@@ -24,10 +24,41 @@ let debug_stage (stage : string) (str : string) : unit =
   debug_log (str ^ "\n\n")
 
 
+let pp_label ?(width : int = 30) (label : string) : Pp.document =
+  let padding = max 2 ((width - (String.length label + 2)) / 2) in
+  let open Pp in
+  repeat width slash
+  ^^ hardline
+  ^^ repeat padding slash
+  ^^ space
+  ^^ string label
+  ^^ space
+  ^^ repeat padding slash
+  ^^ hardline
+  ^^ repeat width slash
+
+
+let compile_unit_tests (insts : Core_to_mucore.instrumentation list) =
+  let open Pp in
+  separate_map
+    (semi ^^ twice hardline)
+    (fun (inst : Core_to_mucore.instrumentation) ->
+      CF.Pp_ail.pp_statement
+        A.(
+          Utils.mk_stmt
+            (AilSexpr
+               (Utils.mk_expr
+                  (AilEcall
+                     ( Utils.mk_expr (AilEident (Sym.fresh_named "CN_UNIT_TEST_CASE")),
+                       [ Utils.mk_expr (AilEident inst.fn) ] ))))))
+    insts
+
+
 let compile_generators
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   (insts : Core_to_mucore.instrumentation list)
+  : PPrint.document
   =
   let ctx = GenCompile.compile prog5.resource_predicates insts in
   debug_stage "Compile" (ctx |> GenDefinitions.pp_context |> Pp.plain ~width:80);
@@ -46,7 +77,7 @@ let compile_generators
   doc
 
 
-let compile_test_case
+let compile_random_test_case
   (prog5 : unit Mucore.file)
   (args_map : (Sym.t * (Sym.t * C.ctype) list) list)
   (convert_from : Sym.t * C.ctype -> Pp.document)
@@ -130,42 +161,16 @@ let compile_test_case
   ^^ parens
        (separate
           (comma ^^ space)
-          [ Sym.pp inst.fn;
-            (if
-               SymSet.is_empty
-                 (LAT.free_vars
-                    (fun _ -> SymSet.empty)
-                    (AT.get_lat (Option.get inst.internal)))
-             then
-               int 1
-             else
-               int 100);
-            separate_map (comma ^^ space) convert_from args
-          ])
+          [ Sym.pp inst.fn; int 100; separate_map (comma ^^ space) convert_from args ])
   ^^ twice hardline
 
 
-let compile_tests
-  (filename : string)
+let compile_random_tests
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   (insts : Core_to_mucore.instrumentation list)
   : Pp.document
   =
-  let _main_decl : A.sigma_declaration =
-    ( Sym.fresh_named "main",
-      ( Locations.other __LOC__,
-        CF.Annot.Attrs [],
-        Decl_function
-          ( false,
-            (C.no_qualifiers, CF.Ctype.signed_int),
-            [ (C.no_qualifiers, CF.Ctype.signed_int, false);
-              (C.no_qualifiers, CF.Ctype.pointer_to_char, false)
-            ],
-            false,
-            false,
-            false ) ) )
-  in
   let declarations : A.sigma_declaration list =
     insts
     |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
@@ -201,19 +206,50 @@ let compile_tests
             (Memory.bt_of_sct (Sctypes.of_ctype_unsafe (Locations.other __LOC__) ct))))
   in
   let open Pp in
+  concat_map (compile_random_test_case prog5 args_map convert_from) insts
+
+
+let compile_tests
+  (filename_base : string)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
+  (insts : Core_to_mucore.instrumentation list)
+  =
+  let unit_tests, random_tests =
+    List.partition
+      (fun (inst : Core_to_mucore.instrumentation) ->
+        let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
+        match decl with
+        | Decl_function (_, _, args, _, _, _) ->
+          List.is_empty args
+          && SymSet.is_empty
+               (LAT.free_vars
+                  (fun _ -> SymSet.empty)
+                  (AT.get_lat (Option.get inst.internal)))
+        | Decl_object _ -> failwith __LOC__)
+      insts
+  in
+  let unit_tests_doc = compile_unit_tests unit_tests in
+  let random_tests_doc = compile_random_tests sigma prog5 random_tests in
+  let open Pp in
   string "#include "
-  ^^ dquotes (string filename)
+  ^^ dquotes (string (filename_base ^ "_gen.h"))
   ^^ hardline
   ^^ string "#include "
-  ^^ dquotes
-       (string
-          (String.sub filename 0 (String.length filename - String.length "_gen.h")
-           ^ "-exec.c"))
+  ^^ dquotes (string (filename_base ^ "-exec.c"))
   ^^ hardline
   ^^ string "#include "
   ^^ dquotes (string "cn.c")
   ^^ twice hardline
-  ^^ concat_map (compile_test_case prog5 args_map convert_from) insts
+  ^^ pp_label "Unit tests"
+  ^^ twice hardline
+  ^^ unit_tests_doc
+  ^^ twice hardline
+  ^^ pp_label "Random tests"
+  ^^ twice hardline
+  ^^ random_tests_doc
+  ^^ pp_label "Main function"
+  ^^ twice hardline
   ^^ string "int main"
   ^^ parens (string "int argc, char* argv[]")
   ^^ break 1
@@ -242,7 +278,10 @@ let compile_tests
                           ])
                   ^^ semi
                   ^^ hardline)
-                declarations
+                (List.map
+                   (fun (inst : Core_to_mucore.instrumentation) ->
+                     (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
+                   insts)
            ^^ string "return cn_test_main(argc, argv);")
         ^^ hardline)
   ^^ hardline
@@ -401,7 +440,7 @@ let generate
   let generators_doc = compile_generators sigma prog5 insts in
   let generators_fn = filename_base ^ "_gen.h" in
   save output_dir generators_fn generators_doc;
-  let tests_doc = compile_tests generators_fn sigma prog5 insts in
+  let tests_doc = compile_tests filename_base sigma prog5 insts in
   let test_file = filename_base ^ "_test.c" in
   save output_dir test_file tests_doc;
   let script_doc = compile_script ~output_dir ~test_file in

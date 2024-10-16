@@ -9,6 +9,25 @@ typedef enum cn_test_result cn_test_case_fn(void);
 
 void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
 
+#define CN_UNIT_TEST_CASE(Name)                                                         \
+    static jmp_buf buf_##Name;                                                          \
+                                                                                        \
+    void cn_test_##Name##_fail () {                                                     \
+        longjmp(buf_##Name, 1);                                                         \
+    }                                                                                   \
+                                                                                        \
+    enum cn_test_result cn_test_##Name () {                                             \
+        if (setjmp(buf_##Name)) {                                                       \
+            return CN_TEST_FAIL;                                                        \
+        }                                                                               \
+        set_cn_exit_cb(&cn_test_##Name##_fail);                                         \
+                                                                                        \
+        CN_TEST_INIT();                                                                 \
+        Name();                                                                         \
+                                                                                        \
+        return CN_TEST_PASS;                                                            \
+    }
+
 #define CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Name, Samples, Init, ...)                  \
     static jmp_buf buf_##Name;                                                          \
                                                                                         \
