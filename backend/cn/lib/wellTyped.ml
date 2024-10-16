@@ -960,6 +960,28 @@ module WIT = struct
       fail (illtyped_index_term loc it (IT.bt it) ~expected ~reason))
 end
 
+(* Throws a warning when the given index term is not a `u64`. *)
+let warn_when_not_u64
+  (ident : string)
+  (loc : Locations.t)
+  (bt : BaseTypes.t)
+  (sym : document option)
+  : unit
+  =
+  match bt with
+  | Bits (Unsigned, 64) -> ()
+  | _t ->
+    warn
+      loc
+      (squotes (string ident)
+       ^^^ !^"expects a"
+       ^^^ squotes !^"u64"
+       ^^ !^", but"
+       ^^^ (match sym with Some sym -> squotes sym ^^^ !^"with type" | None -> !^"type")
+       ^^^ squotes (BaseTypes.pp bt)
+       ^^^ !^"was provided. This will become an error in the future.")
+
+
 module WRET = struct
   open IndexTerms
 
@@ -995,6 +1017,7 @@ module WRET = struct
       assert (BT.equal (snd p.q) qbt);
       (*normalisation does not change bit types. If this assertion fails, we have to
         adjust the later code to use qbt.*)
+      warn_when_not_u64 "each" loc qbt (Some (Sym.pp (fst p.q)));
       let@ step = WIT.check loc (snd p.q) p.step in
       let@ step =
         match step with
@@ -1838,6 +1861,7 @@ module BaseTyping = struct
         | E_Everything -> return ()
       in
       let@ it = WIT.infer it in
+      warn_when_not_u64 "extract" (IT.loc it) (IT.bt it) (Some (IndexTerms.pp it));
       return (Extract (attrs, to_extract, it))
     | Unfold (f, its) ->
       let@ def = get_logical_function_def loc f in

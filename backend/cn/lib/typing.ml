@@ -457,33 +457,7 @@ let add_r_internal ?(derive_constraints = true) loc (r, RE.O oargs) =
   iterM (fun x -> add_c_internal (LC.T x)) pointer_facts
 
 
-(* Throws a warning when the given index term is not a `u64`. *)
-let warn_when_not_u64 (ident: string) (loc: Locations.t) (t: BaseTypes.t) (ix: 'a Terms.annot option): unit =
-  let open Pp in
-  match t with
-  | Bits (Unsigned, 64) ->
-    ()
-  | _t ->
-    warn loc (
-          squotes (string ident)
-      ^^^ !^"expects a"
-      ^^^ squotes !^"u64"
-      ^^  !^", but"
-      ^^^ (match ix with
-          | Some ix -> (
-              squotes (IndexTerms.pp ix)
-          ^^^ !^"with type"
-          )
-          | None -> (
-              !^"type"
-          ))
-      ^^^ squotes (BaseTypes.pp t)
-      ^^^ !^"was provided. This will become an error in the future."
-    )
-
-
-let add_movable_index loc (pred, ix) =
-  warn_when_not_u64 "extract" loc (IT.basetype ix) (Some ix);
+let add_movable_index _loc (pred, ix) =
   let@ ixs = get_movable_indices () in
   let@ () = set_movable_indices ((pred, ix) :: ixs) in
   set_unfold_resources ()
