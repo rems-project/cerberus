@@ -163,6 +163,7 @@ module WBT = struct
       | Integer -> return Integer
       | Bits (sign, n) -> return (Bits (sign, n))
       | Real -> return Real
+      | MemByte -> return MemByte
       | Alloc_id -> return Alloc_id
       | Loc () -> return (Loc ())
       | CType -> return CType
@@ -292,7 +293,7 @@ module WIT = struct
         match bt with
         | Unit | Bool | Integer | Bits _ | Real | Alloc_id
         | Loc ()
-        | CType | Struct _ | Record _ | Map _ | List _ | Tuple _ | Set _ ->
+        | MemByte | CType | Struct _ | Record _ | Map _ | List _ | Tuple _ | Set _ ->
           failwith "revisit for extended pattern language"
         | Datatype s ->
           let@ dt_info = get_datatype loc s in
@@ -400,6 +401,7 @@ module WIT = struct
         let@ () = ensure_z_fits_bits_type loc (sign, n) v in
         return (IT (Const c, BT.Bits (sign, n), loc))
       | Const (Q q) -> return (IT (Const (Q q), Real, loc))
+      | Const (MemByte b) -> return (IT (Const (MemByte b), BT.MemByte, loc))
       | Const (Pointer p) ->
         let rs = Option.get (BT.is_bits_bt Memory.uintptr_bt) in
         let@ () = ensure_z_fits_bits_type loc rs p.addr in
@@ -731,6 +733,8 @@ module WIT = struct
             return ()
           | Bits _, Loc () -> return ()
           | Loc (), Bits _ -> return ()
+          | MemByte, Bits _ -> return ()
+          | MemByte, Alloc_id -> return ()
           | source, target ->
             let msg =
               !^"Unsupported cast from"
