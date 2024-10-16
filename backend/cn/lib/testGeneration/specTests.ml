@@ -3,9 +3,11 @@ module A = CF.AilSyntax
 module C = CF.Ctype
 module BT = BaseTypes
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 module CtA = Cn_internal_to_ail
 module Utils = Executable_spec_utils
 module Config = TestGenConfig
+module SymSet = Set.Make (Sym)
 
 let debug_log_file : out_channel option ref = ref None
 
@@ -44,9 +46,109 @@ let compile_generators
   doc
 
 
+let compile_test_case
+  (prog5 : unit Mucore.file)
+  (args_map : (Sym.t * (Sym.t * C.ctype) list) list)
+  (convert_from : Sym.t * C.ctype -> Pp.document)
+  (inst : Core_to_mucore.instrumentation)
+  : Pp.document
+  =
+  let open Pp in
+  let args = List.assoc Sym.equal inst.fn args_map in
+  let globals =
+    let global_syms =
+      let args = args |> List.map fst in
+      inst.internal
+      |> Option.get
+      |> AT.get_lat
+      |> LAT.free_vars (fun _ -> SymSet.empty)
+      |> SymSet.to_seq
+      |> List.of_seq
+      |> List.filter (fun x ->
+        not
+          (List.mem (fun x y -> String.equal (Sym.pp_string x) (Sym.pp_string y)) x args))
+    in
+    List.map
+      (fun sym ->
+        match List.assoc Sym.equal sym prog5.globs with
+        | GlobalDecl sct -> (sym, sct)
+        | GlobalDef (sct, _) -> (sym, sct))
+      global_syms
+  in
+  (if List.is_empty globals then
+     string "CN_RANDOM_TEST_CASE"
+   else (
+     let init_name = string "cn_test_" ^^ Sym.pp inst.fn ^^ string "_init" in
+     string "void"
+     ^^ space
+     ^^ init_name
+     ^^ parens
+          (string "struct"
+           ^^ space
+           ^^ string (String.concat "_" [ "cn_gen"; Sym.pp_string inst.fn; "record" ])
+           ^^ star
+           ^^ space
+           ^^ string "res")
+     ^^ space
+     ^^ braces
+          (nest
+             2
+             (hardline
+              ^^ separate_map
+                   hardline
+                   (fun (sym, sct) ->
+                     let ty =
+                       CF.Pp_ail.pp_ctype
+                         ~executable_spec:true
+                         ~is_human:false
+                         C.no_qualifiers
+                         (Sctypes.to_ctype sct)
+                     in
+                     Sym.pp sym
+                     ^^ space
+                     ^^ equals
+                     ^^ space
+                     ^^ star
+                     ^^ parens (ty ^^ star)
+                     ^^ string "convert_from_cn_pointer"
+                     ^^ parens (string "res->cn_gen_" ^^ Sym.pp sym)
+                     ^^ semi
+                     ^^ hardline
+                     ^^ string "cn_assume_ownership"
+                     ^^ parens
+                          (separate
+                             (comma ^^ space)
+                             [ ampersand ^^ Sym.pp sym;
+                               string "sizeof" ^^ parens ty;
+                               string "(char*)" ^^ dquotes init_name
+                             ])
+                     ^^ semi)
+                   globals)
+           ^^ hardline)
+     ^^ twice hardline
+     ^^ string "CN_RANDOM_TEST_CASE_WITH_INIT"))
+  ^^ parens
+       (separate
+          (comma ^^ space)
+          [ Sym.pp inst.fn;
+            (if
+               SymSet.is_empty
+                 (LAT.free_vars
+                    (fun _ -> SymSet.empty)
+                    (AT.get_lat (Option.get inst.internal)))
+             then
+               int 1
+             else
+               int 100);
+            separate_map (comma ^^ space) convert_from args
+          ])
+  ^^ twice hardline
+
+
 let compile_tests
   (filename : string)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
   (insts : Core_to_mucore.instrumentation list)
   : Pp.document
   =
@@ -69,7 +171,7 @@ let compile_tests
     |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
       (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
   in
-  let args : (Sym.t * (Sym.t * C.ctype) list) list =
+  let args_map : (Sym.t * (Sym.t * C.ctype) list) list =
     List.map
       (fun (inst : Core_to_mucore.instrumentation) ->
         ( inst.fn,
@@ -95,7 +197,7 @@ let compile_tests
             A.(
               AilEmemberofptr
                 ( Utils.mk_expr (AilEident (Sym.fresh_named "res")),
-                  Sym.Identifier (Locations.other __LOC__, Sym.pp_string x) ))
+                  Sym.Identifier (Locations.other __LOC__, "cn_gen_" ^ Sym.pp_string x) ))
             (Memory.bt_of_sct (Sctypes.of_ctype_unsafe (Locations.other __LOC__) ct))))
   in
   let open Pp in
@@ -111,24 +213,7 @@ let compile_tests
   ^^ string "#include "
   ^^ dquotes (string "cn.c")
   ^^ twice hardline
-  ^^ concat_map
-       (fun (inst : Core_to_mucore.instrumentation) ->
-         string "CN_TEST_CASE"
-         ^^ parens
-              (separate
-                 (comma ^^ space)
-                 [ Sym.pp inst.fn;
-                   (if AT.count_computational (Option.get inst.internal) = 0 then
-                      int 1
-                    else
-                      int 100);
-                   separate_map
-                     (comma ^^ space)
-                     convert_from
-                     (List.assoc Sym.equal inst.fn args)
-                 ])
-         ^^ twice hardline)
-       insts
+  ^^ concat_map (compile_test_case prog5 args_map convert_from) insts
   ^^ string "int main"
   ^^ parens (string "int argc, char* argv[]")
   ^^ break 1
@@ -316,7 +401,7 @@ let generate
   let generators_doc = compile_generators sigma prog5 insts in
   let generators_fn = filename_base ^ "_gen.h" in
   save output_dir generators_fn generators_doc;
-  let tests_doc = compile_tests generators_fn sigma insts in
+  let tests_doc = compile_tests generators_fn sigma prog5 insts in
   let test_file = filename_base ^ "_test.c" in
   save output_dir test_file tests_doc;
   let script_doc = compile_script ~output_dir ~test_file in

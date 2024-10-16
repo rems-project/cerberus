@@ -9,7 +9,7 @@ typedef enum cn_test_result cn_test_case_fn(void);
 
 void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
 
-#define CN_TEST_CASE(Name, Samples, ...)                                                \
+#define CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Name, Samples, Init, ...)                  \
     static jmp_buf buf_##Name;                                                          \
                                                                                         \
     void cn_test_##Name##_fail () {                                                     \
@@ -26,6 +26,7 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
         for (int i = 0; i < Samples; i++) {                                             \
             CN_TEST_INIT();                                                             \
             struct cn_gen_##Name##_record *res = cn_gen_##Name();                       \
+            Init(res);                                                                  \
             if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                     \
                 return CN_TEST_GEN_FAIL;                                                \
             }                                                                           \
@@ -35,6 +36,14 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
                                                                                         \
         return CN_TEST_PASS;                                                            \
     }
+
+#define CN_RANDOM_TEST_CASE_WITH_INIT(Name, Samples, ...)                               \
+    CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(                                               \
+        Name, Samples, cn_test_##Name##_init, __VA_ARGS__)
+
+
+#define CN_RANDOM_TEST_CASE(Name, Samples, ...)                                         \
+    CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Name, Samples, , __VA_ARGS__)
 
 int cn_test_main(int argc, char* argv[]);
 

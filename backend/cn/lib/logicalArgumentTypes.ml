@@ -5,6 +5,7 @@ module LS = LogicalSorts
 module RET = ResourceTypes
 module LC = LogicalConstraints
 module SymSet = Set.Make (Sym)
+module SymMap = Map.Make (Sym)
 
 type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
@@ -57,6 +58,30 @@ and suitably_alpha_rename i_subst syms s t =
     alpha_rename i_subst s t
   else
     (s, t)
+
+
+let free_vars_bts i_free_vars_bts =
+  let union =
+    SymMap.union (fun _ bt1 bt2 ->
+      assert (BT.equal bt1 bt2);
+      Some bt1)
+  in
+  let rec aux = function
+    | Define ((s, it), _info, t) ->
+      let it_vars = IT.free_vars_bts it in
+      let t_vars = SymMap.remove s (aux t) in
+      union it_vars t_vars
+    | Resource ((s, (re, _bt)), _info, t) ->
+      let re_vars = RET.free_vars_bts re in
+      let t_vars = SymMap.remove s (aux t) in
+      union re_vars t_vars
+    | Constraint (lc, _info, t) ->
+      let lc_vars = LC.free_vars_bts lc in
+      let t_vars = aux t in
+      union lc_vars t_vars
+    | I i -> i_free_vars_bts i
+  in
+  aux
 
 
 let free_vars i_free_vars =
