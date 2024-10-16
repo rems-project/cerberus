@@ -7,6 +7,7 @@ type 'a t_gen =
   | Unit
   | Bool
   | Integer
+  | MemByte
   | Bits of sign * int
   | Real
   | Alloc_id
@@ -44,6 +45,7 @@ let rec pp pp_loc =
   | Unit -> !^"void"
   | Bool -> !^"boolean"
   | Integer -> !^"integer"
+  | MemByte -> !^"mem_byte"
   | Bits (Signed, n) -> !^("i" ^ string_of_int n)
   | Bits (Unsigned, n) -> !^("u" ^ string_of_int n)
   | Real -> !^"real"
@@ -68,6 +70,7 @@ let rec contained =
   | Unit -> []
   | Bool -> []
   | Integer -> []
+  | MemByte -> []
   | Bits _ -> []
   | Real -> []
   | Alloc_id -> []
@@ -151,6 +154,7 @@ let rec hash = function
   | Unit -> 0
   | Bool -> 1
   | Integer -> 2
+  | MemByte -> 10
   | Real -> 3
   | Alloc_id -> 4
   | Loc () -> 5

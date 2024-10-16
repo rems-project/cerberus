@@ -283,6 +283,35 @@ module CN_AllocId = struct
   let to_sexp s = if !use_vip then SMT.int_zk s else CN_Tuple.con []
 end
 
+module CN_MemByte = struct
+  let name = "mem_byte"
+
+  let alloc_id_name = "alloc_id"
+
+  let value_name = "value"
+
+  let alloc_id_value_name = "AiV"
+
+  (** Bit-width of memory bytes *)
+  let width = Memory.bits_per_byte
+
+  (** The name of the pointer type *)
+  let t = SMT.atom name
+
+  (** Make a allocation ID & address pair pointer value *)
+  let con ~alloc_id ~value = SMT.app_ alloc_id_value_name [ alloc_id; value ]
+
+  let declare s =
+    ack_command
+      s
+      (SMT.declare_datatype
+         name
+         []
+         [ ( alloc_id_value_name,
+             [ (alloc_id_name, CN_AllocId.t ()); (value_name, SMT.t_bits width) ] )
+         ])
+end
+
 module CN_Pointer = struct
   let name = "pointer"
 
@@ -453,6 +482,7 @@ let rec translate_base_type = function
   | Unit -> CN_Tuple.t []
   | Bool -> SMT.t_bool
   | Integer -> SMT.t_int
+  | MemByte -> CN_MemByte.t
   | Bits (_, n) -> SMT.t_bits n
   | Real -> SMT.t_real
   | Loc () -> CN_Pointer.t
@@ -485,6 +515,17 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
     let signed = equal_sign sign Signed in
     Const (Bits ((sign, n), SMT.to_bits n signed sexp))
   | Real -> Const (Q (SMT.to_q sexp))
+  | MemByte ->
+    (match SMT.to_con sexp with
+     | con, [ salloc_id; svalue ] when String.equal con CN_MemByte.alloc_id_value_name ->
+       let alloc_id = CN_AllocId.from_sexp salloc_id in
+       let value =
+         match get_value gs ctys (BT.Bits (Unsigned, CN_MemByte.width)) svalue with
+         | Const (Bits (_, z)) -> z
+         | _ -> failwith "Memory byte value is not bits"
+       in
+       Const (MemByte { alloc_id; value })
+     | _ -> failwith "MemByte")
   | Loc () ->
     (match SMT.to_con sexp with
      | con, [] when String.equal con CN_Pointer.null_name -> Const Null
@@ -555,6 +596,10 @@ let translate_const s co =
   | Z z -> SMT.int_zk z
   | Bits ((_, w), z) -> SMT.bv_k w z
   | Q q -> SMT.real_k q
+  | MemByte b ->
+    CN_MemByte.con
+      ~alloc_id:(CN_AllocId.to_sexp b.alloc_id)
+      ~value:(SMT.bv_k CN_MemByte.width b.value)
   | Pointer p ->
     CN_Pointer.con_aia
       ~alloc_id:(CN_AllocId.to_sexp p.alloc_id)
@@ -1034,6 +1079,15 @@ let rec translate_term s iterm =
        maybe_cast (CN_Pointer.addr_of ~ptr:smt_term)
      | Loc (), Alloc_id ->
        CN_Pointer.alloc_id_of ~ptr:smt_term ~null_case:(default Alloc_id)
+     | MemByte, Bits _ ->
+       let maybe_cast x =
+         if BT.equal cbt (BT.Bits (Unsigned, 8)) then
+           x
+         else
+           bv_cast ~to_:cbt ~from:(BT.Bits (Unsigned, 8)) x
+       in
+       maybe_cast (SMT.app_ CN_MemByte.value_name [ smt_term ])
+     | MemByte, Alloc_id -> SMT.app_ CN_MemByte.alloc_id_name [ smt_term ]
      | Real, Integer -> SMT.real_to_int smt_term
      | Integer, Real -> SMT.int_to_real smt_term
      | Bits _, Bits _ -> bv_cast ~to_:cbt ~from:(IT.bt t) smt_term
@@ -1138,6 +1192,7 @@ let declare_solver_basics s =
     CN_Tuple.declare s arity
   done;
   CN_List.declare s;
+  CN_MemByte.declare s;
   CN_Pointer.declare s;
   (* structs may depend only on other structs. datatypes may depend on other datatypes and
      structs. *)
