@@ -40,6 +40,14 @@ let lt_check (it_max : IT.t) gt loc =
   GT.assert_ (T (IT.gt_ (it_max, IT.num_lit_ min (IT.bt it_max) loc) loc), gt) loc
 
 
+let range_check (it_min : IT.t) (it_max : IT.t) gt loc =
+  GT.assert_ (T (IT.gt_ (it_max, it_min) loc), lt_check it_max gt loc) loc
+
+
+let mult_range_check (it_mult : IT.t) (it_min : IT.t) (it_max : IT.t) gt loc =
+  mult_check it_mult (range_check it_min it_max gt loc) loc
+
+
 let min_sym = Sym.fresh_named "min"
 
 let ge_gen_sym_db = gen_syms_bits "ge"
@@ -62,7 +70,11 @@ let range_gen_sym_db = gen_syms_bits "range"
 
 let range_gen (it_min : IT.t) (it_max : IT.t) (bt : BT.t) loc : GT.t =
   let fsym = List.assoc BT.equal bt range_gen_sym_db in
-  lt_check it_max (GT.call_ (fsym, [ (min_sym, it_min); (max_sym, it_max) ]) bt loc) loc
+  range_check
+    it_min
+    it_max
+    (GT.call_ (fsym, [ (min_sym, it_min); (max_sym, it_max) ]) bt loc)
+    loc
 
 
 let mult_sym = Sym.fresh_named "mult"
@@ -108,14 +120,13 @@ let mult_range_gen_sym_db = gen_syms_bits "mult_range"
 let mult_range_gen (it_mult : IT.t) (it_min : IT.t) (it_max : IT.t) (bt : BT.t) loc : GT.t
   =
   let fsym = List.assoc BT.equal bt mult_range_gen_sym_db in
-  mult_check
+  mult_range_check
     it_mult
-    (lt_check
-       it_max
-       (GT.call_
-          (fsym, [ (mult_sym, it_mult); (min_sym, it_min); (max_sym, it_max) ])
-          bt
-          loc)
+    it_min
+    it_max
+    (GT.call_
+       (fsym, [ (mult_sym, it_mult); (min_sym, it_min); (max_sym, it_max) ])
+       bt
        loc)
     loc
 
