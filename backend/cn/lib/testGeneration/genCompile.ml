@@ -318,16 +318,41 @@ let compile_spec
   (at : 'a AT.t)
   : unit m
   =
-  let rec aux (at : 'a AT.t) =
-    match at with
-    | Computational ((x, bt), (loc, _), at') ->
-      let acc, lat = aux at' in
-      ((x, (bt, loc)) :: acc, lat)
-    | L lat -> ([], lat)
+  (* Necessary to avoid triggering special-cased logic in [CtA] w.r.t globals *)
+  let rename x = Sym.fresh_named ("cn_gen_" ^ Sym.pp_string x) in
+  let lat =
+    let lat = AT.get_lat at in
+    let subst =
+      let loc = Locations.other __LOC__ in
+      lat
+      |> LAT.free_vars_bts (fun _ -> SymMap.empty)
+      |> SymMap.bindings
+      |> List.map (fun (x, bt) -> (x, IT.sym_ (rename x, bt, loc)))
+      |> IT.make_subst
+      |> LAT.subst (fun _ x -> x)
+    in
+    subst lat
   in
-  let args, lat = aux at in
   let here = Locations.other __FUNCTION__ in
-  let oargs = List.map_snd (fun (bt, _) -> GBT.of_bt bt) args in
+  let oargs =
+    let oargs' =
+      lat
+      |> LAT.free_vars_bts (fun _ -> SymMap.empty)
+      |> SymMap.bindings
+      |> List.map_snd GBT.of_bt
+    in
+    oargs'
+    @ (at
+       |> AT.get_computational
+       |> List.map_fst rename
+       |> List.filter (fun (x, _) ->
+         not
+           (List.mem_assoc
+              (fun x y -> String.equal (Sym.pp_string x) (Sym.pp_string y))
+              x
+              oargs'))
+       |> List.map_snd GBT.of_bt)
+  in
   let@ gt =
     compile_it_lat
       filename

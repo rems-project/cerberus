@@ -61,6 +61,13 @@ let rec get_return = function
   | L t -> LAT.get_return t
 
 
+let rec get_lat = function Computational (_, _, ft) -> get_lat ft | L t -> t
+
+let rec get_computational = function
+  | Computational (sbt, _, ft) -> sbt :: get_computational ft
+  | L _ -> []
+
+
 let rec count_computational = function
   | Computational (_, _, ft) -> 1 + count_computational ft
   | L _ -> 0
