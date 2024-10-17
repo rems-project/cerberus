@@ -1765,6 +1765,22 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        in
        aux es [] []
      | CN_progs (_, cn_progs) ->
+       let bytes_pred ct pointer init : RET.predicate_type =
+         { name = Owned (ct, init); pointer; iargs = [] }
+       in
+       let bytes_qpred sym ct pointer init : RET.qpredicate_type =
+         (* TODO - how is the basetype of qpreds determined in the code base? *)
+         let here = Locations.other __FUNCTION__ in
+         let bt' = BT.Bits (Unsigned, 64) in
+         { q = (sym, bt');
+           q_loc = here;
+           step = IT.num_lit_ Z.one bt' here;
+           permission = IT.(lt_ (sym_ (sym, bt', here), sizeOf_ ct here) here);
+           name = Owned (Sctypes.char_ct, init);
+           pointer;
+           iargs = []
+         }
+       in
        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
        let aux loc stmt =
          (* copying bits of code from elsewhere in check.ml *)
@@ -1772,77 +1788,48 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          | Cnprog.Pack_unpack (_pack_unpack, _pt) ->
            warn loc !^"Explicit pack/unpack unsupported.";
            return ()
-         | To_from_bytes (To, res) ->
-           (match res with
-            | { name = PName _; _ } -> fail (fun _ -> { loc; msg = To_bytes_needs_owned })
-            | { name = Owned (ct, Uninit); pointer; _ } ->
-              let@ _ =
-                RI.Special.predicate_request
-                  loc
-                  (Access To_bytes)
-                  ({ name = Owned (ct, Uninit); pointer; iargs = [] }, None)
-              in
-              let bt = BT.Bits (Unsigned, 64) in
-              let q = (Sym.fresh_named "to_bytes", bt) in
-              let here = Locations.other __FUNCTION__ in
-              let step = IT.num_lit_ Z.one bt here in
-              let permission =
-                IT.(lt_ (sym_ (fst q, snd q, here), sizeOf_ ct here) here)
-              in
-              let@ () =
-                add_r
-                  loc
-                  ( Q
-                      { q;
-                        q_loc = here;
-                        step;
-                        permission;
-                        name = Owned (Sctypes.char_ct, Uninit);
-                        pointer;
-                        iargs = []
-                      },
-                    O (default_ (BT.Map (bt, Memory.bt_of_sct Sctypes.char_ct)) loc) )
-              in
-              return ()
-            | { name = Owned (_, Init); _ } ->
+         | To_from_bytes ((To | From), { name = PName _; _ }) ->
+           fail (fun _ -> { loc; msg = Byte_conv_needs_owned })
+         | To_from_bytes (To, { name = Owned (ct, init); pointer; _ }) ->
+           let@ _ =
+             RI.Special.predicate_request
+               loc
+               (Access To_bytes)
+               (bytes_pred ct pointer init, None)
+           in
+           let q_sym = Sym.fresh_named "to_bytes" in
+           let bt = BT.Bits (Unsigned, 64) in
+           let@ () =
+             add_r
+               loc
+               ( Q (bytes_qpred q_sym ct pointer init),
+                 O (default_ (BT.Map (bt, Memory.bt_of_sct Sctypes.char_ct)) loc) )
+           in
+           (match init with
+            | Uninit -> return ()
+            | Init ->
               warn loc !^"byte conversion is being implemented - ignoring for now";
               return ())
-         | To_from_bytes (From, res) ->
-           (match res with
-            | { name = PName _; _ } -> fail (fun _ -> { loc; msg = To_bytes_needs_owned })
-            | { name = Owned (ct, Uninit); pointer; _ } ->
-              (* TODO - how is the basetype of qpreds determined in the code base? *)
-              let bt = BT.Bits (Unsigned, 64) in
-              let q = (Sym.fresh_named "from_bytes", bt) in
-              let here = Locations.other __FUNCTION__ in
-              let step = IT.num_lit_ Z.one bt here in
-              let permission =
-                IT.(lt_ (sym_ (fst q, snd q, here), sizeOf_ ct here) here)
-              in
-              let@ _ =
-                RI.Special.qpredicate_request
-                  loc
-                  (Access From_bytes)
-                  ( { q;
-                      q_loc = here;
-                      step;
-                      permission;
-                      name = Owned (Sctypes.char_ct, Uninit);
-                      pointer;
-                      iargs = []
-                    },
-                    None )
-              in
-              let@ () =
-                add_r
-                  loc
-                  ( P { name = Owned (ct, Uninit); pointer; iargs = [] },
-                    O (default_ (Memory.bt_of_sct ct) loc) )
-              in
-              (* TODO - why is this constraint necessary here? *)
-              let@ () = add_c here (LC.T (IT.good_pointer ~pointee_ct:ct pointer here)) in
-              return ()
-            | { name = Owned (_, Init); _ } ->
+         | To_from_bytes (From, { name = Owned (ct, init); pointer; _ }) ->
+           let q_sym = Sym.fresh_named "from_bytes" in
+           let@ _ =
+             RI.Special.qpredicate_request
+               loc
+               (Access From_bytes)
+               (bytes_qpred q_sym ct pointer init, None)
+           in
+           let@ () =
+             add_r
+               loc
+               (P (bytes_pred ct pointer init), O (default_ (Memory.bt_of_sct ct) loc))
+           in
+           let@ () =
+             (* TODO - why is this constraint necessary here? *)
+             add_c here (LC.T (IT.good_pointer ~pointee_ct:ct pointer here))
+           in
+           (match init with
+            | Uninit -> return ()
+            | Init ->
               warn loc !^"byte conversion is being implemented - ignoring for now";
               return ())
          | Have lc ->

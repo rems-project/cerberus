@@ -87,9 +87,17 @@
         goto cn_label_##last_var##_backtrack;                                           \
     }
 
-#define CN_GEN_MAP_BEGIN(map, i, i_ty, min, max)                                        \
+#define CN_GEN_MAP_BEGIN(map, i, i_ty, min, max, last_var, ...)                         \
     cn_map* map = map_create();                                                         \
     {                                                                                   \
+        if (0) {                                                                        \
+        cn_label_##i##_backtrack:                                                       \
+            ;                                                                           \
+            char *toAdd[] = { __VA_ARGS__ };                                            \
+            cn_gen_backtrack_relevant_add_many(toAdd);                                  \
+            goto cn_label_##last_var##_backtrack;                                       \
+        }                                                                               \
+                                                                                        \
         i_ty* i = max;                                                                  \
         while (convert_from_cn_bool(i_ty##_ge(i, min))) {
 

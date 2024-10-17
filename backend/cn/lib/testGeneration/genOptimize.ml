@@ -16,6 +16,41 @@ type opt_pass =
     transform : GT.t -> GT.t
   }
 
+(** This pass performs makes pointer offsets consistent *)
+module PointerOffsets = struct
+  let transform (gt : GT.t) : GT.t =
+    let aux (gt : GT.t) : GT.t =
+      match gt with
+      | GT (Asgn ((it_addr, sct), it_val, gt'), _, loc) ->
+        let it_addr =
+          match it_addr with
+          | IT
+              ( Binop (Add, IT (ArrayShift { base; ct; index }, _, loc_shift), it_offset),
+                _,
+                loc_add ) ->
+            IT.add_
+              ( base,
+                IT.add_
+                  (IT.mul_ (index, IT.sizeOf_ ct loc_shift) loc_shift, it_offset)
+                  loc_add )
+              loc_shift
+          | IT
+              ( Binop
+                  (Add, IT (Binop (Add, it_base, it_offset_1), _, loc_shift), it_offset_2),
+                _,
+                loc_add ) ->
+            IT.add_ (it_base, IT.add_ (it_offset_1, it_offset_2) loc_add) loc_shift
+          | _ -> it_addr
+        in
+        GT.asgn_ ((it_addr, sct), it_val, gt') loc
+      | _ -> gt
+    in
+    GT.map_gen_post aux gt
+
+
+  let pass = { name = "rewrite"; transform }
+end
+
 (** This pass performs various inlinings *)
 module Inline = struct
   (** This pass inlines generators that just return a constant or symbol *)
@@ -377,6 +412,72 @@ module RemoveUnused = struct
   let passes = [ { name; transform } ]
 end
 
+(** This pass pulls asserts and assignments
+    closer to the relevant variables *)
+module Reordering = struct
+  let name = "reordering"
+
+  let get_statement_ordering (iargs : SymSet.t) (stmts : GS.t list) : GS.t list =
+    let rec loop ((vars, res, stmts) : SymSet.t * GS.t list * GS.t list)
+      : SymSet.t * GS.t list
+      =
+      if List.is_empty stmts then
+        (vars, res)
+      else (
+        let res', stmts =
+          List.partition
+            (fun (stmt : GS.t) ->
+              match stmt with
+              | Asgn ((it_addr, _sct), it_val) ->
+                SymSet.subset (IT.free_vars_list [ it_addr; it_val ]) vars
+              | Assert lc -> SymSet.subset (LC.free_vars lc) vars
+              | _ -> false)
+            stmts
+        in
+        let res = res @ res' in
+        let vars, res, stmts =
+          match stmts with
+          | (Let (_, (var, _)) as stmt) :: stmts' ->
+            (SymSet.add var vars, res @ [ stmt ], stmts')
+          | stmt :: _ -> failwith (Pp.plain (GS.pp stmt) ^ " @ " ^ __LOC__)
+          | [] -> (vars, res, [])
+        in
+        loop (vars, res, stmts))
+    in
+    let _, res = loop (iargs, [], stmts) in
+    res
+
+
+  let reorder (iargs : SymSet.t) (gt : GT.t) : GT.t =
+    let stmts, gt_last = GS.stmts_of_gt gt in
+    let stmts = get_statement_ordering iargs stmts in
+    GS.gt_of_stmts stmts gt_last
+
+
+  let transform (gd : GD.t) : GD.t =
+    let rec aux (iargs : SymSet.t) (gt : GT.t) : GT.t =
+      let rec loop (iargs : SymSet.t) (gt : GT.t) : GT.t =
+        let (GT (gt_, _bt, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+        | Pick wgts -> GT.pick_ (List.map_snd (aux iargs) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, loop iargs gt_rest) loc
+        | Let (backtracks, (x, gt'), gt_rest) ->
+          let iargs = SymSet.add x iargs in
+          GT.let_ (backtracks, (x, (aux iargs) gt'), loop iargs gt_rest) loc
+        | Assert (lc, gt_rest) -> GT.assert_ (lc, loop iargs gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, aux iargs gt_then, aux iargs gt_else) loc
+        | Map ((i_sym, i_bt, it_perm), gt_inner) ->
+          GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym iargs) gt_inner) loc
+      in
+      gt |> reorder iargs |> loop iargs
+    in
+    let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
+    { gd with body = Some (aux iargs (Option.get gd.body)) }
+end
+
 module ConstraintPropagation = struct
   open Interval
 
@@ -403,15 +504,16 @@ module ConstraintPropagation = struct
       { mult; intervals }
 
 
-    let of_bt (bt : BT.t) : t option =
-      match BT.is_bits_bt bt with
-      | Some (sgn, bits) ->
+    let rec of_bt (bt : BT.t) : t option =
+      match bt with
+      | Loc () -> of_bt Memory.uintptr_bt
+      | Bits (sgn, bits) ->
         let to_interval =
           match sgn with Signed -> Interval.sint | Unsigned -> Interval.uint
         in
         let interval = to_interval bits in
         Some (of_ Z.one (Intervals.of_interval interval))
-      | None -> None
+      | _ -> None
 
 
     let of_mult (mult : Z.t) : t =
@@ -569,10 +671,13 @@ module ConstraintPropagation = struct
            of_it (IT.arith_binop op (it', IT.num_lit_ (Z.sub n m) bt loc) loc)
          | _ -> None)
         (* END Simplify stuff*)
-      | Unop (Not, IT (Binop (EQ, IT (Sym x, _, _), IT (Const (Bits (_, n)), _, _)), _, _))
-      | Unop (Not, IT (Binop (EQ, IT (Const (Bits (_, n)), _, _), IT (Sym x, _, _)), _, _))
+      | Unop
+          (Not, IT (Binop (EQ, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _))
+      | Unop
+          (Not, IT (Binop (EQ, IT (Const (Bits (_, n)), _, _), IT (Sym x, x_bt, _)), _, _))
         ->
-        Some (true, (x, Int (IntRep.ne n)))
+        let@ bt_rep = IntRep.of_bt x_bt in
+        Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.ne n))))
       | Binop
           ( EQ,
             IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _),
@@ -592,8 +697,7 @@ module ConstraintPropagation = struct
     let is_const (Int r) = IntRep.is_const r
 
     let to_stmts (x : Sym.t) (bt : BT.t) (Int r : t) : GS.t list =
-      match bt with
-      | Bits (sgn, sz) ->
+      let aux (sgn : BT.sign) (sz : int) : GS.t list =
         let loc = Locations.other __LOC__ in
         let min_bt, max_bt = BT.bits_range (sgn, sz) in
         let min, max = (IntRep.minimum r, IntRep.maximum r) in
@@ -624,7 +728,13 @@ module ConstraintPropagation = struct
             ]
         in
         stmt_min @ stmt_max @ stmt_mult
-      | _ -> failwith __LOC__
+      in
+      match bt with
+      | Loc () ->
+        let sgn, sz = Option.get (BT.is_bits_bt Memory.uintptr_bt) in
+        aux sgn sz
+      | Bits (sgn, sz) -> aux sgn sz
+      | _ -> failwith (Pp.plain (BT.pp bt) ^ " @ " ^ __LOC__)
   end
 
   module Constraint = struct
@@ -918,7 +1028,7 @@ module ConstraintPropagation = struct
 end
 
 module Specialization = struct
-  module IntRep = struct
+  module Rep = struct
     type t =
       { mult : IT.t option;
         min : IT.t option;
@@ -981,63 +1091,50 @@ module Specialization = struct
       { mult; min; max }
   end
 
-  module ValueRep = struct
-    type t = (* | Unknown *)
-      | Int of IntRep.t
-
-    let of_it (x : Sym.t) (bt : BT.t) (it : IT.t) : t option =
-      match bt with
-      | Bits _ -> Option.map (fun r -> Int r) (IntRep.of_it x it)
-      | _ -> None
-
-
-    let intersect (v1 : t) (v2 : t) : t =
-      match (v1, v2) with Int r1, Int r2 -> Int (IntRep.intersect r1 r2)
-    (* | Int r, Unknown | Unknown, Int r -> Int r
-       | Unknown, Unknown -> Unknown *)
-  end
-
   let collect_constraints (vars : SymSet.t) (x : Sym.t) (bt : BT.t) (stmts : GS.t list)
-    : GS.t list * ValueRep.t
+    : GS.t list * Rep.t
     =
-    let rec aux (stmts : GS.t list) : GS.t list * ValueRep.t =
+    let rec aux (stmts : GS.t list) : GS.t list * Rep.t =
       match stmts with
       | (Assert (T it) as stmt) :: stmts' when SymSet.subset (IT.free_vars it) vars ->
         let stmts', r = aux stmts' in
-        (match ValueRep.of_it x bt it with
-         | Some r' -> (stmts', ValueRep.intersect r r')
+        (match Rep.of_it x it with
+         | Some r' -> (stmts', Rep.intersect r r')
          | None -> (stmt :: stmts', r))
       | stmt :: stmts' ->
         let stmts', v = aux stmts' in
         (stmt :: stmts', v)
       | [] ->
         (match bt with
-         | Bits _ -> ([], Int { mult = None; min = None; max = None })
+         | Bits _ -> ([], { mult = None; min = None; max = None })
          | _ -> failwith __LOC__)
     in
     aux stmts
 
 
-  let compile_constraints (v : ValueRep.t) (gt : GT.t) : GT.t =
+  let compile_constraints (v : Rep.t) (gt : GT.t) : GT.t =
     match gt with
     | GT (Uniform _, _, _) ->
       let loc = Locations.other __LOC__ in
       (match v with
-       | Int { mult = None; min = None; max = None } -> gt
-       | Int { mult = Some n; min = None; max = None } ->
+       | { mult = None; min = None; max = None } -> gt
+       | { mult = Some n; min = None; max = None } ->
          GenBuiltins.mult_gen n (GT.bt gt) loc
-       | Int { mult = None; min = Some n; max = None } ->
-         GenBuiltins.ge_gen n (GT.bt gt) loc
-       | Int { mult = None; min = None; max = Some n } ->
-         GenBuiltins.lt_gen n (GT.bt gt) loc
-       | Int { mult = None; min = Some n1; max = Some n2 } ->
+       | { mult = None; min = Some n; max = None } -> GenBuiltins.ge_gen n (GT.bt gt) loc
+       | { mult = None; min = None; max = Some n } -> GenBuiltins.lt_gen n (GT.bt gt) loc
+       | { mult = None; min = Some n1; max = Some n2 } ->
          GenBuiltins.range_gen n1 n2 (GT.bt gt) loc
-       | Int { mult = Some n1; min = Some n2; max = None } ->
+       | { mult = Some n1; min = Some n2; max = None } ->
          GenBuiltins.mult_ge_gen n1 n2 (GT.bt gt) loc
-       | Int { mult = Some n1; min = None; max = Some n2 } ->
+       | { mult = Some n1; min = None; max = Some n2 } ->
          GenBuiltins.mult_lt_gen n1 n2 (GT.bt gt) loc
-       | Int { mult = Some n1; min = Some n2; max = Some n3 } ->
+       | { mult = Some n1; min = Some n2; max = Some n3 } ->
          GenBuiltins.mult_range_gen n1 n2 n3 (GT.bt gt) loc)
+    | GT (Alloc sz, _, _) ->
+      let loc = Locations.other __LOC__ in
+      (match v with
+       | { mult = None; min = _; max = _ } -> gt
+       | { mult = Some n; min = _; max = _ } -> GenBuiltins.aligned_alloc_gen n sz loc)
     | _ -> gt
 
 
@@ -1092,7 +1189,7 @@ end
 let all_passes (prog5 : unit Mucore.file) =
   Inline.passes
   @ RemoveUnused.passes
-  @ [ TermSimplification.pass prog5 ]
+  @ [ TermSimplification.pass prog5; PointerOffsets.pass ]
   @ SplitConstraints.passes
 
 
@@ -1117,10 +1214,16 @@ let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) :
 let optimize_gen_def
   (prog5 : unit Mucore.file)
   (passes : StringSet.t)
-  ({ name; iargs; oargs; body } : GD.t)
+  ({ filename; recursive; name; iargs; oargs; body } : GD.t)
   : GD.t
   =
-  { name; iargs; oargs; body = Option.map (optimize_gen prog5 passes) body }
+  { filename;
+    recursive;
+    name;
+    iargs;
+    oargs;
+    body = Option.map (optimize_gen prog5 passes) body
+  }
   |> ConstraintPropagation.transform
   |> Specialization.transform
   |> InferAllocationSize.transform

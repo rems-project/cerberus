@@ -1,7 +1,10 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
 module IT = IndexTerms
+module RET = ResourceTypes
 module LC = LogicalConstraints
+module RP = ResourcePredicates
+module LAT = LogicalArgumentTypes
 module GT = GenTerms
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
@@ -152,9 +155,21 @@ let get_addr_offset_opt (it : IT.t) : (Sym.t * IT.t) option =
   let (IT (it_, _, loc)) = it in
   match it_ with
   | ArrayShift { base = IT (Sym p_sym, _, _); ct; index = it_offset } ->
-    Some (p_sym, IT.mul_ (IT.sizeOf_ ct loc, IT.cast_ Memory.size_bt it_offset loc) loc)
+    let it_offset =
+      if BT.equal (IT.bt it_offset) Memory.size_bt then
+        it_offset
+      else
+        IT.cast_ Memory.size_bt it_offset loc
+    in
+    Some (p_sym, IT.mul_ (IT.sizeOf_ ct loc, it_offset) loc)
   | Binop (Add, IT (Sym p_sym, _, _), it_offset) ->
-    Some (p_sym, IT.cast_ Memory.size_bt it_offset loc)
+    let it_offset =
+      if BT.equal (IT.bt it_offset) Memory.size_bt then
+        it_offset
+      else
+        IT.cast_ Memory.size_bt it_offset loc
+    in
+    Some (p_sym, it_offset)
   | Sym p_sym -> Some (p_sym, IT.num_lit_ Z.zero Memory.size_bt loc)
   | _ -> None
 
@@ -164,3 +179,33 @@ let get_addr_offset (it : IT.t) : Sym.t * IT.t =
   | Some r -> r
   | None ->
     failwith ("unsupported format for address: " ^ CF.Pp_utils.to_plain_string (IT.pp it))
+
+
+let get_recursive_preds (preds : (Sym.t * RP.definition) list) : SymSet.t =
+  let get_calls (pred : RP.definition) : SymSet.t =
+    pred.clauses
+    |> Option.get
+    |> List.map (fun (cl : RP.clause) -> cl.packing_ft)
+    |> List.map LAT.r_resource_requests
+    |> List.flatten
+    |> List.map snd
+    |> List.map fst
+    |> List.map ResourceTypes.predicate_name
+    |> List.filter_map (fun (n : RET.predicate_name) ->
+      match n with PName name -> Some name | Owned _ -> None)
+    |> SymSet.of_list
+  in
+  let module G = Graph.Persistent.Digraph.Concrete (Sym) in
+  let g =
+    List.fold_left
+      (fun g (fsym, pred) ->
+        SymSet.fold (fun gsym g' -> G.add_edge g' fsym gsym) (get_calls pred) g)
+      G.empty
+      preds
+  in
+  let module Oper = Graph.Oper.P (G) in
+  let closure = Oper.transitive_closure g in
+  preds
+  |> List.map fst
+  |> List.filter (fun fsym -> G.mem_edge closure fsym fsym)
+  |> SymSet.of_list

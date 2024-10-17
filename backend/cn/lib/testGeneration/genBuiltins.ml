@@ -30,6 +30,16 @@ let gen_syms_bits (name : string) : (BT.t * Sym.t) list =
   ]
 
 
+let mult_check (it_mult : IT.t) gt loc =
+  GT.assert_ (T (IT.gt_ (it_mult, IT.num_lit_ Z.zero (IT.bt it_mult) loc) loc), gt) loc
+
+
+let lt_check (it_max : IT.t) gt loc =
+  let sgn, sz = Option.get (BT.is_bits_bt (IT.bt it_max)) in
+  let min, _ = BT.bits_range (sgn, sz) in
+  GT.assert_ (T (IT.gt_ (it_max, IT.num_lit_ min (IT.bt it_max) loc) loc), gt) loc
+
+
 let min_sym = Sym.fresh_named "min"
 
 let ge_gen_sym_db = gen_syms_bits "ge"
@@ -45,14 +55,14 @@ let lt_gen_sym_db = gen_syms_bits "lt"
 
 let lt_gen (it_max : IT.t) (bt : BT.t) loc : GT.t =
   let fsym = List.assoc BT.equal bt lt_gen_sym_db in
-  GT.call_ (fsym, [ (max_sym, it_max) ]) bt loc
+  lt_check it_max (GT.call_ (fsym, [ (max_sym, it_max) ]) bt loc) loc
 
 
 let range_gen_sym_db = gen_syms_bits "range"
 
 let range_gen (it_min : IT.t) (it_max : IT.t) (bt : BT.t) loc : GT.t =
   let fsym = List.assoc BT.equal bt range_gen_sym_db in
-  GT.call_ (fsym, [ (min_sym, it_min); (max_sym, it_max) ]) bt loc
+  lt_check it_max (GT.call_ (fsym, [ (min_sym, it_min); (max_sym, it_max) ]) bt loc) loc
 
 
 let mult_sym = Sym.fresh_named "mult"
@@ -61,21 +71,36 @@ let mult_gen_sym_db = gen_syms_bits "mult"
 
 let mult_gen (it_mult : IT.t) (bt : BT.t) loc : GT.t =
   let fsym = List.assoc BT.equal bt mult_gen_sym_db in
-  GT.call_ (fsym, [ (mult_sym, it_mult) ]) bt loc
+  mult_check
+    it_mult
+    (GT.assert_
+       ( T (IT.gt_ (it_mult, IT.num_lit_ Z.zero bt loc) loc),
+         GT.call_ (fsym, [ (mult_sym, it_mult) ]) bt loc )
+       loc)
+    loc
 
 
 let mult_ge_gen_sym_db = gen_syms_bits "mult_ge"
 
 let mult_ge_gen (it_mult : IT.t) (it_min : IT.t) (bt : BT.t) loc : GT.t =
   let fsym = List.assoc BT.equal bt mult_ge_gen_sym_db in
-  GT.call_ (fsym, [ (mult_sym, it_mult); (min_sym, it_min) ]) bt loc
+  mult_check
+    it_mult
+    (GT.call_ (fsym, [ (mult_sym, it_mult); (min_sym, it_min) ]) bt loc)
+    loc
 
 
 let mult_lt_gen_sym_db = gen_syms_bits "mult_lt"
 
 let mult_lt_gen (it_mult : IT.t) (it_max : IT.t) (bt : BT.t) loc : GT.t =
   let fsym = List.assoc BT.equal bt mult_lt_gen_sym_db in
-  GT.call_ (fsym, [ (mult_sym, it_mult); (max_sym, it_max) ]) bt loc
+  mult_check
+    it_mult
+    (lt_check
+       it_max
+       (GT.call_ (fsym, [ (mult_sym, it_mult); (max_sym, it_max) ]) bt loc)
+       loc)
+    loc
 
 
 let mult_range_gen_sym_db = gen_syms_bits "mult_range"
@@ -83,7 +108,41 @@ let mult_range_gen_sym_db = gen_syms_bits "mult_range"
 let mult_range_gen (it_mult : IT.t) (it_min : IT.t) (it_max : IT.t) (bt : BT.t) loc : GT.t
   =
   let fsym = List.assoc BT.equal bt mult_range_gen_sym_db in
-  GT.call_ (fsym, [ (mult_sym, it_mult); (min_sym, it_min); (max_sym, it_max) ]) bt loc
+  mult_check
+    it_mult
+    (lt_check
+       it_max
+       (GT.call_
+          (fsym, [ (mult_sym, it_mult); (min_sym, it_min); (max_sym, it_max) ])
+          bt
+          loc)
+       loc)
+    loc
+
+
+let align_sym = Sym.fresh_named "align"
+
+let size_sym = Sym.fresh_named "size"
+
+let aligned_alloc_gen_sym = Sym.fresh_named "cn_gen_aligned_alloc"
+
+let aligned_alloc_gen (it_align : IT.t) (it_size : IT.t) loc : GT.t =
+  let it_align =
+    if BT.equal (IT.bt it_align) Memory.size_bt then
+      it_align
+    else
+      IT.cast_ Memory.size_bt it_align loc
+  in
+  let it_size =
+    if BT.equal (IT.bt it_size) Memory.size_bt then
+      it_size
+    else
+      IT.cast_ Memory.size_bt it_align loc
+  in
+  GT.call_
+    (aligned_alloc_gen_sym, [ (align_sym, it_align); (size_sym, it_size) ])
+    (BT.Loc ())
+    loc
 
 
 let is_builtin (sym : Sym.t) : bool =
@@ -94,4 +153,6 @@ let is_builtin (sym : Sym.t) : bool =
     mult_range_gen_sym_db
   ]
   |> List.map (List.map snd)
-  |> List.exists (List.mem Sym.equal sym)
+  |> List.flatten
+  |> List.cons aligned_alloc_gen_sym
+  |> List.mem Sym.equal sym

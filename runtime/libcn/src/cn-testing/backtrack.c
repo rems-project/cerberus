@@ -90,29 +90,42 @@ int cn_gen_backtrack_relevant_remap(char* from, char* to) {
 }
 
 int cn_gen_backtrack_relevant_remap_many(char* from[], char* to[]) {
+    int number_of_remaps = 0;
+    for (int i = 0; from[i] != 0; i++) {
+        number_of_remaps += 1;
+    }
+    if (number_of_remaps == 0) {
+        return 1;
+    }
+
+    char** toUnique = malloc(number_of_remaps * sizeof(char*));
+
     int successes = 1;
     for (int i = 0; from[i] != 0; i++) {
+        // Get length of string
+        size_t len = strlen(to[i]);
+
         // Copy the desired variable name
-        char toUniq[100];
-        strcpy(toUniq, to[i]);
+        toUnique[i] = (char*)malloc(len + 2);
+        strcpy(toUnique[i], to[i]);
 
         // Give it an impossible name, but unique
-        strcat(toUniq, "$");
+        (toUnique[i][len]) = '$';
+        (toUnique[i][len + 1]) = '\0';
 
         // We do this indirection in case there's a duplicate between `from` and `to`
-        successes *= cn_gen_backtrack_relevant_remap(from[i], toUniq);
+        successes &= cn_gen_backtrack_relevant_remap(from[i], toUnique[i]);
     }
+
     for (int i = 0; from[i] != 0; i++) {
-        // Copy the desired variable name
-        char toUniq[100];
-        strcpy(toUniq, to[i]);
-
-        // Give it an impossible name, but unique
-        strcat(toUniq, "$");
-
-        // We do this indirection in case there's a duplicate between `from` and `to`
-        successes *= cn_gen_backtrack_relevant_remap(toUniq, to[i]);
+        successes &= cn_gen_backtrack_relevant_remap(toUnique[i], to[i]);
     }
+
+    for (int i = 0; i < number_of_remaps; i++) {
+        free(toUnique[i]);
+    }
+    free(toUnique);
+
     return successes;
 }
 

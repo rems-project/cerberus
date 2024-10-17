@@ -5,4 +5,5 @@ int main()
     /*@ to_bytes Owned(p); @*/
     /*@ from_bytes Owned<int>(p); @*/
     /*@ to_bytes Owned<int>(p); @*/
+    /*@ from_bytes Owned<int>(p); @*/
 }

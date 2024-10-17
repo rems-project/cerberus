@@ -163,6 +163,7 @@ module WBT = struct
       | Integer -> return Integer
       | Bits (sign, n) -> return (Bits (sign, n))
       | Real -> return Real
+      | MemByte -> return MemByte
       | Alloc_id -> return Alloc_id
       | Loc () -> return (Loc ())
       | CType -> return CType
@@ -292,7 +293,7 @@ module WIT = struct
         match bt with
         | Unit | Bool | Integer | Bits _ | Real | Alloc_id
         | Loc ()
-        | CType | Struct _ | Record _ | Map _ | List _ | Tuple _ | Set _ ->
+        | MemByte | CType | Struct _ | Record _ | Map _ | List _ | Tuple _ | Set _ ->
           failwith "revisit for extended pattern language"
         | Datatype s ->
           let@ dt_info = get_datatype loc s in
@@ -400,6 +401,7 @@ module WIT = struct
         let@ () = ensure_z_fits_bits_type loc (sign, n) v in
         return (IT (Const c, BT.Bits (sign, n), loc))
       | Const (Q q) -> return (IT (Const (Q q), Real, loc))
+      | Const (MemByte b) -> return (IT (Const (MemByte b), BT.MemByte, loc))
       | Const (Pointer p) ->
         let rs = Option.get (BT.is_bits_bt Memory.uintptr_bt) in
         let@ () = ensure_z_fits_bits_type loc rs p.addr in
@@ -731,6 +733,8 @@ module WIT = struct
             return ()
           | Bits _, Loc () -> return ()
           | Loc (), Bits _ -> return ()
+          | MemByte, Bits _ -> return ()
+          | MemByte, Alloc_id -> return ()
           | source, target ->
             let msg =
               !^"Unsupported cast from"
@@ -956,6 +960,28 @@ module WIT = struct
       fail (illtyped_index_term loc it (IT.bt it) ~expected ~reason))
 end
 
+(* Throws a warning when the given index term is not a `u64`. *)
+let warn_when_not_u64
+  (ident : string)
+  (loc : Locations.t)
+  (bt : BaseTypes.t)
+  (sym : document option)
+  : unit
+  =
+  match bt with
+  | Bits (Unsigned, 64) -> ()
+  | _t ->
+    warn
+      loc
+      (squotes (string ident)
+       ^^^ !^"expects a"
+       ^^^ squotes !^"u64"
+       ^^ !^", but"
+       ^^^ (match sym with Some sym -> squotes sym ^^^ !^"with type" | None -> !^"type")
+       ^^^ squotes (BaseTypes.pp bt)
+       ^^^ !^"was provided. This will become an error in the future.")
+
+
 module WRET = struct
   open IndexTerms
 
@@ -991,6 +1017,7 @@ module WRET = struct
       assert (BT.equal (snd p.q) qbt);
       (*normalisation does not change bit types. If this assertion fails, we have to
         adjust the later code to use qbt.*)
+      warn_when_not_u64 "each" loc qbt (Some (Sym.pp (fst p.q)));
       let@ step = WIT.check loc (snd p.q) p.step in
       let@ step =
         match step with
@@ -1834,6 +1861,7 @@ module BaseTyping = struct
         | E_Everything -> return ()
       in
       let@ it = WIT.infer it in
+      warn_when_not_u64 "extract" (IT.loc it) (IT.bt it) (Some (IndexTerms.pp it));
       return (Extract (attrs, to_extract, it))
     | Unfold (f, its) ->
       let@ def = get_logical_function_def loc f in

@@ -2,6 +2,10 @@ type const =
   | Z of Z.t
   | Bits of (BaseTypes.sign * int) * Z.t
   | Q of Q.t
+  | MemByte of
+      { alloc_id : Z.t;
+        value : Z.t
+      }
   | Pointer of
       { alloc_id : Z.t;
         addr : Z.t
@@ -202,6 +206,8 @@ let pp
            ^^^ !^("0x" ^ Z.format "%x" (BaseTypes.normalise_to_range (Unsigned, n) v))
            ^^^ !^"*/"
        | Q q -> !^(Q.to_string q)
+       | MemByte { alloc_id = id; value } ->
+         braces (alloc_id id ^^ semi ^^ space ^^ !^("0x" ^ Z.format "%x" value))
        | Pointer { alloc_id = id; addr } ->
          braces (alloc_id id ^^ semi ^^ space ^^ !^("0x" ^ Z.format "%x" addr))
        | Alloc_id i -> !^("@" ^ Z.to_string i)
@@ -379,6 +385,8 @@ let rec dtree (IT (it_, bt, loc)) =
     | Const (Z z) -> Dleaf !^(Z.to_string z)
     | Const (Bits _) -> Dleaf (pp (IT (it_, bt, loc)))
     | Const (Q q) -> Dleaf !^(Q.to_string q)
+    | Const (MemByte { alloc_id = id; value }) ->
+      Dnode (pp_ctor "mem_byte", [ alloc_id id; Dleaf !^(Z.to_string value) ])
     | Const (Pointer { alloc_id = id; addr }) ->
       Dnode (pp_ctor "pointer", [ alloc_id id; Dleaf !^(Z.to_string addr) ])
     | Const (Bool b) -> Dleaf !^(if b then "true" else "false")

@@ -13,6 +13,8 @@ extern "C" {
 
     cn_pointer* cn_gen_alloc(cn_bits_u64* sz);
 
+    cn_pointer* cn_gen_aligned_alloc(cn_bits_u64* alignment, cn_bits_u64* sz);
+
     cn_bits_u64* cn_gen_alloc_size(cn_pointer* p);
 
 #ifdef __cplusplus

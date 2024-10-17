@@ -129,23 +129,24 @@ let generate_cn_assert ?(cn_source_loc_opt = None) ail_expr =
 
 let rec bt_to_cn_base_type = function
   | BT.Unit -> CN_unit
-  | BT.Bool -> CN_bool
-  | BT.Integer -> CN_integer
-  | BT.Bits (sign, size) ->
-    CN_bits ((match sign with BT.Unsigned -> CN_unsigned | BT.Signed -> CN_signed), size)
-  | BT.Real -> CN_real
-  | BT.Alloc_id -> CN_alloc_id
-  | BT.CType -> failwith "TODO BT.Ctype"
-  | BT.Loc () -> CN_loc
-  | BT.Struct tag -> CN_struct tag
-  | BT.Datatype tag -> CN_datatype tag
-  | BT.Record member_types ->
+  | Bool -> CN_bool
+  | Integer -> CN_integer
+  | Bits (sign, size) ->
+    CN_bits ((match sign with Unsigned -> CN_unsigned | Signed -> CN_signed), size)
+  | Real -> CN_real
+  | MemByte -> failwith (__FUNCTION__ ^ ": TODO MemByte")
+  | Alloc_id -> CN_alloc_id
+  | CType -> failwith (__FUNCTION__ ^ ": TODO Ctype")
+  | Loc () -> CN_loc
+  | Struct tag -> CN_struct tag
+  | Datatype tag -> CN_datatype tag
+  | Record member_types ->
     let ms = List.map (fun (id, bt) -> (id, bt_to_cn_base_type bt)) member_types in
     CN_record ms
-  | BT.Map (bt1, bt2) -> CN_map (bt_to_cn_base_type bt1, bt_to_cn_base_type bt2)
-  | BT.List bt -> CN_list (bt_to_cn_base_type bt)
-  | BT.Tuple bts -> CN_tuple (List.map bt_to_cn_base_type bts)
-  | BT.Set bt -> CN_set (bt_to_cn_base_type bt)
+  | Map (bt1, bt2) -> CN_map (bt_to_cn_base_type bt1, bt_to_cn_base_type bt2)
+  | List bt -> CN_list (bt_to_cn_base_type bt)
+  | Tuple bts -> CN_tuple (List.map bt_to_cn_base_type bts)
+  | Set bt -> CN_set (bt_to_cn_base_type bt)
 
 
 let str_of_cn_bitvector_type sign size =
@@ -634,7 +635,7 @@ let rec cn_to_ail_const_internal const =
   let ail_const =
     match const with
     | IT.Z z -> A.AilEconst (ConstantInteger (IConstant (z, Decimal, None)))
-    | Bits ((_sign, _size), i) ->
+    | MemByte { alloc_id = _; value = i } | Bits (_, i) ->
       A.AilEconst (ConstantInteger (IConstant (i, Decimal, None)))
     | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
     | Pointer z ->

@@ -52,7 +52,8 @@ type term =
         min : IT.t;
         max : IT.t;
         perm : IT.t;
-        inner : term
+        inner : term;
+        last_var : Sym.t
       }
 [@@deriving eq, ord]
 
@@ -63,7 +64,8 @@ val free_vars_term_list : term list -> SymSet.t
 val pp_term : term -> Pp.document
 
 type definition =
-  { name : Sym.t;
+  { filename : string;
+    name : Sym.t;
     iargs : (Sym.t * BT.t) list;
     oargs : (Sym.t * BT.t) list;
     body : term
