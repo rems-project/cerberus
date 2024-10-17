@@ -16,6 +16,68 @@ type opt_pass =
     transform : GT.t -> GT.t
   }
 
+module BranchPruning = struct
+  module Unused = struct
+    let transform (gt : GT.t) : GT.t =
+      let aux (gt : GT.t) : GT.t =
+        match gt with
+        | GT (ITE (it_cond, gt_then, gt_else), _, _) ->
+          if IT.is_true it_cond then
+            gt_then
+          else if IT.is_false it_cond then
+            gt_else
+          else
+            gt
+        | _ -> gt
+      in
+      GT.map_gen_pre aux gt
+
+
+    let pass = { name = "branch_elimination_unused"; transform }
+  end
+
+  module Inconsistent = struct
+    let rec contains_false_assertion (gt : GT.t) : bool =
+      let (GT (gt_, _, _)) = gt in
+      match gt_ with
+      | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> false
+      | Pick wgts -> List.for_all (fun (_, gt') -> contains_false_assertion gt') wgts
+      | Asgn ((it_addr, _), _, gt') ->
+        (match it_addr with
+         | IT (Const Null, _, _) -> true
+         | _ -> contains_false_assertion gt')
+      | Let (_, (_, gt_inner), gt') ->
+        contains_false_assertion gt_inner || contains_false_assertion gt'
+      | Assert (lc, gt') ->
+        (match lc with
+         | (T it | Forall (_, it)) when IT.is_false it -> true
+         | _ -> contains_false_assertion gt')
+      | ITE (_, gt_then, gt_else) ->
+        contains_false_assertion gt_then && contains_false_assertion gt_else
+      | Map (_, gt') -> contains_false_assertion gt'
+
+
+    let transform (gt : GT.t) : GT.t =
+      let aux (gt : GT.t) : GT.t =
+        match gt with
+        | GT (ITE (it_if, gt_then, gt_else), _, loc_ite) ->
+          if contains_false_assertion gt_else then
+            GT.assert_ (T it_if, gt_then) loc_ite
+          else if contains_false_assertion gt_then then
+            GT.assert_ (T (IT.not_ it_if (IT.loc it_if)), gt_else) loc_ite
+          else
+            gt
+        | _ -> gt
+      in
+      GT.map_gen_post aux gt
+
+
+    let pass = { name = "branch_elimination_inconsistent"; transform }
+  end
+
+  let passes = [ Unused.pass; Inconsistent.pass ]
+end
+
 module MemberIndirection = struct
   type kind =
     | Struct
@@ -532,6 +594,7 @@ module TermSimplification = struct
         GT.asgn_ ((simp_it it_addr, sct), simp_it it_val, gt') loc
       | Return it -> GT.return_ (simp_it it) loc
       | Assert (lc, gt') -> GT.assert_ (simp_lc lc, gt') loc
+      | ITE (it_if, gt_then, gt_else) -> GT.ite_ (simp_it it_if, gt_then, gt_else) loc
       | Map ((i, i_bt, it_perm), gt') -> GT.map_ ((i, i_bt, simp_it it_perm), gt') loc
       | _ -> gt
     in
@@ -1367,6 +1430,7 @@ let all_passes (prog5 : unit Mucore.file) =
   (MemberIndirection.pass :: Inline.passes)
   @ RemoveUnused.passes
   @ [ TermSimplification.pass prog5; PointerOffsets.pass ]
+  @ BranchPruning.passes
   @ SplitConstraints.passes
 
 
