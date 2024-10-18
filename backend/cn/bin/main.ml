@@ -496,7 +496,13 @@ let run_tests
               interactive
             }
           in
-          TestGeneration.run ~output_dir ~filename config sigma prog5;
+          TestGeneration.run
+            ~output_dir
+            ~filename
+            ~with_ownership_checking
+            config
+            sigma
+            prog5;
           if not dont_run then
             Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();

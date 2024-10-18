@@ -48,8 +48,7 @@
         goto cn_label_##last_var##_backtrack;                                           \
     }                                                                                   \
     void *tmp##_ptr = convert_from_cn_pointer(cn_pointer_add_cn_bits_u64(p, offset));   \
-    *(addr_ty*)tmp##_ptr = value;                                                       \
-    cn_assume_ownership(tmp##_ptr, sizeof(addr_ty), (char*)gen_name);
+    *(addr_ty*)tmp##_ptr = value;
 
 #define CN_GEN_LET_BEGIN(backtracks, var)                                               \
     int var##_backtracks = backtracks;                                                  \
