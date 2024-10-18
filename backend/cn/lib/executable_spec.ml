@@ -233,6 +233,9 @@ let main
   let c_predicate_defs, locs_and_c_predicate_decls, c_records' =
     generate_c_predicates_internal sigm prog5.resource_predicates
   in
+  let c_assume_spec_defs, c_assume_spec_decls =
+    generate_c_assume_pres_internal instrumentation sigm prog5
+  in
   let conversion_function_defs, conversion_function_decls =
     generate_conversion_and_equality_functions sigm
   in
@@ -286,7 +289,8 @@ let main
       (* record_equality_fun_prot_strs'; *)
       c_function_decls;
       "\n";
-      predicate_decls
+      predicate_decls;
+      c_assume_spec_decls
     ]
   in
   let cn_header_oc_str =
@@ -305,7 +309,8 @@ let main
       ownership_function_defs;
       c_function_defs;
       "\n";
-      c_predicate_defs
+      c_predicate_defs;
+      c_assume_spec_defs
     ]
   in
   output_to_oc cn_oc cn_defs_list;
