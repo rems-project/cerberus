@@ -10,13 +10,12 @@ Below are the installation instructions for installing Cerberus, CN,
 and their dependencies.
 
 
-1. Install a recent version of OCaml (we are using 5.0.0) and the opam
+1. Install a recent version of OCaml (we are using 5.0.0 -- 5.2.0) and the opam
 package manager for OCaml, following the instructions at
 <https://ocaml.org/docs/install.html>. (Remember to initialise opam
 via `opam init` after the installation of opam.)
 
-2. Install the GMP and MPFR libraries, and Python (a dependency of
-   Z3). On a Ubuntu system this is done via `sudo apt install libgmp-dev libmpfr-dev python2.7` .
+2. Install the GMP and MPFR libraries, and Z3. On a Ubuntu system this is done via `sudo apt install libgmp-dev libmpfr-dev z3` .
 
 3. Install the `dune` OCaml build system and Lem via
 
@@ -31,8 +30,7 @@ via `opam init` after the installation of opam.)
     ```
 
 5. In the downloaded `cerberus` directory run the following opam
-   command to install CN's opam-package dependencies, including
-   Z3. (Installation of Z3 usually takes relatively long.)
+   command to install CN's opam-package dependencies. 
 
     ```
     opam install --deps-only ./cerberus-lib.opam ./cn.opam
