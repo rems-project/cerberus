@@ -7,7 +7,6 @@ depends: [
   "monomorphic"
   "ocaml" {>= "4.14.0"}
   "ppx_deriving"
-  "z3" {>= "4.8.14"}
   "cmdliner"
   "ocamlgraph"
 ]
