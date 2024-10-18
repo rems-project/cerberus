@@ -232,8 +232,6 @@ let dtree dtree_i =
 
 (*CHT*)
 
-module SymMap = Map.Make(Sym)
-
 (* Type of nonterminal lines in a predicate clause.
   Corresponds to packing_ft *)
 type line =
