@@ -16,6 +16,100 @@ type opt_pass =
     transform : GT.t -> GT.t
   }
 
+module PushPull = struct
+  let pull_out_inner_generators (gt : GT.t) : GT.t =
+    let aux (gt : GT.t) : GT.t =
+      match gt with
+      | GT (Let (x_backtracks, (x, gt1), gt2), _, loc_let) ->
+        (match gt1 with
+         | GT (Asgn ((it_addr, sct), it_val, gt3), _, loc_asgn) ->
+           GT.asgn_
+             ((it_addr, sct), it_val, GT.let_ (x_backtracks, (x, gt3), gt2) loc_let)
+             loc_asgn
+         | GT (Let (y_backtracks', (y, gt3), gt4), _, loc_let') ->
+           let z = Sym.fresh () in
+           let gt4 =
+             GT.subst
+               (IT.make_subst [ (y, IT.sym_ (z, GT.bt gt3, Locations.other __LOC__)) ])
+               gt4
+           in
+           GT.let_
+             (y_backtracks', (z, gt3), GT.let_ (x_backtracks, (x, gt4), gt2) loc_let)
+             loc_let'
+         | GT (Assert (lc, gt3), _, loc_assert) ->
+           GT.assert_ (lc, GT.let_ (x_backtracks, (x, gt3), gt2) loc_let) loc_assert
+         | GT (ITE (it_if, gt_then, gt_else), _, loc_ite) ->
+           GT.ite_
+             ( it_if,
+               GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
+               GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
+             loc_ite
+         | GT (Pick wgts, _, loc_pick) ->
+           GT.pick_
+             (List.map_snd
+                (fun gt' -> GT.let_ (x_backtracks, (x, gt'), gt2) loc_let)
+                wgts)
+             loc_pick
+         | _ -> gt)
+      | _ -> gt
+    in
+    GT.map_gen_post aux gt
+
+
+  let push_in_outer_generators (gt : GT.t) : GT.t =
+    let aux (gt : GT.t) : GT.t =
+      match gt with
+      | GT
+          ( Asgn ((it_addr, sct), it_val, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
+            _,
+            loc_asgn )
+        when SymSet.is_empty (SymSet.inter (IT.free_vars it_addr) (IT.free_vars it_if)) ->
+        GT.ite_
+          ( it_if,
+            GT.asgn_ ((it_addr, sct), it_val, gt_then) loc_asgn,
+            GT.asgn_ ((it_addr, sct), it_val, gt_else) loc_asgn )
+          loc_ite
+      | GT
+          ( Let (x_backtracks, (x, gt1), GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
+            _,
+            loc_let )
+        when not (SymSet.mem x (IT.free_vars it_if)) ->
+        GT.ite_
+          ( it_if,
+            GT.let_ (x_backtracks, (x, gt1), gt_then) loc_let,
+            GT.let_ (x_backtracks, (x, gt1), gt_else) loc_let )
+          loc_ite
+      | GT
+          ( Let (x_backtracks, (x, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), gt2),
+            _,
+            loc_let ) ->
+        GT.ite_
+          ( it_if,
+            GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
+            GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
+          loc_ite
+      | GT (Assert (lc, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), _, loc_assert)
+        when SymSet.is_empty (SymSet.inter (LC.free_vars lc) (IT.free_vars it_if)) ->
+        GT.ite_
+          (it_if, GT.assert_ (lc, gt_then) loc_assert, GT.assert_ (lc, gt_else) loc_assert)
+          loc_ite
+      | _ -> gt
+    in
+    GT.map_gen_pre aux gt
+
+
+  let transform (gt : GT.t) : GT.t =
+    let rec loop (gt : GT.t) : GT.t =
+      let old_gt = gt in
+      let new_gt = gt |> pull_out_inner_generators |> push_in_outer_generators in
+      if GT.equal old_gt new_gt then new_gt else loop new_gt
+    in
+    loop gt
+
+
+  let pass = { name = "push_pull"; transform }
+end
+
 module BranchPruning = struct
   module Unused = struct
     let transform (gt : GT.t) : GT.t =
@@ -1448,7 +1542,7 @@ module Specialization = struct
 end
 
 let all_passes (prog5 : unit Mucore.file) =
-  (MemberIndirection.pass :: Inline.passes)
+  (PushPull.pass :: MemberIndirection.pass :: Inline.passes)
   @ RemoveUnused.passes
   @ [ TermSimplification.pass prog5; PointerOffsets.pass ]
   @ BranchPruning.passes
