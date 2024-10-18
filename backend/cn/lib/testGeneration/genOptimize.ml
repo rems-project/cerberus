@@ -471,7 +471,28 @@ module SplitConstraints = struct
     let pass = { name; transform }
   end
 
-  let passes = [ Conjunction.pass; Let.pass ]
+  module ITE = struct
+    let name = "split_ite"
+
+    let transform (gt : GT.t) : GT.t =
+      let aux (gt : GT.t) : GT.t =
+        let (GT (gt_, _bt, loc)) = gt in
+        match gt_ with
+        | Assert (T (IT (ITE (it_if, it_then, it_else), _, loc_ite)), gt') ->
+          GT.ite_
+            (it_if, GT.assert_ (T it_then, gt') loc, GT.assert_ (T it_else, gt') loc)
+            loc_ite
+        | Assert (T (IT (Binop (Or, it_1, it_2), _, loc_or)), gt') ->
+          GT.ite_ (it_1, gt', GT.assert_ (T it_2, gt') loc) loc_or
+        | _ -> gt
+      in
+      GT.map_gen_pre aux gt
+
+
+    let pass = { name; transform }
+  end
+
+  let passes = [ Conjunction.pass; Let.pass; ITE.pass ]
 end
 
 (** This pass infers how much allocation is needed
