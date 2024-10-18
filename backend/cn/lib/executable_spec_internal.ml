@@ -159,12 +159,11 @@ let generate_c_assume_pres_internal
     let dts = sigma.cn_datatypes in
     let preds = prog5.resource_predicates in
     let args =
-      match
-        ( List.assoc Sym.equal inst.fn sigma.declarations,
-          List.assoc Sym.equal inst.fn sigma.function_definitions )
-      with
-      | (_, _, Decl_function (_, _, arg_cts, _, _, _)), (_, _, _, arg_names, _) ->
-        List.combine arg_names (List.map (fun (_, ct, _) -> ct) arg_cts)
+      match List.assoc Sym.equal inst.fn sigma.declarations with
+      | _, _, Decl_function (_, _, args, _, _, _) ->
+        let arg_names = AT.get_computational (Option.get inst.internal) in
+        let arg_cts = List.map (fun (_, ct, _) -> ct) args in
+        List.map (fun ((x, bt), ct) -> (x, (bt, ct))) (List.combine arg_names arg_cts)
       | _ -> failwith ("unreachable @ " ^ __LOC__)
     in
     let globals = extract_global_variables prog5.globs in

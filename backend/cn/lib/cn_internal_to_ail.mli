@@ -189,7 +189,7 @@ val cn_to_ail_assume_predicates_internal
 val cn_to_ail_assume_pre_internal
   :  A.sigma_cn_datatype list ->
   C.union_tag ->
-  (C.union_tag * C.ctype) list ->
+  (C.union_tag * (BT.t * C.ctype)) list ->
   (C.union_tag * C.ctype) list ->
   (C.union_tag * ResourcePredicates.definition) list ->
   'a LogicalArgumentTypes.t ->

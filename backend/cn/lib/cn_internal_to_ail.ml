@@ -2686,7 +2686,7 @@ let cn_to_ail_resource_internal
         ownership_ctypes := Sctypes.to_ctype sct :: !ownership_ctypes;
         let sct_str = str_of_ctype (Sctypes.to_ctype sct) in
         let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
-        let owned_fn_name = "owned_" ^ sct_str in
+        let owned_fn_name = "check_owned_" ^ sct_str in
         let ptr_add_it = IT.(IT (Sym ptr_add_sym, BT.(Loc ()), Cerb_location.unknown)) in
         (* Hack with enum as sym *)
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
@@ -3898,7 +3898,41 @@ let cn_to_ail_assume_pre_internal dts sym args globals preds lat
   =
   let open Option in
   let fsym = Sym.fresh_named ("assume_" ^ Sym.pp_string sym) in
-  let bs, ss = cn_to_ail_assume_lat_internal_2 dts (Some sym) globals preds lat in
+  (* Convert arguments to CN types *)
+  let new_args =
+    List.map (fun (x, _) -> (x, Sym.fresh_named (Sym.pp_string x ^ "_cn"))) args
+  in
+  let bs =
+    List.map
+      (fun (x, y) ->
+        create_binding y (bt_to_ail_ctype (fst (List.assoc Sym.equal x args))))
+      new_args
+  in
+  let ss =
+    List.map
+      (fun (x, y) ->
+        A.AilSdeclaration
+          [ ( y,
+              Some
+                (mk_expr
+                   (wrap_with_convert_to
+                      (A.AilEident x)
+                      (fst (List.assoc Sym.equal x args)))) )
+          ])
+      new_args
+  in
+  let lat =
+    LAT.subst
+      (fun _ x -> x)
+      (IT.make_subst
+         (List.map
+            (fun (x, y) ->
+              (x, IT.sym_ (y, fst (List.assoc Sym.equal x args), Locations.other __LOC__)))
+            new_args))
+      lat
+  in
+  (* Generate function *)
+  let bs', ss' = cn_to_ail_assume_lat_internal_2 dts (Some sym) globals preds lat in
   let decl : A.sigma_declaration =
     ( fsym,
       ( Locations.other __LOC__,
@@ -3906,7 +3940,7 @@ let cn_to_ail_assume_pre_internal dts sym args globals preds lat
         Decl_function
           ( false,
             (empty_qualifiers, C.void),
-            List.map (fun (_, ct) -> (C.no_qualifiers, ct, false)) args,
+            List.map (fun (_, (_, ct)) -> (C.no_qualifiers, ct, false)) args,
             false,
             false,
             false ) ) )
@@ -3917,6 +3951,6 @@ let cn_to_ail_assume_pre_internal dts sym args globals preds lat
         0,
         Attrs [],
         List.map fst args,
-        A.(mk_stmt (AilSblock (bs, List.map mk_stmt ss))) ) )
+        A.(mk_stmt (AilSblock (bs @ bs', List.map mk_stmt (ss @ ss')))) ) )
   in
   (decl, def)
