@@ -1386,6 +1386,131 @@ module TermSimplification = struct
   let pass (prog5 : unit Mucore.file) = { name; transform = transform prog5 }
 end
 
+(** This pass performs rewrites [Simplify] would ideally do *)
+module TermSimplification' = struct
+  let name = "simplify_term"
+
+  let simplify_it (it : IT.t) : IT.t =
+    let aux (it : IT.t) : IT.t =
+      let (IT.IT (it_, bt, loc)) = it in
+      match it_ with
+      | Binop
+          ( EQ,
+            IT
+              ( Binop (Mul, IT (Binop (Div, IT (Sym x, x_bt, x_loc), it1), _, _), it2),
+                _,
+                _ ),
+            IT (Sym x', _, _) )
+      | Binop
+          ( EQ,
+            IT
+              ( Binop (MulNoSMT, IT (Binop (Div, IT (Sym x, x_bt, x_loc), it1), _, _), it2),
+                _,
+                _ ),
+            IT (Sym x', _, _) )
+      | Binop
+          ( EQ,
+            IT
+              ( Binop (Mul, IT (Binop (DivNoSMT, IT (Sym x, x_bt, x_loc), it1), _, _), it2),
+                _,
+                _ ),
+            IT (Sym x', _, _) )
+      | Binop
+          ( EQ,
+            IT
+              ( Binop
+                  ( MulNoSMT,
+                    IT (Binop (DivNoSMT, IT (Sym x, x_bt, x_loc), it1), _, _),
+                    it2 ),
+                _,
+                _ ),
+            IT (Sym x', _, _) )
+        when Sym.equal x x' && IT.equal it1 it2 ->
+        IT.eq_
+          (IT.mod_ (IT.sym_ (x, x_bt, x_loc), it1) loc, IT.num_lit_ Z.zero x_bt loc)
+          loc
+      | Binop
+          ( EQ,
+            IT (Sym x, x_bt, x_loc),
+            IT (Binop (Mul, IT (Binop (Div, IT (Sym x', _, _), it1), _, _), it2), _, _) )
+      | Binop
+          ( EQ,
+            IT (Sym x, x_bt, x_loc),
+            IT
+              (Binop (MulNoSMT, IT (Binop (Div, IT (Sym x', _, _), it1), _, _), it2), _, _)
+          )
+      | Binop
+          ( EQ,
+            IT (Sym x, x_bt, x_loc),
+            IT
+              (Binop (Mul, IT (Binop (DivNoSMT, IT (Sym x', _, _), it1), _, _), it2), _, _)
+          )
+      | Binop
+          ( EQ,
+            IT (Sym x, x_bt, x_loc),
+            IT
+              ( Binop (MulNoSMT, IT (Binop (DivNoSMT, IT (Sym x', _, _), it1), _, _), it2),
+                _,
+                _ ) )
+        when Sym.equal x x' && IT.equal it1 it2 ->
+        IT.eq_
+          (IT.mod_ (IT.sym_ (x, x_bt, x_loc), it1) loc, IT.num_lit_ Z.zero x_bt loc)
+          loc
+      | (Binop (Min, it1, it2) | Binop (Max, it1, it2)) when IT.equal it1 it2 -> it1
+      | Binop (Min, it1, it2) ->
+        (match (IT.is_bits_const it1, IT.is_bits_const it2) with
+         | Some (_, n1), Some (_, n2) -> IT.num_lit_ (Z.min n1 n2) bt loc
+         | Some ((sgn, sz), n), _ when Z.equal n (fst (BT.bits_range (sgn, sz))) -> it1
+         | _, Some ((sgn, sz), n) when Z.equal n (fst (BT.bits_range (sgn, sz))) -> it2
+         | Some ((sgn, sz), n), _ when Z.equal n (snd (BT.bits_range (sgn, sz))) -> it2
+         | _, Some ((sgn, sz), n) when Z.equal n (snd (BT.bits_range (sgn, sz))) -> it1
+         | _ -> it)
+      | Binop (Max, it1, it2) ->
+        (match (IT.is_bits_const it1, IT.is_bits_const it2) with
+         | Some (_, n1), Some (_, n2) -> IT.num_lit_ (Z.max n1 n2) bt loc
+         | Some ((sgn, sz), n), _ when Z.equal n (snd (BT.bits_range (sgn, sz))) -> it1
+         | _, Some ((sgn, sz), n) when Z.equal n (snd (BT.bits_range (sgn, sz))) -> it2
+         | Some ((sgn, sz), n), _ when Z.equal n (fst (BT.bits_range (sgn, sz))) -> it2
+         | _, Some ((sgn, sz), n) when Z.equal n (fst (BT.bits_range (sgn, sz))) -> it1
+         | _ -> it)
+      | _ -> it
+    in
+    IT.map_term_post aux it
+
+
+  let simplify_lc (lc : LC.t) : LC.t =
+    match lc with
+    | T it -> T (simplify_it it)
+    | Forall ((i, i_bt), IT (Binop (Implies, it_perm, it_body), _, loc_implies)) ->
+      let it_perm = simplify_it it_perm in
+      let it_body = simplify_it it_body in
+      if IT.is_false it_perm || IT.is_true it_body then
+        LC.T (IT.bool_ true loc_implies)
+      else
+        LC.Forall ((i, i_bt), IT.arith_binop Implies (it_perm, it_body) loc_implies)
+    | _ -> failwith __LOC__
+
+
+  let transform (gt : GT.t) : GT.t =
+    let aux (gt : GT.t) : GT.t =
+      let (GT (gt_, bt, loc)) = gt in
+      match gt_ with
+      | Alloc it -> GT.alloc_ (simplify_it it) loc
+      | Call (fsym, iargs) -> GT.call_ (fsym, List.map_snd simplify_it iargs) bt loc
+      | Asgn ((it_addr, sct), it_val, gt') ->
+        GT.asgn_ ((simplify_it it_addr, sct), simplify_it it_val, gt') loc
+      | Return it -> GT.return_ (simplify_it it) loc
+      | Assert (lc, gt') -> GT.assert_ (simplify_lc lc, gt') loc
+      | ITE (it_if, gt_then, gt_else) -> GT.ite_ (simplify_it it_if, gt_then, gt_else) loc
+      | Map ((i, i_bt, it_perm), gt') -> GT.map_ ((i, i_bt, simplify_it it_perm), gt') loc
+      | _ -> gt
+    in
+    GT.map_gen_post aux gt
+
+
+  let pass = { name; transform }
+end
+
 (** This pass removes unused variables *)
 module RemoveUnused = struct
   let name = "remove_unused"
@@ -2298,7 +2423,7 @@ let all_passes (prog5 : unit Mucore.file) =
    :: MemberIndirection.pass
    :: Inline.passes)
   @ RemoveUnused.passes
-  @ [ TermSimplification.pass prog5; PointerOffsets.pass ]
+  @ [ TermSimplification.pass prog5; TermSimplification'.pass; PointerOffsets.pass ]
   @ BranchPruning.passes
   @ SplitConstraints.passes
 
@@ -2321,23 +2446,23 @@ let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) :
   gt |> loop 5
 
 
-let optimize_gen_def
-  (prog5 : unit Mucore.file)
-  (passes : StringSet.t)
-  ({ filename; recursive; name; iargs; oargs; body } : GD.t)
-  : GD.t
-  =
-  { filename;
-    recursive;
-    name;
-    iargs;
-    oargs;
-    body = Option.map (optimize_gen prog5 passes) body
-  }
+let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.t) : GD.t =
+  let aux ({ filename; recursive; name; iargs; oargs; body } : GD.t) : GD.t =
+    { filename;
+      recursive;
+      name;
+      iargs;
+      oargs;
+      body = Option.map (optimize_gen prog5 passes) body
+    }
+  in
+  gd
+  |> aux
   |> ConstraintPropagation.transform
   |> Specialization.Equality.transform
   |> Specialization.Integer.transform
   |> InferAllocationSize.transform
+  |> aux
 
 
 let optimize
