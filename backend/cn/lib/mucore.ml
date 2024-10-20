@@ -432,3 +432,20 @@ type 'TY file =
     lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
     call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
   }
+
+let empty_file : 'TY file =
+  { main = None;
+    tagDefs = Pmap.empty Sym.compare;
+    globs = [];
+    funs = Pmap.empty Sym.compare;
+    extern = Pmap.empty Id.compare;
+    stdlib_syms =
+      (let open Set.Make (Sym) in
+       empty);
+    mk_functions = [];
+    resource_predicates = [];
+    logical_predicates = [];
+    datatypes = [];
+    lemmata = [];
+    call_funinfo = Pmap.empty Sym.compare
+  }
