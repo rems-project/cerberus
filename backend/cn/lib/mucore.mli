@@ -335,3 +335,5 @@ type 'TY file =
     lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
     call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
   }
+
+val empty_file : 'TY file
