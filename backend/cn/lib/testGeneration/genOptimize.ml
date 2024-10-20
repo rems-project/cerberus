@@ -2056,13 +2056,14 @@ module Specialization = struct
         | Let (backtracks, (x, (GT (Arbitrary, _, loc) as gt))) :: stmts'
         | Let (backtracks, (x, (GT (Uniform _, _, loc) as gt))) :: stmts'
         | Let (backtracks, (x, (GT (Alloc _, _, loc) as gt))) :: stmts' ->
-          let vars = SymSet.add x vars in
           let stmts', gt =
             match find_constraint vars x stmts' with
             | Some (stmts', it) -> (stmts', GT.return_ it loc)
             | None -> (stmts', gt)
           in
+          let vars = SymSet.add x vars in
           GS.Let (backtracks, (x, gt)) :: aux vars stmts'
+        | (Let (_, (x, _)) as stmt) :: stmts' -> stmt :: aux (SymSet.add x vars) stmts'
         | stmt :: stmts' -> stmt :: aux vars stmts'
         | [] -> []
       in
