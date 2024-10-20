@@ -231,7 +231,11 @@ let rec compile_it_lat
         in
         let y = Sym.fresh () in
         if BT.equal (BT.Record []) ret_bt then
-          GT.call_ (fsym, args) ret_bt loc
+          GT.let_
+            ( 0,
+              (y, GT.call_ (fsym, args) ret_bt loc),
+              GT.return_ (IT.sym_ (y, ret_bt, loc)) loc )
+            loc
         else (
           let it_ret =
             IT.recordMember_
