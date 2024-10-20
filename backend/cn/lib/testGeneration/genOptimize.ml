@@ -1427,8 +1427,6 @@ module SplitConstraints = struct
           GT.ite_
             (it_if, GT.assert_ (T it_then, gt') loc, GT.assert_ (T it_else, gt') loc)
             loc_ite
-        | Assert (T (IT (Binop (Or, it_1, it_2), _, loc_or)), gt') ->
-          GT.ite_ (it_1, gt', GT.assert_ (T it_2, gt') loc) loc_or
         | _ -> gt
       in
       GT.map_gen_pre aux gt
@@ -1437,7 +1435,79 @@ module SplitConstraints = struct
     let pass = { name; transform }
   end
 
-  let passes = [ Conjunction.pass; Let.pass; ITE.pass ]
+  module Disjunction = struct
+    let name = "split_disjunction"
+
+    let rec dnf_ (e : BT.t IT.term) : BT.t IT.term =
+      match e with
+      | Unop (Not, e') ->
+        (match dnf e' with
+         (* Double negation elimination *)
+         | IT (Unop (Not, IT (e, _, _)), _, _) -> e
+         (* Flip inequalities *)
+         | IT (Binop (LT, e1, e2), _, _) -> Binop (LE, e2, e1)
+         | IT (Binop (LE, e1, e2), _, _) -> Binop (LT, e2, e1)
+         (* De Morgan's Law *)
+         | IT (Binop (And, e1, e2), info, loc) ->
+           Binop
+             ( Or,
+               dnf (IT.IT (Unop (Not, e1), info, loc)),
+               dnf (IT (Unop (Not, e2), info, loc)) )
+         | IT (Binop (Or, e1, e2), info, loc) ->
+           Binop
+             ( And,
+               dnf (IT (Unop (Not, e1), info, loc)),
+               dnf (IT (Unop (Not, e2), info, loc)) )
+         (* Otherwise *)
+         | e'' -> Unop (Not, e''))
+      | Binop (And, e1, e2) ->
+        (match (dnf e1, dnf e2) with
+         (* Distribute conjunctions *)
+         | e', IT (Binop (Or, e_x, e_y), info, loc)
+         | IT (Binop (Or, e_x, e_y), info, loc), e' ->
+           Binop
+             ( Or,
+               dnf (IT (Binop (And, e', e_x), info, loc)),
+               dnf (IT (Binop (And, e', e_y), info, loc)) )
+         | e1, e2 -> Binop (And, e1, e2))
+      | _ -> e
+
+
+    and dnf (e : IT.t) : IT.t =
+      let (IT (e, info, loc)) = e in
+      IT (dnf_ e, info, loc)
+
+
+    let listify_constraints (it : IT.t) : IT.t list =
+      let rec loop (c : IT.t) : IT.t list =
+        match c with IT (Binop (Or, e1, e2), _, _) -> loop e1 @ loop e2 | _ -> [ c ]
+      in
+      loop it
+
+
+    let transform (gt : GT.t) : GT.t =
+      let aux (gt : GT.t) : GT.t =
+        let (GT (gt_, _bt, loc)) = gt in
+        match gt_ with
+        | Assert (T it, gt') ->
+          let it = dnf it in
+          (match it with
+           | IT (Binop (Or, _, _), _, _) ->
+             let cases = it |> listify_constraints in
+             List.fold_left
+               (fun gt_rest it' -> GT.ite_ (it', gt', gt_rest) loc)
+               (GT.assert_ (T (List.hd cases), gt') loc)
+               (List.tl cases)
+           | _ -> gt)
+        | _ -> gt
+      in
+      GT.map_gen_pre aux gt
+
+
+    let pass = { name; transform }
+  end
+
+  let passes = [ Conjunction.pass; Let.pass; ITE.pass; Disjunction.pass ]
 end
 
 (** This pass infers how much allocation is needed
