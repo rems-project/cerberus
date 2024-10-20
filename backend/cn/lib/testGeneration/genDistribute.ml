@@ -45,7 +45,12 @@ let apply_array_max_length (gt : GT.t) : GT.t =
     | Map ((i, i_bt, it_perm), gt') ->
       let _it_min, it_max = GenAnalysis.get_bounds (i, i_bt) it_perm in
       let loc = Locations.other __LOC__ in
-      let it_max_min = IT.le_ (IT.num_lit_ (Z.of_int 0) (IT.bt it_max) loc, it_max) loc in
+      let it_max_min =
+        IT.le_
+          ( IT.num_lit_ (Z.of_int 0) (IT.bt it_max) loc,
+            IT.add_ (it_max, IT.num_lit_ Z.one (IT.bt it_max) loc) loc )
+          loc
+      in
       let it_max_max =
         IT.lt_
           ( it_max,

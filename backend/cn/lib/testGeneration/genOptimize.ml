@@ -977,6 +977,9 @@ module BranchPruning = struct
       | Assert (lc, gt') ->
         (match lc with
          | (T it | Forall (_, it)) when IT.is_false it -> true
+         | Forall (_, IT (Binop (Implies, it_perm, it_body), _, _))
+           when IT.is_true it_perm && IT.is_false it_body ->
+           true
          | _ -> contains_false_assertion gt')
       | ITE (_, gt_then, gt_else) ->
         contains_false_assertion gt_then && contains_false_assertion gt_else
@@ -1313,20 +1316,36 @@ module SplitConstraints = struct
 
     let rec cnf_ (e : BT.t IT.term) : BT.t IT.term =
       match e with
-      (* Double negation elimination *)
-      | Unop (Not, IT (Unop (Not, IT (e, _, _)), _, _)) -> e
-      (* Flip inequalities *)
-      | Unop (Not, IT (Binop (LT, e1, e2), _, _)) -> Binop (LE, e2, e1)
-      | Unop (Not, IT (Binop (LE, e1, e2), _, _)) -> Binop (LT, e2, e1)
-      (* De Morgan's Law *)
-      | Unop (Not, IT (Binop (And, e1, e2), info, loc)) ->
-        Binop (Or, IT (Unop (Not, cnf e1), info, loc), IT (Unop (Not, cnf e2), info, loc))
-      | Unop (Not, IT (Binop (Or, e1, e2), info, loc)) ->
-        Binop (And, IT (Unop (Not, cnf e1), info, loc), IT (Unop (Not, cnf e2), info, loc))
-      (* Distribute disjunction *)
-      | Binop (Or, e1, IT (Binop (And, e2, e3), info, loc))
-      | Binop (Or, IT (Binop (And, e2, e3), info, loc), e1) ->
-        Binop (And, IT (Binop (Or, e1, e2), info, loc), IT (Binop (Or, e1, e3), info, loc))
+      | Unop (Not, e') ->
+        (match cnf e' with
+         (* Double negation elimination *)
+         | IT (Unop (Not, IT (e, _, _)), _, _) -> e
+         (* Flip inequalities *)
+         | IT (Binop (LT, e1, e2), _, _) -> Binop (LE, e2, e1)
+         | IT (Binop (LE, e1, e2), _, _) -> Binop (LT, e2, e1)
+         (* De Morgan's Law *)
+         | IT (Binop (And, e1, e2), info, loc) ->
+           Binop
+             ( Or,
+               cnf (IT.IT (Unop (Not, e1), info, loc)),
+               cnf (IT (Unop (Not, e2), info, loc)) )
+         | IT (Binop (Or, e1, e2), info, loc) ->
+           Binop
+             ( And,
+               cnf (IT (Unop (Not, e1), info, loc)),
+               cnf (IT (Unop (Not, e2), info, loc)) )
+         (* Otherwise *)
+         | e'' -> Unop (Not, e''))
+      | Binop (Or, e1, e2) ->
+        (match (cnf e1, cnf e2) with
+         (* Distribute disjunction *)
+         | e', IT (Binop (And, e_x, e_y), info, loc)
+         | IT (Binop (And, e_x, e_y), info, loc), e' ->
+           Binop
+             ( And,
+               cnf (IT (Binop (Or, e', e_x), info, loc)),
+               cnf (IT (Binop (Or, e', e_y), info, loc)) )
+         | e1, e2 -> Binop (Or, e1, e2))
       | _ -> e
 
 
