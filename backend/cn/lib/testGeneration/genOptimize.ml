@@ -1954,14 +1954,20 @@ module ConstraintPropagation = struct
       let (IT (it_, _, _)) = it in
       let open Option in
       match it_ with
-      | Binop (op, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)) ->
+      | Binop (op, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _))
+      | Binop
+          (op, IT (Cast (_, IT (Sym x, x_bt, _)), _, _), IT (Const (Bits (_, n)), _, _))
+        ->
         let@ bt_rep = IntRep.of_bt x_bt in
         (match op with
          | EQ -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.const n))))
          | LT -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.lt n))))
          | LE -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.leq n))))
          | _ -> None)
-      | Binop (op, IT (Const (Bits (_, n)), _, _), IT (Sym x, x_bt, _)) ->
+      | Binop (op, IT (Const (Bits (_, n)), _, _), IT (Sym x, x_bt, _))
+      | Binop
+          (op, IT (Const (Bits (_, n)), _, _), IT (Cast (_, IT (Sym x, x_bt, _)), _, _))
+        ->
         let@ bt_rep = IntRep.of_bt x_bt in
         (match op with
          | EQ -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.const n))))
@@ -1976,6 +1982,26 @@ module ConstraintPropagation = struct
           ( op,
             IT (Const (Bits (_, n)), _, _),
             IT (Binop (Add, IT (Const (Bits (_, m)), _, _), IT (Sym x, x_bt, _)), _, _) )
+      | Binop
+          ( op,
+            IT (Const (Bits (_, n)), _, _),
+            IT
+              ( Binop
+                  ( Add,
+                    IT (Cast (_, IT (Sym x, x_bt, _)), _, _),
+                    IT (Const (Bits (_, m)), _, _) ),
+                _,
+                _ ) )
+      | Binop
+          ( op,
+            IT (Const (Bits (_, n)), _, _),
+            IT
+              ( Binop
+                  ( Add,
+                    IT (Const (Bits (_, m)), _, _),
+                    IT (Cast (_, IT (Sym x, x_bt, _)), _, _) ),
+                _,
+                _ ) )
         when Z.equal m Z.one ->
         let@ bt_rep = IntRep.of_bt x_bt in
         (match op with
@@ -1984,6 +2010,16 @@ module ConstraintPropagation = struct
       | Binop
           ( op,
             IT (Binop (Sub, IT (Sym x, x_bt, _), IT (Const (Bits (_, m)), _, _)), _, _),
+            IT (Const (Bits (_, n)), _, _) )
+      | Binop
+          ( op,
+            IT
+              ( Binop
+                  ( Sub,
+                    IT (Cast (_, IT (Sym x, x_bt, _)), _, _),
+                    IT (Const (Bits (_, m)), _, _) ),
+                _,
+                _ ),
             IT (Const (Bits (_, n)), _, _) )
         when Z.equal m Z.one ->
         let@ bt_rep = IntRep.of_bt x_bt in
@@ -2059,6 +2095,94 @@ module ConstraintPropagation = struct
         (match op with
          | EQ | LT | LE ->
            of_it (IT.arith_binop op (it', IT.num_lit_ (Z.sub n m) bt loc) loc)
+         | _ -> None)
+      | Binop (op, IT (Const (Bits (_, n)), bt, _), IT (Binop (Mul, it1, it2), _, _))
+      | Binop
+          ( op,
+            IT (Cast (_, IT (Const (Bits (_, n)), _, _)), bt, _),
+            IT (Binop (Mul, it1, it2), _, _) )
+      | Binop
+          ( op,
+            IT (Cast (_, IT (Const (Bits (_, n)), _, _)), bt, _),
+            IT (Cast (_, IT (Binop (Mul, it1, it2), _, _)), _, _) ) ->
+        (match (it1, it2) with
+         | ( (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it'),
+             IT (Const (Bits (_, m)), _, _) )
+         | ( (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it'),
+             IT (Cast (_, IT (Const (Bits (_, m)), _, _)), _, _) )
+         | ( IT (Const (Bits (_, m)), _, _),
+             (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it') )
+         | ( IT (Cast (_, IT (Const (Bits (_, m)), _, _)), _, _),
+             (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it') ) ->
+           let loc = Locations.other __LOC__ in
+           (match BT.is_bits_bt bt' with
+            | Some (sgn', sz')
+              when Z.geq
+                     (snd (BT.bits_range (sgn, sz)))
+                     (Z.pow (snd (BT.bits_range (sgn', sz'))) 2) ->
+              (match op with
+               | EQ when Z.divisible n m ->
+                 of_it (IT.eq_ (IT.num_lit_ (Z.div n m) bt loc, it') loc)
+               | LE when Z.geq n Z.zero && Z.gt m Z.zero ->
+                 of_it (IT.le_ (IT.num_lit_ (Z.div n m) bt loc, it') loc)
+               | LE when Z.leq n Z.zero && Z.gt m Z.zero ->
+                 of_it
+                   (IT.le_
+                      (IT.num_lit_ (Z.div (Z.add n (Z.sub m Z.one)) m) bt loc, it')
+                      loc)
+               | LT when Z.geq n Z.zero && Z.gt m Z.zero ->
+                 of_it (IT.lt_ (IT.num_lit_ (Z.div n m) bt loc, it') loc)
+               | LT when Z.leq n Z.zero && Z.gt m Z.zero ->
+                 of_it
+                   (IT.lt_
+                      (IT.num_lit_ (Z.div (Z.add n (Z.sub m Z.one)) m) bt loc, it')
+                      loc)
+               | _ -> None)
+            | _ -> None)
+         | _ -> None)
+      | Binop (op, IT (Binop (Mul, it1, it2), _, _), IT (Const (Bits (_, n)), bt, _))
+      | Binop
+          ( op,
+            IT (Binop (Mul, it1, it2), _, _),
+            IT (Cast (_, IT (Const (Bits (_, n)), _, _)), bt, _) )
+      | Binop
+          ( op,
+            IT (Cast (_, IT (Binop (Mul, it1, it2), _, _)), _, _),
+            IT (Cast (_, IT (Const (Bits (_, n)), _, _)), bt, _) ) ->
+        (match (it1, it2) with
+         | ( (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it'),
+             IT (Const (Bits (_, m)), _, _) )
+         | ( (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it'),
+             IT (Cast (_, IT (Const (Bits (_, m)), _, _)), _, _) )
+         | ( IT (Const (Bits (_, m)), _, _),
+             (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it') )
+         | ( IT (Cast (_, IT (Const (Bits (_, m)), _, _)), _, _),
+             (IT (Cast (Bits (sgn, sz), IT (Sym _, bt', _)), _, _) as it') ) ->
+           let loc = Locations.other __LOC__ in
+           (match BT.is_bits_bt bt' with
+            | Some (sgn', sz')
+              when Z.geq
+                     (snd (BT.bits_range (sgn, sz)))
+                     (Z.pow (snd (BT.bits_range (sgn', sz'))) 2) ->
+              (match op with
+               | EQ when Z.divisible n m ->
+                 of_it (IT.eq_ (IT.num_lit_ (Z.div n m) bt loc, it') loc)
+               | LE when Z.geq n Z.zero && Z.gt m Z.zero ->
+                 of_it (IT.le_ (it', IT.num_lit_ (Z.div n m) bt loc) loc)
+               | LE when Z.leq n Z.zero && Z.gt m Z.zero ->
+                 of_it
+                   (IT.le_
+                      (it', IT.num_lit_ (Z.div (Z.add n (Z.sub m Z.one)) m) bt loc)
+                      loc)
+               | LT when Z.geq n Z.zero && Z.gt m Z.zero ->
+                 of_it (IT.lt_ (it', IT.num_lit_ (Z.div n m) bt loc) loc)
+               | LT when Z.leq n Z.zero && Z.gt m Z.zero ->
+                 of_it
+                   (IT.lt_
+                      (it', IT.num_lit_ (Z.div (Z.add n (Z.sub m Z.one)) m) bt loc)
+                      loc)
+               | _ -> None)
+            | _ -> None)
          | _ -> None)
       (* END Simplify stuff*)
       | Unop
