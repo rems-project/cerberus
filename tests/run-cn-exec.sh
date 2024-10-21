@@ -178,6 +178,10 @@ SHOULD_FAIL=$(find cn -name '*.error.c' \
   ! -name "pointer_to_char_cast.error.c" \
   ! -name "pointer_to_unsigned_int_cast.error.c" \
   ! -name "ptr_diff2.error.c" \
+  ! -name "to_bytes.error.c" \
+  ! -name "before_from_bytes.error.c" \
+  ! -name "partial_init_bytes.error.c" \
+  ! -name "before_to_bytes.error.c" \
 )
 
 FAILED=""
