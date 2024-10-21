@@ -249,7 +249,7 @@ type dep_tree =
   get an assignment for those free variables *)
 (*CHT TODO: this assumes candidate and exp have *exactly* the same structure *)
 let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
-  let arrange l = List.map snd ( List.sort (fun p1 p2 -> Id.compare (fst p1) (fst p2)) l) in
+  let sort_by_id l = List.map snd ( List.sort (fun p1 p2 -> Id.compare (fst p1) (fst p2)) l) in
   let merge = (fun k v1 v2 -> let _ = k in if v1 == v2 then Some v1 else None) in
   let match_lists exps exps' = (
     let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
@@ -287,7 +287,7 @@ let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
     let _ = (n, exp1, n', exp1') in
     failwith "CHT - out of scope"
   | Struct (name, fields), Struct (name', fields') -> if (name == name')
-    then match_lists (arrange fields) (arrange fields')
+    then match_lists (sort_by_id fields) (sort_by_id fields')
     else None
   | StructMember (exp1, id), StructMember (exp1', id') ->
     let _ = (id, exp1, id', exp1') in
@@ -306,8 +306,7 @@ let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
     failwith "CHT - out of scope"
   | Constructor (name, args), Constructor (name', args') -> if (name == name')
     then
-      let arrange l = List.map snd ( List.sort (fun p1 p2 -> Id.compare (fst p1) (fst p2)) l) in
-      match_lists (arrange args) (arrange args')
+      match_lists (sort_by_id args) (sort_by_id args')
     else None
   | MemberShift (ba, v, id), MemberShift (ba', v', id') ->
     let _ = ((ba, v, id), (ba', v', id')) in
@@ -382,7 +381,45 @@ let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
   | Cast (bt, exp1), Cast (bt', exp1') ->
     let _ = ((bt, exp1), (bt', exp1')) in
     failwith "CHT - out of scope"
-  | _, _ -> None
+  (* included so the compiler will catch any missing new constructors *)
+  | Const _, _ -> None
+  | Unop _, _ -> None
+  | Binop _, _-> None
+  | ITE _, _ -> None
+  | EachI _, _ -> None
+  | Tuple _, _ -> None
+  | NthTuple _, _ -> None
+  | Struct _, _ -> None
+  | StructMember _, _ -> None
+  | StructUpdate _, _ -> None
+  | Record _, _ -> None
+  | RecordMember _, _ -> None
+  | RecordUpdate _, _ -> None
+  | Constructor _, _ -> None
+  | MemberShift _, _ -> None
+  | ArrayShift _, _ -> None
+  | CopyAllocId _, _ -> None
+  | HasAllocId _, _ -> None
+  | SizeOf _, _ -> None
+  | OffsetOf _, _ -> None
+  | Nil _, _ -> None
+  | Cons _, _ -> None
+  | Head _, _ -> None
+  | Tail _, _ -> None
+  | NthList _, _ -> None
+  | ArrayToList _, _ -> None
+  | Representable _, _ -> None
+  | Good _, _ -> None
+  | Aligned _, _ -> None
+  | WrapI _, _ -> None
+  | MapConst _, _ -> None
+  | MapSet _, _ -> None
+  | MapGet _, _ -> None
+  | MapDef _, _ -> None
+  | Apply _, _ -> None
+  | Let _, _ -> None
+  | Match _, _ -> None
+  | Cast _, _ -> None
 
 (* Get the free variables from an expression *)
 let get_fvs (exp : IT.t) : Sym.t list = SymSet.to_list (IT.free_vars exp)
@@ -409,7 +446,7 @@ let rec to_tree_aux (lines : packing_ft) (defs : dep_tree SymMap.t) : IT.t * dep
     let root = NodeLT (ln, convert_children vs) in
     let new_defs = SymMap.add v root defs in
     to_tree_aux next new_defs
-  | Constraint (lc, i, next) -> let _ = (lc, i, next) in failwith "CHT - out of scope for now"
+  | Constraint (_, _, next) -> to_tree_aux next defs (*CHT TODO - trees with asserts are out of scope for now*)
   | I it -> (it, defs)
 
 (* Convert the body of a predicate clause into a variable-assignment dependency tree *)

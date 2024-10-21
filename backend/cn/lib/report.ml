@@ -44,6 +44,7 @@ let add_labeled lab view mp = StrMap.add lab view mp
 
 type state_report =
   { where : where_report;
+    invalid_resources : simp_view labeled_view;
     not_given_to_solver : simp_view labeled_view;
     resources : simp_view labeled_view;
     constraints : simp_view labeled_view;
@@ -185,6 +186,11 @@ let simp_view s =
   else
     [ div [ btn; div [ val_simp ]; div [ val_orig ] ] ]
 
+let make_invalid_resources rs =
+  h
+  1
+  "Invalid resources"
+  (interesting_uninteresting table_without_head simp_view rs)
 
 let make_not_given_to_solver ds =
   h
@@ -401,7 +407,7 @@ th {
     color: rgb(150, 150, 150);
     background-color: rgb(50, 50, 50);
   }
-  
+
   .toggle {
     background-color: #CCCCCC;
     color: black;
@@ -618,7 +624,7 @@ function create_line(n, str) {
   return ret
 }
 
-function make_toggles(className, labels) {     
+function make_toggles(className, labels) {
   for(const btn of document.getElementsByClassName(className)) {
     const opts = []
     for (let i = btn.nextSibling; i !== null; i = i.nextSibling) {
@@ -673,6 +679,7 @@ let make_state (report : state_report) requested unproven predicate_hints =
       make_requested requested;
       make_unproven unproven;
       make_predicate_hints predicate_hints;
+      make_invalid_resources report.invalid_resources;
       make_not_given_to_solver report.not_given_to_solver;
       make_resources report.resources;
       make_terms report.terms;
