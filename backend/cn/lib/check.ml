@@ -1769,9 +1769,8 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          { name = Owned (ct, init); pointer; iargs = [] }
        in
        let bytes_qpred sym ct pointer init : RET.qpredicate_type =
-         (* TODO - how is the basetype of qpreds determined in the code base? *)
          let here = Locations.other __FUNCTION__ in
-         let bt' = BT.Bits (Unsigned, 64) in
+         let bt' = WellTyped.quantifier_bt in
          { q = (sym, bt');
            q_loc = here;
            step = IT.num_lit_ Z.one bt' here;
@@ -1780,6 +1779,41 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            pointer;
            iargs = []
          }
+       in
+       let bytes_constraints ~(value : IT.t) ~(byte_arr : IT.t) (ct : Sctypes.t) =
+         (* FIXME this hard codes big endianness but this should be switchable *)
+         let here = Locations.other __FUNCTION__ in
+         match ct with
+         | Sctypes.Void | Array (_, _) | Struct _ | Function (_, _, _) -> assert false
+         | Integer it ->
+           let bt = IT.bt value in
+           let lhs = value in
+           let rhs =
+             let[@ocaml.warning "-8"] (b :: bytes) =
+               List.init (Memory.size_of_integer_type it) (fun i ->
+                 let index = int_lit_ i WellTyped.quantifier_bt here in
+                 let casted = cast_ bt (map_get_ byte_arr index here) here in
+                 let shift_amt = int_lit_ (i * 8) bt here in
+                 IT.IT (Binop (ShiftLeft, casted, shift_amt), bt, here))
+             in
+             List.fold_left (fun x y -> IT.add_ (x, y) here) b bytes
+           in
+           eq_ (lhs, rhs) here
+         | Pointer _ ->
+           (* FIXME this totally ignores provenances *)
+           let bt = WellTyped.quantifier_bt in
+           let lhs = cast_ bt value here in
+           let rhs =
+             let[@ocaml.warning "-8"] (b :: bytes) =
+               List.init Memory.size_of_pointer (fun i ->
+                 let index = int_lit_ i bt here in
+                 let casted = cast_ bt (map_get_ byte_arr index here) here in
+                 let shift_amt = int_lit_ (i * 8) bt here in
+                 IT.IT (Binop (ShiftLeft, casted, shift_amt), bt, here))
+             in
+             List.fold_left (fun x y -> IT.add_ (x, y) here) b bytes
+           in
+           eq_ (lhs, rhs) here
        in
        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
        let aux loc stmt =
@@ -1791,47 +1825,42 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          | To_from_bytes ((To | From), { name = PName _; _ }) ->
            fail (fun _ -> { loc; msg = Byte_conv_needs_owned })
          | To_from_bytes (To, { name = Owned (ct, init); pointer; _ }) ->
-           let@ _ =
+           let@ (_, O value), _ =
              RI.Special.predicate_request
                loc
                (Access To_bytes)
                (bytes_pred ct pointer init, None)
            in
            let q_sym = Sym.fresh_named "to_bytes" in
-           let bt = BT.Bits (Unsigned, 64) in
-           let@ () =
-             add_r
-               loc
-               ( Q (bytes_qpred q_sym ct pointer init),
-                 O (default_ (BT.Map (bt, Memory.bt_of_sct Sctypes.char_ct)) loc) )
-           in
+           let bt = WellTyped.quantifier_bt in
+           let map_bt = BT.Map (bt, Memory.bt_of_sct Sctypes.char_ct) in
+           let byte_sym, byte_arr = IT.fresh_named map_bt "byte_arr" here in
+           let@ () = add_a byte_sym map_bt (loc, lazy (Pp.string "byte array")) in
+           let@ () = add_r loc (Q (bytes_qpred q_sym ct pointer init), O byte_arr) in
            (match init with
-            | Uninit -> return ()
-            | Init ->
-              warn loc !^"byte conversion is being implemented - ignoring for now";
-              return ())
+            | Uninit -> add_c loc (LC.T (IT.eq_ (byte_arr, default_ map_bt here) here))
+            | Init -> add_c loc (LC.T (bytes_constraints ~value ~byte_arr ct)))
          | To_from_bytes (From, { name = Owned (ct, init); pointer; _ }) ->
            let q_sym = Sym.fresh_named "from_bytes" in
-           let@ _ =
+           let@ (_, O byte_arr), _ =
              RI.Special.qpredicate_request
                loc
                (Access From_bytes)
                (bytes_qpred q_sym ct pointer init, None)
            in
+           let value_bt = Memory.bt_of_sct ct in
+           let value_sym, value = IT.fresh_named value_bt "value" here in
            let@ () =
-             add_r
-               loc
-               (P (bytes_pred ct pointer init), O (default_ (Memory.bt_of_sct ct) loc))
+             add_a value_sym value_bt (loc, lazy (Pp.string "value from bytes"))
            in
+           let@ () = add_r loc (P (bytes_pred ct pointer init), O value) in
            let@ () =
              (* TODO - why is this constraint necessary here? *)
              add_c here (LC.T (IT.good_pointer ~pointee_ct:ct pointer here))
            in
            (match init with
-            | Uninit -> return ()
-            | Init ->
-              warn loc !^"byte conversion is being implemented - ignoring for now";
-              return ())
+            | Uninit -> add_c loc (LC.T (IT.eq_ (value, default_ value_bt here) here))
+            | Init -> add_c loc (LC.T (bytes_constraints ~value ~byte_arr ct)))
          | Have lc ->
            let@ _lc = WellTyped.WLC.welltyped loc lc in
            fail (fun _ -> { loc; msg = Generic !^"todo: 'have' not implemented yet" })

@@ -17,8 +17,7 @@
   ocamlgraph
   result
   str
-  unix
-  z3))
+  unix))
 
 ; There is already a Version in Cerb_frontend, but if new commits only require
 ; rebuilding the CN backend that module will be out of date.
