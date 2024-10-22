@@ -4,6 +4,12 @@
 
 #include <cn-testing/prelude.h>
 
+static uint8_t null_in_every = 2;
+
+void set_null_in_every(uint8_t n) {
+    null_in_every = n;
+}
+
 static hash_table* pointer_size_map = 0;
 
 void cn_gen_alloc_reset(void) {
@@ -19,8 +25,8 @@ cn_pointer* cn_gen_alloc(cn_bits_u64* sz) {
 
     if (bytes == 0) {
         void* p;
-        uint64_t rnd = convert_from_cn_bits_u64(cn_gen_uniform_cn_bits_u64(0));
-        if ((rnd % 2) == 0) {
+        uint64_t rnd = convert_from_cn_bits_u8(cn_gen_uniform_cn_bits_u8(null_in_every));
+        if (rnd == 0) {
             p = NULL;
         }
         else {

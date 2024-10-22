@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+    void set_null_in_every(uint8_t n);
+
     void cn_gen_alloc_reset(void);
 
     cn_pointer* cn_gen_alloc(cn_bits_u64* sz);
