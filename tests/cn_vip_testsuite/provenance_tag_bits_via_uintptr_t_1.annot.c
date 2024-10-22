@@ -1,3 +1,4 @@
+// NOTE: terminates with cvc5 but not Z3
 #include "refinedc.h"
 
 #include <assert.h>

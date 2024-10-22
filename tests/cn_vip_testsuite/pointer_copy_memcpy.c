@@ -8,11 +8,15 @@ int main()
 {
   int *p = &x;
   int *q;
-  /*CN_VIP*/unsigned char *q_bytes = block_int_ptr_to_block_uchar_arr(&q);
-  /*CN_VIP*/unsigned char *p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
-  _memcpy (q_bytes, p_bytes, sizeof p);
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(p_bytes); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes Block<int*>(&q); @*/
+  _memcpy ((unsigned char*)&q, (unsigned char*)&p, sizeof p);
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+#ifdef NO_ROUND_TRIP
+  /*CN_VIP*/p = __cerbvar_copy_alloc_id((uintptr_t)p, &x); // only for *p in assertion
+  /*CN_VIP*/q = __cerbvar_copy_alloc_id((uintptr_t)q, &x);
+#endif
   *q = 11; // is this free of undefined behaviour?
   //CN_VIP printf("*p=%d  *q=%d\n",*p,*q);
   /*CN_VIP*//*@ assert(*p == 11i32 && *q == 11i32); @*/

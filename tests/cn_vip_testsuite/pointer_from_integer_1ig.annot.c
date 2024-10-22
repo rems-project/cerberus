@@ -3,14 +3,16 @@
 //CN_VIP #include <stdio.h>
 #include <stdint.h>
 #include "charon_address_guesses.h"
+#include "cn_lemmas.h"
 void f(uintptr_t i) {
   int j=5;
+  /*CN_VIP*//*@ apply assert_equal(i, (u64)&j); @*/
 #if defined(ANNOT)
   int *p = copy_alloc_id(i, &j);
 #else
   int *p = (int*)i;
 #endif
-  /*CN_VIP*/ /*@ assert ((alloc_id) p == (alloc_id) &j);@*/
+  /*CN_VIP*//*@ assert ((alloc_id) p == (alloc_id) &j);@*/
   if (p==&j) {
     *p=7;
     /*CN_VIP*//*@ assert (j == 7i32); @*/

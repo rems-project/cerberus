@@ -20,7 +20,7 @@ int main()
   /*CN_VIP*/bit=0;
   for (int k=0; k<uintptr_t_width; k++)
   /*@ inv i == (u64) p;
-          (u64) p == (u64) &x;
+          ptr_eq(p, &x);
           uintptr_t_width == 64u64;
           (0i32 <= k) && (k <= 64i32);
           let k_mask = shift_left(1u64, (u64) k) - 1u64;
