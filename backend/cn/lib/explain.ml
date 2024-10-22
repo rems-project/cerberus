@@ -81,7 +81,6 @@ type log = log_entry list (* most recent first *)
 
   let rec check_clause (g : Global.t) (c : ResourcePredicates.clause) (candidate : IT.t) =
     let graph = LAT.to_tree c.packing_ft in
-    (*TODO: how to convert guard to LC to add in line below?*)
     let cs, vs = (getClauseConstraints graph candidate g) in
     let cs' = List.concat [cs; convert_symmap_to_lc vs; [LC.t_ c.guard]] in
     ask_solver g cs'
@@ -93,7 +92,7 @@ type log = log_entry list (* most recent first *)
     then
       [Error (!^"Candidate " ^/^ IT.pp candidate ^/^ !^" has different type from
         predicate output: " ^/^ BT.pp (IT.basetype candidate) ^/^  !^" versus " ^/^ BT.pp def.oarg_bt ^/^ !^".")]
-    else (*CHT TODO*)
+    else
       match def.clauses with
       | None -> [Unknown (!^"Predicate " ^/^ ResourcePredicates.pp_definition def ^/^ !^" is uninterpreted. ")]
         (* ([Error (!^"No clauses in definition of predicate " ^/^
