@@ -43,6 +43,7 @@ let add_request
   let gd : GD.t =
     { filename = Option.get (Cerb_location.get_filename pred.loc);
       recursive = SymSet.mem fsym recursive;
+      spec = false;
       name = fsym;
       iargs =
         (pred.pointer, BT.Loc ()) :: pred.iargs
@@ -295,7 +296,7 @@ let rec compile_clauses
 let compile_pred
   (recursive_preds : SymSet.t)
   (preds : (Sym.t * RP.definition) list)
-  ({ filename; recursive; name; iargs; oargs; body } : GD.t)
+  ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
   : unit m
   =
   assert (Option.is_none body);
@@ -310,7 +311,7 @@ let compile_pred
       oargs
       (Option.get pred.clauses)
   in
-  let gd : GD.t = { filename; recursive; name; iargs; oargs; body = Some gt } in
+  let gd : GD.t = { filename; recursive; spec; name; iargs; oargs; body = Some gt } in
   fun s -> ((), GD.add_context gd s)
 
 
@@ -368,7 +369,7 @@ let compile_spec
       (LAT.map (fun _ -> IT.unit_ here) lat)
   in
   let gd : GD.t =
-    { filename; recursive = false; name; iargs = []; oargs; body = Some gt }
+    { filename; recursive = false; spec = true; name; iargs = []; oargs; body = Some gt }
   in
   fun s -> ((), GD.add_context gd s)
 

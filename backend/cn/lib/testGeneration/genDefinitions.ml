@@ -4,6 +4,7 @@ module GT = GenTerms
 type t =
   { filename : string;
     recursive : bool;
+    spec : bool;
     name : Sym.t;
     iargs : (Sym.t * GBT.t) list;
     oargs : (Sym.t * GBT.t) list;
@@ -11,7 +12,9 @@ type t =
   }
 [@@deriving eq, ord]
 
-let mangled_name { filename = _; recursive = _; name; iargs; oargs = _; body = _ } : Sym.t
+let mangled_name
+  { filename = _; recursive = _; spec = _; name; iargs; oargs = _; body = _ }
+  : Sym.t
   =
   GenUtils.get_mangled_name (name :: List.map fst iargs)
 
@@ -49,7 +52,9 @@ let pp_context (ctx : context) : Pp.document =
   surround_separate_map 2 1 empty lbracket (semi ^^ twice hardline) rbracket pp defns
 
 
-let add_context ({ filename; recursive; name; iargs; oargs; body } : t) (ctx : context)
+let add_context
+  ({ filename; recursive; spec; name; iargs; oargs; body } : t)
+  (ctx : context)
   : context
   =
   let desired_iargs = List.map fst iargs in
@@ -64,13 +69,15 @@ let add_context ({ filename; recursive; name; iargs; oargs; body } : t) (ctx : c
            iargs_defs
        in
        ( name,
-         (desired_iargs, { filename; recursive; name; iargs; oargs; body }) :: others2 )
+         (desired_iargs, { filename; recursive; spec; name; iargs; oargs; body })
+         :: others2 )
        :: others
      | Some _ -> ctx
      | None ->
        ( name,
-         (desired_iargs, { filename; recursive; name; iargs; oargs; body }) :: iargs_defs
-       )
+         (desired_iargs, { filename; recursive; spec; name; iargs; oargs; body })
+         :: iargs_defs )
        :: others)
   | None ->
-    (name, [ (desired_iargs, { filename; recursive; name; iargs; oargs; body }) ]) :: ctx
+    (name, [ (desired_iargs, { filename; recursive; spec; name; iargs; oargs; body }) ])
+    :: ctx
