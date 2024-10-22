@@ -6,6 +6,7 @@ module RET = ResourceTypes
 module LC = LogicalConstraints
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
+open Option
 
 type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
@@ -245,113 +246,120 @@ type dep_tree =
   | UndefinedLT
   | NodeLT of line * dep_tree IT.SymMap.t
 
+(* Optionally zip two lists, returning None if the lists have different lengths *)
+let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
+| [], [] -> Some []
+| h1 :: tl1, h2 :: tl2 -> (match zip tl1 tl2 with
+  | Some zs -> Some ((h1, h2) :: zs)
+  | None -> None)
+| _, _ -> None
+
+(* Take the union of two symbol maps,
+    removing any key that is in both maps but has a different value in each *)
+let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a SymMap.t) (m2 : 'a SymMap.t) : 'a SymMap.t =
+  let merge = (fun k v1 v2 -> let _ = k in if eq v1 v2 then Some v1 else None) in
+  SymMap.union merge m1 m2
+
+(* Build a map by using f to develop a map for each
+    pair of elements in the two lists, failing
+    if they produce different results for any symbol or if
+    the lists have different lengths *)
+let map_from_lists f eq exps exps' =
+  let merge_o_maps o_acc (exp1, exp1') =
+    let@ acc = o_acc in
+    let@ x = f exp1 exp1' in
+    Some (merge_eq eq acc x)
+  in
+  let@ zipped = zip exps exps' in
+  List.fold_left merge_o_maps (Some SymMap.empty) zipped
+
 (* Match an expression with free variables against a candidate returned by the solver to
   get an assignment for those free variables *)
 (*CHT TODO: this assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
 let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
-  let sort_by_id l = List.map snd ( List.sort (fun p1 p2 -> Id.compare (fst p1) (fst p2)) l) in
-  let merge = (fun k v1 v2 -> let _ = k in if IT.equal v1 v2 then Some v1 else None) in
-  let match_lists exps exps' = (
-    let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
-    | [], [] -> Some []
-    | h1 :: tl1, h2 :: tl2 -> (match zip tl1 tl2 with
-      | Some zs -> Some ((h1, h2) :: zs)
-      | None -> None)
-    | _, _ -> None
-    in
-    let comb acc (exp1, exp1') = match acc, get_assignment exp1 exp1' with
-    | None, _ -> None
-    | _, None -> None
-    | Some acc', Some m -> Some (SymMap.union merge acc' m)
-    in
-    (match (zip exps exps') with
-    | Some zs -> List.fold_left comb (Some SymMap.empty) zs
-    | None -> None)) in
+  let map_from_IT_lists = map_from_lists get_assignment IT.equal in
+  let sort_by_discard_fst compare l =
+    List.map snd ( List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l) in
+  let sort_by_id = sort_by_discard_fst Id.compare in
+  let sort_by_pattern = sort_by_discard_fst (Terms.compare_pattern BT.compare) in
+  let map_with_guard g l1 l1' = if g then map_from_IT_lists l1 l1' else None in
   match IT.term exp, IT.term candidate with
-  | Const c, Const c' -> if (IT.equal_const c c') then Some SymMap.empty else None
+  | Const c, Const c' -> map_with_guard (IT.equal_const c c') [] []
   | Sym v, _' -> Some (SymMap.add v candidate SymMap.empty)
   | Unop (op, exp1), Unop (op', exp1') ->
-    if (IT.equal_unop op op') then get_assignment exp1 exp1' else None
+    map_with_guard (IT.equal_unop op op') [exp1] [exp1']
   | Binop (op, exp1, exp2), Binop (op', exp1', exp2') ->
-    if (IT.equal_binop op op')
-      then match_lists [exp1; exp2] [exp1'; exp2']
-    else None
+    map_with_guard (IT.equal_binop op op') [exp1; exp2] [exp1'; exp2']
   | ITE (exp1, exp2, exp3), ITE (exp1', exp2', exp3') ->
-    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | EachI ((z1, (v, bty), z2), exp1), EachI ((z1', (v', bty'), z2'), exp1') ->
-    if (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') then get_assignment exp1 exp1' else None
+    map_with_guard (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') [exp1] [exp1']
   (* add Z3's Distinct for separation facts *)
-  | Tuple exps, Tuple exps' -> match_lists exps exps'
+  | Tuple exps, Tuple exps' -> map_from_IT_lists exps exps'
   | NthTuple (n, exp1), NthTuple (n', exp1') ->
-    if (n = n') then get_assignment exp1 exp1' else None
-  | Struct (name, fields), Struct (name', fields') -> if (Sym.equal name name')
-    then match_lists (sort_by_id fields) (sort_by_id fields')
-    else None
+    map_with_guard (n = n') [exp1] [exp1']
+  | Struct (name, fields), Struct (name', fields') ->
+    map_with_guard (Sym.equal name name') (sort_by_id fields) (sort_by_id fields')
   | StructMember (exp1, id), StructMember (exp1', id') ->
-    if (Id.equal id id') then get_assignment exp1 exp1' else None
+    map_with_guard (Id.equal id id') [exp1] [exp1']
   | StructUpdate ((exp1, id), exp2), StructUpdate ((exp1', id'), exp2') ->
-    if (Id.equal id id') then match_lists [exp1; exp2] [exp1'; exp2'] else None
+    map_with_guard (Id.equal id id') [exp1; exp2] [exp1'; exp2']
   | Record fields, Record fields' ->
-    match_lists (sort_by_id fields) (sort_by_id fields')
+    map_from_IT_lists (sort_by_id fields) (sort_by_id fields')
   | RecordMember (exp1, id), RecordMember (exp1', id') ->
-    if (Id.equal id id') then get_assignment exp1 exp1' else None
+    map_with_guard (Id.equal id id') [exp1] [exp1']
   | RecordUpdate ((exp1, id), exp2), RecordUpdate ((exp1', id'), exp2') ->
-    if (Id.equal id id') then match_lists [exp1; exp2] [exp1'; exp2'] else None
-  | Constructor (name, args), Constructor (name', args') -> if (Sym.equal name name')
-    then
-      match_lists (sort_by_id args) (sort_by_id args')
-    else None
+    map_with_guard (Id.equal id id') [exp1; exp2] [exp1'; exp2']
+  | Constructor (name, args), Constructor (name', args') ->
+    map_with_guard (Sym.equal name name') (sort_by_id args) (sort_by_id args')
   | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
-    if (Sym.equal v v' && Id.equal id id') then get_assignment exp1 exp1' else None
+    map_with_guard (Sym.equal v v' && Id.equal id id') [exp1] [exp1']
   | ArrayShift {base; ct; index}, ArrayShift {base=base'; ct=ct'; index=index'} ->
-      if (Sctypes.equal ct ct')
-        then match_lists [base; index] [base'; index']
-        else None
+    map_with_guard (Sctypes.equal ct ct') [base; index] [base'; index']
   | CopyAllocId {addr=exp1; loc=exp2}, CopyAllocId {addr=exp1'; loc=exp2'} ->
-    match_lists [exp1; exp2] [exp1'; exp2']
+    map_from_IT_lists [exp1; exp2] [exp1'; exp2']
   | HasAllocId exp1, HasAllocId exp1' ->
     get_assignment exp1 exp1'
   | SizeOf cty, SizeOf cty' ->
-    if (Sctypes.equal cty cty') then Some SymMap.empty else None
+    map_with_guard (Sctypes.equal cty cty') [] []
   | OffsetOf (v, id), OffsetOf (v', id') ->
-    if (Sym.equal v v' && Id.equal id id') then Some SymMap.empty else None
+    map_with_guard (Sym.equal v v' && Id.equal id id') [] []
   | Nil bty, Nil bty' ->
-    if (BT.equal bty bty') then Some SymMap.empty else None
+    map_with_guard (BT.equal bty bty') [] []
   | Cons (h, tl), Cons (h', tl') ->
-    match_lists [h; tl] [h'; tl']
+    map_from_IT_lists [h; tl] [h'; tl']
   | Head l, Head l' ->
     get_assignment l l'
   | Tail l, Tail l' ->
     get_assignment l l'
   | NthList (exp1, exp2, exp3),  NthList (exp1', exp2', exp3') ->
-    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | ArrayToList (exp1, exp2, exp3), ArrayToList (exp1', exp2', exp3') ->
-    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | Representable (cty, exp1), Representable (cty', exp1') ->
-    if (Sctypes.equal cty cty') then get_assignment exp1 exp1' else None
+    map_with_guard (Sctypes.equal cty cty') [exp1] [exp1']
   | Good (cty, exp1), Good (cty', exp1') ->
-    if (Sctypes.equal cty cty') then get_assignment exp1 exp1' else None
+    map_with_guard (Sctypes.equal cty cty') [exp1] [exp1']
   | Aligned { t=exp1; align=exp2}, Aligned { t=exp1'; align=exp2'} ->
-    match_lists [exp1; exp2] [exp1'; exp2']
+    map_from_IT_lists [exp1; exp2] [exp1'; exp2']
   | WrapI (ity, exp1), WrapI (ity', exp1') ->
-    if (Cerb_frontend.IntegerType.integerTypeEqual ity ity') then get_assignment exp1 exp1' else None
+    map_with_guard (Cerb_frontend.IntegerType.integerTypeEqual ity ity') [exp1] [exp1']
   | MapConst (bty, exp1), MapConst (bty', exp1') ->
-    if (BT.equal bty bty') then get_assignment exp1 exp1' else None
+    map_with_guard (BT.equal bty bty') [exp1] [exp1']
   | MapSet (exp1, exp2, exp3), MapSet (exp1', exp2', exp3') ->
-    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | MapGet (exp1, exp2), MapGet (exp1', exp2') ->
-    match_lists [exp1; exp2] [exp1'; exp2']
+    map_from_IT_lists [exp1; exp2] [exp1'; exp2']
   | MapDef ((v, bty), exp1), MapDef ((v', bty'), exp1') ->
-    if (Sym.equal v v' && BT.equal bty bty') then get_assignment exp1 exp1' else None
+    map_with_guard (Sym.equal v v' && BT.equal bty bty') [exp1] [exp1']
   | Apply (v, exps), Apply (v', exps') ->
-    if (Sym.equal v v') then match_lists exps exps' else None
+    map_with_guard (Sym.equal v v') exps exps'
   | Let ((v, exp1), exp2), Let ((v', exp1'), exp2') ->
-    if (Sym.equal v v') then match_lists [exp1; exp2] [exp1'; exp2'] else None
+    map_with_guard (Sym.equal v v') [exp1; exp2] [exp1'; exp2']
   | Match (exp1, pats), Match (exp1', pats') ->
-    let sort_by_pattern l = List.map snd ( List.sort (fun p1 p2 -> Terms.compare_pattern BT.compare (fst p1) (fst p2)) l) in
-    match_lists (exp1 :: sort_by_pattern pats) (exp1' :: sort_by_pattern pats')
+    map_from_IT_lists (exp1 :: sort_by_pattern pats) (exp1' :: sort_by_pattern pats')
   | Cast (bt, exp1), Cast (bt', exp1') ->
-    if (BT.equal bt bt') then get_assignment exp1 exp1' else None
+    map_with_guard (BT.equal bt bt') [exp1] [exp1']
   (* included so the compiler will catch any missing new constructors *)
   | Const _, _ -> None
   | Unop _, _ -> None
