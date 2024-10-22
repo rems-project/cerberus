@@ -334,7 +334,7 @@ let cn_to_ail_binop_internal bt1 bt2 =
   | SetDifference -> failwith "TODO cn_to_ail_binop: SetDifference"
   | SetMember -> failwith "TODO cn_to_ail_binop: SetMember"
   | Subset -> failwith "TODO cn_to_ail_binop: Subset"
-  | Implies -> failwith "TODO cn_to_ail_binop: Impl"
+  | Implies -> (A.Or, Some "cn_bool_implies")
 
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)

@@ -45,7 +45,12 @@ let apply_array_max_length (gt : GT.t) : GT.t =
     | Map ((i, i_bt, it_perm), gt') ->
       let _it_min, it_max = GenAnalysis.get_bounds (i, i_bt) it_perm in
       let loc = Locations.other __LOC__ in
-      let it_max_min = IT.le_ (IT.num_lit_ (Z.of_int 0) (IT.bt it_max) loc, it_max) loc in
+      let it_max_min =
+        IT.le_
+          ( IT.num_lit_ (Z.of_int 0) (IT.bt it_max) loc,
+            IT.add_ (it_max, IT.num_lit_ Z.one (IT.bt it_max) loc) loc )
+          loc
+      in
       let it_max_max =
         IT.lt_
           ( it_max,
@@ -100,105 +105,14 @@ let confirm_distribution (gt : GT.t) : GT.t =
            ^^ brackets (separate_map (comma ^^ break 1) Locations.pp failures)))
 
 
-let pull_out_inner_generators (gt : GT.t) : GT.t =
-  let aux (gt : GT.t) : GT.t =
-    match gt with
-    | GT (Let (x_backtracks, (x, gt1), gt2), _, loc_let) ->
-      (match gt1 with
-       | GT (Asgn ((it_addr, sct), it_val, gt3), _, loc_asgn) ->
-         GT.asgn_
-           ((it_addr, sct), it_val, GT.let_ (x_backtracks, (x, gt3), gt2) loc_let)
-           loc_asgn
-       | GT (Let (y_backtracks', (y, gt3), gt4), _, loc_let') ->
-         let z = Sym.fresh () in
-         let gt4 =
-           GT.subst
-             (IT.make_subst [ (y, IT.sym_ (z, GT.bt gt3, Locations.other __LOC__)) ])
-             gt4
-         in
-         GT.let_
-           (y_backtracks', (z, gt3), GT.let_ (x_backtracks, (x, gt4), gt2) loc_let)
-           loc_let'
-       | GT (Assert (lc, gt3), _, loc_assert) ->
-         GT.assert_ (lc, GT.let_ (x_backtracks, (x, gt3), gt2) loc_let) loc_assert
-       | GT (ITE (it_if, gt_then, gt_else), _, loc_ite) ->
-         GT.ite_
-           ( it_if,
-             GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
-             GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
-           loc_ite
-       | GT (Pick wgts, _, loc_pick) ->
-         GT.pick_
-           (List.map_snd (fun gt' -> GT.let_ (x_backtracks, (x, gt'), gt2) loc_let) wgts)
-           loc_pick
-       | _ -> gt)
-    | _ -> gt
-  in
-  GT.map_gen_post aux gt
-
-
-let push_in_outer_generators (gt : GT.t) : GT.t =
-  let aux (gt : GT.t) : GT.t =
-    match gt with
-    | GT
-        ( Asgn ((it_addr, sct), it_val, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
-          _,
-          loc_asgn )
-      when SymSet.is_empty (SymSet.inter (IT.free_vars it_addr) (IT.free_vars it_if)) ->
-      GT.ite_
-        ( it_if,
-          GT.asgn_ ((it_addr, sct), it_val, gt_then) loc_asgn,
-          GT.asgn_ ((it_addr, sct), it_val, gt_else) loc_asgn )
-        loc_ite
-    | GT
-        ( Let (x_backtracks, (x, gt1), GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
-          _,
-          loc_let )
-      when not (SymSet.mem x (IT.free_vars it_if)) ->
-      GT.ite_
-        ( it_if,
-          GT.let_ (x_backtracks, (x, gt1), gt_then) loc_let,
-          GT.let_ (x_backtracks, (x, gt1), gt_else) loc_let )
-        loc_ite
-    | GT
-        ( Let (x_backtracks, (x, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), gt2),
-          _,
-          loc_let ) ->
-      GT.ite_
-        ( it_if,
-          GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
-          GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
-        loc_ite
-    | GT (Assert (lc, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), _, loc_assert)
-      when SymSet.is_empty (SymSet.inter (LC.free_vars lc) (IT.free_vars it_if)) ->
-      GT.ite_
-        (it_if, GT.assert_ (lc, gt_then) loc_assert, GT.assert_ (lc, gt_else) loc_assert)
-        loc_ite
-    | _ -> gt
-  in
-  GT.map_gen_pre aux gt
-
-
-let push_and_pull (gt : GT.t) : GT.t =
-  let rec loop (gt : GT.t) : GT.t =
-    let old_gt = gt in
-    let new_gt = gt |> pull_out_inner_generators |> push_in_outer_generators in
-    if GT.equal old_gt new_gt then new_gt else loop new_gt
-  in
-  loop gt
-
-
 let distribute_gen (gt : GT.t) : GT.t =
-  gt
-  |> allocations
-  |> apply_array_max_length
-  |> default_weights
-  |> confirm_distribution
-  |> push_and_pull
+  gt |> allocations |> apply_array_max_length |> default_weights |> confirm_distribution
 
 
-let distribute_gen_def ({ filename; recursive; name; iargs; oargs; body } : GD.t) : GD.t =
-  { filename; recursive; name; iargs; oargs; body = Option.map distribute_gen body }
+let distribute_gen_def ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
+  : GD.t
+  =
+  { filename; recursive; spec; name; iargs; oargs; body = Option.map distribute_gen body }
 
 
 let distribute (ctx : GD.context) : GD.context =

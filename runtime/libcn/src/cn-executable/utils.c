@@ -80,6 +80,12 @@ cn_bool *cn_bool_or(cn_bool *b1, cn_bool *b2) {
     return res;
 }
 
+cn_bool *cn_bool_implies(cn_bool *b1, cn_bool *b2) {
+    cn_bool *res = alloc(sizeof(cn_bool));
+    res->val = !b1->val || b2->val;
+    return res;
+}
+
 cn_bool *cn_bool_not(cn_bool *b) {
     cn_bool *res = alloc(sizeof(cn_bool));
     res->val = !(b->val);

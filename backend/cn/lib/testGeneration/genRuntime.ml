@@ -194,7 +194,7 @@ let rec pp_term (tm : term) : Pp.document =
     ^^ space
     ^^ parens (IT.pp cond)
     ^^ space
-    ^^ braces (c_comment (BT.pp bt) ^^ nest 2 (break 1 ^^ pp_term t) ^^ break 1)
+    ^^ braces (nest 2 (break 1 ^^ c_comment (BT.pp bt) ^^ break 1 ^^ pp_term t) ^^ break 1)
     ^^ space
     ^^ string "else"
     ^^ space
@@ -412,7 +412,7 @@ let pp_definition (def : definition) : Pp.document =
      ^^ rbrace)
 
 
-let elaborate_gd ({ filename; recursive = _; name; iargs; oargs; body } : GD.t)
+let elaborate_gd ({ filename; recursive = _; spec = _; name; iargs; oargs; body } : GD.t)
   : definition
   =
   { filename;
