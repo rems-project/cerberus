@@ -1836,35 +1836,143 @@ end
 module Reordering = struct
   let name = "reordering"
 
+  module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
+
+  let get_variable_ordering (iargs : SymSet.t) (stmts : GS.t list) : Sym.t list =
+    let module Oper = Graph.Oper.P (SymGraph) in
+    (* Describes logical dependencies where [x <- y] means that [x] depends on [y] *)
+    let collect_constraints (stmts : GS.t list) : SymGraph.t =
+      let rec aux (stmts : GS.t list) : SymGraph.t =
+        match stmts with
+        | Let (_, (x, _)) :: stmts' -> SymGraph.add_vertex (aux stmts') x
+        | Assert (T (IT (Binop (EQ, IT (Sym x, _, _), it), _, _))) :: stmts' ->
+          let g = aux stmts' in
+          let g' =
+            List.fold_left
+              (fun g' y ->
+                if SymSet.mem y iargs || Sym.equal x y then
+                  g'
+                else
+                  SymGraph.add_edge_e g' (y, x))
+              g
+              (it |> IT.free_vars |> SymSet.to_seq |> List.of_seq)
+          in
+          g'
+        | Assert (T (IT (Binop (EQ, it, IT (Sym x, _, _)), _, _))) :: stmts' ->
+          let g = aux stmts' in
+          Seq.fold_left
+            (fun g' y ->
+              if SymSet.mem y iargs || Sym.equal x y then
+                g'
+              else
+                SymGraph.add_edge_e g' (y, x))
+            g
+            (it |> IT.free_vars |> SymSet.to_seq)
+        | _ :: stmts' -> aux stmts'
+        | [] -> SymGraph.empty
+      in
+      let g = aux stmts in
+      let g' = Oper.transitive_closure g in
+      assert (not (SymGraph.fold_edges (fun x y acc -> Sym.equal x y || acc) g' false));
+      g
+    in
+    (* Describes data dependencies where [x <- y] means that [x] depends on [y] *)
+    let collect_dependencies (stmts : GS.t list) : SymGraph.t =
+      let rec aux (stmts : GS.t list) : SymGraph.t =
+        match stmts with
+        | Let (_, (x, gt)) :: stmts' ->
+          let g = SymGraph.add_vertex (aux stmts') x in
+          SymSet.fold
+            (fun y g' ->
+              if SymSet.mem y iargs then
+                g'
+              else
+                SymGraph.add_edge g' y x)
+            (GT.free_vars gt)
+            g
+        | _ :: stmts' -> aux stmts'
+        | [] -> SymGraph.empty
+      in
+      stmts |> aux |> Oper.transitive_closure
+    in
+    let g_c = collect_constraints stmts in
+    let g_d = collect_dependencies stmts in
+    let orig_order =
+      List.filter_map (function GS.Let (_, (x, _)) -> Some x | _ -> None) stmts
+    in
+    (* Get variables that should be generated before [x], in the order they appear *)
+    let get_needs (x : Sym.t) (ys : Sym.t list) : Sym.t list =
+      let syms_c =
+        SymGraph.fold_pred
+          (fun y syms -> if List.mem Sym.equal y ys then syms else SymSet.add y syms)
+          g_c
+          x
+          SymSet.empty
+      in
+      let syms =
+        SymSet.fold
+          (fun z acc ->
+            SymSet.union
+              acc
+              (SymGraph.fold_pred
+                 (fun y syms' ->
+                   if List.mem Sym.equal y ys then syms' else SymSet.add y syms')
+                 g_d
+                 z
+                 SymSet.empty))
+          syms_c
+          syms_c
+      in
+      orig_order |> List.filter (fun x -> SymSet.mem x syms)
+    in
+    let new_order : Sym.t list -> Sym.t list =
+      List.fold_left
+        (fun acc y ->
+          if List.mem Sym.equal y acc then
+            acc
+          else (
+            let zs = get_needs y acc in
+            if List.is_empty zs then
+              acc @ [ y ]
+            else
+              acc @ zs @ [ y ]))
+        []
+    in
+    let rec loop (ys : Sym.t list) : Sym.t list =
+      let old_ys = ys in
+      let new_ys = new_order ys in
+      if List.equal Sym.equal old_ys new_ys then new_ys else loop new_ys
+    in
+    loop orig_order
+
+
   let get_statement_ordering (iargs : SymSet.t) (stmts : GS.t list) : GS.t list =
-    let rec loop ((vars, res, stmts) : SymSet.t * GS.t list * GS.t list)
-      : SymSet.t * GS.t list
-      =
-      if List.is_empty stmts then
-        (vars, res)
-      else (
-        let res', stmts =
+    let rec loop (vars : SymSet.t) (syms : Sym.t list) (stmts : GS.t list) : GS.t list =
+      let res, stmts' =
+        List.partition
+          (fun (stmt : GS.t) ->
+            match stmt with
+            | Asgn ((it_addr, _sct), it_val) ->
+              SymSet.subset (IT.free_vars_list [ it_addr; it_val ]) vars
+            | Assert lc -> SymSet.subset (LC.free_vars lc) vars
+            | _ -> false)
+          stmts
+      in
+      match syms with
+      | sym :: syms' ->
+        let res', stmts'' =
           List.partition
             (fun (stmt : GS.t) ->
-              match stmt with
-              | Asgn ((it_addr, _sct), it_val) ->
-                SymSet.subset (IT.free_vars_list [ it_addr; it_val ]) vars
-              | Assert lc -> SymSet.subset (LC.free_vars lc) vars
-              | _ -> false)
-            stmts
+              match stmt with Let (_, (x, _)) -> Sym.equal x sym | _ -> false)
+            stmts'
         in
-        let res = res @ res' in
-        let vars, res, stmts =
-          match stmts with
-          | (Let (_, (var, _)) as stmt) :: stmts' ->
-            (SymSet.add var vars, res @ [ stmt ], stmts')
-          | stmt :: _ -> failwith (Pp.plain (GS.pp stmt) ^ " @ " ^ __LOC__)
-          | [] -> (vars, res, [])
-        in
-        loop (vars, res, stmts))
+        res @ res' @ loop (SymSet.add sym vars) syms' stmts''
+      | [] ->
+        assert (List.is_empty stmts');
+        res
     in
-    let _, res = loop (iargs, [], stmts) in
-    res
+    let syms = get_variable_ordering iargs stmts in
+    loop iargs syms stmts
 
 
   let reorder (iargs : SymSet.t) (gt : GT.t) : GT.t =
@@ -2889,6 +2997,7 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   gd
   |> aux
   |> Fusion.Each.transform
+  |> Reordering.transform
   |> ConstraintPropagation.transform
   |> Specialization.Equality.transform
   |> Specialization.Integer.transform
