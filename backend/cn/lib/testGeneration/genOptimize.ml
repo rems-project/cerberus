@@ -933,7 +933,7 @@ module PushPull = struct
   let transform (gt : GT.t) : GT.t =
     let rec loop (gt : GT.t) : GT.t =
       let old_gt = gt in
-      let new_gt = gt |> pull_out_inner_generators |> push_in_outer_generators in
+      let new_gt = gt |> pull_out_inner_generators (* |> push_in_outer_generators *) in
       if GT.equal old_gt new_gt then new_gt else loop new_gt
     in
     loop gt
@@ -1167,6 +1167,12 @@ module PointerOffsets = struct
               ( Binop (Add, IT (ArrayShift { base; ct; index }, _, loc_shift), it_offset),
                 _,
                 loc_add ) ->
+            let index =
+              if BT.equal (IT.bt index) Memory.size_bt then
+                index
+              else
+                IT.cast_ Memory.size_bt index (Locations.other __LOC__)
+            in
             IT.add_
               ( base,
                 IT.add_
@@ -2055,8 +2061,9 @@ module ConstraintPropagation = struct
       (* START FIXME: Simplify should do this *)
       | Binop
           ( op,
-            IT (Const (Bits (_, n)), bt, _),
-            IT (Binop (Sub, it', IT (Const (Bits (_, m)), _, _)), _, _) ) ->
+            IT (Const (Bits ((sgn, sz), n)), bt, _),
+            IT (Binop (Sub, it', IT (Const (Bits (_, m)), _, _)), _, _) )
+        when BT.fits_range (sgn, sz) (Z.add n m) ->
         let loc = Locations.other __LOC__ in
         (match op with
          | EQ | LT | LE ->
@@ -2064,8 +2071,9 @@ module ConstraintPropagation = struct
          | _ -> None)
       | Binop
           ( op,
-            IT (Const (Bits (_, n)), bt, _),
-            IT (Binop (Add, it', IT (Const (Bits (_, m)), _, _)), _, _) ) ->
+            IT (Const (Bits ((sgn, sz), n)), bt, _),
+            IT (Binop (Add, it', IT (Const (Bits (_, m)), _, _)), _, _) )
+        when BT.fits_range (sgn, sz) (Z.sub n m) ->
         let loc = Locations.other __LOC__ in
         (match op with
          | EQ | LT | LE ->
@@ -2074,7 +2082,8 @@ module ConstraintPropagation = struct
       | Binop
           ( op,
             IT (Binop (Sub, it', IT (Const (Bits (_, m)), _, _)), _, _),
-            IT (Const (Bits (_, n)), bt, _) ) ->
+            IT (Const (Bits ((sgn, sz), n)), bt, _) )
+        when BT.fits_range (sgn, sz) (Z.add n m) ->
         let loc = Locations.other __LOC__ in
         (match op with
          | EQ | LT | LE ->
@@ -2083,7 +2092,8 @@ module ConstraintPropagation = struct
       | Binop
           ( op,
             IT (Binop (Add, it', IT (Const (Bits (_, m)), _, _)), _, _),
-            IT (Const (Bits (_, n)), bt, _) ) ->
+            IT (Const (Bits ((sgn, sz), n)), bt, _) )
+        when BT.fits_range (sgn, sz) (Z.add n m) ->
         let loc = Locations.other __LOC__ in
         (match op with
          | EQ | LT | LE ->
@@ -2836,10 +2846,11 @@ let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) :
 
 
 let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.t) : GD.t =
-  let aux ({ filename; recursive; name; iargs; oargs; body } : GD.t) : GD.t =
+  let aux ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t) : GD.t =
     { filename;
       recursive;
       name;
+      spec;
       iargs;
       oargs;
       body = Option.map (optimize_gen prog5 passes) body

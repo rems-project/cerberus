@@ -109,8 +109,10 @@ let distribute_gen (gt : GT.t) : GT.t =
   gt |> allocations |> apply_array_max_length |> default_weights |> confirm_distribution
 
 
-let distribute_gen_def ({ filename; recursive; name; iargs; oargs; body } : GD.t) : GD.t =
-  { filename; recursive; name; iargs; oargs; body = Option.map distribute_gen body }
+let distribute_gen_def ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
+  : GD.t
+  =
+  { filename; recursive; spec; name; iargs; oargs; body = Option.map distribute_gen body }
 
 
 let distribute (ctx : GD.context) : GD.context =

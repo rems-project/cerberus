@@ -122,12 +122,13 @@ let normalize_gen (prog5 : unit Mucore.file) (gt : GT.t) : GT.t =
 
 let normalize_gen_def
   (prog5 : unit Mucore.file)
-  ({ filename; recursive; name; iargs; oargs; body } : GD.t)
+  ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
   : GD.t
   =
   { filename;
     recursive;
     name;
+    spec;
     iargs;
     oargs;
     body = Option.map (normalize_gen prog5) body
