@@ -1,7 +1,9 @@
 //CN_VIP #include <stdio.h>
 #include <inttypes.h>
+#include "cn_lemmas.h"
 int y=2, x=1;
 int main() {
+  /*@ apply assert_equal((u64)&x + 4u64, (u64)&y); @*/
   uintptr_t p = (uintptr_t)(&x + 1);
   uintptr_t q = (uintptr_t)&y;
   //CN_VIP printf("Addresses: p=%" PRIxPTR " q=%" PRIxPTR "\n", (unsigned long)p,(unsigned long)q);

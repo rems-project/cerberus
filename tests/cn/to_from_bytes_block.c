@@ -1,7 +1,7 @@
 void from_bytes(int *p)
 /*@ 
 requires 
-    take X = each (u64 i; i < sizeof<int>) { Block(array_shift<char>(p, i)) };
+    take X = each (u64 i; i < sizeof<int>) { Block(array_shift<unsigned char>(p, i)) };
 ensures
     take Y = Block(p);
 @*/
@@ -14,7 +14,7 @@ void to_bytes(int *p)
 requires 
     take Y = Block(p);
 ensures
-    take X = each (u64 i; i < sizeof<int>) { Block(array_shift<char>(p, i)) };
+    take X = each (u64 i; i < sizeof<int>) { Block(array_shift<unsigned char>(p, i)) };
 @*/
 {
     /*@ to_bytes Block(p); @*/

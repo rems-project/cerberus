@@ -108,6 +108,8 @@ ensures
     XR == YR;
 @*/
 
+#include <stddef.h>
+
 int _memcmp(unsigned char *dest, unsigned char *src, size_t n);
 /*@ spec _memcmp(pointer dest, pointer src, u64 n);
 
@@ -141,3 +143,12 @@ ensures
     Src == SrcR;
     SrcR == DestR;
 @*/
+
+/*@
+lemma assert_equal(u64 x, u64 y)
+requires
+    true;
+ensures
+    x == y;
+@*/
+

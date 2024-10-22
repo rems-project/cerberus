@@ -13,7 +13,10 @@ requires
   int *p = &x;
   p=p+1;
   intptr_t i = (intptr_t)p;
-  int *q = (int *)i;
+  /*CN_VIP*/int *q = (int *)i;
+#ifdef NO_ROUND_TRIP
+  /*CN_VIP*/q = __cerbvar_copy_alloc_id((uintptr_t)q, &x);
+#endif
   q=q-1;
   *q = 11; // is this free of undefined behaviour?
   //CN_VIP printf("*q=%d\n",*q);
