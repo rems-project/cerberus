@@ -1666,6 +1666,36 @@ module TermSimplification' = struct
       let (IT.IT (it_, bt, loc)) = it in
       match it_ with
       | Binop
+          ( Add,
+            IT (Binop (Add, it1, IT (Const (Bits (_, n1)), _, _)), _, _),
+            IT (Const (Bits ((sgn, sz), n2)), _, _) )
+      | Binop
+          ( Add,
+            IT (Const (Bits ((sgn, sz), n2)), _, _),
+            IT (Binop (Add, it1, IT (Const (Bits (_, n1)), _, _)), _, _) )
+        when BT.fits_range (sgn, sz) (Z.add n1 n2) ->
+        IT.add_ (it1, IT.num_lit_ (Z.add n1 n2) (Bits (sgn, sz)) loc) loc
+      | Binop
+          ( Add,
+            IT (Binop (Add, IT (Const (Bits (_, n1)), _, _), it1), _, _),
+            IT (Const (Bits ((sgn, sz), n2)), _, _) )
+      | Binop
+          ( Add,
+            IT (Const (Bits ((sgn, sz), n2)), _, _),
+            IT (Binop (Add, IT (Const (Bits (_, n1)), _, _), it1), _, _) )
+        when BT.fits_range (sgn, sz) (Z.add n1 n2) ->
+        IT.add_ (it1, IT.num_lit_ (Z.add n1 n2) (Bits (sgn, sz)) loc) loc
+      | Binop
+          ( Add,
+            IT (Binop (Sub, it1, IT (Const (Bits (_, n1)), _, _)), _, _),
+            IT (Const (Bits ((sgn, sz), n2)), _, _) )
+      | Binop
+          ( Add,
+            IT (Const (Bits ((sgn, sz), n2)), _, _),
+            IT (Binop (Sub, it1, IT (Const (Bits (_, n1)), _, _)), _, _) )
+        when BT.fits_range (sgn, sz) (Z.sub n1 n2) ->
+        IT.add_ (it1, IT.num_lit_ (Z.sub n1 n2) (Bits (sgn, sz)) loc) loc
+      | Binop
           ( EQ,
             IT
               ( Binop (Mul, IT (Binop (Div, IT (Sym x, x_bt, x_loc), it1), _, _), it2),
