@@ -247,10 +247,10 @@ type dep_tree =
 
 (* Match an expression with free variables against a candidate returned by the solver to
   get an assignment for those free variables *)
-(*CHT TODO: this assumes candidate and exp have *exactly* the same structure *)
+(*CHT TODO: this assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
 let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
   let sort_by_id l = List.map snd ( List.sort (fun p1 p2 -> Id.compare (fst p1) (fst p2)) l) in
-  let merge = (fun k v1 v2 -> let _ = k in if v1 == v2 then Some v1 else None) in
+  let merge = (fun k v1 v2 -> let _ = k in if IT.equal v1 v2 then Some v1 else None) in
   let match_lists exps exps' = (
     let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
     | [], [] -> Some []
@@ -268,119 +268,90 @@ let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
     | Some zs -> List.fold_left comb (Some SymMap.empty) zs
     | None -> None)) in
   match IT.term exp, IT.term candidate with
-  | Const c, Const c' -> if (c == c') then Some SymMap.empty else None
+  | Const c, Const c' -> if (IT.equal_const c c') then Some SymMap.empty else None
   | Sym v, _' -> Some (SymMap.add v candidate SymMap.empty)
   | Unop (op, exp1), Unop (op', exp1') ->
-    if (op == op') then get_assignment exp1 exp1' else None
+    if (IT.equal_unop op op') then get_assignment exp1 exp1' else None
   | Binop (op, exp1, exp2), Binop (op', exp1', exp2') ->
-    if (op == op')
+    if (IT.equal_binop op op')
       then match_lists [exp1; exp2] [exp1'; exp2']
     else None
   | ITE (exp1, exp2, exp3), ITE (exp1', exp2', exp3') ->
     match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
-  | EachI ((z1, (v, ty), z2), exp1), EachI ((z1', (v', ty'), z2'), exp1') ->
-    let _ = (((z1, (v, ty), z2), exp1), ((z1', (v', ty'), z2'), exp1')) in
-    failwith "CHT - out of scope"
+  | EachI ((z1, (v, bty), z2), exp1), EachI ((z1', (v', bty'), z2'), exp1') ->
+    if (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') then get_assignment exp1 exp1' else None
   (* add Z3's Distinct for separation facts *)
   | Tuple exps, Tuple exps' -> match_lists exps exps'
   | NthTuple (n, exp1), NthTuple (n', exp1') ->
-    let _ = (n, exp1, n', exp1') in
-    failwith "CHT - out of scope"
-  | Struct (name, fields), Struct (name', fields') -> if (name == name')
+    if (n = n') then get_assignment exp1 exp1' else None
+  | Struct (name, fields), Struct (name', fields') -> if (Sym.equal name name')
     then match_lists (sort_by_id fields) (sort_by_id fields')
     else None
   | StructMember (exp1, id), StructMember (exp1', id') ->
-    let _ = (id, exp1, id', exp1') in
-    failwith "CHT - out of scope"
+    if (Id.equal id id') then get_assignment exp1 exp1' else None
   | StructUpdate ((exp1, id), exp2), StructUpdate ((exp1', id'), exp2') ->
-    let _ = (((exp1, id), exp2), ((exp1', id'), exp2')) in
-    failwith "CHT - out of scope"
+    if (Id.equal id id') then match_lists [exp1; exp2] [exp1'; exp2'] else None
   | Record fields, Record fields' ->
-    let _ = (fields, fields') in
-    failwith "CHT - out of scope"
+    match_lists (sort_by_id fields) (sort_by_id fields')
   | RecordMember (exp1, id), RecordMember (exp1', id') ->
-    let _ = (id, exp1, id', exp1') in
-    failwith "CHT - out of scope"
+    if (Id.equal id id') then get_assignment exp1 exp1' else None
   | RecordUpdate ((exp1, id), exp2), RecordUpdate ((exp1', id'), exp2') ->
-    let _ = (((exp1, id), exp2), ((exp1', id'), exp2')) in
-    failwith "CHT - out of scope"
-  | Constructor (name, args), Constructor (name', args') -> if (name == name')
+    if (Id.equal id id') then match_lists [exp1; exp2] [exp1'; exp2'] else None
+  | Constructor (name, args), Constructor (name', args') -> if (Sym.equal name name')
     then
       match_lists (sort_by_id args) (sort_by_id args')
     else None
-  | MemberShift (ba, v, id), MemberShift (ba', v', id') ->
-    let _ = ((ba, v, id), (ba', v', id')) in
-    failwith "CHT - out of scope"
+  | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
+    if (Sym.equal v v' && Id.equal id id') then get_assignment exp1 exp1' else None
   | ArrayShift {base; ct; index}, ArrayShift {base=base'; ct=ct'; index=index'} ->
-      if (ct == ct')
+      if (Sctypes.equal ct ct')
         then match_lists [base; index] [base'; index']
         else None
-  | CopyAllocId {addr; loc}, CopyAllocId {addr=addr'; loc=loc'} ->
-    let _ = ((addr, loc), (addr', loc')) in
-    failwith "CHT - out of scope"
-  | HasAllocId ba, HasAllocId ba' ->
-    let _ = (ba, ba') in
-    failwith "CHT - out of scope"
+  | CopyAllocId {addr=exp1; loc=exp2}, CopyAllocId {addr=exp1'; loc=exp2'} ->
+    match_lists [exp1; exp2] [exp1'; exp2']
+  | HasAllocId exp1, HasAllocId exp1' ->
+    get_assignment exp1 exp1'
   | SizeOf cty, SizeOf cty' ->
-    let _ = (cty, cty') in
-    failwith "CHT - out of scope"
+    if (Sctypes.equal cty cty') then Some SymMap.empty else None
   | OffsetOf (v, id), OffsetOf (v', id') ->
-    let _ = ((v, id), (v', id')) in
-    failwith "CHT - out of scope"
-  | Nil ty, Nil ty' ->
-    let _ = (ty, ty') in
-    failwith "CHT - out of scope"
+    if (Sym.equal v v' && Id.equal id id') then Some SymMap.empty else None
+  | Nil bty, Nil bty' ->
+    if (BT.equal bty bty') then Some SymMap.empty else None
   | Cons (h, tl), Cons (h', tl') ->
-    let _ = ((h, tl), (h', tl')) in
-    failwith "CHT - out of scope"
+    match_lists [h; tl] [h'; tl']
   | Head l, Head l' ->
-    let _ = (l, l') in
-    failwith "CHT - out of scope"
+    get_assignment l l'
   | Tail l, Tail l' ->
-    let _ = (l, l') in
-    failwith "CHT - out of scope"
+    get_assignment l l'
   | NthList (exp1, exp2, exp3),  NthList (exp1', exp2', exp3') ->
-    let _ = ((exp1, exp2, exp3), (exp1', exp2', exp3')) in
-    failwith "CHT - out of scope"
+    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | ArrayToList (exp1, exp2, exp3), ArrayToList (exp1', exp2', exp3') ->
-    let _ = ((exp1, exp2, exp3), (exp1', exp2', exp3')) in
-    failwith "CHT - out of scope"
+    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | Representable (cty, exp1), Representable (cty', exp1') ->
-    let _ = ((cty, exp1), (cty', exp1')) in
-    failwith "CHT - out of scope"
+    if (Sctypes.equal cty cty') then get_assignment exp1 exp1' else None
   | Good (cty, exp1), Good (cty', exp1') ->
-    let _ = ((cty, exp1), (cty', exp1')) in
-    failwith "CHT - out of scope"
-  | Aligned { t; align}, Aligned { t=t'; align=align'} ->
-    let _ = ((t, align), (t', align')) in
-    failwith "CHT - out of scope"
-  | WrapI (cty, exp1), WrapI (cty', exp1') ->
-    let _ = ((cty, exp1), (cty', exp1')) in
-    failwith "CHT - out of scope"
-  | MapConst (ty, exp1), MapConst (ty', exp1') ->
-    let _ = ((ty, exp1), (ty', exp1')) in
-    failwith "CHT - out of scope"
+    if (Sctypes.equal cty cty') then get_assignment exp1 exp1' else None
+  | Aligned { t=exp1; align=exp2}, Aligned { t=exp1'; align=exp2'} ->
+    match_lists [exp1; exp2] [exp1'; exp2']
+  | WrapI (ity, exp1), WrapI (ity', exp1') ->
+    if (Cerb_frontend.IntegerType.integerTypeEqual ity ity') then get_assignment exp1 exp1' else None
+  | MapConst (bty, exp1), MapConst (bty', exp1') ->
+    if (BT.equal bty bty') then get_assignment exp1 exp1' else None
   | MapSet (exp1, exp2, exp3), MapSet (exp1', exp2', exp3') ->
-    let _ = ((exp1, exp2, exp3), (exp1', exp2', exp3')) in
-    failwith "CHT - out of scope"
+    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | MapGet (exp1, exp2), MapGet (exp1', exp2') ->
-    let _ = ((exp1, exp2), (exp1', exp2')) in
-    failwith "CHT - out of scope"
-  | MapDef ((v, ty), exp1), MapDef ((v', ty'), exp1') ->
-    let _ = ((v, ty, exp1), (v', ty', exp1')) in
-    failwith "CHT - out of scope"
+    match_lists [exp1; exp2] [exp1'; exp2']
+  | MapDef ((v, bty), exp1), MapDef ((v', bty'), exp1') ->
+    if (Sym.equal v v' && BT.equal bty bty') then get_assignment exp1 exp1' else None
   | Apply (v, exps), Apply (v', exps') ->
-    let _ = ((v, exps), (v', exps')) in
-    failwith "CHT - out of scope"
+    if (Sym.equal v v') then match_lists exps exps' else None
   | Let ((v, exp1), exp2), Let ((v', exp1'), exp2') ->
-    let _ = ((v, exp1, exp2), (v', exp1', exp2')) in
-    failwith "CHT - out of scope"
+    if (Sym.equal v v') then match_lists [exp1; exp2] [exp1'; exp2'] else None
   | Match (exp1, pats), Match (exp1', pats') ->
-    let _ = ((exp1, pats), (exp1', pats')) in
-    failwith "CHT - out of scope"
+    let sort_by_pattern l = List.map snd ( List.sort (fun p1 p2 -> Terms.compare_pattern BT.compare (fst p1) (fst p2)) l) in
+    match_lists (exp1 :: sort_by_pattern pats) (exp1' :: sort_by_pattern pats')
   | Cast (bt, exp1), Cast (bt', exp1') ->
-    let _ = ((bt, exp1), (bt', exp1')) in
-    failwith "CHT - out of scope"
+    if (BT.equal bt bt') then get_assignment exp1 exp1' else None
   (* included so the compiler will catch any missing new constructors *)
   | Const _, _ -> None
   | Unop _, _ -> None
@@ -439,9 +410,15 @@ let rec to_tree_aux (lines : packing_ft) (defs : dep_tree SymMap.t) : IT.t * dep
     let new_defs = SymMap.add v root defs in
     to_tree_aux next new_defs
   | Resource ((v, (rt, bt)), i, next) ->
+    let get_all_fvs l = List.sort_uniq Sym.compare (List.concat_map get_fvs l) in
     let vs = match rt with
-    | P {name=_; pointer; iargs} -> List.concat_map get_fvs (pointer :: iargs)
-    | Q _ -> failwith "CHT - out of scope" in
+    | P {name=_; pointer; iargs} -> get_all_fvs (pointer :: iargs)
+    | Q {name=_; pointer; q=(q_sym, _); q_loc=_; step; permission; iargs} ->
+      let fvs_with_q = get_all_fvs (pointer :: step :: permission :: iargs) in
+      List.filter (fun s -> not (Sym.equal s q_sym)) fvs_with_q
+      (*CHT TODO: what are q_loc and step precisely?*)
+      (*CHT TODO: how does shadowing work here re: q? If q appears in output is it always this q*)
+    in
     let ln = ResourceL ((v, (rt, bt)), i) in
     let root = NodeLT (ln, convert_children vs) in
     let new_defs = SymMap.add v root defs in
