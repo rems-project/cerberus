@@ -69,8 +69,8 @@ Fact ADDR_LIMIT_to_Z:
   AddressValue.to_Z (AddressValue.of_Z AddressValue.ADDR_LIMIT) = 0.
 Proof.
   unfold AddressValue.ADDR_LIMIT, AddressValue.of_Z, AddressValue.to_Z.
-  Transparent bv_to_Z_unsigned.
-  unfold bv_to_Z_unsigned.
+  Transparent Utils.bv_to_Z_unsigned.
+  unfold Utils.bv_to_Z_unsigned.
   rewrite bitvector.Z_to_bv_unsigned.
   replace (bitvector.bv_modulus AddressValue.len) with (0 + (bitvector.bv_modulus AddressValue.len)) by lia.
   apply bitvector.bv_wrap_add_modulus_1.
@@ -5428,7 +5428,7 @@ Module CheriMemoryImplWithProofs
     (f : A -> option B)
     (l : list A)
     (l' : list B):
-    Capability.try_map f l = Some l' ->
+    Utils.try_map f l = Some l' ->
     length l' = length l.
   Proof.
     generalize dependent l'.
