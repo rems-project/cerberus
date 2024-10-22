@@ -38,10 +38,19 @@ val lab_interesting : label
 (** Uninteresting things that are hidden by default *)
 val lab_uninteresting : label
 
+(** Resources that do not satisfy predicate definitions *)
+val lab_invalid : label
+
+(** Resources that may not satisfy predicate definitions *)
+val lab_unknown : label
+
+(** Resources that do satisfy predicate definitions *)
+val lab_valid : label
+
 (** A collection of labeled things *)
 type 'a labeled_view
 
-(** Empty collection of labeld things *)
+(** Empty collection of labeled things *)
 val labeled_empty : 'a labeled_view
 
 (** Set the entities assocaited with a lable *)
