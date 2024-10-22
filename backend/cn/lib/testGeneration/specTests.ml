@@ -372,6 +372,11 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
       space
       string
       ([ "./${TEST_DIR}/tests.out" ]
+       @ (Config.has_null_in_every ()
+          |> Option.map (fun null_in_every ->
+            [ "--null-in-every"; string_of_int null_in_every ])
+          |> Option.to_list
+          |> List.flatten)
        @ (Config.has_seed ()
           |> Option.map (fun seed -> [ "--seed"; seed ])
           |> Option.to_list
