@@ -67,10 +67,74 @@ let rec compile_term
                  [ AilEident (Sym.fresh_named (name_of_bt name bt));
                    AilEconst (ConstantInteger (IConstant (Z.of_int sz, Decimal, None)))
                  ] ))) )
-  | Pick _wgts ->
-    ( [],
-      [],
-      mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_named "pick_placeholder")), [])) )
+  | Pick { bt; choices } ->
+    let var = Sym.fresh () in
+    let tmp = Sym.fresh () in
+    let bs, ss =
+      snd
+        (List.fold_left
+           (fun (weightsSoFar, (bs', ss')) (w, gr) ->
+             let weightsNow = weightsSoFar + w in
+             let bs, ss, e = compile_term sigma name gr in
+             ( weightsNow,
+               ( bs' @ bs,
+                 ss'
+                 @ A.(
+                     [ AilSexpr
+                         (mk_expr
+                            (AilEcall
+                               ( mk_expr
+                                   (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_BEGIN")),
+                                 List.map
+                                   mk_expr
+                                   [ AilEident tmp;
+                                     AilEconst
+                                       (ConstantInteger
+                                          (IConstant (Z.of_int weightsSoFar, Decimal, None)));
+                                     AilEconst
+                                       (ConstantInteger
+                                          (IConstant (Z.of_int weightsNow, Decimal, None)))
+                                   ] )))
+                     ]
+                     @ ss
+                     @ [ AilSexpr
+                           (mk_expr
+                              (AilEcall
+                                 ( mk_expr
+                                     (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_END")),
+                                   [ mk_expr (AilEident var); e ] )))
+                       ]) ) ))
+           (0, ([], []))
+           choices)
+    in
+    ( bs,
+      A.
+        [ AilSexpr
+            (mk_expr
+               (AilEcall
+                  ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_BEGIN")),
+                    List.map
+                      mk_expr
+                      [ AilEident (Sym.fresh_named (name_of_bt name bt));
+                        AilEident var;
+                        AilEident tmp;
+                        AilEconst
+                          (ConstantInteger
+                             (IConstant
+                                ( Z.of_int
+                                    (List.fold_left Int.add 0 (List.map fst choices)),
+                                  Decimal,
+                                  None )))
+                      ] )))
+        ]
+      @ ss
+      @ [ AilSexpr
+            (mk_expr
+               (AilEcall
+                  ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_END")),
+                    [ mk_expr (AilEident tmp) ] )))
+        ],
+      A.(mk_expr (AilEident var)) )
   | Alloc { bytes = it } ->
     let alloc_sym = Sym.fresh_named "cn_gen_alloc" in
     let b, s, e = compile_it sigma name it in
