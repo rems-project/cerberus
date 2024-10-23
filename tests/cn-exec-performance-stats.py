@@ -14,11 +14,13 @@ parser=argparse.ArgumentParser()
 parser.add_argument("--dir", help="Collect performance metrics for *directory* of CN files")
 parser.add_argument("--file", help="Collect performance metrics for a *single* CN file")
 parser.add_argument("--csv", help="Store results in csv file with provided name")
+parser.add_argument("--iterate", help="Iterate over various sizes of data structure for provided example. To be used in conjunction with --file")
+parser.add_argument("--buddy_path", help="Collect statistics for pKVM buddy allocator - provide path to buddy")
 
 args=parser.parse_args()
 
-if (not args.dir and not args.file) or (args.dir and args.file):
-    print("Please provide *either* a standalone CN file *or* a directory path for several CN files")
+if (not (args.dir or args.file or args.buddy_path)):
+    print("Please provide an argument for --dir, --file or --buddy_path")
     exit()
 
 if ".csv" not in args.csv:
@@ -31,10 +33,13 @@ tests_path=""
 if args.dir:
     tests_path = args.dir
     cn_test_files = [f for f in listdir(tests_path) if (isfile(join(tests_path, f)) and ".broken" not in f and ".c" in f)]
-else:
+elif args.file:
     filename_split = args.file.split('/')
     tests_path = '/'.join(filename_split[:-1])
     cn_test_files=[filename_split[-1]]
+elif args.buddy_path:
+    tests_path = "."
+    cn_test_files=["driver.pp.c"]
 
 # print(cn_test_files)
 time_cmd = "time "
@@ -51,76 +56,102 @@ runtime_prefix = opam_switch_prefix + "/lib/cn/runtime"
 
 num_error_files=0
 
-def print_and_error():
+def print_and_error(error_str):
     global num_error_files
-    print("ERROR")
+    print(error_str + " ERROR")
     num_error_files+=1
 
-def time_spec_generation(f, input_basename):
+def gen_instr_cmd(f, input_basename):
     instr_cmd_prefix = "cn instrument"
     instr_cmd = time_cmd + instr_cmd_prefix + " " + tests_path + "/" + f
     instr_cmd += " --output-decorated=" + input_basename + "-exec.c"
     instr_cmd += " --with-ownership-checking"
+    return instr_cmd
+
+def gen_compile_cmd(input_basename):
+    compile_cmd = time_cmd + "cc -g -c -I" + runtime_prefix + "/include/ " + input_basename + "-exec.c cn.c"
+    return compile_cmd
+
+def gen_link_cmd(input_basename):
+    link_cmd = time_cmd + "cc -I" + runtime_prefix + "/include -o " + input_basename + "-exec-output.bin " + input_basename + "-exec.o cn.o " + runtime_prefix + "/libcn.a"
+    return link_cmd
+
+def gen_exec_cmd(input_basename):
+    exec_cmd = time_cmd + "./" + input_basename + "-exec-output.bin"
+    return exec_cmd
+
+
+def time_spec_generation(f, input_basename):
+    instr_cmd = gen_instr_cmd(f, input_basename)
+    print(instr_cmd)
     instr_result = subprocess.run(instr_cmd.split(), capture_output=True, text = True)
     instr_output = instr_result.stderr
-    successful_gen_flag = "error" not in instr_output
+    successful_gen_flag = ("error" not in instr_output) or args.buddy_path
     generation_time = None
     if successful_gen_flag:
         generation_time = instr_output.split()[0]
         # print(generation_time)
     else:
-        print_and_error()
+        print_and_error("GENERATION")
     return successful_gen_flag, generation_time
 
 
 def time_compilation(input_basename):
-    compile_cmd = time_cmd + "cc -g -c -I" + runtime_prefix + "/include/ " + input_basename + "-exec.c cn.c"
+    compile_cmd = gen_compile_cmd(input_basename)
+    print(compile_cmd)
     compile_result = subprocess.run(compile_cmd.split(), capture_output=True, text = True)
     compile_output = compile_result.stderr
-    successful_compile_flag = "error" not in compile_output
+    successful_compile_flag = ("error" not in compile_output) or args.buddy_path
     compilation_time = None
     if successful_compile_flag:
         compilation_time = compile_output.split()[0]
     else:
-        print_and_error()
+        print_and_error("COMPILATION")
     return successful_compile_flag, compilation_time
+
         
 def time_linking(input_basename):
-    link_cmd = time_cmd + "cc -I" + runtime_prefix + "/include -o " + input_basename + "-exec-output.bin " + input_basename + "-exec.o cn.o " + runtime_prefix + "/libcn.a"
+    link_cmd = gen_link_cmd(input_basename)
+    print(link_cmd)
     link_result = subprocess.run(link_cmd.split(), capture_output=True, text = True)
     link_output = link_result.stderr
-    successful_linking_flag = "error" not in link_output
+    successful_linking_flag = ("error" not in link_output) or args.buddy_path
     link_time = None
     if successful_linking_flag:
         link_time = link_output.split()[0]
     else:
-        print_and_error()
+        print_and_error("LINKING")
     return successful_linking_flag, link_time
 
 def time_executable(input_basename):
-    executable_cmd = time_cmd + "./" + input_basename + "-exec-output.bin"
+    executable_cmd = gen_exec_cmd(input_basename)
+    print(executable_cmd)
     executable_result = subprocess.run(executable_cmd.split(), capture_output=True, text = True)
     executable_output = executable_result.stderr
-    successful_executable_flag = "error" not in executable_output
+    successful_executable_flag = ("error" not in executable_output) or args.buddy_path
     executable_time = None
     if successful_executable_flag:
         executable_time = executable_output.split()[0]
     else:
-        print_and_error()
+        print_and_error("EXECUTABLE")
     return successful_executable_flag, executable_time
 
+def preprocess_buddy():
+    preprocess_cmd = "cc -E -P -CC " + args.buddy_path + "driver.c"
+    pp_f = open("driver.pp.c", "w")
+    subprocess.call(preprocess_cmd.split(), stdout=pp_f)
 
-print("Collecting performance metrics...")
 
-for f in cn_test_files:
-    print(f)
+def collect_stats_for_single_file(f, c_arg=None):
+    # print(f)
     # Generation
+    
     input_basename = f.split('.')[0]
     generation_successful, generation_time = time_spec_generation(f, input_basename)
     if generation_successful:
         # print("Generation successful")
         # Compilation
-        print(input_basename)
+        # print(input_basename)
         compilation_successful, compilation_time = time_compilation(input_basename)
         if compilation_successful:
             # print("Compilation successful")
@@ -137,6 +168,15 @@ for f in cn_test_files:
                     link_times.append(float(link_time))
                     executable_times.append(float(executable_time))
                     non_error_cn_filenames.append(f)
+    
+
+print("Collecting performance metrics...")
+
+if args.buddy_path:
+    preprocess_buddy()
+
+for f in cn_test_files:
+    collect_stats_for_single_file(f)
 
 
 
