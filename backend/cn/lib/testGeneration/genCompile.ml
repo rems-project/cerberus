@@ -290,7 +290,7 @@ let rec compile_clauses
     in
     let@ gt_else = compile_clauses filename recursive preds name iargs oargs cls' in
     return (GT.ite_ (it_if, gt_then, gt_else) cl.loc)
-  | [] -> failwith "unreachable"
+  | [] -> failwith ("unreachable @ " ^ __LOC__)
 
 
 let compile_pred
