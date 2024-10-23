@@ -94,7 +94,7 @@ module Interval = struct
 end
 
 module Intervals = struct
-  (* Separated, non-empty, sorted from smallest integers to largest. *)
+  (* Separated, sorted from smallest integers to largest. *)
   type t = Interval.t list [@@deriving eq, ord]
 
   let to_intervals t = t
@@ -172,17 +172,14 @@ module Intervals = struct
     match is with [ i ] -> Interval.is_const i | _ -> None
 
 
+  let is_empty (is : t) : bool = List.is_empty is
+
   let minimum (is : t) : Z.t option =
-    match is with
-    | i :: _ -> Interval.minimum i
-    | [] -> failwith "Intervals should be non-empty"
+    match is with i :: _ -> Interval.minimum i | [] -> None
 
 
   let rec maximum (is : t) : Z.t option =
-    match is with
-    | [ i ] -> Interval.maximum i
-    | _ :: is' -> maximum is'
-    | [] -> failwith "Intervals should be non-empty"
+    match is with [ i ] -> Interval.maximum i | _ :: is' -> maximum is' | [] -> None
 end
 
 module Solver = struct

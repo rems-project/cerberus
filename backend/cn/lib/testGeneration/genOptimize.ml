@@ -2017,16 +2017,19 @@ module ConstraintPropagation = struct
 
     let of_ (mult : Z.t) (intervals : Intervals.t) : t =
       let intervals =
-        let open Z in
-        let min = Option.get (Intervals.minimum intervals) in
-        let min' = min / mult * mult in
-        let max' = Z.succ (Option.get (Intervals.maximum intervals)) in
-        let max =
-          ((max' / mult) + if Z.equal (max' mod mult) Z.zero then Z.zero else Z.one)
-          * mult
-        in
-        let mult_interval = Interval.range (Z.max min min') (Z.min max max') in
-        Intervals.intersect (Intervals.of_interval mult_interval) intervals
+        if Intervals.is_empty intervals then
+          intervals
+        else
+          let open Z in
+          let min = Option.get (Intervals.minimum intervals) in
+          let min' = min / mult * mult in
+          let max' = Z.succ (Option.get (Intervals.maximum intervals)) in
+          let max =
+            ((max' / mult) + if Z.equal (max' mod mult) Z.zero then Z.zero else Z.one)
+            * mult
+          in
+          let mult_interval = Interval.range (Z.max min min') (Z.min max max') in
+          Intervals.intersect (Intervals.of_interval mult_interval) intervals
       in
       { mult; intervals }
 
@@ -2055,6 +2058,17 @@ module ConstraintPropagation = struct
 
     let const (n : Z.t) : t = of_interval (Interval.const n)
 
+    let empty () : t =
+      let i =
+        Intervals.intersect
+          (Intervals.of_interval (Interval.const Z.zero))
+          (Intervals.of_interval (Interval.const Z.one))
+      in
+      (* So we know if something changes in [Intervals] *)
+      assert (Intervals.is_empty i);
+      of_intervals i
+
+
     let ne (n : Z.t) : t =
       of_intervals (Intervals.complement (Intervals.of_interval (Interval.const n)))
 
@@ -2077,9 +2091,11 @@ module ConstraintPropagation = struct
 
     let is_const (r : t) : Z.t option = Intervals.is_const r.intervals
 
-    let minimum (r : t) : Z.t = Option.get (Intervals.minimum r.intervals)
+    let is_empty (r : t) : bool = Intervals.is_empty r.intervals
 
-    let maximum (r : t) : Z.t = Option.get (Intervals.maximum r.intervals)
+    let minimum (r : t) : Z.t option = Intervals.minimum r.intervals
+
+    let maximum (r : t) : Z.t option = Intervals.maximum r.intervals
   end
 
   module Domain = struct
@@ -2355,42 +2371,46 @@ module ConstraintPropagation = struct
       let aux (sgn : BT.sign) (sz : int) : GS.t list =
         let loc = Locations.other __LOC__ in
         let min_bt, max_bt = BT.bits_range (sgn, sz) in
-        let min, max = (IntRep.minimum r, IntRep.maximum r) in
-        let stmts_range =
-          if Z.equal min max then
-            [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), IT.num_lit_ min bt loc) loc)) ]
-          else (
-            let stmt_min =
-              if Z.lt min_bt min then
-                [ GS.Assert
-                    (LC.T (IT.le_ (IT.num_lit_ min bt loc, IT.sym_ (x, bt, loc)) loc))
-                ]
-              else
-                []
-            in
-            let stmt_max =
-              if Z.lt max max_bt then
-                [ GS.Assert
-                    (LC.T (IT.le_ (IT.sym_ (x, bt, loc), IT.num_lit_ max bt loc) loc))
-                ]
-              else
-                []
-            in
-            stmt_min @ stmt_max)
-        in
-        let stmt_mult =
-          if Z.equal r.mult Z.one then
-            []
-          else
-            [ GS.Assert
-                (LC.T
-                   (IT.eq_
-                      ( IT.mod_ (IT.sym_ (x, bt, loc), IT.num_lit_ r.mult bt loc) loc,
-                        IT.num_lit_ Z.zero bt loc )
-                      loc))
-            ]
-        in
-        stmt_mult @ stmts_range
+        if IntRep.is_empty r then
+          [ GS.Assert (T (IT.bool_ false loc)) ]
+        else (
+          let min, max = (Option.get (IntRep.minimum r), Option.get (IntRep.maximum r)) in
+          let stmts_range =
+            if Z.equal min max then
+              [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), IT.num_lit_ min bt loc) loc))
+              ]
+            else (
+              let stmt_min =
+                if Z.lt min_bt min then
+                  [ GS.Assert
+                      (LC.T (IT.le_ (IT.num_lit_ min bt loc, IT.sym_ (x, bt, loc)) loc))
+                  ]
+                else
+                  []
+              in
+              let stmt_max =
+                if Z.lt max max_bt then
+                  [ GS.Assert
+                      (LC.T (IT.le_ (IT.sym_ (x, bt, loc), IT.num_lit_ max bt loc) loc))
+                  ]
+                else
+                  []
+              in
+              stmt_min @ stmt_max)
+          in
+          let stmt_mult =
+            if Z.equal r.mult Z.one then
+              []
+            else
+              [ GS.Assert
+                  (LC.T
+                     (IT.eq_
+                        ( IT.mod_ (IT.sym_ (x, bt, loc), IT.num_lit_ r.mult bt loc) loc,
+                          IT.num_lit_ Z.zero bt loc )
+                        loc))
+              ]
+          in
+          stmt_mult @ stmts_range)
       in
       match bt with
       | Loc () ->
@@ -2443,13 +2463,13 @@ module ConstraintPropagation = struct
       | _ -> None
 
 
-    let intersect (c1 : t) (c2 : t) : t option =
+    let intersect (c1 : t) (c2 : t) : t =
       match (c1, c2) with
-      | Eq, Eq | Ne, Ne | Lt, Lt | Le, Le -> Some c1
-      | Eq, Le | Le, Eq -> Some Eq
-      | Lt, Le | Le, Lt | Lt, Ne | Ne, Lt -> Some Lt
+      | Eq, Eq | Ne, Ne | Lt, Lt | Le, Le -> c1
+      | Eq, Le | Le, Eq -> Eq
+      | Lt, Le | Le, Lt | Lt, Ne | Ne, Lt -> Lt
       | Eq, Ne | Ne, Eq | Eq, Lt | Lt, Eq | Le, Ne | Ne, Le | Invalid, _ | _, Invalid ->
-        None
+        Invalid
   end
 
   module ConstraintNetwork = struct
@@ -2480,9 +2500,7 @@ module ConstraintPropagation = struct
       let g =
         match G.find_all_edges g x y with
         | [ (x', c', y') ] ->
-          G.add_edge_e
-            (G.remove_edge_e g (x', c', y'))
-            (x, Option.get (Constraint.intersect c c'), y)
+          G.add_edge_e (G.remove_edge_e g (x', c', y')) (x, Constraint.intersect c c', y)
         | [] -> G.add_edge_e g (x, c, y)
         | _ -> failwith __LOC__
       in
@@ -2573,14 +2591,38 @@ module ConstraintPropagation = struct
       in
       (r1', r2')
     | Lt ->
-      let r1' : Domain.t = Int (IntRep.intersect r1 (IntRep.lt (IntRep.maximum r2))) in
-      let r2' : Domain.t = Int (IntRep.intersect r2 (IntRep.geq (IntRep.minimum r1))) in
+      let r1' : Domain.t =
+        Int
+          (if IntRep.is_empty r2 then
+             r2
+           else
+             IntRep.intersect r1 (IntRep.lt (Option.get (IntRep.maximum r2))))
+      in
+      let r2' : Domain.t =
+        Int
+          (if IntRep.is_empty r1 then
+             r1
+           else
+             IntRep.intersect r2 (IntRep.geq (Option.get (IntRep.minimum r1))))
+      in
       (r1', r2')
     | Le ->
-      let r1' : Domain.t = Int (IntRep.intersect r1 (IntRep.leq (IntRep.maximum r2))) in
-      let r2' : Domain.t = Int (IntRep.intersect r2 (IntRep.gt (IntRep.minimum r1))) in
+      let r1' : Domain.t =
+        Int
+          (if IntRep.is_empty r2 then
+             r2
+           else
+             IntRep.intersect r1 (IntRep.leq (Option.get (IntRep.maximum r2))))
+      in
+      let r2' : Domain.t =
+        Int
+          (if IntRep.is_empty r1 then
+             r1
+           else
+             IntRep.intersect r2 (IntRep.gt (Option.get (IntRep.minimum r1))))
+      in
       (r1', r2')
-    | Invalid -> failwith __LOC__
+    | Invalid -> (Int (IntRep.empty ()), Int (IntRep.empty ()))
 
 
   (** AC-3 from https://doi.org/10.1016/0004-3702(77)90007-8 *)
