@@ -4,7 +4,7 @@
 
 #include <cn-testing/prelude.h>
 
-static uint8_t null_in_every = 2;
+static uint8_t null_in_every = 4;
 
 void set_null_in_every(uint8_t n) {
     null_in_every = n;
