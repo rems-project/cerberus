@@ -13,11 +13,16 @@ parser=argparse.ArgumentParser()
 
 parser.add_argument("--dir", help="Collect performance metrics for *directory* of CN files")
 parser.add_argument("--file", help="Collect performance metrics for a *single* CN file")
+parser.add_argument("--csv", help="Store results in csv file with provided name")
 
 args=parser.parse_args()
 
 if (not args.dir and not args.file) or (args.dir and args.file):
     print("Please provide *either* a standalone CN file *or* a directory path for several CN files")
+    exit()
+
+if ".csv" not in args.csv:
+    print("Please provide CSV file extension explicitly in --csv arg")
     exit()
 
 
@@ -27,7 +32,9 @@ if args.dir:
     tests_path = args.dir
     cn_test_files = [f for f in listdir(tests_path) if (isfile(join(tests_path, f)) and ".broken" not in f and ".c" in f)]
 else:
-    cn_test_files=[args.file]
+    filename_split = args.file.split('/')
+    tests_path = '/'.join(filename_split[:-1])
+    cn_test_files=[filename_split[-1]]
 
 # print(cn_test_files)
 time_cmd = "time "
@@ -49,9 +56,10 @@ def print_and_error():
     print("ERROR")
     num_error_files+=1
 
-def time_spec_generation(f):
+def time_spec_generation(f, input_basename):
     instr_cmd_prefix = "cn instrument"
     instr_cmd = time_cmd + instr_cmd_prefix + " " + tests_path + "/" + f
+    instr_cmd += " --output-decorated=" + input_basename + "-exec.c"
     instr_cmd += " --with-ownership-checking"
     instr_result = subprocess.run(instr_cmd.split(), capture_output=True, text = True)
     instr_output = instr_result.stderr
@@ -107,23 +115,23 @@ print("Collecting performance metrics...")
 for f in cn_test_files:
     print(f)
     # Generation
-    generation_successful, generation_time = time_spec_generation(f)
+    input_basename = f.split('.')[0]
+    generation_successful, generation_time = time_spec_generation(f, input_basename)
     if generation_successful:
-        print("Generation successful")
+        # print("Generation successful")
         # Compilation
-        input_basename = f.split('.')[0]
         print(input_basename)
         compilation_successful, compilation_time = time_compilation(input_basename)
         if compilation_successful:
-            print("Compilation successful")
+            # print("Compilation successful")
             # Linking
             linking_successful, link_time = time_linking(input_basename)
             if linking_successful:
-                print("Linking successful")
+                # print("Linking successful")
                 # Running binary
                 executable_successful, executable_time = time_executable(input_basename)
                 if executable_successful:
-                    print("Executable ran successfully")
+                    # print("Executable ran successfully")
                     generation_times.append(float(generation_time))
                     compilation_times.append(float(compilation_time))
                     link_times.append(float(link_time))
@@ -142,10 +150,12 @@ stats_dict = \
  'executable_time': executable_times}
 
 df = pd.DataFrame.from_dict(stats_dict)
-df["total"] = df.iloc[:, -4:-1].sum(axis=1)
+df["total"] = df.iloc[:, -4:].sum(axis=1)
 
 print(df)
-df.to_csv('times.csv', index=False) 
+
+if args.csv:
+    df.to_csv(args.csv, index=False) 
 
 print("Number of error files:")
 print(num_error_files)
