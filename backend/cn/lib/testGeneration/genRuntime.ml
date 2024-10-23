@@ -17,7 +17,10 @@ type term =
       { bt : BT.t;
         sz : int
       }
-  | Pick of { choices : (int * term) list }
+  | Pick of
+      { bt : BT.t;
+        choices : (int * term) list
+      }
   | Alloc of { bytes : IT.t }
   | Call of
       { fsym : Sym.t;
@@ -67,7 +70,7 @@ let is_return (tm : term) : bool = match tm with Return _ -> true | _ -> false
 let rec free_vars_term (tm : term) : SymSet.t =
   match tm with
   | Uniform _ -> SymSet.empty
-  | Pick { choices } -> free_vars_term_list (List.map snd choices)
+  | Pick { bt = _; choices } -> free_vars_term_list (List.map snd choices)
   | Alloc { bytes } -> IT.free_vars bytes
   | Call { fsym = _; iargs } -> SymSet.of_list (List.map snd iargs)
   | Asgn { pointer; offset; sct = _; value; last_var = _; rest } ->
@@ -100,15 +103,18 @@ let rec pp_term (tm : term) : Pp.document =
   let open Pp in
   match tm with
   | Uniform { bt; sz } -> string "uniform" ^^ angles (BT.pp bt) ^^ parens (int sz)
-  | Pick { choices } ->
+  | Pick { bt; choices } ->
     string "pick"
     ^^ parens
          (brackets
-            (separate_map
-               (semi ^^ break 1)
-               (fun (w, gt) ->
-                 parens (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp_term gt))))
-               choices))
+            (break 1
+             ^^ c_comment (BT.pp bt)
+             ^^ break 1
+             ^^ separate_map
+                  (semi ^^ break 1)
+                  (fun (w, gt) ->
+                    parens (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp_term gt))))
+                  choices))
   | Alloc { bytes } -> string "alloc" ^^ parens (IT.pp bytes)
   | Call { fsym; iargs } ->
     Sym.pp fsym
@@ -296,7 +302,31 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
           plain
             (string "Value from " ^^ Locations.pp loc ^^ string " is still `arbitrary`"))
     | Uniform sz -> Uniform { bt; sz }
-    | Pick wgts -> Pick { choices = List.map_snd (aux vars) wgts }
+    | Pick wgts ->
+      Pick
+        { bt;
+          choices =
+            (let wgts =
+               let gcd =
+                 List.fold_left
+                   (fun x y -> Z.gcd x y)
+                   (fst (List.hd wgts))
+                   (List.map fst (List.tl wgts))
+               in
+               List.map_fst (fun x -> Z.div x gcd) wgts
+             in
+             let w_sum = List.fold_left Z.add Z.zero (List.map fst wgts) in
+             let max_int = Z.of_int Int.max_int in
+             let f =
+               if Z.leq w_sum max_int then
+                 fun w -> Z.to_int w
+               else
+                 fun w ->
+               Z.to_int
+                 (Z.max Z.one (Z.div w (Z.div (Z.add w_sum (Z.pred max_int)) max_int)))
+             in
+             List.map (fun (w, gt) -> (f w, aux vars gt)) wgts)
+        }
     | Alloc bytes -> Alloc { bytes }
     | Call (fsym, xits) ->
       let (iargs : (Sym.t * Sym.t) list), (gt_lets : Sym.t -> term -> term) =

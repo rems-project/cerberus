@@ -1,7 +1,8 @@
 #ifndef CN_GEN_DSL_H
 #define CN_GEN_DSL_H
 
-#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #include "backtrack.h"
 
@@ -111,6 +112,25 @@
                 break;                                                                  \
             }                                                                           \
             i = i_ty##_sub(i, convert_to_##i_ty(1));                                    \
+        }                                                                               \
+    }
+
+#define CN_GEN_PICK_BEGIN(ty, var, tmp, sumWeights)                                     \
+    ty* var = NULL;                                                                     \
+    {                                                                                   \
+        cn_bits_u32* tmp = CN_GEN_UNIFORM(cn_bits_u32, sumWeights);                     \
+
+#define CN_GEN_PICK_CASE_BEGIN(tmp, weightsSoFar, weightsNow)                           \
+        if (weightsSoFar <= tmp->val && tmp->val < weightsNow) {
+
+#define CN_GEN_PICK_CASE_END(var, e)                                                    \
+            var = e;                                                                    \
+        }
+
+#define CN_GEN_PICK_END(var)                                                            \
+        if (var == NULL) {                                                              \
+            printf("Invalid generated value");                                          \
+            assert(false);                                                              \
         }                                                                               \
     }
 
