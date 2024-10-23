@@ -498,7 +498,7 @@ let run_tests
           in
           TestGeneration.run ~output_dir ~filename config sigma prog5;
           if not dont_run then
-            Unix.execv "./run_tests.sh" (Array.of_list []))
+            Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
       Resultat.return ())
 

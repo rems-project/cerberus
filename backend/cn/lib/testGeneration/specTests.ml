@@ -447,5 +447,5 @@ let generate
   let test_file = filename_base ^ "_test.c" in
   save output_dir test_file tests_doc;
   let script_doc = compile_script ~output_dir ~test_file in
-  save ~perm:0o777 "./" "run_tests.sh" script_doc;
+  save ~perm:0o777 output_dir "run_tests.sh" script_doc;
   ()
