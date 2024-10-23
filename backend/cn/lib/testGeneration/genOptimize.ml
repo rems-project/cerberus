@@ -16,6 +16,44 @@ type opt_pass =
     transform : GT.t -> GT.t
   }
 
+module FlipIfs = struct
+  (* TODO: Improve performance on runway example *)
+  let transform (gd : GD.t) : GD.t =
+    let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
+    let rec aux (gt : GT.t) : GT.t =
+      let (GT (gt_, _, loc)) = gt in
+      match gt_ with
+      | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+      | Pick wgts -> GT.pick_ (List.map_snd aux wgts) loc
+      | ITE (it_if, gt_then, gt_else) ->
+        let gt_then, gt_else = (aux gt_then, aux gt_else) in
+        if not (SymSet.subset (IT.free_vars it_if) iargs) then (
+          let wgts1 =
+            match gt_then with
+            | GT (Pick wgts, _, _) ->
+              List.map_snd (fun gt' -> GT.assert_ (T it_if, gt') loc) wgts
+            | gt' -> [ (Z.one, GT.assert_ (T it_if, gt') loc) ]
+          in
+          let wgts2 =
+            match gt_else with
+            | GT (Pick wgts, _, _) ->
+              List.map_snd (fun gt' -> GT.assert_ (T (IT.not_ it_if loc), gt') loc) wgts
+            | gt' -> [ (Z.one, GT.assert_ (T (IT.not_ it_if loc), gt') loc) ]
+          in
+          GT.pick_ (wgts1 @ wgts2) loc)
+        else
+          GT.ite_ (it_if, gt_then, gt_else) loc
+      | Asgn ((it_addr, sct), it_val, gt') ->
+        GT.asgn_ ((it_addr, sct), it_val, aux gt') loc
+      | Let (backtracks, (x, gt_inner), gt') ->
+        GT.let_ (backtracks, (x, aux gt_inner), aux gt') loc
+      | Assert (lc, gt') -> GT.assert_ (lc, aux gt') loc
+      | Map ((i, i_bt, it_perm), gt_inner) ->
+        GT.map_ ((i, i_bt, it_perm), aux gt_inner) loc
+    in
+    { gd with body = Some (aux (Option.get gd.body)) }
+end
+
 module Fusion = struct
   module Each = struct
     let check_index_ok (m : Sym.t) (i : Sym.t) (it : IT.t) : bool =
@@ -898,26 +936,22 @@ module PushPull = struct
   let push_in_outer_generators (gt : GT.t) : GT.t =
     let aux (gt : GT.t) : GT.t =
       match gt with
-      | GT
-          ( Asgn ((it_addr, sct), it_val, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
-            _,
-            loc_asgn )
-        when SymSet.is_empty (SymSet.inter (IT.free_vars it_addr) (IT.free_vars it_if)) ->
-        GT.ite_
-          ( it_if,
-            GT.asgn_ ((it_addr, sct), it_val, gt_then) loc_asgn,
-            GT.asgn_ ((it_addr, sct), it_val, gt_else) loc_asgn )
-          loc_ite
-      | GT
-          ( Let (x_backtracks, (x, gt1), GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
-            _,
-            loc_let )
-        when not (SymSet.mem x (IT.free_vars it_if)) ->
-        GT.ite_
-          ( it_if,
-            GT.let_ (x_backtracks, (x, gt1), gt_then) loc_let,
-            GT.let_ (x_backtracks, (x, gt1), gt_else) loc_let )
-          loc_ite
+      | GT (Asgn ((it_addr, sct), it_val, GT (Pick wgts, _, loc_pick)), _, loc_asgn) ->
+        GT.pick_
+          (List.map_snd (fun gt' -> GT.asgn_ ((it_addr, sct), it_val, gt') loc_asgn) wgts)
+          loc_pick
+      | GT (Let (x_backtracks, (x, gt_inner), GT (Pick wgts, _, loc_pick)), _, loc_let) ->
+        GT.pick_
+          (List.map_snd
+             (fun gt' -> GT.let_ (x_backtracks, (x, gt_inner), gt') loc_let)
+             wgts)
+          loc_pick
+      | GT (Let (x_backtracks, (x, GT (Pick wgts, _, loc_pick)), gt_rest), _, loc_let) ->
+        GT.pick_
+          (List.map_snd
+             (fun gt' -> GT.let_ (x_backtracks, (x, gt'), gt_rest) loc_let)
+             wgts)
+          loc_pick
       | GT
           ( Let (x_backtracks, (x, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), gt2),
             _,
@@ -927,11 +961,8 @@ module PushPull = struct
             GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
             GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
           loc_ite
-      | GT (Assert (lc, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), _, loc_assert)
-        when SymSet.is_empty (SymSet.inter (LC.free_vars lc) (IT.free_vars it_if)) ->
-        GT.ite_
-          (it_if, GT.assert_ (lc, gt_then) loc_assert, GT.assert_ (lc, gt_else) loc_assert)
-          loc_ite
+      | GT (Assert (lc, GT (Pick wgts, _, loc_pick)), _, loc_assert) ->
+        GT.pick_ (List.map_snd (fun gt' -> GT.assert_ (lc, gt') loc_assert) wgts) loc_pick
       | _ -> gt
     in
     GT.map_gen_pre aux gt
@@ -940,7 +971,7 @@ module PushPull = struct
   let transform (gt : GT.t) : GT.t =
     let rec loop (gt : GT.t) : GT.t =
       let old_gt = gt in
-      let new_gt = gt |> pull_out_inner_generators (* |> push_in_outer_generators *) in
+      let new_gt = gt |> pull_out_inner_generators |> push_in_outer_generators in
       if GT.equal old_gt new_gt then new_gt else loop new_gt
     in
     loop gt
@@ -954,6 +985,33 @@ module BranchPruning = struct
     let transform (gt : GT.t) : GT.t =
       let aux (gt : GT.t) : GT.t =
         match gt with
+        | GT (Pick [ (_, gt') ], _, _) -> gt'
+        | GT (Pick wgts, _, loc_pick) ->
+          let rec aux'' (wgts : (Z.t * GT.t) list) : (Z.t * GT.t) list =
+            match List.find_index (fun (_, gt') -> GT.is_pick gt') wgts with
+            | Some i ->
+              let w, gt' = List.nth wgts i in
+              let wgts = List.filteri (fun i' _ -> i <> i') wgts in
+              (match gt' with
+               | GT (Pick wgts', _, _) when List.non_empty wgts' ->
+                 let w_sum = List.fold_left Z.add Z.zero (List.map fst wgts') in
+                 let wgts =
+                   List.map_fst (Z.mul w_sum) wgts @ List.map_fst (Z.mul w) wgts'
+                 in
+                 let wgts =
+                   let gcd =
+                     List.fold_left
+                       (fun x y -> Z.gcd x y)
+                       (fst (List.hd wgts))
+                       (List.map fst (List.tl wgts))
+                   in
+                   List.map_fst (fun x -> Z.div x gcd) wgts
+                 in
+                 aux'' wgts
+               | _ -> failwith ("unreachable @ " ^ __LOC__))
+            | None -> wgts
+          in
+          GT.pick_ (aux'' wgts) loc_pick
         | GT (ITE (it_cond, gt_then, gt_else), _, _) ->
           if IT.is_true it_cond then
             gt_then
@@ -974,7 +1032,9 @@ module BranchPruning = struct
       let (GT (gt_, _, _)) = gt in
       match gt_ with
       | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> false
-      | Pick wgts -> List.for_all (fun (_, gt') -> contains_false_assertion gt') wgts
+      | Pick wgts ->
+        List.is_empty wgts
+        || List.for_all (fun (_, gt') -> contains_false_assertion gt') wgts
       | Asgn ((it_addr, _), _, gt') ->
         (match it_addr with
          | IT (Const Null, _, _) -> true
@@ -996,6 +1056,10 @@ module BranchPruning = struct
     let transform (gt : GT.t) : GT.t =
       let aux (gt : GT.t) : GT.t =
         match gt with
+        | GT (Pick wgts, _, loc_pick) ->
+          GT.pick_
+            (List.filter (fun (_, gt') -> not (contains_false_assertion gt')) wgts)
+            loc_pick
         | GT (ITE (it_if, gt_then, gt_else), _, loc_ite) ->
           if contains_false_assertion gt_else then
             GT.assert_ (T it_if, gt_then) loc_ite
@@ -1499,11 +1563,12 @@ module SplitConstraints = struct
           let it = dnf it in
           (match it with
            | IT (Binop (Or, _, _), _, _) ->
-             let cases = it |> listify_constraints in
-             List.fold_left
-               (fun gt_rest it' -> GT.ite_ (it', gt', gt_rest) loc)
-               (GT.assert_ (T (List.hd cases), gt') loc)
-               (List.tl cases)
+             let cases =
+               it
+               |> listify_constraints
+               |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
+             in
+             GT.pick_ cases loc
            | _ -> gt)
         | _ -> gt
       in
@@ -1520,8 +1585,12 @@ module SplitConstraints = struct
       let aux (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
-        | Assert (T (IT (Binop (Implies, it_if, it_then), _, loc_ite)), gt') ->
-          GT.ite_ (it_if, GT.assert_ (T it_then, gt') loc, gt') loc_ite
+        | Assert (T (IT (Binop (Implies, it_if, it_then), _, loc_implies)), gt') ->
+          GT.pick_
+            [ (Z.one, GT.assert_ (T (IT.not_ it_if loc_implies), gt') loc);
+              (Z.one, GT.assert_ (T it_then, gt') loc)
+            ]
+            loc_implies
         | _ -> gt
       in
       GT.map_gen_pre aux gt
@@ -3046,6 +3115,9 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   gd
   |> aux
   |> Fusion.Each.transform
+  |> aux
+  |> FlipIfs.transform
+  |> aux
   |> Reordering.transform
   |> ConstraintPropagation.transform
   |> Specialization.Equality.transform
