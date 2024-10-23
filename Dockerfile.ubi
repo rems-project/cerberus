@@ -1,0 +1,30 @@
+FROM redhat/ubi9:latest
+
+# Install basic dependencies
+RUN yum update -y && \
+    yum install -y xz sudo gcc unzip \
+    diffutils patch pkgconfig bzip2 \
+    git perl wget
+
+# Install additional FEDORA packages
+# from https://www.cyberciti.biz/faq/install-epel-repo-on-an-rhel-8-x/
+# NOTE: we might have to eventually use only RedHat packages
+RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
+    yum update -y
+
+RUN yum install -y z3 mpfr-devel gmp-devel m4
+
+# # Install OPAM
+# # See https://opam.ocaml.org/doc/1.2/Install.html
+# ENV OPAMCONFIRMLEVEL=unsafe-yes
+# RUN wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
+# # TODO: is there a way to avoid doing this?
+# RUN /usr/local/bin/opam init --comp 4.05.0
+
+# Use Nix to install OPAM *sigh*
+# NOTE: This doesn't work currently - and we should not be using this approach anyway
+RUN sh <(curl -L https://nixos.org/nix/install) --daemon --yes
+#RUN source $HOME/.nix-profile/etc/profile.d/nix.sh && nix-env
+RUN nix-env -i opam bubblewrap
+#RUN opam init --disable-sandboxing -y
+#RUN opam install dune lem
