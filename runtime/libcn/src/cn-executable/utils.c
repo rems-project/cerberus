@@ -36,7 +36,7 @@ void reset_cn_exit_cb(void) {
 }
 
 void print_error_msg_info(void) {
-  cn_printf(CN_LOGGING_INFO, "Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+  // cn_printf(CN_LOGGING_INFO, "Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
 }
 
 cn_bool *convert_to_cn_bool(_Bool b) {
@@ -51,11 +51,11 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 }
 
 void cn_assert(cn_bool *cn_b) {
-    cn_printf(CN_LOGGING_INFO, "[CN: assertion] function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+    // cn_printf(CN_LOGGING_INFO, "[CN: assertion] function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
     if (!(cn_b->val)) {
-        cn_printf(CN_LOGGING_ERROR, "CN assertion failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        // cn_printf(CN_LOGGING_ERROR, "CN assertion failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         if (error_msg_info.cn_source_loc) {
-            cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
+            // cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
         }
         cn_exit();
     }
@@ -63,7 +63,7 @@ void cn_assert(cn_bool *cn_b) {
 
 void c_ghost_assert(cn_bool *cn_b) {
     if (!(cn_b->val)) {
-        cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        // cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         cn_exit();
     }
 }
@@ -116,7 +116,7 @@ void initialise_ghost_stack_depth(void) {
 void ghost_stack_depth_incr(void) {
     cn_stack_depth++;
     // update_error_message_info(0);
-    print_error_msg_info();
+    // print_error_msg_info();
 }
 
 
@@ -127,10 +127,10 @@ void ghost_stack_depth_incr(void) {
 void ghost_stack_depth_decr(void) {
     cn_stack_depth--;
     // update_error_message_info(0);
-    print_error_msg_info();
+    // print_error_msg_info();
     // leak checking
     hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
-    cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
+    // cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
     _Bool leaked = false;
     while (ht_next(&it)) {
         intptr_t *key = it.key;
@@ -138,10 +138,10 @@ void ghost_stack_depth_decr(void) {
         _Bool fine = *depth <= cn_stack_depth;
         if (!fine) {
             leaked = true;
-            cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
+            // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
         }
     }
-    cn_printf(CN_LOGGING_INFO, "\n");
+    // cn_printf(CN_LOGGING_INFO, "\n");
     c_ghost_assert(convert_to_cn_bool(!leaked));
 }
 
@@ -167,27 +167,27 @@ void ownership_ghost_state_remove(signed long* address_key) {
 void dump_ownership_state()
 {
   hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
-  cn_printf(CN_LOGGING_INFO, "BEGIN ownership state\n");
+  // cn_printf(CN_LOGGING_INFO, "BEGIN ownership state\n");
   while (ht_next(&it)) {
     int depth = it.value ? *(int*)it.value : -1;
-    cn_printf(CN_LOGGING_INFO, "[%#lx] => depth: %d\n", *it.key, depth);
+    // cn_printf(CN_LOGGING_INFO, "[%#lx] => depth: %d\n", *it.key, depth);
   }
-  cn_printf(CN_LOGGING_INFO, "END\n");
+  // cn_printf(CN_LOGGING_INFO, "END\n");
 }
 
 
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
-    cn_printf(CN_LOGGING_INFO, "[CN: getting ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
-    //print_error_msg_info();
+    // cn_printf(CN_LOGGING_INFO, "[CN: getting ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    //// print_error_msg_info();
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
-        /* cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
+        /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth - 1) {
-            cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            cn_printf(CN_LOGGING_ERROR, "  ==> owned at level : %d\n", curr_depth);
+            // cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+            // cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            // cn_printf(CN_LOGGING_ERROR, "  ==> owned at level : %d\n", curr_depth);
             //dump_ownership_state();
             cn_exit();
         }
@@ -197,16 +197,16 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
-    cn_printf(CN_LOGGING_INFO, "[CN: returning ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
-    //print_error_msg_info();
+    // cn_printf(CN_LOGGING_INFO, "[CN: returning ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    //// print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth) {
-            cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            cn_printf(CN_LOGGING_ERROR, "  ==> owned at level: %d\n", curr_depth);
+            // cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+            // cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            // cn_printf(CN_LOGGING_ERROR, "  ==> owned at level: %d\n", curr_depth);
             //dump_ownership_state();
             cn_exit();
         }
@@ -216,12 +216,12 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
-    cn_printf(CN_LOGGING_INFO, "[CN: assuming ownership (%s)] " FMT_PTR_2 ", size: %lu\n", fun, (uintptr_t) generic_c_ptr, size);
-    //print_error_msg_info();
+    // cn_printf(CN_LOGGING_INFO, "[CN: assuming ownership (%s)] " FMT_PTR_2 ", size: %lu\n", fun, (uintptr_t) generic_c_ptr, size);
+    //// print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = ((uintptr_t) generic_c_ptr) + i;
-        /* cn_printf(CN_LOGGING_INFO, "CN: Assuming ownership for %lu (function: %s)\n",  */
+        /* // cn_printf(CN_LOGGING_INFO, "CN: Assuming ownership for %lu (function: %s)\n",  */
         /*        ((uintptr_t) generic_c_ptr) + i, fun); */
         ownership_ghost_state_set(address_key, cn_stack_depth);
     }
@@ -246,40 +246,40 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size
 
 
 void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
-  cn_printf(CN_LOGGING_INFO, "[C access checking] add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
+  // cn_printf(CN_LOGGING_INFO, "[C access checking] add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
       signed long *address_key = alloc(sizeof(long));
       *address_key = ptr_to_local + i;
-      /* cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
+      /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
       ownership_ghost_state_set(address_key, cn_stack_depth);
   }
 }
 
 void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
-  cn_printf(CN_LOGGING_INFO, "[C access checking] remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
+  // cn_printf(CN_LOGGING_INFO, "[C access checking] remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
       signed long *address_key = alloc(sizeof(long));
       *address_key = ptr_to_local + i;
-      /* cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
+      /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
       ownership_ghost_state_remove(address_key);
   }
 }
 
 void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
     signed long address_key = 0;
-    cn_printf(CN_LOGGING_INFO, "C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " ] -- ", generic_c_ptr, generic_c_ptr + offset);
+    // cn_printf(CN_LOGGING_INFO, "C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " ] -- ", generic_c_ptr, generic_c_ptr + offset);
     for (int i = 0; i<offset; i++) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
       if (curr_depth != cn_stack_depth) {
-        cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-        cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-        cn_printf(CN_LOGGING_ERROR, "  ==> curr_depth: %d\n", curr_depth);
+        // cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        // cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+        // cn_printf(CN_LOGGING_ERROR, "  ==> curr_depth: %d\n", curr_depth);
         cn_exit();
       }
     //   c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
-    cn_printf(CN_LOGGING_INFO, "\n");
+    // cn_printf(CN_LOGGING_INFO, "\n");
 }
 
 /* TODO: Need address of and size of every stack-allocated variable - could store in struct and pass through. But this is an optimisation */
@@ -375,7 +375,7 @@ cn_bool *cn_map_subset(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(voi
         if (!val2) return convert_to_cn_bool(0);
 
         if (convert_from_cn_bool(cn_bool_not(value_equality_fun(val1, val2)))) {
-            cn_printf(CN_LOGGING_INFO, "Values not equal!\n");
+            // cn_printf(CN_LOGGING_INFO, "Values not equal!\n");
             return convert_to_cn_bool(0);
         } 
     }
@@ -405,11 +405,11 @@ void update_error_message_info_(const char *function_name, char *file_name, int 
     error_msg_info.file_name = file_name;
     error_msg_info.line_number = line_number;
     error_msg_info.cn_source_loc = cn_source_loc;
-    //print_error_msg_info();
+    //// print_error_msg_info();
 }
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number) {
-  cn_printf(CN_LOGGING_INFO, "Initialising error message info\n");
+  // cn_printf(CN_LOGGING_INFO, "Initialising error message info\n");
   error_msg_info.function_name = function_name;
   error_msg_info.file_name = file_name;
   error_msg_info.line_number = line_number;
@@ -449,7 +449,7 @@ void *cn_aligned_alloc(size_t align, size_t size)
     cn_assume_ownership((void*) p, size, str);
     return p;
   } else {
-    cn_printf(CN_LOGGING_INFO, "aligned_alloc failed\n");
+    // cn_printf(CN_LOGGING_INFO, "aligned_alloc failed\n");
     return p;
   }
 }
@@ -462,7 +462,7 @@ void *cn_malloc(unsigned long size)
     cn_assume_ownership((void*) p, size, str);
     return p;
   } else {
-    cn_printf(CN_LOGGING_INFO, "malloc failed\n");
+    // cn_printf(CN_LOGGING_INFO, "malloc failed\n");
     return p;
   }
 }
@@ -475,14 +475,14 @@ void *cn_calloc(size_t num, size_t size)
     cn_assume_ownership((void*) p, num*size, str);
     return p;
   } else {
-    cn_printf(CN_LOGGING_INFO, "calloc failed\n");
+    // cn_printf(CN_LOGGING_INFO, "calloc failed\n");
     return p;
   }
 }
 
 void cn_free_sized(void* malloced_ptr, size_t size)
 {
-  cn_printf(CN_LOGGING_INFO, "[CN: freeing ownership] " FMT_PTR ", size: %lu\n", (uintptr_t) malloced_ptr, size);
+  // cn_printf(CN_LOGGING_INFO, "[CN: freeing ownership] " FMT_PTR ", size: %lu\n", (uintptr_t) malloced_ptr, size);
   for (int i = 0; i < size; i++) {
       signed long *address_key = alloc(sizeof(long));
       *address_key = (uintptr_t) malloced_ptr + i;
@@ -495,11 +495,11 @@ void cn_free_sized(void* malloced_ptr, size_t size)
 
 void cn_print_u64(const char *str, unsigned long u)
 {
-  cn_printf(CN_LOGGING_INFO, "\n\nprint %s: %20lx,  %20lu\n\n", str, u, u);
+  // cn_printf(CN_LOGGING_INFO, "\n\nprint %s: %20lx,  %20lu\n\n", str, u, u);
 }
 
 void cn_print_nr_u64(int i, unsigned long u)
 {
-  cn_printf(CN_LOGGING_INFO, "\n\nprint %d: %20lx,  %20lu\n", i, u, u);
+  // cn_printf(CN_LOGGING_INFO, "\n\nprint %d: %20lx,  %20lu\n", i, u, u);
 }
 
