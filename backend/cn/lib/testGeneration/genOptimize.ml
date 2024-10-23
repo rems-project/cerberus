@@ -70,22 +70,27 @@ module Fusion = struct
       (x : Sym.t)
       ((it_min, it_max) : IT.t * IT.t)
       (gt : GT.t)
-      : (Sym.t * IT.t) list
+      : GT.t * (Sym.t * IT.t) list
       =
-      let rec aux (gt : GT.t) : (Sym.t * IT.t) list =
-        let (GT (gt_, _, _)) = gt in
+      let rec aux (gt : GT.t) : GT.t * (Sym.t * IT.t) list =
+        let (GT (gt_, _, loc)) = gt in
         match gt_ with
         | Arbitrary | Uniform _ | Pick _ | Alloc _ | Call _ | Return _ | ITE _ | Map _ ->
-          []
-        | Asgn (_, _, gt') -> aux gt'
-        | Let (_, (_, gt_inner), gt_body) -> aux gt_inner @ aux gt_body
+          (gt, [])
+        | Asgn ((it_addr, sct), it_val, gt') ->
+          let gt', res = aux gt' in
+          (GT.asgn_ ((it_addr, sct), it_val, gt') loc, res)
+        | Let (backtracks, (y, gt_inner), gt_rest) ->
+          let gt_inner, res = aux gt_inner in
+          let gt_rest, res' = aux gt_rest in
+          (GT.let_ (backtracks, (y, gt_inner), gt_rest) loc, res @ res')
         | Assert
             ( Forall
                 ((i, i_bt), (IT (Binop (Implies, it_perm, it_body), _, loc_implies) as it)),
               gt' )
           when SymSet.mem x (IT.free_vars it) && check_index_ok x i it ->
           let it_min', it_max' = GA.get_bounds (i, i_bt) it_perm in
-          let res = aux gt' in
+          let gt', res = aux gt' in
           if
             IT.equal it_min it_min'
             && IT.equal it_max it_max'
@@ -93,10 +98,12 @@ module Fusion = struct
                  (SymSet.remove i (IT.free_vars_list [ it_perm; it_body ]))
                  vars
           then
-            (i, IT.arith_binop Implies (it_perm, it_body) loc_implies) :: res
+            (gt', (i, IT.arith_binop Implies (it_perm, it_body) loc_implies) :: res)
           else
-            res
-        | Assert (_, gt') -> aux gt'
+            (GT.assert_ (Forall ((i, i_bt), it), gt') loc, res)
+        | Assert (lc, gt') ->
+          let gt', res = aux gt' in
+          (GT.assert_ (lc, gt') loc, res)
       in
       aux gt
 
@@ -128,7 +135,7 @@ module Fusion = struct
             (backtracks, (x, GT (Map ((i, i_bt, it_perm), gt_inner), _, loc_map)), gt_rest)
           ->
           let its_bounds = GA.get_bounds (i, i_bt) it_perm in
-          let constraints =
+          let gt_rest, constraints =
             collect_constraints (SymSet.add x vars) x its_bounds gt_rest
           in
           let gt_inner =
@@ -462,7 +469,7 @@ module PartialEvaluation = struct
             else
               IT.and2_ (t1, loop (i + 1)) here)
           else
-            failwith "unreachable"
+            failwith ("unreachable @ " ^ __LOC__)
         in
         if i_start > i_end then return @@ IT.bool_ true here else eval_aux (loop i_start)
       | NthTuple (i, it') ->
