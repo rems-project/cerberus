@@ -12,7 +12,10 @@ type term =
       { bt : BT.t;
         sz : int
       }
-  | Pick of { choices : (int * term) list }
+  | Pick of
+      { bt : BT.t;
+        choices : (int * term) list
+      }
   | Alloc of { bytes : IT.t }
   | Call of
       { fsym : Sym.t;
