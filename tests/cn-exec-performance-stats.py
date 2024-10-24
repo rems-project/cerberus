@@ -26,9 +26,10 @@ if (not (args.dir or args.file or args.buddy_path)):
     print("Please provide an argument for --dir, --file or --buddy_path")
     exit()
 
-if ".csv" not in args.csv:
-    print("Please provide CSV file extension explicitly in --csv arg")
-    exit()
+if args.csv:
+    if ".csv" not in args.csv:
+        print("Please provide CSV file extension explicitly in --csv arg")
+        exit()
 
 
 cn_test_files=[]
@@ -133,10 +134,14 @@ def time_executable(input_basename, c_arg):
     if c_arg:
         executable_cmd += " " + str(c_arg)
     print(executable_cmd)
+    fout = open("execution.log",'w')
+    ferr = open("execution.err",'w')
     executable_result = subprocess.run(executable_cmd.split(), capture_output=True, text = True)
     executable_output = executable_result.stderr
     successful_executable_flag = is_non_error_output(executable_output)
     executable_time = None
+    print(executable_result.stdout,file=fout)
+    print(executable_output,file=ferr)
     if successful_executable_flag:
         executable_time = executable_output.split()[-6:][0]
     else:
@@ -182,7 +187,7 @@ def collect_stats_for_single_file(f, c_arg=None):
 print("Collecting performance metrics...")
 
 if args.buddy_path:
-    preprocess()
+    preprocess_buddy()
 
 
 num_elements_list=[]
