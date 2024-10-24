@@ -88,7 +88,7 @@
         goto cn_label_##last_var##_backtrack;                                           \
     }
 
-#define CN_GEN_MAP_BEGIN(map, i, i_ty, min, max, last_var, ...)                         \
+#define CN_GEN_MAP_BEGIN(map, i, i_ty, perm, max, last_var, ...)                        \
     cn_map* map = map_create();                                                         \
     {                                                                                   \
         if (0) {                                                                        \
@@ -100,7 +100,7 @@
         }                                                                               \
                                                                                         \
         i_ty* i = max;                                                                  \
-        while (convert_from_cn_bool(i_ty##_ge(i, min))) {
+        while (convert_from_cn_bool(perm)) {
 
 #define CN_GEN_MAP_BODY(perm)                                                           \
             if (convert_from_cn_bool(perm)) {
