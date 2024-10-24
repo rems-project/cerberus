@@ -666,7 +666,7 @@ type ail_executable_spec =
 let empty_ail_executable_spec = { pre = ([], []); post = ([], []); in_stmt = [] }
 
 type 'a dest =
-  | Assert : ail_bindings_and_statements dest
+  | Assert : Cerb_location.t -> ail_bindings_and_statements dest
   | Return : ail_bindings_and_statements dest
   | AssignVar : C.union_tag -> ail_bindings_and_statements dest
   | PassBack
@@ -687,8 +687,8 @@ let dest_with_unit_check
   =
   fun d (b, s, e, is_unit) ->
   match d with
-  | Assert ->
-    let assert_stmts = generate_cn_assert e in
+  | Assert loc ->
+    let assert_stmts = generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
     (b, s @ assert_stmts)
   | Return ->
     let return_stmt = if is_unit then A.(AilSreturnVoid) else A.(AilSreturn e) in
@@ -715,7 +715,7 @@ let prefix
   =
   fun d (b1, s1) u ->
   match (d, u) with
-  | Assert, (b2, s2) -> (b1 @ b2, s1 @ s2)
+  | Assert _, (b2, s2) -> (b1 @ b2, s1 @ s2)
   | Return, (b2, s2) -> (b1 @ b2, s1 @ s2)
   | AssignVar _, (b2, s2) -> (b1 @ b2, s1 @ s2)
   | PassBack, (b2, s2, e) -> (b1 @ b2, s1 @ s2, e)
@@ -724,7 +724,7 @@ let prefix
 let empty_for_dest : type a. a dest -> a =
   fun d ->
   match d with
-  | Assert -> ([], [])
+  | Assert _ -> ([], [])
   | Return -> ([], [])
   | AssignVar _ -> ([], [])
   | PassBack -> ([], [], mk_expr empty_ail_expr)
@@ -1388,8 +1388,8 @@ let rec cn_to_ail_expr_aux_internal
          | ([], t) :: _rest ->
            let bs, ss =
              match d with
-             | Assert ->
-               cn_to_ail_expr_aux_internal const_prop pred_name dts globals t Assert
+             | Assert loc ->
+               cn_to_ail_expr_aux_internal const_prop pred_name dts globals t (Assert loc)
              | Return ->
                cn_to_ail_expr_aux_internal const_prop pred_name dts globals t Return
              | AssignVar x ->
@@ -1513,7 +1513,7 @@ let rec cn_to_ail_expr_aux_internal
       fun vars cases d ->
       let bs, ss = translate 1 vars cases in
       match d with
-      | Assert -> (bs, ss)
+      | Assert _ -> (bs, ss)
       | Return -> (bs, ss)
       | AssignVar _x -> failwith "TODO translate_real 1"
       | PassBack -> failwith "TODO translate_real 2"
@@ -2985,19 +2985,9 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
     in
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2, s1 @ s2)
-  | LAT.Constraint (lc, (_loc, str_opt), lat) ->
+  | LAT.Constraint (lc, (loc, _str_opt), lat) ->
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
-    (* TODO: Check this logic *)
-    let ss =
-      match str_opt with
-      | Some _info ->
-        (* Printf.printf "Logical constraint info: %s\n" info; *)
-        []
-      | None ->
-        (* Printf.printf "No logical constraint info\n"; *)
-        let ail_stats_ = generate_cn_assert e in
-        s @ ail_stats_
-    in
+    let ss = s @ generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2, ss @ s2)
   | LAT.I it ->
@@ -3131,16 +3121,9 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
     in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
     (b1 @ b2, s1 @ s2)
-  | LRT.Constraint (lc, (loc, str_opt), t) ->
+  | LRT.Constraint (lc, (loc, _str_opt), t) ->
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
-    (* TODO: Check this logic *)
-    let ss =
-      match str_opt with
-      | Some _info -> []
-      | None ->
-        let ail_stats_ = generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
-        s @ ail_stats_
-    in
+    let ss = s @ generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds t in
     (b1 @ b2, ss @ s2)
   | LRT.I -> ([], [])
@@ -3211,8 +3194,8 @@ let rec cn_to_ail_cnprog_internal_aux dts globals = function
     ((loc', [], []), true)
   else
     ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), false) *)
-  | Statement (_loc, stmt) ->
-    let (bs, ss), no_op = cn_to_ail_cnstatement_internal dts globals Assert stmt in
+  | Statement (loc, stmt) ->
+    let (bs, ss), no_op = cn_to_ail_cnstatement_internal dts globals (Assert loc) stmt in
     ((bs, ss), no_op)
 
 
@@ -3275,19 +3258,9 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
         new_lat
     in
     prepend_to_precondition ail_executable_spec (b1, s1)
-  | LAT.Constraint (lc, (_loc, str_opt), lat) ->
+  | LAT.Constraint (lc, (loc, _str_opt), lat) ->
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
-    (* TODO: Check this logic *)
-    let ss =
-      match str_opt with
-      | Some _info ->
-        (* Printf.printf "Logical constraint info: %s\n" info; *)
-        []
-      | None ->
-        (* Printf.printf "No logical constraint info\n"; *)
-        let ail_stats_ = generate_cn_assert e in
-        s @ ail_stats_
-    in
+    let ss = s @ generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
     let ail_executable_spec =
       cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type lat
     in
