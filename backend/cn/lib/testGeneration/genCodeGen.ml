@@ -67,10 +67,70 @@ let rec compile_term
                  [ AilEident (Sym.fresh_named (name_of_bt name bt));
                    AilEconst (ConstantInteger (IConstant (Z.of_int sz, Decimal, None)))
                  ] ))) )
-  | Pick _wgts ->
-    ( [],
-      [],
-      mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_named "pick_placeholder")), [])) )
+  | Pick { bt; choice_var; choices; last_var } ->
+    let var = Sym.fresh () in
+    let bs, ss =
+      List.split
+        (List.mapi
+           (fun i (_, gr) ->
+             let bs, ss, e = compile_term sigma name gr in
+             ( bs,
+               A.(
+                 [ AilSexpr
+                     (mk_expr
+                        (AilEcall
+                           ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_BEGIN")),
+                             List.map
+                               mk_expr
+                               [ AilEconst
+                                   (ConstantInteger
+                                      (IConstant (Z.of_int i, Decimal, None)))
+                               ] )))
+                 ]
+                 @ ss
+                 @ [ AilSexpr
+                       (mk_expr
+                          (AilEcall
+                             ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_END")),
+                               [ mk_expr (AilEident var); e ] )))
+                   ]) ))
+           choices)
+    in
+    ( List.flatten bs,
+      A.
+        [ AilSexpr
+            (mk_expr
+               (AilEcall
+                  ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_BEGIN")),
+                    List.map
+                      mk_expr
+                      [ AilEident (Sym.fresh_named (name_of_bt name bt));
+                        AilEident var;
+                        AilEident choice_var;
+                        AilEident last_var
+                      ]
+                    @ List.flatten
+                        (List.mapi
+                           (fun i (w, _) ->
+                             List.map
+                               mk_expr
+                               [ AilEconst
+                                   (ConstantInteger
+                                      (IConstant (Z.of_int w, Decimal, None)));
+                                 AilEconst
+                                   (ConstantInteger
+                                      (IConstant (Z.of_int i, Decimal, None)))
+                               ])
+                           choices) )))
+        ]
+      @ List.flatten ss
+      @ [ AilSexpr
+            (mk_expr
+               (AilEcall
+                  ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_END")),
+                    [ mk_expr (AilEident choice_var) ] )))
+        ],
+      A.(mk_expr (AilEident var)) )
   | Alloc { bytes = it } ->
     let alloc_sym = Sym.fresh_named "cn_gen_alloc" in
     let b, s, e = compile_it sigma name it in
@@ -281,15 +341,17 @@ let rec compile_term
         mk_expr (AilEident (Sym.fresh_named (name_of_bt name i_bt)))
       ]
     in
+    let b_perm, s_perm, e_perm = compile_it sigma name perm in
     let s_begin =
       A.(
         s_min
+        @ s_perm
         @ [ AilSexpr
               (mk_expr
                  (AilEcall
                     ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_MAP_BEGIN")),
                       e_args
-                      @ [ e_min; e_max; mk_expr (AilEident last_var) ]
+                      @ [ e_perm; e_max; mk_expr (AilEident last_var) ]
                       @ List.map
                           (fun x ->
                             mk_expr
@@ -302,10 +364,10 @@ let rec compile_term
                                           [ (Locations.other __LOC__, [ Sym.pp_string x ])
                                           ] )) )))
                           (List.of_seq
-                             (SymSet.to_seq (SymSet.remove i (IT.free_vars perm)))) )))
+                             (SymSet.to_seq (SymSet.remove i (IT.free_vars perm))))
+                      @ [ mk_expr (AilEconst ConstantNull) ] )))
           ])
     in
-    let b_perm, s_perm, e_perm = compile_it sigma name perm in
     let s_body =
       A.(
         s_perm

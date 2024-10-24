@@ -371,7 +371,12 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
     separate_map
       space
       string
-      ([ "./${TEST_DIR}/tests.out" ]
+      ([ "${TEST_DIR}/tests.out" ]
+       @ (Config.has_null_in_every ()
+          |> Option.map (fun null_in_every ->
+            [ "--null-in-every"; string_of_int null_in_every ])
+          |> Option.to_list
+          |> List.flatten)
        @ (Config.has_seed ()
           |> Option.map (fun seed -> [ "--seed"; seed ])
           |> Option.to_list
@@ -442,5 +447,5 @@ let generate
   let test_file = filename_base ^ "_test.c" in
   save output_dir test_file tests_doc;
   let script_doc = compile_script ~output_dir ~test_file in
-  save ~perm:0o777 "./" "run_tests.sh" script_doc;
+  save ~perm:0o777 output_dir "run_tests.sh" script_doc;
   ()

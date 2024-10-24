@@ -87,6 +87,8 @@ module Intervals : sig
   (** Is this a singleton subset. *)
   val is_const : t -> Z.t option
 
+  val is_empty : t -> bool
+
   (** Minimum value in subset if it exists *)
   val minimum : t -> Z.t option
 

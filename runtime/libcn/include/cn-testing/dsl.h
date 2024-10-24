@@ -1,7 +1,8 @@
 #ifndef CN_GEN_DSL_H
 #define CN_GEN_DSL_H
 
-#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #include "backtrack.h"
 
@@ -77,8 +78,6 @@
             }                                                                           \
         }
 
-// #define CN_GEN_RETURN(val) val
-
 #define CN_GEN_ASSERT(cond, last_var, ...)                                              \
     if (!convert_from_cn_bool(cond)) {                                                  \
         cn_gen_backtrack_assert_failure();                                              \
@@ -87,7 +86,7 @@
         goto cn_label_##last_var##_backtrack;                                           \
     }
 
-#define CN_GEN_MAP_BEGIN(map, i, i_ty, min, max, last_var, ...)                         \
+#define CN_GEN_MAP_BEGIN(map, i, i_ty, perm, max, last_var, ...)                        \
     cn_map* map = map_create();                                                         \
     {                                                                                   \
         if (0) {                                                                        \
@@ -99,7 +98,7 @@
         }                                                                               \
                                                                                         \
         i_ty* i = max;                                                                  \
-        while (convert_from_cn_bool(i_ty##_ge(i, min))) {
+        while (convert_from_cn_bool(perm)) {
 
 #define CN_GEN_MAP_BODY(perm)                                                           \
             if (convert_from_cn_bool(perm)) {
@@ -113,5 +112,44 @@
             i = i_ty##_sub(i, convert_to_##i_ty(1));                                    \
         }                                                                               \
     }
+
+#define CN_GEN_PICK_BEGIN(ty, var, tmp, last_var, ...)                                  \
+    ty* var = NULL;                                                                     \
+    uint64_t tmp##_choices[] = { __VA_ARGS__, UINT64_MAX };                             \
+    uint8_t tmp##_num_choices = 0;                                                      \
+    while (tmp##_choices[tmp##_num_choices] != UINT64_MAX) {\
+        tmp##_num_choices++;\
+    }   \
+    tmp##_num_choices /= 2;\
+    struct int_urn* tmp##_urn = urn_from_array(tmp##_choices, tmp##_num_choices);       \
+    cn_label_##tmp##_gen:                                                               \
+        ;                                                                               \
+    uint64_t tmp = urn_remove(tmp##_urn);                                               \
+    if (0) {                                                                            \
+    cn_label_##tmp##_backtrack:                                                         \
+        if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT                          \
+            && tmp##_urn->size != 0) {                                                  \
+            cn_gen_backtrack_reset();                                                   \
+            goto cn_label_##tmp##_gen;                                                  \
+        } else {                                                                        \
+            goto cn_label_##last_var##_backtrack;                                       \
+        }                                                                               \
+    }                                                                                   \
+    switch (tmp) {
+
+#define CN_GEN_PICK_CASE_BEGIN(index)                                                   \
+    case index:
+
+#define CN_GEN_PICK_CASE_END(var, e)                                                    \
+        var = e;                                                                        \
+        break;
+
+#define CN_GEN_PICK_END(tmp)                                                            \
+    default:                                                                            \
+        printf("Invalid generated value");                                              \
+        assert(false);                                                                  \
+    }                                                                                   \
+    free(tmp##_urn);                                                                    \
+
 
 #endif // CN_GEN_DSL_H
