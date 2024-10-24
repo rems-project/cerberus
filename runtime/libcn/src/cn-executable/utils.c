@@ -53,9 +53,9 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 void cn_assert(cn_bool *cn_b) {
     // cn_printf(CN_LOGGING_INFO, "[CN: assertion] function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
     if (!(cn_b->val)) {
-        // cn_printf(CN_LOGGING_ERROR, "CN assertion failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        cn_printf(CN_LOGGING_ERROR, "CN assertion failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         if (error_msg_info.cn_source_loc) {
-            // cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
+            cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
         }
         cn_exit();
     }
@@ -63,7 +63,7 @@ void cn_assert(cn_bool *cn_b) {
 
 void c_ghost_assert(cn_bool *cn_b) {
     if (!(cn_b->val)) {
-        // cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         cn_exit();
     }
 }
@@ -272,12 +272,12 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
       if (curr_depth != cn_stack_depth) {
-        // cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-        // cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-        // cn_printf(CN_LOGGING_ERROR, "  ==> curr_depth: %d\n", curr_depth);
+        cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+        cn_printf(CN_LOGGING_ERROR, "  ==> curr_depth: %d\n", curr_depth);
         cn_exit();
       }
-    //   c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
+      c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
     // cn_printf(CN_LOGGING_INFO, "\n");
 }
