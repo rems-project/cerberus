@@ -10,7 +10,7 @@ type t_ =
   | Arbitrary (** Generate arbitrary values *)
   | Uniform of int (** Generate uniform values *)
   | Pick of (Z.t * t) list
-  (** Pick among a list of options, weighted by the provided [int]s *)
+  (** Pick among a list of options, weighted by the provided [Z.t]s *)
   | Alloc of IT.t (** Allocate an array of a length [IT.t]  and return its address *)
   | Call of Sym.t * (Sym.t * IT.t) list
   (** Call a defined generator according to a [Sym.t] with arguments [IT.t list] *)
