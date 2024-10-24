@@ -11,7 +11,7 @@ type t =
   }
 
 let default =
-  { max_backtracks = 10;
+  { max_backtracks = 25;
     max_unfolds = 5;
     max_array_length = 50;
     null_in_every = None;
