@@ -45,7 +45,7 @@ elif args.buddy_path:
     cn_test_files=["driver.pp.c"]
 
 # print(cn_test_files)
-time_cmd = "time "
+time_cmd = 'gtime -f %e,%M '
 
 generation_times=[]
 compilation_times=[]
@@ -60,9 +60,10 @@ runtime_prefix = opam_switch_prefix + "/lib/cn/runtime"
 num_error_files=0
 
 def print_and_error(error_str):
-    global num_error_files
+    # global num_error_files
     print(error_str + " ERROR")
-    num_error_files+=1
+    exit()
+    # num_error_files+=1
 
 def gen_instr_cmd(f, input_basename):
     instr_cmd_prefix = "cn instrument"
@@ -93,10 +94,11 @@ def time_spec_generation(f, input_basename):
     print(instr_cmd)
     instr_result = subprocess.run(instr_cmd.split(), capture_output=True, text = True)
     instr_output = instr_result.stderr
-    successful_gen_flag = is_non_error_output(instr_result)
+    successful_gen_flag = not instr_result.returncode
     generation_time = None
     if successful_gen_flag:
-        generation_time = instr_output.split()[-6:][0]
+        print(instr_output)
+        generation_time = instr_output.split(',')[-2:][0]
         # print(generation_time)
     else:
         print_and_error("GENERATION")
@@ -108,10 +110,10 @@ def time_compilation(input_basename):
     print(compile_cmd)
     compile_result = subprocess.run(compile_cmd.split(), capture_output=True, text = True)
     compile_output = compile_result.stderr
-    successful_compile_flag = is_non_error_output(compile_result)
+    successful_compile_flag = not compile_result.returncode
     compilation_time = None
     if successful_compile_flag:
-        compilation_time = compile_output.split()[-6:][0]
+        compilation_time = compile_output.split(',')[-2:][0]
     else:
         print_and_error("COMPILATION")
     return successful_compile_flag, compilation_time
@@ -122,10 +124,10 @@ def time_linking(input_basename):
     print(link_cmd)
     link_result = subprocess.run(link_cmd.split(), capture_output=True, text = True)
     link_output = link_result.stderr
-    successful_linking_flag = is_non_error_output(link_result)
+    successful_linking_flag = not link_result.returncode
     link_time = None
     if successful_linking_flag:
-        link_time = link_output.split()[-6:][0]
+        link_time = link_output.split(',')[-2:][0]
     else:
         print_and_error("LINKING")
     return successful_linking_flag, link_time
@@ -135,10 +137,10 @@ def time_executable(input_basename):
     print(executable_cmd)
     executable_result = subprocess.run(executable_cmd.split(), capture_output=True, text = True)
     executable_output = executable_result.stderr
-    successful_executable_flag = is_non_error_output(executable_result)
+    successful_executable_flag = not executable_result.returncode
     executable_time = None
     if successful_executable_flag:
-        executable_time = executable_output.split()[-6:][0]
+        executable_time = executable_output.split(',')[-2:][0]
     else:
         print_and_error("EXECUTABLE")
     return successful_executable_flag, executable_time
@@ -208,7 +210,7 @@ num_elements_list=[]
 for f in cn_test_files:
     input_basename = f.split('.')[0]
     if args.iterate:
-        for i in range(11):
+        for i in range(1, 11):
             num_elements = 2**i
             print(f)
             subst_f = find_and_replace_macro(f, input_basename, num_elements)
