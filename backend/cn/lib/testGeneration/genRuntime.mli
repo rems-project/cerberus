@@ -14,7 +14,9 @@ type term =
       }
   | Pick of
       { bt : BT.t;
-        choices : (int * term) list
+        choice_var : Sym.t;
+        choices : (int * term) list;
+        last_var : Sym.t
       }
   | Alloc of { bytes : IT.t }
   | Call of

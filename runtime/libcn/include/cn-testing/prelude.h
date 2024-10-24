@@ -6,6 +6,7 @@
 #include <cn-testing/backtrack.h>
 #include <cn-testing/alloc.h>
 #include <cn-testing/uniform.h>
+#include <cn-testing/urn.h>
 
 #include <cn-testing/result.h>
 #include <cn-testing/test.h>
