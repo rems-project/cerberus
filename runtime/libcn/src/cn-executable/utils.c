@@ -185,9 +185,9 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
         /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth - 1) {
-            // cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            // cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            // cn_printf(CN_LOGGING_ERROR, "  ==> owned at level : %d\n", curr_depth);
+            cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+            cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            cn_printf(CN_LOGGING_ERROR, "  ==> owned at level : %d\n", curr_depth);
             //dump_ownership_state();
             cn_exit();
         }
@@ -204,9 +204,9 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
         *address_key = generic_c_ptr + i;
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth) {
-            // cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            // cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            // cn_printf(CN_LOGGING_ERROR, "  ==> owned at level: %d\n", curr_depth);
+            cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+            cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            cn_printf(CN_LOGGING_ERROR, "  ==> owned at level: %d\n", curr_depth);
             //dump_ownership_state();
             cn_exit();
         }
@@ -273,8 +273,8 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
       int curr_depth = ownership_ghost_state_get(&address_key);
       if (curr_depth != cn_stack_depth) {
         cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-        cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-        cn_printf(CN_LOGGING_ERROR, "  ==> curr_depth: %d\n", curr_depth);
+        cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- CN stack depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+        cn_printf(CN_LOGGING_ERROR, "  ==> retrieved stack depth: %d\n", curr_depth);
         cn_exit();
       }
       c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));

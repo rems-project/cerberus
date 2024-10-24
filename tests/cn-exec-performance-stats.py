@@ -16,7 +16,9 @@ parser.add_argument("--file", help="Collect performance metrics for a *single* C
 parser.add_argument("--csv", help="Store results in csv file with provided name")
 parser.add_argument("--iterate", action='store_true', help="Iterate over various sizes of data structure")
 parser.add_argument("--buddy_path", help="Collect statistics for pKVM buddy allocator - provide path to buddy")
+parser.add_argument("--preprocess", action='store_true', help='Preprocess input file before generating executable')
 parser.set_defaults(iterate=False)
+parser.set_defaults(preprocess=False)
 
 args=parser.parse_args()
 
@@ -148,6 +150,7 @@ def preprocess_buddy():
     subprocess.call(preprocess_cmd.split(), stdout=pp_f)
 
 
+
 def collect_stats_for_single_file(f, c_arg=None):
     # print(f)
     # Generation
@@ -179,7 +182,8 @@ def collect_stats_for_single_file(f, c_arg=None):
 print("Collecting performance metrics...")
 
 if args.buddy_path:
-    preprocess_buddy()
+    preprocess()
+
 
 num_elements_list=[]
 
