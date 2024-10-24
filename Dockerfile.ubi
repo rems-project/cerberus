@@ -4,7 +4,7 @@ FROM redhat/ubi9:latest
 RUN yum update -y && \
     yum install -y xz sudo gcc unzip \
     diffutils patch pkgconfig bzip2 \
-    git perl wget
+    git perl wget ca-certificates
 
 # Install additional FEDORA packages
 # from https://www.cyberciti.biz/faq/install-epel-repo-on-an-rhel-8-x/
@@ -14,17 +14,38 @@ RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.n
 
 RUN yum install -y z3 mpfr-devel gmp-devel m4
 
-# # Install OPAM
-# # See https://opam.ocaml.org/doc/1.2/Install.html
-# ENV OPAMCONFIRMLEVEL=unsafe-yes
-# RUN wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
-# # TODO: is there a way to avoid doing this?
-# RUN /usr/local/bin/opam init --comp 4.05.0
+# Install OPAM
+# See https://opam.ocaml.org/doc/1.2/Install.html
+# NOTE: currently this needs to be done via Nix, eventually
+# we would need to compile opam specifically for RedHat Ubi9
+RUN /sbin/useradd -m nixuser \
+    && mkdir /nix \
+    && chown nixuser /nix
 
-# Use Nix to install OPAM *sigh*
-# NOTE: This doesn't work currently - and we should not be using this approach anyway
-RUN sh <(curl -L https://nixos.org/nix/install) --daemon --yes
-#RUN source $HOME/.nix-profile/etc/profile.d/nix.sh && nix-env
-RUN nix-env -i opam bubblewrap
-#RUN opam init --disable-sandboxing -y
-#RUN opam install dune lem
+USER nixuser
+ENV USER=nixuser
+ENV PATH="/home/nixuser/.nix-profile/bin:${PATH}"
+RUN curl -sL https://nixos.org/nix/install | sh -s -- --no-daemon
+
+ENV NIX_SSL_CERT_FILE="/etc/pki/tls/certs/ca-bundle.crt"
+RUN whoami
+RUN nix-env -i bubblewrap opam
+ENV OPAMCONFIRMLEVEL=unsafe-yes
+RUN opam init --disable-sandboxing -y
+RUN opam install -y dune lem
+
+ADD . /opt/cerberus
+WORKDIR /opt/cerberus
+# Workaround to enable `opam install`
+USER root
+RUN chown -R nixuser /opt/cerberus
+USER nixuser
+# Back to the install flow
+RUN opam install --deps-only -y  ./cerberus-lib.opam ./cn.opam
+RUN eval `opam env` && make install
+RUN eval `opam env` make install_cn
+RUN rm -rf /opt/cerberus
+COPY docker_entry_point.sh /opt/docker_entry_point.sh
+RUN chmod +x /opt/docker_entry_point.sh
+WORKDIR /data
+ENTRYPOINT ["/opt/docker_entry_point.sh"]
