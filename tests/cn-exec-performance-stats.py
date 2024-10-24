@@ -83,13 +83,14 @@ def gen_exec_cmd(input_basename):
 
 def time_spec_generation(f, input_basename):
     instr_cmd = gen_instr_cmd(f, input_basename)
-    print(instr_cmd)
+    # print(instr_cmd)
     instr_result = subprocess.run(instr_cmd.split(), capture_output=True, text = True)
     instr_output = instr_result.stderr
     successful_gen_flag = ("error" not in instr_output) or args.buddy_path
     generation_time = None
     if successful_gen_flag:
-        generation_time = instr_output.split()[0]
+        # TODO: Fix for buddy allocator
+        generation_time = instr_output.split()[-6:][0]
         # print(generation_time)
     else:
         print_and_error("GENERATION")
@@ -98,13 +99,13 @@ def time_spec_generation(f, input_basename):
 
 def time_compilation(input_basename):
     compile_cmd = gen_compile_cmd(input_basename)
-    print(compile_cmd)
+    # print(compile_cmd)
     compile_result = subprocess.run(compile_cmd.split(), capture_output=True, text = True)
     compile_output = compile_result.stderr
     successful_compile_flag = ("error" not in compile_output) or args.buddy_path
     compilation_time = None
     if successful_compile_flag:
-        compilation_time = compile_output.split()[0]
+        compilation_time = compile_output.split()[-6:][0]
     else:
         print_and_error("COMPILATION")
     return successful_compile_flag, compilation_time
@@ -112,26 +113,26 @@ def time_compilation(input_basename):
         
 def time_linking(input_basename):
     link_cmd = gen_link_cmd(input_basename)
-    print(link_cmd)
+    # print(link_cmd)
     link_result = subprocess.run(link_cmd.split(), capture_output=True, text = True)
     link_output = link_result.stderr
     successful_linking_flag = ("error" not in link_output) or args.buddy_path
     link_time = None
     if successful_linking_flag:
-        link_time = link_output.split()[0]
+        link_time = link_output.split()[-6:][0]
     else:
         print_and_error("LINKING")
     return successful_linking_flag, link_time
 
 def time_executable(input_basename):
     executable_cmd = gen_exec_cmd(input_basename)
-    print(executable_cmd)
+    # print(executable_cmd)
     executable_result = subprocess.run(executable_cmd.split(), capture_output=True, text = True)
     executable_output = executable_result.stderr
     successful_executable_flag = ("error" not in executable_output) or args.buddy_path
     executable_time = None
     if successful_executable_flag:
-        executable_time = executable_output.split()[0]
+        executable_time = executable_output.split()[-6:][0]
     else:
         print_and_error("EXECUTABLE")
     return successful_executable_flag, executable_time
