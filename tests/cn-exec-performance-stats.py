@@ -26,9 +26,10 @@ if (not (args.dir or args.file or args.buddy_path)):
     print("Please provide an argument for --dir, --file or --buddy_path")
     exit()
 
-if ".csv" not in args.csv:
-    print("Please provide CSV file extension explicitly in --csv arg")
-    exit()
+if args.csv:
+    if ".csv" not in args.csv:
+        print("Please provide CSV file extension explicitly in --csv arg")
+        exit()
 
 
 cn_test_files=[]
@@ -47,6 +48,7 @@ elif args.buddy_path:
 # print(cn_test_files)
 time_cmd = 'gtime -f %e,%M '
 
+
 generation_times=[]
 compilation_times=[]
 link_times=[]
@@ -64,6 +66,7 @@ def print_and_error(error_str):
     print(error_str + " ERROR")
     exit()
     # num_error_files+=1
+
 
 def gen_instr_cmd(f, input_basename):
     instr_cmd_prefix = "cn instrument"
@@ -88,6 +91,7 @@ def is_non_error_output(res):
     stdout_error = ("error" in res.stdout) or ("Out of memory!" in res.stdout)
     stderr_error = ("error" in res.stderr) or ("Out of memory!" in res.stderr)
     return args.buddy_path or (not stdout_error and not stderr_error)
+
 
 def time_spec_generation(f, input_basename):
     instr_cmd = gen_instr_cmd(f, input_basename)
@@ -142,6 +146,10 @@ def time_executable(input_basename):
     if successful_executable_flag:
         executable_time = executable_output.split(',')[-2:][0]
     else:
+        print("Stdout:")
+        print(executable_result.stdout)
+        print("Stderr:")
+        print(executable_output)
         print_and_error("EXECUTABLE")
     return successful_executable_flag, executable_time
 
@@ -167,7 +175,6 @@ def find_and_replace_macro(f, input_basename, num_elements):
         file.write(filedata)
 
     return subst_f_name
-
 
 
 
