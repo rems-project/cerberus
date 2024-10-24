@@ -55,6 +55,9 @@ void update_error_message_info_(const char *function_name, char *file_name, int 
 #define update_cn_error_message_info(x)\
     update_error_message_info_(__func__, __FILE__, __LINE__ + 1, x)
 
+#define update_cn_error_message_info_access_check(x)\
+    update_error_message_info_(__func__, __FILE__, __LINE__, x)
+
 /* Wrappers for C types */
 
 /* Signed bitvectors */
@@ -549,6 +552,7 @@ static inline void cn_postfix(void *ptr, size_t size)
 #define CN_LOAD(LV)                                           \
   ({                                                          \
     typeof(LV) *__tmp = &(LV);                                \
+    update_cn_error_message_info_access_check(NULL);          \
     c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
     cn_load(__tmp, sizeof(typeof(LV)));                       \
     *__tmp;                                                   \
@@ -558,6 +562,7 @@ static inline void cn_postfix(void *ptr, size_t size)
  ({                                                           \
     typeof(LV) *__tmp;                                        \
     __tmp = &(LV);                                            \
+    update_cn_error_message_info_access_check(NULL);          \
     c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
     cn_store(__tmp, sizeof(typeof(LV)));                      \
     *__tmp op##= (X);                                         \
@@ -569,6 +574,7 @@ static inline void cn_postfix(void *ptr, size_t size)
  ({                                                           \
     typeof(LV) *__tmp;                                        \
     __tmp = &(LV);                                            \
+    update_cn_error_message_info_access_check(NULL);          \
     c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
     cn_postfix(__tmp, sizeof(typeof(LV)));                    \
     (*__tmp) OP;                                              \
