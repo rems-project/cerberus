@@ -42,16 +42,21 @@ elif args.file:
     tests_path = '/'.join(filename_split[:-1])
     cn_test_files=[filename_split[-1]]
 elif args.buddy_path:
-    tests_path = "."
+    tests_path = args.buddy_path
     cn_test_files=["driver.pp.c"]
 
 # print(cn_test_files)
-time_cmd = "time "
+time_cmd = 'gtime -f ~%e~%M '
+
 
 generation_times=[]
 compilation_times=[]
 link_times=[]
 executable_times=[]
+generation_space=[]
+compilation_space=[]
+link_space=[]
+executable_space=[]
 
 non_error_cn_filenames=[]
 
@@ -61,9 +66,11 @@ runtime_prefix = opam_switch_prefix + "/lib/cn/runtime"
 num_error_files=0
 
 def print_and_error(error_str):
-    global num_error_files
+    # global num_error_files
     print(error_str + " ERROR")
-    num_error_files+=1
+    exit()
+    # num_error_files+=1
+
 
 def gen_instr_cmd(f, input_basename):
     instr_cmd_prefix = "cn instrument"
@@ -84,22 +91,26 @@ def gen_exec_cmd(input_basename):
     exec_cmd = time_cmd + "./" + input_basename + "-exec-output.bin"
     return exec_cmd
 
-def is_non_error_output(output):
-    return ("error" not in output) or ("Out of memory!" not in output) or args.buddy_path
+def is_non_error_output(res):
+    stdout_error = ("error" in res.stdout) or ("Out of memory!" in res.stdout)
+    stderr_error = ("error" in res.stderr) or ("Out of memory!" in res.stderr)
+    return args.buddy_path or (not stdout_error and not stderr_error)
+
 
 def time_spec_generation(f, input_basename):
     instr_cmd = gen_instr_cmd(f, input_basename)
     print(instr_cmd)
     instr_result = subprocess.run(instr_cmd.split(), capture_output=True, text = True)
     instr_output = instr_result.stderr
-    successful_gen_flag = is_non_error_output(instr_output)
-    generation_time = None
+    successful_gen_flag = not instr_result.returncode
+    generation_time_and_space = None
     if successful_gen_flag:
-        generation_time = instr_output.split()[-6:][0]
+        # print(instr_output)
+        generation_time_and_space = instr_output.split('~')[-2:]
         # print(generation_time)
     else:
         print_and_error("GENERATION")
-    return successful_gen_flag, generation_time
+    return successful_gen_flag, generation_time_and_space
 
 
 def time_compilation(input_basename):
@@ -107,13 +118,13 @@ def time_compilation(input_basename):
     print(compile_cmd)
     compile_result = subprocess.run(compile_cmd.split(), capture_output=True, text = True)
     compile_output = compile_result.stderr
-    successful_compile_flag = is_non_error_output(compile_output)
-    compilation_time = None
+    successful_compile_flag = not compile_result.returncode
+    compilation_time_and_space = None
     if successful_compile_flag:
-        compilation_time = compile_output.split()[-6:][0]
+        compilation_time_and_space = compile_output.split('~')[-2:]
     else:
         print_and_error("COMPILATION")
-    return successful_compile_flag, compilation_time
+    return successful_compile_flag, compilation_time_and_space
 
         
 def time_linking(input_basename):
@@ -121,85 +132,108 @@ def time_linking(input_basename):
     print(link_cmd)
     link_result = subprocess.run(link_cmd.split(), capture_output=True, text = True)
     link_output = link_result.stderr
-    successful_linking_flag = is_non_error_output(link_output)
-    link_time = None
+    successful_linking_flag = not link_result.returncode
+    link_time_and_space = None
     if successful_linking_flag:
-        link_time = link_output.split()[-6:][0]
+        link_time_and_space = link_output.split('~')[-2:]
     else:
         print_and_error("LINKING")
-    return successful_linking_flag, link_time
+    return successful_linking_flag, link_time_and_space
 
-def time_executable(input_basename, c_arg):
+def time_executable(input_basename):
     executable_cmd = gen_exec_cmd(input_basename)
-    if c_arg:
-        executable_cmd += " " + str(c_arg)
     print(executable_cmd)
-    fout = open("execution.log",'w')
-    ferr = open("execution.err",'w')
     executable_result = subprocess.run(executable_cmd.split(), capture_output=True, text = True)
     executable_output = executable_result.stderr
-    successful_executable_flag = is_non_error_output(executable_output)
-    executable_time = None
-    print(executable_result.stdout,file=fout)
-    print(executable_output,file=ferr)
+    successful_executable_flag = not executable_result.returncode
+    executable_time_and_space = None
     if successful_executable_flag:
-        executable_time = executable_output.split()[-6:][0]
+        executable_time_and_space = executable_output.split('~')[-2:]
     else:
+        print("Stdout:")
+        print(executable_result.stdout)
+        print("Stderr:")
+        print(executable_output)
         print_and_error("EXECUTABLE")
-    return successful_executable_flag, executable_time
+    return successful_executable_flag, executable_time_and_space
 
-def preprocess_buddy():
-    preprocess_cmd = "cc -E -P -CC " + args.buddy_path + "driver.c"
+
+def preprocess_file(filename, input_basename):
+    path = args.buddy_path if args.buddy_path else tests_path
+    preprocess_cmd = "cc -E -P -CC " + path + "/" + filename
     print(preprocess_cmd)
-    pp_f = open("driver.pp.c", "w")
+    pp_f_name = input_basename + ".pp.c"
+    pp_f = open(path + "/" + pp_f_name, "w")
     subprocess.call(preprocess_cmd.split(), stdout=pp_f)
+    return pp_f_name
+
+def find_and_replace_macro(f, input_basename, num_elements):
+    # Assume there is a macro of the form #define SIZE magic in the input file
+    with open(tests_path + "/" + f, 'r') as file:
+        filedata = file.read()
+
+    filedata = filedata.replace('magic', str(num_elements))
+    subst_f_name = input_basename + ".subst.c"
+
+    with open(tests_path + "/" + subst_f_name, 'w') as file:
+        file.write(filedata)
+
+    return subst_f_name
 
 
 
-def collect_stats_for_single_file(f, c_arg=None):
+
+def collect_stats_for_single_file(f, input_basename):
     # print(f)
     # Generation
     
-    input_basename = f.split('.')[0]
-    generation_successful, generation_time = time_spec_generation(f, input_basename)
+    generation_successful, generation_time_and_space = time_spec_generation(f, input_basename)
     if generation_successful:
         # print("Generation successful")
         # Compilation
         # print(input_basename)
-        compilation_successful, compilation_time = time_compilation(input_basename)
+        compilation_successful, compilation_time_and_space = time_compilation(input_basename)
         if compilation_successful:
             # print("Compilation successful")
             # Linking
-            linking_successful, link_time = time_linking(input_basename)
+            linking_successful, link_time_and_space = time_linking(input_basename)
             if linking_successful:
                 # print("Linking successful")
                 # Running binary
-                executable_successful, executable_time = time_executable(input_basename, c_arg)
+                executable_successful, executable_time_and_space = time_executable(input_basename)
                 if executable_successful:
                     # print("Executable ran successfully")
-                    generation_times.append(float(generation_time))
-                    compilation_times.append(float(compilation_time))
-                    link_times.append(float(link_time))
-                    executable_times.append(float(executable_time))
+                    generation_times.append(float(generation_time_and_space[0]))
+                    compilation_times.append(float(compilation_time_and_space[0]))
+                    link_times.append(float(link_time_and_space[0]))
+                    executable_times.append(float(executable_time_and_space[0]))
+                    generation_space.append(float(generation_time_and_space[1]))
+                    compilation_space.append(float(compilation_time_and_space[1]))
+                    link_space.append(float(link_time_and_space[1]))
+                    executable_space.append(float(executable_time_and_space[1]))
                     non_error_cn_filenames.append(f)
     
 
 print("Collecting performance metrics...")
 
-if args.buddy_path:
-    preprocess_buddy()
+if args.buddy_path and not args.iterate:
+    preprocess_file("driver.c", "driver")
 
 
 num_elements_list=[]
 
 for f in cn_test_files:
+    input_basename = f.split('.')[0]
     if args.iterate:
-        for i in range(200):
+        for i in range(1, 3):
             num_elements = 2**i
-            collect_stats_for_single_file(f, num_elements)
+            print(f)
+            subst_f = find_and_replace_macro(f, input_basename, num_elements)
+            pp_f = preprocess_file(subst_f, input_basename)
+            collect_stats_for_single_file(pp_f, input_basename)
             num_elements_list.append(num_elements)
     else:
-        collect_stats_for_single_file(f)
+        collect_stats_for_single_file(f, input_basename)
 
 
 
@@ -215,8 +249,14 @@ stats_dict['compilation_time'] = compilation_times
 stats_dict['linking_time'] = link_times
 stats_dict['executable_time'] = executable_times
 
+stats_dict['generation_space'] = generation_space
+stats_dict['compilation_space'] = compilation_space
+stats_dict['linking_space'] = link_space
+stats_dict['executable_space'] = executable_space
+
 df = pd.DataFrame.from_dict(stats_dict)
-df["total"] = df.iloc[:, -4:].sum(axis=1)
+df["total_time"] = df.iloc[:, -8:-4].sum(axis=1)
+df["total_space"] = df.iloc[:, -4:].sum(axis=1)
 
 print(df)
 
