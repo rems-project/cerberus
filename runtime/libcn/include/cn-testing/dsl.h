@@ -78,8 +78,6 @@
             }                                                                           \
         }
 
-// #define CN_GEN_RETURN(val) val
-
 #define CN_GEN_ASSERT(cond, last_var, ...)                                              \
     if (!convert_from_cn_bool(cond)) {                                                  \
         cn_gen_backtrack_assert_failure();                                              \
@@ -115,23 +113,43 @@
         }                                                                               \
     }
 
-#define CN_GEN_PICK_BEGIN(ty, var, tmp, sumWeights)                                     \
+#define CN_GEN_PICK_BEGIN(ty, var, tmp, last_var, ...)                                  \
     ty* var = NULL;                                                                     \
-    {                                                                                   \
-        cn_bits_u32* tmp = CN_GEN_UNIFORM(cn_bits_u32, sumWeights);                     \
+    uint64_t tmp##_choices[] = { __VA_ARGS__, UINT64_MAX };                             \
+    uint8_t tmp##_num_choices = 0;                                                      \
+    while (tmp##_choices[tmp##_num_choices] != UINT64_MAX) {\
+        tmp##_num_choices++;\
+    }   \
+    tmp##_num_choices /= 2;\
+    struct int_urn* tmp##_urn = urn_from_array(tmp##_choices, tmp##_num_choices);       \
+    cn_label_##tmp##_gen:                                                               \
+        ;                                                                               \
+    uint64_t tmp = urn_remove(tmp##_urn);                                               \
+    if (0) {                                                                            \
+    cn_label_##tmp##_backtrack:                                                         \
+        if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT                          \
+            && tmp##_urn->size != 0) {                                                  \
+            cn_gen_backtrack_reset();                                                   \
+            goto cn_label_##tmp##_gen;                                                  \
+        } else {                                                                        \
+            goto cn_label_##last_var##_backtrack;                                       \
+        }                                                                               \
+    }                                                                                   \
+    switch (tmp) {
 
-#define CN_GEN_PICK_CASE_BEGIN(tmp, weightsSoFar, weightsNow)                           \
-        if (weightsSoFar <= tmp->val && tmp->val < weightsNow) {
+#define CN_GEN_PICK_CASE_BEGIN(index)                                                   \
+    case index:
 
 #define CN_GEN_PICK_CASE_END(var, e)                                                    \
-            var = e;                                                                    \
-        }
+        var = e;                                                                        \
+        break;
 
-#define CN_GEN_PICK_END(var)                                                            \
-        if (var == NULL) {                                                              \
-            printf("Invalid generated value");                                          \
-            assert(false);                                                              \
-        }                                                                               \
-    }
+#define CN_GEN_PICK_END(tmp)                                                            \
+    default:                                                                            \
+        printf("Invalid generated value");                                              \
+        assert(false);                                                                  \
+    }                                                                                   \
+    urn_free(tmp##_urn);                                                                \
+
 
 #endif // CN_GEN_DSL_H
