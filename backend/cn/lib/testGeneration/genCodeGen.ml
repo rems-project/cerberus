@@ -345,15 +345,17 @@ let rec compile_term
         mk_expr (AilEident (Sym.fresh_named (name_of_bt name i_bt)))
       ]
     in
+    let b_perm, s_perm, e_perm = compile_it sigma name perm in
     let s_begin =
       A.(
         s_min
+        @ s_perm
         @ [ AilSexpr
               (mk_expr
                  (AilEcall
                     ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_MAP_BEGIN")),
                       e_args
-                      @ [ e_min; e_max; mk_expr (AilEident last_var) ]
+                      @ [ e_perm; e_max; mk_expr (AilEident last_var) ]
                       @ List.map
                           (fun x ->
                             mk_expr
@@ -366,10 +368,10 @@ let rec compile_term
                                           [ (Locations.other __LOC__, [ Sym.pp_string x ])
                                           ] )) )))
                           (List.of_seq
-                             (SymSet.to_seq (SymSet.remove i (IT.free_vars perm)))) )))
+                             (SymSet.to_seq (SymSet.remove i (IT.free_vars perm))))
+                      @ [ mk_expr (AilEconst ConstantNull) ] )))
           ])
     in
-    let b_perm, s_perm, e_perm = compile_it sigma name perm in
     let s_body =
       A.(
         s_perm
