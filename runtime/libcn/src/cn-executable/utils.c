@@ -449,7 +449,7 @@ void *cn_aligned_alloc(size_t align, size_t size)
     cn_assume_ownership((void*) p, size, str);
     return p;
   } else {
-    // cn_printf(CN_LOGGING_INFO, "aligned_alloc failed\n");
+    cn_printf(CN_LOGGING_INFO, "aligned_alloc failed\n");
     return p;
   }
 }
@@ -462,7 +462,7 @@ void *cn_malloc(unsigned long size)
     cn_assume_ownership((void*) p, size, str);
     return p;
   } else {
-    // cn_printf(CN_LOGGING_INFO, "malloc failed\n");
+    cn_printf(CN_LOGGING_INFO, "malloc failed\n");
     return p;
   }
 }
@@ -475,7 +475,7 @@ void *cn_calloc(size_t num, size_t size)
     cn_assume_ownership((void*) p, num*size, str);
     return p;
   } else {
-    // cn_printf(CN_LOGGING_INFO, "calloc failed\n");
+    cn_printf(CN_LOGGING_INFO, "calloc failed\n");
     return p;
   }
 }
