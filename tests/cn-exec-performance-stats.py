@@ -14,8 +14,9 @@ parser=argparse.ArgumentParser()
 parser.add_argument("--dir", help="Collect performance metrics for *directory* of CN files")
 parser.add_argument("--file", help="Collect performance metrics for a *single* CN file")
 parser.add_argument("--csv", help="Store results in csv file with provided name")
-parser.add_argument("--iterate", help="Iterate over various sizes of data structure for provided example. To be used in conjunction with --file")
+parser.add_argument("--iterate", action='store_true', help="Iterate over various sizes of data structure")
 parser.add_argument("--buddy_path", help="Collect statistics for pKVM buddy allocator - provide path to buddy")
+parser.set_defaults(iterate=False)
 
 args=parser.parse_args()
 
@@ -80,16 +81,17 @@ def gen_exec_cmd(input_basename):
     exec_cmd = time_cmd + "./" + input_basename + "-exec-output.bin"
     return exec_cmd
 
+def is_non_error_output(output):
+    return ("error" not in output) or ("Out of memory!" not in output) or args.buddy_path
 
 def time_spec_generation(f, input_basename):
     instr_cmd = gen_instr_cmd(f, input_basename)
-    # print(instr_cmd)
+    print(instr_cmd)
     instr_result = subprocess.run(instr_cmd.split(), capture_output=True, text = True)
     instr_output = instr_result.stderr
-    successful_gen_flag = ("error" not in instr_output) or args.buddy_path
+    successful_gen_flag = is_non_error_output(instr_output)
     generation_time = None
     if successful_gen_flag:
-        # TODO: Fix for buddy allocator
         generation_time = instr_output.split()[-6:][0]
         # print(generation_time)
     else:
@@ -99,10 +101,10 @@ def time_spec_generation(f, input_basename):
 
 def time_compilation(input_basename):
     compile_cmd = gen_compile_cmd(input_basename)
-    # print(compile_cmd)
+    print(compile_cmd)
     compile_result = subprocess.run(compile_cmd.split(), capture_output=True, text = True)
     compile_output = compile_result.stderr
-    successful_compile_flag = ("error" not in compile_output) or args.buddy_path
+    successful_compile_flag = is_non_error_output(compile_output)
     compilation_time = None
     if successful_compile_flag:
         compilation_time = compile_output.split()[-6:][0]
@@ -113,10 +115,10 @@ def time_compilation(input_basename):
         
 def time_linking(input_basename):
     link_cmd = gen_link_cmd(input_basename)
-    # print(link_cmd)
+    print(link_cmd)
     link_result = subprocess.run(link_cmd.split(), capture_output=True, text = True)
     link_output = link_result.stderr
-    successful_linking_flag = ("error" not in link_output) or args.buddy_path
+    successful_linking_flag = is_non_error_output(link_output)
     link_time = None
     if successful_linking_flag:
         link_time = link_output.split()[-6:][0]
@@ -124,12 +126,14 @@ def time_linking(input_basename):
         print_and_error("LINKING")
     return successful_linking_flag, link_time
 
-def time_executable(input_basename):
+def time_executable(input_basename, c_arg):
     executable_cmd = gen_exec_cmd(input_basename)
-    # print(executable_cmd)
+    if c_arg:
+        executable_cmd += " " + str(c_arg)
+    print(executable_cmd)
     executable_result = subprocess.run(executable_cmd.split(), capture_output=True, text = True)
     executable_output = executable_result.stderr
-    successful_executable_flag = ("error" not in executable_output) or args.buddy_path
+    successful_executable_flag = is_non_error_output(executable_output)
     executable_time = None
     if successful_executable_flag:
         executable_time = executable_output.split()[-6:][0]
@@ -139,6 +143,7 @@ def time_executable(input_basename):
 
 def preprocess_buddy():
     preprocess_cmd = "cc -E -P -CC " + args.buddy_path + "driver.c"
+    print(preprocess_cmd)
     pp_f = open("driver.pp.c", "w")
     subprocess.call(preprocess_cmd.split(), stdout=pp_f)
 
@@ -161,7 +166,7 @@ def collect_stats_for_single_file(f, c_arg=None):
             if linking_successful:
                 # print("Linking successful")
                 # Running binary
-                executable_successful, executable_time = time_executable(input_basename)
+                executable_successful, executable_time = time_executable(input_basename, c_arg)
                 if executable_successful:
                     # print("Executable ran successfully")
                     generation_times.append(float(generation_time))
@@ -176,19 +181,30 @@ print("Collecting performance metrics...")
 if args.buddy_path:
     preprocess_buddy()
 
+num_elements_list=[]
+
 for f in cn_test_files:
-    collect_stats_for_single_file(f)
+    if args.iterate:
+        for i in range(200):
+            num_elements = 2**i
+            collect_stats_for_single_file(f, num_elements)
+            num_elements_list.append(num_elements)
+    else:
+        collect_stats_for_single_file(f)
 
 
 
 print("...done!")
 
-stats_dict = \
-{'cn_filename': non_error_cn_filenames,
- 'generation_time': generation_times, 
- 'compilation_time': compilation_times,
- 'linking_time': link_times,
- 'executable_time': executable_times}
+stats_dict = {'cn_filename': non_error_cn_filenames}
+
+if args.iterate:
+    stats_dict['num_elements'] = num_elements_list
+
+stats_dict['generation_time'] = generation_times
+stats_dict['compilation_time'] = compilation_times
+stats_dict['linking_time'] = link_times
+stats_dict['executable_time'] = executable_times
 
 df = pd.DataFrame.from_dict(stats_dict)
 df["total"] = df.iloc[:, -4:].sum(axis=1)
