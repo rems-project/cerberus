@@ -2857,6 +2857,7 @@ module Specialization = struct
 
 
     let transform (gd : GD.t) : GD.t =
+      let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
       let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t =
         let rec loop (vars : SymSet.t) (gt : GT.t) : GT.t =
           let (GT (gt_, _bt, loc)) = gt in
@@ -2877,7 +2878,6 @@ module Specialization = struct
         in
         gt |> specialize vars |> loop vars
       in
-      let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
       { gd with body = Some (aux iargs (Option.get gd.body)) }
   end
 

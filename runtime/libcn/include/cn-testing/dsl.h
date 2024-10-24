@@ -71,6 +71,10 @@
                 if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT) {               \
                     var##_backtracks--;                                                 \
                     cn_gen_backtrack_reset();                                           \
+                } else if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ALLOC) {         \
+                    if (toAdd[0] != NULL) {                                             \
+                        goto cn_label_##last_var##_backtrack;                           \
+                    }                                                                   \
                 }                                                                       \
                 goto cn_label_##var##_gen;                                              \
             } else {                                                                    \
@@ -117,10 +121,10 @@
     ty* var = NULL;                                                                     \
     uint64_t tmp##_choices[] = { __VA_ARGS__, UINT64_MAX };                             \
     uint8_t tmp##_num_choices = 0;                                                      \
-    while (tmp##_choices[tmp##_num_choices] != UINT64_MAX) {\
-        tmp##_num_choices++;\
-    }   \
-    tmp##_num_choices /= 2;\
+    while (tmp##_choices[tmp##_num_choices] != UINT64_MAX) {                            \
+        tmp##_num_choices += 2;                                                         \
+    }                                                                                   \
+    tmp##_num_choices /= 2;                                                             \
     struct int_urn* tmp##_urn = urn_from_array(tmp##_choices, tmp##_num_choices);       \
     cn_label_##tmp##_gen:                                                               \
         ;                                                                               \
