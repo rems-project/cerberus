@@ -155,7 +155,6 @@ def time_executable(input_basename, instrumented):
     return time_cmd(executable_cmd, "EXECUTABLE")
 
 
-
 def preprocess_file(filename, input_basename):
     path = args.buddy_path if args.buddy_path else tests_path
     preprocess_cmd = "cc -E -P -CC " + path + "/" + filename
@@ -230,7 +229,6 @@ def collect_stats_for_single_file(f, input_basename):
         executable_space['uninstrumented'].append(float(uninstr_stats_dict["executable"]['space']))
 
         non_error_cn_filenames.append(f)
-    
 
 print("Collecting performance metrics...")
 
