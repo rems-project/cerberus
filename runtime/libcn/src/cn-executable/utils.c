@@ -39,7 +39,7 @@ void print_error_msg_info(struct cn_error_message_info *info) {
   if(info) {
     if (info->parent != NULL) {
       print_error_msg_info(info->parent);
-      cn_printf(CN_LOGGING_ERROR, "-->\n");
+      cn_printf(CN_LOGGING_ERROR, "************************************************************\n");
     }
     cn_printf(CN_LOGGING_ERROR, "function %s, file %s, line %d\n", info->function_name, info->file_name, info->line_number);
     if (info->cn_source_loc) {
@@ -66,8 +66,8 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 void cn_assert(cn_bool *cn_b) {
     // cn_printf(CN_LOGGING_INFO, "[CN: assertion] function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
     if (!(cn_b->val)) {
-        cn_printf(CN_LOGGING_ERROR, "CN assertion failed.");
         print_error_msg_info(error_msg_info);
+        cn_printf(CN_LOGGING_ERROR, "CN assertion failed.");
         cn_exit();
     }
 }
@@ -150,8 +150,8 @@ void ghost_stack_depth_decr(void) {
         uintptr_t *key = (uintptr_t *) it.key;
         int *depth = it.value;
         if (*depth > cn_stack_depth) {
-          cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR"\n", *key);
           print_error_msg_info(error_msg_info);
+          cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR"\n", *key);
           cn_exit();
             // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
         }
@@ -258,6 +258,7 @@ void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, s
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
       if (curr_depth != expected_stack_depth) {
+        print_error_msg_info(error_msg_info);
         cn_printf(CN_LOGGING_ERROR, "%s failed.\n", access_kind);
         if (curr_depth == -1) {
           cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i));
@@ -266,7 +267,6 @@ void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, s
           cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned at expected function call stack depth %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), expected_stack_depth);
           cn_printf(CN_LOGGING_ERROR, "  ==> (owned at stack depth: %d)\n", curr_depth);
         }
-        print_error_msg_info(error_msg_info);
         cn_exit();
       }
     }
