@@ -86,14 +86,22 @@ def gen_instr_cmd(f, input_basename):
     return instr_cmd
 
 def gen_compile_cmd(input_basename, instrumented):
-    c_files = input_basename + "-exec.c cn.c" if instrumented else input_basename + ".c"
-    compile_cmd = time_cmd_str + "cc -g -c -I" + runtime_prefix + "/include/ " + c_files
+    c_files = input_basename + "-exec.c cn.c" if instrumented else tests_path + input_basename + ".c"
+    compile_cmd = time_cmd_str + "cc -g -c "
+    if instrumented:
+        compile_cmd += "-I" + runtime_prefix + "/include/ "
+    compile_cmd += c_files
     return compile_cmd
 
 def gen_link_cmd(input_basename, instrumented):
-    o_files = input_basename + "-exec.o cn.o " if instrumented else input_basename + ".o"
-    bin_file = input_basename + "-exec-output.bin " if instrumented else input_basename + "-output.bin"
-    link_cmd = time_cmd_str + "cc -I" + runtime_prefix + "/include -o " + bin_file + o_files + runtime_prefix + "/libcn.a"
+    o_files = input_basename + "-exec.o cn.o " if instrumented else input_basename + ".o "
+    bin_file = input_basename + "-exec-output.bin " if instrumented else input_basename + "-output.bin "
+    link_cmd = time_cmd_str + "cc "
+    if instrumented:
+        link_cmd += "-I" + runtime_prefix + "/include "
+    link_cmd += "-o " + bin_file + o_files
+    if instrumented:
+        link_cmd += runtime_prefix + "/libcn.a"
     return link_cmd
 
 def gen_exec_cmd(input_basename, instrumented):
@@ -198,7 +206,7 @@ def run_cmds_and_collect_stats(f, input_basename, instrumented):
 
 def collect_stats_for_single_file(f, input_basename):
     # Uninstrumented run
-    uninstr_executable_successful, uninstr_stats_dict = run_cmds_and_collect_stats(f, input_basename, instrumented=True)
+    uninstr_executable_successful, uninstr_stats_dict = run_cmds_and_collect_stats(f, input_basename, instrumented=False)
 
     # Instrumented run
     instr_executable_successful, instr_stats_dict = run_cmds_and_collect_stats(f, input_basename, instrumented=True)
@@ -272,16 +280,40 @@ stats_dict['uninstr_compilation_space'] = compilation_space['uninstrumented']
 stats_dict['uninstr_linking_space'] = link_space['uninstrumented']
 stats_dict['uninstr_executable_space'] = executable_space['uninstrumented']
 
-df = pd.DataFrame.from_dict(stats_dict)
-df["instr_total_time"] = df[['instr_generation_time', 'instr_compilation_time', 'instr_linking_time', 'instr_executable_time']].sum(axis=1)
-df["instr_total_space"] = df[['instr_generation_space', 'instr_compilation_space', 'instr_linking_space', 'instr_executable_space']].sum(axis=1)
-df["uninstr_total_time"] = df[['uninstr_compilation_time', 'uninstr_linking_time', 'uninstr_executable_time']].sum(axis=1)
-df["uninstr_total_space"] = df[['uninstr_compilation_space', 'uninstr_linking_space', 'uninstr_executable_space']].sum(axis=1)
+full_df = pd.DataFrame.from_dict(stats_dict)
 
-print(df)
+# Total time and space
+full_df["instr_total_time"] = full_df[['instr_generation_time', 'instr_compilation_time', 'instr_linking_time', 'instr_executable_time']].sum(axis=1)
+full_df["instr_total_space"] = full_df[['instr_generation_space', 'instr_compilation_space', 'instr_linking_space', 'instr_executable_space']].sum(axis=1)
+full_df["uninstr_total_time"] = full_df[['uninstr_compilation_time', 'uninstr_linking_time', 'uninstr_executable_time']].sum(axis=1)
+full_df["uninstr_total_space"] = full_df[['uninstr_compilation_space', 'uninstr_linking_space', 'uninstr_executable_space']].sum(axis=1)
+
+# Differences in executable time and space
+full_df["executable_time_difference"] = full_df['instr_executable_time'] - full_df['uninstr_executable_time']
+full_df["executable_space_difference"] = full_df['instr_executable_space'] - full_df['uninstr_executable_space']
+
+print(full_df)
 
 if args.csv:
-    df.to_csv(args.csv, index=False) 
+    full_df.to_csv(args.csv, index=False) 
+
+if args.csv_clean:
+    if args.iterate:
+        pass
+    else:
+        clean_stats_dict = {
+            'mean_generation_time': [full_df.loc[:, 'instr_generation_time'].mean()],
+            'std_generation_time': [full_df['instr_generation_time'].std()],
+            'mean_exec_time_difference': [full_df.loc[:, 'executable_time_difference'].mean()],
+            'std_exec_time_difference': [full_df['executable_time_difference'].std()],
+            'mean_exec_space_difference': [full_df.loc[:, 'executable_space_difference'].mean()],
+            'std_exec_space_difference': [full_df['executable_space_difference'].std()], 
+        }
+
+        clean_df = pd.DataFrame.from_dict(clean_stats_dict)
+        clean_df.to_csv(args.csv_clean, index=False) 
+
+
 
 print("Number of error files:")
 print(num_error_files)
