@@ -56,13 +56,13 @@ time_cmd_str = 'gtime -f ~%e~%M '
 
 
 generation_times=[]
-compilation_times=[]
-link_times=[]
-executable_times=[]
+compilation_times={'instrumented': [], 'uninstrumented': []}
+link_times={'instrumented': [], 'uninstrumented': []}
+executable_times={'instrumented': [], 'uninstrumented': []}
 generation_space=[]
-compilation_space=[]
-link_space=[]
-executable_space=[]
+compilation_space={'instrumented': [], 'uninstrumented': []}
+link_space={'instrumented': [], 'uninstrumented': []}
+executable_space={'instrumented': [], 'uninstrumented': []}
 
 non_error_cn_filenames=[]
 
@@ -100,11 +100,6 @@ def gen_exec_cmd(input_basename, instrumented):
     bin_file = input_basename + "-exec-output.bin " if instrumented else input_basename + "-output.bin"
     exec_cmd = time_cmd_str + "./" + bin_file
     return exec_cmd
-
-def is_non_error_output(res):
-    stdout_error = ("error" in res.stdout) or ("Out of memory!" in res.stdout)
-    stderr_error = ("error" in res.stderr) or ("Out of memory!" in res.stderr)
-    return args.buddy_path or (not stdout_error and not stderr_error)
 
 def time_cmd(cmd, error_msg, executable=False):
     res = subprocess.run(cmd.split(), capture_output=True, text = True)
@@ -175,38 +170,58 @@ def find_and_replace_macro(f, input_basename, num_elements):
 
     return subst_f_name
 
+def run_cmds_and_collect_stats(f, input_basename, instrumented):
+    single_run_stats_dict = {}
+    # Instrumented run
+    generation_successful = True
+    if instrumented:
+        generation_successful, generation_stats = time_spec_generation(f, input_basename)
 
+    if generation_successful:
+        compilation_successful, compilation_stats = time_compilation(input_basename, instrumented)
+
+        if compilation_successful:
+            linking_successful, link_stats = time_linking(input_basename, instrumented)
+
+            if linking_successful:
+                executable_successful, executable_stats = time_executable(input_basename, instrumented)
+                if instrumented:
+                    single_run_stats_dict["generation"] = generation_stats
+
+                single_run_stats_dict["compilation"] = compilation_stats
+                single_run_stats_dict["linking"] = link_stats
+                single_run_stats_dict["executable"] = executable_stats
+                return executable_successful, single_run_stats_dict
+
+    return False, {}
 
 
 def collect_stats_for_single_file(f, input_basename):
-    # print(f)
-    # Generation
-    
-    generation_successful, generation_stats = time_spec_generation(f, input_basename)
-    if generation_successful:
-        # print("Generation successful")
-        # Compilation
-        # print(input_basename)
-        compilation_successful, compilation_stats = time_compilation(input_basename, True)
-        if compilation_successful:
-            # print("Compilation successful")
-            # Linking
-            linking_successful, link_stats = time_linking(input_basename, True)
-            if linking_successful:
-                # print("Linking successful")
-                # Running binary
-                executable_successful, executable_stats = time_executable(input_basename, True)
-                if executable_successful:
-                    # print("Executable ran successfully")
-                    generation_times.append(float(generation_stats['time']))
-                    compilation_times.append(float(compilation_stats['time']))
-                    link_times.append(float(link_stats['time']))
-                    executable_times.append(float(executable_stats['time']))
-                    generation_space.append(float(generation_stats['space']))
-                    compilation_space.append(float(compilation_stats['space']))
-                    link_space.append(float(link_stats['space']))
-                    executable_space.append(float(executable_stats['space']))
-                    non_error_cn_filenames.append(f)
+    # Uninstrumented run
+    uninstr_executable_successful, uninstr_stats_dict = run_cmds_and_collect_stats(f, input_basename, instrumented=True)
+
+    # Instrumented run
+    instr_executable_successful, instr_stats_dict = run_cmds_and_collect_stats(f, input_basename, instrumented=True)
+    if instr_executable_successful and uninstr_executable_successful:
+        # Instrumented stats
+        generation_times.append(float(instr_stats_dict["generation"]['time']))
+        compilation_times['instrumented'].append(float(instr_stats_dict["compilation"]['time']))
+        link_times['instrumented'].append(float(instr_stats_dict["linking"]['time']))
+        executable_times['instrumented'].append(float(instr_stats_dict["executable"]['time']))
+        generation_space.append(float(instr_stats_dict["generation"]['space']))
+        compilation_space['instrumented'].append(float(instr_stats_dict["compilation"]['space']))
+        link_space['instrumented'].append(float(instr_stats_dict["linking"]['space']))
+        executable_space['instrumented'].append(float(instr_stats_dict["executable"]['space']))
+
+        # Uninstrumented stats
+        compilation_times['uninstrumented'].append(float(uninstr_stats_dict["compilation"]['time']))
+        link_times['uninstrumented'].append(float(uninstr_stats_dict["linking"]['time']))
+        executable_times['uninstrumented'].append(float(uninstr_stats_dict["executable"]['time']))
+        compilation_space['uninstrumented'].append(float(uninstr_stats_dict["compilation"]['space']))
+        link_space['uninstrumented'].append(float(uninstr_stats_dict["linking"]['space']))
+        executable_space['uninstrumented'].append(float(uninstr_stats_dict["executable"]['space']))
+
+        non_error_cn_filenames.append(f)
     
 
 print("Collecting performance metrics...")
@@ -239,19 +254,29 @@ stats_dict = {'cn_filename': non_error_cn_filenames}
 if args.iterate:
     stats_dict['num_elements'] = num_elements_list
 
-stats_dict['generation_time'] = generation_times
-stats_dict['compilation_time'] = compilation_times
-stats_dict['linking_time'] = link_times
-stats_dict['executable_time'] = executable_times
+stats_dict['instr_generation_time'] = generation_times
+stats_dict['instr_compilation_time'] = compilation_times['instrumented']
+stats_dict['instr_linking_time'] = link_times['instrumented']
+stats_dict['instr_executable_time'] = executable_times['instrumented']
 
-stats_dict['generation_space'] = generation_space
-stats_dict['compilation_space'] = compilation_space
-stats_dict['linking_space'] = link_space
-stats_dict['executable_space'] = executable_space
+stats_dict['instr_generation_space'] = generation_space
+stats_dict['instr_compilation_space'] = compilation_space['instrumented']
+stats_dict['instr_linking_space'] = link_space['instrumented']
+stats_dict['instr_executable_space'] = executable_space['instrumented']
+
+stats_dict['uninstr_compilation_time'] = compilation_times['uninstrumented']
+stats_dict['uninstr_linking_time'] = link_times['uninstrumented']
+stats_dict['uninstr_executable_time'] = executable_times['uninstrumented']
+
+stats_dict['uninstr_compilation_space'] = compilation_space['uninstrumented']
+stats_dict['uninstr_linking_space'] = link_space['uninstrumented']
+stats_dict['uninstr_executable_space'] = executable_space['uninstrumented']
 
 df = pd.DataFrame.from_dict(stats_dict)
-df["total_time"] = df.iloc[:, -8:-4].sum(axis=1)
-df["total_space"] = df.iloc[:, -4:].sum(axis=1)
+df["instr_total_time"] = df[['instr_generation_time', 'instr_compilation_time', 'instr_linking_time', 'instr_executable_time']].sum(axis=1)
+df["instr_total_space"] = df[['instr_generation_space', 'instr_compilation_space', 'instr_linking_space', 'instr_executable_space']].sum(axis=1)
+df["uninstr_total_time"] = df[['uninstr_compilation_time', 'uninstr_linking_time', 'uninstr_executable_time']].sum(axis=1)
+df["uninstr_total_space"] = df[['uninstr_compilation_space', 'uninstr_linking_space', 'uninstr_executable_space']].sum(axis=1)
 
 print(df)
 
