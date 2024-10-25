@@ -7,7 +7,7 @@ typedef hash_table ownership_ghost_state;
 /* Ownership globals */
 ownership_ghost_state* cn_ownership_global_ghost_state;
 
-struct cn_error_message_info error_msg_info;
+struct cn_error_message_info *error_msg_info;
 
 static enum cn_logging_level logging_level = CN_LOGGING_INFO;
 
@@ -35,8 +35,21 @@ void reset_cn_exit_cb(void) {
     cn_exit = &cn_exit_aux;
 }
 
-void print_error_msg_info(void) {
-  // cn_printf(CN_LOGGING_INFO, "Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+void print_error_msg_info(struct cn_error_message_info *info) {
+  if(info) {
+    if (info->parent != NULL) {
+      print_error_msg_info(info->parent);
+      cn_printf(CN_LOGGING_ERROR, "-->\n");
+    }
+    cn_printf(CN_LOGGING_ERROR, "function %s, file %s, line %d\n", info->function_name, info->file_name, info->line_number);
+    if (info->cn_source_loc) {
+        cn_printf(CN_LOGGING_ERROR, "original source location: \n%s\n", info->cn_source_loc);
+    }
+  }
+  else {
+    cn_printf(CN_LOGGING_ERROR, "Internal error: no error_msg_info available.");
+    cn_exit_aux();
+  }
 }
 
 cn_bool *convert_to_cn_bool(_Bool b) {
@@ -53,10 +66,8 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 void cn_assert(cn_bool *cn_b) {
     // cn_printf(CN_LOGGING_INFO, "[CN: assertion] function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
     if (!(cn_b->val)) {
-        cn_printf(CN_LOGGING_ERROR, "CN assertion failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-        if (error_msg_info.cn_source_loc) {
-            cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
-        }
+        cn_printf(CN_LOGGING_ERROR, "CN assertion failed.");
+        print_error_msg_info(error_msg_info);
         cn_exit();
     }
 }
@@ -139,10 +150,8 @@ void ghost_stack_depth_decr(void) {
         uintptr_t *key = (uintptr_t *) it.key;
         int *depth = it.value;
         if (*depth > cn_stack_depth) {
-          cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR": function %s, file %s, line %d\n", *key, error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-          if (error_msg_info.cn_source_loc) {
-            cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
-          }
+          cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR"\n", *key);
+          print_error_msg_info(error_msg_info);
           cn_exit();
             // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
         }
@@ -249,10 +258,7 @@ void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, s
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
       if (curr_depth != expected_stack_depth) {
-        cn_printf(CN_LOGGING_ERROR, "%s failed: function %s, file %s, line %d\n", access_kind, error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-        if (error_msg_info.cn_source_loc) {
-                cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
-        }
+        cn_printf(CN_LOGGING_ERROR, "%s failed.\n", access_kind);
         if (curr_depth == -1) {
           cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i));
         }
@@ -260,6 +266,7 @@ void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, s
           cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned at expected function call stack depth %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), expected_stack_depth);
           cn_printf(CN_LOGGING_ERROR, "  ==> (owned at stack depth: %d)\n", curr_depth);
         }
+        print_error_msg_info(error_msg_info);
         cn_exit();
       }
     }
@@ -383,21 +390,36 @@ void *convert_from_cn_pointer(cn_pointer *cn_ptr) {
     return cn_ptr->ptr;
 }
 
+struct cn_error_message_info *make_error_message_info_entry(const char *function_name, 
+                                   char *file_name, 
+                                   int line_number, 
+                                   char *cn_source_loc, 
+                                   struct cn_error_message_info *parent)
+{
+  struct cn_error_message_info *entry = (struct cn_error_message_info *) alloc(sizeof(struct cn_error_message_info));
+  entry->function_name = function_name;
+  entry->file_name = file_name;
+  entry->line_number = line_number;
+  entry->cn_source_loc = cn_source_loc;
+  entry->parent = parent;
+  return entry;
+}
 
-void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc) {
-    error_msg_info.function_name = function_name;
-    error_msg_info.file_name = file_name;
-    error_msg_info.line_number = line_number;
-    error_msg_info.cn_source_loc = cn_source_loc;
-    //// print_error_msg_info();
+void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc) 
+{
+    error_msg_info = make_error_message_info_entry(function_name, file_name, line_number, cn_source_loc, error_msg_info);
 }
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number) {
   // cn_printf(CN_LOGGING_INFO, "Initialising error message info\n");
-  error_msg_info.function_name = function_name;
-  error_msg_info.file_name = file_name;
-  error_msg_info.line_number = line_number;
-  error_msg_info.cn_source_loc = 0;
+  error_msg_info = make_error_message_info_entry(function_name, file_name, line_number, 0, NULL);
+}
+
+void cn_pop_msg_info ()
+{
+  struct cn_error_message_info *old = error_msg_info;
+  error_msg_info = old->parent;
+  //TODO: free(old);  
 }
 
 

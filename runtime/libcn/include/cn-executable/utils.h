@@ -39,6 +39,7 @@ struct cn_error_message_info {
     char *file_name;
     int line_number;
     char *cn_source_loc;
+    struct cn_error_message_info *parent;
 };
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number);
@@ -47,12 +48,14 @@ void initialise_error_msg_info_(const char *function_name, char *file_name, int 
 
 
 /* TODO: Implement */
-struct cn_error_messages {
+/*struct cn_error_messages {
     struct cn_error_message_info *top_level_error_msg_info;
     struct cn_error_message_info *nested_error_msg_info;
-};
+};*/
 
 void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc);
+
+void cn_pop_msg_info();
 
 #define update_cn_error_message_info(x)\
     update_error_message_info_(__func__, __FILE__, __LINE__ + 1, x)
