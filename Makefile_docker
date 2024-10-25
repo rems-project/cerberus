@@ -1,6 +1,17 @@
 .PHONY: all release dev-env deps
 
-PLATFORM ?= linux/amd64
+# This is needed because docker tags can't have `/` in the name
+PLATFORM ?= linux-amd64
+ifeq ($(PLATFORM),linux-amd64)
+DOCKER_PLATFORM=linux/amd64
+else
+ifeq ($(PLATFORM),linux-arm64)
+DOCKER_PLATFORM=linux/arm64
+else
+$(error "Unknown platform!")
+endif
+endif
+
 $(info Building for platform $(PLATFORM))
 
 all:

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64]
+        platform: [linux-amd64, linux-arm64]
     permissions:
       packages: write
       contents: read
@@ -44,7 +44,34 @@ jobs:
       run: |
         echo "Building ${{env.CERBERUS_IMAGE_ID}}"
         PLATFORM=${{ matrix.platform }} make -f Makefile_docker release_cn
-        docker tag cn:release ${{env.CERBERUS_IMAGE_ID}}
-
+        docker tag cn:release ${{env.CERBERUS_IMAGE_ID}}-${{ matrix.platform }}
     - name: Push the Docker image
-      run: docker push ${{env.CERBERUS_IMAGE_ID}}
+      run: docker push ${{env.CERBERUS_IMAGE_ID}}-${{ matrix.platform }}
+
+  combine-docker:
+      runs-on: docker:latest
+      needs: deploy-docker
+      permissions:
+        packages: write
+        contents: read
+        attestations: write
+        id-token: write
+      steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull images
+        run: |
+          docker pull ${{env.CERBERUS_IMAGE_ID}}-linux-amd64
+          docker pull ${{env.CERBERUS_IMAGE_ID}}-linux-arm64
+      - name: Create manifest
+        run: |
+          docker manifest create ${{env.CERBERUS_IMAGE_ID}} ${{env.CERBERUS_IMAGE_ID}}-linux-amd64 ${{env.CERBERUS_IMAGE_ID}}-linux-arm64
+          docker manifest inspect ${{env.CERBERUS_IMAGE_ID}}
+      - name: Push the Docker image
+        run: docker manifest push ${{env.CERBERUS_IMAGE_ID}}
