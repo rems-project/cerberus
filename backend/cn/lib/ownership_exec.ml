@@ -17,9 +17,9 @@ let cn_stack_depth_incr_sym = Sym.fresh_pretty "ghost_stack_depth_incr"
 
 let cn_stack_depth_decr_sym = Sym.fresh_pretty "ghost_stack_depth_decr"
 
-let c_map_local_ownership_fn_sym = Sym.fresh_pretty "c_add_local_to_ghost_state"
+let c_add_ownership_fn_sym = Sym.fresh_pretty "c_add_to_ghost_state"
 
-let c_remove_local_ownership_fn_sym = Sym.fresh_pretty "c_remove_local_from_ghost_state"
+let c_remove_ownership_fn_sym = Sym.fresh_pretty "c_remove_from_ghost_state"
 
 (* TODO: Use these to reduce verbosity of output. Mirrors C+CN input slightly less since
    we replace declarations with a call to one of these macros *)
@@ -96,9 +96,10 @@ let generate_c_local_ownership_entry_fcall (local_sym, local_ctype) =
       AilEcast (empty_qualifiers, C.uintptr_t, mk_expr (AilEunary (Address, local_ident))))
   in
   let arg2 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in
+  let arg3 = A.(AilEident cn_stack_depth_sym) in
   mk_expr
     (AilEcall
-       (mk_expr (AilEident c_map_local_ownership_fn_sym), List.map mk_expr [ arg1; arg2 ]))
+       (mk_expr (AilEident c_add_ownership_fn_sym), List.map mk_expr [ arg1; arg2; arg3 ]))
 
 
 (* int x = 0, y = 5;
@@ -154,7 +155,7 @@ let generate_c_local_ownership_exit (local_sym, local_ctype) =
       (mk_expr
          A.(
            AilEcall
-             ( mk_expr (AilEident c_remove_local_ownership_fn_sym),
+             ( mk_expr (AilEident c_remove_ownership_fn_sym),
                List.map mk_expr [ arg1; arg2 ] ))))
 
 

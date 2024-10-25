@@ -6,7 +6,7 @@ typedef hash_table ownership_ghost_state;
 
 /* Ownership globals */
 ownership_ghost_state* cn_ownership_global_ghost_state;
-signed long cn_stack_depth;
+
 struct cn_error_message_info error_msg_info;
 
 static enum cn_logging_level logging_level = CN_LOGGING_INFO;
@@ -61,15 +61,15 @@ void cn_assert(cn_bool *cn_b) {
     }
 }
 
-void c_ghost_assert(cn_bool *cn_b) {
-    if (!(cn_b->val)) {
-        cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-        if (error_msg_info.cn_source_loc) {
-            cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
-        }
-        cn_exit();
-    }
-}
+/* void c_ghost_assert(cn_bool *cn_b) { */
+/*     if (!(cn_b->val)) { */
+/*         cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number); */
+/*         if (error_msg_info.cn_source_loc) { */
+/*             cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc); */
+/*         } */
+/*         cn_exit(); */
+/*     } */
+/* } */
 
 cn_bool *cn_bool_and(cn_bool *b1, cn_bool *b2) {
     cn_bool *res = alloc(sizeof(cn_bool));
@@ -123,6 +123,7 @@ void ghost_stack_depth_incr(void) {
 }
 
 
+// TODO: one of these should maybe go away
 #define FMT_PTR "\x1b[33m%#lx\x1b[0m"
 // #define KMAG  "\x1B[35m"
 #define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
@@ -134,18 +135,19 @@ void ghost_stack_depth_decr(void) {
     // leak checking
     hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
     // cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
-    _Bool leaked = false;
     while (ht_next(&it)) {
-        intptr_t *key = it.key;
+        uintptr_t *key = (uintptr_t *) it.key;
         int *depth = it.value;
-        _Bool fine = *depth <= cn_stack_depth;
-        if (!fine) {
-            leaked = true;
+        if (*depth > cn_stack_depth) {
+          cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR": function %s, file %s, line %d\n", *key, error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+          if (error_msg_info.cn_source_loc) {
+            cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
+          }
+          cn_exit();
             // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
         }
     }
     // cn_printf(CN_LOGGING_INFO, "\n");
-    c_ghost_assert(convert_to_cn_bool(!leaked));
 }
 
 int ownership_ghost_state_get(signed long *address_key) {
@@ -163,9 +165,6 @@ void ownership_ghost_state_remove(signed long* address_key) {
     ownership_ghost_state_set(address_key, -1);
 }
 
-#define FMT_PTR "\x1b[33m%#lx\x1b[0m"
-// #define KMAG  "\x1B[35m"
-#define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
 
 void dump_ownership_state()
 {
@@ -182,46 +181,15 @@ void dump_ownership_state()
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
     // cn_printf(CN_LOGGING_INFO, "[CN: getting ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
     //// print_error_msg_info();
-    for (int i = 0; i < size; i++) {
-        signed long *address_key = alloc(sizeof(long));
-        *address_key = generic_c_ptr + i;
-        /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
-        int curr_depth = ownership_ghost_state_get(address_key);
-        if (curr_depth != cn_stack_depth - 1) {
-            cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            cn_printf(CN_LOGGING_ERROR, "  ==> owned at level : %d\n", curr_depth);
-            if (error_msg_info.cn_source_loc) {
-                cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
-            }
-            //dump_ownership_state();
-            cn_exit();
-        }
-        // cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1));
-        ownership_ghost_state_set(address_key, cn_stack_depth);
-    }
+  c_ownership_check("Precondition ownership check", generic_c_ptr, (int) size, cn_stack_depth - 1);
+  c_add_to_ghost_state(generic_c_ptr, size, cn_stack_depth);
 }
 
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
     // cn_printf(CN_LOGGING_INFO, "[CN: returning ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
     //// print_error_msg_info();
-    for (int i = 0; i < size; i++) { 
-        signed long *address_key = alloc(sizeof(long));
-        *address_key = generic_c_ptr + i;
-        int curr_depth = ownership_ghost_state_get(address_key);
-        if (curr_depth != cn_stack_depth) {
-            cn_printf(CN_LOGGING_ERROR, "CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            cn_printf(CN_LOGGING_ERROR, "  ==> owned at level: %d\n", curr_depth);
-            if (error_msg_info.cn_source_loc) {
-                cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
-            }
-            //dump_ownership_state();
-            cn_exit();
-        }
-        // cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
-        ownership_ghost_state_set(address_key, cn_stack_depth - 1);
-    }
+  c_ownership_check("Postcondition ownership check", generic_c_ptr, (int) size, cn_stack_depth);
+  c_add_to_ghost_state(generic_c_ptr, size, cn_stack_depth - 1);
 }
 
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
@@ -254,17 +222,17 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size
 }
 
 
-void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
+void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack_depth) {
   // cn_printf(CN_LOGGING_INFO, "[C access checking] add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
       signed long *address_key = alloc(sizeof(long));
       *address_key = ptr_to_local + i;
       /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
-      ownership_ghost_state_set(address_key, cn_stack_depth);
+      ownership_ghost_state_set(address_key, stack_depth);
   }
 }
 
-void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
+void c_remove_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
   // cn_printf(CN_LOGGING_INFO, "[C access checking] remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
       signed long *address_key = alloc(sizeof(long));
@@ -274,22 +242,26 @@ void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
   }
 }
 
-void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
+void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, signed long expected_stack_depth) {
     signed long address_key = 0;
     // cn_printf(CN_LOGGING_INFO, "C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " ] -- ", generic_c_ptr, generic_c_ptr + offset);
     for (int i = 0; i<offset; i++) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
-      if (curr_depth != cn_stack_depth) {
-        cn_printf(CN_LOGGING_ERROR, "C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-        cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") -- CN stack depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-        cn_printf(CN_LOGGING_ERROR, "  ==> retrieved stack depth: %d\n", curr_depth);
+      if (curr_depth != expected_stack_depth) {
+        cn_printf(CN_LOGGING_ERROR, "%s failed: function %s, file %s, line %d\n", access_kind, error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         if (error_msg_info.cn_source_loc) {
                 cn_printf(CN_LOGGING_ERROR, "CN source location: \n%s\n", error_msg_info.cn_source_loc);
         }
+        if (curr_depth == -1) {
+          cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i));
+        }
+        else {
+          cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned at expected function call stack depth %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), expected_stack_depth);
+          cn_printf(CN_LOGGING_ERROR, "  ==> (owned at stack depth: %d)\n", curr_depth);
+        }
         cn_exit();
       }
-    //   c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
     // cn_printf(CN_LOGGING_INFO, "\n");
 }
@@ -495,14 +467,8 @@ void *cn_calloc(size_t num, size_t size)
 void cn_free_sized(void* malloced_ptr, size_t size)
 {
   // cn_printf(CN_LOGGING_INFO, "[CN: freeing ownership] " FMT_PTR ", size: %lu\n", (uintptr_t) malloced_ptr, size);
-  for (int i = 0; i < size; i++) {
-      signed long *address_key = alloc(sizeof(long));
-      *address_key = (uintptr_t) malloced_ptr + i;
-      /* printf(" off: %d [" FMT_PTR "]\n", i, *address_key); */
-      int curr_depth = ownership_ghost_state_get(address_key);
-      c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
-      ownership_ghost_state_remove(address_key);
-  }
+  c_ownership_check("Free", (uintptr_t) malloced_ptr, (int) size, cn_stack_depth);
+  c_remove_from_ghost_state((uintptr_t) malloced_ptr, size);
 }
 
 void cn_print_u64(const char *str, unsigned long u)
