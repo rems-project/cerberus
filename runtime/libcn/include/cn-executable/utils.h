@@ -32,6 +32,8 @@ enum cn_logging_level set_cn_logging_level(enum cn_logging_level new_level);
         printf(__VA_ARGS__);\
     }
 
+void cn_print_nr_owned_predicates(void);
+
 struct cn_error_message_info {
     const char *function_name;
     char *file_name;
