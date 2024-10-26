@@ -19,8 +19,9 @@ parser.add_argument("--csv_clean", help="Store most useful results in csv file w
 parser.add_argument("--iterate", help="Iterate up to 2**(n-1)")
 parser.add_argument("--buddy_path", help="Collect statistics for pKVM buddy allocator - provide path to buddy")
 parser.add_argument("--preprocess", action='store_true', help='Preprocess input file before generating executable')
-parser.set_defaults(iterate=False)
+parser.add_argument("--track_owned", action='store_true', help='Track number of Owned predicates dynamically')
 parser.set_defaults(preprocess=False)
+parser.set_defaults(track_owned=False)
 
 args=parser.parse_args()
 
@@ -130,10 +131,8 @@ def time_cmd(cmd, error_msg, executable=False):
         collected_stats = output.split('~')[-2:]
         cmd_stats['time'] = collected_stats[0]
         cmd_stats['space'] = collected_stats[1]
-        if executable:
+        if executable and args.track_owned:
             owned_stats = res.stdout.split('£')[-1]
-            print("OWNED STATS")
-            print(str(owned_stats))
             cmd_stats['nr_owned_predicates'] = owned_stats
         # print(generation_time)
     else:
@@ -234,7 +233,8 @@ def collect_stats_for_single_file(f, input_basename):
         compilation_space['instrumented'].append(float(instr_stats_dict["compilation"]['space']))
         link_space['instrumented'].append(float(instr_stats_dict["linking"]['space']))
         executable_space['instrumented'].append(float(instr_stats_dict["executable"]['space']))
-        nr_owned_predicates.append(float(instr_stats_dict["executable"]['nr_owned_predicates']))
+        if args.track_owned:
+            nr_owned_predicates.append(float(instr_stats_dict["executable"]['nr_owned_predicates']))
 
         # Uninstrumented stats
         compilation_times['uninstrumented'].append(float(uninstr_stats_dict["compilation"]['time']))
@@ -285,7 +285,8 @@ stats_dict['instr_generation_space'] = generation_space
 stats_dict['instr_compilation_space'] = compilation_space['instrumented']
 stats_dict['instr_linking_space'] = link_space['instrumented']
 stats_dict['instr_executable_space'] = executable_space['instrumented']
-stats_dict['nr_owned_predicates'] = nr_owned_predicates
+if args.track_owned:
+    stats_dict['nr_owned_predicates'] = nr_owned_predicates
 
 stats_dict['uninstr_compilation_time'] = compilation_times['uninstrumented']
 stats_dict['uninstr_linking_time'] = link_times['uninstrumented']
@@ -314,7 +315,10 @@ if args.csv:
 
 if args.csv_clean:
     if args.iterate:
-        copied_cols = ['cn_filename', 'num_elements', 'nr_owned_predicates', 'executable_time_difference', 'executable_space_difference']
+        copied_cols = ['cn_filename', 'num_elements']
+        if args.track_owned:
+            copied_cols += ['nr_owned_predicates']
+        copied_cols += ['executable_time_difference', 'executable_space_difference']
         iterated_clean_df = full_df[copied_cols].copy()
         iterated_clean_df['log2_executable_time_difference'] = np.log2(abs(iterated_clean_df['executable_time_difference']))
         iterated_clean_df['log2_executable_space_difference'] = np.log2(abs(iterated_clean_df['executable_space_difference']))
