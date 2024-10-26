@@ -8,6 +8,7 @@ typedef hash_table ownership_ghost_state;
 ownership_ghost_state* cn_ownership_global_ghost_state;
 signed long cn_stack_depth;
 struct cn_error_message_info error_msg_info;
+signed long nr_owned_predicates;
 
 static enum cn_logging_level logging_level = CN_LOGGING_INFO;
 
@@ -109,6 +110,7 @@ cn_map *map_create(void) {
 }
 
 void initialise_ownership_ghost_state(void) {
+    nr_owned_predicates = 0;
     cn_ownership_global_ghost_state = ht_create();
 }
 
@@ -238,6 +240,7 @@ void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
 
 
 void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size) {
+  nr_owned_predicates++;
   switch (owned_enum)
     {
       case GET:
@@ -511,6 +514,10 @@ void cn_free_sized(void* malloced_ptr, size_t size)
   }
 }
 
+void cn_print_nr_owned_predicates(void) {
+    printf("Owned predicates £%lu\n", nr_owned_predicates);
+}
+ 
 void cn_print_u64(const char *str, unsigned long u)
 {
   // cn_printf(CN_LOGGING_INFO, "\n\nprint %s: %20lx,  %20lu\n\n", str, u, u);

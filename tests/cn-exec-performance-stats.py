@@ -5,6 +5,7 @@ from os import listdir
 from os.path import isfile, join
 import argparse, sys, os
 import pandas as pd
+import numpy as np
 
 
 
@@ -49,7 +50,7 @@ elif args.file:
     cn_test_files=[filename_split[-1]]
 elif args.buddy_path:
     tests_path = args.buddy_path
-    cn_test_files=["driver.pp.c"]
+    cn_test_files=["driver-pp.c"]
 
 # print(cn_test_files)
 time_cmd_str = 'gtime -f ~%e~%M '
@@ -59,6 +60,7 @@ generation_times=[]
 compilation_times={'instrumented': [], 'uninstrumented': []}
 link_times={'instrumented': [], 'uninstrumented': []}
 executable_times={'instrumented': [], 'uninstrumented': []}
+nr_owned_predicates=[]
 generation_space=[]
 compilation_space={'instrumented': [], 'uninstrumented': []}
 link_space={'instrumented': [], 'uninstrumented': []}
@@ -86,8 +88,13 @@ def gen_instr_cmd(f, input_basename):
     return instr_cmd
 
 def gen_compile_cmd(input_basename, instrumented):
-    c_files = input_basename + "-exec.c cn.c" if instrumented else tests_path + input_basename + ".c"
-    compile_cmd = time_cmd_str + "cc -g -c "
+    c_files = input_basename + "-exec.c cn.c" if instrumented else tests_path + "/" + input_basename + ".c "
+    if not instrumented:
+        c_files += "header.c"
+    compile_cmd = time_cmd_str + "cc "
+    if not instrumented:
+        compile_cmd += "-I " + "header.h "
+    compile_cmd += "-g -c "
     if instrumented:
         compile_cmd += "-I" + runtime_prefix + "/include/ "
     compile_cmd += c_files
@@ -95,10 +102,14 @@ def gen_compile_cmd(input_basename, instrumented):
 
 def gen_link_cmd(input_basename, instrumented):
     o_files = input_basename + "-exec.o cn.o " if instrumented else input_basename + ".o "
+    if not instrumented:
+        o_files += " header.o "
     bin_file = input_basename + "-exec-output.bin " if instrumented else input_basename + "-output.bin "
     link_cmd = time_cmd_str + "cc "
     if instrumented:
         link_cmd += "-I" + runtime_prefix + "/include "
+    if not instrumented:
+        link_cmd += "-I " + "header.h "
     link_cmd += "-o " + bin_file + o_files
     if instrumented:
         link_cmd += runtime_prefix + "/libcn.a"
@@ -119,6 +130,11 @@ def time_cmd(cmd, error_msg, executable=False):
         collected_stats = output.split('~')[-2:]
         cmd_stats['time'] = collected_stats[0]
         cmd_stats['space'] = collected_stats[1]
+        if executable:
+            owned_stats = res.stdout.split('£')[-1]
+            print("OWNED STATS")
+            print(str(owned_stats))
+            cmd_stats['nr_owned_predicates'] = owned_stats
         # print(generation_time)
     else:
         if executable:
@@ -152,25 +168,24 @@ def time_linking(input_basename, instrumented):
 def time_executable(input_basename, instrumented):
     executable_cmd = gen_exec_cmd(input_basename, instrumented)
     print(executable_cmd)
-    return time_cmd(executable_cmd, "EXECUTABLE")
+    return time_cmd(executable_cmd, "EXECUTABLE", executable=True)
 
 
 def preprocess_file(filename, input_basename):
-    path = args.buddy_path if args.buddy_path else tests_path
-    preprocess_cmd = "cc -E -P -CC " + path + "/" + filename
+    preprocess_cmd = "cc -E -P -CC " + tests_path + "/" + filename
     print(preprocess_cmd)
-    pp_f_name = input_basename + ".pp.c"
-    pp_f = open(path + "/" + pp_f_name, "w")
+    pp_f_name = input_basename + "-pp.c"
+    pp_f = open(tests_path + "/" + pp_f_name, "w")
     subprocess.call(preprocess_cmd.split(), stdout=pp_f)
     return pp_f_name
 
-def find_and_replace_macro(f, input_basename, num_elements):
+def find_and_replace_macro(f, input_basename, str_being_replaced, new_str):
     # Assume there is a macro of the form #define SIZE magic in the input file
     with open(tests_path + "/" + f, 'r') as file:
         filedata = file.read()
 
-    filedata = filedata.replace('magic', str(num_elements))
-    subst_f_name = input_basename + ".subst.c"
+    filedata = filedata.replace(str_being_replaced, new_str)
+    subst_f_name = input_basename + "-subst.c"
 
     with open(tests_path + "/" + subst_f_name, 'w') as file:
         file.write(filedata)
@@ -219,6 +234,7 @@ def collect_stats_for_single_file(f, input_basename):
         compilation_space['instrumented'].append(float(instr_stats_dict["compilation"]['space']))
         link_space['instrumented'].append(float(instr_stats_dict["linking"]['space']))
         executable_space['instrumented'].append(float(instr_stats_dict["executable"]['space']))
+        nr_owned_predicates.append(float(instr_stats_dict["executable"]['nr_owned_predicates']))
 
         # Uninstrumented stats
         compilation_times['uninstrumented'].append(float(uninstr_stats_dict["compilation"]['time']))
@@ -244,9 +260,9 @@ for f in cn_test_files:
         for i in range(1, int(args.iterate)):
             num_elements = 2**i
             print(f)
-            subst_f = find_and_replace_macro(f, input_basename, num_elements)
-            pp_f = preprocess_file(subst_f, input_basename)
-            collect_stats_for_single_file(pp_f, input_basename)
+            subst_f = find_and_replace_macro(f, input_basename, "magic", str(num_elements))
+            pp_f = preprocess_file(subst_f, input_basename + "-subst")
+            collect_stats_for_single_file(pp_f, input_basename + "-pp")
             num_elements_list.append(num_elements)
     else:
         collect_stats_for_single_file(f, input_basename)
@@ -269,6 +285,7 @@ stats_dict['instr_generation_space'] = generation_space
 stats_dict['instr_compilation_space'] = compilation_space['instrumented']
 stats_dict['instr_linking_space'] = link_space['instrumented']
 stats_dict['instr_executable_space'] = executable_space['instrumented']
+stats_dict['nr_owned_predicates'] = nr_owned_predicates
 
 stats_dict['uninstr_compilation_time'] = compilation_times['uninstrumented']
 stats_dict['uninstr_linking_time'] = link_times['uninstrumented']
@@ -297,7 +314,11 @@ if args.csv:
 
 if args.csv_clean:
     if args.iterate:
-        pass
+        copied_cols = ['cn_filename', 'num_elements', 'nr_owned_predicates', 'executable_time_difference', 'executable_space_difference']
+        iterated_clean_df = full_df[copied_cols].copy()
+        iterated_clean_df['log2_executable_time_difference'] = np.log2(abs(iterated_clean_df['executable_time_difference']))
+        iterated_clean_df['log2_executable_space_difference'] = np.log2(abs(iterated_clean_df['executable_space_difference']))
+        iterated_clean_df.to_csv(args.csv_clean, index=False) 
     else:
         clean_stats_dict = {
             'mean_generation_time': [full_df.loc[:, 'instr_generation_time'].mean()],
