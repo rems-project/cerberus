@@ -19,6 +19,7 @@ open IndexTerms
 open Pp
 open C
 open Resources
+open Option
 
 (* perhaps somehow unify with above *)
 type action =
@@ -84,14 +85,18 @@ let ask_solver g lcs = match (Solver.ask_solver g lcs) with
 let convert_symmap_to_lc (m : IT.t SymMap.t) : LogicalConstraints.t list =
   let kvs = SymMap.bindings m in
   let to_lc (k, v) =
-    LC.T (IT.IT (Binop (EQ, IT.IT (IT.Sym k, basetype v, Cerb_location.unknown) , v), BT.Bool, Cerb_location.unknown)) in
+    LC.T (IT.eq_ (IT.IT (IT.Sym k, basetype v, Cerb_location.unknown) , v) Cerb_location.unknown) in
   List.map to_lc kvs
 
 let rec check_clause (g : Global.t) (c : ResourcePredicates.clause) (candidate : IT.t) =
+  (*get variable dependency graph*)
   let graph = LAT.to_tree c.packing_ft in
+  (*get constraints on whether candidate could have come from this clause*)
   let cs, vs = (getClauseConstraints graph candidate g) in
   let cs' = List.concat [cs; convert_symmap_to_lc vs; [LC.t_ c.guard]] in
+  (*query solver*)
   ask_solver g cs'
+
 and check_pred
   (def : ResourcePredicates.definition) (candidate : IT.t) (g : Global.t) : check_result list =
   (* ensure candidate type matches output type of predicate *)
@@ -108,18 +113,22 @@ and check_pred
         in
         (* return either [No] or a list of positive/ambiguous results *)
         condense_results checked
+
 and getClauseConstraints graph candidate globals =
+  (*"false" constraint*)
   let default = ([LC.T (IT (Const (Bool false), BT.Bool, Cerb_location.unknown))], SymMap.empty) in
   match graph with
   | (exp, subgraphs) ->
+    (* use candidate to get terms for FVs in exp. This may fail for valid expressions *)
     let ovs_ = LAT.get_assignment exp candidate in
     match ovs_ with
-    | None -> default
+    | None -> failwith "Unknown"
     | Some vs_ ->
-    (*TODO: stateful*)
-    (*TODO - shortcut: guard could be var equality*)
-    let foreachvar x vs = match (SymMap.find_opt x subgraphs) with
-    | None -> failwith "CHT - could be known globally? out of scope for now"
+    (*CHT TODO: stateful*)
+    (*CHT TODO: shortcut - guard could be var equality*)
+    (* find definition of x, and for each fv in its def, recurse *)
+    let foreachvar x' vs = match (SymMap.find_opt x' subgraphs) with
+    | None -> failwith "CHT - could be known in ctxt? out of scope for now"
     | Some UndefinedLT -> failwith "CHT style - impossible"
     | Some (NodeLT (line, subgraphs')) -> match line with
       | DefineL ((x, t), _) ->
@@ -134,8 +143,7 @@ and getClauseConstraints graph candidate globals =
           | P psig ->
             (match psig.name with
             | Owned (_, _) ->
-              let eq = IT (Binop (EQ, psig.pointer, null_ Cerb_location.unknown), BT.Bool, Cerb_location.unknown) in
-              let neq = IT.IT (Unop (Not, eq), BT.Bool, Cerb_location.unknown) in
+              let neq = IT.ne__ psig.pointer (IT.null_ Cerb_location.unknown) Cerb_location.unknown in
                 ([LC.t_ neq], vs)
             | PName name -> let opdef = SymMap.find_opt name globals.resource_predicates in
               match opdef with
@@ -156,6 +164,30 @@ and getClauseConstraints graph candidate globals =
       let lcs', vs' = foreachvar k vs in
       (List.append lcs' lcs, vs') in
     List.fold_left comb ([], vs_) (SymMap.bindings vs_)
+
+let rec getBodyConstraints (ctxt : Context.t) (lines : IT.t LAT.t) : IT.t =
+  let loc = Cerb_location.unknown in
+  match lines with
+  | Define ((v, it), _, next) -> failwith "need bt for v"
+  | Resource ((v, (rt, bt)), _, next)-> failwith "Main issue: need to be able to check that whatever value we give v works for rt"
+  | Constraint (lc, _, next) -> (match lc with
+    | T it -> and_ [it; getBodyConstraints ctxt next] loc
+    | Forall _ -> failwith ""
+    )
+  | I it -> failwith ""
+
+let getClauseConstraints' (ctxt : Context.t) (cl : REP.clause) : IT.t =
+  IT.and_ [cl.guard; getBodyConstraints ctxt cl.packing_ft] Cerb_location.unknown
+
+let checkPredNaive (ctxt : Context.t) (def : REP.definition) (candidate : IT.t) : check_result =
+  let loc = Cerb_location.unknown in
+  match def.clauses with
+  | None -> Unknown (!^"Predicate " ^/^ ResourcePredicates.pp_definition def ^/^ !^" is uninterpreted.")
+  | Some cls ->
+    let cand_eq (cl : REP.clause) = IT.eq__ (LAT.get_return cl.packing_ft) candidate loc in
+    let with_cand_eq (cl : REP.clause)  = LC.T (IT.and_ [getClauseConstraints' ctxt cl; cand_eq cl] loc) in
+    let check_cl (cl : REP.clause)  = ask_solver ctxt.global [with_cand_eq cl] in
+    combine_results (List.map check_cl cls)
 
 (* End CHT *)
 
