@@ -2,7 +2,7 @@ name: docker
 
 on:
   # Temporary - change back to schedule once it is confirmed to work
-  push:
+  pull_request:
 #  schedule:
 #    - cron: '30 18 * * *'
 
