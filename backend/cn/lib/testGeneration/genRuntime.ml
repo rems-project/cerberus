@@ -26,7 +26,8 @@ type term =
   | Alloc of { bytes : IT.t }
   | Call of
       { fsym : Sym.t;
-        iargs : (Sym.t * Sym.t) list
+        iargs : (Sym.t * Sym.t) list;
+        oarg_bt : BT.t
       }
   | Asgn of
       { pointer : Sym.t;
@@ -75,7 +76,7 @@ let rec free_vars_term (tm : term) : SymSet.t =
   | Pick { bt = _; choice_var = _; choices; last_var = _ } ->
     free_vars_term_list (List.map snd choices)
   | Alloc { bytes } -> IT.free_vars bytes
-  | Call { fsym = _; iargs } -> SymSet.of_list (List.map snd iargs)
+  | Call { fsym = _; iargs; oarg_bt = _ } -> SymSet.of_list (List.map snd iargs)
   | Asgn { pointer; offset; sct = _; value; last_var = _; rest } ->
     List.fold_left
       SymSet.union
@@ -131,15 +132,18 @@ let rec pp_term (tm : term) : Pp.document =
                             (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp_term gt))))
                         choices)))
   | Alloc { bytes } -> string "alloc" ^^ parens (IT.pp bytes)
-  | Call { fsym; iargs } ->
-    Sym.pp fsym
-    ^^ parens
-         (nest
-            2
-            (separate_map
-               (comma ^^ break 1)
-               (fun (x, y) -> Sym.pp x ^^ colon ^^ space ^^ Sym.pp y)
-               iargs))
+  | Call { fsym; iargs; oarg_bt } ->
+    parens
+      (Sym.pp fsym
+       ^^ parens
+            (nest
+               2
+               (separate_map
+                  (comma ^^ break 1)
+                  (fun (x, y) -> Sym.pp x ^^ colon ^^ space ^^ Sym.pp y)
+                  iargs))
+       ^^ space
+       ^^ BT.pp oarg_bt)
   | Asgn
       { pointer : Sym.t;
         offset : IT.t;
@@ -369,7 +373,7 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
           xits
           ([], fun _ gr -> gr)
       in
-      gt_lets last_var (Call { fsym; iargs })
+      gt_lets last_var (Call { fsym; iargs; oarg_bt = bt })
     | Asgn ((it_addr, sct), value, rest) ->
       let pointer, offset = GA.get_addr_offset it_addr in
       if not (SymSet.mem pointer inputs || List.exists (Sym.equal pointer) vars) then

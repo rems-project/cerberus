@@ -29,6 +29,15 @@
 
 #define CN_GEN_MULT(ty, mul) cn_gen_mult_##ty(mul)
 
+#define CN_GEN_CALL_FROM(...)                                                           \
+    {                                                                                   \
+        char* from[] = { __VA_ARGS__, NULL };
+
+#define CN_GEN_CALL_TO(...)                                                             \
+        char* to[] = { __VA_ARGS__, NULL };                                             \
+        cn_gen_backtrack_relevant_remap_many(from, to);                                 \
+    }
+
 #define CN_GEN_ASSIGN(p, offset, addr_ty, value, tmp, gen_name, last_var)               \
     cn_bits_u64* tmp##_size = cn_bits_u64_add(                                          \
                 offset,                                                                 \
@@ -49,15 +58,6 @@
 
 #define CN_GEN_LET_BODY(ty, var, gen)                                                   \
         ty* var = gen;
-
-#define CN_GEN_LET_FROM(...)                                                            \
-        {                                                                               \
-            char* from[] = { __VA_ARGS__, NULL };
-
-#define CN_GEN_LET_TO(...)                                                              \
-            char* to[] = { __VA_ARGS__, NULL };                                         \
-            cn_gen_backtrack_relevant_remap_many(from, to);                             \
-        }
 
 #define CN_GEN_LET_END(backtracks, var, last_var, ...)                                  \
         if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                         \

@@ -21,7 +21,8 @@ type term =
   | Alloc of { bytes : IT.t }
   | Call of
       { fsym : Sym.t;
-        iargs : (Sym.t * Sym.t) list
+        iargs : (Sym.t * Sym.t) list;
+        oarg_bt : BT.t
       }
   | Asgn of
       { pointer : Sym.t;
