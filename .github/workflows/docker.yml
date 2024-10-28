@@ -1,8 +1,10 @@
 name: docker
 
 on:
-  schedule:
-    - cron: '30 18 * * *'
+  # Temporary - change back to schedule once it is confirmed to work
+  push:
+#  schedule:
+#    - cron: '30 18 * * *'
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
