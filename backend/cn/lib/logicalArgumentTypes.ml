@@ -241,7 +241,7 @@ type line =
   | ConstraintL of LC.t * info
 
 (* Variable-assignment dependency graph for predicate clauses *)
-(*CHT: this is really a DAG, but shouldn't matter here *)
+(* this is really a DAG and so has duplicate nodes in tree form *)
 type dep_tree =
   | UndefinedLT
   | NodeLT of line * dep_tree IT.SymMap.t
@@ -294,7 +294,6 @@ let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
     map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | EachI ((z1, (v, bty), z2), exp1), EachI ((z1', (v', bty'), z2'), exp1') ->
     map_with_guard (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') [exp1] [exp1']
-  (* add Z3's Distinct for separation facts *)
   | Tuple exps, Tuple exps' -> map_from_IT_lists exps exps'
   | NthTuple (n, exp1), NthTuple (n', exp1') ->
     map_with_guard (n = n') [exp1] [exp1']
@@ -404,17 +403,19 @@ let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
 let get_fvs (exp : IT.t) : Sym.t list = SymSet.to_list (IT.free_vars exp)
 
 let rec to_tree_aux (lines : packing_ft) (defs : dep_tree SymMap.t) : IT.t * dep_tree IT.SymMap.t =
-  let get_children v' = match (SymMap.find_opt v' defs) with
-  | Some t -> t
-  | None -> UndefinedLT
+  (* find the subgraph rooted at the line where the variable is defined *)
+  let add_children acc v = match (SymMap.find_opt v defs) with
+  | Some t -> SymMap.add v t acc
+  | None -> acc (* variable is not defined in lines; may be globally defined *)
   in
-  let convert_children vs =
-    (List.fold_left (fun acc v -> SymMap.add v (get_children v) acc) SymMap.empty vs) in
+  (* build a map from all vs to the subgraphs rooted at the lines where they are defined *)
+  let get_subgraphs vs =
+    (List.fold_left add_children SymMap.empty vs) in
   match lines with
   | Define ((v, it), i, next) ->
     let vs = get_fvs it in
     let ln = DefineL ((v, it), i) in
-    let root = NodeLT (ln, convert_children vs) in
+    let root = NodeLT (ln, get_subgraphs vs) in
     let new_defs = SymMap.add v root defs in
     to_tree_aux next new_defs
   | Resource ((v, (rt, bt)), i, next) ->
@@ -428,7 +429,7 @@ let rec to_tree_aux (lines : packing_ft) (defs : dep_tree SymMap.t) : IT.t * dep
       (*CHT TODO: how does shadowing work here re: q? If q appears in output is it always this q*)
     in
     let ln = ResourceL ((v, (rt, bt)), i) in
-    let root = NodeLT (ln, convert_children vs) in
+    let root = NodeLT (ln, get_subgraphs vs) in
     let new_defs = SymMap.add v root defs in
     to_tree_aux next new_defs
   | Constraint (_, _, next) -> to_tree_aux next defs (*CHT TODO - trees with asserts are out of scope for now*)
