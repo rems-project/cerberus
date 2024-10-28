@@ -18,16 +18,16 @@ all:
 	@echo 'targets: deps|release|dev-env'
 
 deps :
-	docker build --platform $(PLATFORM) --tag cerberus:deps -f Dockerfile.deps .
+	docker build --platform $(DOCKER_PLATFORM) --tag cerberus:deps -f Dockerfile.deps .
 
 release: deps
-	docker build --platform $(PLATFORM) --tag cerberus:release -f Dockerfile.release .
+	docker build --platform $(DOCKER_PLATFORM) --tag cerberus:release -f Dockerfile.release .
 	@echo 'for example: docker run --volume `PWD`:/data/ cerberus:release cerberus tests/tcc/00_assignment.c --pp=core'
 
 release_cn: deps
-	docker build --platform $(PLATFORM) --tag cn:release -f Dockerfile.release .
+	docker build --platform $(DOCKER_PLATFORM) --tag cn:release -f Dockerfile.release .
 	@echo 'for example: docker run --volume `PWD`:/data/ cn:release cerberus tests/tcc/00_assignment.c --pp=core'
 
 dev-env: deps
-	docker build --platform $(PLATFORM) --tag cerberus:dev-env -f Dockerfile.dev-env .
+	docker build --platform $(DOCKER_PLATFORM) --tag cerberus:dev-env -f Dockerfile.dev-env .
 	@echo 'for example: docker run -ti --volume `PWD`:/home/user1/cerberus/ cerberus:dev-env'
