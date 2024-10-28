@@ -135,10 +135,32 @@ let rec compile_term
     let alloc_sym = Sym.fresh_named "cn_gen_alloc" in
     let b, s, e = compile_it sigma name it in
     (b, s, mk_expr (AilEcall (mk_expr (AilEident alloc_sym), [ e ])))
-  | Call { fsym; iargs } ->
+  | Call { fsym; iargs; oarg_bt } ->
     let sym = GenUtils.get_mangled_name (fsym :: List.map fst iargs) in
     let es = iargs |> List.map snd |> List.map (fun x -> A.(mk_expr (AilEident x))) in
-    ([], [], mk_expr (AilEcall (mk_expr (AilEident sym), es)))
+    let x = Sym.fresh () in
+    let b = Utils.create_binding x (bt_to_ctype fsym oarg_bt) in
+    let wrap_to_string (sym : Sym.t) =
+      A.(
+        AilEcast
+          ( C.no_qualifiers,
+            C.pointer_to_char,
+            mk_expr (AilEstr (None, [ (Locations.other __LOC__, [ Sym.pp_string sym ]) ]))
+          ))
+    in
+    let from_vars = iargs |> List.map fst |> List.map wrap_to_string in
+    let to_vars = iargs |> List.map snd |> List.map wrap_to_string in
+    let macro_call name vars =
+      A.AilSexpr
+        (mk_expr
+           (AilEcall (mk_expr (AilEident (Sym.fresh_named name)), List.map mk_expr vars)))
+    in
+    ( [ b ],
+      [ AilSdeclaration [ (x, Some (mk_expr (AilEcall (mk_expr (AilEident sym), es)))) ];
+        macro_call "CN_GEN_CALL_FROM" from_vars;
+        macro_call "CN_GEN_CALL_TO" to_vars
+      ],
+      mk_expr (AilEident x) )
   | Asgn { pointer; offset; sct; value; last_var; rest } ->
     let tmp_sym = Sym.fresh () in
     let bt = BT.Bits (Unsigned, 64) in
@@ -197,29 +219,6 @@ let rec compile_term
                       ] )))
         ]
     in
-    let s_special_cases =
-      match value with
-      | Call { fsym = _; iargs } ->
-        let wrap_to_string (sym : Sym.t) =
-          A.(
-            AilEcast
-              ( C.no_qualifiers,
-                C.pointer_to_char,
-                mk_expr
-                  (AilEstr (None, [ (Locations.other __LOC__, [ Sym.pp_string sym ]) ]))
-              ))
-        in
-        let from_vars = iargs |> List.map fst |> List.map wrap_to_string in
-        let to_vars = iargs |> List.map snd |> List.map wrap_to_string in
-        let macro_call name vars =
-          A.AilSexpr
-            (mk_expr
-               (AilEcall
-                  (mk_expr (AilEident (Sym.fresh_named name)), List.map mk_expr vars)))
-        in
-        [ macro_call "CN_GEN_LET_FROM" from_vars; macro_call "CN_GEN_LET_TO" to_vars ]
-      | _ -> []
-    in
     let b2, s2, e2 = compile_term sigma name value in
     let s3 =
       A.(
@@ -235,7 +234,7 @@ let rec compile_term
                                 (Option.value
                                    ~default:name
                                    (match value with
-                                    | Call { fsym; iargs } ->
+                                    | Call { fsym; iargs; oarg_bt = _ } ->
                                       Some
                                         (GenUtils.get_mangled_name
                                            (fsym :: List.map fst iargs))
@@ -245,7 +244,6 @@ let rec compile_term
                       ]
                     @ [ e2 ] )))
         ]
-        @ s_special_cases
         @ [ AilSexpr
               (mk_expr
                  (AilEcall
