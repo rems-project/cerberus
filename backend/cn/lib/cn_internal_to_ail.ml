@@ -115,12 +115,12 @@ let generate_error_msg_info_update_stats ?(cn_source_loc_opt = None) () =
         (mk_expr (AilEcall (mk_expr (AilEident update_fn_sym), [ cn_source_loc_arg ]))))
   ]
 
+
 let cn_pop_msg_info_sym = Sym.fresh_pretty "cn_pop_msg_info"
 
 let generate_cn_pop_msg_info =
-  let expr_ = A.(AilEcall (mk_expr (AilEident cn_pop_msg_info_sym), [ ])) in
+  let expr_ = A.(AilEcall (mk_expr (AilEident cn_pop_msg_info_sym), [])) in
   [ A.(AilSexpr (mk_expr expr_)) ]
-
 
 
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
@@ -130,8 +130,9 @@ let generate_cn_assert (*?(cn_source_loc_opt = None)*) ail_expr =
   let assertion_stat = A.(AilSexpr (mk_expr assertion_expr_)) in
   (*let error_msg_update_stats_ =
     generate_error_msg_info_update_stats ~cn_source_loc_opt ()
-  in*)
-  (*error_msg_update_stats_ @*) [ assertion_stat ]
+    in*)
+  (*error_msg_update_stats_ @*)
+  [ assertion_stat ]
 
 
 let rec bt_to_cn_base_type = function
@@ -1342,8 +1343,10 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.AilEcall (f, es) in
     (*let error_msg_update_stats_ =
       generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-    in*)
-    dest d (List.concat bs, List.concat ss (*@ error_msg_update_stats_*), mk_expr ail_expr_)
+      in*)
+    dest
+      d
+      (List.concat bs, List.concat ss (*@ error_msg_update_stats_*), mk_expr ail_expr_)
   | Let ((var, t1), body) ->
     let b1, s1, e1 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
@@ -2608,7 +2611,7 @@ let cn_to_ail_resource_internal
         in
         (*let error_msg_update_stats_ =
           generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-        in*)
+          in*)
         let fcall =
           A.(
             AilEcall
@@ -2715,7 +2718,7 @@ let cn_to_ail_resource_internal
         in
         (*let error_msg_update_stats_ =
           generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-        in*)
+          in*)
         let fcall =
           A.(
             AilEcall
@@ -3034,8 +3037,10 @@ let cn_to_ail_predicate_internal
       in
       let ss =
         (*let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some rp_def.loc) () in
-        let pop_s = generate_cn_pop_msg_info in*)
-        (*upd_s @*) ss (*@ pop_s*)
+          let pop_s = generate_cn_pop_msg_info in*)
+        (*upd_s @*)
+        ss
+        (*@ pop_s*)
       in
       (match c.guard with
        | IT (Const (Bool true), _, _) ->
@@ -3152,11 +3157,16 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
   | LRT.I -> ([], [])
 
 
-let cn_to_ail_post_internal (*loc*) dts globals preds (RT.Computational (_bound, _oinfo, t)) =
+let cn_to_ail_post_internal
+  (*loc*) dts
+  globals
+  preds
+  (RT.Computational (_bound, _oinfo, t))
+  =
   (*let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
-  let pop_s = generate_cn_pop_msg_info in*)
+    let pop_s = generate_cn_pop_msg_info in*)
   let bs, ss = cn_to_ail_post_aux_internal dts globals preds t in
-  (bs, List.map mk_stmt ((*upd_s @*) ss (*@ pop_s*)))
+  (bs, List.map mk_stmt (*upd_s @*) ss (*@ pop_s*))
 
 
 (* TODO: Add destination passing *)
