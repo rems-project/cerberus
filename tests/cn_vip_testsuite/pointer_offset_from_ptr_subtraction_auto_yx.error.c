@@ -7,15 +7,18 @@ int main() {
   int y=2, x=1;
   int *p = &x;
   int *q = &y;
-  ptrdiff_t offset = q - p;
+  ptrdiff_t offset = q - p; // CN VIP UB
   int *r = p + offset;
-  /*CN_VIP*/unsigned char* r_bytes = owned_int_ptr_to_owned_uchar_arr(&r);
-  /*CN_VIP*/unsigned char* q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
-  /*CN_VIP*/int result = _memcmp(r_bytes, q_bytes, sizeof(r));
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(r_bytes); @*/
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&r); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*/int result = _memcmp((unsigned char*)&r, (unsigned char*)&q, sizeof(r));
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&r); @*/
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+#ifdef NO_ROUND_TRIP
+  /*CN_VIP*/r = __cerbvar_copy_alloc_id((uintptr_t)r, &x);
+#endif
   if (result == 0) {
-    *r = 11; // is this free of UB?
+    *r = 11;
     //CN_VIP printf("y=%d *q=%d *r=%d\n",y,*q,*r);
   }
 }

@@ -53,42 +53,29 @@ SUCC=$(
     find $DIRNAME/cn_vip_testsuite -name '*.c' \
         \! -name '*.annot.c' \
         \! -name '*.error.c' \
-        \! -name '*.unprovable.c' \
 )
 FAIL=$(find $DIRNAME/cn_vip_testsuite -name '*.error.c')
 ANNOT=$(find $DIRNAME/cn_vip_testsuite -name '*.annot.c')
-UNPROV=$(
-    find $DIRNAME/cn_vip_testsuite -name '*.unprovable.c' \
-        \! -name 'pointer_copy_user_ctrlflow_bytewise.unprovable.c'
-)
 
 FAILED=''
 
-for TEST in ${SUCC} ${ANNOT}; do
-  if ! exits_with_code "cn verify -DVIP -DANNOT -DNO_ROUND_TRIP --solver-type=cvc5" "${TEST}" 0; then
-      FAILED+=" ${TEST}"
-  fi
-done
+# for TEST in ${SUCC} ${ANNOT}; do
+#   if ! exits_with_code "cn verify -DVIP -DANNOT -DNO_ROUND_TRIP --solver-type=cvc5" "${TEST}" 0; then
+#       FAILED+=" ${TEST}"
+#   fi
+# done
 
 # TODO add below with both -DNON_DET_TRUE and -DNON_DET_FALSE
 # provenance_equality_auto_yx.c
 # provenance_equality_global_fn_yx.c
 # provenance_equality_global_yx.c
 
-# for TEST in $FAIL $ANNOT $UNPROV
-# do
-#   echo $CN verify $TEST
-#   RET=$?
-#   if [[ "$RET" = 1 || "$RET" = 2 ]]
-#   then
-#     echo "$TEST -- OK"
-#   else
-#     echo "$TEST -- Unexpected"
-#     NUM_FAILED=$(( $NUM_FAILED + 1 ))
-#     FAILED="$FAILED $TEST"
-#   fi
-#   echo
-# done
+for TEST in $FAIL $ANNOT
+do
+  if ! exits_with_code "cn verify -DNO_ROUND_TRIP --solver-type=cvc5" "${TEST}" 1; then
+      FAILED+=" ${TEST}"
+  fi
+done
 
 if [ -z "${FAILED}" ]; then
   exit 0

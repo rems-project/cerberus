@@ -1406,9 +1406,10 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 | Array (item_ty, _) -> Memory.size_of_ctype item_ty
                 | ct -> Memory.size_of_ctype ct
               in
+              let ub = CF.Undefined.UB048_disjoint_array_pointers_subtraction in
+              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
               let ub_unspec = CF.Undefined.UB_unspec_pointer_sub in
               let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
               let@ () =
                 check_live_alloc_bounds `Ptr_diff loc arg1 ub (both_in_bounds arg1 arg2)
               in
