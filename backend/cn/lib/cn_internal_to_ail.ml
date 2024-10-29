@@ -461,6 +461,7 @@ let wrap_with_convert_from ?sct ail_expr_ bt =
 
 let get_equality_fn_call bt e1 e2 _dts =
   match bt with
+  (* TODO (RB) Check if buggy: https://github.com/rems-project/cerberus/pull/652 *)
   | BT.Map (_, val_bt) ->
     let val_ctype_with_ptr = bt_to_ail_ctype val_bt in
     let val_ctype = get_ctype_without_ptr val_ctype_with_ptr in
