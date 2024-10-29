@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-signed long cn_stack_depth;
+extern signed long cn_stack_depth;
 
 enum cn_logging_level {
     CN_LOGGING_NONE = 0,
