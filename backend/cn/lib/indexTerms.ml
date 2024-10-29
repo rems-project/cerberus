@@ -717,14 +717,18 @@ let gtPointer_ (it, it') loc = ltPointer_ (it', it) loc
 
 let gePointer_ (it, it') loc = lePointer_ (it', it) loc
 
-let cast_ bt it loc = IT (Cast (bt, it), bt, loc)
+let cast_ bt' it loc = if BT.equal bt' (bt it) then it else IT (Cast (bt', it), bt', loc)
 
 let uintptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
 
 let uintptr_int_ n loc = uintptr_const_ (Z.of_int n) loc
 (* for integer-mode: z_ n *)
 
-let addr_ it loc = cast_ Memory.uintptr_bt it loc
+let addr_ it loc =
+  assert (BT.equal (bt it) (Loc ()));
+  cast_ Memory.uintptr_bt it loc
+
+
 (* for integer-mode: cast_ Integer it *)
 
 let allocId_ it loc = cast_ Alloc_id it loc

@@ -13,6 +13,7 @@ int main()
   uintptr_t uy = (uintptr_t)&y;
   uintptr_t offset = 4;
   ux = ux + offset;
+  /*@ apply assert_equal((u64) ux, uy); @*/
 #if defined(ANNOT)
   int *p = copy_alloc_id(ux, &y);
 #else
@@ -21,11 +22,15 @@ int main()
   int *q = &y;
   //CN_VIP printf("Addresses: &x=%p p=%p &y=%"PRIxPTR\
          "\n",(void*)&x,(void*)p,(unsigned long)uy);
-  /*CN_VIP*/unsigned char* p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
-  /*CN_VIP*/unsigned char* q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
-  /*CN_VIP*/int result = _memcmp(p_bytes, q_bytes, sizeof(p));
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(p_bytes); @*/
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*/int result = _memcmp((unsigned char*)&p, (unsigned char*)&q, sizeof(p));
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+#ifdef NO_ROUND_TRIP
+  /*CN_VIP*/p = copy_alloc_id((uintptr_t)p, &y);
+  /*CN_VIP*/q = copy_alloc_id((uintptr_t)q, &y); // for *q in assertion
+#endif
   if (result == 0) {
     *p = 11; // does this have undefined behaviour?
     /*CN_VIP*//*@ assert(x == 1i32 && y == 11i32 && *p == 11i32 && *q == 11i32); @*/

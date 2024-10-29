@@ -14,17 +14,18 @@ int main()
   uintptr_t i2 = i1 & 0x00000000FFFFFFFF;//
   uintptr_t i3 = i2 & 0xFFFFFFFF00000000;// (@1,0x0)
   uintptr_t i4 = i3 + ADDR_PLE_1;        // (@1,ADDR_PLE_1)
-#if defined(ANNOT)
+  /*@ apply assert_equal(i4, (u64)&x); @*/
+#ifdef ANNOT
   int *q = copy_alloc_id(i4, p);
 #else
   int *q = (int *)i4;
 #endif
   //CN_VIP printf("Addresses: p=%p\n",(void*)p);
-  /*CN_VIP*/unsigned char* i1_bytes = owned_uintptr_t_to_owned_uchar_arr(&i1);
-  /*CN_VIP*/unsigned char* i4_bytes = owned_uintptr_t_to_owned_uchar_arr(&i4);
-  /*CN_VIP*/int result = _memcmp(i1_bytes, i4_bytes, sizeof(i1));
-  /*CN_VIP*//*@ apply byte_ptr_to_uintptr_t(i1_bytes); @*/
-  /*CN_VIP*//*@ apply byte_ptr_to_uintptr_t(i4_bytes); @*/
+  /*CN_VIP*//*@ to_bytes Owned<uintptr_t>(&i1); @*/
+  /*CN_VIP*//*@ to_bytes Owned<uintptr_t>(&i4); @*/
+  /*CN_VIP*/int result = _memcmp((unsigned char*)&i1, (unsigned char*)&i4, sizeof(i1));
+  /*CN_VIP*//*@ from_bytes Owned<uintptr_t>(&i1); @*/
+  /*CN_VIP*//*@ from_bytes Owned<uintptr_t>(&i4); @*/
   if (result == 0) {
     *q = 11;  // does this have defined behaviour?
     /*CN_VIP*//*@ assert(x == 11i32 && *p == 11i32 && *q == 11i32); @*/
