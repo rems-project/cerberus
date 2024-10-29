@@ -22,16 +22,18 @@ int main()
   int *q = &y;
   /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
   /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
-  /*CN_VIP*/int result = _memcmp((unsigned char*)&p, (unsigned char*)&q, sizeof(p));
+  /*CN_VIP*/int result = _memcmp((unsigned char *)&p, (unsigned char *)&q, sizeof(p));
   /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
   /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
 #ifdef NO_ROUND_TRIP
-  /*CN_VIP*/p = copy_alloc_id((uintptr_t)p, &y);
+#ifdef ANNOT
+  /*CN_VIP*/p = copy_alloc_id((uintptr_t)p, &y); // p has empty prov outside of annot
+#endif
   /*CN_VIP*/q = copy_alloc_id((uintptr_t)q, &y); // for *q in assertion
 #endif
   if (result == 0) {
-    *p = 11; // is this free of UB?
+    *p = 11; // CN VIP UB (no annot)
     //CN_VIP printf("x=%d y=%d *p=%d *q=%d\n",x,y,*p,*q);
-    /*@ assert (x == 1i32 && y == 11i32 && *p == 11i32 && *q == 11i32); @*/
+    /*CN_VIP*//*@ assert(x == 1i32 && y == 11i32 && *p == 11i32 && *q == 11i32); @*/
   }
 }
