@@ -18,9 +18,9 @@ int main()
     (((uintptr_t)&(x[0])) + ((uintptr_t)&(y[1])))
     -((uintptr_t)&(y[0])) );
 #endif
-  *p = 11;  // is this free of undefined behaviour?
+  *p = 11;  // CN VIP UB (no annot)
   //(equivalent to the &x[0]+(&(y[1])-&(y[0])) version?)
-  /*CN_VIP*//*@ assert(x[1u64] == 11i32 && *p == 11i32); @*/
   //CN_VIP printf("x[1]=%d *p=%d\n",x[1],*p);
+  /*CN_VIP*//*@ assert(x[1u64] == 11i32 && *p == 11i32); @*/
   return 0;
 }

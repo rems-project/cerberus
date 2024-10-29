@@ -14,7 +14,7 @@ int main()
   uintptr_t offset = 4;
   ux = ux + offset;
   /*@ apply assert_equal((u64) ux, uy); @*/
-#if defined(ANNOT)
+#ifdef ANNOT
   int *p = copy_alloc_id(ux, &y);
 #else
   int *p = (int *)ux; // does this have undefined behaviour?
@@ -28,12 +28,14 @@ int main()
   /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
   /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
 #ifdef NO_ROUND_TRIP
+#ifdef ANNOT
   /*CN_VIP*/p = copy_alloc_id((uintptr_t)p, &y);
+#endif
   /*CN_VIP*/q = copy_alloc_id((uintptr_t)q, &y); // for *q in assertion
 #endif
   if (result == 0) {
-    *p = 11; // does this have undefined behaviour?
-    /*CN_VIP*//*@ assert(x == 1i32 && y == 11i32 && *p == 11i32 && *q == 11i32); @*/
+    *p = 11; // CN VIP UB (no annot)
     //CN_VIP printf("x=%d  y=%d  *p=%d  *q=%d\n",x,y,*p,*q);
+    /*CN_VIP*//*@ assert(x == 1i32 && y == 11i32 && *p == 11i32 && *q == 11i32); @*/
   }
 }

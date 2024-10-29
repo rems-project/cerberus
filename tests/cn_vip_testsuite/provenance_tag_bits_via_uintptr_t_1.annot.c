@@ -17,7 +17,7 @@ int main()
   // construct an integer like &x with low-order bit set
   i = i | 1u;
   // cast back to a pointer
-#if defined(ANNOT)
+#ifdef ANNOT
   int *q = copy_alloc_id(i, p);
 #else
   int *q = (int *) i; // does this have defined behaviour?
@@ -25,14 +25,14 @@ int main()
   // cast to integer and mask out the low-order two bits
   uintptr_t j = ((uintptr_t)q) & ~((uintptr_t)3u);
   // cast back to a pointer
-#if defined(ANNOT)
+#ifdef ANNOT
   int *r = copy_alloc_id(j, p);
 #else
   int *r = (int *) j;
 #endif
   // are r and p now equivalent?
-  *r = 11;           //  does this have defined behaviour?
+  *r = 11;           //  CN VIP UB (no annot)
   _Bool b = (r==p);  //  is this true?
-  /*CN_VIP*//*@ assert (x == 11i32 && *r == 11i32 && b == 1u8); @*/
   //CN_VIP printf("x=%i *r=%i (r==p)=%s\n",x,*r,b?"true":"false");
+  /*CN_VIP*//*@ assert(x == 11i32 && *r == 11i32 && b == 1u8); @*/
 }

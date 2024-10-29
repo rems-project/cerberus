@@ -33,12 +33,12 @@ int main()
     else
       j = j;
   }
-#if defined(ANNOT)
+#ifdef ANNOT
   q = copy_alloc_id(j, &x);
 #else
   q = (int *)j;
 #endif
-  *q = 11; // is this free of undefined behaviour?
-  /*CN_VIP*//*@ assert(*p == 11i32 && *q == 11i32); @*/
+  *q = 11; // CN VIP UB (no annot)
   //CN_VIP printf("*p=%d  *q=%d\n",*p,*q);
+  /*CN_VIP*//*@ assert(*p == 11i32 && *q == 11i32); @*/
 }
