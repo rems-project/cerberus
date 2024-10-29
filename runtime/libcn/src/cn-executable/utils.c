@@ -134,10 +134,12 @@ void initialise_ghost_stack_depth(void) {
     cn_stack_depth = 0;
 }
 
+signed long get_cn_stack_depth(void) {
+    return cn_stack_depth;
+}
+
 void ghost_stack_depth_incr(void) {
     cn_stack_depth++;
-    // update_error_message_info(0);
-    // print_error_msg_info();
 }
 
 

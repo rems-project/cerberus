@@ -91,10 +91,10 @@ def gen_instr_cmd(f, input_basename):
 def gen_compile_cmd(input_basename, instrumented):
     c_files = input_basename + "-exec.c cn.c" if instrumented else tests_path + "/" + input_basename + ".c "
     if not instrumented:
-        c_files += "header.c"
+        c_files += "cn_uninstr_defs.c"
     compile_cmd = time_cmd_str + "cc "
     if not instrumented:
-        compile_cmd += "-I " + "header.h "
+        compile_cmd += "-I " + "cn_uninstr_defs.h "
     compile_cmd += "-g -c "
     if instrumented:
         compile_cmd += "-I" + runtime_prefix + "/include/ "
@@ -104,13 +104,13 @@ def gen_compile_cmd(input_basename, instrumented):
 def gen_link_cmd(input_basename, instrumented):
     o_files = input_basename + "-exec.o cn.o " if instrumented else input_basename + ".o "
     if not instrumented:
-        o_files += " header.o "
+        o_files += " cn_uninstr_defs.o "
     bin_file = input_basename + "-exec-output.bin " if instrumented else input_basename + "-output.bin "
     link_cmd = time_cmd_str + "cc "
     if instrumented:
         link_cmd += "-I" + runtime_prefix + "/include "
     if not instrumented:
-        link_cmd += "-I " + "header.h "
+        link_cmd += "-I " + "cn_uninstr_defs.h "
     link_cmd += "-o " + bin_file + o_files
     if instrumented:
         link_cmd += runtime_prefix + "/libcn.a"

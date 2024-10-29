@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-extern signed long cn_stack_depth;
+signed long cn_stack_depth;
 
 enum cn_logging_level {
     CN_LOGGING_NONE = 0,
@@ -125,6 +125,7 @@ typedef hash_table cn_map;
 
 void initialise_ownership_ghost_state(void);
 void initialise_ghost_stack_depth(void);
+signed long get_cn_stack_depth(void);
 void ghost_stack_depth_incr(void);
 void ghost_stack_depth_decr(void);
 
@@ -563,7 +564,7 @@ static inline void cn_postfix(void *ptr, size_t size)
   ({                                                          \
     typeof(LV) *__tmp = &(LV);                                \
     update_cn_error_message_info_access_check(NULL);          \
-    c_ownership_check("Load", (uintptr_t) __tmp, sizeof(typeof(LV)), cn_stack_depth); \
+    c_ownership_check("Load", (uintptr_t) __tmp, sizeof(typeof(LV)), get_cn_stack_depth()); \
     cn_load(__tmp, sizeof(typeof(LV)));                       \
     *__tmp;                                                   \
   })
@@ -573,7 +574,7 @@ static inline void cn_postfix(void *ptr, size_t size)
     typeof(LV) *__tmp;                                        \
     __tmp = &(LV);                                            \
     update_cn_error_message_info_access_check(NULL);          \
-    c_ownership_check("Store", (uintptr_t) __tmp, sizeof(typeof(LV)), cn_stack_depth); \
+    c_ownership_check("Store", (uintptr_t) __tmp, sizeof(typeof(LV)), get_cn_stack_depth()); \
     cn_store(__tmp, sizeof(typeof(LV)));                      \
     *__tmp op##= (X);                                         \
  })
@@ -585,7 +586,7 @@ static inline void cn_postfix(void *ptr, size_t size)
     typeof(LV) *__tmp;                                        \
     __tmp = &(LV);                                            \
     update_cn_error_message_info_access_check(NULL);          \
-    c_ownership_check("Postfix operation", (uintptr_t) __tmp, sizeof(typeof(LV)), cn_stack_depth); \
+    c_ownership_check("Postfix operation", (uintptr_t) __tmp, sizeof(typeof(LV)), get_cn_stack_depth()); \
     cn_postfix(__tmp, sizeof(typeof(LV)));                    \
     (*__tmp) OP;                                              \
  })
