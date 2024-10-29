@@ -13,20 +13,31 @@ int main()
   int *q = &y;
   uintptr_t i = (uintptr_t)p;
   uintptr_t j = (uintptr_t)q;
-  /*CN_VIP*/unsigned char* p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
-  /*CN_VIP*/unsigned char* q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
-  /*CN_VIP*/int result = _memcmp(p_bytes, q_bytes, sizeof(p));
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(p_bytes); @*/
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
-  if (result == 0) {
-#if defined(ANNOT)
-    int *r = copy_alloc_id(i, q);
-#else
-    int *r = (int *)i;
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*/int result = _memcmp((unsigned char*)&p, (unsigned char*)&q, sizeof(p));
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+#ifdef NO_ROUND_TRIP
+  /*CN_VIP*/p = copy_alloc_id((uintptr_t)p, &x);
+  /*CN_VIP*/q = copy_alloc_id((uintptr_t)q, &y);
 #endif
-    *r=11;
-    r=r-1;  // is this free of UB?
-    *r=12;  // and this?
+  if (result == 0) {
+#ifdef ANNOT
+    int *r = copy_alloc_id(i, q); // CN VIP UB if ¬NO_ROUND_TRIP & ANNOT
+# else
+    int *r = (int *)i;
+#ifdef NO_ROUND_TRIP
+    /*CN_VIP*/r = copy_alloc_id((uintptr_t)r, p);
+#endif
+#endif
+    *r=11;  // CN VIP UB if ¬ANNOT
+    r=r-1;  // CN VIP UB if NO_ROUND TRIP && ANNOT
+    *r=12;
     //CN_VIP printf("x=%d y=%d *q=%d *r=%d\n",x,y,*q,*r);
   }
 }
+
+/* NOTE: see tests/pvni_testsuite for why what
+   vip_artifact/evaluation_cerberus/results.pdf expects for this test is probably
+   wrong. */

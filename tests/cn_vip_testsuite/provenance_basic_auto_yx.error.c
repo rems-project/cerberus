@@ -7,13 +7,16 @@ int main() {
   int *p = &x + 1;
   int *q = &y;
   //CN_VIP printf("Addresses: p=%p q=%p\n",(void*)p,(void*)q);
-  /*CN_VIP*/unsigned char* p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
-  /*CN_VIP*/unsigned char* q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
-  /*CN_VIP*/int result = _memcmp(p_bytes, q_bytes, sizeof(p));
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(p_bytes); @*/
-  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*/int result = _memcmp((unsigned char*)&p, (unsigned char*)&q, sizeof(p));
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+#ifdef NO_ROUND_TRIP
+  /*CN_VIP*/p = __cerbvar_copy_alloc_id((uintptr_t)p, &x);
+#endif
   if (result == 0) {
-    *p = 11;  // does this have undefined behaviour?
+    *p = 11;  // CN VIP UB
     //CN_VIP printf("x=%d y=%d *p=%d *q=%d\n",x,y,*p,*q);
   }
 }

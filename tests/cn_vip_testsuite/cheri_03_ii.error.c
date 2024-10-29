@@ -3,7 +3,7 @@ int main() {
   int x[2];
   int *p = &x[0];
   //is this free of undefined behaviour?
-  int *q = p + 11;
+  int *q = p + 11; // CN VIP UB
   q = q - 10;
   *q = 1;
   //CN_VIP printf("x[1]=%i  *q=%i\n",x[1],*q);
