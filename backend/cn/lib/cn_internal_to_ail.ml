@@ -1388,45 +1388,30 @@ let rec cn_to_ail_expr_aux_internal
       | [] -> assert false
     in
     let transform_switch_expr e = A.(AilEmemberofptr (e, Id.id "tag")) in
-    (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
     (* Matrix algorithm for pattern compilation *)
     let rec translate
-      :  int -> IT.t list -> (BT.t IT.pattern list * IT.t) list ->
+      :  int -> IT.t list -> (BT.t IT.pattern list * IT.t) list -> Sym.sym ->
       A.bindings * _ A.statement_ list
       =
-      fun count vars cases ->
-      let result_sym = Sym.fresh () in
-      let _result_ident = A.(AilEident result_sym) in
-      let _result_binding = create_binding result_sym (bt_to_ail_ctype basetype) in
-      let _result_decl = A.(AilSdeclaration [ (result_sym, None) ]) in
+      fun count vars cases res_sym ->
       match vars with
       | [] ->
         (match cases with
          | ([], t) :: _rest ->
-           let bs, ss =
-             match d with
-             | Assert loc ->
-               cn_to_ail_expr_aux_internal const_prop pred_name dts globals t (Assert loc)
-             | Return ->
-               cn_to_ail_expr_aux_internal const_prop pred_name dts globals t Return
-             | AssignVar x ->
-               cn_to_ail_expr_aux_internal
-                 const_prop
-                 pred_name
-                 dts
-                 globals
-                 t
-                 (AssignVar x)
-             | PassBack -> failwith "TODO Pattern Match PassBack"
-           in
-           (bs, ss)
+           cn_to_ail_expr_aux_internal
+             const_prop
+             pred_name
+             dts
+             globals
+             t
+             (AssignVar res_sym)
          | [] -> failwith "Incomplete pattern match"
          | (_ :: _, _e) :: _rest -> failwith "Redundant patterns")
       | term :: vs ->
         let cases = List.map (simplify_leading_variable term) cases in
         if List.for_all leading_wildcard cases then (
           let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
-          let bindings', stats' = translate count vs cases in
+          let bindings', stats' = translate count vs cases res_sym in
           (bindings', stats'))
         else (
           match IT.bt term with
@@ -1481,7 +1466,7 @@ let rec cn_to_ail_expr_aux_internal
                      (List.combine vars' bts)
                  in
                  let bindings, member_stats =
-                   translate (count + 1) (terms' @ vs) cases'
+                   translate (count + 1) (terms' @ vs) cases' res_sym
                  in
                  (* TODO: Check *)
                  let stat_block =
@@ -1528,12 +1513,12 @@ let rec cn_to_ail_expr_aux_internal
       : type a. IT.t list -> (BT.t IT.pattern list * IT.t) list -> a dest -> a
       =
       fun vars cases d ->
-      let bs, ss = translate 1 vars cases in
-      match d with
-      | Assert _ -> (bs, ss)
-      | Return -> (bs, ss)
-      | AssignVar _x -> failwith "TODO translate_real 1"
-      | PassBack -> failwith "TODO translate_real 2"
+      let result_sym = Sym.fresh () in
+      let result_ident = A.(AilEident result_sym) in
+      let result_binding = create_binding result_sym (bt_to_ail_ctype basetype) in
+      let result_decl = A.(AilSdeclaration [ (result_sym, None) ]) in
+      let bs, ss = translate 1 vars cases result_sym in
+      dest d (result_binding :: bs, result_decl :: ss, mk_expr result_ident)
     in
     let ps' = List.map (fun (p, t) -> ([ p ], t)) ps in
     translate_real [ t ] ps' d
