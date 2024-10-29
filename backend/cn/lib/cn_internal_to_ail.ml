@@ -116,15 +116,23 @@ let generate_error_msg_info_update_stats ?(cn_source_loc_opt = None) () =
   ]
 
 
+let cn_pop_msg_info_sym = Sym.fresh_pretty "cn_pop_msg_info"
+
+let generate_cn_pop_msg_info =
+  let expr_ = A.(AilEcall (mk_expr (AilEident cn_pop_msg_info_sym), [])) in
+  [ A.(AilSexpr (mk_expr expr_)) ]
+
+
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
-let generate_cn_assert ?(cn_source_loc_opt = None) ail_expr =
+let generate_cn_assert (*?(cn_source_loc_opt = None)*) ail_expr =
   let assertion_expr_ = A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ ail_expr ])) in
   let assertion_stat = A.(AilSexpr (mk_expr assertion_expr_)) in
-  let error_msg_update_stats_ =
+  (*let error_msg_update_stats_ =
     generate_error_msg_info_update_stats ~cn_source_loc_opt ()
-  in
-  error_msg_update_stats_ @ [ assertion_stat ]
+    in*)
+  (*error_msg_update_stats_ @*)
+  [ assertion_stat ]
 
 
 let rec bt_to_cn_base_type = function
@@ -689,8 +697,10 @@ let dest_with_unit_check
   fun d (b, s, e, is_unit) ->
   match d with
   | Assert loc ->
-    let assert_stmts = generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
-    (b, s @ assert_stmts)
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
+    let assert_stmts = generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e in
+    (b, s @ upd_s @ assert_stmts @ pop_s)
   | Return ->
     let return_stmt = if is_unit then A.(AilSreturnVoid) else A.(AilSreturn e) in
     (b, s @ [ return_stmt ])
@@ -855,7 +865,7 @@ let rec cn_to_ail_expr_aux_internal
     a dest ->
     a
   =
-  fun const_prop pred_name dts globals (IT (term_, basetype, loc)) d ->
+  fun const_prop pred_name dts globals (IT (term_, basetype, _loc)) d ->
   match term_ with
   | Const const ->
     let ail_expr_, is_unit = cn_to_ail_const_internal const in
@@ -1331,10 +1341,12 @@ let rec cn_to_ail_expr_aux_internal
     let bs, ss, es = list_split_three bs_ss_es in
     let f = mk_expr A.(AilEident sym) in
     let ail_expr_ = A.AilEcall (f, es) in
-    let error_msg_update_stats_ =
+    (*let error_msg_update_stats_ =
       generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-    in
-    dest d (List.concat bs, List.concat ss @ error_msg_update_stats_, mk_expr ail_expr_)
+      in*)
+    dest
+      d
+      (List.concat bs, List.concat ss (*@ error_msg_update_stats_*), mk_expr ail_expr_)
   | Let ((var, t1), body) ->
     let b1, s1, e1 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
@@ -2542,7 +2554,7 @@ let cn_to_ail_resource_internal
   dts
   globals
   (preds : (Sym.t * RP.definition) list)
-  loc
+  _loc
   =
   let calculate_return_type = function
     | ResourceTypes.Owned (sct, _) ->
@@ -2597,9 +2609,9 @@ let cn_to_ail_resource_internal
           list_split_three
             (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) p.iargs)
         in
-        let error_msg_update_stats_ =
+        (*let error_msg_update_stats_ =
           generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-        in
+          in*)
         let fcall =
           A.(
             AilEcall
@@ -2608,7 +2620,7 @@ let cn_to_ail_resource_internal
         let binding = create_binding sym (bt_to_ail_ctype ~pred_sym:(Some pname) bt) in
         ( mk_expr fcall,
           binding :: List.concat bs,
-          List.concat ss @ error_msg_update_stats_,
+          List.concat ss (*@ error_msg_update_stats_*),
           None )
     in
     let s_decl =
@@ -2704,9 +2716,9 @@ let cn_to_ail_resource_internal
           list_split_three
             (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) q.iargs)
         in
-        let error_msg_update_stats_ =
+        (*let error_msg_update_stats_ =
           generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-        in
+          in*)
         let fcall =
           A.(
             AilEcall
@@ -2714,7 +2726,7 @@ let cn_to_ail_resource_internal
                 (mk_expr (AilEident ptr_add_sym) :: es) @ [ mk_expr (AilEident enum_sym) ]
               ))
         in
-        (mk_expr fcall, List.concat bs, List.concat ss @ error_msg_update_stats_, None)
+        (mk_expr fcall, List.concat bs, List.concat ss (*@ error_msg_update_stats_*), None)
     in
     let typedef_name = get_typedef_string (bt_to_ail_ctype i_bt) in
     let incr_func_name =
@@ -2981,14 +2993,18 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LAT.Resource ((name, (ret, _bt)), (loc, _str_opt), lat) ->
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
     let b1, s1 =
       cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret
     in
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
-    (b1 @ b2, s1 @ s2)
+    (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
   | LAT.Constraint (lc, (loc, _str_opt), lat) ->
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
-    let ss = s @ generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
+    let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2, ss @ s2)
   | LAT.I it ->
@@ -3018,6 +3034,13 @@ let cn_to_ail_predicate_internal
           globals
           preds
           c.packing_ft
+      in
+      let ss =
+        (*let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some rp_def.loc) () in
+          let pop_s = generate_cn_pop_msg_info in*)
+        (*upd_s @*)
+        ss
+        (*@ pop_s*)
       in
       (match c.guard with
        | IT (Const (Bool true), _, _) ->
@@ -3114,6 +3137,8 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
     (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LRT.Resource ((name, (re, bt)), (loc, _str_opt), t) ->
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
     let b1, s1 =
       cn_to_ail_resource_internal ~is_pre:false new_name dts globals preds loc re
     in
@@ -3121,18 +3146,27 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
       Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, bt, new_name) t
     in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
-    (b1 @ b2, s1 @ s2)
+    (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
   | LRT.Constraint (lc, (loc, _str_opt), t) ->
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
-    let ss = s @ generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
+    let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds t in
     (b1 @ b2, ss @ s2)
   | LRT.I -> ([], [])
 
 
-let cn_to_ail_post_internal dts globals preds (RT.Computational (_bound, _oinfo, t)) =
+let cn_to_ail_post_internal
+  (*loc*) dts
+  globals
+  preds
+  (RT.Computational (_bound, _oinfo, t))
+  =
+  (*let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in*)
   let bs, ss = cn_to_ail_post_aux_internal dts globals preds t in
-  (bs, List.map mk_stmt ss)
+  (bs, List.map mk_stmt (*upd_s @*) ss (*@ pop_s*))
 
 
 (* TODO: Add destination passing *)
@@ -3196,8 +3230,10 @@ let rec cn_to_ail_cnprog_internal_aux dts globals = function
   else
     ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), false) *)
   | Statement (loc, stmt) ->
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
     let (bs, ss), no_op = cn_to_ail_cnstatement_internal dts globals (Assert loc) stmt in
-    ((bs, ss), no_op)
+    ((bs, upd_s @ ss @ pop_s), no_op)
 
 
 let cn_to_ail_cnprog_internal dts globals cn_prog =
@@ -3206,11 +3242,13 @@ let cn_to_ail_cnprog_internal dts globals cn_prog =
 
 
 let cn_to_ail_statements dts globals (loc, cn_progs) =
+  let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+  let pop_s = generate_cn_pop_msg_info in
   let bs_and_ss =
     List.map (fun prog -> cn_to_ail_cnprog_internal dts globals prog) cn_progs
   in
   let bs, ss = List.split bs_and_ss in
-  (loc, (List.concat bs, List.concat ss))
+  (loc, (List.concat bs, upd_s @ List.concat ss @ pop_s))
 
 
 let prepend_to_precondition ail_executable_spec (b1, s1) =
@@ -3242,6 +3280,8 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
     in
     prepend_to_precondition ail_executable_spec (binding :: b1, decl :: s1)
   | LAT.Resource ((name, (ret, bt)), (loc, _str_opt), lat) ->
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let b1, s1 =
       cn_to_ail_resource_internal ~is_pre:true new_name dts globals preds loc ret
@@ -3258,10 +3298,12 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
         c_return_type
         new_lat
     in
-    prepend_to_precondition ail_executable_spec (b1, s1)
+    prepend_to_precondition ail_executable_spec (b1, upd_s @ s1 @ pop_s)
   | LAT.Constraint (lc, (loc, _str_opt), lat) ->
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
-    let ss = s @ generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
+    let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
     let ail_executable_spec =
       cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type lat
     in

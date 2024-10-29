@@ -39,6 +39,7 @@ struct cn_error_message_info {
     char *file_name;
     int line_number;
     char *cn_source_loc;
+    struct cn_error_message_info *parent;
 };
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number);
@@ -47,12 +48,14 @@ void initialise_error_msg_info_(const char *function_name, char *file_name, int 
 
 
 /* TODO: Implement */
-struct cn_error_messages {
+/*struct cn_error_messages {
     struct cn_error_message_info *top_level_error_msg_info;
     struct cn_error_message_info *nested_error_msg_info;
-};
+};*/
 
 void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc);
+
+void cn_pop_msg_info();
 
 #define update_cn_error_message_info(x)\
     update_error_message_info_(__func__, __FILE__, __LINE__ + 1, x)
@@ -120,6 +123,7 @@ typedef hash_table cn_map;
 
 void initialise_ownership_ghost_state(void);
 void initialise_ghost_stack_depth(void);
+signed long get_cn_stack_depth(void);
 void ghost_stack_depth_incr(void);
 void ghost_stack_depth_decr(void);
 
@@ -522,13 +526,13 @@ void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun);
 void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size);
 
 /* C ownership checking */
-void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size);
-void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size);
-void c_ownership_check(uintptr_t generic_c_ptr, int offset);
+void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack_depth);
+void c_remove_from_ghost_state(uintptr_t ptr_to_local, size_t size);
+void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, signed long expected_stack_depth);
 
 // Unused 
 #define c_concat_with_mapping_stat(STAT, CTYPE, VAR_NAME, GHOST_STATE, STACK_DEPTH)\
-    STAT; c_add_local_to_ghost_state((uintptr_t) &VAR_NAME, GHOST_STATE, sizeof(CTYPE), STACK_DEPTH);
+    STAT; c_add_to_ghost_state((uintptr_t) &VAR_NAME, GHOST_STATE, sizeof(CTYPE), STACK_DEPTH);
 
 #define c_declare_and_map_local(CTYPE, VAR_NAME)\
     c_concat_with_mapping_stat(CTYPE VAR_NAME, CTYPE, VAR_NAME)
@@ -558,7 +562,7 @@ static inline void cn_postfix(void *ptr, size_t size)
   ({                                                          \
     typeof(LV) *__tmp = &(LV);                                \
     update_cn_error_message_info_access_check(NULL);          \
-    c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
+    c_ownership_check("Load", (uintptr_t) __tmp, sizeof(typeof(LV)), get_cn_stack_depth()); \
     cn_load(__tmp, sizeof(typeof(LV)));                       \
     *__tmp;                                                   \
   })
@@ -568,7 +572,7 @@ static inline void cn_postfix(void *ptr, size_t size)
     typeof(LV) *__tmp;                                        \
     __tmp = &(LV);                                            \
     update_cn_error_message_info_access_check(NULL);          \
-    c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
+    c_ownership_check("Store", (uintptr_t) __tmp, sizeof(typeof(LV)), get_cn_stack_depth()); \
     cn_store(__tmp, sizeof(typeof(LV)));                      \
     *__tmp op##= (X);                                         \
  })
@@ -580,7 +584,7 @@ static inline void cn_postfix(void *ptr, size_t size)
     typeof(LV) *__tmp;                                        \
     __tmp = &(LV);                                            \
     update_cn_error_message_info_access_check(NULL);          \
-    c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
+    c_ownership_check("Postfix operation", (uintptr_t) __tmp, sizeof(typeof(LV)), get_cn_stack_depth()); \
     cn_postfix(__tmp, sizeof(typeof(LV)));                    \
     (*__tmp) OP;                                              \
  })
