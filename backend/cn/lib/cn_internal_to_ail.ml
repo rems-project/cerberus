@@ -1472,7 +1472,8 @@ let rec cn_to_ail_expr_aux_internal
                  let stat_block =
                    A.AilSblock
                      ( constr_binding :: bindings,
-                       constructor_var_assign :: List.map mk_stmt member_stats )
+                       (constructor_var_assign :: List.map mk_stmt member_stats)
+                       @ [ mk_stmt AilSbreak ] )
                  in
                  let tag_sym =
                    generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym
