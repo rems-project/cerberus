@@ -6,7 +6,6 @@ module RET = ResourceTypes
 module LC = LogicalConstraints
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
-open Option
 
 type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
@@ -231,20 +230,38 @@ let dtree dtree_i =
   in
   aux
 
-(*CHT*)
+(** Infrastructure for checking if a countermodel satisfies a predicate **)
+open ResultWithData
+
+type check_result = (LC.logical_constraint list, Pp.document) result_with_data
+let pp_check_result = pp_result_with_data (Pp.list LC.pp) (fun d -> d)
+
+let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
+  List.fold_left (fun acc elem -> match f elem with None -> acc | Some x -> x :: acc) [] l
+
+(* Gives a single canonical result *)
+let combine_results (results : check_result list)
+  : check_result =
+  match results with
+  | [] -> Error !^"Empty result list"
+  | h :: t ->
+    let combine = fun acc res -> match acc, res with
+      | Yes l, _ -> Yes l
+      | _, Yes l -> Yes l
+      | Error s, _ -> Error s
+      | _, Error s -> Error s
+      | Unknown s, _ -> Unknown s
+      | _, Unknown s -> Unknown s
+      | No s, _ -> No s
+    in
+    List.fold_left combine h t
+
 
 (* Type of nonterminal lines in a predicate clause.
   Corresponds to packing_ft *)
-type line =
+type def_line =
   | DefineL of (Sym.t * IT.t) * info
   | ResourceL of (Sym.t * (RET.t * BT.t)) * info
-  | ConstraintL of LC.t * info
-
-(* Variable-assignment dependency graph for predicate clauses *)
-(* this is really a DAG and so has duplicate nodes in tree form *)
-type dep_tree =
-  | UndefinedLT
-  | NodeLT of line * dep_tree IT.SymMap.t
 
 (* Optionally zip two lists, returning None if the lists have different lengths *)
 let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
@@ -265,175 +282,161 @@ let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a SymMap.t) (m2 : 'a SymMap.t) : 'a 
     if they produce different results for any symbol or if
     the lists have different lengths *)
 let map_from_lists f eq exps exps' =
-  let merge_o_maps o_acc (exp1, exp1') =
-    let@ acc = o_acc in
-    let@ x = f exp1 exp1' in
-    Some (merge_eq eq acc x)
+  let merge_r_maps r_acc (exp1, exp1') =
+    let@ acc = r_acc in
+    let@ combined = f exp1 exp1' in
+    Yes (merge_eq eq acc combined)
   in
-  let@ zipped = zip exps exps' in
-  List.fold_left merge_o_maps (Some SymMap.empty) zipped
+  match zip exps exps' with
+  | Some zipped -> List.fold_left merge_r_maps (Yes SymMap.empty) zipped
+  | None -> Error !^"Could not zip lists of expressions." (* should never happen *)
 
 (* Match an expression with free variables against a candidate returned by the solver to
-  get an assignment for those free variables *)
-(*CHT TODO: this assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
-let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
-  let map_from_IT_lists = map_from_lists get_assignment IT.equal in
+  get candidates for each of those free variables *)
+(* TODO: this is very naive right now;
+  it assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
+let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t SymMap.t, Pp.document) result_with_data =
+  let map_from_IT_lists = map_from_lists get_var_cands IT.equal in
   let sort_by_discard_fst compare l =
     List.map snd ( List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l) in
   let sort_by_id = sort_by_discard_fst Id.compare in
   let sort_by_pattern = sort_by_discard_fst (Terms.compare_pattern BT.compare) in
-  let map_with_guard g l1 l1' = if g then map_from_IT_lists l1 l1' else None in
+  let map_with_guard_unknown g l1 l1' = if g then map_from_IT_lists l1 l1' else (Unknown (Pp.bool g ^/^ !^" not satisfied")) in
+  let map_with_guard_no g l1 l1' = if g then map_from_IT_lists l1 l1' else (No (Pp.bool g ^/^ !^" not satisfied") ) in
+  let default = Unknown (!^"Different CN constructors for " ^/^ IT.pp exp ^/^ !^" and " ^/^ IT.pp candidate) in
   match IT.term exp, IT.term candidate with
-  | Const c, Const c' -> map_with_guard (IT.equal_const c c') [] []
-  | Sym v, _' -> Some (SymMap.add v candidate SymMap.empty)
+  | Const c, Const c' -> map_with_guard_no (IT.equal_const c c') [] []
+  | Sym v, _' -> Yes (SymMap.add v candidate SymMap.empty)
   | Unop (op, exp1), Unop (op', exp1') ->
-    map_with_guard (IT.equal_unop op op') [exp1] [exp1']
+    map_with_guard_unknown (IT.equal_unop op op') [exp1] [exp1']
   | Binop (op, exp1, exp2), Binop (op', exp1', exp2') ->
-    map_with_guard (IT.equal_binop op op') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (IT.equal_binop op op') [exp1; exp2] [exp1'; exp2']
   | ITE (exp1, exp2, exp3), ITE (exp1', exp2', exp3') ->
     map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | EachI ((z1, (v, bty), z2), exp1), EachI ((z1', (v', bty'), z2'), exp1') ->
-    map_with_guard (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') [exp1] [exp1']
+    map_with_guard_unknown (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') [exp1] [exp1']
   | Tuple exps, Tuple exps' -> map_from_IT_lists exps exps'
   | NthTuple (n, exp1), NthTuple (n', exp1') ->
-    map_with_guard (n = n') [exp1] [exp1']
+    map_with_guard_unknown (n = n') [exp1] [exp1']
   | Struct (name, fields), Struct (name', fields') ->
-    map_with_guard (Sym.equal name name') (sort_by_id fields) (sort_by_id fields')
+    map_with_guard_no (Sym.equal name name') (sort_by_id fields) (sort_by_id fields')
   | StructMember (exp1, id), StructMember (exp1', id') ->
-    map_with_guard (Id.equal id id') [exp1] [exp1']
+    map_with_guard_unknown (Id.equal id id') [exp1] [exp1']
   | StructUpdate ((exp1, id), exp2), StructUpdate ((exp1', id'), exp2') ->
-    map_with_guard (Id.equal id id') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (Id.equal id id') [exp1; exp2] [exp1'; exp2']
   | Record fields, Record fields' ->
     map_from_IT_lists (sort_by_id fields) (sort_by_id fields')
   | RecordMember (exp1, id), RecordMember (exp1', id') ->
-    map_with_guard (Id.equal id id') [exp1] [exp1']
+    map_with_guard_unknown (Id.equal id id') [exp1] [exp1']
   | RecordUpdate ((exp1, id), exp2), RecordUpdate ((exp1', id'), exp2') ->
-    map_with_guard (Id.equal id id') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (Id.equal id id') [exp1; exp2] [exp1'; exp2']
   | Constructor (name, args), Constructor (name', args') ->
-    map_with_guard (Sym.equal name name') (sort_by_id args) (sort_by_id args')
+    map_with_guard_no (Sym.equal name name') (sort_by_id args) (sort_by_id args')
   | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
-    map_with_guard (Sym.equal v v' && Id.equal id id') [exp1] [exp1']
+    map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [exp1] [exp1']
   | ArrayShift {base; ct; index}, ArrayShift {base=base'; ct=ct'; index=index'} ->
-    map_with_guard (Sctypes.equal ct ct') [base; index] [base'; index']
+    map_with_guard_unknown (Sctypes.equal ct ct') [base; index] [base'; index']
   | CopyAllocId {addr=exp1; loc=exp2}, CopyAllocId {addr=exp1'; loc=exp2'} ->
     map_from_IT_lists [exp1; exp2] [exp1'; exp2']
   | HasAllocId exp1, HasAllocId exp1' ->
-    get_assignment exp1 exp1'
+    get_var_cands exp1 exp1'
   | SizeOf cty, SizeOf cty' ->
-    map_with_guard (Sctypes.equal cty cty') [] []
+    map_with_guard_unknown (Sctypes.equal cty cty') [] []
   | OffsetOf (v, id), OffsetOf (v', id') ->
-    map_with_guard (Sym.equal v v' && Id.equal id id') [] []
+    map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [] []
   | Nil bty, Nil bty' ->
-    map_with_guard (BT.equal bty bty') [] []
+    map_with_guard_no (BT.equal bty bty') [] []
   | Cons (h, tl), Cons (h', tl') ->
     map_from_IT_lists [h; tl] [h'; tl']
   | Head l, Head l' ->
-    get_assignment l l'
+    get_var_cands l l'
   | Tail l, Tail l' ->
-    get_assignment l l'
+    get_var_cands l l'
   | NthList (exp1, exp2, exp3),  NthList (exp1', exp2', exp3') ->
     map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | ArrayToList (exp1, exp2, exp3), ArrayToList (exp1', exp2', exp3') ->
     map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | Representable (cty, exp1), Representable (cty', exp1') ->
-    map_with_guard (Sctypes.equal cty cty') [exp1] [exp1']
+    map_with_guard_unknown (Sctypes.equal cty cty') [exp1] [exp1']
   | Good (cty, exp1), Good (cty', exp1') ->
-    map_with_guard (Sctypes.equal cty cty') [exp1] [exp1']
+    map_with_guard_unknown (Sctypes.equal cty cty') [exp1] [exp1']
   | Aligned { t=exp1; align=exp2}, Aligned { t=exp1'; align=exp2'} ->
     map_from_IT_lists [exp1; exp2] [exp1'; exp2']
   | WrapI (ity, exp1), WrapI (ity', exp1') ->
-    map_with_guard (Cerb_frontend.IntegerType.integerTypeEqual ity ity') [exp1] [exp1']
+    map_with_guard_unknown (Cerb_frontend.IntegerType.integerTypeEqual ity ity') [exp1] [exp1']
   | MapConst (bty, exp1), MapConst (bty', exp1') ->
-    map_with_guard (BT.equal bty bty') [exp1] [exp1']
+    map_with_guard_unknown (BT.equal bty bty') [exp1] [exp1']
   | MapSet (exp1, exp2, exp3), MapSet (exp1', exp2', exp3') ->
     map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
   | MapGet (exp1, exp2), MapGet (exp1', exp2') ->
     map_from_IT_lists [exp1; exp2] [exp1'; exp2']
   | MapDef ((v, bty), exp1), MapDef ((v', bty'), exp1') ->
-    map_with_guard (Sym.equal v v' && BT.equal bty bty') [exp1] [exp1']
+    map_with_guard_unknown (Sym.equal v v' && BT.equal bty bty') [exp1] [exp1']
   | Apply (v, exps), Apply (v', exps') ->
-    map_with_guard (Sym.equal v v') exps exps'
+    map_with_guard_unknown (Sym.equal v v') exps exps'
   | Let ((v, exp1), exp2), Let ((v', exp1'), exp2') ->
-    map_with_guard (Sym.equal v v') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (Sym.equal v v') [exp1; exp2] [exp1'; exp2']
   | Match (exp1, pats), Match (exp1', pats') ->
     map_from_IT_lists (exp1 :: sort_by_pattern pats) (exp1' :: sort_by_pattern pats')
   | Cast (bt, exp1), Cast (bt', exp1') ->
-    map_with_guard (BT.equal bt bt') [exp1] [exp1']
+    map_with_guard_unknown (BT.equal bt bt') [exp1] [exp1']
   (* included so the compiler will catch any missing new constructors *)
-  | Const _, _ -> None
-  | Unop _, _ -> None
-  | Binop _, _-> None
-  | ITE _, _ -> None
-  | EachI _, _ -> None
-  | Tuple _, _ -> None
-  | NthTuple _, _ -> None
-  | Struct _, _ -> None
-  | StructMember _, _ -> None
-  | StructUpdate _, _ -> None
-  | Record _, _ -> None
-  | RecordMember _, _ -> None
-  | RecordUpdate _, _ -> None
-  | Constructor _, _ -> None
-  | MemberShift _, _ -> None
-  | ArrayShift _, _ -> None
-  | CopyAllocId _, _ -> None
-  | HasAllocId _, _ -> None
-  | SizeOf _, _ -> None
-  | OffsetOf _, _ -> None
-  | Nil _, _ -> None
-  | Cons _, _ -> None
-  | Head _, _ -> None
-  | Tail _, _ -> None
-  | NthList _, _ -> None
-  | ArrayToList _, _ -> None
-  | Representable _, _ -> None
-  | Good _, _ -> None
-  | Aligned _, _ -> None
-  | WrapI _, _ -> None
-  | MapConst _, _ -> None
-  | MapSet _, _ -> None
-  | MapGet _, _ -> None
-  | MapDef _, _ -> None
-  | Apply _, _ -> None
-  | Let _, _ -> None
-  | Match _, _ -> None
-  | Cast _, _ -> None
+  | Const _, _ -> default
+  | Unop _, _ -> default
+  | Binop _, _-> default
+  | ITE _, _ -> default
+  | EachI _, _ -> default
+  | Tuple _, _ -> default
+  | NthTuple _, _ -> default
+  | Struct _, _ -> default
+  | StructMember _, _ -> default
+  | StructUpdate _, _ -> default
+  | Record _, _ -> default
+  | RecordMember _, _ -> default
+  | RecordUpdate _, _ -> default
+  | Constructor _, _ -> default
+  | MemberShift _, _ -> default
+  | ArrayShift _, _ -> default
+  | CopyAllocId _, _ -> default
+  | HasAllocId _, _ -> default
+  | SizeOf _, _ -> default
+  | OffsetOf _, _ -> default
+  | Nil _, _ -> default
+  | Cons _, _ -> default
+  | Head _, _ -> default
+  | Tail _, _ -> default
+  | NthList _, _ -> default
+  | ArrayToList _, _ -> default
+  | Representable _, _ -> default
+  | Good _, _ -> default
+  | Aligned _, _ -> default
+  | WrapI _, _ -> default
+  | MapConst _, _ -> default
+  | MapSet _, _ -> default
+  | MapGet _, _ -> default
+  | MapDef _, _ -> default
+  | Apply _, _ -> default
+  | Let _, _ -> default
+  | Match _, _ -> default
+  | Cast _, _ -> default
 
 (* Get the free variables from an expression *)
 let get_fvs (exp : IT.t) : Sym.t list = SymSet.to_list (IT.free_vars exp)
 
-let rec to_tree_aux (lines : packing_ft) (defs : dep_tree SymMap.t) : IT.t * dep_tree IT.SymMap.t =
-  (* find the subgraph rooted at the line where the variable is defined *)
-  let add_children acc v = match (SymMap.find_opt v defs) with
-  | Some t -> SymMap.add v t acc
-  | None -> acc (* variable is not defined in lines; may be globally defined *)
-  in
-  (* build a map from all vs to the subgraphs rooted at the lines where they are defined *)
-  let get_subgraphs vs =
-    (List.fold_left add_children SymMap.empty vs) in
+let rec organize_lines_aux (lines : packing_ft) (defs : def_line SymMap.t) (lcs : LC.t list): IT.t * def_line IT.SymMap.t * (LC.t list) =
   match lines with
   | Define ((v, it), i, next) ->
-    let vs = get_fvs it in
     let ln = DefineL ((v, it), i) in
-    let root = NodeLT (ln, get_subgraphs vs) in
-    let new_defs = SymMap.add v root defs in
-    to_tree_aux next new_defs
+    let new_defs = SymMap.add v ln defs in
+    organize_lines_aux next new_defs lcs
   | Resource ((v, (rt, bt)), i, next) ->
-    let get_all_fvs l = List.sort_uniq Sym.compare (List.concat_map get_fvs l) in
-    let vs = match rt with
-    | P {name=_; pointer; iargs} -> get_all_fvs (pointer :: iargs)
-    | Q {name=_; pointer; q=(q_sym, _); q_loc=_; step; permission; iargs} ->
-      let fvs_with_q = get_all_fvs (pointer :: step :: permission :: iargs) in
-      List.filter (fun s -> not (Sym.equal s q_sym)) fvs_with_q
-      (*CHT TODO: what are q_loc and step precisely?*)
-      (*CHT TODO: how does shadowing work here re: q? If q appears in output is it always this q*)
-    in
     let ln = ResourceL ((v, (rt, bt)), i) in
-    let root = NodeLT (ln, get_subgraphs vs) in
-    let new_defs = SymMap.add v root defs in
-    to_tree_aux next new_defs
-  | Constraint (_, _, next) -> to_tree_aux next defs (*CHT TODO - trees with asserts are out of scope for now*)
-  | I it -> (it, defs)
+    let new_defs = SymMap.add v ln defs in
+    organize_lines_aux next new_defs lcs
+  | Constraint (lc, _, next) -> organize_lines_aux next defs (lc :: lcs)
+  | I it -> (it, defs, lcs)
 
-(* Convert the body of a predicate clause into a variable-assignment dependency tree *)
-let to_tree (lines : packing_ft) : IT.t * dep_tree IT.SymMap.t = to_tree_aux lines SymMap.empty
+(* Sort lines into the returned expression, a map of variables to their defining lines, and a list of constraints *)
+let organize_lines (lines : packing_ft) : IT.t * def_line IT.SymMap.t * (LC.t list) = organize_lines_aux lines SymMap.empty []
+
+(** End infrastructure for checking if a countermodel satisfies a predicate **)

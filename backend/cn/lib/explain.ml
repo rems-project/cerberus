@@ -37,154 +37,107 @@ type log = log_entry list (* most recent first *)
 
 
 (** Infrastructure for checking if a countermodel satisfies a predicate **)
-
-(* TODO monad instance *)
-type ('a, 'b) result =
-| Yes of 'a
-| No
-| Unknown of 'b
-| Error of 'b
-
-
-let bind (a : ('a, 'b) result) (f : 'a ->  ('c, 'b) result) : ('c, 'b) result =
-  match a with
-  | Yes x -> f x
-  | No -> No
-  | Unknown e -> Unknown e
-  | Error e -> Error e
-
-let ( let@ ) = bind
-
-let is_no r = match r with No -> true | _ -> false
-
-let is_yes r = match r with Yes _ -> true | _ -> false
-
-type check_result = (LC.logical_constraint list, Pp.document) result
-
-let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
-  List.fold_left (fun acc elem -> match f elem with None -> acc | Some x -> x :: acc) [] l
-
-(* Condenses list into "No" or a list of successes/timeouts/errors *)
-let condense_results (results : check_result list) :
-  check_result list =
-  let filtered = List.filter (fun r -> not (is_no r)) results in
-  if filtered == [] then [No] else filtered
-
-(* Gives a single canonical result *)
-let combine_results (results : check_result list)
-  : check_result =
-  match results with
-  | [] -> Error !^"Empty result list"
-  | h :: t ->
-    let combine = fun acc res -> match acc, res with
-      | Yes l, _ -> Yes l
-      | _, Yes l -> Yes l
-      | Error s, _ -> Error s
-      | _, Error s -> Error s
-      | Unknown s, _ -> Unknown s
-      | _, Unknown s -> Unknown s
-      | No, _ -> No
-    in
-    List.fold_left combine h t
+open ResultWithData
 
 let ask_solver g lcs = match (Solver.ask_solver g lcs) with
-| Unsat -> No
+| Unsat -> No !^"Solver returned No."
 | Unknown -> Unknown !^"Solver returned Unknown."
 | Sat -> Yes lcs
 
 let convert_symmap_to_lc (m : IT.t SymMap.t) : LogicalConstraints.t list =
+  let loc = Cerb_location.unknown in
   let kvs = SymMap.bindings m in
   let to_lc (k, v) =
-    LC.T (IT.eq_ (IT.IT (IT.Sym k, basetype v, Cerb_location.unknown) , v) Cerb_location.unknown) in
+    LC.T (IT.eq_ (IT.IT (IT.Sym k, basetype v, loc) , v) loc) in
   List.map to_lc kvs
 
-let rec check_pred (def : ResourcePredicates.definition) (candidate : IT.t) (g : Global.t) : check_result list =
+let rec check_pred (def : ResourcePredicates.definition) (candidate : IT.t) (g : Global.t) : LAT.check_result =
   (* ensure candidate type matches output type of predicate *)
   if (not (BT.equal (IT.basetype candidate) (def.oarg_bt)))
   then
-    [Error (!^"Candidate " ^/^ IT.pp candidate ^/^ !^" has different type from
-      predicate output: " ^/^ BT.pp (IT.basetype candidate) ^/^  !^" versus " ^/^ BT.pp def.oarg_bt ^/^ !^".")]
+    No (!^"Candidate " ^/^ IT.pp candidate ^/^ !^" has different type from
+      predicate output: " ^/^ BT.pp (IT.basetype candidate) ^/^  !^" versus " ^/^ BT.pp def.oarg_bt ^/^ !^".")
   else
     match def.clauses with
-    | None -> [Unknown (!^"Predicate " ^/^ ResourcePredicates.pp_definition def ^/^ !^" is uninterpreted. ")]
+    | None -> Unknown (!^"Predicate " ^/^ ResourcePredicates.pp_definition def ^/^ !^" is uninterpreted. ")
     | Some clauses ->
         (* for each clause, check if candidate could have been its output *)
         let checked = List.map (fun c -> check_clause g c candidate) clauses
         in
         (* return either [No] or a list of positive/ambiguous results *)
-        condense_results checked
+        LAT.combine_results checked
 
 and check_clause (g : Global.t) (c : ResourcePredicates.clause) (candidate : IT.t) =
   (* get returned expression of c and variable dependency graph *)
-  let exp, subgraphs = LAT.to_tree c.packing_ft in
+  let exp, var_def_locs, lcs = LAT.organize_lines c.packing_ft in
   (* get constraints on whether candidate could have come from this clause *)
-  let@ (cs, vs) = getBodyConstraints exp subgraphs candidate g in
-  (* add guard and variable assignments to constraints list *)
-  let cs' = List.concat [cs; convert_symmap_to_lc vs; [LC.t_ c.guard]] in
-  (* query solver *)
-  ask_solver g cs'
+  match get_body_constraints exp var_def_locs candidate g with
+  | Yes (cs, vs) ->
+    (* add guard and variable assignments to constraints list *)
+    let cs' = List.concat [lcs; cs; convert_symmap_to_lc vs; [LC.t_ c.guard]] in
+    (* query solver *)
+    ask_solver g cs'
+  | No e -> No e
+  | Unknown e -> Unknown e
+  | Error e -> Error e
 
-and getBodyConstraints exp subgraphs candidate globals =
+and get_body_constraints exp var_def_locs candidate globals =
   (* use candidate to get terms for FVs in exp.
     TODO: This returns "Unknown" for expressions that do not have the same
     syntactic structure because they may still be semantically equivalent. *)
-  let ovs_ = LAT.get_assignment exp candidate in
-  match ovs_ with
-  | None -> Unknown (!^"Could not find term assignment for free variables in " ^/^ (IT.pp exp))
-  | Some vs_ ->
-  (* TODO: shortcut - guard could be var equality*)
-  (* find definition of x*)
-    let comb acc elem =
-      (match acc with
-      | Yes (lcs, vs) ->
-        (let k, _ = elem in
-        match foreachvar k vs subgraphs globals with
-        | Yes (lcs', vs') -> Yes (List.append lcs' lcs, vs')
-        | Error e -> Error e
+  match LAT.get_var_cands exp candidate with
+  | Yes var_cands ->
+    let accumulate_results acc elem =
+      let v, v_cand = elem in
+      match acc with
+      | Yes (acc_lcs, acc_var_cands) -> (match get_var_constraints v v_cand acc_var_cands var_def_locs globals with
+        | Yes (v_lcs, v_var_cands) -> Yes (List.append v_lcs acc_lcs, v_var_cands)
+        | No e -> No e
         | Unknown e -> Unknown e
-        | No -> No)
-      | Error e -> Error e
+        | Error e -> Error e)
+      | No e -> No e
       | Unknown e -> Unknown e
-      | No -> No)
-    in
-    List.fold_left comb (Yes ([], vs_)) (SymMap.bindings vs_)
-and foreachvar x' vs subgraphs globals = match (SymMap.find_opt x' subgraphs) with
-| None -> Unknown (!^"Could not find variable definition for " ^/^ (Sym.pp x'))
-  (* TODO: could be known in ctxt; out of scope for now*)
-| Some UndefinedLT -> Error (!^"No definition found for variable " ^/^ Sym.pp x')
-| Some (NodeLT (line, subgraphs')) -> match line with
-  | DefineL ((x, t), _) ->
-    (* find assignment for x and recurse with x's definition *)
-    (match (SymMap.find_opt x vs) with
-    | None -> Error (!^"No assignment found for variable " ^/^ Sym.pp x')
-    | Some v -> getBodyConstraints t subgraphs' v globals
-    )
-  | ResourceL ((x, (p, _)), _) ->
-    (* find assignment for x and recurse with x's definition*)
-    (match (SymMap.find_opt x vs) with
-    | None -> Error (!^"No assignment found for variable " ^/^ Sym.pp x')
-    | Some v -> match p with
-      | P psig ->
-        (match psig.name with
-        | Owned (_, _) ->
-          let neq = IT.ne__ psig.pointer (IT.null_ Cerb_location.unknown) Cerb_location.unknown in
-            Yes ([LC.t_ neq], vs)
-        | PName name -> let opdef = SymMap.find_opt name globals.resource_predicates in
-          match opdef with
-          | Some pdef ->
-            (* TODO: this doesn't account for looking up args of the predicate further up in the graph *)
-            (match combine_results (check_pred pdef v globals) with
-            | Yes cs -> Yes (cs, vs)
-            | Error e -> Error e
-            | Unknown e -> Unknown e
-            | No -> No)
-          | None -> Error (!^"Could not find definition of predicate" ^/^ Sym.pp name)
-        )
-      | Q qsig -> let _ = qsig in Error (!^"quantified predicates are out of scope for now")
-    )
-  | ConstraintL (c, _) -> let _ = c in Error (!^"asserts are out of scope for now")
+      | Error e -> Error e
 
-(** End infrastructure for checking if a countermodel satisfies a predicate **)
+    in
+    List.fold_left accumulate_results (Yes ([], var_cands)) (SymMap.bindings var_cands)
+  | No e -> No e
+  | Unknown e -> Unknown e
+  | Error e -> Error e
+
+and get_var_constraints v v_cand var_cands var_def_locs globals =
+  let loc = Cerb_location.unknown in
+  match (SymMap.find_opt v var_def_locs) with
+  (* TODO: var definition could be known in ctxt *)
+  | None -> Unknown (!^"Could not find variable definition line for " ^/^ (Sym.pp v))
+  | Some line -> match line with
+      (* recurse with x's definition *)
+    | DefineL ((_, t), _) -> get_body_constraints t var_def_locs v_cand globals
+    | ResourceL ((_, (p, _)), _) ->
+      match p with
+      | P psig -> (match psig.name with
+        | Owned (_, _) ->
+          (* if the predicate is Owned, its pointer argument should not be null *)
+          let neq = IT.ne__ psig.pointer (IT.null_ loc) loc in
+          Yes ([LC.t_ neq], var_cands)
+        | PName name ->
+          (* search for predicate definition *)
+          match SymMap.find_opt name globals.resource_predicates with
+          | Some pdef ->
+            (* TODO: this doesn't account for looking up args of the predicate further up in the graph.
+                Adding that will require dealing with scoping issues, e.g. if
+                a candidate or line definition for one of the arguments includes a variable with a
+                different usage within the predicate *)
+            (match check_pred pdef v_cand globals with
+            | Yes cs -> Yes (cs, var_cands)
+            | No e -> No e
+            | Unknown e -> Unknown e
+            | Error e -> Error e)
+          | None -> Unknown (!^"Could not find definition of predicate " ^/^ Sym.pp name)
+        )
+      | Q qsig -> let _ = qsig in Unknown (!^"Quantified predicates are out of scope for now.")
+
+(** End section: Infrastructure for checking if a countermodel satisfies a predicate **)
 
 let clause_has_resource req c =
   let open LogicalArgumentTypes in
@@ -348,25 +301,30 @@ let state ctxt log model_with_q extras =
     let g = ctxt.global in
     let defs = g.resource_predicates in
     let check (rt, o) =
-      match predicate_name rt with
-      | Owned _ -> None
-      | PName s ->
-        match (SymMap.find_opt s defs), o with
-        | Some def, O it -> Some (combine_results (check_pred def it g))
+      match predicate_name rt, o with
+      | Owned _, _ -> None
+      | PName s, O it ->
+        match (SymMap.find_opt s defs), evaluate it with
+        | Some def, Some cand -> Some (check_pred def cand g)
+        | Some _, None -> Some (Error (!^"Could not locate definition of variable " ^/^ IT.pp it))
         | None, _ -> Some (Error (!^"Could not locate definition of predicate " ^/^ Sym.pp s))
         in
     let checked =
       let f r = match check r with
       | None -> None
       | Some res -> Some (r, res) in
-      filter_map_some f (get_rs ctxt) in
+      LAT.filter_map_some f (get_rs ctxt) in
     let (nos, rest) = List.partition (fun p -> is_no (snd p)) checked in
     let (yeses, unknown) = List.partition (fun p -> is_yes (snd p)) rest in
+    let pp_checked_res r = {original = LAT.pp_check_result (snd r); simplified= [LAT.pp_check_result (snd r)]} in
     add_labeled
       lab_invalid
-      (List.map (fun r -> pp_res None (fst r)) nos)
-      (add_labeled lab_unknown (List.map (fun r -> pp_res None (fst r)) unknown)
-        (add_labeled lab_valid (List.map (fun r -> pp_res None (fst r)) yeses)
+      (List.map pp_checked_res nos)
+      (* pp_res None (fst r)) nos) *)
+      (add_labeled lab_unknown (List.map pp_checked_res unknown)
+      (* (fun r -> pp_res None (fst r)) unknown) *)
+        (add_labeled lab_valid (List.map pp_checked_res yeses)
+        (* (fun r -> pp_res None (fst r)) yeses) *)
           labeled_empty))
       in
   let not_given_to_solver =
@@ -384,7 +342,6 @@ let state ctxt log model_with_q extras =
     let forall_constraints, funs, ctxt_preds = not_given_to_solver ctxt in
     let preds =
       let pred_compare (s1, _) (s2, _) = Sym.compare s1 s2 in
-      (*CHT TODO: deriving this would require changing a lot of files *)
       Base.List.dedup_and_sort (List.append log_preds ctxt_preds) ~compare:pred_compare
     in
     let interesting_constraints, uninteresting_constraints =
