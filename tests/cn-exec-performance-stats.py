@@ -20,9 +20,7 @@ parser.add_argument("--iterate", help="Iterate up to 2**(n-1)")
 parser.add_argument("--buddy_path", help="Collect statistics for pKVM buddy allocator - provide path to buddy")
 parser.add_argument("--preprocess", action='store_true', help='Preprocess input file before generating executable')
 parser.add_argument("--track_owned", action='store_true', help='Track number of Owned predicates dynamically')
-parser.add_argument("--track_owned", action='store_true', help='Track number of Owned predicates dynamically')
 parser.set_defaults(preprocess=False)
-parser.set_defaults(track_owned=False)
 parser.set_defaults(track_owned=False)
 
 args=parser.parse_args()
@@ -236,8 +234,6 @@ def collect_stats_for_single_file(f, input_basename):
         executable_space['instrumented'].append(float(instr_stats_dict["executable"]['space']))
         if args.track_owned:
             nr_owned_predicates.append(float(instr_stats_dict["executable"]['nr_owned_predicates']))
-        if args.track_owned:
-            nr_owned_predicates.append(float(instr_stats_dict["executable"]['nr_owned_predicates']))
 
         # Uninstrumented stats
         compilation_times['uninstrumented'].append(float(uninstr_stats_dict["compilation"]['time']))
@@ -288,8 +284,6 @@ stats_dict['instr_generation_space'] = generation_space
 stats_dict['instr_compilation_space'] = compilation_space['instrumented']
 stats_dict['instr_linking_space'] = link_space['instrumented']
 stats_dict['instr_executable_space'] = executable_space['instrumented']
-if args.track_owned:
-    stats_dict['nr_owned_predicates'] = nr_owned_predicates
 if args.track_owned:
     stats_dict['nr_owned_predicates'] = nr_owned_predicates
 
