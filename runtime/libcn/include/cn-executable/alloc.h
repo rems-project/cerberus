@@ -28,6 +28,12 @@ void *zalloc_(long nbytes, const char *, int);
 
 void free_all(void);
 
+typedef void* alloc_checkpoint;
+
+alloc_checkpoint alloc_save_checkpoint(void);
+
+void free_after(alloc_checkpoint ptr);
+
 // void *alloc_zeros(long nbytes);
 
 #ifdef __cplusplus
