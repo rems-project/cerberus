@@ -393,6 +393,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
        string
        [ "if";
          "cc";
+         "-g";
          "\"-I${RUNTIME_PREFIX}/include\"";
          "-o \"${TEST_DIR}/tests.out\"";
          "${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o";

@@ -73,7 +73,8 @@ int cn_test_main(int argc, char* argv[]);
     initialise_ownership_ghost_state();                                                 \
     initialise_ghost_stack_depth();                                                     \
     cn_gen_backtrack_reset();                                                           \
-    cn_gen_alloc_reset();
+    cn_gen_alloc_reset();                                                               \
+    cn_gen_ownership_reset();
 
 #define CN_TEST_GENERATE(name) ({                                                       \
     struct cn_gen_##name##_record* res = cn_gen_##name();                               \
