@@ -48,6 +48,7 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
             if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                     \
                 return CN_TEST_GEN_FAIL;                                                \
             }                                                                           \
+            assume_##Name(__VA_ARGS__);                                                 \
             Init(res);                                                                  \
             Name(__VA_ARGS__);                                                          \
             cn_gen_rand_replace(checkpoint);                                            \

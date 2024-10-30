@@ -57,7 +57,12 @@ type ail_executable_spec =
     in_stmt : (Locations.t * ail_bindings_and_statements) list
   }
 
-val generate_ownership_function
+val generate_check_ownership_function
+  :  with_ownership_checking:bool ->
+  C.ctype ->
+  A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
+
+val generate_assume_ownership_function
   :  with_ownership_checking:bool ->
   C.ctype ->
   A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
@@ -169,3 +174,19 @@ val cn_to_ail_pre_post_internal
   C.ctype ->
   Core_to_mucore.fn_spec_instrumentation option ->
   ail_executable_spec
+
+val cn_to_ail_assume_predicates_internal
+  :  (Sym.t * ResourcePredicates.definition) list ->
+  A.sigma_cn_datatype list ->
+  (Sym.t * C.ctype) list ->
+  (Sym.t * ResourcePredicates.definition) list ->
+  (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
+
+val cn_to_ail_assume_pre_internal
+  :  A.sigma_cn_datatype list ->
+  C.union_tag ->
+  (C.union_tag * (BT.t * C.ctype)) list ->
+  (C.union_tag * C.ctype) list ->
+  (C.union_tag * ResourcePredicates.definition) list ->
+  'a LogicalArgumentTypes.t ->
+  A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
