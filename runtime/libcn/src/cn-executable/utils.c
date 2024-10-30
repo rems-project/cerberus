@@ -431,6 +431,10 @@ void initialise_error_msg_info_(const char *function_name, char *file_name, int 
   error_msg_info = make_error_message_info_entry(function_name, file_name, line_number, 0, NULL);
 }
 
+void reset_error_msg_info() {
+  error_msg_info = NULL;
+}
+
 void cn_pop_msg_info ()
 {
   struct cn_error_message_info *old = error_msg_info;
