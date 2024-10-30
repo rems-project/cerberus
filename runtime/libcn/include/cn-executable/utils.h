@@ -46,6 +46,7 @@ void initialise_error_msg_info_(const char *function_name, char *file_name, int 
 
 #define initialise_error_msg_info() initialise_error_msg_info_(__func__, __FILE__, __LINE__)
 
+void reset_error_msg_info();
 
 /* TODO: Implement */
 /*struct cn_error_messages {
