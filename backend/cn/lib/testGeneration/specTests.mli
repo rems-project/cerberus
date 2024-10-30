@@ -4,6 +4,7 @@ module A = CF.AilSyntax
 val generate
   :  output_dir:string ->
   filename:string ->
+  with_ownership_checking:bool ->
   CF.GenTypes.genTypeCategory A.sigma ->
   unit Mucore.file ->
   unit

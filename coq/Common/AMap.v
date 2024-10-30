@@ -3,6 +3,7 @@
 Require Import Coq.ZArith.BinInt.
 From Coq.Structures Require Import OrderedType OrderedTypeEx.
 From CheriCaps.Morello Require Import Capabilities.
+Require Import CheriCaps.Common.Utils.
 
 Require Import FMapExt.
 

@@ -441,6 +441,7 @@ let run_tests
   max_backtracks
   max_unfolds
   max_array_length
+  null_in_every
   seed
   logging_level
   interactive
@@ -489,14 +490,21 @@ let run_tests
             { max_backtracks;
               max_unfolds;
               max_array_length;
+              null_in_every;
               seed;
               logging_level;
               interactive
             }
           in
-          TestGeneration.run ~output_dir ~filename config sigma prog5;
+          TestGeneration.run
+            ~output_dir
+            ~filename
+            ~with_ownership_checking
+            config
+            sigma
+            prog5;
           if not dont_run then
-            Unix.execv "./run_tests.sh" (Array.of_list []))
+            Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
       Resultat.return ())
 
@@ -863,7 +871,7 @@ module Testing_flags = struct
     Arg.(
       value
       & opt int TestGeneration.default_cfg.max_backtracks
-      & info [ "backtrack-attempts" ] ~doc)
+      & info [ "max-backtrack-attempts" ] ~doc)
 
 
   let gen_max_unfolds =
@@ -878,6 +886,14 @@ module Testing_flags = struct
       value
       & opt int TestGeneration.default_cfg.max_array_length
       & info [ "max-array-length" ] ~doc)
+
+
+  let test_null_in_every =
+    let doc = "Set the likelihood of NULL being generated as 1 in every <n>" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.null_in_every
+      & info [ "null-in-every" ] ~doc)
 
 
   let test_seed =
@@ -922,6 +938,7 @@ let testing_cmd =
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.test_max_array_length
+    $ Testing_flags.test_null_in_every
     $ Testing_flags.test_seed
     $ Testing_flags.test_logging_level
     $ Testing_flags.interactive_testing

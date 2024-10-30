@@ -132,6 +132,8 @@ let struct_ct tag = Struct tag
 
 let char_ct = Integer Char
 
+let uchar_ct = Integer (Unsigned Ichar)
+
 let rec to_ctype (ct_ : ctype) =
   let ct_ =
     match ct_ with

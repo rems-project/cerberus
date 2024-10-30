@@ -22,3 +22,20 @@ int main() {
     printf("x=%d y=%d *q=%d *r=%d\n",x,y,*q,*r); 
   }
 }
+
+/* NOTE: vip_artifact/evaluation_cerberus/results.pdf expects for this test:
+
+   |----------------------+----------------------+--------------+--------------|
+   | PNVI-ae-udi no annot | PNVI-ae-udi w/ annot | VIP no annot | VIP w/ annot |
+   |----------------------+----------------------+--------------+--------------|
+   | UB: line 19          | UB: line 19          | UB: line 19  | UB: line 20  |
+   |----------------------+----------------------+--------------+--------------|
+
+   This doesn't make sense, because (a) comments don't line up with numbers and (b)
+
+   PNVI-ae-udi no annot: prov is symbolic (one-past int to pointer),
+                         collapses to q on store, so UB on line 20
+   PNVI-ae-udi w/ annot: prov is copy_alloc_id to @q, so UB on line 20
+           VIP no annot: prov is round-trip preserved to @p, so UB on line 19
+           VIP w/ annot: prov is copy_alloc_id @q, so UB on line 20
+*/

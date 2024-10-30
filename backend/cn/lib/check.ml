@@ -450,7 +450,7 @@ let check_alloc_bounds loc ~ptr ub_unspec =
       let@ model = model () in
       let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
       fail (fun ctxt ->
-        { loc; msg = Alloc_out_of_bounds { constr; ptr; ub; ctxt; model } }))
+        { loc; msg = Alloc_out_of_bounds { constr; term = ptr; ub; ctxt; model } }))
   else
     return ()
 
@@ -473,7 +473,7 @@ let check_both_eq_alloc loc arg1 arg2 ub =
   | `True -> return ()
 
 
-let check_live_alloc_bounds reason loc arg ub constr =
+let check_live_alloc_bounds reason loc arg ub term constr =
   let@ base_size = RI.Special.get_live_alloc reason loc arg in
   let here = Locations.other __FUNCTION__ in
   let base, size = Alloc.History.get_base_size base_size here in
@@ -484,7 +484,8 @@ let check_live_alloc_bounds reason loc arg ub constr =
     | `True -> return ()
     | `False ->
       let@ model = model () in
-      fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } }))
+      fail (fun ctxt ->
+        { loc; msg = Alloc_out_of_bounds { term; constr; ub; ctxt; model } }))
   else
     return ()
 
@@ -1382,7 +1383,13 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            check_pexpr pe2 (fun arg2 ->
              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
              let@ () =
-               check_live_alloc_bounds `Ptr_cmp loc arg1 ub (both_in_bounds arg1 arg2)
+               check_live_alloc_bounds
+                 `Ptr_cmp
+                 loc
+                 arg1
+                 ub
+                 (IT.tuple_ [ arg1; arg2 ] here)
+                 (both_in_bounds arg1 arg2)
              in
              k (op (arg1, arg2))))
        in
@@ -1406,11 +1413,18 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 | Array (item_ty, _) -> Memory.size_of_ctype item_ty
                 | ct -> Memory.size_of_ctype ct
               in
+              let ub = CF.Undefined.UB048_disjoint_array_pointers_subtraction in
+              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
               let ub_unspec = CF.Undefined.UB_unspec_pointer_sub in
               let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
               let@ () =
-                check_live_alloc_bounds `Ptr_diff loc arg1 ub (both_in_bounds arg1 arg2)
+                check_live_alloc_bounds
+                  `Ptr_diff
+                  loc
+                  arg1
+                  ub
+                  (IT.tuple_ [ arg1; arg2 ] here)
+                  (both_in_bounds arg1 arg2)
               in
               let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
               let value =
@@ -1468,7 +1482,11 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
             let null_case = eq_ (result, null_ here) here in
             (* NOTE: the allocation ID is intentionally left unconstrained *)
             let alloc_case =
-              and_ [ hasAllocId_ result here; eq_ (arg, addr_ result here) here ] here
+              and_
+                [ hasAllocId_ result here;
+                  eq_ (cast_ Memory.uintptr_bt arg here, addr_ result here) here
+                ]
+                here
             in
             let constr = ite_ (cond, null_case, alloc_case) here in
             let@ () = add_c loc (LC.T constr) in
@@ -1505,11 +1523,17 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               let@ () = check_has_alloc_id loc vt1 ub_unspec in
               let here = Locations.other __FUNCTION__ in
               let@ () =
-                check_live_alloc_bounds `ISO_array_shift loc vt1 ub (fun ~base ~size ->
-                  let addr = addr_ result here in
-                  let lower = le_ (base, addr) here in
-                  let upper = le_ (addr, add_ (base, size) here) here in
-                  and_ [ lower; upper ] here)
+                check_live_alloc_bounds
+                  `ISO_array_shift
+                  loc
+                  vt1
+                  ub
+                  result
+                  (fun ~base ~size ->
+                     let addr = addr_ result here in
+                     let lower = le_ (base, addr) here in
+                     let upper = le_ (addr, add_ (base, size) here) here in
+                     and_ [ lower; upper ] here)
               in
               k result))
         | PtrMemberShift (_tag_sym, _memb_ident, _pe) ->
@@ -1530,7 +1554,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               let@ () = check_has_alloc_id loc vt2 ub_unspec in
               let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
               let@ () =
-                check_live_alloc_bounds `Copy_alloc_id loc vt2 ub (fun ~base ~size ->
+                check_live_alloc_bounds `Copy_alloc_id loc vt2 ub vt1 (fun ~base ~size ->
                   let addr = vt1 in
                   let lower = le_ (base, addr) here in
                   let upper = le_ (addr, add_ (base, size) here) here in
@@ -1775,7 +1799,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            q_loc = here;
            step = IT.num_lit_ Z.one bt' here;
            permission = IT.(lt_ (sym_ (sym, bt', here), sizeOf_ ct here) here);
-           name = Owned (Sctypes.char_ct, init);
+           name = Owned (Sctypes.uchar_ct, init);
            pointer;
            iargs = []
          }
@@ -1825,6 +1849,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          | To_from_bytes ((To | From), { name = PName _; _ }) ->
            fail (fun _ -> { loc; msg = Byte_conv_needs_owned })
          | To_from_bytes (To, { name = Owned (ct, init); pointer; _ }) ->
+           let@ pointer = WellTyped.WIT.infer pointer in
            let@ (_, O value), _ =
              RI.Special.predicate_request
                loc
@@ -1833,7 +1858,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            in
            let q_sym = Sym.fresh_named "to_bytes" in
            let bt = WellTyped.quantifier_bt in
-           let map_bt = BT.Map (bt, Memory.bt_of_sct Sctypes.char_ct) in
+           let map_bt = BT.Map (bt, Memory.bt_of_sct Sctypes.uchar_ct) in
            let byte_sym, byte_arr = IT.fresh_named map_bt "byte_arr" here in
            let@ () = add_a byte_sym map_bt (loc, lazy (Pp.string "byte array")) in
            let@ () = add_r loc (Q (bytes_qpred q_sym ct pointer init), O byte_arr) in
@@ -1841,6 +1866,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
             | Uninit -> add_c loc (LC.T (IT.eq_ (byte_arr, default_ map_bt here) here))
             | Init -> add_c loc (LC.T (bytes_constraints ~value ~byte_arr ct)))
          | To_from_bytes (From, { name = Owned (ct, init); pointer; _ }) ->
+           let@ pointer = WellTyped.WIT.infer pointer in
            let q_sym = Sym.fresh_named "from_bytes" in
            let@ (_, O byte_arr), _ =
              RI.Special.qpredicate_request

@@ -150,6 +150,37 @@ let generate_c_pres_and_posts_internal
     return_ownership_stmts )
 
 
+let generate_c_assume_pres_internal
+  (instrumentation_list : Core_to_mucore.instrumentation list)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
+  =
+  let aux (inst : Core_to_mucore.instrumentation) =
+    let dts = sigma.cn_datatypes in
+    let preds = prog5.resource_predicates in
+    let args =
+      match List.assoc Sym.equal inst.fn sigma.declarations with
+      | _, _, Decl_function (_, _, args, _, _, _) ->
+        let arg_names = AT.get_computational (Option.get inst.internal) in
+        let arg_cts = List.map (fun (_, ct, _) -> ct) args in
+        List.map (fun ((x, bt), ct) -> (x, (bt, ct))) (List.combine arg_names arg_cts)
+      | _ -> failwith ("unreachable @ " ^ __LOC__)
+    in
+    let globals = extract_global_variables prog5.globs in
+    Cn_internal_to_ail.cn_to_ail_assume_pre_internal
+      dts
+      inst.fn
+      args
+      globals
+      preds
+      (AT.get_lat (Option.get inst.internal))
+  in
+  instrumentation_list
+  |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+    Option.is_some inst.internal)
+  |> List.map aux
+
+
 (* Core_to_mucore.instrumentation list -> executable_spec *)
 let generate_c_specs_internal
   with_ownership_checking
@@ -541,7 +572,9 @@ let generate_ownership_functions
   let ail_funs =
     List.map
       (fun ctype ->
-        Cn_internal_to_ail.generate_ownership_function ~with_ownership_checking ctype)
+        Cn_internal_to_ail.generate_check_ownership_function
+          ~with_ownership_checking
+          ctype)
       ctypes
   in
   let decls, defs = List.split ail_funs in

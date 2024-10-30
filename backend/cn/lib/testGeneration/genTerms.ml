@@ -9,8 +9,8 @@ module SymSet = Set.Make (Sym)
 type t_ =
   | Arbitrary (** Generate arbitrary values *)
   | Uniform of int (** Generate uniform values *)
-  | Pick of (int * t) list
-  (** Pick among a list of options, weighted by the provided [int]s *)
+  | Pick of (Z.t * t) list
+  (** Pick among a list of options, weighted by the provided [Z.t]s *)
   | Alloc of IT.t (** Allocate an array of a length [IT.t]  and return its address *)
   | Call of Sym.t * (Sym.t * IT.t) list
   (** Call a defined generator according to a [Sym.t] with arguments [IT.t list] *)
@@ -42,21 +42,6 @@ let arbitrary_ (bt : BT.t) (loc : Locations.t) : t = GT (Arbitrary, bt, loc)
 
 let uniform_ ((bt, sz) : BT.t * int) (loc : Locations.t) : t = GT (Uniform sz, bt, loc)
 
-let pick_ (wgts : (int * t) list) (loc : Locations.t) : t =
-  match wgts with
-  | (_, gt) :: wgts' ->
-    let bt =
-      List.fold_left
-        (fun bt (_, gt) ->
-          assert (BT.equal bt (basetype gt));
-          bt)
-        (basetype gt)
-        wgts'
-    in
-    GT (Pick wgts, bt, loc)
-  | [] -> failwith "unreachable"
-
-
 let alloc_ (it : IT.t) loc : t = GT (Alloc it, BT.Loc (), loc)
 
 let call_ (fsym, xits) (bt : BT.t) loc : t = GT (Call (fsym, xits), bt, loc)
@@ -73,6 +58,21 @@ let return_ (it : IT.t) (loc : Locations.t) : t = GT (Return it, IT.bt it, loc)
 
 let assert_ ((lc, gt') : LC.t * t) (loc : Locations.t) : t =
   GT (Assert (lc, gt'), basetype gt', loc)
+
+
+let pick_ (wgts : (Z.t * t) list) (loc : Locations.t) : t =
+  match wgts with
+  | (_, gt) :: wgts' ->
+    let bt =
+      List.fold_left
+        (fun bt (_, gt) ->
+          assert (BT.equal bt (basetype gt));
+          bt)
+        (basetype gt)
+        wgts'
+    in
+    GT (Pick wgts, bt, loc)
+  | [] -> assert_ (T (IT.bool_ false loc), return_ (IT.null_ loc) loc) loc
 
 
 let ite_ ((it_if, gt_then, gt_else) : IT.t * t * t) loc : t =
@@ -168,7 +168,7 @@ let rec pp (gt : t) : Pp.document =
             (separate_map
                (semi ^^ break 1)
                (fun (w, gt) ->
-                 parens (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp gt))))
+                 parens (z w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp gt))))
                wgts))
   | GT (Alloc it, _bt, _here) -> string "alloc" ^^ parens (IT.pp it)
   | GT (Call (fsym, xits), _bt, _here) ->

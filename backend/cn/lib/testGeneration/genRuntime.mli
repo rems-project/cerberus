@@ -12,11 +12,17 @@ type term =
       { bt : BT.t;
         sz : int
       }
-  | Pick of { choices : (int * term) list }
+  | Pick of
+      { bt : BT.t;
+        choice_var : Sym.t;
+        choices : (int * term) list;
+        last_var : Sym.t
+      }
   | Alloc of { bytes : IT.t }
   | Call of
       { fsym : Sym.t;
-        iargs : (Sym.t * Sym.t) list
+        iargs : (Sym.t * Sym.t) list;
+        oarg_bt : BT.t
       }
   | Asgn of
       { pointer : Sym.t;

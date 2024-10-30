@@ -20,7 +20,7 @@ int main()
   /*CN_VIP*/bit=0;
   for (int k=0; k<uintptr_t_width; k++)
   /*@ inv i == (u64) p;
-          (u64) p == (u64) &x;
+          ptr_eq(p, &x);
           uintptr_t_width == 64u64;
           (0i32 <= k) && (k <= 64i32);
           let k_mask = shift_left(1u64, (u64) k) - 1u64;
@@ -33,12 +33,12 @@ int main()
     else
       j = j;
   }
-#if defined(ANNOT)
+#ifdef ANNOT
   q = copy_alloc_id(j, &x);
 #else
   q = (int *)j;
 #endif
-  *q = 11; // is this free of undefined behaviour?
-  /*CN_VIP*//*@ assert(*p == 11i32 && *q == 11i32); @*/
+  *q = 11; // CN VIP UB (no annot)
   //CN_VIP printf("*p=%d  *q=%d\n",*p,*q);
+  /*CN_VIP*//*@ assert(*p == 11i32 && *q == 11i32); @*/
 }

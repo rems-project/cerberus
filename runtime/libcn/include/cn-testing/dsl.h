@@ -1,7 +1,8 @@
 #ifndef CN_GEN_DSL_H
 #define CN_GEN_DSL_H
 
-#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #include "backtrack.h"
 
@@ -28,39 +29,57 @@
 
 #define CN_GEN_MULT(ty, mul) cn_gen_mult_##ty(mul)
 
-#define CN_GEN_ASSIGN(p, offset, addr_ty, value, tmp, gen_name, last_var)               \
-    cn_bits_u64* tmp##_size = cn_bits_u64_add(                                          \
-                offset,                                                                 \
-                convert_to_cn_bits_u64(sizeof(addr_ty)));                               \
-    if (!convert_from_cn_bool(cn_bits_u64_le(tmp##_size, cn_gen_alloc_size(p)))) {      \
+#define CN_GEN_CALL_FROM(...)                                                           \
+    {                                                                                   \
+        char* from[] = { __VA_ARGS__, NULL };
+
+#define CN_GEN_CALL_TO(...)                                                             \
+        char* to[] = { __VA_ARGS__, NULL };                                             \
+        cn_gen_backtrack_relevant_remap_many(from, to);                                 \
+    }
+
+#define CN_GEN_ASSIGN(p, offset, addr_ty, value, tmp, gen_name, last_var, ...)          \
+    if (convert_from_cn_pointer(p) == 0) {                                              \
+        cn_gen_backtrack_assert_failure();                                              \
         cn_gen_backtrack_relevant_add((char*)#p);                                       \
-        cn_gen_backtrack_alloc_set(convert_from_cn_bits_u64(tmp##_size));               \
         goto cn_label_##last_var##_backtrack;                                           \
     }                                                                                   \
     void *tmp##_ptr = convert_from_cn_pointer(cn_pointer_add_cn_bits_u64(p, offset));   \
+    if (!cn_gen_alloc_check(tmp##_ptr, sizeof(addr_ty))) {                              \
+        cn_gen_backtrack_relevant_add((char*)#p);                                       \
+        cn_bits_u64* tmp##_size = cn_bits_u64_add(                                      \
+                offset,                                                                 \
+                convert_to_cn_bits_u64(sizeof(addr_ty)));                               \
+        cn_gen_backtrack_alloc_set(convert_from_cn_bits_u64(tmp##_size));               \
+        goto cn_label_##last_var##_backtrack;                                           \
+    }                                                                                   \
+    if (!cn_gen_ownership_check(tmp##_ptr, sizeof(addr_ty))) {                          \
+        cn_gen_backtrack_assert_failure();                                              \
+        char *toAdd[] = { __VA_ARGS__ };                                                \
+        cn_gen_backtrack_relevant_add_many(toAdd);                                      \
+        goto cn_label_##last_var##_backtrack;                                           \
+    }                                                                                   \
     *(addr_ty*)tmp##_ptr = value;                                                       \
-    cn_assume_ownership(tmp##_ptr, sizeof(addr_ty), (char*)gen_name);
+    cn_gen_ownership_update(tmp##_ptr, sizeof(addr_ty));
 
 #define CN_GEN_LET_BEGIN(backtracks, var)                                               \
     int var##_backtracks = backtracks;                                                  \
     cn_label_##var##_gen:                                                               \
-        ;
+        ;                                                                               \
+        alloc_checkpoint var##_checkpoint = alloc_save_checkpoint();                    \
+        void *var##_alloc_checkpoint = cn_gen_alloc_save();                             \
+        void *var##_ownership_checkpoint = cn_gen_ownership_save();
+
 
 #define CN_GEN_LET_BODY(ty, var, gen)                                                   \
         ty* var = gen;
 
-#define CN_GEN_LET_FROM(...)                                                            \
-        {                                                                               \
-            char* from[] = { __VA_ARGS__, NULL };
-
-#define CN_GEN_LET_TO(...)                                                              \
-            char* to[] = { __VA_ARGS__, NULL };                                         \
-            cn_gen_backtrack_relevant_remap_many(from, to);                             \
-        }
-
 #define CN_GEN_LET_END(backtracks, var, last_var, ...)                                  \
         if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                         \
         cn_label_##var##_backtrack:                                                     \
+            free_after(var##_checkpoint);                                               \
+            cn_gen_alloc_restore(var##_alloc_checkpoint);                               \
+            cn_gen_ownership_restore(var##_ownership_checkpoint);                       \
             if (cn_gen_backtrack_relevant_contains((char*)#var)) {                      \
                 char *toAdd[] = { __VA_ARGS__ };                                        \
                 cn_gen_backtrack_relevant_add_many(toAdd);                              \
@@ -70,14 +89,16 @@
                 if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT) {               \
                     var##_backtracks--;                                                 \
                     cn_gen_backtrack_reset();                                           \
+                } else if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ALLOC) {         \
+                    if (toAdd[0] != NULL) {                                             \
+                        goto cn_label_##last_var##_backtrack;                           \
+                    }                                                                   \
                 }                                                                       \
                 goto cn_label_##var##_gen;                                              \
             } else {                                                                    \
                 goto cn_label_##last_var##_backtrack;                                   \
             }                                                                           \
         }
-
-// #define CN_GEN_RETURN(val) val
 
 #define CN_GEN_ASSERT(cond, last_var, ...)                                              \
     if (!convert_from_cn_bool(cond)) {                                                  \
@@ -87,7 +108,7 @@
         goto cn_label_##last_var##_backtrack;                                           \
     }
 
-#define CN_GEN_MAP_BEGIN(map, i, i_ty, min, max, last_var, ...)                         \
+#define CN_GEN_MAP_BEGIN(map, i, i_ty, perm, max, last_var, ...)                        \
     cn_map* map = map_create();                                                         \
     {                                                                                   \
         if (0) {                                                                        \
@@ -99,7 +120,7 @@
         }                                                                               \
                                                                                         \
         i_ty* i = max;                                                                  \
-        while (convert_from_cn_bool(i_ty##_ge(i, min))) {
+        while (convert_from_cn_bool(perm)) {
 
 #define CN_GEN_MAP_BODY(perm)                                                           \
             if (convert_from_cn_bool(perm)) {
@@ -113,5 +134,50 @@
             i = i_ty##_sub(i, convert_to_##i_ty(1));                                    \
         }                                                                               \
     }
+
+#define CN_GEN_PICK_BEGIN(ty, var, tmp, last_var, ...)                                  \
+    ty* var = NULL;                                                                     \
+    uint64_t tmp##_choices[] = { __VA_ARGS__, UINT64_MAX };                             \
+    uint8_t tmp##_num_choices = 0;                                                      \
+    while (tmp##_choices[tmp##_num_choices] != UINT64_MAX) {                            \
+        tmp##_num_choices += 2;                                                         \
+    }                                                                                   \
+    tmp##_num_choices /= 2;                                                             \
+    struct int_urn* tmp##_urn = urn_from_array(tmp##_choices, tmp##_num_choices);       \
+    cn_label_##tmp##_gen:                                                               \
+        ;                                                                               \
+    alloc_checkpoint tmp##_checkpoint = alloc_save_checkpoint();                        \
+    void *tmp##_alloc_checkpoint = cn_gen_alloc_save();                                 \
+    void *tmp##_ownership_checkpoint = cn_gen_ownership_save();                         \
+    uint64_t tmp = urn_remove(tmp##_urn);                                               \
+    if (0) {                                                                            \
+    cn_label_##tmp##_backtrack:                                                         \
+        free_after(tmp##_checkpoint);                                                   \
+        cn_gen_alloc_restore(tmp##_alloc_checkpoint);                                   \
+        cn_gen_ownership_restore(tmp##_ownership_checkpoint);                           \
+        if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT                          \
+            && tmp##_urn->size != 0) {                                                  \
+            cn_gen_backtrack_reset();                                                   \
+            goto cn_label_##tmp##_gen;                                                  \
+        } else {                                                                        \
+            goto cn_label_##last_var##_backtrack;                                       \
+        }                                                                               \
+    }                                                                                   \
+    switch (tmp) {
+
+#define CN_GEN_PICK_CASE_BEGIN(index)                                                   \
+    case index:
+
+#define CN_GEN_PICK_CASE_END(var, e)                                                    \
+        var = e;                                                                        \
+        break;
+
+#define CN_GEN_PICK_END(tmp)                                                            \
+    default:                                                                            \
+        printf("Invalid generated value");                                              \
+        assert(false);                                                                  \
+    }                                                                                   \
+    urn_free(tmp##_urn);                                                                \
+
 
 #endif // CN_GEN_DSL_H

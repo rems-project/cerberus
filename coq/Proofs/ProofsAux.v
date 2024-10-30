@@ -1665,38 +1665,38 @@ Section AddressValue_Lemmas.
 
   Lemma AdddressValue_eqb_eq:
     forall (a b: AddressValue.t),
-      eqb a b = true <-> a = b.
+      AddressValue.eqb a b = true <-> a = b.
   Proof.
     intros a b.
     split.
     -
       intros H.
-      unfold eqb in H.
+      unfold AddressValue.eqb, Utils.eqb in H.
       bool_to_prop_hyp.
       apply bitvector.bv_eq.
       assumption.
     -
       intros H.
-      unfold eqb.
+      unfold AddressValue.eqb, Utils.eqb.
       subst.
       lia.
   Qed.
 
   Lemma AdddressValue_eqb_neq:
     forall (a b: AddressValue.t),
-      eqb a b = false <-> a <> b.
+      AddressValue.eqb a b = false <-> a <> b.
   Proof.
     intros a b.
     split.
     -
       intros H.
-      unfold eqb in H.
+      unfold AddressValue.eqb, Utils.eqb in H.
       bool_to_prop_hyp.
       apply bitvector.bv_neq.
       assumption.
     -
       intros H.
-      unfold eqb.
+      unfold AddressValue.eqb, Utils.eqb.
       apply bitvector.bv_neq in H.
       lia.
   Qed.
@@ -1714,7 +1714,7 @@ Section AddressValue_Lemmas.
   Proof.
     (* This should not be so tedious! *)
     intros a b.
-    unfold AddressValue.leb, leb, Z.leb.
+    unfold AddressValue.leb, leb, Utils.leb, Z.leb.
     rewrite orb_lazy_alt.
     repeat break_match_goal;auto.
     -
@@ -1722,8 +1722,8 @@ Section AddressValue_Lemmas.
       rewrite Z.ltb_compare in Heqb0.
       break_match_hyp; discriminate.
     -
-      unfold eqb.
-      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
+      unfold eqb, Utils.eqb.
+      unfold AddressValue.to_Z, Utils.bv_to_Z_unsigned in *.
       pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
       break_match_hyp ; try discriminate.
       auto.
@@ -1733,7 +1733,7 @@ Section AddressValue_Lemmas.
       break_match_hyp; discriminate.
     -
       unfold eqb.
-      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
+      unfold AddressValue.to_Z, Utils.bv_to_Z_unsigned in *.
       pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
       break_match_hyp ; try discriminate.
       auto.
@@ -1745,7 +1745,7 @@ Section AddressValue_Lemmas.
   Proof.
     split ; intros H.
     -
-      unfold AddressValue.to_Z, bv_to_Z_unsigned in H.
+      unfold AddressValue.to_Z, Utils.bv_to_Z_unsigned in H.
       apply bitvector.bv_unsigned_inj.
       assumption.
     -
@@ -1766,7 +1766,7 @@ Section AddressValue_Lemmas.
   Proof.
     intros a.
     unfold AddressValue.of_Z, AddressValue.to_Z.
-    unfold bv_to_Z_unsigned.
+    unfold Utils.bv_to_Z_unsigned.
     apply bitvector.Z_to_bv_bv_unsigned.
   Qed.
 

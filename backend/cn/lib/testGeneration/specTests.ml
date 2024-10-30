@@ -6,6 +6,7 @@ module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module CtA = Cn_internal_to_ail
 module Utils = Executable_spec_utils
+module ESpecInternal = Executable_spec_internal
 module Config = TestGenConfig
 module SymSet = Set.Make (Sym)
 
@@ -207,7 +208,50 @@ let compile_random_tests
   concat_map (compile_random_test_case prog5 args_map convert_from) insts
 
 
+let compile_assumes
+  ~(with_ownership_checking : bool)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
+  (insts : Core_to_mucore.instrumentation list)
+  : Pp.document
+  =
+  let declarations, function_definitions =
+    List.split
+      (List.map
+         (fun ctype ->
+           Cn_internal_to_ail.generate_assume_ownership_function
+             ~with_ownership_checking
+             ctype)
+         (let module CtypeSet =
+            Set.Make (struct
+              type t = C.ctype
+
+              let compare a b = compare (Hashtbl.hash a) (Hashtbl.hash b)
+            end)
+          in
+         !CtA.ownership_ctypes |> CtypeSet.of_list |> CtypeSet.to_seq |> List.of_seq)
+       @ Cn_internal_to_ail.cn_to_ail_assume_predicates_internal
+           prog5.resource_predicates
+           sigma.cn_datatypes
+           []
+           prog5.resource_predicates
+       @ ESpecInternal.generate_c_assume_pres_internal insts sigma prog5)
+  in
+  let open Pp in
+  separate_map
+    (twice hardline)
+    (fun (tag, (_, _, decl)) ->
+      CF.Pp_ail.pp_function_prototype ~executable_spec:true tag decl)
+    declarations
+  ^^ twice hardline
+  ^^ CF.Pp_ail.pp_program
+       ~executable_spec:true
+       ~show_include:true
+       (None, { A.empty_sigma with declarations; function_definitions })
+
+
 let compile_tests
+  ~(with_ownership_checking : bool)
   (filename_base : string)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
@@ -239,6 +283,9 @@ let compile_tests
   ^^ string "#include "
   ^^ dquotes (string "cn.c")
   ^^ twice hardline
+  ^^ pp_label "Assume Ownership Functions"
+  ^^ twice hardline
+  ^^ compile_assumes ~with_ownership_checking sigma prog5 insts
   ^^ pp_label "Unit tests"
   ^^ twice hardline
   ^^ unit_tests_doc
@@ -346,6 +393,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
        string
        [ "if";
          "cc";
+         "-g";
          "\"-I${RUNTIME_PREFIX}/include\"";
          "-o \"${TEST_DIR}/tests.out\"";
          "${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o";
@@ -371,7 +419,12 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
     separate_map
       space
       string
-      ([ "./${TEST_DIR}/tests.out" ]
+      ([ "${TEST_DIR}/tests.out" ]
+       @ (Config.has_null_in_every ()
+          |> Option.map (fun null_in_every ->
+            [ "--null-in-every"; string_of_int null_in_every ])
+          |> Option.to_list
+          |> List.flatten)
        @ (Config.has_seed ()
           |> Option.map (fun seed -> [ "--seed"; seed ])
           |> Option.to_list
@@ -417,6 +470,7 @@ let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.doc
 let generate
   ~(output_dir : string)
   ~(filename : string)
+  ~(with_ownership_checking : bool)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   : unit
@@ -438,9 +492,11 @@ let generate
   let generators_doc = compile_generators sigma prog5 insts in
   let generators_fn = filename_base ^ "_gen.h" in
   save output_dir generators_fn generators_doc;
-  let tests_doc = compile_tests filename_base sigma prog5 insts in
+  let tests_doc =
+    compile_tests ~with_ownership_checking filename_base sigma prog5 insts
+  in
   let test_file = filename_base ^ "_test.c" in
   save output_dir test_file tests_doc;
   let script_doc = compile_script ~output_dir ~test_file in
-  save ~perm:0o777 "./" "run_tests.sh" script_doc;
+  save ~perm:0o777 output_dir "run_tests.sh" script_doc;
   ()

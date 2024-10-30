@@ -16,6 +16,44 @@ type opt_pass =
     transform : GT.t -> GT.t
   }
 
+module FlipIfs = struct
+  (* TODO: Improve performance on runway example *)
+  let transform (gd : GD.t) : GD.t =
+    let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
+    let rec aux (gt : GT.t) : GT.t =
+      let (GT (gt_, _, loc)) = gt in
+      match gt_ with
+      | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+      | Pick wgts -> GT.pick_ (List.map_snd aux wgts) loc
+      | ITE (it_if, gt_then, gt_else) ->
+        let gt_then, gt_else = (aux gt_then, aux gt_else) in
+        if not (SymSet.subset (IT.free_vars it_if) iargs) then (
+          let wgts1 =
+            match gt_then with
+            | GT (Pick wgts, _, _) ->
+              List.map_snd (fun gt' -> GT.assert_ (T it_if, gt') loc) wgts
+            | gt' -> [ (Z.one, GT.assert_ (T it_if, gt') loc) ]
+          in
+          let wgts2 =
+            match gt_else with
+            | GT (Pick wgts, _, _) ->
+              List.map_snd (fun gt' -> GT.assert_ (T (IT.not_ it_if loc), gt') loc) wgts
+            | gt' -> [ (Z.one, GT.assert_ (T (IT.not_ it_if loc), gt') loc) ]
+          in
+          GT.pick_ (wgts1 @ wgts2) loc)
+        else
+          GT.ite_ (it_if, gt_then, gt_else) loc
+      | Asgn ((it_addr, sct), it_val, gt') ->
+        GT.asgn_ ((it_addr, sct), it_val, aux gt') loc
+      | Let (backtracks, (x, gt_inner), gt') ->
+        GT.let_ (backtracks, (x, aux gt_inner), aux gt') loc
+      | Assert (lc, gt') -> GT.assert_ (lc, aux gt') loc
+      | Map ((i, i_bt, it_perm), gt_inner) ->
+        GT.map_ ((i, i_bt, it_perm), aux gt_inner) loc
+    in
+    { gd with body = Some (aux (Option.get gd.body)) }
+end
+
 module Fusion = struct
   module Each = struct
     let check_index_ok (m : Sym.t) (i : Sym.t) (it : IT.t) : bool =
@@ -70,22 +108,27 @@ module Fusion = struct
       (x : Sym.t)
       ((it_min, it_max) : IT.t * IT.t)
       (gt : GT.t)
-      : (Sym.t * IT.t) list
+      : GT.t * (Sym.t * IT.t) list
       =
-      let rec aux (gt : GT.t) : (Sym.t * IT.t) list =
-        let (GT (gt_, _, _)) = gt in
+      let rec aux (gt : GT.t) : GT.t * (Sym.t * IT.t) list =
+        let (GT (gt_, _, loc)) = gt in
         match gt_ with
         | Arbitrary | Uniform _ | Pick _ | Alloc _ | Call _ | Return _ | ITE _ | Map _ ->
-          []
-        | Asgn (_, _, gt') -> aux gt'
-        | Let (_, (_, gt_inner), gt_body) -> aux gt_inner @ aux gt_body
+          (gt, [])
+        | Asgn ((it_addr, sct), it_val, gt') ->
+          let gt', res = aux gt' in
+          (GT.asgn_ ((it_addr, sct), it_val, gt') loc, res)
+        | Let (backtracks, (y, gt_inner), gt_rest) ->
+          let gt_inner, res = aux gt_inner in
+          let gt_rest, res' = aux gt_rest in
+          (GT.let_ (backtracks, (y, gt_inner), gt_rest) loc, res @ res')
         | Assert
             ( Forall
                 ((i, i_bt), (IT (Binop (Implies, it_perm, it_body), _, loc_implies) as it)),
               gt' )
           when SymSet.mem x (IT.free_vars it) && check_index_ok x i it ->
           let it_min', it_max' = GA.get_bounds (i, i_bt) it_perm in
-          let res = aux gt' in
+          let gt', res = aux gt' in
           if
             IT.equal it_min it_min'
             && IT.equal it_max it_max'
@@ -93,10 +136,12 @@ module Fusion = struct
                  (SymSet.remove i (IT.free_vars_list [ it_perm; it_body ]))
                  vars
           then
-            (i, IT.arith_binop Implies (it_perm, it_body) loc_implies) :: res
+            (gt', (i, IT.arith_binop Implies (it_perm, it_body) loc_implies) :: res)
           else
-            res
-        | Assert (_, gt') -> aux gt'
+            (GT.assert_ (Forall ((i, i_bt), it), gt') loc, res)
+        | Assert (lc, gt') ->
+          let gt', res = aux gt' in
+          (GT.assert_ (lc, gt') loc, res)
       in
       aux gt
 
@@ -128,7 +173,7 @@ module Fusion = struct
             (backtracks, (x, GT (Map ((i, i_bt, it_perm), gt_inner), _, loc_map)), gt_rest)
           ->
           let its_bounds = GA.get_bounds (i, i_bt) it_perm in
-          let constraints =
+          let gt_rest, constraints =
             collect_constraints (SymSet.add x vars) x its_bounds gt_rest
           in
           let gt_inner =
@@ -462,7 +507,7 @@ module PartialEvaluation = struct
             else
               IT.and2_ (t1, loop (i + 1)) here)
           else
-            failwith "unreachable"
+            failwith ("unreachable @ " ^ __LOC__)
         in
         if i_start > i_end then return @@ IT.bool_ true here else eval_aux (loop i_start)
       | NthTuple (i, it') ->
@@ -891,26 +936,22 @@ module PushPull = struct
   let push_in_outer_generators (gt : GT.t) : GT.t =
     let aux (gt : GT.t) : GT.t =
       match gt with
-      | GT
-          ( Asgn ((it_addr, sct), it_val, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
-            _,
-            loc_asgn )
-        when SymSet.is_empty (SymSet.inter (IT.free_vars it_addr) (IT.free_vars it_if)) ->
-        GT.ite_
-          ( it_if,
-            GT.asgn_ ((it_addr, sct), it_val, gt_then) loc_asgn,
-            GT.asgn_ ((it_addr, sct), it_val, gt_else) loc_asgn )
-          loc_ite
-      | GT
-          ( Let (x_backtracks, (x, gt1), GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
-            _,
-            loc_let )
-        when not (SymSet.mem x (IT.free_vars it_if)) ->
-        GT.ite_
-          ( it_if,
-            GT.let_ (x_backtracks, (x, gt1), gt_then) loc_let,
-            GT.let_ (x_backtracks, (x, gt1), gt_else) loc_let )
-          loc_ite
+      | GT (Asgn ((it_addr, sct), it_val, GT (Pick wgts, _, loc_pick)), _, loc_asgn) ->
+        GT.pick_
+          (List.map_snd (fun gt' -> GT.asgn_ ((it_addr, sct), it_val, gt') loc_asgn) wgts)
+          loc_pick
+      | GT (Let (x_backtracks, (x, gt_inner), GT (Pick wgts, _, loc_pick)), _, loc_let) ->
+        GT.pick_
+          (List.map_snd
+             (fun gt' -> GT.let_ (x_backtracks, (x, gt_inner), gt') loc_let)
+             wgts)
+          loc_pick
+      | GT (Let (x_backtracks, (x, GT (Pick wgts, _, loc_pick)), gt_rest), _, loc_let) ->
+        GT.pick_
+          (List.map_snd
+             (fun gt' -> GT.let_ (x_backtracks, (x, gt'), gt_rest) loc_let)
+             wgts)
+          loc_pick
       | GT
           ( Let (x_backtracks, (x, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), gt2),
             _,
@@ -920,11 +961,8 @@ module PushPull = struct
             GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
             GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
           loc_ite
-      | GT (Assert (lc, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), _, loc_assert)
-        when SymSet.is_empty (SymSet.inter (LC.free_vars lc) (IT.free_vars it_if)) ->
-        GT.ite_
-          (it_if, GT.assert_ (lc, gt_then) loc_assert, GT.assert_ (lc, gt_else) loc_assert)
-          loc_ite
+      | GT (Assert (lc, GT (Pick wgts, _, loc_pick)), _, loc_assert) ->
+        GT.pick_ (List.map_snd (fun gt' -> GT.assert_ (lc, gt') loc_assert) wgts) loc_pick
       | _ -> gt
     in
     GT.map_gen_pre aux gt
@@ -933,7 +971,7 @@ module PushPull = struct
   let transform (gt : GT.t) : GT.t =
     let rec loop (gt : GT.t) : GT.t =
       let old_gt = gt in
-      let new_gt = gt |> pull_out_inner_generators (* |> push_in_outer_generators *) in
+      let new_gt = gt |> pull_out_inner_generators |> push_in_outer_generators in
       if GT.equal old_gt new_gt then new_gt else loop new_gt
     in
     loop gt
@@ -947,6 +985,33 @@ module BranchPruning = struct
     let transform (gt : GT.t) : GT.t =
       let aux (gt : GT.t) : GT.t =
         match gt with
+        | GT (Pick [ (_, gt') ], _, _) -> gt'
+        | GT (Pick wgts, _, loc_pick) ->
+          let rec aux'' (wgts : (Z.t * GT.t) list) : (Z.t * GT.t) list =
+            match List.find_index (fun (_, gt') -> GT.is_pick gt') wgts with
+            | Some i ->
+              let w, gt' = List.nth wgts i in
+              let wgts = List.filteri (fun i' _ -> i <> i') wgts in
+              (match gt' with
+               | GT (Pick wgts', _, _) when List.non_empty wgts' ->
+                 let w_sum = List.fold_left Z.add Z.zero (List.map fst wgts') in
+                 let wgts =
+                   List.map_fst (Z.mul w_sum) wgts @ List.map_fst (Z.mul w) wgts'
+                 in
+                 let wgts =
+                   let gcd =
+                     List.fold_left
+                       (fun x y -> Z.gcd x y)
+                       (fst (List.hd wgts))
+                       (List.map fst (List.tl wgts))
+                   in
+                   List.map_fst (fun x -> Z.div x gcd) wgts
+                 in
+                 aux'' wgts
+               | _ -> failwith ("unreachable @ " ^ __LOC__))
+            | None -> wgts
+          in
+          GT.pick_ (aux'' wgts) loc_pick
         | GT (ITE (it_cond, gt_then, gt_else), _, _) ->
           if IT.is_true it_cond then
             gt_then
@@ -967,7 +1032,9 @@ module BranchPruning = struct
       let (GT (gt_, _, _)) = gt in
       match gt_ with
       | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> false
-      | Pick wgts -> List.for_all (fun (_, gt') -> contains_false_assertion gt') wgts
+      | Pick wgts ->
+        List.is_empty wgts
+        || List.for_all (fun (_, gt') -> contains_false_assertion gt') wgts
       | Asgn ((it_addr, _), _, gt') ->
         (match it_addr with
          | IT (Const Null, _, _) -> true
@@ -989,6 +1056,10 @@ module BranchPruning = struct
     let transform (gt : GT.t) : GT.t =
       let aux (gt : GT.t) : GT.t =
         match gt with
+        | GT (Pick wgts, _, loc_pick) ->
+          GT.pick_
+            (List.filter (fun (_, gt') -> not (contains_false_assertion gt')) wgts)
+            loc_pick
         | GT (ITE (it_if, gt_then, gt_else), _, loc_ite) ->
           if contains_false_assertion gt_else then
             GT.assert_ (T it_if, gt_then) loc_ite
@@ -1492,11 +1563,12 @@ module SplitConstraints = struct
           let it = dnf it in
           (match it with
            | IT (Binop (Or, _, _), _, _) ->
-             let cases = it |> listify_constraints in
-             List.fold_left
-               (fun gt_rest it' -> GT.ite_ (it', gt', gt_rest) loc)
-               (GT.assert_ (T (List.hd cases), gt') loc)
-               (List.tl cases)
+             let cases =
+               it
+               |> listify_constraints
+               |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
+             in
+             GT.pick_ cases loc
            | _ -> gt)
         | _ -> gt
       in
@@ -1513,8 +1585,12 @@ module SplitConstraints = struct
       let aux (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
-        | Assert (T (IT (Binop (Implies, it_if, it_then), _, loc_ite)), gt') ->
-          GT.ite_ (it_if, GT.assert_ (T it_then, gt') loc, gt') loc_ite
+        | Assert (T (IT (Binop (Implies, it_if, it_then), _, loc_implies)), gt') ->
+          GT.pick_
+            [ (Z.one, GT.assert_ (T (IT.not_ it_if loc_implies), gt') loc);
+              (Z.one, GT.assert_ (T it_then, gt') loc)
+            ]
+            loc_implies
         | _ -> gt
       in
       GT.map_gen_pre aux gt
@@ -2017,16 +2093,19 @@ module ConstraintPropagation = struct
 
     let of_ (mult : Z.t) (intervals : Intervals.t) : t =
       let intervals =
-        let open Z in
-        let min = Option.get (Intervals.minimum intervals) in
-        let min' = min / mult * mult in
-        let max' = Z.succ (Option.get (Intervals.maximum intervals)) in
-        let max =
-          ((max' / mult) + if Z.equal (max' mod mult) Z.zero then Z.zero else Z.one)
-          * mult
-        in
-        let mult_interval = Interval.range (Z.max min min') (Z.min max max') in
-        Intervals.intersect (Intervals.of_interval mult_interval) intervals
+        if Intervals.is_empty intervals then
+          intervals
+        else
+          let open Z in
+          let min = Option.get (Intervals.minimum intervals) in
+          let min' = min / mult * mult in
+          let max' = Z.succ (Option.get (Intervals.maximum intervals)) in
+          let max =
+            ((max' / mult) + if Z.equal (max' mod mult) Z.zero then Z.zero else Z.one)
+            * mult
+          in
+          let mult_interval = Interval.range (Z.max min min') (Z.min max max') in
+          Intervals.intersect (Intervals.of_interval mult_interval) intervals
       in
       { mult; intervals }
 
@@ -2055,6 +2134,17 @@ module ConstraintPropagation = struct
 
     let const (n : Z.t) : t = of_interval (Interval.const n)
 
+    let empty () : t =
+      let i =
+        Intervals.intersect
+          (Intervals.of_interval (Interval.const Z.zero))
+          (Intervals.of_interval (Interval.const Z.one))
+      in
+      (* So we know if something changes in [Intervals] *)
+      assert (Intervals.is_empty i);
+      of_intervals i
+
+
     let ne (n : Z.t) : t =
       of_intervals (Intervals.complement (Intervals.of_interval (Interval.const n)))
 
@@ -2077,9 +2167,11 @@ module ConstraintPropagation = struct
 
     let is_const (r : t) : Z.t option = Intervals.is_const r.intervals
 
-    let minimum (r : t) : Z.t = Option.get (Intervals.minimum r.intervals)
+    let is_empty (r : t) : bool = Intervals.is_empty r.intervals
 
-    let maximum (r : t) : Z.t = Option.get (Intervals.maximum r.intervals)
+    let minimum (r : t) : Z.t option = Intervals.minimum r.intervals
+
+    let maximum (r : t) : Z.t option = Intervals.maximum r.intervals
   end
 
   module Domain = struct
@@ -2355,42 +2447,46 @@ module ConstraintPropagation = struct
       let aux (sgn : BT.sign) (sz : int) : GS.t list =
         let loc = Locations.other __LOC__ in
         let min_bt, max_bt = BT.bits_range (sgn, sz) in
-        let min, max = (IntRep.minimum r, IntRep.maximum r) in
-        let stmts_range =
-          if Z.equal min max then
-            [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), IT.num_lit_ min bt loc) loc)) ]
-          else (
-            let stmt_min =
-              if Z.lt min_bt min then
-                [ GS.Assert
-                    (LC.T (IT.le_ (IT.num_lit_ min bt loc, IT.sym_ (x, bt, loc)) loc))
-                ]
-              else
-                []
-            in
-            let stmt_max =
-              if Z.lt max max_bt then
-                [ GS.Assert
-                    (LC.T (IT.le_ (IT.sym_ (x, bt, loc), IT.num_lit_ max bt loc) loc))
-                ]
-              else
-                []
-            in
-            stmt_min @ stmt_max)
-        in
-        let stmt_mult =
-          if Z.equal r.mult Z.one then
-            []
-          else
-            [ GS.Assert
-                (LC.T
-                   (IT.eq_
-                      ( IT.mod_ (IT.sym_ (x, bt, loc), IT.num_lit_ r.mult bt loc) loc,
-                        IT.num_lit_ Z.zero bt loc )
-                      loc))
-            ]
-        in
-        stmt_mult @ stmts_range
+        if IntRep.is_empty r then
+          [ GS.Assert (T (IT.bool_ false loc)) ]
+        else (
+          let min, max = (Option.get (IntRep.minimum r), Option.get (IntRep.maximum r)) in
+          let stmts_range =
+            if Z.equal min max then
+              [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), IT.num_lit_ min bt loc) loc))
+              ]
+            else (
+              let stmt_min =
+                if Z.lt min_bt min then
+                  [ GS.Assert
+                      (LC.T (IT.le_ (IT.num_lit_ min bt loc, IT.sym_ (x, bt, loc)) loc))
+                  ]
+                else
+                  []
+              in
+              let stmt_max =
+                if Z.lt max max_bt then
+                  [ GS.Assert
+                      (LC.T (IT.le_ (IT.sym_ (x, bt, loc), IT.num_lit_ max bt loc) loc))
+                  ]
+                else
+                  []
+              in
+              stmt_min @ stmt_max)
+          in
+          let stmt_mult =
+            if Z.equal r.mult Z.one then
+              []
+            else
+              [ GS.Assert
+                  (LC.T
+                     (IT.eq_
+                        ( IT.mod_ (IT.sym_ (x, bt, loc), IT.num_lit_ r.mult bt loc) loc,
+                          IT.num_lit_ Z.zero bt loc )
+                        loc))
+              ]
+          in
+          stmt_mult @ stmts_range)
       in
       match bt with
       | Loc () ->
@@ -2443,13 +2539,13 @@ module ConstraintPropagation = struct
       | _ -> None
 
 
-    let intersect (c1 : t) (c2 : t) : t option =
+    let intersect (c1 : t) (c2 : t) : t =
       match (c1, c2) with
-      | Eq, Eq | Ne, Ne | Lt, Lt | Le, Le -> Some c1
-      | Eq, Le | Le, Eq -> Some Eq
-      | Lt, Le | Le, Lt | Lt, Ne | Ne, Lt -> Some Lt
+      | Eq, Eq | Ne, Ne | Lt, Lt | Le, Le -> c1
+      | Eq, Le | Le, Eq -> Eq
+      | Lt, Le | Le, Lt | Lt, Ne | Ne, Lt -> Lt
       | Eq, Ne | Ne, Eq | Eq, Lt | Lt, Eq | Le, Ne | Ne, Le | Invalid, _ | _, Invalid ->
-        None
+        Invalid
   end
 
   module ConstraintNetwork = struct
@@ -2480,9 +2576,7 @@ module ConstraintPropagation = struct
       let g =
         match G.find_all_edges g x y with
         | [ (x', c', y') ] ->
-          G.add_edge_e
-            (G.remove_edge_e g (x', c', y'))
-            (x, Option.get (Constraint.intersect c c'), y)
+          G.add_edge_e (G.remove_edge_e g (x', c', y')) (x, Constraint.intersect c c', y)
         | [] -> G.add_edge_e g (x, c, y)
         | _ -> failwith __LOC__
       in
@@ -2573,14 +2667,38 @@ module ConstraintPropagation = struct
       in
       (r1', r2')
     | Lt ->
-      let r1' : Domain.t = Int (IntRep.intersect r1 (IntRep.lt (IntRep.maximum r2))) in
-      let r2' : Domain.t = Int (IntRep.intersect r2 (IntRep.geq (IntRep.minimum r1))) in
+      let r1' : Domain.t =
+        Int
+          (if IntRep.is_empty r2 then
+             r2
+           else
+             IntRep.intersect r1 (IntRep.lt (Option.get (IntRep.maximum r2))))
+      in
+      let r2' : Domain.t =
+        Int
+          (if IntRep.is_empty r1 then
+             r1
+           else
+             IntRep.intersect r2 (IntRep.geq (Option.get (IntRep.minimum r1))))
+      in
       (r1', r2')
     | Le ->
-      let r1' : Domain.t = Int (IntRep.intersect r1 (IntRep.leq (IntRep.maximum r2))) in
-      let r2' : Domain.t = Int (IntRep.intersect r2 (IntRep.gt (IntRep.minimum r1))) in
+      let r1' : Domain.t =
+        Int
+          (if IntRep.is_empty r2 then
+             r2
+           else
+             IntRep.intersect r1 (IntRep.leq (Option.get (IntRep.maximum r2))))
+      in
+      let r2' : Domain.t =
+        Int
+          (if IntRep.is_empty r1 then
+             r1
+           else
+             IntRep.intersect r2 (IntRep.gt (Option.get (IntRep.minimum r1))))
+      in
       (r1', r2')
-    | Invalid -> failwith __LOC__
+    | Invalid -> (Int (IntRep.empty ()), Int (IntRep.empty ()))
 
 
   (** AC-3 from https://doi.org/10.1016/0004-3702(77)90007-8 *)
@@ -2739,6 +2857,7 @@ module Specialization = struct
 
 
     let transform (gd : GD.t) : GD.t =
+      let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
       let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t =
         let rec loop (vars : SymSet.t) (gt : GT.t) : GT.t =
           let (GT (gt_, _bt, loc)) = gt in
@@ -2759,7 +2878,6 @@ module Specialization = struct
         in
         gt |> specialize vars |> loop vars
       in
-      let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
       { gd with body = Some (aux iargs (Option.get gd.body)) }
   end
 
@@ -2997,6 +3115,9 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   gd
   |> aux
   |> Fusion.Each.transform
+  |> aux
+  |> FlipIfs.transform
+  |> aux
   |> Reordering.transform
   |> ConstraintPropagation.transform
   |> Specialization.Equality.transform

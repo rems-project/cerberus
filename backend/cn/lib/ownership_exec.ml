@@ -9,7 +9,7 @@ let cn_ghost_state_struct_type =
   mk_ctype ~annots:[ CF.Annot.Atypedef (Sym.fresh_pretty "ownership_ghost_state") ] C.Void
 
 
-let cn_stack_depth_sym = Sym.fresh_pretty "cn_stack_depth"
+let get_cn_stack_depth_sym = Sym.fresh_pretty "get_cn_stack_depth"
 
 let cn_stack_depth_ctype = C.mk_ctype_integer (Signed Long)
 
@@ -17,9 +17,9 @@ let cn_stack_depth_incr_sym = Sym.fresh_pretty "ghost_stack_depth_incr"
 
 let cn_stack_depth_decr_sym = Sym.fresh_pretty "ghost_stack_depth_decr"
 
-let c_map_local_ownership_fn_sym = Sym.fresh_pretty "c_add_local_to_ghost_state"
+let c_add_ownership_fn_sym = Sym.fresh_pretty "c_add_to_ghost_state"
 
-let c_remove_local_ownership_fn_sym = Sym.fresh_pretty "c_remove_local_from_ghost_state"
+let c_remove_ownership_fn_sym = Sym.fresh_pretty "c_remove_from_ghost_state"
 
 (* TODO: Use these to reduce verbosity of output. Mirrors C+CN input slightly less since
    we replace declarations with a call to one of these macros *)
@@ -63,12 +63,6 @@ let get_end_loc ?(offset = 0) = function
       "get_end_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
 
 
-let create_ail_ownership_global_decls () =
-  [ (cn_ghost_state_sym, C.mk_ctype_pointer empty_qualifiers cn_ghost_state_struct_type);
-    (cn_stack_depth_sym, cn_stack_depth_ctype)
-  ]
-
-
 let get_ownership_global_init_stats () =
   let cn_ghost_state_init_fcall =
     mk_expr
@@ -96,9 +90,10 @@ let generate_c_local_ownership_entry_fcall (local_sym, local_ctype) =
       AilEcast (empty_qualifiers, C.uintptr_t, mk_expr (AilEunary (Address, local_ident))))
   in
   let arg2 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in
+  let arg3 = A.(AilEcall (mk_expr (AilEident get_cn_stack_depth_sym), [])) in
   mk_expr
     (AilEcall
-       (mk_expr (AilEident c_map_local_ownership_fn_sym), List.map mk_expr [ arg1; arg2 ]))
+       (mk_expr (AilEident c_add_ownership_fn_sym), List.map mk_expr [ arg1; arg2; arg3 ]))
 
 
 (* int x = 0, y = 5;
@@ -154,7 +149,7 @@ let generate_c_local_ownership_exit (local_sym, local_ctype) =
       (mk_expr
          A.(
            AilEcall
-             ( mk_expr (AilEident c_remove_local_ownership_fn_sym),
+             ( mk_expr (AilEident c_remove_ownership_fn_sym),
                List.map mk_expr [ arg1; arg2 ] ))))
 
 

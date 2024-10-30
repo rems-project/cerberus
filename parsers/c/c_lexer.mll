@@ -424,7 +424,7 @@ and hash = parse
         offset_location lexbuf file n
       )}
   | ("pragma" [^ '\n']* '\n')
-      { }
+      { new_line lexbuf }
   | [^ '\n']* eof
       { raise (Error Errors.Cparser_unexpected_eof) }
   | _

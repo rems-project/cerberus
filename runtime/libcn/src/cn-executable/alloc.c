@@ -65,6 +65,14 @@ void free_all(void) {
     curr = buf;
 }
 
+alloc_checkpoint alloc_save_checkpoint(void) {
+    return curr;
+}
+
+void free_after(alloc_checkpoint ptr) {
+    curr = ptr;
+}
+
 // void *alloc_zeros(long nbytes) {
 //     void *res = alloc(nbytes);
 //     bzero(res, nbytes);
