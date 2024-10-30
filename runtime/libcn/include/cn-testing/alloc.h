@@ -13,11 +13,25 @@ extern "C" {
 
     void cn_gen_alloc_reset(void);
 
+    void* cn_gen_alloc_save(void);
+
+    void cn_gen_alloc_restore(void* ptr);
+
+    void cn_gen_ownership_reset(void);
+
+    void* cn_gen_ownership_save(void);
+
+    void cn_gen_ownership_restore(void* ptr);
+
     cn_pointer* cn_gen_alloc(cn_bits_u64* sz);
 
     cn_pointer* cn_gen_aligned_alloc(cn_bits_u64* alignment, cn_bits_u64* sz);
 
-    cn_bits_u64* cn_gen_alloc_size(cn_pointer* p);
+    int cn_gen_alloc_check(void* p, size_t sz);
+
+    void cn_gen_ownership_update(void* p, size_t sz);
+
+    int cn_gen_ownership_check(cn_pointer* p, size_t sz);
 
 #ifdef __cplusplus
 }

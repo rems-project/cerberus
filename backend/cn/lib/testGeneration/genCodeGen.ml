@@ -198,7 +198,21 @@ let rec compile_term
                              mk_expr (AilEstr (None, [ (loc, [ Sym.pp_string name ]) ]))
                            ));
                       mk_expr (AilEident last_var)
-                    ] )))
+                    ]
+                    @ List.map
+                        (fun x ->
+                          mk_expr
+                            (AilEcast
+                               ( C.no_qualifiers,
+                                 C.pointer_to_char,
+                                 mk_expr
+                                   (AilEstr
+                                      ( None,
+                                        [ (Locations.other __LOC__, [ Sym.pp_string x ]) ]
+                                      )) )))
+                        (List.of_seq
+                           (SymSet.to_seq (SymSet.add pointer (IT.free_vars offset))))
+                    @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
     in
     let b4, s4, e4 = compile_term sigma name rest in
