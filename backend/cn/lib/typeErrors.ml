@@ -616,30 +616,33 @@ let canonicalize (path : string) : string =
     path
 
 
-(** Create a filename derived from the given error location, and create a file
-    with that name in [output_dir], which will be created if it doesn't exist.
-    If no directory is provided, or if the provided directory name is
-    unusable, the file is created in the system temporary directory instead. *)
+(** Construct a canonical path to a directory and create the directory if it
+    doesn't already exist. If [output_dir] is provided, the path will point to
+    it. If not, the path will point to a temporary directory instead. *)
+let mk_output_dir (output_dir : string option) : string =
+  match output_dir with
+  | None -> Filename.get_temp_dir_name ()
+  | Some d ->
+    let dir = canonicalize d in
+    if not (Sys.file_exists dir) then (
+      (* 0o700 == r+w+x permissions for current user *)
+      Sys.mkdir dir 0o700;
+      dir)
+    else if Sys.is_directory dir then
+      dir
+    else
+      Filename.get_temp_dir_name ()
+
+
+(** Construct a canonical filename for state output derived from the given error
+    location, located in [output_dir], if possible. *)
 let mk_state_file_name
   ?(output_dir : string option)
   ?(fn_name : string option)
   (loc : Cerb_location.t)
   : string
   =
-  let dir =
-    match output_dir with
-    | None -> Filename.get_temp_dir_name ()
-    | Some d ->
-      let dir = canonicalize d in
-      if not (Sys.file_exists dir) then (
-        (* 0o700 == r+w+x permissions for current user *)
-        Sys.mkdir dir 0o700;
-        dir)
-      else if Sys.is_directory dir then
-        dir
-      else
-        Filename.get_temp_dir_name ()
-  in
+  let dir = mk_output_dir output_dir in
   let file_tag =
     match Cerb_location.get_filename loc with
     | None -> ""
@@ -647,6 +650,25 @@ let mk_state_file_name
   in
   let function_tag = match fn_name with None -> "" | Some fn -> "__" ^ fn in
   let filename = "state" ^ file_tag ^ function_tag ^ ".html" in
+  Filename.concat dir filename
+
+
+(** Construct a canonical filename for report output derived from the given
+    error location, located in [output_dir], if possible. *)
+let mk_report_file_name
+  ?(output_dir : string option)
+  ?(fn_name : string option)
+  (loc : Cerb_location.t)
+  : string
+  =
+  let dir = mk_output_dir output_dir in
+  let file_tag =
+    match Cerb_location.get_filename loc with
+    | None -> ""
+    | Some filename -> "__" ^ Filename.basename filename
+  in
+  let function_tag = match fn_name with None -> "" | Some fn -> "__" ^ fn in
+  let filename = "report" ^ file_tag ^ function_tag ^ ".json" in
   Filename.concat dir filename
 
 
@@ -662,23 +684,30 @@ let report_pretty ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
     | Some state ->
       let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
-      let msg = !^"State file:" ^^^ !^("file://" ^ link) in
-      Some msg
-    | None -> None
+      let state_msg = !^"State file:" ^^^ !^("file://" ^ link) in
+      let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
+      let report_js = Report.report_to_yojson state in
+      let () = Yojson.Safe.to_file report_file report_js in
+      let report_msg = !^"Report file:" ^^^ !^("file://" ^ report_file) in
+      [ state_msg; report_msg ]
+    | None -> []
   in
-  Pp.error loc report.short (Option.to_list report.descr @ Option.to_list consider)
+  Pp.error loc report.short (Option.to_list report.descr @ consider)
 
 
 (* stealing some logic from pp_errors *)
 let report_json ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
   let report = pp_message msg in
-  let state_error_file =
+  let state_error_file, report_file =
     match report.state with
     | Some state ->
       let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
-      `String link
-    | None -> `Null
+      let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
+      let report_js = Report.report_to_yojson state in
+      let () = Yojson.Safe.to_file report_file report_js in
+      (`String link, `String report_file)
+    | None -> (`Null, `Null)
   in
   let descr =
     match report.descr with None -> `Null | Some descr -> `String (Pp.plain descr)
@@ -688,7 +717,8 @@ let report_json ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
       [ ("loc", Loc.json_loc loc);
         ("short", `String (Pp.plain report.short));
         ("descr", descr);
-        ("state", state_error_file)
+        ("state", state_error_file);
+        ("report", report_file)
       ]
   in
   Yojson.Safe.to_channel ~std:true stderr json
