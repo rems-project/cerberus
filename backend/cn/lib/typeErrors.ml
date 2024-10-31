@@ -676,7 +676,12 @@ let mk_report_file_name
     error contains enough information to create an HTML state report, generate
     one in [output_dir] (or, failing that, the system temporary directory) and
     print a link to it. *)
-let report_pretty ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
+let report_pretty
+  ?output_dir:dir_
+  ?(fn_name : string option)
+  ?(serialize_json : bool = false)
+  { loc; msg }
+  =
   (* stealing some logic from pp_errors *)
   let report = pp_message msg in
   let consider =
@@ -685,28 +690,39 @@ let report_pretty ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
       let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
       let state_msg = !^"State file:" ^^^ !^("file://" ^ link) in
-      let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
-      let report_js = Report.report_to_yojson state in
-      let () = Yojson.Safe.to_file report_file report_js in
-      let report_msg = !^"Report file:" ^^^ !^("file://" ^ report_file) in
-      [ state_msg; report_msg ]
+      if serialize_json then (
+        let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
+        let report_js = Report.report_to_yojson state in
+        let () = Yojson.Safe.to_file report_file report_js in
+        let report_msg = !^"Report file:" ^^^ !^("file://" ^ report_file) in
+        [ state_msg; report_msg ])
+      else
+        [ state_msg ]
     | None -> []
   in
   Pp.error loc report.short (Option.to_list report.descr @ consider)
 
 
 (* stealing some logic from pp_errors *)
-let report_json ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
+let report_json
+  ?output_dir:dir_
+  ?(fn_name : string option)
+  ?(serialize_json : bool = false)
+  { loc; msg }
+  =
   let report = pp_message msg in
   let state_error_file, report_file =
     match report.state with
     | Some state ->
       let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
-      let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
-      let report_js = Report.report_to_yojson state in
-      let () = Yojson.Safe.to_file report_file report_js in
-      (`String link, `String report_file)
+      if serialize_json then (
+        let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
+        let report_js = Report.report_to_yojson state in
+        let () = Yojson.Safe.to_file report_file report_js in
+        (`String link, `String report_file))
+      else
+        (`String link, `Null)
     | None -> (`Null, `Null)
   in
   let descr =
