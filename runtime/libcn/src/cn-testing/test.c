@@ -8,11 +8,10 @@
 
 #include <cn-executable/utils.h>
 
+#include <cn-testing/test.h>
 #include <cn-testing/result.h>
 #include <cn-testing/rand.h>
 #include <cn-testing/alloc.h>
-
-typedef enum cn_test_result cn_test_case_fn(void);
 
 struct cn_test_case {
     char* suite;
@@ -116,7 +115,7 @@ int cn_test_main(int argc, char* argv[]) {
             print_test_info(test_case->suite, test_case->name, 0, 0);
             fflush(stdout);
             checkpoints[i] = cn_gen_rand_save();
-            enum cn_test_result result = test_case->func();
+            enum cn_test_result result = test_case->func(1);
             if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {
                 results[i] = result;
             }
@@ -129,8 +128,9 @@ int cn_test_main(int argc, char* argv[]) {
                 printf("FAILED\n");
                 set_cn_logging_level(logging_level);
                 cn_gen_rand_restore(checkpoints[i]);
-                test_case->func();
+                test_case->func(0);
                 set_cn_logging_level(CN_LOGGING_NONE);
+                printf("\n\n");
                 break;
             case CN_TEST_GEN_FAIL:
                 printf("FAILED TO GENERATE VALID INPUT\n");
@@ -225,7 +225,7 @@ outside_loop:
         set_cn_logging_level(CN_LOGGING_INFO);
         reset_cn_exit_cb();
         // raise(SIGTRAP); // Trigger breakpoint
-        test_cases[mapToCase[testcase - 1]].func();
+        test_cases[mapToCase[testcase - 1]].func(0);
     }
 
     return !(failed == 0 && errored == 0);
