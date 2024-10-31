@@ -443,9 +443,16 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
           |> Option.map (fun level -> [ "--logging-level"; string_of_int level ])
           |> Option.to_list
           |> List.flatten)
+       @ (if Config.is_interactive () then
+            [ "--interactive" ]
+          else
+            [])
+       @ (match Config.is_until_timeout () with
+          | Some timeout -> [ "--until-timeout"; string_of_int timeout ]
+          | None -> [])
        @
-       if Config.is_interactive () then
-         [ "--interactive" ]
+       if Config.is_exit_fast () then
+         [ "--exit-fast" ]
        else
          [])
   in

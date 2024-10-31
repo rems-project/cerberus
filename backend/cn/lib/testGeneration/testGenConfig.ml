@@ -7,7 +7,9 @@ type t =
     null_in_every : int option;
     seed : string option;
     logging_level : int option;
-    interactive : bool
+    interactive : bool;
+    until_timeout : int option;
+    exit_fast : bool
   }
 
 let default =
@@ -17,7 +19,9 @@ let default =
     null_in_every = None;
     seed = None;
     logging_level = None;
-    interactive = false
+    interactive = false;
+    until_timeout = None;
+    exit_fast = false
   }
 
 
@@ -38,3 +42,7 @@ let has_seed () = !instance.seed
 let has_logging_level () = !instance.logging_level
 
 let is_interactive () = !instance.interactive
+
+let is_until_timeout () = !instance.until_timeout
+
+let is_exit_fast () = !instance.exit_fast

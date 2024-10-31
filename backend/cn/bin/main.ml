@@ -445,6 +445,8 @@ let run_tests
   seed
   logging_level
   interactive
+  until_timeout
+  exit_fast
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -493,7 +495,9 @@ let run_tests
               null_in_every;
               seed;
               logging_level;
-              interactive
+              interactive;
+              until_timeout;
+              exit_fast
             }
           in
           TestGeneration.run
@@ -914,6 +918,21 @@ module Testing_flags = struct
       "Enable interactive features for testing, such as requesting more detailed logs"
     in
     Arg.(value & flag & info [ "interactive" ] ~doc)
+
+
+  let test_until_timeout =
+    let doc =
+      "Keep rerunning tests until the given timeout (in seconds) has been reached"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.until_timeout
+      & info [ "until-timeout" ] ~doc)
+
+
+  let test_exit_fast =
+    let doc = "Stop testing upon finding the first failure" in
+    Arg.(value & flag & info [ "exit-fast" ] ~doc)
 end
 
 let testing_cmd =
@@ -942,6 +961,8 @@ let testing_cmd =
     $ Testing_flags.test_seed
     $ Testing_flags.test_logging_level
     $ Testing_flags.interactive_testing
+    $ Testing_flags.test_until_timeout
+    $ Testing_flags.test_exit_fast
   in
   let doc =
     "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\
