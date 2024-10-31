@@ -5,7 +5,7 @@
 #include <cn-executable/utils.h>
 #include <cn-testing/result.h>
 
-typedef enum cn_test_result cn_test_case_fn(void);
+typedef enum cn_test_result cn_test_case_fn(int);
 
 void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
 
@@ -37,7 +37,7 @@ void print_test_info(char* suite, char* name, int tests, int discards);
         longjmp(buf_##Name, 1);                                                         \
     }                                                                                   \
                                                                                         \
-    enum cn_test_result cn_test_##Name () {                                             \
+    enum cn_test_result cn_test_##Name (int printing) {                                 \
         if (setjmp(buf_##Name)) {                                                       \
             return CN_TEST_FAIL;                                                        \
         }                                                                               \
@@ -46,8 +46,10 @@ void print_test_info(char* suite, char* name, int tests, int discards);
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
         int i = 0, d = 0;                                                               \
         for (; i < Samples; i++) {                                                      \
-            printf("\r");                                                               \
-            print_test_info(#Suite, #Name, i, d);                                       \
+            if (printing) {                                                             \
+                printf("\r");                                                           \
+                print_test_info(#Suite, #Name, i, d);                                   \
+            }                                                                           \
             CN_TEST_INIT();                                                             \
             struct cn_gen_##Name##_record *res = cn_gen_##Name();                       \
             if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                     \
@@ -66,8 +68,10 @@ void print_test_info(char* suite, char* name, int tests, int discards);
             cn_gen_rand_replace(checkpoint);                                            \
         }                                                                               \
                                                                                         \
-        printf("\r");                                                                   \
-        print_test_info(#Suite, #Name, i, d);                                           \
+        if (printing) {                                                                 \
+            printf("\r");                                                               \
+            print_test_info(#Suite, #Name, i, d);                                       \
+        }                                                                               \
         return CN_TEST_PASS;                                                            \
     }
 
