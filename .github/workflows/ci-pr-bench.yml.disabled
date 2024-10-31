@@ -89,8 +89,8 @@ jobs:
     - name: Unzip and install cvc5
       run: |
         unzip cvc5-Linux-x86_64-static.zip
-        chmod +x cvc5-Linux-static/bin/cvc5
-        sudo cp cvc5-Linux-static/bin/cvc5 /usr/local/bin/
+        chmod +x cvc5-Linux-x86_64-static/bin/cvc5
+        sudo cp cvc5-Linux-x86_64-static/bin/cvc5 /usr/local/bin/
 
     - name: Install CN
       run: |
