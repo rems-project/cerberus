@@ -118,11 +118,14 @@ let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation)
   match i.internal with Some instr -> aux_at instr | None -> ()
 
 
-(* Populate record table *)
-let populate_record_map
-  (instrumentation : Core_to_mucore.instrumentation list)
-  (prog5 : unit Mucore.file)
-  =
+let add_records_to_map_from_fns_and_preds (prog5 : unit Mucore.file) =
+  let populate cn_sym bt =
+    Cn_internal_to_ail.augment_record_map ~cn_sym bt;
+    match bt with
+    | BT.Record members ->
+      List.iter Cn_internal_to_ail.augment_record_map (List.map snd members)
+    | _ -> ()
+  in
   let fun_syms_and_ret_types =
     List.map
       (fun (sym, (def : LogicalFunctions.definition)) -> (sym, def.return_bt))
@@ -134,6 +137,14 @@ let populate_record_map
       prog5.resource_predicates
   in
   List.iter
-    (fun (cn_sym, bt) -> Cn_internal_to_ail.augment_record_map ~cn_sym bt)
-    (fun_syms_and_ret_types @ pred_syms_and_ret_types);
+    (fun (cn_sym, bt) -> populate cn_sym bt)
+    (fun_syms_and_ret_types @ pred_syms_and_ret_types)
+
+
+(* Populate record table *)
+let populate_record_map
+  (instrumentation : Core_to_mucore.instrumentation list)
+  (prog5 : unit Mucore.file)
+  =
+  add_records_to_map_from_fns_and_preds prog5;
   List.iter add_records_to_map_from_instrumentation instrumentation

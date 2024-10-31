@@ -6,7 +6,7 @@ module BT = BaseTypes
 val ownership_ctypes : C.ctype list ref
 
 module MembersKey : sig
-  type t = (Id.t * Sym.t CF.Cn.cn_base_type) list
+  type t = (Id.t * BT.t) list
 
   val compare : t -> t -> int
 end

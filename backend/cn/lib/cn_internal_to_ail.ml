@@ -43,19 +43,17 @@ let rec cn_base_type_to_bt = function
 
 
 module MembersKey = struct
-  type t = (Id.t * Sym.t cn_base_type) list
+  type t = (Id.t * BT.t) list
 
   let rec compare (ms : t) ms' =
     match (ms, ms') with
     | [], [] -> 0
     | _, [] -> 1
     | [], _ -> -1
-    | (id, cn_bt) :: ms, (id', cn_bt') :: ms' ->
+    | (id, bt) :: ms, (id', bt') :: ms' ->
       let c = String.compare (Id.s id) (Id.s id') in
       if c == 0 then (
-        let c' =
-          BaseTypes.compare (cn_base_type_to_bt cn_bt) (cn_base_type_to_bt cn_bt')
-        in
+        let c' = BaseTypes.compare bt bt' in
         if c' == 0 then
           compare ms ms'
         else
@@ -171,8 +169,8 @@ let str_of_bt_bitvector_type sign size =
 
 let augment_record_map ?cn_sym bt =
   let sym_prefix = match cn_sym with Some sym' -> sym' | None -> Sym.fresh () in
-  match bt_to_cn_base_type bt with
-  | CN_record members ->
+  match bt with
+  | BT.Record members ->
     (* Augment records map if entry does not exist already *)
     if not (RecordMap.mem members !records) then (
       let sym' = generate_sym_with_suffix ~suffix:"_record" sym_prefix in
@@ -188,10 +186,7 @@ let lookup_records_map members =
       ("Record not found in map ("
        ^ String.concat
            ", "
-           (List.map
-              (fun (x, cbt) ->
-                Pp.(plain (BT.pp (cn_base_type_to_bt cbt) ^^ space ^^ Id.pp x)))
-              members)
+           (List.map (fun (x, bt) -> Pp.(plain (BT.pp bt ^^ space ^^ Id.pp x))) members)
        ^ ")")
 
 
@@ -214,7 +209,10 @@ let rec cn_to_ail_base_type ?pred_sym:(_ = None) cn_typ =
       (* gets replaced with typedef anyway (TODO: clean up) *)
     | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
     | CN_record members ->
-      let sym = lookup_records_map members in
+      let sym =
+        lookup_records_map
+          (List.map (fun (id, bt) -> (id, cn_base_type_to_bt bt)) members)
+      in
       Struct sym
     (* Every struct is converted into a struct pointer *)
     | CN_datatype sym -> Struct sym
@@ -362,6 +360,9 @@ let get_underscored_typedef_string_from_bt ?(is_record = false) bt =
        let suffix = if is_record then "" else "_cn" in
        let cn_sym = generate_sym_with_suffix ~suffix sym in
        Some ("struct_" ^ Sym.pp_string cn_sym)
+     | BT.Record ms ->
+       let sym = lookup_records_map ms in
+       Some ("struct_" ^ Sym.pp_string sym)
      | _ -> None)
 
 
@@ -1120,9 +1121,7 @@ let rec cn_to_ail_expr_aux_internal
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
     in
-    let transformed_ms =
-      List.map (fun (id, it) -> (id, bt_to_cn_base_type (IT.bt it))) ms
-    in
+    let transformed_ms = List.map (fun (id, it) -> (id, IT.bt it)) ms in
     let sym_name = lookup_records_map transformed_ms in
     let ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct sym_name))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
@@ -1601,9 +1600,7 @@ let cn_to_ail_expr_internal_with_pred_name
 let create_member (ctype, id) = (id, (empty_attributes, None, empty_qualifiers, ctype))
 
 let generate_tag_definition dt_members =
-  let ail_dt_members =
-    List.map (fun (id, cn_type) -> (cn_to_ail_base_type cn_type, id)) dt_members
-  in
+  let ail_dt_members = List.map (fun (id, bt) -> (bt_to_ail_ctype bt, id)) dt_members in
   (* TODO: Check if something called tag already exists *)
   let members = List.map create_member ail_dt_members in
   C.(StructDef (members, None))
@@ -1728,9 +1725,13 @@ let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
       create_member (mk_ctype cntype_pointer, Id.id "cntype")
     ]
   in
-  let structs =
-    List.map (fun c -> generate_struct_definition c) cn_datatype.cn_dt_cases
+  let bt_cases =
+    List.map
+      (fun (sym, ms) ->
+        (sym, List.map (fun (id, cn_t) -> (id, cn_base_type_to_bt cn_t)) ms))
+      cn_datatype.cn_dt_cases
   in
+  let structs = List.map (fun c -> generate_struct_definition c) bt_cases in
   let structs =
     if first then (
       let generic_dt_struct =
@@ -1993,7 +1994,7 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
           | Some member_ctype_str -> "default_" ^ member_ctype_str
           | None ->
             Printf.printf "%s\n" (Pp.plain (BT.pp bt));
-            failwith "no underscored typedef string found"
+            failwith "Datatype default function: no underscored typedef string found"
         in
         let fcall =
           A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), []))
@@ -2185,7 +2186,7 @@ let generate_struct_default_function
         | Some member_ctype_str -> "default_" ^ member_ctype_str
         | None ->
           Printf.printf "%s\n" (Pp.plain (BT.pp bt));
-          failwith "no underscored typedef string found"
+          failwith "Struct default function: no underscored typedef string found"
       in
       let fcall =
         A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), []))
@@ -2474,6 +2475,7 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
   : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
   let cn_sym = sym in
+  (* Printf.printf "Record sym: %s\n" (Sym.pp_string cn_sym); *)
   let fn_str = "default_struct_" ^ Sym.pp_string cn_sym in
   let cn_struct_ctype = C.(Struct cn_sym) in
   let cn_struct_ptr_ctype =
@@ -2487,6 +2489,7 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
   let ret_ident = A.(AilEident ret_sym) in
   (* Function body *)
   let generate_member_default_assign (id, bt) =
+    (* Printf.printf "Member: %s\n" (Id.pp_string id); *)
     let lhs = A.(AilEmemberofptr (mk_expr ret_ident, id)) in
     let member_ctype_str_opt = get_underscored_typedef_string_from_bt bt in
     let default_fun_str =
@@ -2494,7 +2497,7 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
       | Some member_ctype_str -> "default_" ^ member_ctype_str
       | None ->
         Printf.printf "%s\n" (Pp.plain (BT.pp bt));
-        failwith "no underscored typedef string found"
+        failwith "Record default function: no underscored typedef string found"
     in
     let fcall =
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), []))
@@ -2918,9 +2921,8 @@ let cn_to_ail_logical_constraint
 
 let rec generate_record_opt pred_sym = function
   | BT.Record members ->
-    let members' = List.map (fun (id, bt) -> (id, bt_to_cn_base_type bt)) members in
     let record_sym = generate_sym_with_suffix ~suffix:"_record" pred_sym in
-    Some (generate_struct_definition ~lc:false (record_sym, members'))
+    Some (generate_struct_definition ~lc:false (record_sym, members))
   | BT.Tuple ts ->
     let members = List.map (fun t -> (create_id_from_sym (Sym.fresh ()), t)) ts in
     generate_record_opt pred_sym (BT.Record members)
