@@ -986,7 +986,8 @@ module BranchPruning = struct
       let aux (gt : GT.t) : GT.t =
         match gt with
         | GT (Pick [ (_, gt') ], _, _) -> gt'
-        | GT (Pick wgts, _, loc_pick) ->
+        (* TODO: Understand why this is so bad *)
+        (* | GT (Pick wgts, _, loc_pick) ->
           let rec aux'' (wgts : (Z.t * GT.t) list) : (Z.t * GT.t) list =
             match List.find_index (fun (_, gt') -> GT.is_pick gt') wgts with
             | Some i ->
@@ -1011,7 +1012,7 @@ module BranchPruning = struct
                | _ -> failwith ("unreachable @ " ^ __LOC__))
             | None -> wgts
           in
-          GT.pick_ (aux'' wgts) loc_pick
+          GT.pick_ (aux'' wgts) loc_pick *)
         | GT (ITE (it_cond, gt_then, gt_else), _, _) ->
           if IT.is_true it_cond then
             gt_then
