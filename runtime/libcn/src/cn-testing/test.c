@@ -38,6 +38,20 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func) {
     };
 }
 
+void print_test_info(char* suite, char* name, int tests, int discards) {
+    if (tests == 0 && discards == 0) {
+        printf("Testing %s::%s:", suite, name);
+    }
+    else if (discards == 0) {
+        printf("Testing %s::%s: %d runs", suite, name, tests);
+    }
+    else {
+        printf("Testing %s::%s: %d runs; %d discarded", suite, name, tests, discards);
+    }
+
+    fflush(stdout);
+}
+
 int cn_test_main(int argc, char* argv[]) {
     set_cn_logging_level(CN_LOGGING_NONE);
 
@@ -82,9 +96,11 @@ int cn_test_main(int argc, char* argv[]) {
     enum cn_test_result results[CN_TEST_MAX_TEST_CASES];
     for (int i = 0; i < num_test_cases; i++) {
         struct cn_test_case* test_case = &test_cases[i];
-        printf("Testing %s::%s: ", test_case->suite, test_case->name);
+        print_test_info(test_case->suite, test_case->name, 0, 0);
+        fflush(stdout);
         checkpoints[i] = cn_gen_rand_save();
         results[i] = test_case->func();
+        printf("\n");
         switch (results[i]) {
         case CN_TEST_PASS:
             passed++;

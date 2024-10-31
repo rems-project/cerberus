@@ -9,6 +9,8 @@ typedef enum cn_test_result cn_test_case_fn(void);
 
 void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
 
+void print_test_info(char* suite, char* name, int tests, int discards);
+
 #define CN_UNIT_TEST_CASE(Name)                                                         \
     static jmp_buf buf_##Name;                                                          \
                                                                                         \
@@ -28,7 +30,7 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
         return CN_TEST_PASS;                                                            \
     }
 
-#define CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Name, Samples, Init, ...)                  \
+#define CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Suite, Name, Samples, Init, ...)           \
     static jmp_buf buf_##Name;                                                          \
                                                                                         \
     void cn_test_##Name##_fail () {                                                     \
@@ -42,11 +44,21 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
         set_cn_exit_cb(&cn_test_##Name##_fail);                                         \
                                                                                         \
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
-        for (int i = 0; i < Samples; i++) {                                             \
+        int i = 0, d = 0;                                                               \
+        for (; i < Samples; i++) {                                                      \
+            printf("\r");                                                               \
+            print_test_info(#Suite, #Name, i, d);                                       \
             CN_TEST_INIT();                                                             \
             struct cn_gen_##Name##_record *res = cn_gen_##Name();                       \
             if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                     \
-                return CN_TEST_GEN_FAIL;                                                \
+                i--;                                                                    \
+                d++;                                                                    \
+                if (d == 10 * Samples) {                                                \
+                    printf("\r");                                                       \
+                    print_test_info(#Suite, #Name, i + 1, d);                           \
+                    return CN_TEST_GEN_FAIL;                                            \
+                }                                                                       \
+                continue;                                                               \
             }                                                                           \
             assume_##Name(__VA_ARGS__);                                                 \
             Init(res);                                                                  \
@@ -54,16 +66,18 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
             cn_gen_rand_replace(checkpoint);                                            \
         }                                                                               \
                                                                                         \
+        printf("\r");                                                                   \
+        print_test_info(#Suite, #Name, i, d);                                           \
         return CN_TEST_PASS;                                                            \
     }
 
-#define CN_RANDOM_TEST_CASE_WITH_INIT(Name, Samples, ...)                               \
+#define CN_RANDOM_TEST_CASE_WITH_INIT(Suite, Name, Samples, ...)                        \
     CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(                                               \
-        Name, Samples, cn_test_##Name##_init, __VA_ARGS__)
+        Suite, Name, Samples, cn_test_##Name##_init, __VA_ARGS__)
 
 
-#define CN_RANDOM_TEST_CASE(Name, Samples, ...)                                         \
-    CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Name, Samples, , __VA_ARGS__)
+#define CN_RANDOM_TEST_CASE(Suite, Name, Samples, ...)                                  \
+    CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Suite, Name, Samples, , __VA_ARGS__)
 
 int cn_test_main(int argc, char* argv[]);
 
