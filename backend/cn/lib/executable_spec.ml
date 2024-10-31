@@ -227,10 +227,10 @@ let main
   let c_datatype_defs, _c_datatype_decls, c_datatype_equality_fun_decls =
     generate_c_datatypes sigm
   in
-  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records =
+  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, _c_records =
     generate_c_functions_internal sigm prog5.logical_predicates
   in
-  let c_predicate_defs, locs_and_c_predicate_decls, c_records' =
+  let c_predicate_defs, locs_and_c_predicate_decls, _c_records' =
     generate_c_predicates_internal sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
@@ -252,31 +252,22 @@ let main
   let cn_converted_struct_defs, _cn_converted_struct_decls =
     generate_cn_versions_of_structs sigm.tag_definitions
   in
-  (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) =
-     generate_all_record_strs sigm in *)
-  let record_defs_str, _record_decls_str = c_records in
-  let record_defs_str', _record_decls_str = c_records' in
   let record_fun_defs, record_fun_decls =
-    Executable_spec_internal.generate_c_record_funs
-      sigm
-      prog5.logical_predicates
-      prog5.resource_predicates
+    Executable_spec_records.generate_c_record_funs sigm
   in
-  (* let extern_ownership_globals = if with_ownership_checking then "\n" ^
-     generate_ownership_globals ~is_extern:true () else "" in *)
   let datatype_strs = String.concat "\n" (List.map snd c_datatype_defs) in
   let predicate_decls =
     String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls))
   in
+  let record_defs, _record_decls = Executable_spec_records.generate_all_record_strs () in
   let cn_header_decls_list =
     [ cn_utils_header;
       "\n";
+      (if not (String.equal record_defs "") then "\n/* CN RECORDS */\n\n" else "");
+      record_defs;
       c_struct_defs;
       cn_converted_struct_defs;
-      (if String.equal record_defs_str "" then "\n/* CN RECORDS */\n\n" else "");
-      record_defs_str;
-      record_defs_str';
-      (if String.equal datatype_strs "" then "\n/* CN DATATYPES */\n\n" else "");
+      (if not (String.equal datatype_strs "") then "\n/* CN DATATYPES */\n\n" else "");
       datatype_strs;
       "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
       ownership_function_decls;

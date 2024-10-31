@@ -143,7 +143,7 @@ val cn_to_ail_datatype
   A.sigma_cn_datatype ->
   Locations.t * A.sigma_tag_definition list
 
-val cn_to_ail_pred_records
+val cn_to_ail_records
   :  (MembersKey.t * A.ail_identifier) list ->
   A.sigma_tag_definition list
 
