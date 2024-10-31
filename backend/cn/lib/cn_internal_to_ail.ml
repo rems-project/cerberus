@@ -167,15 +167,14 @@ let str_of_bt_bitvector_type sign size =
   sign_str ^ size_str
 
 
-let rec augment_record_map ?cn_sym bt =
+let augment_record_map ?cn_sym bt =
   let sym_prefix = match cn_sym with Some sym' -> sym' | None -> Sym.fresh () in
   match bt with
   | BT.Record members ->
     (* Augment records map if entry does not exist already *)
     if not (RecordMap.mem members !records) then (
       let sym' = generate_sym_with_suffix ~suffix:"_record" sym_prefix in
-      records := RecordMap.add members sym' !records;
-      List.iter augment_record_map (List.map snd members))
+      records := RecordMap.add members sym' !records)
   | _ -> ()
 
 
@@ -361,6 +360,9 @@ let get_underscored_typedef_string_from_bt ?(is_record = false) bt =
        let suffix = if is_record then "" else "_cn" in
        let cn_sym = generate_sym_with_suffix ~suffix sym in
        Some ("struct_" ^ Sym.pp_string cn_sym)
+     | BT.Record ms ->
+       let sym = lookup_records_map ms in
+       Some ("struct_" ^ Sym.pp_string sym)
      | _ -> None)
 
 
@@ -2473,7 +2475,7 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
   : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
   let cn_sym = sym in
-  Printf.printf "Record sym: %s\n" (Sym.pp_string cn_sym);
+  (* Printf.printf "Record sym: %s\n" (Sym.pp_string cn_sym); *)
   let fn_str = "default_struct_" ^ Sym.pp_string cn_sym in
   let cn_struct_ctype = C.(Struct cn_sym) in
   let cn_struct_ptr_ctype =
@@ -2487,6 +2489,7 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
   let ret_ident = A.(AilEident ret_sym) in
   (* Function body *)
   let generate_member_default_assign (id, bt) =
+    (* Printf.printf "Member: %s\n" (Id.pp_string id); *)
     let lhs = A.(AilEmemberofptr (mk_expr ret_ident, id)) in
     let member_ctype_str_opt = get_underscored_typedef_string_from_bt bt in
     let default_fun_str =
