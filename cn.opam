@@ -7,6 +7,7 @@ depends: [
   "monomorphic"
   "ocaml" {>= "4.14.0"}
   "ppx_deriving"
+  "ppx_deriving_yojson" {>= "3.8.0"}
   "cmdliner"
   "ocamlgraph"
 ]
