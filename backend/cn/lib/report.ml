@@ -2,11 +2,13 @@ type term_entry =
   { term : Pp.document;
     value : Pp.document
   }
+[@@deriving yojson]
 
 type predicate_clause_entry =
   { cond : Pp.document;
     clause : Pp.document
   }
+[@@deriving yojson]
 
 type resource_entry =
   { res : Pp.document;
@@ -19,12 +21,14 @@ type where_report =
     loc_cartesian : ((int * int) * (int * int)) option;
     loc_head : string (* loc_pos: string; *)
   }
+[@@deriving yojson]
 
 (* Different forms of a document. *)
 type simp_view =
   { original : Pp.document; (* original view *)
     simplified : Pp.document list (* simplified based on model *)
   }
+[@@deriving yojson]
 
 type label = string
 
@@ -32,11 +36,49 @@ let lab_interesting : label = "interesting"
 
 let lab_uninteresting : label = "uninteresting"
 
-module StrMap = Map.Make (String)
+let sequence (xs : ('a, 'e) Result.t list) : ('a list, 'e) Result.t =
+  let ( let* ) = Result.bind in
+  let rcons e es =
+    let* v = e in
+    let* vs = es in
+    Ok (v :: vs)
+  in
+  List.fold_right rcons xs (Ok [])
+
+
+module StrMap = struct
+  module M = Map.Make (String)
+
+  let to_yojson (value_to_yojson : 'v -> Yojson.Safe.t) (map : 'v M.t) : Yojson.Safe.t =
+    `Assoc (List.map_snd value_to_yojson (M.bindings map))
+
+
+  let of_yojson
+    (value_of_yojson : Yojson.Safe.t -> ('v, string) Result.t)
+    (json : Yojson.Safe.t)
+    : ('v M.t, string) Result.t
+    =
+    match json with
+    | `Assoc elems ->
+      let ( let* ) = Result.bind in
+      let elems' =
+        List.map
+          (fun (key, json_value) ->
+            let* value = value_of_yojson json_value in
+            Ok (key, value))
+          elems
+      in
+      let* bindings = sequence elems' in
+      Ok (M.of_seq (List.to_seq bindings))
+    | _ -> Error ("StrMap.of_yojson: expected `Assoc, found " ^ Yojson.Safe.to_string json)
+
+
+  include M
+end
 
 (* Things classified in various ways.
    To start we just have "interesting" and "uninteresting", but we could add more *)
-type 'a labeled_view = 'a list StrMap.t
+type 'a labeled_view = 'a list StrMap.t [@@deriving yojson]
 
 let labeled_empty = StrMap.empty
 
@@ -49,6 +91,7 @@ type state_report =
     constraints : simp_view labeled_view;
     terms : term_entry labeled_view
   }
+[@@deriving yojson]
 
 type report =
   { trace : state_report list;
@@ -56,6 +99,7 @@ type report =
     unproven : Pp.document (* * Pp.document *) option;
     predicate_hints : predicate_clause_entry list
   }
+[@@deriving yojson]
 
 let list elements = String.concat "" elements
 

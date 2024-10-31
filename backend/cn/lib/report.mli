@@ -77,3 +77,7 @@ type report =
 
     The third argument is information about the various things that need to be saved. *)
 val make : string -> string Option.m -> report -> string
+
+val report_of_yojson : Yojson.Safe.t -> (report, string) Result.t
+
+val report_to_yojson : report -> Yojson.Safe.t

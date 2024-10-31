@@ -335,3 +335,17 @@ let progress_simple title name =
 
 
 let of_total cur total = Printf.sprintf "[%d/%d]" cur total
+
+let document_to_yojson (doc : document) : Yojson.Safe.t =
+  let buf_size = 1024 (* chosen pretty arbitrarily *) in
+  let buf = Stdlib.Buffer.create buf_size in
+  PPrint.ToBuffer.compact buf doc;
+  let str = Stdlib.Buffer.contents buf in
+  `String str
+
+
+let document_of_yojson (json : Yojson.Safe.t) : (document, string) Result.t =
+  match json with
+  | `String str -> Ok (PPrint.arbitrary_string str)
+  | _ ->
+    Error ("document_of_yojson: expected `String, found " ^ Yojson.Safe.to_string json)
