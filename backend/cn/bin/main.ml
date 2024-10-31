@@ -194,13 +194,14 @@ let report_type_error
   ~(json : bool)
   ?(output_dir : string option)
   ?(fn_name : string option)
+  ?(serialize_json : bool = false)
   (error : TypeErrors.t)
   : unit
   =
   if json then
-    TypeErrors.report_json ?output_dir ?fn_name error
+    TypeErrors.report_json ?output_dir ?fn_name ~serialize_json error
   else
-    TypeErrors.report_pretty ?output_dir ?fn_name error
+    TypeErrors.report_pretty ?output_dir ?fn_name ~serialize_json error
 
 
 (** Generate an appropriate exit code for the provided error. *)
@@ -222,8 +223,13 @@ let exit_code_of_errors (errors : TypeErrors.t list) : int option =
 
 
 (** Report the provided error, then exit. *)
-let handle_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t) =
-  report_type_error ~json ?output_dir error;
+let handle_type_error
+  ~(json : bool)
+  ?(output_dir : string option)
+  ?(serialize_json : bool = false)
+  (error : TypeErrors.t)
+  =
+  report_type_error ~json ?output_dir ~serialize_json error;
   exit (exit_code_of_error error)
 
 
@@ -233,6 +239,7 @@ let well_formed
   incl_dirs
   incl_files
   json
+  json_trace
   output_dir
   csv_times
   log_times
@@ -252,7 +259,7 @@ let well_formed
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar
-    ~handle_error:(handle_type_error ~json ?output_dir)
+    ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Resultat.return ())
 
 
@@ -269,6 +276,7 @@ let verify
   slow_smt_dir
   no_timestamps
   json
+  json_trace
   output_dir
   diag
   lemmata
@@ -327,14 +335,20 @@ let verify
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
-    ~handle_error:(handle_type_error ~json ?output_dir)
+    ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
       let check (functions, lemmas) =
         let open Typing in
         let@ errors = Check.time_check_c_functions functions in
         if not quiet then
           List.iter
-            (fun (fn, err) -> report_type_error ~json ?output_dir ~fn_name:fn err)
+            (fun (fn, err) ->
+              report_type_error
+                ~json
+                ?output_dir
+                ~fn_name:fn
+                ~serialize_json:json_trace
+                err)
             errors;
         Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
         Check.generate_lemmas lemmas lemmata
@@ -353,6 +367,7 @@ let generate_executable_specs
   print_sym_nums
   no_timestamps
   json
+  json_trace
   output_dir
   diag
   only
@@ -401,7 +416,7 @@ let generate_executable_specs
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
-    ~handle_error:(handle_type_error ~json ?output_dir)
+    ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
@@ -726,8 +741,13 @@ module Verify_flags = struct
 
 
   let json =
-    let doc = "output in json format" in
+    let doc = "output summary in JSON format" in
     Arg.(value & flag & info [ "json" ] ~doc)
+
+
+  let json_trace =
+    let doc = "output state trace files as JSON, in addition to HTML" in
+    Arg.(value & flag & info [ "json-trace" ] ~doc)
 
 
   let output_dir =
@@ -788,6 +808,7 @@ let wf_cmd =
     $ Common_flags.incl_dirs
     $ Common_flags.incl_files
     $ Verify_flags.json
+    $ Verify_flags.json_trace
     $ Verify_flags.output_dir
     $ Common_flags.csv_times
     $ Common_flags.log_times
@@ -824,6 +845,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.slow_smt_dir
   $ Common_flags.no_timestamps
   $ Verify_flags.json
+  $ Verify_flags.json_trace
   $ Verify_flags.output_dir
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
@@ -988,6 +1010,7 @@ let instrument_cmd =
     $ Common_flags.print_sym_nums
     $ Common_flags.no_timestamps
     $ Verify_flags.json
+    $ Verify_flags.json_trace
     $ Verify_flags.output_dir
     $ Verify_flags.diag
     $ Verify_flags.only
