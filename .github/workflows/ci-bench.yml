@@ -78,7 +78,7 @@ jobs:
       uses: robinraju/release-downloader@v1
       with:
         repository: cvc5/cvc5
-        tag: cvc5-1.1.2
+        tag: cvc5-1.2.0
         fileName: cvc5-Linux-static.zip
 
     - name: Unzip and install cvc5
