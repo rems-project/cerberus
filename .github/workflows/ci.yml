@@ -81,7 +81,7 @@ jobs:
       with:
         repository: cvc5/cvc5
         tag: cvc5-1.2.0
-        fileName: cvc5-Linux-static.zip
+        fileName: cvc5-Linux-x86_64-static.zip
 
     - name: Unzip and install cvc5
       run: |
