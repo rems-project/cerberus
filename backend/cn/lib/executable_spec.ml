@@ -253,13 +253,8 @@ let main
     generate_cn_versions_of_structs sigm.tag_definitions
   in
   let record_fun_defs, record_fun_decls =
-    Executable_spec_internal.generate_c_record_funs
-      sigm
-      prog5.logical_predicates
-      prog5.resource_predicates
+    Executable_spec_records.generate_c_record_funs sigm
   in
-  (* let extern_ownership_globals = if with_ownership_checking then "\n" ^
-     generate_ownership_globals ~is_extern:true () else "" in *)
   let datatype_strs = String.concat "\n" (List.map snd c_datatype_defs) in
   let predicate_decls =
     String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls))

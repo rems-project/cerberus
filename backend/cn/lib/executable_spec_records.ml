@@ -187,3 +187,49 @@ let generate_all_record_strs () =
     Executable_spec_internal.generate_c_records ail_records
   in
   (record_def_strs, record_decl_strs)
+
+
+let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
+  let cn_record_info =
+    Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records
+  in
+  let cn_record_info = List.map (fun (ms, sym) -> (sym, ms)) cn_record_info in
+  let record_equality_functions =
+    List.concat
+      (List.map
+         (Cn_internal_to_ail.generate_record_equality_function sigm.cn_datatypes)
+         cn_record_info)
+  in
+  let record_default_functions =
+    List.concat
+      (List.map
+         (Cn_internal_to_ail.generate_record_default_function sigm.cn_datatypes)
+         cn_record_info)
+  in
+  let record_map_get_functions =
+    List.concat (List.map Cn_internal_to_ail.generate_record_map_get cn_record_info)
+  in
+  let eq_decls, eq_defs = List.split record_equality_functions in
+  let default_decls, default_defs = List.split record_default_functions in
+  let mapget_decls, mapget_defs = List.split record_map_get_functions in
+  let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma =
+    { sigm with
+      declarations = eq_decls @ default_decls @ mapget_decls;
+      function_definitions = eq_defs @ default_defs @ mapget_defs
+    }
+  in
+  let fun_doc =
+    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1)
+  in
+  let fun_strs = CF.Pp_utils.to_plain_pretty_string fun_doc in
+  let decl_docs =
+    List.map
+      (fun (sym, (_, _, decl)) ->
+        CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+      (eq_decls @ default_decls @ mapget_decls)
+  in
+  let fun_prot_strs =
+    List.map (fun doc -> [ CF.Pp_utils.to_plain_pretty_string doc ]) decl_docs
+  in
+  let fun_prot_strs = String.concat "\n" (List.concat fun_prot_strs) in
+  (fun_strs, fun_prot_strs)
