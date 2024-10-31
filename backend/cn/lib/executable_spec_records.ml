@@ -176,3 +176,14 @@ let populate_record_map
     add_records_to_map_from_struct
     (List.map snd (Pmap.bindings_list prog5.tagDefs));
   List.iter add_records_to_map_from_instrumentation instrumentation
+
+
+let generate_all_record_strs () =
+  let ail_records =
+    Cn_internal_to_ail.cn_to_ail_records
+      (Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records)
+  in
+  let record_def_strs, record_decl_strs =
+    Executable_spec_internal.generate_c_records ail_records
+  in
+  (record_def_strs, record_decl_strs)

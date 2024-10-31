@@ -235,13 +235,6 @@ let generate_record_strs
   (record_def_strs, record_decl_strs)
 
 
-let generate_all_record_strs sigm =
-  generate_record_strs
-    sigm
-    (Cn_internal_to_ail.cn_to_ail_pred_records
-       (Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records))
-
-
 let generate_str_from_ail_struct ail_struct =
   CF.Pp_utils.to_plain_pretty_string (generate_doc_from_ail_struct ail_struct)
 

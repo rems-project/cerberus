@@ -1616,9 +1616,9 @@ let generate_struct_definition ?(lc = true) (constructor, members) =
   (constr_sym, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
 
 
-let cn_to_ail_pred_records map_bindings =
+let cn_to_ail_records map_bindings =
   let flipped_bindings = List.map (fun (ms, sym) -> (sym, ms)) map_bindings in
-  List.map generate_struct_definition flipped_bindings
+  List.map (generate_struct_definition ~lc:false) flipped_bindings
 
 
 (* Generic map get for structs, datatypes and records *)
