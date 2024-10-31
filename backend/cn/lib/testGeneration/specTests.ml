@@ -160,7 +160,17 @@ let compile_random_test_case
   ^^ parens
        (separate
           (comma ^^ space)
-          [ Sym.pp inst.fn; int 100; separate_map (comma ^^ space) convert_from args ])
+          [ inst.fn_loc
+            |> Cerb_location.get_filename
+            |> Option.get
+            |> Filename.basename
+            |> String.split_on_char '.'
+            |> List.hd
+            |> string;
+            Sym.pp inst.fn;
+            int 100;
+            separate_map (comma ^^ space) convert_from args
+          ])
   ^^ twice hardline
 
 
