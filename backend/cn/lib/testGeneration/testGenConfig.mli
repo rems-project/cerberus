@@ -7,7 +7,9 @@ type t =
     null_in_every : int option;
     seed : string option;
     logging_level : int option;
-    interactive : bool
+    interactive : bool;
+    until_timeout : int option;
+    exit_fast : bool
   }
 
 val default : t
@@ -27,3 +29,7 @@ val has_seed : unit -> string option
 val has_logging_level : unit -> int option
 
 val is_interactive : unit -> bool
+
+val is_until_timeout : unit -> int option
+
+val is_exit_fast : unit -> bool

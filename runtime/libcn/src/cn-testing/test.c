@@ -53,12 +53,15 @@ void print_test_info(char* suite, char* name, int tests, int discards) {
 }
 
 int cn_test_main(int argc, char* argv[]) {
+    int begin_time = time(NULL);
     set_cn_logging_level(CN_LOGGING_NONE);
 
     cn_gen_srand(time(NULL));
     uint64_t seed = cn_gen_rand();
     int interactive = 0;
     enum cn_logging_level logging_level = CN_LOGGING_ERROR;
+    int timeout = 0;
+    int exit_fast = 0;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
 
@@ -77,50 +80,99 @@ int cn_test_main(int argc, char* argv[]) {
             set_null_in_every(strtol(argv[i + 1], NULL, 16));
             i++;
         }
+        else if (strcmp("--until-timeout", arg) == 0) {
+            timeout = strtol(argv[i + 1], NULL, 10);
+            i++;
+        }
+        else if (strcmp("--exit-fast", arg) == 0) {
+            exit_fast = 1;
+        }
     }
 
     if (interactive) {
         printf("Running in interactive mode\n");
     }
 
+    if (timeout != 0) {
+        printf("Running until timeout of %d seconds\n", timeout);
+    }
+
     printf("Using seed: %016" PRIx64 "\n", seed);
     cn_gen_srand(seed);
     cn_gen_rand(); // Junk to get something to make a checkpoint from
 
+    cn_gen_rand_checkpoint checkpoints[CN_TEST_MAX_TEST_CASES];
+    enum cn_test_result results[CN_TEST_MAX_TEST_CASES] = { CN_TEST_SKIP };
+
+    int timediff = 0;
+
+    do {
+        for (int i = 0; i < num_test_cases; i++) {
+            if (results[i] == CN_TEST_FAIL) {
+                continue;
+            }
+
+            struct cn_test_case* test_case = &test_cases[i];
+            print_test_info(test_case->suite, test_case->name, 0, 0);
+            fflush(stdout);
+            checkpoints[i] = cn_gen_rand_save();
+            enum cn_test_result result = test_case->func();
+            if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {
+                results[i] = result;
+            }
+            printf("\n");
+            switch (result) {
+            case CN_TEST_PASS:
+                printf("PASSED\n");
+                break;
+            case CN_TEST_FAIL:
+                printf("FAILED\n");
+                set_cn_logging_level(logging_level);
+                cn_gen_rand_restore(checkpoints[i]);
+                test_case->func();
+                set_cn_logging_level(CN_LOGGING_NONE);
+                break;
+            case CN_TEST_GEN_FAIL:
+                printf("FAILED TO GENERATE VALID INPUT\n");
+                break;
+            case CN_TEST_SKIP:
+                printf("SKIPPED\n");
+                break;
+            }
+
+            if (exit_fast && result == CN_TEST_FAIL) {
+                goto outside_loop;
+            }
+
+            if (timeout != 0) {
+                timediff = time(NULL) - begin_time;
+            }
+        }
+        if (timediff < timeout) {
+            printf("\n%d seconds remaining, rerunning tests\n\n", timeout - timediff);
+        }
+    } while (timediff < timeout);
+
+outside_loop:
+    ;
     int passed = 0;
     int failed = 0;
     int errored = 0;
     int skipped = 0;
 
-    cn_gen_rand_checkpoint checkpoints[CN_TEST_MAX_TEST_CASES];
-    enum cn_test_result results[CN_TEST_MAX_TEST_CASES];
     for (int i = 0; i < num_test_cases; i++) {
-        struct cn_test_case* test_case = &test_cases[i];
-        print_test_info(test_case->suite, test_case->name, 0, 0);
-        fflush(stdout);
-        checkpoints[i] = cn_gen_rand_save();
-        results[i] = test_case->func();
-        printf("\n");
         switch (results[i]) {
         case CN_TEST_PASS:
             passed++;
-            printf("PASSED\n");
             break;
         case CN_TEST_FAIL:
             failed++;
-            printf("FAILED\n");
-            set_cn_logging_level(logging_level);
-            cn_gen_rand_restore(checkpoints[i]);
-            test_case->func();
-            set_cn_logging_level(CN_LOGGING_NONE);
             break;
         case CN_TEST_GEN_FAIL:
             errored++;
-            printf("FAILED TO GENERATE VALID INPUT\n");
             break;
         case CN_TEST_SKIP:
             skipped++;
-            printf("SKIPPED\n");
             break;
         }
     }
