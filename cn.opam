@@ -2,6 +2,16 @@ opam-version: "2.0"
 synopsis: "The CN type system"
 description: "The CN type system"
 maintainer: ["Christopher Pulte <cp526@cl.cam.ac.uk>"]
+authors: [
+  "Christopher Pulte"
+  "Thomas Sewell"
+  "Dhruv Makwana"
+  "Rini Banerjee"
+  "Zain Amer"
+  "Kayvan Memarian"
+]
+homepage: "https://rems-project.github.io/cn-tutorial"
+bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
   "cerberus-lib"
   "monomorphic"
@@ -9,6 +19,7 @@ depends: [
   "ppx_deriving"
   "cmdliner"
   "ocamlgraph"
+  "zarith" {>= "1.13"}
 ]
 build: [
   ["dune" "subst"] {pinned}
