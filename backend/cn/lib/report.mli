@@ -44,8 +44,11 @@ type 'a labeled_view
 (** Empty collection of labeld things *)
 val labeled_empty : 'a labeled_view
 
-(** Set the entities assocaited with a lable *)
+(** Set the entities associated with a label *)
 val add_labeled : label -> 'a list -> 'a labeled_view -> 'a labeled_view
+
+(** Get any entities associated with a label *)
+val get_labeled : 'a labeled_view -> label -> 'a list option
 
 (** Information about a specific state of the computation.
     The resources, constraints, and terms are pairs because they classify

@@ -84,6 +84,8 @@ let labeled_empty = StrMap.empty
 
 let add_labeled lab view mp = StrMap.add lab view mp
 
+let get_labeled mp lab = StrMap.find_opt lab mp
+
 type state_report =
   { where : where_report;
     not_given_to_solver : simp_view labeled_view;
