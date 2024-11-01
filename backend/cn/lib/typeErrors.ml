@@ -634,42 +634,47 @@ let mk_output_dir (output_dir : string option) : string =
       Filename.get_temp_dir_name ()
 
 
-(** Construct a canonical filename for state output derived from the given error
-    location, located in [output_dir], if possible. *)
-let mk_state_file_name
-  ?(output_dir : string option)
+(** A naming convention for files that pertain to specific error locations. The
+    generated name will always include the user-provided [~name], which should
+    be a valid filename. *)
+let located_file_name
   ?(fn_name : string option)
-  (loc : Cerb_location.t)
+  ~(dir : string)
+  ~(name : string)
+  ~(ext : string)
+  (error_loc : Cerb_location.t)
   : string
   =
-  let dir = mk_output_dir output_dir in
-  let file_tag =
-    match Cerb_location.get_filename loc with
+  let source_file_tag =
+    match Cerb_location.get_filename error_loc with
     | None -> ""
     | Some filename -> "__" ^ Filename.basename filename
   in
   let function_tag = match fn_name with None -> "" | Some fn -> "__" ^ fn in
-  let filename = "state" ^ file_tag ^ function_tag ^ ".html" in
+  let filename = name ^ source_file_tag ^ function_tag ^ ext in
   Filename.concat dir filename
+
+
+(** Construct a canonical filename for state output derived from the given error
+    location, located in [output_dir]. *)
+let mk_state_file_name
+  ?(fn_name : string option)
+  (output_dir : string)
+  (loc : Cerb_location.t)
+  : string
+  =
+  located_file_name ?fn_name ~dir:output_dir ~name:"state" ~ext:".html" loc
 
 
 (** Construct a canonical filename for report output derived from the given
-    error location, located in [output_dir], if possible. *)
+    error location, located in [output_dir]. *)
 let mk_report_file_name
-  ?(output_dir : string option)
   ?(fn_name : string option)
+  (output_dir : string)
   (loc : Cerb_location.t)
   : string
   =
-  let dir = mk_output_dir output_dir in
-  let file_tag =
-    match Cerb_location.get_filename loc with
-    | None -> ""
-    | Some filename -> "__" ^ Filename.basename filename
-  in
-  let function_tag = match fn_name with None -> "" | Some fn -> "__" ^ fn in
-  let filename = "report" ^ file_tag ^ function_tag ^ ".json" in
-  Filename.concat dir filename
+  located_file_name ?fn_name ~dir:output_dir ~name:"report" ~ext:".json" loc
 
 
 (** Format the error for human readability and print it to [stderr]. if the
@@ -677,7 +682,7 @@ let mk_report_file_name
     one in [output_dir] (or, failing that, the system temporary directory) and
     print a link to it. *)
 let report_pretty
-  ?output_dir:dir_
+  ?(output_dir : string option)
   ?(fn_name : string option)
   ?(serialize_json : bool = false)
   { loc; msg }
@@ -687,11 +692,12 @@ let report_pretty
   let consider =
     match report.state with
     | Some state ->
-      let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
+      let dir = mk_output_dir output_dir in
+      let file = mk_state_file_name ?fn_name dir loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
       let state_msg = !^"State file:" ^^^ !^("file://" ^ link) in
       if serialize_json then (
-        let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
+        let report_file = mk_report_file_name ?fn_name dir loc in
         let report_js = Report.report_to_yojson state in
         let () = Yojson.Safe.to_file report_file report_js in
         let report_msg = !^"Report file:" ^^^ !^("file://" ^ report_file) in
@@ -705,7 +711,7 @@ let report_pretty
 
 (* stealing some logic from pp_errors *)
 let report_json
-  ?output_dir:dir_
+  ?(output_dir : string option)
   ?(fn_name : string option)
   ?(serialize_json : bool = false)
   { loc; msg }
@@ -714,10 +720,11 @@ let report_json
   let state_error_file, report_file =
     match report.state with
     | Some state ->
-      let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
+      let dir = mk_output_dir output_dir in
+      let file = mk_state_file_name ?fn_name dir loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
       if serialize_json then (
-        let report_file = mk_report_file_name ?output_dir:dir_ ?fn_name loc in
+        let report_file = mk_report_file_name ?fn_name dir loc in
         let report_js = Report.report_to_yojson state in
         let () = Yojson.Safe.to_file report_file report_js in
         (`String link, `String report_file))
