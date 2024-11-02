@@ -1,7 +1,7 @@
 type t =
   { (* Compile time *)
     max_backtracks : int;
-    max_unfolds : int;
+    max_unfolds : int option;
     max_array_length : int;
     (* Run time *)
     null_in_every : int option;
@@ -14,7 +14,7 @@ type t =
 
 let default =
   { max_backtracks = 25;
-    max_unfolds = 5;
+    max_unfolds = None;
     max_array_length = 50;
     null_in_every = None;
     seed = None;
