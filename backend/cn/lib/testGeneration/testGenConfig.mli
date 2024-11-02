@@ -1,7 +1,7 @@
 type t =
   { (* Compile time *)
     max_backtracks : int;
-    max_unfolds : int;
+    max_unfolds : int option;
     max_array_length : int;
     (* Run time *)
     null_in_every : int option;
@@ -18,7 +18,7 @@ val initialize : t -> unit
 
 val get_max_backtracks : unit -> int
 
-val get_max_unfolds : unit -> int
+val get_max_unfolds : unit -> int option
 
 val get_max_array_length : unit -> int
 

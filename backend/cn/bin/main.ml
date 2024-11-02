@@ -903,7 +903,9 @@ module Testing_flags = struct
   let gen_max_unfolds =
     let doc = "Set the maximum number of unfolds for recursive generators" in
     Arg.(
-      value & opt int TestGeneration.default_cfg.max_unfolds & info [ "max-unfolds" ] ~doc)
+      value
+      & opt (some int) TestGeneration.default_cfg.max_unfolds
+      & info [ "max-unfolds" ] ~doc)
 
 
   let test_max_array_length =
