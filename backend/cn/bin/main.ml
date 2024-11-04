@@ -493,6 +493,7 @@ let run_tests
             print_endline
               ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
           let _, sigma = ail_prog in
+          Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           Executable_spec.main
             ~without_ownership_checking
             ~with_test_gen:true
