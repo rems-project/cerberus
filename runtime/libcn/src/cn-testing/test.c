@@ -101,7 +101,8 @@ int cn_test_main(int argc, char* argv[]) {
     cn_gen_rand(); // Junk to get something to make a checkpoint from
 
     cn_gen_rand_checkpoint checkpoints[CN_TEST_MAX_TEST_CASES];
-    enum cn_test_result results[CN_TEST_MAX_TEST_CASES] = { CN_TEST_SKIP };
+    enum cn_test_result results[CN_TEST_MAX_TEST_CASES];
+    memset(results, CN_TEST_SKIP, CN_TEST_MAX_TEST_CASES * sizeof(enum cn_test_result));
 
     int timediff = 0;
 
