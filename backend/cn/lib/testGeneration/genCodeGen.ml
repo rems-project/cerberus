@@ -156,10 +156,15 @@ let rec compile_term
            (AilEcall (mk_expr (AilEident (Sym.fresh_named name)), List.map mk_expr vars)))
     in
     ( [ b ],
-      [ AilSdeclaration [ (x, Some (mk_expr (AilEcall (mk_expr (AilEident sym), es)))) ];
-        macro_call "CN_GEN_CALL_FROM" from_vars;
-        macro_call "CN_GEN_CALL_TO" to_vars
-      ],
+      ([ A.AilSdeclaration
+           [ (x, Some (mk_expr (AilEcall (mk_expr (AilEident sym), es)))) ]
+       ]
+       @
+       if GenBuiltins.is_builtin sym then
+         []
+       else
+         [ macro_call "CN_GEN_CALL_FROM" from_vars; macro_call "CN_GEN_CALL_TO" to_vars ]
+      ),
       mk_expr (AilEident x) )
   | Asgn { pointer; offset; sct; value; last_var; rest } ->
     let tmp_sym = Sym.fresh () in
