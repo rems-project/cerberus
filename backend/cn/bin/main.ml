@@ -384,7 +384,7 @@ let generate_executable_specs
   (* Executable spec *)
     output_decorated
   output_decorated_dir
-  with_ownership_checking
+  without_ownership_checking
   with_test_gen
   copy_source_dir
   =
@@ -421,7 +421,7 @@ let generate_executable_specs
       Cerb_colour.without_colour
         (fun () ->
           Executable_spec.main
-            ~with_ownership_checking
+            ~without_ownership_checking
             ~with_test_gen
             ~copy_source_dir
             filename
@@ -449,7 +449,7 @@ let run_tests
   no_inherit_loc
   magic_comment_char_dollar
   (* Executable spec *)
-    with_ownership_checking
+    without_ownership_checking
   (* Test Generation *)
     output_dir
   dont_run
@@ -494,7 +494,7 @@ let run_tests
               ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
           let _, sigma = ail_prog in
           Executable_spec.main
-            ~with_ownership_checking
+            ~without_ownership_checking
             ~with_test_gen:true
             ~copy_source_dir:false
             filename
@@ -518,7 +518,7 @@ let run_tests
           TestGeneration.run
             ~output_dir
             ~filename
-            ~with_ownership_checking
+            ~without_ownership_checking
             config
             sigma
             prog5;
@@ -773,8 +773,8 @@ module Executable_spec_flags = struct
     Arg.(value & opt (some string) None & info [ "output-decorated" ] ~docv:"FILE" ~doc)
 
 
-  let with_ownership_checking =
-    let doc = "Enable ownership checking within CN runtime testing" in
+  let without_ownership_checking =
+    let doc = "Disable ownership checking within CN runtime testing" in
     Arg.(value & flag & info [ "with-ownership-checking" ] ~doc)
 
 
@@ -973,7 +973,7 @@ let testing_cmd =
     $ Common_flags.use_peval
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
-    $ Executable_spec_flags.with_ownership_checking
+    $ Executable_spec_flags.without_ownership_checking
     $ Testing_flags.output_test_dir
     $ Testing_flags.dont_run_tests
     $ Testing_flags.gen_backtrack_attempts
@@ -1026,7 +1026,7 @@ let instrument_cmd =
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.output_decorated
     $ Executable_spec_flags.output_decorated_dir
-    $ Executable_spec_flags.with_ownership_checking
+    $ Executable_spec_flags.without_ownership_checking
     $ Executable_spec_flags.with_test_gen
     $ Executable_spec_flags.copy_source_dir
   in
