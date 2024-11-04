@@ -57,7 +57,7 @@ type ail_executable_spec =
     in_stmt : (Locations.t * ail_bindings_and_statements) list
   }
 
-val generate_check_ownership_function
+val generate_get_or_put_ownership_function
   :  with_ownership_checking:bool ->
   C.ctype ->
   A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
