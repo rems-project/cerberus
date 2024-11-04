@@ -194,7 +194,7 @@ let output_to_oc oc str_list = List.iter (Stdlib.output_string oc) str_list
 open Executable_spec_internal
 
 let main
-  ?(with_ownership_checking = false)
+  ?(without_ownership_checking = false)
   ?(with_test_gen = false)
   ?(copy_source_dir = false)
   filename
@@ -217,7 +217,7 @@ let main
   Executable_spec_records.populate_record_map instrumentation prog5;
   let executable_spec =
     generate_c_specs_internal
-      with_ownership_checking
+      without_ownership_checking
       instrumentation
       symbol_table
       statement_locs
@@ -244,7 +244,7 @@ let main
   in
   let ownership_function_defs, ownership_function_decls =
     generate_ownership_functions
-      with_ownership_checking
+      without_ownership_checking
       Cn_internal_to_ail.ownership_ctypes
       sigm
   in
@@ -326,7 +326,7 @@ let main
     List.map (fun (loc, _) -> (loc, [ "" ])) toplevel_locs_and_defs
   in
   let accesses_stmt_injs =
-    if with_ownership_checking then memory_accesses_injections ail_prog else []
+    if without_ownership_checking then [] else memory_accesses_injections ail_prog
   in
   let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
   let struct_injs_with_filenames =
@@ -372,12 +372,12 @@ let main
         failwith
           "Input file cannot have predefined main function when passing to CN test-gen \
            tooling"
-    else if with_ownership_checking then (
+    else if without_ownership_checking then
+      executable_spec.pre_post
+    else (
       (* Inject ownership init function calls and mapping and unmapping of globals into provided main function *)
       let global_ownership_init_pair = generate_ownership_global_assignments sigm prog5 in
       global_ownership_init_pair @ executable_spec.pre_post)
-    else
-      executable_spec.pre_post
   in
   (match
      Source_injection.(

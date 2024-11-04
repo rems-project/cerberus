@@ -742,7 +742,7 @@ let empty_for_dest : type a. a dest -> a =
   | PassBack -> ([], [], mk_expr empty_ail_expr)
 
 
-let generate_get_or_put_ownership_function ~with_ownership_checking ctype
+let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
   =
   let ctype_str = str_of_ctype ctype in
@@ -760,7 +760,9 @@ let generate_get_or_put_ownership_function ~with_ownership_checking ctype
   in
   let generic_c_ptr_sym = Sym.fresh_pretty "generic_c_ptr" in
   let generic_c_ptr_bs, generic_c_ptr_ss =
-    if with_ownership_checking then (
+    if without_ownership_checking then
+      ([], [])
+    else (
       let uintptr_t_type = C.uintptr_t in
       let generic_c_ptr_binding = create_binding generic_c_ptr_sym uintptr_t_type in
       let uintptr_t_cast_expr =
@@ -770,8 +772,6 @@ let generate_get_or_put_ownership_function ~with_ownership_checking ctype
         A.(AilSdeclaration [ (generic_c_ptr_sym, Some uintptr_t_cast_expr) ])
       in
       ([ generic_c_ptr_binding ], [ generic_c_ptr_assign_stat_ ]))
-    else
-      ([], [])
   in
   let param2_sym = Sym.fresh_pretty "owned_enum" in
   let param1 = (param1_sym, bt_to_ail_ctype BT.(Loc ())) in
@@ -781,7 +781,9 @@ let generate_get_or_put_ownership_function ~with_ownership_checking ctype
   let param_syms, param_types = List.split [ param1; param2 ] in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let ownership_fcall_maybe =
-    if with_ownership_checking then (
+    if without_ownership_checking then
+      []
+    else (
       let ownership_fn_sym = Sym.fresh_pretty "cn_get_or_put_ownership" in
       let ownership_fn_args =
         A.
@@ -797,8 +799,6 @@ let generate_get_or_put_ownership_function ~with_ownership_checking ctype
                   ( mk_expr (AilEident ownership_fn_sym),
                     List.map mk_expr ownership_fn_args ))))
       ])
-    else
-      []
   in
   let deref_expr_ = A.(AilEunary (Indirection, cast_expr)) in
   let sct_opt = Sctypes.of_ctype ctype in
@@ -3265,7 +3265,12 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
 
 
 (* Precondition and postcondition translation - LAT.I case means precondition translation finished *)
-let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type
+let rec cn_to_ail_lat_internal_2
+  without_ownership_checking
+  dts
+  globals
+  preds
+  c_return_type
   = function
   | LAT.Define ((name, it), _info, lat) ->
     let ctype = bt_to_ail_ctype (IT.bt it) in
@@ -3279,7 +3284,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
     let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
-        with_ownership_checking
+        without_ownership_checking
         dts
         globals
         preds
@@ -3299,7 +3304,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
     in
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
-        with_ownership_checking
+        without_ownership_checking
         dts
         globals
         preds
@@ -3313,7 +3318,13 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
     let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
     let ail_executable_spec =
-      cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type lat
+      cn_to_ail_lat_internal_2
+        without_ownership_checking
+        dts
+        globals
+        preds
+        c_return_type
+        lat
     in
     prepend_to_precondition ail_executable_spec (b1, ss)
   (* Postcondition *)
@@ -3364,15 +3375,15 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
     in
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stat_ =
-      if with_ownership_checking then (
+      if without_ownership_checking then
+        []
+      else (
         let cn_stack_depth_decr_stat_ =
           mk_stmt
             (A.AilSexpr
                (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_decr_sym), []))))
         in
         [ cn_stack_depth_decr_stat_ ])
-      else
-        []
     in
     let block =
       A.(
@@ -3382,7 +3393,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
 
 
 let rec cn_to_ail_pre_post_aux_internal
-  with_ownership_checking
+  without_ownership_checking
   dts
   preds
   globals
@@ -3399,7 +3410,7 @@ let rec cn_to_ail_pre_post_aux_internal
     in
     let ail_executable_spec =
       cn_to_ail_pre_post_aux_internal
-        with_ownership_checking
+        without_ownership_checking
         dts
         preds
         globals
@@ -3408,15 +3419,26 @@ let rec cn_to_ail_pre_post_aux_internal
     in
     prepend_to_precondition ail_executable_spec ([ binding ], [ decl ])
   | AT.L lat ->
-    cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type lat
+    cn_to_ail_lat_internal_2
+      without_ownership_checking
+      dts
+      globals
+      preds
+      c_return_type
+      lat
 
 
-let cn_to_ail_pre_post_internal ~with_ownership_checking dts preds globals c_return_type
+let cn_to_ail_pre_post_internal
+  ~without_ownership_checking
+  dts
+  preds
+  globals
+  c_return_type
   = function
   | Some internal ->
     let ail_executable_spec =
       cn_to_ail_pre_post_aux_internal
-        with_ownership_checking
+        without_ownership_checking
         dts
         preds
         globals
@@ -3424,20 +3446,20 @@ let cn_to_ail_pre_post_internal ~with_ownership_checking dts preds globals c_ret
         internal
     in
     let extra_stats_ =
-      if with_ownership_checking then (
+      if without_ownership_checking then
+        []
+      else (
         let cn_stack_depth_incr_stat_ =
           A.AilSexpr
             (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_incr_sym), [])))
         in
         [ cn_stack_depth_incr_stat_ ])
-      else
-        []
     in
     prepend_to_precondition ail_executable_spec ([], extra_stats_)
   | None -> empty_ail_executable_spec
 
 
-let generate_assume_ownership_function ~with_ownership_checking ctype
+let generate_assume_ownership_function ~without_ownership_checking ctype
   : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
   =
   let ctype_str = str_of_ctype ctype in
@@ -3459,7 +3481,9 @@ let generate_assume_ownership_function ~with_ownership_checking ctype
   let param_syms, param_types = List.split [ param1; param2 ] in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let ownership_fcall_maybe =
-    if with_ownership_checking then (
+    if without_ownership_checking then
+      []
+    else (
       let ownership_fn_sym = Sym.fresh_pretty "cn_assume_ownership" in
       let ownership_fn_args =
         A.
@@ -3475,8 +3499,6 @@ let generate_assume_ownership_function ~with_ownership_checking ctype
                   ( mk_expr (AilEident ownership_fn_sym),
                     List.map mk_expr ownership_fn_args ))))
       ])
-    else
-      []
   in
   let deref_expr_ = A.(AilEunary (Indirection, cast_expr)) in
   let sct_opt = Sctypes.of_ctype ctype in
