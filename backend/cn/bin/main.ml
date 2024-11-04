@@ -775,7 +775,7 @@ module Executable_spec_flags = struct
 
   let without_ownership_checking =
     let doc = "Disable ownership checking within CN runtime testing" in
-    Arg.(value & flag & info [ "with-ownership-checking" ] ~doc)
+    Arg.(value & flag & info [ "without-ownership-checking" ] ~doc)
 
 
   let with_test_gen =
