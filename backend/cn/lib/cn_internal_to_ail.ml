@@ -742,13 +742,13 @@ let empty_for_dest : type a. a dest -> a =
   | PassBack -> ([], [], mk_expr empty_ail_expr)
 
 
-let generate_check_ownership_function ~with_ownership_checking ctype
+let generate_get_or_put_ownership_function ~with_ownership_checking ctype
   : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
   =
   let ctype_str = str_of_ctype ctype in
   (* Printf.printf ("ctype_str: %s\n") ctype_str; *)
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
-  let fn_sym = Sym.fresh_pretty ("check_owned_" ^ ctype_str) in
+  let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
   let cast_expr =
     mk_expr
@@ -782,7 +782,7 @@ let generate_check_ownership_function ~with_ownership_checking ctype
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let ownership_fcall_maybe =
     if with_ownership_checking then (
-      let ownership_fn_sym = Sym.fresh_pretty "cn_check_ownership" in
+      let ownership_fn_sym = Sym.fresh_pretty "cn_get_or_put_ownership" in
       let ownership_fn_args =
         A.
           [ AilEident param2_sym;
@@ -2601,7 +2601,7 @@ let cn_to_ail_resource_internal
         ownership_ctypes := Sctypes.to_ctype sct :: !ownership_ctypes;
         let ct_str = str_of_ctype (Sctypes.to_ctype sct) in
         let ct_str = String.concat "_" (String.split_on_char ' ' ct_str) in
-        let owned_fn_name = "check_owned_" ^ ct_str in
+        let owned_fn_name = "owned_" ^ ct_str in
         (* Hack with enum as sym *)
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
         let fn_call_it =
@@ -2708,7 +2708,7 @@ let cn_to_ail_resource_internal
         ownership_ctypes := Sctypes.to_ctype sct :: !ownership_ctypes;
         let sct_str = str_of_ctype (Sctypes.to_ctype sct) in
         let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
-        let owned_fn_name = "check_owned_" ^ sct_str in
+        let owned_fn_name = "owned_" ^ sct_str in
         let ptr_add_it = IT.(IT (Sym ptr_add_sym, BT.(Loc ()), Cerb_location.unknown)) in
         (* Hack with enum as sym *)
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in

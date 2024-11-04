@@ -500,7 +500,7 @@ let generate_ownership_functions
   let ail_funs =
     List.map
       (fun ctype ->
-        Cn_internal_to_ail.generate_check_ownership_function
+        Cn_internal_to_ail.generate_get_or_put_ownership_function
           ~with_ownership_checking
           ctype)
       ctypes
