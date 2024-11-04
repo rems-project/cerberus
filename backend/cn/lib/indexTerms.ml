@@ -113,7 +113,9 @@ let rec free_vars_bts (it : 'a annot) : BT.t SymMap.t =
       | [] -> acc
       | (pat, body) :: cases ->
         let bound = SymSet.of_list (List.map fst (bound_by_pattern pat)) in
-        let more = SymMap.filter (fun x _ -> SymSet.mem x bound) (free_vars_bts body) in
+        let more =
+          SymMap.filter (fun x _ -> not (SymSet.mem x bound)) (free_vars_bts body)
+        in
         aux
           (SymMap.union
              (fun _ bt1 bt2 ->
