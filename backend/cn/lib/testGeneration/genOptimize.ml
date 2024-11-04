@@ -1506,6 +1506,19 @@ module SplitConstraints = struct
     let pass = { name; transform }
   end
 
+  let rec is_external (gt : GT.t) : bool =
+    let (GT (gt_, _, _)) = gt in
+    match gt_ with
+    | Arbitrary | Uniform _ | Alloc _ | Return _ -> false
+    | Call _ -> true
+    | Pick wgts -> wgts |> List.map snd |> List.exists is_external
+    | Asgn (_, _, gt_rest) -> is_external gt_rest
+    | Let (_, (_, gt_inner), gt_rest) -> is_external gt_inner || is_external gt_rest
+    | Assert (_, gt_rest) -> is_external gt_rest
+    | ITE (_, gt_then, gt_else) -> is_external gt_then || is_external gt_else
+    | Map (_, gt_inner) -> is_external gt_inner
+
+
   module Disjunction = struct
     let name = "split_disjunction"
 
@@ -1557,23 +1570,59 @@ module SplitConstraints = struct
 
 
     let transform (gt : GT.t) : GT.t =
-      let aux (gt : GT.t) : GT.t =
+      let rec aux (ext : SymSet.t) (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+        | Pick wgts -> GT.pick_ (List.map_snd (aux ext) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, aux ext gt_rest) loc
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let gt_inner = aux ext gt_inner in
+          let ext = if is_external gt_inner then SymSet.add x ext else ext in
+          GT.let_ (backtracks, (x, gt_inner), aux ext gt_rest) loc
         | Assert (T it, gt') ->
           let it = dnf it in
+          let gt' = aux ext gt' in
           (match it with
            | IT (Binop (Or, _, _), _, _) ->
-             let cases =
+             let its_split, its_left =
                it
                |> listify_constraints
-               |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
+               |> List.partition (fun it' ->
+                 match it with
+                 | IT (Binop (EQ, IT (Sym x, _, _), _), _, _) when not (SymSet.mem x ext)
+                   ->
+                   true
+                 | IT (Binop (EQ, _, IT (Sym x, _, _)), _, _) when not (SymSet.mem x ext)
+                   ->
+                   true
+                 | _ -> SymSet.disjoint ext (IT.free_vars it'))
+             in
+             let gt' =
+               if List.is_empty its_left then
+                 gt'
+               else (
+                 let it' =
+                   List.fold_left
+                     (fun it1 it2 -> IT.or2_ (it1, it2) loc)
+                     (List.hd its_left)
+                     (List.tl its_left)
+                 in
+                 GT.assert_ (T it', gt') loc)
+             in
+             let cases =
+               its_split |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
              in
              GT.pick_ cases loc
-           | _ -> gt)
-        | _ -> gt
+           | _ -> GT.assert_ (T it, gt') loc)
+        | Assert ((Forall _ as lc), gt_rest) -> GT.assert_ (lc, aux ext gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, aux ext gt_then, aux ext gt_else) loc
+        | Map ((i, i_bt, it_perm), gt_inner) ->
+          GT.map_ ((i, i_bt, it_perm), aux ext gt_inner) loc
       in
-      GT.map_gen_pre aux gt
+      aux SymSet.empty gt
 
 
     let pass = { name; transform }
