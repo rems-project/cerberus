@@ -1267,7 +1267,7 @@ end
 
 module MemberIndirection = struct
   type kind =
-    | Struct
+    | Struct of Sym.t
     | Record
 
   let rec replace_memberof_it
@@ -1292,7 +1292,7 @@ module MemberIndirection = struct
       | Struct (tag, xits) -> IT.Struct (tag, List.map_snd repl xits)
       | StructMember (it', x) ->
         (match (k, IT.is_sym it') with
-         | Struct, Some (y, _y_bt) when Sym.equal y sym ->
+         | Struct _tag, Some (y, _y_bt) when Sym.equal y sym ->
            IT.Sym (List.assoc Id.equal x dict)
          | _ -> IT.StructMember (repl it', x))
       | StructUpdate ((it_struct, x), it_val) ->
@@ -1367,43 +1367,58 @@ module MemberIndirection = struct
       match gt with
       | GT
           ( Let
-              ( backtracks,
-                (x, (GT (Return (IT (Struct (_, xits), bt, _)), _, _) as gt_inner)),
+              ( _backtracks,
+                (x, GT (Return (IT (Struct (_, xits), bt, loc_it)), _, loc_ret)),
                 gt' ),
             _,
             loc )
       | GT
           ( Let
-              ( backtracks,
-                (x, (GT (Return (IT (Record xits, bt, _)), _, _) as gt_inner)),
+              ( _backtracks,
+                (x, GT (Return (IT (Record xits, bt, loc_it)), _, loc_ret)),
                 gt' ),
             _,
             loc ) ->
         let k =
-          match bt with Struct _ -> Struct | Record _ -> Record | _ -> failwith __LOC__
+          match bt with
+          | Struct tag -> Struct tag
+          | Record _ -> Record
+          | _ -> failwith __LOC__
         in
-        let open Either in
-        let members =
-          xits
-          |> List.map_snd (fun it ->
-            match IT.is_sym it with
-            | Some (x, _) -> (Left (), x)
-            | None -> (Right it, Sym.fresh ()))
+        let members_to_indirect, members_to_leave =
+          xits |> List.partition (fun (_, it) -> Option.is_none (IT.is_sym it))
+        in
+        let indirect_map =
+          List.map_snd (fun _ -> Sym.fresh ()) members_to_indirect
+          @ List.map
+              (fun (y, it) -> (y, fst (Option.get (IT.is_sym it))))
+              members_to_leave
         in
         let gt_main =
           GT.let_
-            ( backtracks,
-              (x, gt_inner),
-              replace_memberof_gt k x (List.map_snd snd members) gt' )
+            ( 0,
+              ( x,
+                GT.return_
+                  (let members =
+                     indirect_map
+                     |> List.map (fun (y, z) ->
+                       let it = List.assoc Id.equal y xits in
+                       (y, IT.sym_ (z, IT.bt it, IT.loc it)))
+                   in
+                   match k with
+                   | Struct tag -> IT.struct_ (tag, members) loc_it
+                   | Record -> IT.record_ members loc_it)
+                  loc_ret ),
+              replace_memberof_gt k x indirect_map gt' )
             loc
         in
         let here = Locations.other __LOC__ in
-        members
-        |> List.map snd
-        |> List.filter_map (fun (info, x) ->
-          match info with Right it -> Some (x, it) | Left () -> None)
+        members_to_indirect
         |> List.fold_left
-             (fun gt'' (x, it) -> GT.let_ (0, (x, GT.return_ it here), gt'') here)
+             (fun gt'' (y, it) ->
+               GT.let_
+                 (0, (List.assoc Id.equal y indirect_map, GT.return_ it here), gt'')
+                 here)
              gt_main
       | _ -> gt
     in
@@ -2280,7 +2295,17 @@ module Reordering = struct
         in
         res @ res' @ loop (SymSet.add sym vars) syms' stmts''
       | [] ->
-        assert (List.is_empty stmts');
+        if List.non_empty stmts' then
+          print_endline
+            (match stmts' with
+             | [ Assert lc ] ->
+               Pp.(
+                 LC.free_vars lc
+                 |> SymSet.to_seq
+                 |> List.of_seq
+                 |> separate_map (comma ^^ space) Sym.pp
+                 |> plain)
+             | _ -> "ss");
         res
     in
     let syms = get_variable_ordering iargs stmts in
