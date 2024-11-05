@@ -9,7 +9,8 @@ type t =
     logging_level : int option;
     interactive : bool;
     until_timeout : int option;
-    exit_fast : bool
+    exit_fast : bool;
+    max_stack_depth : int option
   }
 
 let default =
@@ -21,7 +22,8 @@ let default =
     logging_level = None;
     interactive = false;
     until_timeout = None;
-    exit_fast = false
+    exit_fast = false;
+    max_stack_depth = None
   }
 
 
@@ -46,3 +48,5 @@ let is_interactive () = !instance.interactive
 let is_until_timeout () = !instance.until_timeout
 
 let is_exit_fast () = !instance.exit_fast
+
+let has_max_stack_depth () = !instance.max_stack_depth

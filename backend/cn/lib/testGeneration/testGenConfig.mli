@@ -9,7 +9,8 @@ type t =
     logging_level : int option;
     interactive : bool;
     until_timeout : int option;
-    exit_fast : bool
+    exit_fast : bool;
+    max_stack_depth : int option
   }
 
 val default : t
@@ -33,3 +34,5 @@ val is_interactive : unit -> bool
 val is_until_timeout : unit -> int option
 
 val is_exit_fast : unit -> bool
+
+val has_max_stack_depth : unit -> int option
