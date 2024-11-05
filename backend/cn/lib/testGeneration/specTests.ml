@@ -259,6 +259,68 @@ let compile_assumes
        ~show_include:true
        (None, { A.empty_sigma with declarations; function_definitions })
 
+let gen_nested 
+(args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list)
+: Pp.document
+= 
+let open Pp in 
+let convert_from (ctx : (Sym.t * C.ctype) list)  ((x, ct) : Sym.t * C.ctype) =
+  match List.fold_left (fun acc (name, ty) -> if C.ctypeEqual ty ct then Some name else acc) None ctx with
+  | Some x -> Sym.pp x
+  | None -> CF.Pp_ail.pp_expression
+            (Utils.mk_expr
+                (CtA.wrap_with_convert_from
+                  A.(
+                    AilEmemberofptr
+                      ( Utils.mk_expr (AilEident (Sym.fresh_named "res")),
+                        Sym.Identifier (Locations.other __LOC__, "cn_gen_" ^ Sym.pp_string x) ))
+                  (Memory.bt_of_sct (Sctypes.of_ctype_unsafe (Locations.other __LOC__) ct))))
+  in
+let rec go (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list) (ctx : (Sym.t * C.ctype) list) (prev : int)=
+  match args_map with
+  | [] -> empty
+  | (f, ((qualifiers, ret_ty), args))::xs -> 
+    let (ctx', assign) = 
+    match ret_ty with 
+    | Ctype(_, Void) -> (ctx, empty) (* attempted to use fresh_cn but did not work for some reason?*)
+    | _ -> let name = Sym.fresh_named ("x" ^ string_of_int prev) in ((name, ret_ty)::ctx, separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals])
+    in 
+    (assign ^^ Sym.pp f ^^ parens
+    (separate
+      (comma ^^ space)
+      [ separate_map (comma ^^ space) (convert_from ctx) args ])
+      ^^ semi ^^ hardline ^^ (go xs ctx' (prev + 1)))
+in go args_map [] 0
+          
+let compile_nested 
+(sigma : CF.GenTypes.genTypeCategory A.sigma)
+(* (prog5 : unit Mucore.file) *)
+(insts : Core_to_mucore.instrumentation list)
+: Pp.document
+= 
+let declarations : A.sigma_declaration list =
+  insts
+  |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
+    (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
+in
+let args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list =
+  List.map
+    (fun (inst : Core_to_mucore.instrumentation) ->
+      ( inst.fn,
+        let _, _, _, xs, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
+        match List.assoc Sym.equal inst.fn declarations with
+        | _, _, Decl_function (_, (qual, ret), cts, _, _, _) ->
+          ((qual, ret), List.combine xs (List.map (fun (_, ct, _) -> ct) cts))
+        | _ ->
+          failwith
+            (String.concat
+               " "
+               [ "Function declaration not found for";
+                 Sym.pp_string inst.fn;
+                 "@";
+                 __LOC__
+               ]) )) insts in
+    gen_nested args_map
 
 let compile_tests
   ~(with_ownership_checking : bool)
@@ -281,9 +343,12 @@ let compile_tests
         | Decl_object _ -> failwith __LOC__)
       insts
   in
-  let unit_tests_doc = compile_unit_tests unit_tests in
-  let random_tests_doc = compile_random_tests sigma prog5 random_tests in
+  let _ = compile_unit_tests unit_tests in
+  let nested = compile_nested sigma insts in
+  let _ = compile_random_tests sigma prog5 random_tests in
+  let _ = pp_label "" in
   let open Pp in
+  let _ = compile_assumes ~with_ownership_checking sigma prog5 insts in ();
   string "#include "
   ^^ dquotes (string (filename_base ^ "_gen.h"))
   ^^ hardline
@@ -292,24 +357,24 @@ let compile_tests
   ^^ hardline
   ^^ string "#include "
   ^^ dquotes (string "cn.c")
-  ^^ twice hardline
-  ^^ pp_label "Assume Ownership Functions"
-  ^^ twice hardline
-  ^^ compile_assumes ~with_ownership_checking sigma prog5 insts
-  ^^ pp_label "Unit tests"
-  ^^ twice hardline
-  ^^ unit_tests_doc
-  ^^ twice hardline
-  ^^ pp_label "Random tests"
-  ^^ twice hardline
-  ^^ random_tests_doc
-  ^^ pp_label "Main function"
+  (* ^^ twice hardline *)
+  (* ^^ pp_label "Assume Ownership Functions"
+  ^^ twice hardline *)
+  (* ^^ compile_assumes ~with_ownership_checking sigma prog5 insts *)
+  (* ^^ pp_label "Unit tests" *)
+  (* ^^ twice hardline *)
+  (* ^^ unit_tests_doc *)
+  (* ^^ twice hardline *)
+  (* ^^ pp_label "Random tests" *)
+  (* ^^ twice hardline *)
+  (* ^^ random_tests_doc *)
+  (* ^^ pp_label "Main function" *)
   ^^ twice hardline
   ^^ string "int main"
   ^^ parens (string "int argc, char* argv[]")
   ^^ break 1
-  ^^ braces
-       (nest
+  ^^ braces (nest 2 (hardline ^^ nested ^^ hardline ^^ (string "return 0;")) ^^ hardline)
+       (* (nest
           2
           (hardline
            ^^ concat_map
@@ -339,7 +404,7 @@ let compile_tests
                    insts)
            ^^ string "return cn_test_main(argc, argv);")
         ^^ hardline)
-  ^^ hardline
+  ^^ hardline *)
 
 
 let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
