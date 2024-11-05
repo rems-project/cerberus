@@ -12,6 +12,7 @@
 #include <cn-testing/result.h>
 #include <cn-testing/rand.h>
 #include <cn-testing/alloc.h>
+#include <cn-testing/backtrack.h>
 
 struct cn_test_case {
     char* suite;
@@ -76,7 +77,7 @@ int cn_test_main(int argc, char* argv[]) {
             i++;
         }
         else if (strcmp("--null-in-every", arg) == 0) {
-            set_null_in_every(strtol(argv[i + 1], NULL, 16));
+            set_null_in_every(strtol(argv[i + 1], NULL, 10));
             i++;
         }
         else if (strcmp("--until-timeout", arg) == 0) {
@@ -85,6 +86,10 @@ int cn_test_main(int argc, char* argv[]) {
         }
         else if (strcmp("--exit-fast", arg) == 0) {
             exit_fast = 1;
+        }
+        else if (strcmp("--max-stack-depth", arg) == 0) {
+            cn_gen_backtrack_set_max_depth(strtoul(argv[i + 1], NULL, 10));
+            i++;
         }
     }
 
@@ -114,7 +119,6 @@ int cn_test_main(int argc, char* argv[]) {
 
             struct cn_test_case* test_case = &test_cases[i];
             print_test_info(test_case->suite, test_case->name, 0, 0);
-            fflush(stdout);
             checkpoints[i] = cn_gen_rand_save();
             enum cn_test_result result = test_case->func(1);
             if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {

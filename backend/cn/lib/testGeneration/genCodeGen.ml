@@ -451,6 +451,16 @@ let compile_gen_def
                  ([ s1 ]
                   @ s2
                   @ A.
+                      [ AilSexpr
+                          (mk_expr
+                             (AilEcall
+                                ( mk_expr
+                                    (AilEident
+                                       (Sym.fresh_named
+                                          "cn_gen_backtrack_decrement_depth")),
+                                  [] )))
+                      ]
+                  @ A.
                       [ AilSreturn
                           (mk_expr
                              (AilEcast

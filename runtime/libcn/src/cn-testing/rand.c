@@ -167,7 +167,16 @@ void cn_gen_rand_restore(cn_gen_rand_checkpoint checkpoint) {
     choice_history = checkpoint;
 }
 
+void free_list(struct choice_list* curr) {
+    while (curr != NULL) {
+        struct choice_list* tmp = curr;
+        curr = curr->next;
+        free(tmp);
+    }
+}
+
 void cn_gen_rand_replace(cn_gen_rand_checkpoint checkpoint) {
     cn_gen_rand_restore(checkpoint);
+    free_list(choice_history->next);
     choice_history->next = 0;
 }

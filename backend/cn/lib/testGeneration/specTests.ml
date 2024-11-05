@@ -450,11 +450,15 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
        @ (match Config.is_until_timeout () with
           | Some timeout -> [ "--until-timeout"; string_of_int timeout ]
           | None -> [])
-       @
-       if Config.is_exit_fast () then
-         [ "--exit-fast" ]
-       else
-         [])
+       @ (if Config.is_exit_fast () then
+            [ "--exit-fast" ]
+          else
+            [])
+       @ (Config.has_max_stack_depth ()
+          |> Option.map (fun max_stack_depth ->
+            [ "--max-stack-depth"; string_of_int max_stack_depth ])
+          |> Option.to_list
+          |> List.flatten))
   in
   string "if"
   ^^ space

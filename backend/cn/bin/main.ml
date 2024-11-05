@@ -462,6 +462,7 @@ let run_tests
   interactive
   until_timeout
   exit_fast
+  max_stack_depth
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -513,7 +514,8 @@ let run_tests
               logging_level;
               interactive;
               until_timeout;
-              exit_fast
+              exit_fast;
+              max_stack_depth
             }
           in
           TestGeneration.run
@@ -958,6 +960,14 @@ module Testing_flags = struct
   let test_exit_fast =
     let doc = "Stop testing upon finding the first failure" in
     Arg.(value & flag & info [ "exit-fast" ] ~doc)
+
+
+  let test_max_stack_depth =
+    let doc = "Maximum stack depth for generators" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.max_stack_depth
+      & info [ "max-stack-depth" ] ~doc)
 end
 
 let testing_cmd =
@@ -988,6 +998,7 @@ let testing_cmd =
     $ Testing_flags.interactive_testing
     $ Testing_flags.test_until_timeout
     $ Testing_flags.test_exit_fast
+    $ Testing_flags.test_max_stack_depth
   in
   let doc =
     "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\
