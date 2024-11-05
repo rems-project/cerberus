@@ -545,22 +545,23 @@ let rec symb_exec_expr ctxt state_vars expr =
       let loc, l_sym = SymMap.find nm ctxt.c_fun_pred_map in
       let@ def = get_logical_function_def loc l_sym in
       rcval (IT.apply_ l_sym args_its def.LogicalFunctions.return_bt loc) state)
-    else if Sym.has_id_with Setup.unfold_stdlib_name nm then (
-      let s = Option.get (Sym.has_id nm) in
-      let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
-      if String.equal s "ctz_proxy" then
-        rcval
-          (wrap_int (IT.arith_unop Terms.BW_CTZ_NoSMT (List.hd args_its) loc) loc)
-          state
-      else if List.exists (String.equal s) [ "ffs_proxy"; "ffsl_proxy"; "ffsll_proxy" ]
-      then
-        rcval
-          (wrap_int (IT.arith_unop Terms.BW_FFS_NoSMT (List.hd args_its) loc) loc)
-          state
-      else
-        failwith ("unknown stdlib function: " ^ s))
-    else
-      fail_fun_it "not a function with a pure/logical interpretation"
+    else (
+      let bail = fail_fun_it "not a function with a pure/logical interpretation" in
+      match Sym.has_id nm with
+      | None -> bail
+      | Some s ->
+        let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
+        if String.equal s "ctz_proxy" then
+          rcval
+            (wrap_int (IT.arith_unop Terms.BW_CTZ_NoSMT (List.hd args_its) loc) loc)
+            state
+        else if List.exists (String.equal s) [ "ffs_proxy"; "ffsl_proxy"; "ffsll_proxy" ]
+        then
+          rcval
+            (wrap_int (IT.arith_unop Terms.BW_FFS_NoSMT (List.hd args_its) loc) loc)
+            state
+        else
+          bail)
   | CN_progs _ -> rcval (IT.unit_ loc) state
   | _ ->
     fail_n

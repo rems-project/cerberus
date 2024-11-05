@@ -43,14 +43,7 @@ end
 
 open Log
 
-let frontend
-  ~macros
-  ~incl_dirs
-  ~incl_files
-  astprints
-  ~do_peval
-  ~filename
-  ~magic_comment_char_dollar
+let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_char_dollar
   =
   let open CF in
   Cerb_global.set_cerb_conf
@@ -67,7 +60,6 @@ let frontend
   Switches.set
     ([ "inner_arg_temps"; "at_magic_comments" ]
      @ if magic_comment_char_dollar then [ "magic_comment_char_dollar" ] else []);
-  Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
   let conf = Setup.conf macros incl_dirs incl_files astprints in
@@ -90,14 +82,12 @@ let frontend
   let markers_env, ail_prog = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
-  let prog2 = if do_peval then Core_peval.rewrite_file prog1 else prog1 in
-  let prog3 = Milicore.core_to_micore__file Locations.update prog2 in
-  let prog4 = Milicore_label_inline.rewrite_file prog3 in
+  let prog2 = Milicore.core_to_micore__file Locations.update prog1 in
+  let prog3 = Milicore_label_inline.rewrite_file prog2 in
   let statement_locs = CStatements.search (snd ail_prog) in
   print_log_file ("original", CORE prog0);
   print_log_file ("without_unspec", CORE prog1);
-  print_log_file ("after_peval", CORE prog2);
-  return (prog4, (markers_env, ail_prog), statement_locs)
+  return (prog3, (markers_env, ail_prog), statement_locs)
 
 
 let handle_frontend_error = function
@@ -133,7 +123,6 @@ let with_well_formedness_check
   ~csv_times
   ~log_times
   ~astprints
-  ~use_peval
   ~no_inherit_loc
   ~magic_comment_char_dollar
   ~(* Callbacks *)
@@ -146,14 +135,13 @@ let with_well_formedness_check
      unit Resultat.t)
   =
   check_input_file filename;
-  let prog4, (markers_env, ail_prog), statement_locs =
+  let prog, (markers_env, ail_prog), statement_locs =
     handle_frontend_error
       (frontend
          ~macros
          ~incl_dirs
          ~incl_files
          astprints
-         ~do_peval:use_peval
          ~filename
          ~magic_comment_char_dollar)
   in
@@ -170,7 +158,7 @@ let with_well_formedness_check
         Core_to_mucore.normalise_file
           ~inherit_loc:(not no_inherit_loc)
           (markers_env, snd ail_prog)
-          prog4
+          prog
       in
       print_log_file ("mucore", MUCORE prog5);
       let paused =
@@ -244,7 +232,6 @@ let well_formed
   csv_times
   log_times
   astprints
-  use_peval
   no_inherit_loc
   magic_comment_char_dollar
   =
@@ -256,7 +243,6 @@ let well_formed
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
@@ -292,7 +278,6 @@ let verify
   astprints
   dont_use_vip
   no_use_ity
-  use_peval
   fail_fast
   quiet
   no_inherit_loc
@@ -332,7 +317,6 @@ let verify
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
@@ -377,7 +361,6 @@ let generate_executable_specs
   astprints
   dont_use_vip
   no_use_ity
-  use_peval
   fail_fast
   no_inherit_loc
   magic_comment_char_dollar
@@ -413,7 +396,6 @@ let generate_executable_specs
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
@@ -445,7 +427,6 @@ let run_tests
   csv_times
   log_times
   astprints
-  use_peval
   no_inherit_loc
   magic_comment_char_dollar
   (* Executable spec *)
@@ -481,7 +462,6 @@ let run_tests
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
@@ -639,11 +619,6 @@ module Common_flags = struct
       \  integer type annotations placed by the Core elaboration"
     in
     Arg.(value & flag & info [ "no-use-ity" ] ~doc)
-
-
-  let use_peval =
-    let doc = "(this switch should go away) run the Core partial evaluation phase" in
-    Arg.(value & flag & info [ "use-peval" ] ~doc)
 
 
   let no_inherit_loc =
@@ -816,7 +791,6 @@ let wf_cmd =
     $ Common_flags.csv_times
     $ Common_flags.log_times
     $ Common_flags.astprints
-    $ Common_flags.use_peval
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
   in
@@ -864,7 +838,6 @@ let verify_t : unit Term.t =
   $ Common_flags.astprints
   $ Verify_flags.dont_use_vip
   $ Common_flags.no_use_ity
-  $ Common_flags.use_peval
   $ Verify_flags.fail_fast
   $ Verify_flags.quiet
   $ Common_flags.no_inherit_loc
@@ -983,7 +956,6 @@ let testing_cmd =
     $ Common_flags.csv_times
     $ Common_flags.log_times
     $ Common_flags.astprints
-    $ Common_flags.use_peval
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.without_ownership_checking
@@ -1034,7 +1006,6 @@ let instrument_cmd =
     $ Common_flags.astprints
     $ Verify_flags.dont_use_vip
     $ Common_flags.no_use_ity
-    $ Common_flags.use_peval
     $ Verify_flags.fail_fast
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar

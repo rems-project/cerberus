@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail -o noclobber
 
-# copying from run-ci.sh
-# Z3=$(ocamlfind query z3)
-# export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:-}:${Z3}"
-# export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}:${Z3}"
-
 USAGE="USAGE: $0 [-h]"
 
 function echo_and_err() {
