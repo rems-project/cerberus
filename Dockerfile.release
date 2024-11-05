@@ -1,7 +1,0 @@
-FROM cerberus:deps
-
-RUN rm -rf /opt/cerberus
-COPY docker_entry_point.sh /opt/docker_entry_point.sh
-RUN chmod +x /opt/docker_entry_point.sh
-WORKDIR /data
-ENTRYPOINT ["/opt/docker_entry_point.sh"]
