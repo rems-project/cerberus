@@ -12,5 +12,3 @@ val conf
   string list ->
   Cerb_backend.Pipeline.language list ->
   Cerb_backend.Pipeline.configuration
-
-val unfold_stdlib_name : string -> bool

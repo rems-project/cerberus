@@ -32,23 +32,6 @@ ensures
     (return != 0i32 || Src == Dest) && (return == 0i32 || Src != Dest);
 @*/
 
-void _memcpy(unsigned char *dest, unsigned char *src, size_t n);
-/*@ spec _memcpy(pointer dest, pointer src, u64 n);
-
-requires
-    (u64) src + n <= (u64) dest || (u64) dest + n <= (u64) src;
-    (u64) src <= (u64) src + n;
-    (u64) dest <= (u64) dest + n;
-    take Src = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(src, i)) };
-    take Dest = each (u64 i; 0u64 <= i && i < n ) { Block<unsigned char>(array_shift(dest, i)) };
-
-ensures
-    take SrcR = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(src, i)) };
-    take DestR = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(dest, i)) };
-    Src == SrcR;
-    SrcR == DestR;
-@*/
-
 /*@
 lemma assert_equal(u64 x, u64 y)
 requires
