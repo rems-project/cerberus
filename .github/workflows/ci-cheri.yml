@@ -1,4 +1,4 @@
-name: CI
+name: CHERI
 
 on:
   pull_request:
@@ -30,7 +30,7 @@ jobs:
 
     - name: System dependencies (ubuntu)
       run: |
-        sudo apt install build-essential libgmp-dev z3 opam cmake
+        sudo apt install build-essential libgmp-dev opam
 
     - name: Restore cached opam
       id: cache-opam-restore
@@ -42,8 +42,13 @@ jobs:
     - name: Setup opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
-        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-        opam install --deps-only --yes ./cerberus-lib.opam
+        eval $(opam env --switch=with_coq)
+        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+        opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
+        opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
+        opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
+        opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
+        opam install --deps-only --yes ./cerberus-lib.opam ./cerberus-cheri.opam
 
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
@@ -53,16 +58,19 @@ jobs:
         path: ~/.opam
         key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
 
-    - name: Install Cerberus
+    - name: Install Cerberus-CHERI
+      if: ${{ matrix.version == '4.14.1' }}
       run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
+        opam switch with_coq
+        eval $(opam env --switch=with_coq)
         opam pin --yes --no-action add cerberus-lib .
-        opam pin --yes --no-action add cerberus .
-        opam install --yes cerberus
+        opam pin --yes --no-action add cerberus-cheri .
+        opam install --yes cerberus-cheri
 
-    - name: Run Cerberus CI tests
+    - name: Run Cerberus-CHERI CI tests
+      if: ${{ matrix.version == '4.14.1' }}
       run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci.sh
+        opam switch with_coq
+        eval $(opam env --switch=with_coq)
+        cd tests; USE_OPAM='' ./run-cheri.sh
+        cd ..

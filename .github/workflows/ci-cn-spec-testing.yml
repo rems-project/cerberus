@@ -1,11 +1,10 @@
-name: CI (CN runtime checks)
+name: CN Spec Testing
 
 on:
   pull_request:
   push:
     branches:
       - master
-      - cheri-tests
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
@@ -89,3 +88,10 @@ jobs:
         eval $(opam env --switch=${{ matrix.version }})
         cd cn-tutorial; ./runtime-test.sh 
         cd ..
+
+    - name: Run CN-Test-Gen CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
+
