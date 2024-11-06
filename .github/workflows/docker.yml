@@ -1,8 +1,9 @@
 name: docker
 
 on:
-  schedule:
-    - cron: '30 18 * * *'
+  pull_request:
+  # schedule:
+    # - cron: '30 18 * * *'
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
