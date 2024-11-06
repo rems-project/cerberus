@@ -228,7 +228,7 @@ outside_loop:
 
         cn_gen_rand_restore(checkpoints[mapToCase[testcase - 1]]);
         set_cn_logging_level(CN_LOGGING_INFO);
-        reset_cn_exit_cb();
+        reset_cn_failure_cb();
         // raise(SIGTRAP); // Trigger breakpoint
         test_cases[mapToCase[testcase - 1]].func(0);
     }
