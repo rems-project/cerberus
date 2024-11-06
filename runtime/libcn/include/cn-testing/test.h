@@ -22,7 +22,7 @@ void print_test_info(char* suite, char* name, int tests, int discards);
         if (setjmp(buf_##Name)) {                                                       \
             return CN_TEST_FAIL;                                                        \
         }                                                                               \
-        set_cn_exit_cb(&cn_test_##Name##_fail);                                         \
+        set_cn_failure_cb(&cn_test_##Name##_fail);                                      \
                                                                                         \
         CN_TEST_INIT();                                                                 \
         Name();                                                                         \
@@ -33,39 +33,42 @@ void print_test_info(char* suite, char* name, int tests, int discards);
 #define CN_RANDOM_TEST_CASE_WITH_CUSTOM_INIT(Suite, Name, Samples, Init, ...)           \
     static jmp_buf buf_##Name;                                                          \
                                                                                         \
-    void cn_test_##Name##_fail () {                                                     \
-        longjmp(buf_##Name, 1);                                                         \
+    void cn_test_##Name##_fail (enum cn_failure_mode mode) {                            \
+        longjmp(buf_##Name, mode);                                                      \
     }                                                                                   \
                                                                                         \
     enum cn_test_result cn_test_##Name (int printing) {                                 \
-        if (setjmp(buf_##Name)) {                                                       \
-            return CN_TEST_FAIL;                                                        \
-        }                                                                               \
-        set_cn_exit_cb(&cn_test_##Name##_fail);                                         \
-                                                                                        \
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
         int i = 0, d = 0;                                                               \
+        switch (setjmp(buf_##Name)) {                                                   \
+            case CN_FAILURE_ASSERT:                                                     \
+            case CN_FAILURE_CHECK_OWNERSHIP:                                            \
+            case CN_FAILURE_OWNERSHIP_LEAK:                                             \
+                return CN_TEST_FAIL;                                                    \
+            case CN_FAILURE_ALLOC:                                                      \
+                d++;                                                                    \
+                break;                                                                  \
+        }                                                                               \
+        set_cn_failure_cb(&cn_test_##Name##_fail);                                      \
         for (; i < Samples; i++) {                                                      \
             if (printing) {                                                             \
                 printf("\r");                                                           \
                 print_test_info(#Suite, #Name, i, d);                                   \
             }                                                                           \
+            if (d == 10 * Samples) {                                                    \
+                return CN_TEST_GEN_FAIL;                                                \
+            }                                                                           \
+            cn_gen_rand_replace(checkpoint);                                            \
             CN_TEST_INIT();                                                             \
             struct cn_gen_##Name##_record *res = cn_gen_##Name();                       \
             if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                     \
                 i--;                                                                    \
                 d++;                                                                    \
-                if (d == 10 * Samples) {                                                \
-                    printf("\r");                                                       \
-                    print_test_info(#Suite, #Name, i + 1, d);                           \
-                    return CN_TEST_GEN_FAIL;                                            \
-                }                                                                       \
                 continue;                                                               \
             }                                                                           \
             assume_##Name(__VA_ARGS__);                                                 \
             Init(res);                                                                  \
             Name(__VA_ARGS__);                                                          \
-            cn_gen_rand_replace(checkpoint);                                            \
         }                                                                               \
                                                                                         \
         if (printing) {                                                                 \
