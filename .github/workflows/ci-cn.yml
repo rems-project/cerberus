@@ -79,19 +79,19 @@ jobs:
         repository: rems-project/cn-tutorial
         path: cn-tutorial
 
-    - name: Run CN CI tests
+    - name: Run CN tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         ./tests/run-cn.py 2> diff.patch || (cat diff.patch; exit 1)
 
-    - name: Run CN Tutorial CI tests
+    - name: Run CN Tutorial tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         tests/run-cn-tutorial-ci.sh cn-tutorial
 
-    - name: Run CN VIP CI tests
+    - name: Run CN VIP tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
