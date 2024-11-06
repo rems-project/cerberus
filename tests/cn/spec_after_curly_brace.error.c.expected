@@ -1,0 +1,6 @@
+return code: 1
+tests/cn/spec_after_curly_brace.error.c:3:3: error: unexpected token before 'ensures'
+You're inside a function - so I'm expecting a CN statement.
+Hint: these start with 'extract', 'instantiate', 'split_case', 'assert', 'print', 'apply'.
+  ensures return == 0i32; @*/
+  ^~~~~~~ 

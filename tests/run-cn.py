@@ -61,15 +61,14 @@ def run_tests(args):
     test_rel_paths = list(filter_tests(args.test_dir, args.suffix))
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for test_rel_path, diff in zip(test_rel_paths, executor.map(cn.get_diff, test_rel_paths)):
-            if args.patch:
-                if diff:
-                    failed_tests += 1
-                    sys.stdout.writelines(diff)
-            elif diff:
+            if diff:
                 failed_tests += 1
-                print('\033[31m[ FAILED ]\033[m %s' % test_rel_path)
-            else:
-                print('\033[32m[ PASSED ]\033[m %s' % test_rel_path)
+                sys.stderr.writelines(diff)
+            if not args.quiet:
+                if diff:
+                    print('\033[31m[ FAILED ]\033[m %s' % test_rel_path)
+                else:
+                    print('\033[32m[ PASSED ]\033[m %s' % test_rel_path)
     sys.exit(min(failed_tests, 1))
     return
 
@@ -81,7 +80,7 @@ parser.add_argument('--test-dir', help='Directory of tests.', default='tests/cn'
 parser.add_argument('--cn', default='cn')
 parser.add_argument('--timeout', default=60)
 parser.add_argument('--suffix', help='Uniquely identifying suffix of a file in the test directory.')
-parser.add_argument('--patch', help='Output unified format patches for the failing tests.',
+parser.add_argument('--quiet', help='Output unified format patches for the failing tests.',
         action='store_true')
 parser.set_defaults(func=run_tests)
 

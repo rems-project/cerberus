@@ -1,0 +1,7 @@
+return code: 1
+tests/cn/cnfunction_mismatched_args1.error.c:6:5: warning: experimental keyword 'cn_function' (use of experimental features is discouraged)
+/*@ cn_function bw_or; @*/
+    ^~~~~~~~~~~ 
+tests/cn/cnfunction_mismatched_args1.error.c:5:1: error: mismatched argument number for c_bw_or -> bw_or
+int c_bw_or(int x)
+~~~~^~~~~~~~~~~~~~ 

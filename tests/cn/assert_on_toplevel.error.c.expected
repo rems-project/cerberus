@@ -1,0 +1,5 @@
+return code: 2
+tests/cn/assert_on_toplevel.error.c:2:5: error: unexpected token before 'assert'
+parsing "cn_toplevel'": expected "cn_toplevel"
+    assert @*/
+    ^~~~~~ 

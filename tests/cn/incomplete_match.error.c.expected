@@ -1,0 +1,4 @@
+return code: 1
+tests/cn/incomplete_match.error.c:9:3: error: Incomplete pattern
+  match t {
+  ^~~~~~~~~ 

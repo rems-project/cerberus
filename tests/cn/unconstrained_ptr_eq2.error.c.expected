@@ -1,0 +1,9 @@
+return code: 1
+[1/1]: f -- fail
+tests/cn/unconstrained_ptr_eq2.error.c:7:5: error: Unprovable constraint
+    return p == q;
+    ^~~~~~~~~~~~~~ 
+Constraint from tests/cn/unconstrained_ptr_eq2.error.c:4:5:
+    return == 1i32;
+    ^~~~~~~~~~~~~~~ 
+State file: file:///tmp/state__unconstrained_ptr_eq2.error.c__f.html

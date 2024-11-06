@@ -1,0 +1,4 @@
+return code: 2
+tests/cn/map_set.error.c:3:24: error: the type name `bool' is not declared
+function (map<integer, bool>) write_to_012(integer foo, map<integer, bool> my_map) {
+                       ^

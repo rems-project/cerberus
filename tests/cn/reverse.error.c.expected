@@ -1,0 +1,17 @@
+return code: 1
+[1/2]: reverse -- fail
+[2/2]: main -- fail
+tests/cn/reverse.error.c:106:7: error: Unprovable constraint
+      return cur;
+      ^~~~~~~~~~~ 
+Constraint from tests/cn/reverse.error.c:89:14:
+             L_ == rev(L);
+             ^~~~~~~~~~~~~ 
+State file: file:///tmp/state__reverse.error.c__reverse.html
+tests/cn/reverse.error.c:124:3: error: Missing resource for de-allocating
+  return 0;
+  ^~~~~~~~~ 
+Resource needed: Block<struct node>(&n3)
+  which requires: Block<signed int>(&&n3->head)
+      other location (Cn__ResourceInference.General.predicate_request)  (arg head)
+State file: file:///tmp/state__reverse.error.c__main.html

@@ -1,0 +1,5 @@
+return code: 1
+tests/cn/inconsistent.error.c:1:1: error: function makes inconsistent assumptions
+void f()
+~~~~~^~~ 
+State file: file:///tmp/state__inconsistent.error.c.html

@@ -1,0 +1,7 @@
+return code: 1
+[1/1]: different_size -- fail
+tests/cn/division_return_size.error.c:9:5: error: integer value not representable at type signed int
+    return x / y;
+    ^~~~~~~~~~~~~ 
+Value: (i64)x / y
+State file: file:///tmp/state__division_return_size.error.c__different_size.html

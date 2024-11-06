@@ -1,0 +1,9 @@
+return code: 1
+[1/1]: f -- fail
+tests/cn/has_alloc_id_ptr_eq.error.c:10:5: error: Unprovable constraint
+    return p == q;
+    ^~~~~~~~~~~~~~ 
+Constraint from tests/cn/has_alloc_id_ptr_eq.error.c:7:5:
+    return == 1i32;
+    ^~~~~~~~~~~~~~~ 
+State file: file:///tmp/state__has_alloc_id_ptr_eq.error.c__f.html

@@ -1,0 +1,8 @@
+return code: 1
+[1/2]: f -- fail
+[2/2]: main -- pass
+tests/cn/pointer_to_unsigned_int_cast.error.c:3:3: error: integer value not representable at type unsigned int
+  (unsigned int)&x;
+  ^~~~~~~~~~~~~~~~ 
+Value: &x
+State file: file:///tmp/state__pointer_to_unsigned_int_cast.error.c__f.html

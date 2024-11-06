@@ -1,0 +1,11 @@
+return code: 1
+[1/3]: half -- pass
+[2/3]: whole -- pass
+[3/3]: main -- fail
+tests/cn/merging_arrays.error.c:25:5: error: Cannot satisfy request for resource for calling function whole. It requires merging multiple arrays.
+    whole(a);
+    ^~~~~~~~ 
+Resource needed: each(u64 i; 0'u64 <= i && i < 10'u64)
+{Owned<signed int>(&a + i * 4'u64)}
+      tests/cn/merging_arrays.error.c:14:10: (arg X)
+State file: file:///tmp/state__merging_arrays.error.c__main.html

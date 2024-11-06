@@ -1,0 +1,5 @@
+return code: 1
+tests/cn/implies3.error.c:1:1: error: function makes inconsistent assumptions
+int foo ()
+~~~~^~~~~~ 
+State file: file:///tmp/state__implies3.error.c.html

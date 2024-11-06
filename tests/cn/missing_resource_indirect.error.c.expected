@@ -1,0 +1,10 @@
+return code: 1
+[1/1]: f -- fail
+tests/cn/missing_resource_indirect.error.c:18:3: error: Missing resource for returning
+  return x;
+  ^~~~~~~~~ 
+Resource needed: Owned_Wrapper(p)
+      tests/cn/missing_resource_indirect.error.c:16:18: (arg Resource_From_Nothing)
+  which requires: Owned<signed int>(p)
+      tests/cn/missing_resource_indirect.error.c:7:8: (arg I)
+State file: file:///tmp/state__missing_resource_indirect.error.c__f.html
