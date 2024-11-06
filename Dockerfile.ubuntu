@@ -1,5 +1,5 @@
-# Build image with all dependencies
-FROM ubuntu:22.04 as deps
+# Build a minimal release image
+FROM ubuntu:22.04
 
 RUN apt-get update
 RUN apt-get upgrade -y
@@ -12,6 +12,7 @@ RUN opam install dune lem
 ADD . /opt/cerberus
 WORKDIR /opt/cerberus
 RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
+
 RUN eval `opam env` \
   && make install \
   && make install_cn
