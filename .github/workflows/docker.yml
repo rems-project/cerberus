@@ -6,7 +6,7 @@ on:
     # - cron: '30 18 * * *'
 
 env:
-  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
+  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn
 
 # Cancelling an in-progress job when a new push is performed causes the CI to
 # show up as failed: https://github.com/orgs/community/discussions/8336
@@ -18,7 +18,7 @@ concurrency:
 
 # Instructions from https://depot.dev/blog/multi-platform-docker-images-in-github-actions
 jobs:
-  deploy-docker:
+  docker-release-ubuntu:
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -46,6 +46,38 @@ jobs:
         context: .
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: ${{env.CERBERUS_IMAGE_ID}}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        tags: ${{env.CERBERUS_IMAGE_ID}}:release
+        file: Dockerfile.ubuntu
+
+  docker-release-redhat:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build multi-platform image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{env.CERBERUS_IMAGE_ID}}:release-redhat
+        file: Dockerfile.redhat
+        attests: type=sbom
+        provenance: mode=max
