@@ -1,172 +1,160 @@
-struct int_list {
-  int head;
-  struct int_list* tail;
+struct node {
+  int value;
+  struct node* next;
 };
 
 /*@
-datatype seq {
-  Seq_Nil {},
-  Seq_Cons {i32 head, datatype seq tail}
+datatype list {
+  Nil {},
+  Cons {i32 head, list tail}
 }
 
-predicate (datatype seq) IntList(pointer p) {
+predicate (list) List(pointer p) {
   if (is_null(p)) {
-    return Seq_Nil{};
+    return Nil {};
   } else {
-    take H = Owned<struct int_list>(p);
-    assert (is_null(H.tail) || !addr_eq(H.tail, NULL));
-    take tl = IntList(H.tail);
-    return (Seq_Cons { head: H.head, tail: tl });
+    take node = Owned<struct node>(p);
+    take tl = List(node.next);
+    return (Cons { head: node.value, tail: tl });
   }
 }
 
-function [rec] ({datatype seq fst, datatype seq snd}) cn_split(datatype seq xs)
-{
+function [rec] ({list fst, list snd}) cn_split(list xs) {
   match xs {
-    Seq_Nil {} => {
-      {fst: Seq_Nil{}, snd: Seq_Nil{}}
+    Nil {} => {
+      {fst: Nil {}, snd: Nil {}}
     }
-    Seq_Cons {head: h1, tail: Seq_Nil{}} => {
-      {fst: Seq_Nil{}, snd: xs}
+    Cons {head: h1, tail: Nil {}} => {
+      {fst: Nil {}, snd: xs}
     }
-    Seq_Cons {head: h1, tail: Seq_Cons {head : h2, tail : tl2 }} => {
+    Cons {head: h1, tail: Cons {head : h2, tail : tl2 }} => {
       let P = cn_split(tl2);
-      {fst: Seq_Cons { head: h1, tail: P.fst},
-       snd: Seq_Cons { head: h2, tail: P.snd}}
+      {fst: Cons { head: h1, tail: P.fst},
+       snd: Cons { head: h2, tail: P.snd}}
     }
   }
 }
 
-function [rec] (datatype seq) cn_merge(datatype seq xs, datatype seq ys) {
+function [rec] (list) cn_merge(list xs, list ys) {
   match xs {
-      Seq_Nil {} => { ys }
-      Seq_Cons {head: x, tail: xs1} => {
+      Nil {} => { 
+        ys 
+      }
+      Cons {head: x, tail: xs1} => {
 	match ys {
-	  Seq_Nil {} => { xs }
-	  Seq_Cons{ head: y, tail: ys1} => {
+	  Nil {} => { 
+            xs 
+          }
+	  Cons { head: y, tail: ys1} => {
 	    let tail = cn_merge(xs1, ys1);
 	    (x < y) ?
-	    (Seq_Cons{ head: x, tail: Seq_Cons {head: y, tail: tail}})
-	    : (Seq_Cons{ head: y, tail: Seq_Cons {head: x, tail: tail}})
+	    (Cons { head: x, tail: Cons {head: y, tail: tail}})
+	    : (Cons { head: y, tail: Cons {head: x, tail: tail}})
 	  }
 	}
       }
   }
 }
 
-function [rec] (datatype seq) cn_mergesort(datatype seq xs) {
+function [rec] (list) cn_mergesort(list xs) {
   match xs {
-      Seq_Nil{} => { xs }
-      Seq_Cons{head: x, tail: Seq_Nil{}} => { xs }
-      Seq_Cons{head: x, tail: Seq_Cons{head: y, tail: zs}} => {
-	let P = cn_split(xs);
-	let L1 = cn_mergesort(P.fst);
-	let L2 = cn_mergesort(P.snd);
-	cn_merge(L1, L2)
-      }
+    Nil {} => { 
+      xs 
     }
+    Cons {head: x, tail: Nil {}} => { 
+      xs 
+    }
+    Cons {head: x, tail: Cons {head: y, tail: zs}} => {
+      let P = cn_split(xs);
+      let L1 = cn_mergesort(P.fst);
+      let L2 = cn_mergesort(P.snd);
+      cn_merge(L1, L2)
+    }
+  }
 }
 @*/
 
-struct int_list_pair {
-  struct int_list* fst;
-  struct int_list* snd;
+struct node_pair {
+  struct node* fst;
+  struct node* snd;
 };
 
-struct int_list_pair split(struct int_list *xs)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
-/*@ requires take Xs = IntList(xs); @*/
-/*@ ensures take Ys = IntList(return.fst); @*/
-/*@ ensures take Zs = IntList(return.snd); @*/
-/*@ ensures is_null(return.fst) || !addr_eq(return.fst, NULL); @*/
-/*@ ensures is_null(return.snd) || !addr_eq(return.snd, NULL); @*/
+struct node_pair split(struct node *xs)
+/*@ requires take Xs = List(xs); @*/
+/*@ ensures take Ys = List(return.fst); @*/
+/*@ ensures take Zs = List(return.snd); @*/
 /*@ ensures {fst: Ys, snd: Zs} == cn_split(Xs); @*/
 {
+  /*@ unfold cn_split(Xs); @*/
   if (xs == 0) {
-    /*@ unfold cn_split(Xs); @*/
-    struct int_list_pair r = {.fst = 0, .snd = 0};
+    struct node_pair r = {.fst = 0, .snd = 0};
     return r;
   } else {
-    struct int_list *cdr = xs -> tail;
+    struct node *cdr = xs->next;
     if (cdr == 0) {
-      /*@ unfold cn_split(Xs); @*/
-      struct int_list_pair r = {.fst = 0, .snd = xs};
+      struct node_pair r = {.fst = 0, .snd = xs};
       return r;
     } else {
-      /*@ unfold cn_split(Xs); @*/
-      struct int_list_pair p = split(cdr->tail);
-      xs->tail = p.fst;
-      cdr->tail = p.snd;
-      struct int_list_pair r = {.fst = xs, .snd = cdr};
+      struct node_pair p = split(cdr->next);
+      xs->next = p.fst;
+      cdr->next = p.snd;
+      struct node_pair r = {.fst = xs, .snd = cdr};
       return r;
     }
   }
 }
 
-struct int_list* merge(struct int_list *xs, struct int_list *ys)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
-/*@ requires is_null(ys) || !addr_eq(ys, NULL); @*/
-/*@ requires take Xs = IntList(xs); @*/
-/*@ requires take Ys = IntList(ys); @*/
-/*@ ensures is_null(return) || !addr_eq(return, NULL); @*/
-/*@ ensures take Zs = IntList(return); @*/
+struct node* merge(struct node *xs, struct node *ys)
+/*@ requires take Xs = List(xs); @*/
+/*@ requires take Ys = List(ys); @*/
+/*@ ensures take Zs = List(return); @*/
 /*@ ensures Zs == cn_merge(Xs, Ys); @*/
 {
+  /*@ unfold cn_merge(Xs, Ys); @*/
   if (xs == 0) {
-    /*@ unfold cn_merge(Xs, Ys); @*/
     return ys;
   } else {
-    /*@ unfold cn_merge(Xs, Ys); @*/
     if (ys == 0) {
-      /*@ unfold cn_merge(Xs, Ys); @*/
       return xs;
     } else {
-      /*@ unfold cn_merge(Xs, Ys); @*/
-      struct int_list *zs = merge(xs->tail, ys->tail);
-      if (xs->head < ys->head) {
-	xs->tail = ys;
-	ys->tail = zs;
+      struct node *zs = merge(xs->next, ys->next);
+      if (xs->value < ys->value) {
+	xs->next = ys;
+	ys->next = zs;
 	return xs;
       } else {
-	ys->tail = xs;
-	xs->tail = zs;
+	ys->next = xs;
+	xs->next = zs;
 	return ys;
       }
     }
   }
 }
 
-struct int_list* naive_mergesort(struct int_list *xs)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
-/*@ requires take Xs = IntList(xs); @*/
-/*@ ensures take Ys = IntList(return); @*/
-/*@ ensures is_null(return) || !addr_eq(return, NULL); @*/
+struct node* naive_mergesort(struct node *xs)
+/*@ requires take Xs = List(xs); @*/
+/*@ ensures take Ys = List(return); @*/
 /*@ ensures Ys == cn_mergesort(Xs); @*/
 {
+  /*@ unfold cn_mergesort(Xs); @*/
   if (xs == 0) {
-    /*@ unfold cn_mergesort(Xs); @*/
+    return xs;
+  } else if (xs->next == 0) {
     return xs;
   } else {
-    struct int_list *tail = xs->tail;
-    if (tail == 0) {
-      /*@ unfold cn_mergesort(Xs); @*/
-      return xs;
-    } else {
-      /*@ unfold cn_mergesort(Xs); @*/
-      struct int_list_pair p = split(xs);
-      p.fst = naive_mergesort(p.fst);
-      p.snd = naive_mergesort(p.snd);
-      return merge(p.fst, p.snd);
-    }
+    struct node_pair p = split(xs);
+    p.fst = naive_mergesort(p.fst);
+    p.snd = naive_mergesort(p.snd);
+    return merge(p.fst, p.snd);
   }
 }
 
 int main(void)
 /*@ trusted; @*/
 {
-  struct int_list i3 = {.head = 3, .tail = 0};
-  struct int_list i2 = {.head = 4, .tail = &i3};
-  struct int_list i1 = {.head = 2, .tail = &i2};
+  struct node i3 = {.value = 3, .next = 0};
+  struct node i2 = {.value = 4, .next = &i3};
+  struct node i1 = {.value = 2, .next = &i2};
 
-  struct int_list *sorted_i1 = naive_mergesort(&i1);
+  struct node *sorted_i1 = naive_mergesort(&i1);
 }
