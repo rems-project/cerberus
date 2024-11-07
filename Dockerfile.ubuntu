@@ -7,14 +7,12 @@ RUN apt-get install -y opam libgmp-dev libmpfr-dev
 
 ENV OPAMCONFIRMLEVEL=unsafe-yes
 RUN opam init --disable-sandboxing
-RUN opam install dune lem
 
 ADD . /opt/cerberus
 WORKDIR /opt/cerberus
 RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
 
 RUN eval `opam env` \
-  && make install \
   && make install_cn
 
 WORKDIR /opt
