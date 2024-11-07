@@ -1,5 +1,6 @@
 type t =
   { (* Compile time *)
+    num_samples : int;
     max_backtracks : int;
     max_unfolds : int option;
     max_array_length : int;
@@ -14,7 +15,8 @@ type t =
   }
 
 let default =
-  { max_backtracks = 25;
+  { num_samples = 100;
+    max_backtracks = 25;
     max_unfolds = None;
     max_array_length = 50;
     null_in_every = None;
@@ -50,3 +52,5 @@ let is_until_timeout () = !instance.until_timeout
 let is_exit_fast () = !instance.exit_fast
 
 let has_max_stack_depth () = !instance.max_stack_depth
+
+let get_num_samples () = !instance.num_samples

@@ -434,6 +434,7 @@ let run_tests
   (* Test Generation *)
     output_dir
   dont_run
+  num_samples
   max_backtracks
   max_unfolds
   max_array_length
@@ -486,7 +487,8 @@ let run_tests
             prog5
             statement_locs;
           let config : TestGeneration.config =
-            { max_backtracks;
+            { num_samples;
+              max_backtracks;
               max_unfolds;
               max_array_length;
               null_in_every;
@@ -865,6 +867,12 @@ module Testing_flags = struct
     Arg.(value & flag & info [ "no-run" ] ~doc)
 
 
+  let gen_num_samples =
+    let doc = "Set the number of samples to test" in
+    Arg.(
+      value & opt int TestGeneration.default_cfg.num_samples & info [ "num-samples" ] ~doc)
+
+
   let gen_backtrack_attempts =
     let doc =
       "Set the maximum attempts to satisfy a constraint before backtracking further, \
@@ -961,6 +969,7 @@ let testing_cmd =
     $ Executable_spec_flags.without_ownership_checking
     $ Testing_flags.output_test_dir
     $ Testing_flags.dont_run_tests
+    $ Testing_flags.gen_num_samples
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.test_max_array_length

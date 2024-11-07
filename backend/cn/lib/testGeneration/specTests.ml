@@ -168,7 +168,7 @@ let compile_random_test_case
             |> List.hd
             |> string;
             Sym.pp inst.fn;
-            int 100;
+            int (Config.get_num_samples ());
             separate_map (comma ^^ space) convert_from args
           ])
   ^^ twice hardline

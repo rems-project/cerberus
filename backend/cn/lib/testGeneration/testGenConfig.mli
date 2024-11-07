@@ -1,5 +1,6 @@
 type t =
   { (* Compile time *)
+    num_samples : int;
     max_backtracks : int;
     max_unfolds : int option;
     max_array_length : int;
@@ -36,3 +37,5 @@ val is_until_timeout : unit -> int option
 val is_exit_fast : unit -> bool
 
 val has_max_stack_depth : unit -> int option
+
+val get_num_samples : unit -> int
