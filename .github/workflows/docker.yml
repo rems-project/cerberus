@@ -47,6 +47,7 @@ jobs:
         push: true
         tags: ${{env.CERBERUS_IMAGE_ID}}:release
         file: Dockerfile.ubuntu
+        github-token: ${{ secrets.GITHUB_TOKEN }}
 
   docker-release-redhat:
     runs-on: ubuntu-latest
@@ -80,3 +81,4 @@ jobs:
         file: Dockerfile.redhat
         attests: type=sbom
         provenance: mode=max
+        github-token: ${{ secrets.GITHUB_TOKEN }}
