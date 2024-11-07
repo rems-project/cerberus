@@ -125,8 +125,10 @@
         if (0) {                                                                        \
         cn_label_##i##_backtrack:                                                       \
             ;                                                                           \
-            char *toAdd[] = { __VA_ARGS__ };                                            \
-            cn_gen_backtrack_relevant_add_many(toAdd);                                  \
+            if (cn_gen_backtrack_relevant_contains((char*)#i)) {                        \
+                char *toAdd[] = { __VA_ARGS__ };                                        \
+                cn_gen_backtrack_relevant_add_many(toAdd);                              \
+            }                                                                           \
             goto cn_label_##last_var##_backtrack;                                       \
         }                                                                               \
                                                                                         \
