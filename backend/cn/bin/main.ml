@@ -469,6 +469,16 @@ let run_tests
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
+          if
+            prog5
+            |> Core_to_mucore.collect_instrumentation
+            |> fst
+            |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+              Option.is_some inst.internal)
+            |> List.is_empty
+          then (
+            print_endline "No testable functions, aborting";
+            exit 1);
           if not (Sys.file_exists output_dir) then (
             print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
             Sys.mkdir output_dir 0o777;
