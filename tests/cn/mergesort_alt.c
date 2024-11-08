@@ -3,6 +3,8 @@ struct node {
   struct node *next;
 };
 
+typedef struct node * ilist;
+
 /*@
 datatype list {
   Nil {},
@@ -17,6 +19,12 @@ predicate (list) List(pointer p) {
     take tl = List(node.next);
     return (Cons { head: node.value, tail: tl });
   }
+}
+
+predicate (list) ListP(pointer p) {
+  take l = Owned<struct node *>(p);
+  take xs = List(l);
+  return xs;
 }
 @*/
 
@@ -110,89 +118,24 @@ function (list) tl (list xs) {
 }
 @*/
 
-struct node_pair {
-  struct node *fst;
-  struct node *snd;
-};
-
-struct node_pair split(struct node *xs)
+ilist split(ilist xs)
 /*@ requires take Xs = List(xs);
-    ensures take Ys = List(return.fst);
-    ensures take Zs = List(return.snd);
-    ensures {fst: Ys, snd: Zs} == cn_split(Xs); @*/
+    ensures take Ys = List(xs);
+    ensures take Zs = List(return);
+    ensures {fst: Ys, snd: Zs} == cn_split(Xs);
+@*/
 {
   /*@ unfold cn_split(Xs); @*/
-  if (xs == 0) {
-    struct node_pair r = {.fst = 0, .snd = 0};
-    return r;
+  if (xs == 0 || xs->next == 0) {
+    return 0;
   } else {
     struct node *cdr = xs->next;
-    if (cdr == 0) {
-      struct node_pair r = {.fst = xs, .snd = 0};
-      return r;
-    } else {
-      struct node_pair p = split(cdr->next);
-      xs->next = p.fst;
-      cdr->next = p.snd;
-      struct node_pair r = {.fst = xs, .snd = cdr};
-      return r;
-    }
+    ilist ys = split(cdr->next);
+    xs->next = cdr->next;
+    cdr->next = ys;
+    return cdr;
   }
 }
-
-struct node *merge(struct node *xs, struct node *ys)
-/*@ requires take Xs = List(xs);
-    requires take Ys = List(ys);
-    ensures take Zs = List(return);
-    ensures Zs == cn_merge(Xs, Ys); @*/
-{
-  /*@ unfold cn_merge(Xs, Ys); @*/
-  if (xs == 0) {
-    return ys;
-  } else if (ys == 0) {
-    return xs;
-  } else if (xs->value <= ys->value) {
-    xs->next = merge(xs->next, ys);
-    return xs;
-  } else {
-    ys->next = merge(xs, ys->next);
-    return ys;
-  }
-}
-
-struct node *naive_mergesort(struct node *xs)
-/*@ requires take Xs = List(xs);
-    ensures take Ys = List(return);
-    ensures Ys == cn_mergesort(Xs); @*/
-{
-  /*@ unfold cn_mergesort(Xs); @*/
-  if (xs == 0) {
-    return xs;
-  } else if (xs->next == 0) {
-    return xs;
-  } else {
-    struct node_pair p = split(xs);
-    p.fst = naive_mergesort(p.fst);
-    p.snd = naive_mergesort(p.snd);
-    return merge(p.fst, p.snd);
-  }
-}
-
-
-
-
-int main(void)
-/*@ trusted; @*/
-{
-  struct node i3 = {.value = 3, .next = 0};
-  struct node i2 = {.value = 4, .next = &i3};
-  struct node i1 = {.value = 2, .next = &i2};
-
-  struct node *sorted_i1 = naive_mergesort(&i1);
-}
-
-
-
 
 
 void prove_merge_sorted(struct node *p, struct node *q)
@@ -244,3 +187,76 @@ void prove_merge_sorted(struct node *p, struct node *q)
     }
   }
 }
+
+
+struct node *merge(struct node *xs, struct node *ys)
+/*@ requires take Xs = List(xs);
+    requires take Ys = List(ys);
+    ensures take Zs = List(return);
+    ensures Zs == cn_merge(Xs, Ys); @*/
+{
+  /*@ unfold cn_merge(Xs, Ys); @*/
+  if (xs == 0) {
+    return ys;
+  } else if (ys == 0) {
+    return xs;
+  } else if (xs->value <= ys->value) {
+    xs->next = merge(xs->next, ys);
+    return xs;
+  } else {
+    ys->next = merge(xs, ys->next);
+    return ys;
+  }
+}
+
+void naive_mergesort(ilist *p)
+/*@ requires take xs_in = ListP(p);
+             let sorted = cn_mergesort(xs_in);
+    ensures take xs_out = ListP(p);
+            xs_out == sorted; 
+            is_sorted(xs_out);
+@*/
+{
+  /*@ unfold cn_mergesort(xs_in); @*/
+  /*@ unfold is_sorted(sorted); @*/
+  /*@ unfold is_sorted(tl(sorted)); @*/
+  ilist xs = *p;
+  if (xs != 0 && xs->next != 0) {
+    ilist ys = split(xs);
+    naive_mergesort(&xs);
+    naive_mergesort(&ys);
+    /*CN*/ prove_merge_sorted(xs, ys);
+    *p = merge(xs, ys);
+    return;
+  }
+}
+
+
+
+
+int main(void)
+/*@ trusted; @*/
+{
+  ilist xs;
+  struct node n1;
+  struct node n2;
+  struct node n3;
+
+  n1.value = 1;
+  n2.value = 4;
+  n3.value = 3;
+
+  xs = &n1;
+  n1.next = &n2;
+  n2.next = &n3;
+  n3.next = 0;
+
+  naive_mergesort(&xs);
+}
+
+
+
+
+
+
+
