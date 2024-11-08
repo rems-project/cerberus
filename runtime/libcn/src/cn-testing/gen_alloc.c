@@ -154,7 +154,7 @@ void cn_gen_ownership_update(void* p, size_t sz) {
     update_ownership(p, sz);
 }
 
-int cn_gen_ownership_check(cn_pointer* p, size_t sz) {
+int cn_gen_ownership_check(void* p, size_t sz) {
     if (ownership_curr == ownership_buf) {
         return 1;
     }

@@ -31,7 +31,7 @@ extern "C" {
 
     void cn_gen_ownership_update(void* p, size_t sz);
 
-    int cn_gen_ownership_check(cn_pointer* p, size_t sz);
+    int cn_gen_ownership_check(void* p, size_t sz);
 
 #ifdef __cplusplus
 }

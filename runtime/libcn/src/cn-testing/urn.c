@@ -4,13 +4,13 @@
 #include <cn-testing/uniform.h>
 #include <cn-testing/urn.h>
 
-int is_leaf(struct int_tree* tree) {
+int is_leaf(struct cn_gen_int_tree* tree) {
     return tree->left == NULL && tree->right == NULL;
 }
 
 
 
-uint64_t sample_tree_det(struct int_tree* tree, uint64_t index) {
+uint64_t sample_tree_det(struct cn_gen_int_tree* tree, uint64_t index) {
     if (tree == NULL) {
         return -1;
     }
@@ -26,20 +26,20 @@ uint64_t sample_tree_det(struct int_tree* tree, uint64_t index) {
     return sample_tree_det(tree->right, index - tree->left->weight);
 }
 
-uint64_t sample_urn(struct int_urn* urn) {
+uint64_t sample_urn(struct cn_gen_int_urn* urn) {
     uint64_t index = convert_from_cn_bits_u64(cn_gen_uniform_cn_bits_u64(urn->tree->weight));
     return sample_tree_det(urn->tree, index);
 }
 
 
 
-struct int_tree* insert_tree(uint8_t path, struct int_tree* tree, struct int_tree* leaf) {
+struct cn_gen_int_tree* insert_tree(uint8_t path, struct cn_gen_int_tree* tree, struct cn_gen_int_tree* leaf) {
     if (tree == NULL) {
         return leaf;
     }
 
     if (is_leaf(tree)) {
-        struct int_tree* res = (struct int_tree*)malloc(sizeof(struct int_tree));
+        struct cn_gen_int_tree* res = (struct cn_gen_int_tree*)malloc(sizeof(struct cn_gen_int_tree));
         res->weight = tree->weight + leaf->weight;
         res->left = tree;
         res->right = leaf;
@@ -57,8 +57,8 @@ struct int_tree* insert_tree(uint8_t path, struct int_tree* tree, struct int_tre
     return tree;
 }
 
-void urn_insert(struct int_urn* urn, uint64_t weight, uint64_t value) {
-    struct int_tree* leaf = (struct int_tree*)malloc(sizeof(struct int_tree));
+void urn_insert(struct cn_gen_int_urn* urn, uint64_t weight, uint64_t value) {
+    struct cn_gen_int_tree* leaf = (struct cn_gen_int_tree*)malloc(sizeof(struct cn_gen_int_tree));
     leaf->weight = weight;
     leaf->value = value;
     leaf->left = NULL;
@@ -70,8 +70,8 @@ void urn_insert(struct int_urn* urn, uint64_t weight, uint64_t value) {
 
 
 
-struct int_urn* urn_from_array(uint64_t elems[], uint8_t len) {
-    struct int_urn* urn = (struct int_urn*)malloc(sizeof(struct int_urn));
+struct cn_gen_int_urn* urn_from_array(uint64_t elems[], uint8_t len) {
+    struct cn_gen_int_urn* urn = (struct cn_gen_int_urn*)malloc(sizeof(struct cn_gen_int_urn));
     urn->size = 0;
     urn->tree = NULL;
     for (uint16_t i = 0; i < 2 * (uint16_t)len; i += 2) {
@@ -92,7 +92,7 @@ struct replace_res {
     uint64_t valueNew;
 };
 
-struct replace_res replace_tree(struct int_tree* tree, uint64_t weight, uint64_t value, uint64_t index) {
+struct replace_res replace_tree(struct cn_gen_int_tree* tree, uint64_t weight, uint64_t value, uint64_t index) {
     if (tree == NULL) {
         assert(false);
     }
@@ -128,7 +128,7 @@ struct replace_res replace_tree(struct int_tree* tree, uint64_t weight, uint64_t
     }
 }
 
-uint64_t replace(struct int_urn* urn, uint64_t weight, uint64_t value, uint64_t index) {
+uint64_t replace(struct cn_gen_int_urn* urn, uint64_t weight, uint64_t value, uint64_t index) {
     return replace_tree(urn->tree, weight, value, index).valueOld;
 }
 
@@ -138,10 +138,10 @@ struct uninsert_res {
 
     uint64_t lowerBound;
 
-    struct int_tree* tree;
+    struct cn_gen_int_tree* tree;
 };
 
-struct uninsert_res uninsert_tree(uint8_t path, struct int_tree* tree) {
+struct uninsert_res uninsert_tree(uint8_t path, struct cn_gen_int_tree* tree) {
     if (tree == NULL) {
         assert(false);
     }
@@ -174,12 +174,12 @@ struct uninsert_res uninsert_tree(uint8_t path, struct int_tree* tree) {
     }
 }
 
-struct uninsert_res uninsert_urn(struct int_urn* urn) {
+struct uninsert_res uninsert_urn(struct cn_gen_int_urn* urn) {
     urn->size -= 1;
     return uninsert_tree(urn->size, urn->tree);
 }
 
-uint64_t remove_urn_det(struct int_urn* urn, uint64_t index) {
+uint64_t remove_urn_det(struct cn_gen_int_urn* urn, uint64_t index) {
     struct uninsert_res res = uninsert_urn(urn);
 
     if (res.tree == NULL) {
@@ -197,12 +197,12 @@ uint64_t remove_urn_det(struct int_urn* urn, uint64_t index) {
     }
 }
 
-uint64_t urn_remove(struct int_urn* urn) {
+uint64_t urn_remove(struct cn_gen_int_urn* urn) {
     uint64_t index = convert_from_cn_bits_u64(cn_gen_uniform_cn_bits_u64(urn->tree->weight));
     return remove_urn_det(urn, index);
 }
 
-void tree_free(struct int_tree* tree) {
+void tree_free(struct cn_gen_int_tree* tree) {
     if (tree == NULL) {
         return;
     }
@@ -216,7 +216,7 @@ void tree_free(struct int_tree* tree) {
     return free(tree);
 }
 
-void urn_free(struct int_urn* urn) {
+void urn_free(struct cn_gen_int_urn* urn) {
     free(urn->tree);
     free(urn);
 }

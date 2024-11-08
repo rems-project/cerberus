@@ -156,7 +156,7 @@
         tmp##_num_choices += 2;                                                         \
     }                                                                                   \
     tmp##_num_choices /= 2;                                                             \
-    struct int_urn* tmp##_urn = urn_from_array(tmp##_choices, tmp##_num_choices);       \
+    struct cn_gen_int_urn* tmp##_urn = urn_from_array(tmp##_choices, tmp##_num_choices);\
     cn_label_##tmp##_gen:                                                               \
         ;                                                                               \
     alloc_checkpoint tmp##_checkpoint = alloc_save_checkpoint();                        \
