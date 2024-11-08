@@ -259,45 +259,75 @@ let compile_assumes
        ~show_include:true
        (None, { A.empty_sigma with declarations; function_definitions })
 
-let gen_nested 
+let callable (ctx : (Sym.t * C.ctype) list) ((_, (_, args)) : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) : bool 
+= 
+List.for_all (fun x -> x) (List.map (fun (_, (ty : C.ctype)) -> 
+  (match ty with 
+  | Ctype(_, ty) ->
+    (match ty with
+    | Basic(Integer(Char)) | Basic(Integer(Bool)) | Basic(Integer(Signed(_))) 
+    | Basic(Integer(Unsigned(_))) | Basic(Floating(_)) | Void -> true
+    | _ -> false)) 
+  || List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx) 
+  args)
+
+let rec gen_nested 
 (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list)
+(fuel : int)
+(ctx : (Sym.t * C.ctype) list)
+(prev : int)
 : Pp.document
 = 
 let open Pp in 
-let convert_from (ctx : (Sym.t * C.ctype) list)  ((x, ct) : Sym.t * C.ctype) =
-  match List.fold_left (fun acc (name, ty) -> if C.ctypeEqual ty ct then Some name else acc) None ctx with
-  | Some x -> Sym.pp x
-  | None -> CF.Pp_ail.pp_expression
-            (Utils.mk_expr
-                (CtA.wrap_with_convert_from
-                  A.(
-                    AilEmemberofptr
-                      ( Utils.mk_expr (AilEident (Sym.fresh_named "res")),
-                        Sym.Identifier (Locations.other __LOC__, "cn_gen_" ^ Sym.pp_string x) ))
-                  (Memory.bt_of_sct (Sctypes.of_ctype_unsafe (Locations.other __LOC__) ct))))
+let gen_arg (ctx : (Sym.t * C.ctype) list)  ((_, ty) : Sym.t * C.ctype) =
+    match ty with 
+    | Ctype(_, ty1) ->
+      match ty1 with
+      | Basic(Integer(Char)) -> string "\'" ^^ char (char_of_int ((Random.int 96) + 32)) ^^ string "\'"
+      | Basic(Integer(Bool)) -> if Random.int 2 = 1 then string "true" else string "false"
+      | Basic(Integer(Signed(_))) -> let rand_int =  Random.int 32767 in int (if Random.int 2 = 1 then (rand_int * -1) else rand_int)
+      | Basic(Integer(Unsigned(_))) -> int (Random.int 65536)
+      | Basic(Floating(_)) -> string (string_of_float (Random.float 65536.0))
+      | Void -> empty
+      | _ -> 
+        (match List.find_opt (fun (_, ct) -> C.ctypeEqual ty ct) ctx with
+        | Some(name, _) -> Sym.pp name
+        | None -> failwith "cannot generate value and no previous call reusable")
   in
-let rec go (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list) (ctx : (Sym.t * C.ctype) list) (prev : int)=
-  match args_map with
-  | [] -> empty
-  | (f, ((qualifiers, ret_ty), args))::xs -> 
+let gen_test (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) =
+  (match args_map with
+  | (f, ((qualifiers, ret_ty), args)) -> 
     let (ctx', assign) = 
     match ret_ty with 
     | Ctype(_, Void) -> (ctx, empty) (* attempted to use fresh_cn but did not work for some reason?*)
     | _ -> let name = Sym.fresh_named ("x" ^ string_of_int prev) in ((name, ret_ty)::ctx, separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals])
     in 
-    (assign ^^ Sym.pp f ^^ parens
+    (ctx', assign ^^ Sym.pp f ^^ parens
     (separate
       (comma ^^ space)
-      [ separate_map (comma ^^ space) (convert_from ctx) args ])
-      ^^ semi ^^ hardline ^^ (go xs ctx' (prev + 1)))
-in go args_map [] 0
-          
+      [ separate_map (comma ^^ space) (gen_arg ctx) args ])
+      ^^ semi ^^ hardline))
+  in
+  match fuel with
+  | 0 -> empty
+  | n -> 
+    (let fs = List.filter (callable ctx) args_map in
+    let (ctx', curr_test) =
+    (match (List.length fs) with
+    | 0 -> (ctx, empty) (* should warn that some tests could not be generated *)
+    | n -> gen_test (List.nth fs (Random.int n)))
+    in
+    curr_test ^^ gen_nested args_map (n - 1) ctx' (prev + 1))
+
+(* random generation in ocaml rather than reusing existing generators 
+fuel parameter default 10 for now (10 calls generated)
+*)
 let compile_nested 
 (sigma : CF.GenTypes.genTypeCategory A.sigma)
-(* (prog5 : unit Mucore.file) *)
 (insts : Core_to_mucore.instrumentation list)
 : Pp.document
 = 
+let fuel = 10 in
 let declarations : A.sigma_declaration list =
   insts
   |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
@@ -320,7 +350,7 @@ let args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) lis
                  "@";
                  __LOC__
                ]) )) insts in
-    gen_nested args_map
+    gen_nested args_map fuel [] 0
 
 let compile_tests
   ~(with_ownership_checking : bool)
