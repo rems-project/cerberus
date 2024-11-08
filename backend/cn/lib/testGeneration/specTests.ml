@@ -290,17 +290,19 @@ let gen_arg (ctx : (Sym.t * C.ctype) list)  ((_, ty) : Sym.t * C.ctype) =
       | Basic(Floating(_)) -> string (string_of_float (Random.float 65536.0))
       | Void -> empty
       | _ -> 
-        (match List.find_opt (fun (_, ct) -> C.ctypeEqual ty ct) ctx with
-        | Some(name, _) -> Sym.pp name
-        | None -> failwith "cannot generate value and no previous call reusable")
+        let prev_calls = List.filter (fun (_, ct) -> C.ctypeEqual ty ct) ctx in
+        (match List.length prev_calls with
+        | 0 -> failwith "cannot generate value and no previous call reusable"
+        | n -> let (name, _) = List.nth prev_calls (Random.int n) in Sym.pp name)
   in
 let gen_test (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) =
   (match args_map with
   | (f, ((qualifiers, ret_ty), args)) -> 
     let (ctx', assign) = 
-    match ret_ty with 
+    (match ret_ty with 
     | Ctype(_, Void) -> (ctx, empty) (* attempted to use fresh_cn but did not work for some reason?*)
-    | _ -> let name = Sym.fresh_named ("x" ^ string_of_int prev) in ((name, ret_ty)::ctx, separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals])
+    | _ -> let name = Sym.fresh_named ("x" ^ string_of_int prev) in 
+           ((name, ret_ty)::ctx, separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals]))
     in 
     (ctx', assign ^^ Sym.pp f ^^ parens
     (separate
@@ -308,7 +310,7 @@ let gen_test (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) 
       [ separate_map (comma ^^ space) (gen_arg ctx) args ])
       ^^ semi ^^ hardline))
   in
-  match fuel with
+  (match fuel with
   | 0 -> empty
   | n -> 
     (let fs = List.filter (callable ctx) args_map in
@@ -317,7 +319,7 @@ let gen_test (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) 
     | 0 -> (ctx, empty) (* should warn that some tests could not be generated *)
     | n -> gen_test (List.nth fs (Random.int n)))
     in
-    curr_test ^^ gen_nested args_map (n - 1) ctx' (prev + 1))
+    curr_test ^^ gen_nested args_map (n - 1) ctx' (prev + 1)))
 
 (* random generation in ocaml rather than reusing existing generators 
 fuel parameter default 10 for now (10 calls generated)
