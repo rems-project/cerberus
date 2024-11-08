@@ -114,10 +114,10 @@ struct node_pair {
 };
 
 struct node_pair split(struct node *xs)
-/*@ requires take Xs = List(xs); @*/
-/*@ ensures take Ys = List(return.fst); @*/
-/*@ ensures take Zs = List(return.snd); @*/
-/*@ ensures {fst: Ys, snd: Zs} == cn_split(Xs); @*/
+/*@ requires take Xs = List(xs);
+    ensures take Ys = List(return.fst);
+    ensures take Zs = List(return.snd);
+    ensures {fst: Ys, snd: Zs} == cn_split(Xs); @*/
 {
   /*@ unfold cn_split(Xs); @*/
   if (xs == 0) {
@@ -139,10 +139,10 @@ struct node_pair split(struct node *xs)
 }
 
 struct node *merge(struct node *xs, struct node *ys)
-/*@ requires take Xs = List(xs); @*/
-/*@ requires take Ys = List(ys); @*/
-/*@ ensures take Zs = List(return); @*/
-/*@ ensures Zs == cn_merge(Xs, Ys); @*/
+/*@ requires take Xs = List(xs);
+    requires take Ys = List(ys);
+    ensures take Zs = List(return);
+    ensures Zs == cn_merge(Xs, Ys); @*/
 {
   /*@ unfold cn_merge(Xs, Ys); @*/
   if (xs == 0) {
@@ -159,9 +159,9 @@ struct node *merge(struct node *xs, struct node *ys)
 }
 
 struct node *naive_mergesort(struct node *xs)
-/*@ requires take Xs = List(xs); @*/
-/*@ ensures take Ys = List(return); @*/
-/*@ ensures Ys == cn_mergesort(Xs); @*/
+/*@ requires take Xs = List(xs);
+    ensures take Ys = List(return);
+    ensures Ys == cn_mergesort(Xs); @*/
 {
   /*@ unfold cn_mergesort(Xs); @*/
   if (xs == 0) {
