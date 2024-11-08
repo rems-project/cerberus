@@ -138,9 +138,18 @@ void cn_free_sized(void*, size_t len);
 void cn_print_nr_u64(int i, unsigned long u) ;
 void cn_print_u64(const char *str, unsigned long u) ;
 
-/* cn_exit callbacks */
-void set_cn_exit_cb(void (*callback)(void));
-void reset_cn_exit_cb(void);
+/* cn_failure callbacks */
+enum cn_failure_mode {
+    CN_FAILURE_ASSERT = 1,
+    CN_FAILURE_CHECK_OWNERSHIP,
+    CN_FAILURE_OWNERSHIP_LEAK,
+    CN_FAILURE_ALLOC
+};
+
+typedef void (*cn_failure_callback)(enum cn_failure_mode);
+void set_cn_failure_cb(cn_failure_callback callback);
+void reset_cn_failure_cb(void);
+void cn_failure(enum cn_failure_mode mode);
 
 /* Conversion functions */
 
@@ -524,7 +533,7 @@ void ownership_ghost_state_remove(signed long* address_key);
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size);
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size);
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun);
-void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size);
+void cn_get_or_put_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size);
 
 /* C ownership checking */
 void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack_depth);

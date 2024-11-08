@@ -57,13 +57,13 @@ type ail_executable_spec =
     in_stmt : (Locations.t * ail_bindings_and_statements) list
   }
 
-val generate_check_ownership_function
-  :  with_ownership_checking:bool ->
+val generate_get_or_put_ownership_function
+  :  without_ownership_checking:bool ->
   C.ctype ->
   A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
 
 val generate_assume_ownership_function
-  :  with_ownership_checking:bool ->
+  :  without_ownership_checking:bool ->
   C.ctype ->
   A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
 
@@ -167,7 +167,7 @@ val cn_to_ail_predicates_internal
   * A.sigma_tag_definition option list
 
 val cn_to_ail_pre_post_internal
-  :  with_ownership_checking:bool ->
+  :  without_ownership_checking:bool ->
   A.sigma_cn_datatype list ->
   (Sym.t * ResourcePredicates.definition) list ->
   (Sym.t * C.ctype) list ->

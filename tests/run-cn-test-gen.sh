@@ -33,7 +33,7 @@ for TEST in $FILES; do
 
   # Run passing tests
   if [[ $TEST == *.pass.c ]]; then
-    $CN test "$TEST" --output-dir="test" --with-ownership-checking
+    $CN test "$TEST" --output-dir="test"
     RET=$?
     if [[ "$RET" != 0 ]]; then
       echo
@@ -50,7 +50,7 @@ for TEST in $FILES; do
 
   # Run failing tests
   if [[ $TEST == *.fail.c ]]; then
-    $CN test "$TEST" --output-dir="test" --with-ownership-checking
+    $CN test "$TEST" --output-dir="test"
     RET=$?
     if [[ "$RET" = 0 ]]; then
       echo

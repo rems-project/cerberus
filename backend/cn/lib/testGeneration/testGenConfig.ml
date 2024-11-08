@@ -1,7 +1,8 @@
 type t =
   { (* Compile time *)
+    num_samples : int;
     max_backtracks : int;
-    max_unfolds : int;
+    max_unfolds : int option;
     max_array_length : int;
     (* Run time *)
     null_in_every : int option;
@@ -9,19 +10,22 @@ type t =
     logging_level : int option;
     interactive : bool;
     until_timeout : int option;
-    exit_fast : bool
+    exit_fast : bool;
+    max_stack_depth : int option
   }
 
 let default =
-  { max_backtracks = 25;
-    max_unfolds = 5;
+  { num_samples = 100;
+    max_backtracks = 25;
+    max_unfolds = None;
     max_array_length = 50;
     null_in_every = None;
     seed = None;
     logging_level = None;
     interactive = false;
     until_timeout = None;
-    exit_fast = false
+    exit_fast = false;
+    max_stack_depth = None
   }
 
 
@@ -46,3 +50,7 @@ let is_interactive () = !instance.interactive
 let is_until_timeout () = !instance.until_timeout
 
 let is_exit_fast () = !instance.exit_fast
+
+let has_max_stack_depth () = !instance.max_stack_depth
+
+let get_num_samples () = !instance.num_samples

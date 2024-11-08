@@ -10,8 +10,15 @@
 #define CN_GEN_INIT()                                                                   \
     if (0) {                                                                            \
     cn_label_bennet_backtrack:                                                          \
+        cn_gen_backtrack_decrement_depth();                                             \
         return NULL;                                                                    \
-    }
+    }                                                                                   \
+    if (cn_gen_backtrack_depth() == cn_gen_backtrack_max_depth()) {                     \
+        cn_gen_backtrack_depth_exceeded();                                              \
+        goto cn_label_bennet_backtrack;                                                 \
+    } else {                                                                            \
+        cn_gen_backtrack_increment_depth();                                             \
+    }                                                                                   \
 
 #define CN_GEN_UNIFORM(ty, sz) cn_gen_uniform_##ty(sz)
 
@@ -70,9 +77,9 @@
         void *var##_alloc_checkpoint = cn_gen_alloc_save();                             \
         void *var##_ownership_checkpoint = cn_gen_ownership_save();
 
-
 #define CN_GEN_LET_BODY(ty, var, gen)                                                   \
-        ty* var = gen;
+        ty* var = gen;                                                                  \
+        cn_gen_rand_checkpoint var##_rand_checkpoint = cn_gen_rand_save();
 
 #define CN_GEN_LET_END(backtracks, var, last_var, ...)                                  \
         if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                         \
@@ -80,13 +87,17 @@
             free_after(var##_checkpoint);                                               \
             cn_gen_alloc_restore(var##_alloc_checkpoint);                               \
             cn_gen_ownership_restore(var##_ownership_checkpoint);                       \
+            if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ALLOC) {                    \
+                cn_gen_rand_restore(var##_rand_checkpoint);                             \
+            }                                                                           \
             if (cn_gen_backtrack_relevant_contains((char*)#var)) {                      \
                 char *toAdd[] = { __VA_ARGS__ };                                        \
                 cn_gen_backtrack_relevant_add_many(toAdd);                              \
                 if (var##_backtracks <= 0) {                                            \
                     goto cn_label_##last_var##_backtrack;                               \
                 }                                                                       \
-                if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT) {               \
+                if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT                  \
+                    || cn_gen_backtrack_type() == CN_GEN_BACKTRACK_DEPTH) {             \
                     var##_backtracks--;                                                 \
                     cn_gen_backtrack_reset();                                           \
                 } else if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ALLOC) {         \
@@ -114,8 +125,10 @@
         if (0) {                                                                        \
         cn_label_##i##_backtrack:                                                       \
             ;                                                                           \
-            char *toAdd[] = { __VA_ARGS__ };                                            \
-            cn_gen_backtrack_relevant_add_many(toAdd);                                  \
+            if (cn_gen_backtrack_relevant_contains((char*)#i)) {                        \
+                char *toAdd[] = { __VA_ARGS__ };                                        \
+                cn_gen_backtrack_relevant_add_many(toAdd);                              \
+            }                                                                           \
             goto cn_label_##last_var##_backtrack;                                       \
         }                                                                               \
                                                                                         \
@@ -155,7 +168,8 @@
         free_after(tmp##_checkpoint);                                                   \
         cn_gen_alloc_restore(tmp##_alloc_checkpoint);                                   \
         cn_gen_ownership_restore(tmp##_ownership_checkpoint);                           \
-        if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT                          \
+        if ((cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT                         \
+            || cn_gen_backtrack_type() == CN_GEN_BACKTRACK_DEPTH)                       \
             && tmp##_urn->size != 0) {                                                  \
             cn_gen_backtrack_reset();                                                   \
             goto cn_label_##tmp##_gen;                                                  \

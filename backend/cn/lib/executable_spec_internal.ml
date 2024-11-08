@@ -55,7 +55,7 @@ let rec extract_global_variables = function
 
 
 let generate_c_pres_and_posts_internal
-  with_ownership_checking
+  without_ownership_checking
   (instrumentation : Core_to_mucore.instrumentation)
   _
   (sigm : _ CF.AilSyntax.sigma)
@@ -71,7 +71,7 @@ let generate_c_pres_and_posts_internal
   let globals = extract_global_variables prog5.globs in
   let ail_executable_spec =
     Cn_internal_to_ail.cn_to_ail_pre_post_internal
-      ~with_ownership_checking
+      ~without_ownership_checking
       dts
       preds
       globals
@@ -82,7 +82,9 @@ let generate_c_pres_and_posts_internal
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
   (* C ownership checking *)
   let (pre_str, post_str), block_ownership_injs =
-    if with_ownership_checking then (
+    if without_ownership_checking then
+      ((pre_str, post_str), [])
+    else (
       let fn_ownership_stats_opt, block_ownership_injs =
         Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm
       in
@@ -97,8 +99,6 @@ let generate_c_pres_and_posts_internal
         in
         (pre_post_pair, block_ownership_injs)
       | None -> ((pre_str, post_str), []))
-    else
-      ((pre_str, post_str), [])
   in
   (* Needed for extracting correct location for CN statement injection *)
   let modify_magic_comment_loc loc =
@@ -183,7 +183,7 @@ let generate_c_assume_pres_internal
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
 let generate_c_specs_internal
-  with_ownership_checking
+  without_ownership_checking
   instrumentation_list
   type_map
   (_ : Cerb_location.t CStatements.LocMap.t)
@@ -192,7 +192,7 @@ let generate_c_specs_internal
   =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     generate_c_pres_and_posts_internal
-      with_ownership_checking
+      without_ownership_checking
       instrumentation
       type_map
       sigm
@@ -482,7 +482,7 @@ let generate_c_predicates_internal
 
 
 let generate_ownership_functions
-  with_ownership_checking
+  without_ownership_checking
   ownership_ctypes
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   =
@@ -500,8 +500,8 @@ let generate_ownership_functions
   let ail_funs =
     List.map
       (fun ctype ->
-        Cn_internal_to_ail.generate_check_ownership_function
-          ~with_ownership_checking
+        Cn_internal_to_ail.generate_get_or_put_ownership_function
+          ~without_ownership_checking
           ctype)
       ctypes
   in

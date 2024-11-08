@@ -10,7 +10,7 @@ int main()
   int *q;
   /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
   /*CN_VIP*//*@ to_bytes Block<int*>(&q); @*/
-  _memcpy ((unsigned char*)&q, (unsigned char*)&p, sizeof p);
+  memcpy((unsigned char*)&q, (unsigned char*)&p, sizeof p);
   /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
   /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
 #ifdef NO_ROUND_TRIP

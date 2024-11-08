@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail -o noclobber
 
-USAGE="USAGE: $0 -h\n       $0 [-ovq] FILE.c"
+USAGE="USAGE: $0 -h\n       $0 [-nvq] FILE.c"
 
 function echo_and_err() {
     printf "$1\n"
@@ -9,16 +9,16 @@ function echo_and_err() {
 }
 
 QUIET=""
-CHECK_OWNERSHIP=""
+NO_CHECK_OWNERSHIP=""
 
-while getopts "hoq" flag; do
+while getopts "hnq" flag; do
  case "$flag" in
    h)
    printf "${USAGE}"
    exit 0
    ;;
-   o)
-   CHECK_OWNERSHIP="--with-ownership-checking"
+   n)
+   NO_CHECK_OWNERSHIP="--without-ownership-checking"
    ;;
    q)
    QUIET=1
@@ -57,7 +57,7 @@ EXEC_DIR=$(mktemp -d -t 'cn-exec.XXXX')
 if cn instrument "${INPUT_FN}" \
     --output-decorated="${INPUT_BASENAME}-exec.c" \
     --output-decorated-dir="${EXEC_DIR}" \
-    ${CHECK_OWNERSHIP}; then
+    ${NO_CHECK_OWNERSHIP}; then
   [ "${QUIET}" ] || echo "Generating C files from CN-annotated source."
 else
   echo_and_err "Failed to generate C files from CN-annotatated source."

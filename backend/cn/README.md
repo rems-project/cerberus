@@ -2,7 +2,7 @@
 
 CN is tool for verifying C code is free of undefined behaviour and meets
 user-written specifications. It can also convert those specifications into
-assertions to be checked at runtime during test cases.
+C assertions to be checked at runtime on concrete test cases.
 
 ## Installation
 
@@ -10,38 +10,41 @@ Below are the installation instructions for installing Cerberus, CN,
 and their dependencies.
 
 
-1. Install a recent version of OCaml (we are using 5.0.0 -- 5.2.0) and the opam
-package manager for OCaml, following the instructions at
-<https://ocaml.org/docs/install.html>. (Remember to initialise opam
-via `opam init` after the installation of opam.)
-
-2. Install the GMP and MPFR libraries, and Z3. On a Ubuntu system this is done via `sudo apt install libgmp-dev libmpfr-dev z3` .
-
-3. Install the `dune` OCaml build system and Lem via
-
-    ```
-    opam install dune lem
-    ```
-
-4. Obtain a copy of Cerberus (including CN) by running
-
-    ```
-    git clone https://github.com/rems-project/cerberus.git
-    ```
-
-5. In the downloaded `cerberus` directory run the following opam
-   command to install CN's opam-package dependencies. 
-
-    ```
-    opam install --deps-only ./cerberus-lib.opam ./cn.opam
-    ```
-
-6. then run
-
+1. Install make, git, GMP library, pkg-config and either/both Z3 or CVC5.
+   On an Ubuntu system this is done via
    ```
-   make install_cn
+   sudo apt install build-essential libgmp-dev pkg-config z3
+   ```
+   Note: there is a [known bug with Z3 version
+   4.8.13](https://github.com/rems-project/cerberus/issues/663) (the default on
+   Ubuntu 22.04) so you may wish to install Z3 via opam later for a more
+   up-to-date version. CVC5 
+
+2. Install the opam package manager for OCaml:
+   https://ocaml.org/docs/installing-ocaml#install-opam.
+   On Ubuntu, `sudo apt install opam`.
+
+3. Initialise opam with a recent version of OCaml (the CI builds with 4.14.1,
+   CN developers use 5.2.0).
+   ```
+   opam init --yes --compiler=5.2.0
+   ````
+
+4. Clone the Cerberus repo (which includes CN):
+   ```
+   git clone https://github.com/rems-project/cerberus.git
    ```
 
+5. For CN end users, who don't want to tinker with CN locally:
+   ```
+   opam install --yes ./cerberus.opam ./cerberus-lib.opam ./cn.opam # z3 for a more recent version
+   ```
+
+6. For CN developers:
+   ```
+   opam install --deps-only ./cerberus.opam ./cerberus-lib.opam ./cn.opam ocamlformat.0.26.2 # one time
+   make install_cn # after any edits
+   ```
    which installs Cerberus, CN (as both a library and an executable), and
    dependencies.
 

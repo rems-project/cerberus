@@ -168,7 +168,7 @@ let compile_random_test_case
             |> List.hd
             |> string;
             Sym.pp inst.fn;
-            int 100;
+            int (Config.get_num_samples ());
             separate_map (comma ^^ space) convert_from args
           ])
   ^^ twice hardline
@@ -219,7 +219,7 @@ let compile_random_tests
 
 
 let compile_assumes
-  ~(with_ownership_checking : bool)
+  ~(without_ownership_checking : bool)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   (insts : Core_to_mucore.instrumentation list)
@@ -230,7 +230,7 @@ let compile_assumes
       (List.map
          (fun ctype ->
            Cn_internal_to_ail.generate_assume_ownership_function
-             ~with_ownership_checking
+             ~without_ownership_checking
              ctype)
          (let module CtypeSet =
             Set.Make (struct
@@ -353,7 +353,7 @@ let args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) lis
     gen_nested args_map fuel [] 0
 
 let compile_tests
-  ~(with_ownership_checking : bool)
+  ~(without_ownership_checking : bool)
   (filename_base : string)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
@@ -389,7 +389,7 @@ let compile_tests
   ^^ twice hardline
   ^^ pp_label "Assume Ownership Functions"
   ^^ twice hardline
-  ^^ compile_assumes ~with_ownership_checking sigma prog5 insts
+  ^^ compile_assumes ~without_ownership_checking sigma prog5 insts
   ^^ pp_label "Unit tests"
   ^^ twice hardline
   ^^ unit_tests_doc
@@ -549,11 +549,15 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
        @ (match Config.is_until_timeout () with
           | Some timeout -> [ "--until-timeout"; string_of_int timeout ]
           | None -> [])
-       @
-       if Config.is_exit_fast () then
-         [ "--exit-fast" ]
-       else
-         [])
+       @ (if Config.is_exit_fast () then
+            [ "--exit-fast" ]
+          else
+            [])
+       @ (Config.has_max_stack_depth ()
+          |> Option.map (fun max_stack_depth ->
+            [ "--max-stack-depth"; string_of_int max_stack_depth ])
+          |> Option.to_list
+          |> List.flatten))
   in
   string "if"
   ^^ space
@@ -586,7 +590,7 @@ let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.doc
 let generate
   ~(output_dir : string)
   ~(filename : string)
-  ~(with_ownership_checking : bool)
+  ~(without_ownership_checking : bool)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   : unit
@@ -609,7 +613,7 @@ let generate
   let generators_fn = filename_base ^ "_gen.h" in
   save output_dir generators_fn generators_doc;
   let tests_doc =
-    compile_tests ~with_ownership_checking filename_base sigma prog5 insts
+    compile_tests ~without_ownership_checking filename_base sigma prog5 insts
   in
   let test_file = filename_base ^ "_test.c" in
   save output_dir test_file tests_doc;

@@ -1,6 +1,6 @@
 # Cerberus C semantics
 
-[![CI](https://github.com/rems-project/cerberus/actions/workflows/ci.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci.yml)
+[![CI](https://github.com/rems-project/cerberus/actions/workflows/ci.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci.yml) [![CI-CN](https://github.com/rems-project/cerberus/actions/workflows/ci-cn.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cn.yml) [![CI-CN-specs-testing](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-spec-testing.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-spec-testing.yml) [![CI-CN-becnhmarks](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-bench.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-bench.yml) [![CI-CHERI](https://github.com/rems-project/cerberus/actions/workflows/ci-cheri.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cheri.yml) [![Docker](https://github.com/rems-project/cerberus/actions/workflows/docker.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/docker.yml)
 
 
 Web interfaces, papers, and web page

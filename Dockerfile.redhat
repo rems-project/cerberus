@@ -1,0 +1,38 @@
+FROM redhat/ubi9:latest
+
+# Install basic dependencies
+RUN yum update -y && \
+    yum install -y xz sudo gcc unzip \
+    diffutils patch pkgconfig bzip2 \
+    git perl wget ca-certificates \
+    mpfr-devel gmp-devel m4
+
+# Install additional FEDORA packages
+# from https://www.cyberciti.biz/faq/install-epel-repo-on-an-rhel-8-x/
+# Currently the FEDORA packages are needed only for Z3
+# NOTE: we might have to eventually use *only* RedHat packages
+# which would mean installing Z3 directly from the release page
+RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
+    yum update -y && \
+    yum install -y z3
+
+# Install OPAM
+# See https://opam.ocaml.org/doc/1.2/Install.html
+RUN curl -fsSL https://opam.ocaml.org/install.sh | sh
+
+ENV OPAMCONFIRMLEVEL=unsafe-yes
+RUN opam init --disable-sandboxing
+
+ADD . /opt/cerberus
+WORKDIR /opt/cerberus
+RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
+
+RUN eval `opam env` \
+  && make install_cn
+
+WORKDIR /opt
+
+COPY docker_entry_point.sh /opt/docker_entry_point.sh
+RUN chmod +x /opt/docker_entry_point.sh
+WORKDIR /data
+ENTRYPOINT ["/opt/docker_entry_point.sh"]

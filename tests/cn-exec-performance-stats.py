@@ -85,7 +85,6 @@ def gen_instr_cmd(f, input_basename):
     instr_cmd_prefix = "cn instrument"
     instr_cmd = time_cmd_str + instr_cmd_prefix + " " + tests_path + "/" + f
     instr_cmd += " --output-decorated=" + input_basename + "-exec.c"
-    instr_cmd += " --with-ownership-checking"
     return instr_cmd
 
 def gen_compile_cmd(input_basename, instrumented):

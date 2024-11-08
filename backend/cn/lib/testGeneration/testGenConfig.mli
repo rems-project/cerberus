@@ -1,7 +1,8 @@
 type t =
   { (* Compile time *)
+    num_samples : int;
     max_backtracks : int;
-    max_unfolds : int;
+    max_unfolds : int option;
     max_array_length : int;
     (* Run time *)
     null_in_every : int option;
@@ -9,7 +10,8 @@ type t =
     logging_level : int option;
     interactive : bool;
     until_timeout : int option;
-    exit_fast : bool
+    exit_fast : bool;
+    max_stack_depth : int option
   }
 
 val default : t
@@ -18,7 +20,7 @@ val initialize : t -> unit
 
 val get_max_backtracks : unit -> int
 
-val get_max_unfolds : unit -> int
+val get_max_unfolds : unit -> int option
 
 val get_max_array_length : unit -> int
 
@@ -33,3 +35,7 @@ val is_interactive : unit -> bool
 val is_until_timeout : unit -> int option
 
 val is_exit_fast : unit -> bool
+
+val has_max_stack_depth : unit -> int option
+
+val get_num_samples : unit -> int

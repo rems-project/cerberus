@@ -224,6 +224,192 @@ module Fusion = struct
       in
       { gd with body }
   end
+
+  module Recursive = struct
+    let collect_constraints (vars : SymSet.t) (x : Sym.t) (gt : GT.t) : GT.t * LC.t list =
+      let rec aux (gt : GT.t) : GT.t * LC.t list =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ | Pick _ | ITE _ | Map _ ->
+          (gt, [])
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.asgn_ ((it_addr, sct), it_val, gt_rest) loc, lcs)
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let gt_inner, lcs = aux gt_inner in
+          let gt_rest, lcs' = aux gt_rest in
+          (GT.let_ (backtracks, (x, gt_inner), gt_rest) loc, lcs @ lcs')
+        | Assert ((T (IT (Binop (EQ, IT (Sym y, _, _), _), _, _)) as lc), gt_rest)
+          when not (Sym.equal x y) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, lcs)
+        | Assert ((T (IT (Binop (EQ, _, IT (Sym y, _, _)), _, _)) as lc), gt_rest)
+          when not (Sym.equal x y) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, lcs)
+        | Assert (lc, gt_rest)
+          when let free_vars = LC.free_vars lc in
+               SymSet.mem x free_vars && SymSet.subset free_vars vars ->
+          let gt_rest, lcs = aux gt_rest in
+          (gt_rest, lc :: lcs)
+        | Assert (lc, gt_rest) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, lcs)
+      in
+      aux gt
+
+
+    type inline_request =
+      { old_name : Sym.t;
+        old_args : (Sym.t * BT.t) list;
+        ret_sym : Sym.t;
+        new_name : Sym.t;
+        new_args : (Sym.t * BT.t) list;
+        constraints : LC.t list
+      }
+
+    let request_gt (vars : SymSet.t) (gt : GT.t) : GT.t * inline_request list =
+      let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t * inline_request list =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> (gt, [])
+        | Pick wgts ->
+          let wgts, reqs =
+            wgts
+            |> List.map (fun (w, gt') ->
+              let gt'', reqs = aux vars gt' in
+              ((w, gt''), reqs))
+            |> List.split
+          in
+          (GT.pick_ wgts loc, List.flatten reqs)
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          let gt_rest, reqs = aux vars gt_rest in
+          (GT.asgn_ ((it_addr, sct), it_val, gt_rest) loc, reqs)
+        | Let (backtracks, (x, GT (Call (fsym, xits), bt_call, loc_call)), gt_rest) ->
+          let gt_rest, lcs = collect_constraints (SymSet.add x vars) x gt_rest in
+          let gt_rest, reqs = aux (SymSet.add x vars) gt_rest in
+          if List.is_empty lcs then
+            ( GT.let_
+                (backtracks, (x, GT.call_ (fsym, xits) bt_call loc_call), gt_rest)
+                loc,
+              reqs )
+          else (
+            let old_args = List.map_snd IT.bt xits in
+            let ret_sym = Sym.fresh_make_uniq (Sym.pp_string x) in
+            let xits' =
+              lcs
+              |> List.map LC.free_vars_bts
+              |> List.fold_left
+                   (SymMap.union (fun _ bt1 bt2 ->
+                      assert (BT.equal bt1 bt2);
+                      Some bt1))
+                   SymMap.empty
+              |> SymMap.remove x
+              |> SymMap.to_seq
+              |> List.of_seq
+              |> List.map (fun (y, y_bt) ->
+                (Sym.fresh (), IT.sym_ (y, y_bt, Locations.other __LOC__)))
+            in
+            let subst =
+              (x, IT.sym_ (ret_sym, bt_call, Locations.other __LOC__))
+              :: (xits'
+                  |> List.map (fun (y, it) ->
+                    ( fst (Option.get (IT.is_sym it)),
+                      IT.sym_ (y, IT.bt it, Locations.other __LOC__) )))
+            in
+            let lcs = List.map (LC.subst (IT.make_subst subst)) lcs in
+            let new_name = Sym.fresh_make_uniq (Sym.pp_string fsym) in
+            let new_args = xits' |> List.map (fun (y, it) -> (y, IT.bt it)) in
+            ( GT.let_
+                ( backtracks,
+                  (x, GT.call_ (new_name, xits @ xits') bt_call loc_call),
+                  gt_rest )
+                loc,
+              { old_name = fsym;
+                old_args;
+                ret_sym;
+                new_name;
+                new_args;
+                constraints = lcs
+              }
+              :: reqs ))
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let gt_inner, reqs = aux vars gt_inner in
+          let gt_rest, reqs' = aux (SymSet.add x vars) gt_rest in
+          (GT.let_ (backtracks, (x, gt_inner), gt_rest) loc, reqs @ reqs')
+        | Assert (lc, gt_rest) ->
+          let gt_rest, reqs = aux vars gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, reqs)
+        | ITE (it_if, gt_then, gt_else) ->
+          let gt_then, reqs = aux vars gt_then in
+          let gt_else, reqs' = aux vars gt_else in
+          (GT.ite_ (it_if, gt_then, gt_else) loc, reqs @ reqs')
+        | Map ((i, i_bt, it_perm), gt_inner) ->
+          let gt_inner, reqs = aux (SymSet.add i vars) gt_inner in
+          (GT.map_ ((i, i_bt, it_perm), gt_inner) loc, reqs)
+      in
+      aux vars gt
+
+
+    let request_gd (gd : GD.t) : GD.t * inline_request list =
+      let gt, reqs =
+        request_gt (gd.iargs |> List.map fst |> SymSet.of_list) (Option.get gd.body)
+      in
+      ({ gd with body = Some gt }, reqs)
+
+
+    let request (ctx : GD.context) : GD.context * inline_request list =
+      ctx
+      |> List.map snd
+      |> List.flatten
+      |> List.map snd
+      |> List.map request_gd
+      |> List.fold_left
+           (fun (ctx', reqs') (gd, reqs) -> (GD.add_context gd ctx', reqs @ reqs'))
+           ([], [])
+
+
+    let fuse ((ctx, reqs) : GD.context * inline_request list) : GD.context =
+      let rec inject (ret_sym : Sym.t) (lcs : LC.t list) (gt : GT.t) : GT.t =
+        let (GT (gt_, bt, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ | Map _ ->
+          GT.let_
+            ( 0,
+              (ret_sym, gt),
+              List.fold_left
+                (fun gt_rest lc -> GT.assert_ (lc, gt_rest) loc)
+                (GT.return_ (IT.sym_ (ret_sym, bt, loc)) loc)
+                lcs )
+            loc
+        | Pick wgts -> GT.pick_ (List.map_snd (inject ret_sym lcs) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, inject ret_sym lcs gt_rest) loc
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          GT.let_ (backtracks, (x, gt_inner), inject ret_sym lcs gt_rest) loc
+        | Assert (lc, gt_rest) -> GT.assert_ (lc, inject ret_sym lcs gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, inject ret_sym lcs gt_then, inject ret_sym lcs gt_else) loc
+      in
+      let rec aux (reqs : inline_request list) : GD.context =
+        match reqs with
+        | { old_name; old_args; ret_sym; new_name; new_args; constraints } :: reqs' ->
+          let gd =
+            ctx
+            |> List.assoc Sym.equal old_name
+            |> List.assoc (List.equal Sym.equal) (List.map fst old_args)
+          in
+          let body = Some (inject ret_sym constraints (Option.get gd.body)) in
+          let iargs = List.map_snd GenBaseTypes.of_bt (old_args @ new_args) in
+          (new_name, [ (List.map fst iargs, { gd with name = new_name; iargs; body }) ])
+          :: aux reqs'
+        | [] -> []
+      in
+      aux reqs @ ctx
+
+
+    let transform ctx = fuse (request ctx)
+  end
 end
 
 module PartialEvaluation = struct
@@ -1081,7 +1267,7 @@ end
 
 module MemberIndirection = struct
   type kind =
-    | Struct
+    | Struct of Sym.t
     | Record
 
   let rec replace_memberof_it
@@ -1106,7 +1292,7 @@ module MemberIndirection = struct
       | Struct (tag, xits) -> IT.Struct (tag, List.map_snd repl xits)
       | StructMember (it', x) ->
         (match (k, IT.is_sym it') with
-         | Struct, Some (y, _y_bt) when Sym.equal y sym ->
+         | Struct _tag, Some (y, _y_bt) when Sym.equal y sym ->
            IT.Sym (List.assoc Id.equal x dict)
          | _ -> IT.StructMember (repl it', x))
       | StructUpdate ((it_struct, x), it_val) ->
@@ -1181,43 +1367,58 @@ module MemberIndirection = struct
       match gt with
       | GT
           ( Let
-              ( backtracks,
-                (x, (GT (Return (IT (Struct (_, xits), bt, _)), _, _) as gt_inner)),
+              ( _backtracks,
+                (x, GT (Return (IT (Struct (_, xits), bt, loc_it)), _, loc_ret)),
                 gt' ),
             _,
             loc )
       | GT
           ( Let
-              ( backtracks,
-                (x, (GT (Return (IT (Record xits, bt, _)), _, _) as gt_inner)),
+              ( _backtracks,
+                (x, GT (Return (IT (Record xits, bt, loc_it)), _, loc_ret)),
                 gt' ),
             _,
             loc ) ->
         let k =
-          match bt with Struct _ -> Struct | Record _ -> Record | _ -> failwith __LOC__
+          match bt with
+          | Struct tag -> Struct tag
+          | Record _ -> Record
+          | _ -> failwith __LOC__
         in
-        let open Either in
-        let members =
-          xits
-          |> List.map_snd (fun it ->
-            match IT.is_sym it with
-            | Some (x, _) -> (Left (), x)
-            | None -> (Right it, Sym.fresh ()))
+        let members_to_indirect, members_to_leave =
+          xits |> List.partition (fun (_, it) -> Option.is_none (IT.is_sym it))
+        in
+        let indirect_map =
+          List.map_snd (fun _ -> Sym.fresh ()) members_to_indirect
+          @ List.map
+              (fun (y, it) -> (y, fst (Option.get (IT.is_sym it))))
+              members_to_leave
         in
         let gt_main =
           GT.let_
-            ( backtracks,
-              (x, gt_inner),
-              replace_memberof_gt k x (List.map_snd snd members) gt' )
+            ( 0,
+              ( x,
+                GT.return_
+                  (let members =
+                     indirect_map
+                     |> List.map (fun (y, z) ->
+                       let it = List.assoc Id.equal y xits in
+                       (y, IT.sym_ (z, IT.bt it, IT.loc it)))
+                   in
+                   match k with
+                   | Struct tag -> IT.struct_ (tag, members) loc_it
+                   | Record -> IT.record_ members loc_it)
+                  loc_ret ),
+              replace_memberof_gt k x indirect_map gt' )
             loc
         in
         let here = Locations.other __LOC__ in
-        members
-        |> List.map snd
-        |> List.filter_map (fun (info, x) ->
-          match info with Right it -> Some (x, it) | Left () -> None)
+        members_to_indirect
         |> List.fold_left
-             (fun gt'' (x, it) -> GT.let_ (0, (x, GT.return_ it here), gt'') here)
+             (fun gt'' (y, it) ->
+               GT.let_
+                 (0, (List.assoc Id.equal y indirect_map, GT.return_ it here), gt'')
+                 here)
              gt_main
       | _ -> gt
     in
@@ -1506,6 +1707,19 @@ module SplitConstraints = struct
     let pass = { name; transform }
   end
 
+  let rec is_external (gt : GT.t) : bool =
+    let (GT (gt_, _, _)) = gt in
+    match gt_ with
+    | Arbitrary | Uniform _ | Alloc _ | Return _ -> false
+    | Call _ -> true
+    | Pick wgts -> wgts |> List.map snd |> List.exists is_external
+    | Asgn (_, _, gt_rest) -> is_external gt_rest
+    | Let (_, (_, gt_inner), gt_rest) -> is_external gt_inner || is_external gt_rest
+    | Assert (_, gt_rest) -> is_external gt_rest
+    | ITE (_, gt_then, gt_else) -> is_external gt_then || is_external gt_else
+    | Map (_, gt_inner) -> is_external gt_inner
+
+
   module Disjunction = struct
     let name = "split_disjunction"
 
@@ -1557,23 +1771,59 @@ module SplitConstraints = struct
 
 
     let transform (gt : GT.t) : GT.t =
-      let aux (gt : GT.t) : GT.t =
+      let rec aux (ext : SymSet.t) (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+        | Pick wgts -> GT.pick_ (List.map_snd (aux ext) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, aux ext gt_rest) loc
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let gt_inner = aux ext gt_inner in
+          let ext = if is_external gt_inner then SymSet.add x ext else ext in
+          GT.let_ (backtracks, (x, gt_inner), aux ext gt_rest) loc
         | Assert (T it, gt') ->
           let it = dnf it in
+          let gt' = aux ext gt' in
           (match it with
            | IT (Binop (Or, _, _), _, _) ->
-             let cases =
+             let its_split, its_left =
                it
                |> listify_constraints
-               |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
+               |> List.partition (fun it' ->
+                 match it with
+                 | IT (Binop (EQ, IT (Sym x, _, _), _), _, _) when not (SymSet.mem x ext)
+                   ->
+                   true
+                 | IT (Binop (EQ, _, IT (Sym x, _, _)), _, _) when not (SymSet.mem x ext)
+                   ->
+                   true
+                 | _ -> SymSet.disjoint ext (IT.free_vars it'))
+             in
+             let gt' =
+               if List.is_empty its_left then
+                 gt'
+               else (
+                 let it' =
+                   List.fold_left
+                     (fun it1 it2 -> IT.or2_ (it1, it2) loc)
+                     (List.hd its_left)
+                     (List.tl its_left)
+                 in
+                 GT.assert_ (T it', gt') loc)
+             in
+             let cases =
+               its_split |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
              in
              GT.pick_ cases loc
-           | _ -> gt)
-        | _ -> gt
+           | _ -> GT.assert_ (T it, gt') loc)
+        | Assert ((Forall _ as lc), gt_rest) -> GT.assert_ (lc, aux ext gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, aux ext gt_then, aux ext gt_else) loc
+        | Map ((i, i_bt, it_perm), gt_inner) ->
+          GT.map_ ((i, i_bt, it_perm), aux ext gt_inner) loc
       in
-      GT.map_gen_pre aux gt
+      aux SymSet.empty gt
 
 
     let pass = { name; transform }
@@ -2045,7 +2295,17 @@ module Reordering = struct
         in
         res @ res' @ loop (SymSet.add sym vars) syms' stmts''
       | [] ->
-        assert (List.is_empty stmts');
+        if List.non_empty stmts' then
+          print_endline
+            (match stmts' with
+             | [ Assert lc ] ->
+               Pp.(
+                 LC.free_vars lc
+                 |> SymSet.to_seq
+                 |> List.of_seq
+                 |> separate_map (comma ^^ space) Sym.pp
+                 |> plain)
+             | _ -> "ss");
         res
     in
     let syms = get_variable_ordering iargs stmts in
@@ -3135,4 +3395,17 @@ let optimize
   =
   let default = all_passes prog5 |> List.map (fun p -> p.name) |> StringSet.of_list in
   let passes = Option.value ~default passes in
-  List.map_snd (List.map_snd (optimize_gen_def prog5 passes)) ctx
+  ctx
+  |> List.map_snd
+       (List.map_snd
+          (fun ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t) : GD.t ->
+             { filename;
+               recursive;
+               name;
+               spec;
+               iargs;
+               oargs;
+               body = Option.map (optimize_gen prog5 passes) body
+             }))
+  |> Fusion.Recursive.transform
+  |> List.map_snd (List.map_snd (optimize_gen_def prog5 passes))

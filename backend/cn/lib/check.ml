@@ -1273,6 +1273,19 @@ let add_trace_information _labels annots =
   return ()
 
 
+let bytes_qpred sym size pointer init : RET.qpredicate_type =
+  let here = Locations.other __FUNCTION__ in
+  let bt' = WellTyped.quantifier_bt in
+  { q = (sym, bt');
+    q_loc = here;
+    step = IT.num_lit_ Z.one bt' here;
+    permission = IT.(lt_ (sym_ (sym, bt', here), size) here);
+    name = Owned (Sctypes.uchar_ct, init);
+    pointer;
+    iargs = []
+  }
+
+
 let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
   let (Expr (loc, annots, expect, e_)) = e in
   let@ () = add_trace_information labels annots in
@@ -1288,6 +1301,10 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
         debug 3 (lazy (action "inferring expression"));
         debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
         debug 3 (lazy (item "ctxt" (Context.pp ctxt))))
+    in
+    let bytes_qpred sym ct pointer init : RET.qpredicate_type =
+      let here = Locations.other __FUNCTION__ in
+      bytes_qpred sym (sizeOf_ ct here) pointer init
     in
     (match e_ with
      | Epure pe ->
@@ -1561,8 +1578,9 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                   and_ [ lower; upper ] here)
               in
               k result))
-        | Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
-          Cerb_debug.error "todo: Memcpy"
+        | Memcpy _ ->
+          (* should have been intercepted by memcpy_proxy *)
+          assert false
         | Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Cerb_debug.error "todo: Memcmp"
         | Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -1791,18 +1809,6 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
      | CN_progs (_, cn_progs) ->
        let bytes_pred ct pointer init : RET.predicate_type =
          { name = Owned (ct, init); pointer; iargs = [] }
-       in
-       let bytes_qpred sym ct pointer init : RET.qpredicate_type =
-         let here = Locations.other __FUNCTION__ in
-         let bt' = WellTyped.quantifier_bt in
-         { q = (sym, bt');
-           q_loc = here;
-           step = IT.num_lit_ Z.one bt' here;
-           permission = IT.(lt_ (sym_ (sym, bt', here), sizeOf_ ct here) here);
-           name = Owned (Sctypes.uchar_ct, init);
-           pointer;
-           iargs = []
-         }
        in
        let bytes_constraints ~(value : IT.t) ~(byte_arr : IT.t) (ct : Sctypes.t) =
          (* FIXME this hard codes big endianness but this should be switchable *)
@@ -2516,27 +2522,85 @@ let ffs_proxy_ft sz =
   ft
 
 
-let add_stdlib_spec call_sigs fsym =
-  match Sym.has_id fsym with
-  (* FIXME: change the naming, we aren't unfolding these *)
-  | Some s when Setup.unfold_stdlib_name s ->
-    let add ft =
-      Pp.debug
-        2
-        (lazy (Pp.headline ("adding builtin spec for procedure " ^ Sym.pp_string fsym)));
-      add_fun_decl fsym (Locations.other __FUNCTION__, Some ft, Pmap.find fsym call_sigs)
-    in
-    if String.equal s "ctz_proxy" then
-      add ctz_proxy_ft
-    else if String.equal s "ffs_proxy" then
-      add (ffs_proxy_ft Sctypes.IntegerBaseTypes.Int_)
-    else if String.equal s "ffsl_proxy" then
-      add (ffs_proxy_ft Sctypes.IntegerBaseTypes.Long)
-    else if String.equal s "ffsll_proxy" then
-      add (ffs_proxy_ft Sctypes.IntegerBaseTypes.LongLong)
-    else
-      return ()
-  | _ -> return ()
+let memcpy_proxy_ft =
+  let here = Locations.other __FUNCTION__ in
+  let info = (here, Some "memcpy_proxy") in
+  (* C arguments *)
+  let dest_sym, dest = IT.fresh_named (BT.Loc ()) "dest" here in
+  let src_sym, src = IT.fresh_named (BT.Loc ()) "src" here in
+  let n_sym, n = IT.fresh_named Memory.size_bt "n" here in
+  (* requires *)
+  let q_bt = WellTyped.quantifier_bt in
+  let uchar_bt = Memory.bt_of_sct Sctypes.uchar_ct in
+  let map_bt = BT.Map (q_bt, uchar_bt) in
+  let destIn_sym, _ = IT.fresh_named map_bt "destIn" here in
+  let srcIn_sym, srcIn = IT.fresh_named map_bt "srcIn" here in
+  let destRes str init = RET.Q (bytes_qpred (Sym.fresh_named str) n dest init) in
+  let srcRes str = RET.Q (bytes_qpred (Sym.fresh_named str) n src Init) in
+  (* ensures *)
+  let ret_sym, ret = IT.fresh_named (BT.Loc ()) "return" here in
+  let destOut_sym, destOut = IT.fresh_named map_bt "destOut" here in
+  let srcOut_sym, srcOut = IT.fresh_named map_bt "srcOut" here in
+  AT.mComputationals
+    [ (dest_sym, Loc (), info); (src_sym, Loc (), info); (n_sym, Memory.size_bt, info) ]
+    (AT.L
+       (LAT.mResources
+          [ ((destIn_sym, (destRes "i_d" Uninit, map_bt)), info);
+            ((srcIn_sym, (srcRes "i_s", map_bt)), info)
+          ]
+          (LAT.I
+             (RT.mComputational
+                ((ret_sym, BT.Loc ()), info)
+                (LRT.mResources
+                   [ ((destOut_sym, (destRes "j_d" Init, map_bt)), info);
+                     ((srcOut_sym, (srcRes "j_s", map_bt)), info)
+                   ]
+                   (LRT.Constraint
+                      ( LC.T
+                          (and_
+                             [ eq_ (ret, dest) here;
+                               eq_ (srcIn, srcOut) here;
+                               eq_ (srcIn, destOut) here
+                             ]
+                             here),
+                        info,
+                        I )))))))
+
+
+let add_stdlib_spec =
+  let module StrMap = Map.Make (String) in
+  let proxies =
+    List.fold_left
+      (fun map (name, ft) -> StrMap.add name ft map)
+      StrMap.empty
+      [ ("ctz_proxy", ctz_proxy_ft);
+        ("ffs_proxy", ffs_proxy_ft Sctypes.IntegerBaseTypes.Int_);
+        ("ffsl_proxy", ffs_proxy_ft Sctypes.IntegerBaseTypes.Long);
+        ("ffsll_proxy", ffs_proxy_ft Sctypes.IntegerBaseTypes.LongLong);
+        ("memcpy_proxy", memcpy_proxy_ft)
+      ]
+  in
+  let add ct fsym ft =
+    Pp.debug
+      2
+      (lazy (Pp.headline ("adding builtin spec for procedure " ^ Sym.pp_string fsym)));
+    add_fun_decl fsym (Locations.other __FUNCTION__, Some ft, ct)
+  in
+  fun call_sigs fsym ->
+    match
+      Option.(
+        let@ s = Sym.has_id fsym in
+        let@ ft = StrMap.find_opt s proxies in
+        (* The C signatures for most of the proxies are included in
+           ./runtime/libc/include/builtins.h, and so show up in every file,
+           regardless of whether or not they are used, but the same is not true
+           for memcpy (its C signature is only present when it is used) hence
+           (1) the extra lookup and (2) it being safe to skip if absent *)
+        let@ ct = Pmap.lookup fsym call_sigs in
+        return (ft, ct))
+    with
+    | None -> return ()
+    | Some (ft, ct) -> add ct fsym ft
 
 
 let record_and_check_datatypes datatypes =

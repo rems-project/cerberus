@@ -1,11 +1,10 @@
-name: CI (CN runtime checks)
+name: CN Spec Testing
 
 on:
   pull_request:
   push:
     branches:
       - master
-      - cheri-tests
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
@@ -46,14 +45,6 @@ jobs:
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
         opam install --deps-only --yes ./cerberus-lib.opam
-        opam switch create with_coq ${{ matrix.version }}
-        eval $(opam env --switch=with_coq)
-        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
-        opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
-        opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
-        opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
-        opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
-        opam install --deps-only --yes ./cerberus-lib.opam ./cerberus-cheri.opam
 
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
@@ -97,3 +88,10 @@ jobs:
         eval $(opam env --switch=${{ matrix.version }})
         cd cn-tutorial; ./runtime-test.sh 
         cd ..
+
+    - name: Run CN-Test-Gen CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
+
