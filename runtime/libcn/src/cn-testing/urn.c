@@ -75,7 +75,9 @@ struct int_urn* urn_from_array(uint64_t elems[], uint8_t len) {
     urn->size = 0;
     urn->tree = NULL;
     for (uint16_t i = 0; i < 2 * (uint16_t)len; i += 2) {
-        urn_insert(urn, elems[i], elems[i + 1]);
+        if (elems[i] != 0) {
+            urn_insert(urn, elems[i], elems[i + 1]);
+        }
     }
     return urn;
 }
