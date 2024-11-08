@@ -373,10 +373,9 @@ let compile_tests
         | Decl_object _ -> failwith __LOC__)
       insts
   in
-  let _ = compile_unit_tests unit_tests in
+  let unit_tests_doc = compile_unit_tests unit_tests in
   let nested = compile_nested sigma insts in
-  let _ = compile_random_tests sigma prog5 random_tests in
-  let _ = pp_label "" in
+  let random_tests_doc = compile_random_tests sigma prog5 random_tests in
   let open Pp in
   let _ = compile_assumes ~with_ownership_checking sigma prog5 insts in ();
   string "#include "
@@ -387,24 +386,24 @@ let compile_tests
   ^^ hardline
   ^^ string "#include "
   ^^ dquotes (string "cn.c")
-  (* ^^ twice hardline *)
-  (* ^^ pp_label "Assume Ownership Functions"
-  ^^ twice hardline *)
-  (* ^^ compile_assumes ~with_ownership_checking sigma prog5 insts *)
-  (* ^^ pp_label "Unit tests" *)
-  (* ^^ twice hardline *)
-  (* ^^ unit_tests_doc *)
-  (* ^^ twice hardline *)
-  (* ^^ pp_label "Random tests" *)
-  (* ^^ twice hardline *)
-  (* ^^ random_tests_doc *)
-  (* ^^ pp_label "Main function" *)
+  ^^ twice hardline
+  ^^ pp_label "Assume Ownership Functions"
+  ^^ twice hardline
+  ^^ compile_assumes ~with_ownership_checking sigma prog5 insts
+  ^^ pp_label "Unit tests"
+  ^^ twice hardline
+  ^^ unit_tests_doc
+  ^^ twice hardline
+  ^^ pp_label "Random tests"
+  ^^ twice hardline 
+  ^^ random_tests_doc 
+  ^^ pp_label "Main function" 
   ^^ twice hardline
   ^^ string "int main"
   ^^ parens (string "int argc, char* argv[]")
   ^^ break 1
-  ^^ braces (nest 2 (hardline ^^ nested ^^ hardline ^^ (string "return 0;")) ^^ hardline)
-       (* (nest
+  ^^ braces
+       (nest
           2
           (hardline
            ^^ concat_map
@@ -432,9 +431,14 @@ let compile_tests
                    (fun (inst : Core_to_mucore.instrumentation) ->
                      (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
                    insts)
+           ^^ hardline 
+           ^^ pp_label "Nested tests"
+           ^^ twice hardline
+           ^^ nested
+           ^^ hardline
            ^^ string "return cn_test_main(argc, argv);")
         ^^ hardline)
-  ^^ hardline *)
+  ^^ hardline
 
 
 let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
