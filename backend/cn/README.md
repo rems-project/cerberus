@@ -18,7 +18,7 @@ and their dependencies.
    Note: there is a [known bug with Z3 version
    4.8.13](https://github.com/rems-project/cerberus/issues/663) (the default on
    Ubuntu 22.04) so you may wish to install Z3 via opam later for a more
-   up-to-date version. CVC5 
+   up-to-date version. Z3 that is provided in the docker images is sufficiently up-to-date.
 
 2. Install the opam package manager for OCaml:
    https://ocaml.org/docs/installing-ocaml#install-opam.

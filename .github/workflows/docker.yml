@@ -82,3 +82,16 @@ jobs:
         attests: type=sbom
         provenance: mode=max
         github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  test-docker-images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tag: [release, release-redhat]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run CN CI tests
+      run: |
+        docker pull ${{env.CERBERUS_IMAGE_ID}}:${{ matrix.tag }}
+        docker run -v $PWD:/work ${{env.CERBERUS_IMAGE_ID}}:${{ matrix.tag }} tests/run-cn.sh
