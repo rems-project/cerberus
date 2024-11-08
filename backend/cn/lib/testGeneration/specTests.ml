@@ -379,7 +379,6 @@ let compile_tests
   let nested = compile_nested sigma insts in
   let random_tests_doc = compile_random_tests sigma prog5 random_tests in
   let open Pp in
-  let _ = compile_assumes ~with_ownership_checking sigma prog5 insts in ();
   string "#include "
   ^^ dquotes (string (filename_base ^ "_gen.h"))
   ^^ hardline
