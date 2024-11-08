@@ -2,7 +2,7 @@
 
 CN is tool for verifying C code is free of undefined behaviour and meets
 user-written specifications. It can also convert those specifications into
-assertions to be checked at runtime during test cases.
+C assertions to be checked at runtime on concrete test cases.
 
 ## Installation
 
