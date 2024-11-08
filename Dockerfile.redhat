@@ -1,4 +1,4 @@
-FROM redhat/ubi9:latest
+FROM redhat/ubi9:9.4
 
 # Install basic dependencies
 RUN yum update -y && \
