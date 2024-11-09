@@ -13,12 +13,11 @@
         cn_gen_backtrack_decrement_depth();                                             \
         return NULL;                                                                    \
     }                                                                                   \
+    cn_gen_backtrack_increment_depth();                                                 \
     if (cn_gen_backtrack_depth() == cn_gen_backtrack_max_depth()) {                     \
         cn_gen_backtrack_depth_exceeded();                                              \
         goto cn_label_bennet_backtrack;                                                 \
-    } else {                                                                            \
-        cn_gen_backtrack_increment_depth();                                             \
-    }                                                                                   \
+    }
 
 #define CN_GEN_UNIFORM(ty, sz) cn_gen_uniform_##ty(sz)
 
@@ -43,6 +42,12 @@
 #define CN_GEN_CALL_TO(...)                                                             \
         char* to[] = { __VA_ARGS__, NULL };                                             \
         cn_gen_backtrack_relevant_remap_many(from, to);                                 \
+    }
+
+#define CN_GEN_CALL_PATH_VARS(...)                                                      \
+    if (cn_gen_backtrack_type() == CN_GEN_BACKTRACK_DEPTH) {                            \
+        char* toAdd[] = { __VA_ARGS__, NULL };                                          \
+        cn_gen_backtrack_relevant_add_many(toAdd);                                      \
     }
 
 #define CN_GEN_ASSIGN(p, offset, addr_ty, value, tmp, gen_name, last_var, ...)          \

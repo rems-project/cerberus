@@ -27,7 +27,8 @@ type term =
   | Call of
       { fsym : Sym.t;
         iargs : (Sym.t * Sym.t) list;
-        oarg_bt : BT.t
+        oarg_bt : BT.t;
+        path_vars : SymSet.t
       }
   | Asgn of
       { pointer : Sym.t;
@@ -76,7 +77,8 @@ let rec free_vars_term (tm : term) : SymSet.t =
   | Pick { bt = _; choice_var = _; choices; last_var = _ } ->
     free_vars_term_list (List.map snd choices)
   | Alloc { bytes } -> IT.free_vars bytes
-  | Call { fsym = _; iargs; oarg_bt = _ } -> SymSet.of_list (List.map snd iargs)
+  | Call { fsym = _; iargs; oarg_bt = _; path_vars = _ } ->
+    SymSet.of_list (List.map snd iargs)
   | Asgn { pointer; offset; sct = _; value; last_var = _; rest } ->
     List.fold_left
       SymSet.union
@@ -132,7 +134,7 @@ let rec pp_term (tm : term) : Pp.document =
                             (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp_term gt))))
                         choices)))
   | Alloc { bytes } -> string "alloc" ^^ parens (IT.pp bytes)
-  | Call { fsym; iargs; oarg_bt } ->
+  | Call { fsym; iargs; oarg_bt; path_vars } ->
     parens
       (Sym.pp fsym
        ^^ parens
@@ -143,7 +145,16 @@ let rec pp_term (tm : term) : Pp.document =
                   (fun (x, y) -> Sym.pp x ^^ colon ^^ space ^^ Sym.pp y)
                   iargs))
        ^^ space
-       ^^ BT.pp oarg_bt)
+       ^^ colon
+       ^^ space
+       ^^ BT.pp oarg_bt
+       ^^ c_comment
+            (string "path affected by"
+             ^^ space
+             ^^ separate_map
+                  (comma ^^ space)
+                  Sym.pp
+                  (path_vars |> SymSet.to_seq |> List.of_seq)))
   | Asgn
       { pointer : Sym.t;
         offset : IT.t;
@@ -312,7 +323,7 @@ let nice_names (inputs : SymSet.t) (gt : GT.t) : GT.t =
 
 
 let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
-  let rec aux (vars : Sym.t list) (gt : GT.t) : term =
+  let rec aux (vars : Sym.t list) (path_vars : SymSet.t) (gt : GT.t) : term =
     let last_var = match vars with v :: _ -> v | [] -> bennet in
     let (GT (gt_, bt, loc)) = gt in
     match gt_ with
@@ -347,7 +358,7 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
                Z.to_int
                  (Z.max Z.one (Z.div w (Z.div (Z.add w_sum (Z.pred max_int)) max_int)))
              in
-             List.map (fun (w, gt) -> (f w, aux (choice_var :: vars) gt)) wgts);
+             List.map (fun (w, gt) -> (f w, aux (choice_var :: vars) path_vars gt)) wgts);
           last_var
         }
     | Alloc bytes -> Alloc { bytes }
@@ -373,7 +384,7 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
           xits
           ([], fun _ gr -> gr)
       in
-      gt_lets last_var (Call { fsym; iargs; oarg_bt = bt })
+      gt_lets last_var (Call { fsym; iargs; oarg_bt = bt; path_vars })
     | Asgn ((it_addr, sct), value, rest) ->
       let pointer, offset = GA.get_addr_offset it_addr in
       if not (SymSet.mem pointer inputs || List.exists (Sym.equal pointer) vars) then
@@ -383,20 +394,21 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
            ^ String.concat "; " (List.map Sym.pp_string vars)
            ^ "] from "
            ^ Pp.plain (Locations.pp (IT.loc it_addr)));
-      Asgn { pointer; offset; sct; value; last_var; rest = aux vars rest }
+      Asgn { pointer; offset; sct; value; last_var; rest = aux vars path_vars rest }
     | Let (backtracks, (x, gt1), gt2) ->
       Let
         { backtracks;
           x;
           x_bt = GT.bt gt1;
-          value = aux vars gt1;
+          value = aux vars path_vars gt1;
           last_var;
-          rest = aux (x :: vars) gt2
+          rest = aux (x :: vars) path_vars gt2
         }
     | Return value -> Return { value }
-    | Assert (prop, rest) -> Assert { prop; last_var; rest = aux vars rest }
+    | Assert (prop, rest) -> Assert { prop; last_var; rest = aux vars path_vars rest }
     | ITE (cond, gt_then, gt_else) ->
-      ITE { bt; cond; t = aux vars gt_then; f = aux vars gt_else }
+      let path_vars = SymSet.union path_vars (IT.free_vars cond) in
+      ITE { bt; cond; t = aux vars path_vars gt_then; f = aux vars path_vars gt_else }
     | Map ((i, i_bt, perm), inner) ->
       let min, max = GenAnalysis.get_bounds (i, i_bt) perm in
       Map
@@ -405,11 +417,11 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
           min;
           max;
           perm;
-          inner = aux (i :: vars) inner;
+          inner = aux (i :: vars) path_vars inner;
           last_var
         }
   in
-  aux [] (nice_names inputs gt)
+  aux [] SymSet.empty (nice_names inputs gt)
 
 
 type definition =
