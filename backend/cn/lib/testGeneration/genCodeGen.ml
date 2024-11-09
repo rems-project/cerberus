@@ -135,7 +135,7 @@ let rec compile_term
     let alloc_sym = Sym.fresh_named "cn_gen_alloc" in
     let b, s, e = compile_it sigma name it in
     (b, s, mk_expr (AilEcall (mk_expr (AilEident alloc_sym), [ e ])))
-  | Call { fsym; iargs; oarg_bt } ->
+  | Call { fsym; iargs; oarg_bt; path_vars } ->
     let sym = GenUtils.get_mangled_name (fsym :: List.map fst iargs) in
     let es = iargs |> List.map snd |> List.map (fun x -> A.(mk_expr (AilEident x))) in
     let x = Sym.fresh () in
@@ -163,8 +163,20 @@ let rec compile_term
        if GenBuiltins.is_builtin sym then
          []
        else
-         [ macro_call "CN_GEN_CALL_FROM" from_vars; macro_call "CN_GEN_CALL_TO" to_vars ]
-      ),
+         (if List.is_empty from_vars then
+            []
+          else
+            [ macro_call "CN_GEN_CALL_FROM" from_vars;
+              macro_call "CN_GEN_CALL_TO" to_vars
+            ])
+         @
+         if GR.SymSet.is_empty path_vars then
+           []
+         else
+           [ macro_call
+               "CN_GEN_CALL_PATH_VARS"
+               (path_vars |> GR.SymSet.to_seq |> List.of_seq |> List.map wrap_to_string)
+           ]),
       mk_expr (AilEident x) )
   | Asgn { pointer; offset; sct; value; last_var; rest } ->
     let tmp_sym = Sym.fresh () in
@@ -253,7 +265,7 @@ let rec compile_term
                                 (Option.value
                                    ~default:name
                                    (match value with
-                                    | Call { fsym; iargs; oarg_bt = _ } ->
+                                    | Call { fsym; iargs; oarg_bt = _; path_vars = _ } ->
                                       Some
                                         (GenUtils.get_mangled_name
                                            (fsym :: List.map fst iargs))

@@ -22,7 +22,8 @@ type term =
   | Call of
       { fsym : Sym.t;
         iargs : (Sym.t * Sym.t) list;
-        oarg_bt : BT.t
+        oarg_bt : BT.t;
+        path_vars : SymSet.t
       }
   | Asgn of
       { pointer : Sym.t;
