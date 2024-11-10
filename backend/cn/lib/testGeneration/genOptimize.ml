@@ -3370,6 +3370,86 @@ module Specialization = struct
       let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
       { gd with body = Some (aux iargs (Option.get gd.body)) }
   end
+
+  module Pointer = struct
+    let is_not_null (x : Sym.t) (gt : GT.t) : bool * GT.t =
+      let rec aux (gt : GT.t) : bool * GT.t =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> (false, gt)
+        | Pick wgts ->
+          let bools, wgts' =
+            wgts
+            |> List.map_snd aux
+            |> List.map (fun (w, (b, gt)) -> (b, (w, gt)))
+            |> List.split
+          in
+          (List.fold_left ( && ) true bools, GT.pick_ wgts' loc)
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          let b, gt_rest' = aux gt_rest in
+          (b, GT.asgn_ ((it_addr, sct), it_val, gt_rest') loc)
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let b, gt_inner' = aux gt_inner in
+          let b', gt_rest' = aux gt_rest in
+          (b || b', GT.let_ (backtracks, (x, gt_inner'), gt_rest') loc)
+        | Assert
+            ( T
+                (IT
+                  ( Unop
+                      (Not, IT (Binop (EQ, IT (Sym y, _, _), IT (Const Null, _, _)), _, _)),
+                    _,
+                    _ )),
+              gt_rest )
+        | Assert
+            ( T
+                (IT
+                  ( Unop
+                      (Not, IT (Binop (EQ, IT (Const Null, _, _), IT (Sym y, _, _)), _, _)),
+                    _,
+                    _ )),
+              gt_rest )
+          when Sym.equal x y ->
+          (true, snd (aux gt_rest))
+        | Assert (lc, gt_rest) ->
+          let b, gt_rest' = aux gt_rest in
+          (b, GT.assert_ (lc, gt_rest') loc)
+        | ITE (it_if, gt_then, gt_else) ->
+          let b, gt_then' = aux gt_then in
+          let b', gt_else' = aux gt_else in
+          (b || b', GT.ite_ (it_if, gt_then', gt_else') loc)
+        | Map ((i, i_bt, it_perm), gt_inner) ->
+          let b, gt_inner' = aux gt_inner in
+          (b, GT.map_ ((i, i_bt, it_perm), gt_inner') loc)
+      in
+      aux gt
+
+
+    let transform_gt (gt : GT.t) : GT.t =
+      let aux (gt : GT.t) : GT.t =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Let
+            ( backtracks,
+              (x, GT (Alloc (IT (Const (Bits (_, n)), _, _)), _, loc_size)),
+              gt_rest )
+          when Z.equal n Z.zero ->
+          let not_null, gt_rest' = is_not_null x gt_rest in
+          if not_null then
+            GT.let_
+              ( backtracks,
+                (x, GT.alloc_ (IT.num_lit_ (Z.of_int 8) Memory.size_bt loc_size) loc),
+                gt_rest' )
+              loc
+          else
+            gt
+        | _ -> gt
+      in
+      GT.map_gen_pre aux gt
+
+
+    let transform (gd : GD.t) : GD.t =
+      { gd with body = Some (transform_gt (Option.get gd.body)) }
+  end
 end
 
 let all_passes (prog5 : unit Mucore.file) =
@@ -3422,6 +3502,7 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   |> ConstraintPropagation.transform
   |> Specialization.Equality.transform
   |> Specialization.Integer.transform
+  |> Specialization.Pointer.transform
   |> InferAllocationSize.transform
   |> aux
 

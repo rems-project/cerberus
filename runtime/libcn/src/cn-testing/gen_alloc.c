@@ -69,18 +69,18 @@ cn_pointer* cn_gen_alloc(cn_bits_u64* sz) {
         bytes = cn_gen_backtrack_alloc_get();
         cn_gen_backtrack_reset();
     }
-
-    if (bytes == 0) {
-        void* p;
+    else if (bytes == 0) {
         uint64_t rnd = convert_from_cn_bits_u8(cn_gen_uniform_cn_bits_u8(null_in_every));
         if (rnd == 0) {
-            p = NULL;
+            bytes = 0;
         }
         else {
-            p = alloc(1);
-            update_alloc(p, 1);
+            bytes = 8;
         }
-        return convert_to_cn_pointer(p);
+    }
+
+    if (bytes == 0) {
+        return convert_to_cn_pointer(NULL);
     }
     else {
         void* p = alloc(bytes);
