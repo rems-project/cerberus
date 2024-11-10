@@ -359,10 +359,14 @@ let rec map_gen_post (f : t -> t) (g : t) : t =
   f (GT (gt_, bt, here))
 
 
-type definition =
-  { filename : string;
-    name : Sym.t;
-    iargs : (Sym.t * GBT.t) list;
-    oargs : GBT.t list;
-    body : t option
-  }
+let rec contains_call (gt : t) : bool =
+  let (GT (gt_, _, _)) = gt in
+  match gt_ with
+  | Arbitrary | Uniform _ | Alloc _ | Return _ -> false
+  | Pick wgts -> wgts |> List.map snd |> List.exists contains_call
+  | Call _ -> true
+  | Asgn (_, _, gt_rest) -> contains_call gt_rest
+  | Let (_, (_, gt_inner), gt_rest) -> contains_call gt_inner || contains_call gt_rest
+  | Assert (_, gt_rest) -> contains_call gt_rest
+  | ITE (_, gt_then, gt_else) -> contains_call gt_then || contains_call gt_else
+  | Map (_, gt_inner) -> contains_call gt_inner

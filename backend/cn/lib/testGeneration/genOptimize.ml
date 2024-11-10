@@ -2165,43 +2165,71 @@ module Reordering = struct
 
   module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
 
-  let get_variable_ordering (iargs : SymSet.t) (stmts : GS.t list) : Sym.t list =
+  let get_variable_ordering (_rec_fsyms : SymSet.t) (iargs : SymSet.t) (stmts : GS.t list)
+    : Sym.t list
+    =
     let module Oper = Graph.Oper.P (SymGraph) in
-    (* Describes logical dependencies where [x <- y] means that [x] depends on [y] *)
-    let collect_constraints (stmts : GS.t list) : SymGraph.t =
-      let rec aux (stmts : GS.t list) : SymGraph.t =
-        match stmts with
-        | Let (_, (x, _)) :: stmts' -> SymGraph.add_vertex (aux stmts') x
-        | Assert (T (IT (Binop (EQ, IT (Sym x, _, _), it), _, _))) :: stmts' ->
-          let g = aux stmts' in
-          let g' =
-            List.fold_left
-              (fun g' y ->
-                if SymSet.mem y iargs || Sym.equal x y then
-                  g'
-                else
-                  SymGraph.add_edge_e g' (y, x))
-              g
-              (it |> IT.free_vars |> SymSet.to_seq |> List.of_seq)
-          in
-          g'
-        | Assert (T (IT (Binop (EQ, it, IT (Sym x, _, _)), _, _))) :: stmts' ->
-          let g = aux stmts' in
-          Seq.fold_left
+    (* Insert edges x <- y_1, ..., y_n when x = f(y_1, ..., y_n) *)
+    let rec consider_equalities (stmts : GS.t list) : SymGraph.t =
+      match stmts with
+      | Let (_, (x, _)) :: stmts' -> SymGraph.add_vertex (consider_equalities stmts') x
+      | Assert (T (IT (Binop (EQ, IT (Sym x, _, _), it), _, _))) :: stmts' ->
+        let g = consider_equalities stmts' in
+        let g' =
+          List.fold_left
             (fun g' y ->
               if SymSet.mem y iargs || Sym.equal x y then
                 g'
               else
                 SymGraph.add_edge_e g' (y, x))
             g
-            (it |> IT.free_vars |> SymSet.to_seq)
-        | _ :: stmts' -> aux stmts'
-        | [] -> SymGraph.empty
-      in
-      let g = aux stmts in
+            (it |> IT.free_vars |> SymSet.to_seq |> List.of_seq)
+        in
+        g'
+      | Assert (T (IT (Binop (EQ, it, IT (Sym x, _, _)), _, _))) :: stmts' ->
+        let g = consider_equalities stmts' in
+        Seq.fold_left
+          (fun g' y ->
+            if SymSet.mem y iargs || Sym.equal x y then
+              g'
+            else
+              SymGraph.add_edge_e g' (y, x))
+          g
+          (it |> IT.free_vars |> SymSet.to_seq)
+      | _ :: stmts' -> consider_equalities stmts'
+      | [] -> SymGraph.empty
+    in
+    (* Put calls before local variables they constrain *)
+    let rec consider_constrained_calls
+      (from_calls : SymSet.t)
+      (g : SymGraph.t)
+      (stmts : GS.t list)
+      : SymGraph.t
+      =
+      match stmts with
+      | Let (_, (x, gt)) :: stmts' when GT.contains_call gt ->
+        consider_constrained_calls (SymSet.add x from_calls) g stmts'
+      | Asgn _ :: stmts' | Let _ :: stmts' ->
+        consider_constrained_calls from_calls g stmts'
+      | Assert lc :: stmts' ->
+        let g = consider_constrained_calls from_calls g stmts' in
+        let free_vars = LC.free_vars lc in
+        let call_vars = SymSet.inter free_vars from_calls in
+        let non_call_vars = SymSet.diff free_vars from_calls in
+        let add_from_call (x : Sym.t) (g : SymGraph.t) : SymGraph.t =
+          SymSet.fold (fun y g' -> SymGraph.add_edge g' y x) call_vars g
+        in
+        SymSet.fold add_from_call non_call_vars g
+      | [] -> g
+    in
+    (* Describes logical dependencies where [x <- y] means that [x] depends on [y] *)
+    let collect_constraints (stmts : GS.t list) : SymGraph.t =
+      let g = consider_equalities stmts in
       let g' = Oper.transitive_closure g in
-      assert (not (SymGraph.fold_edges (fun x y acc -> Sym.equal x y || acc) g' false));
-      g
+      let g'' = consider_constrained_calls SymSet.empty g' stmts in
+      let g''' = Oper.transitive_closure g'' in
+      assert (not (SymGraph.fold_edges (fun x y acc -> Sym.equal x y || acc) g''' false));
+      g'''
     in
     (* Describes data dependencies where [x <- y] means that [x] depends on [y] *)
     let collect_dependencies (stmts : GS.t list) : SymGraph.t =
@@ -2273,7 +2301,9 @@ module Reordering = struct
     loop orig_order
 
 
-  let get_statement_ordering (iargs : SymSet.t) (stmts : GS.t list) : GS.t list =
+  let get_statement_ordering (rec_fsyms : SymSet.t) (iargs : SymSet.t) (stmts : GS.t list)
+    : GS.t list
+    =
     let rec loop (vars : SymSet.t) (syms : Sym.t list) (stmts : GS.t list) : GS.t list =
       let res, stmts' =
         List.partition
@@ -2308,17 +2338,26 @@ module Reordering = struct
              | _ -> "ss");
         res
     in
-    let syms = get_variable_ordering iargs stmts in
+    let syms = get_variable_ordering rec_fsyms iargs stmts in
     loop iargs syms stmts
 
 
-  let reorder (iargs : SymSet.t) (gt : GT.t) : GT.t =
+  let reorder (rec_fsyms : SymSet.t) (iargs : SymSet.t) (gt : GT.t) : GT.t =
     let stmts, gt_last = GS.stmts_of_gt gt in
-    let stmts = get_statement_ordering iargs stmts in
+    let stmts = get_statement_ordering rec_fsyms iargs stmts in
     GS.gt_of_stmts stmts gt_last
 
 
-  let transform (gd : GD.t) : GD.t =
+  let transform (gtx : GD.context) (gd : GD.t) : GD.t =
+    let rec_fsyms =
+      gtx
+      |> List.map snd
+      |> List.flatten
+      |> List.map snd
+      |> List.filter_map (fun (gd' : GD.t) ->
+        if gd'.recursive then Some gd'.name else None)
+      |> SymSet.of_list
+    in
     let rec aux (iargs : SymSet.t) (gt : GT.t) : GT.t =
       let rec loop (iargs : SymSet.t) (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
@@ -2336,7 +2375,7 @@ module Reordering = struct
         | Map ((i_sym, i_bt, it_perm), gt_inner) ->
           GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym iargs) gt_inner) loc
       in
-      gt |> reorder iargs |> loop iargs
+      gt |> reorder rec_fsyms iargs |> loop iargs
     in
     let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
     { gd with body = Some (aux iargs (Option.get gd.body)) }
@@ -3379,7 +3418,7 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   |> aux
   |> FlipIfs.transform
   |> aux
-  |> Reordering.transform
+  |> Reordering.transform []
   |> ConstraintPropagation.transform
   |> Specialization.Equality.transform
   |> Specialization.Integer.transform
@@ -3396,7 +3435,7 @@ let optimize
   let default = all_passes prog5 |> List.map (fun p -> p.name) |> StringSet.of_list in
   let passes = Option.value ~default passes in
   ctx
-  |> List.map_snd
+  (* |> List.map_snd
        (List.map_snd
           (fun ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t) : GD.t ->
              { filename;
@@ -3407,5 +3446,5 @@ let optimize
                oargs;
                body = Option.map (optimize_gen prog5 passes) body
              }))
-  |> Fusion.Recursive.transform
+  |> Fusion.Recursive.transform *)
   |> List.map_snd (List.map_snd (optimize_gen_def prog5 passes))
