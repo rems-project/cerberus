@@ -3716,7 +3716,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             E.return (d_e, d_s)
           end >>= fun (d_e, d_s) ->
           let loop_id = Symbol.fresh_int () in
-          E.record_loop_attribute loop_id attrs >>= fun () ->
+          E.record_loop_attribute loop_id attrs (Loc.locOf e) >>= fun () ->
           if has_continue s then
             (* while (E) S  ==>  while (E) { S; cont: ;} *)
             E.return begin
@@ -3748,7 +3748,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             E.return (d_e, d_s)
           end >>= fun (d_e, d_s) ->
           let loop_id = Symbol.fresh_int () in
-          E.record_loop_attribute loop_id attrs >>= fun () ->
+          E.record_loop_attribute loop_id attrs (Loc.locOf e) >>= fun () ->
           if has_continue s then
             (* do S (E)  ==>  do { S; cont: ;} (E) *)
             E.return begin
@@ -3779,7 +3779,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               desugar_init_declarator attrs isAtomic (specifs.alignment_specifiers <> []) base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             let loop_id = Symbol.fresh_int () in
-            E.record_loop_attribute loop_id attrs_outer >> 
+            E.record_loop_attribute loop_id attrs_outer (match e2_opt with Just e2 -> Loc.locOf e2 | Nothing -> Loc.unknown end) >> 
             (* for each [init_declarator] *)
             E.foldrM (fun opt (acc1, acc2) ->
               match opt with
@@ -3876,7 +3876,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let loop_id = Symbol.fresh_int () in
-          E.record_loop_attribute loop_id attrs >>
+          E.record_loop_attribute loop_id attrs (match e2_opt with Just e2 -> Loc.locOf e2 | Nothing -> Loc.unknown end) >>
           let ctx' =
             <| cont_ident_opt= Just cont_ident |> in
           

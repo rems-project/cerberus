@@ -472,9 +472,9 @@ let run_tests
         (fun () ->
           if
             prog5
-            |> Core_to_mucore.collect_instrumentation
+            |> Executable_spec_extract.collect_instrumentation
             |> fst
-            |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+            |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
               Option.is_some inst.internal)
             |> List.is_empty
           then (

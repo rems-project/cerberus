@@ -1139,9 +1139,9 @@ let normalise_label
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
     (match CF.Annot.get_label_annot annots with
      | Some (LAloop loop_id) ->
-       let@ desugared_inv, cn_desugaring_state =
+       let@ desugared_inv, cn_desugaring_state, loop_condition_loc =
          match Pmap.lookup loop_id loop_attributes with
-         | Some (marker_id, attrs) ->
+         | Some (marker_id, attrs, loop_condition_loc) ->
            let@ inv = Parse.loop_spec attrs in
            let d_st =
              CAE.
@@ -1153,8 +1153,9 @@ let normalise_label
                }
            in
            let@ inv, d_st = desugar_conds d_st inv in
-           return (inv, d_st.inner.cn_state)
-         | None -> return ([], precondition_cn_desugaring_state)
+           return (inv, d_st.inner.cn_state, loop_condition_loc)
+         | None -> assert false
+         (* return ([], precondition_cn_desugaring_state) *)
        in
        debug 6 (lazy (!^"invariant in function" ^^^ Sym.pp fsym));
        debug 6 (lazy (CF.Pp_ast.pp_doc_tree (dtree_of_inv desugared_inv)));
@@ -1179,7 +1180,12 @@ let normalise_label
        (*     ) label_args_and_body  *)
        (* in *)
        return
-         (Mu.Label (loc, label_args_and_body, annots, { label_spec = desugared_inv }))
+         (Mu.Label
+            ( loc,
+              label_args_and_body,
+              annots,
+              { label_spec = desugared_inv },
+              `Loop loop_condition_loc ))
      (* | Some (LAloop_body _loop_id) -> *)
      (*    assert_error loc !^"body label has not been inlined" *)
      | Some (LAloop_continue _loop_id) ->
@@ -1591,137 +1597,3 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
   in
   debug 3 (lazy (headline "done core_to_mucore normalising file"));
   return file
-
-
-(* type internal = { pre: unit arguments; post: ReturnTypes.t; inv: (Loc.t * unit
-   arguments); statements: (Locations.t * Cnprog.cn_prog list) list; } *)
-
-type statements = (Locations.t * Cnprog.t list) list
-
-type fn_spec_instrumentation = (ReturnTypes.t * statements) ArgumentTypes.t
-
-type instrumentation =
-  { fn : Sym.t;
-    fn_loc : Locations.t;
-    internal : fn_spec_instrumentation option
-  }
-
-let rt_stmts_subst subst (rt, stmts) =
-  let rt = ReturnTypes.subst subst rt in
-  let stmts =
-    List.map (fun (loc, cn_progs) -> (loc, List.map (Cnprog.subst subst) cn_progs)) stmts
-  in
-  (rt, stmts)
-
-
-let fn_spec_instrumentation_subst_at
-  : _ Subst.t -> fn_spec_instrumentation -> fn_spec_instrumentation
-  =
-  ArgumentTypes.subst rt_stmts_subst
-
-
-let fn_spec_instrumentation_subst_lat
-  :  _ Subst.t -> (ReturnTypes.t * statements) LogicalArgumentTypes.t ->
-  (ReturnTypes.t * statements) LogicalArgumentTypes.t
-  =
-  LogicalArgumentTypes.subst rt_stmts_subst
-
-
-(* substitute `s_with` for `s_replace` of basetype `bt` *)
-let fn_spec_instrumentation_sym_subst_at (s_replace, bt, s_with) fn_spec =
-  let subst =
-    IT.make_subst [ (s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown)) ]
-  in
-  fn_spec_instrumentation_subst_at subst fn_spec
-
-
-let fn_spec_instrumentation_sym_subst_lat (s_replace, bt, s_with) fn_spec =
-  let subst =
-    IT.make_subst [ (s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown)) ]
-  in
-  fn_spec_instrumentation_subst_lat subst fn_spec
-
-
-let fn_spec_instrumentation_sym_subst_lrt (s_replace, bt, s_with) fn_spec =
-  let subst =
-    IT.make_subst [ (s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown)) ]
-  in
-  LRT.subst subst fn_spec
-
-
-let concat2 (x : 'a list * 'b list) (y : 'a list * 'b list) : 'a list * 'b list =
-  let a1, b1 = x in
-  let a2, b2 = y in
-  (a1 @ a2, b1 @ b2)
-
-
-let concat2_map (f : 'a -> 'b list * 'c list) (xs : 'a list) : 'b list * 'c list =
-  List.fold_right (fun x acc -> concat2 (f x) acc) xs ([], [])
-
-
-let rec stmts_in_expr (Mu.Expr (loc, _, _, e_)) =
-  match e_ with
-  | Epure _ -> ([], [])
-  | Ememop _ -> ([], [])
-  | Eaction _ -> ([], [])
-  | Eskip -> ([], [])
-  | Eccall _ -> ([], [])
-  | Elet (_, _, e) -> stmts_in_expr e
-  | Eunseq es -> concat2_map stmts_in_expr es
-  | Ewseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | Esseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | Eif (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | Ebound e -> stmts_in_expr e
-  | End es -> concat2_map stmts_in_expr es
-  | Erun _ -> ([], [])
-  | CN_progs (stmts_s, stmts_i) -> ([ (loc, stmts_s) ], [ (loc, stmts_i) ])
-
-
-let rec stmts_in_largs f_i = function
-  | Mu.Define (_, _, a) -> stmts_in_largs f_i a
-  | Resource (_, _, a) -> stmts_in_largs f_i a
-  | Constraint (_, _, a) -> stmts_in_largs f_i a
-  | I i -> f_i i
-
-
-let rec stmts_in_args f_i = function
-  | Mu.Computational (_, _, a) -> stmts_in_args f_i a
-  | L a -> stmts_in_largs f_i a
-
-
-let stmts_in_labels labels =
-  Pmap.fold
-    (fun _s def acc ->
-      match def with
-      | Mu.Return _ -> acc
-      | Label (_, a, _, _) -> concat2 (stmts_in_args stmts_in_expr a) acc)
-    labels
-    ([], [])
-
-
-(*
- * let stmts_in_function args_and_body =
- *   stmts_in_args
- *     (fun (body, labels, _rt) -> concat2 (stmts_in_expr body) (stmts_in_labels labels))
- *     args_and_body
- *)
-
-let collect_instrumentation (file : _ Mu.file) =
-  let instrs =
-    List.map
-      (fun (fn, decl) ->
-        match decl with
-        | Mu.Proc { loc = fn_loc; args_and_body; _ } ->
-          let args_and_body = at_of_arguments Fun.id args_and_body in
-          let internal =
-            ArgumentTypes.map
-              (fun (body, labels, rt) ->
-                let _, stmts = concat2 (stmts_in_expr body) (stmts_in_labels labels) in
-                (rt, stmts))
-              args_and_body
-          in
-          { fn; fn_loc; internal = Some internal }
-        | ProcDecl (fn_loc, _fn) -> { fn; fn_loc; internal = None })
-      (Pmap.bindings_list file.funs)
-  in
-  (instrs, C.symtable)
