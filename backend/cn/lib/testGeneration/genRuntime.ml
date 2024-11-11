@@ -8,6 +8,7 @@ module GD = GenDefinitions
 module GBT = GenBaseTypes
 module GA = GenAnalysis
 module SymSet = Set.Make (Sym)
+module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
 module StringMap = Map.Make (String)
 
 let bennet = Sym.fresh_named "bennet"
@@ -23,12 +24,16 @@ type term =
         choices : (int * term) list;
         last_var : Sym.t
       }
-  | Alloc of { bytes : IT.t }
+  | Alloc of
+      { bytes : IT.t;
+        sized : bool
+      }
   | Call of
       { fsym : Sym.t;
         iargs : (Sym.t * Sym.t) list;
         oarg_bt : BT.t;
-        path_vars : SymSet.t
+        path_vars : SymSet.t;
+        sized : int option
       }
   | Asgn of
       { pointer : Sym.t;
@@ -76,8 +81,8 @@ let rec free_vars_term (tm : term) : SymSet.t =
   | Uniform _ -> SymSet.empty
   | Pick { bt = _; choice_var = _; choices; last_var = _ } ->
     free_vars_term_list (List.map snd choices)
-  | Alloc { bytes } -> IT.free_vars bytes
-  | Call { fsym = _; iargs; oarg_bt = _; path_vars = _ } ->
+  | Alloc { bytes; sized = _ } -> IT.free_vars bytes
+  | Call { fsym = _; iargs; oarg_bt = _; path_vars = _; sized = _ } ->
     SymSet.of_list (List.map snd iargs)
   | Asgn { pointer; offset; sct = _; value; last_var = _; rest } ->
     List.fold_left
@@ -133,10 +138,12 @@ let rec pp_term (tm : term) : Pp.document =
                           parens
                             (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp_term gt))))
                         choices)))
-  | Alloc { bytes } -> string "alloc" ^^ parens (IT.pp bytes)
-  | Call { fsym; iargs; oarg_bt; path_vars } ->
+  | Alloc { bytes; sized } ->
+    (if sized then string "alloc_sized" else string "alloc") ^^ parens (IT.pp bytes)
+  | Call { fsym; iargs; oarg_bt; path_vars; sized } ->
     parens
       (Sym.pp fsym
+       ^^ optional (fun n -> brackets (int n)) sized
        ^^ parens
             (nest
                2
@@ -361,7 +368,7 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
              List.map (fun (w, gt) -> (f w, aux (choice_var :: vars) path_vars gt)) wgts);
           last_var
         }
-    | Alloc bytes -> Alloc { bytes }
+    | Alloc bytes -> Alloc { bytes; sized = false }
     | Call (fsym, xits) ->
       let (iargs : (Sym.t * Sym.t) list), (gt_lets : Sym.t -> term -> term) =
         List.fold_right
@@ -384,7 +391,7 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
           xits
           ([], fun _ gr -> gr)
       in
-      gt_lets last_var (Call { fsym; iargs; oarg_bt = bt; path_vars })
+      gt_lets last_var (Call { fsym; iargs; oarg_bt = bt; path_vars; sized = None })
     | Asgn ((it_addr, sct), value, rest) ->
       let pointer, offset = GA.get_addr_offset it_addr in
       if not (SymSet.mem pointer inputs || List.exists (Sym.equal pointer) vars) then
@@ -426,6 +433,7 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
 
 type definition =
   { filename : string;
+    sized : bool;
     name : Sym.t;
     iargs : (Sym.t * BT.t) list;
     oargs : (Sym.t * BT.t) list;
@@ -457,10 +465,11 @@ let pp_definition (def : definition) : Pp.document =
      ^^ rbrace)
 
 
-let elaborate_gd ({ filename; recursive = _; spec = _; name; iargs; oargs; body } : GD.t)
+let elaborate_gd ({ filename; recursive; spec = _; name; iargs; oargs; body } : GD.t)
   : definition
   =
   { filename;
+    sized = recursive;
     name;
     iargs = List.map_snd GBT.bt iargs;
     oargs = List.map_snd GBT.bt oargs;
@@ -484,4 +493,83 @@ let pp (ctx : context) : Pp.document =
     defns
 
 
-let elaborate (gtx : GD.context) : context = List.map_snd (List.map_snd elaborate_gd) gtx
+module Sizing = struct
+  let count_recursive_calls (syms : SymSet.t) (gr : term) : int =
+    let rec aux (gr : term) : int =
+      match gr with
+      | Uniform _ | Alloc _ | Return _ -> 0
+      | Pick { choices; _ } ->
+        choices |> List.map snd |> List.map aux |> List.fold_left max 0
+      | Call { fsym; _ } -> if SymSet.mem fsym syms then 1 else 0
+      | Asgn { rest; _ } -> aux rest
+      | Let { value; rest; _ } -> aux value + aux rest
+      | Assert { rest; _ } -> aux rest
+      | ITE { t; f; _ } -> max (aux t) (aux f)
+      | Map { inner; _ } -> aux inner
+    in
+    aux gr
+
+
+  let size_recursive_calls (syms : SymSet.t) (size : int) (gr : term) : term =
+    let rec aux (gr : term) : term =
+      match gr with
+      | Call ({ fsym; _ } as gr) when SymSet.mem fsym syms ->
+        Call { gr with sized = Some size }
+      | Uniform _ | Call _ | Return _ -> gr
+      | Alloc { bytes; sized = _ } -> Alloc { bytes; sized = true }
+      | Pick ({ choices; _ } as gr) ->
+        Pick { gr with choices = choices |> List.map_snd aux }
+      | Asgn ({ rest; _ } as gr) -> Asgn { gr with rest = aux rest }
+      | Let ({ value; rest; _ } as gr) ->
+        Let { gr with value = aux value; rest = aux rest }
+      | Assert ({ rest; _ } as gr) -> Assert { gr with rest = aux rest }
+      | ITE ({ t; f; _ } as gr) -> ITE { gr with t = aux t; f = aux f }
+      | Map ({ inner; _ } as gr) -> Map { gr with inner = aux inner }
+    in
+    aux gr
+
+
+  let transform_gr (syms : SymSet.t) (gr : term) : term =
+    let rec aux (gr : term) : term =
+      match gr with
+      | ITE { bt; cond; t; f } -> ITE { bt; cond; t = aux t; f = aux f }
+      | Pick { bt; choice_var; choices; last_var } ->
+        Pick { bt; choice_var; choices = List.map_snd aux choices; last_var }
+      | _ ->
+        let count = count_recursive_calls syms gr in
+        size_recursive_calls syms count gr
+    in
+    aux gr
+
+
+  let transform_def
+    (cg : SymGraph.t)
+    ({ filename : string;
+       sized : bool;
+       name : SymSet.elt;
+       iargs : (SymSet.elt * BT.t) list;
+       oargs : (SymSet.elt * BT.t) list;
+       body : term
+     } :
+      definition)
+    : definition
+    =
+    { filename;
+      sized;
+      name;
+      iargs;
+      oargs;
+      body = transform_gr (SymGraph.fold_pred SymSet.add cg name SymSet.empty) body
+    }
+
+
+  let transform (cg : SymGraph.t) (ctx : context) : context =
+    List.map_snd
+      (List.map_snd (fun ({ sized; _ } as def) ->
+         if sized then transform_def cg def else def))
+      ctx
+end
+
+let elaborate (gtx : GD.context) : context =
+  let cg = GA.get_call_graph gtx in
+  gtx |> List.map_snd (List.map_snd elaborate_gd) |> Sizing.transform cg

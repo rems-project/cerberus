@@ -10,16 +10,54 @@
 #define CN_GEN_INIT()                                                                   \
     if (0) {                                                                            \
     cn_label_bennet_backtrack:                                                          \
-        cn_gen_backtrack_decrement_depth();                                             \
+        cn_gen_decrement_depth();                                                       \
         return NULL;                                                                    \
     }                                                                                   \
-    cn_gen_backtrack_increment_depth();                                                 \
-    if (cn_gen_backtrack_depth() == cn_gen_backtrack_max_depth()) {                     \
+    cn_gen_increment_depth();                                                           \
+    if (cn_gen_depth() == cn_gen_max_depth()) {                                         \
         cn_gen_backtrack_depth_exceeded();                                              \
         goto cn_label_bennet_backtrack;                                                 \
     }
 
-#define CN_GEN_UNIFORM(ty, sz) cn_gen_uniform_##ty(sz)
+#define CN_GEN_INIT_SIZED(size)                                                         \
+    if (0) {                                                                            \
+    cn_label_bennet_backtrack:                                                          \
+        cn_gen_decrement_depth();                                                       \
+        return NULL;                                                                    \
+    }                                                                                   \
+    cn_gen_increment_depth();                                                           \
+    if (size <= 0 || cn_gen_depth() == cn_gen_max_depth()) {                            \
+        static int backtracks;                                                          \
+        backtracks++;                                                                   \
+        if (backtracks >= 100) {                                                        \
+            cn_gen_backtrack_assert_failure();                                          \
+            goto cn_label_bennet_backtrack;                                             \
+        }                                                                               \
+        cn_gen_backtrack_depth_exceeded();                                              \
+        goto cn_label_bennet_backtrack;                                                 \
+    }
+
+#define CN_GEN_UNIFORM(ty) cn_gen_uniform_##ty(cn_gen_get_size())
+
+#define CN_GEN_ALLOC(sz) CN_GEN_ALLOC_SIZED(sz, cn_gen_get_size())
+
+#define CN_GEN_ALLOC_SIZED(sz, gen_size)                                                \
+    ({                                                                                  \
+        cn_pointer *ptr;                                                                \
+        uint8_t null_in_every = get_null_in_every();                                    \
+        if (is_sized_null()) {                                                          \
+            set_null_in_every(gen_size);                                                \
+        }                                                                               \
+        if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_ALLOC && gen_size <= 2) {       \
+            ptr = convert_to_cn_pointer(NULL);                                          \
+        } else {                                                                        \
+            ptr = cn_gen_alloc(sz);                                                     \
+        }                                                                               \
+        if (is_sized_null()) {                                                          \
+            set_null_in_every(null_in_every);                                           \
+        }                                                                               \
+        ptr;                                                                            \
+    })
 
 #define CN_GEN_LT_(ty, max) cn_gen_lt_##ty(max)
 
@@ -106,7 +144,9 @@
                     if (toAdd[0] != NULL) {                                             \
                         goto cn_label_##last_var##_backtrack;                           \
                     }                                                                   \
-                    cn_gen_rand_restore(var##_rand_checkpoint);                         \
+                    if (cn_gen_backtrack_alloc_get() > 0) {                             \
+                        cn_gen_rand_restore(var##_rand_checkpoint);                     \
+                    }                                                                   \
                 }                                                                       \
                 goto cn_label_##var##_gen;                                              \
             } else {                                                                    \

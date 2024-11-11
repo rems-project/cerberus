@@ -458,6 +458,11 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
           |> Option.map (fun max_stack_depth ->
             [ "--max-stack-depth"; string_of_int max_stack_depth ])
           |> Option.to_list
+          |> List.flatten)
+       @ (Config.has_max_generator_size ()
+          |> Option.map (fun max_generator_size ->
+            [ "--max-generator-size"; string_of_int max_generator_size ])
+          |> Option.to_list
           |> List.flatten))
   in
   string "if"

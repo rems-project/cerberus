@@ -5,6 +5,7 @@
 #include <setjmp.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #include <cn-executable/utils.h>
 
@@ -12,7 +13,7 @@
 #include <cn-testing/result.h>
 #include <cn-testing/rand.h>
 #include <cn-testing/alloc.h>
-#include <cn-testing/backtrack.h>
+#include <cn-testing/size.h>
 
 struct cn_test_case {
     char* suite;
@@ -88,7 +89,17 @@ int cn_test_main(int argc, char* argv[]) {
             exit_fast = 1;
         }
         else if (strcmp("--max-stack-depth", arg) == 0) {
-            cn_gen_backtrack_set_max_depth(strtoul(argv[i + 1], NULL, 10));
+            cn_gen_set_max_depth(strtoul(argv[i + 1], NULL, 10));
+            i++;
+        }
+        else if (strcmp("--max-generator-size", arg) == 0) {
+            uint64_t sz = strtoul(argv[i + 1], NULL, 10);
+            assert(sz != 0);
+            cn_gen_set_max_size(sz);
+            i++;
+        }
+        else if (strcmp("--sized-null", arg) == 0) {
+            set_sized_null();
             i++;
         }
     }
