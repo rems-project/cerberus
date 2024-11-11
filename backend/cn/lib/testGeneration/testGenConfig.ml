@@ -11,7 +11,8 @@ type t =
     interactive : bool;
     until_timeout : int option;
     exit_fast : bool;
-    max_stack_depth : int option
+    max_stack_depth : int option;
+    max_generator_size : int option
   }
 
 let default =
@@ -25,13 +26,16 @@ let default =
     interactive = false;
     until_timeout = None;
     exit_fast = false;
-    max_stack_depth = None
+    max_stack_depth = None;
+    max_generator_size = None
   }
 
 
 let instance = ref default
 
 let initialize (cfg : t) = instance := cfg
+
+let get_num_samples () = !instance.num_samples
 
 let get_max_backtracks () = !instance.max_backtracks
 
@@ -53,4 +57,4 @@ let is_exit_fast () = !instance.exit_fast
 
 let has_max_stack_depth () = !instance.max_stack_depth
 
-let get_num_samples () = !instance.num_samples
+let has_max_generator_size () = !instance.max_generator_size

@@ -390,10 +390,6 @@ ensures
 {
   struct MapNode *search = *root;
   struct MapNode *parent = findParent(&search, key);
-  if (search) {
-    search->value = value;
-    return;
-  }
 
   if (!parent) {
     *root = newNode(key,value);

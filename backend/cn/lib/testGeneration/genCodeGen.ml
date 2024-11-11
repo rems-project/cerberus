@@ -47,6 +47,7 @@ let compile_lc (sigma : CF.GenTypes.genTypeCategory A.sigma) (lc : LC.t) =
 
 let rec compile_term
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (ctx : GR.context)
   (name : Sym.t)
   (tm : GR.term)
   : A.bindings
@@ -55,25 +56,22 @@ let rec compile_term
   =
   let loc = Locations.other __LOC__ in
   match tm with
-  | Uniform { bt; sz } ->
+  | Uniform { bt; sz = _ } ->
     ( [],
       [],
       A.(
         mk_expr
           (AilEcall
              ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_UNIFORM")),
-               List.map
-                 mk_expr
-                 [ AilEident (Sym.fresh_named (name_of_bt name bt));
-                   AilEconst (ConstantInteger (IConstant (Z.of_int sz, Decimal, None)))
-                 ] ))) )
+               List.map mk_expr [ AilEident (Sym.fresh_named (name_of_bt name bt)) ] )))
+    )
   | Pick { bt; choice_var; choices; last_var } ->
     let var = Sym.fresh () in
     let bs, ss =
       List.split
         (List.mapi
            (fun i (_, gr) ->
-             let bs, ss, e = compile_term sigma name gr in
+             let bs, ss, e = compile_term sigma ctx name gr in
              ( bs,
                A.(
                  [ AilSexpr
@@ -131,13 +129,48 @@ let rec compile_term
                     [ mk_expr (AilEident choice_var) ] )))
         ],
       A.(mk_expr (AilEident var)) )
-  | Alloc { bytes = it } ->
-    let alloc_sym = Sym.fresh_named "cn_gen_alloc" in
+  | Alloc { bytes = it; sized } ->
+    let alloc_sym =
+      Sym.fresh_named (if sized then "CN_GEN_ALLOC_SIZED" else "CN_GEN_ALLOC")
+    in
     let b, s, e = compile_it sigma name it in
-    (b, s, mk_expr (AilEcall (mk_expr (AilEident alloc_sym), [ e ])))
-  | Call { fsym; iargs; oarg_bt; path_vars } ->
+    let es =
+      if sized then
+        [ e; mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")) ]
+      else
+        [ e ]
+    in
+    (b, s, mk_expr (AilEcall (mk_expr (AilEident alloc_sym), es)))
+  | Call { fsym; iargs; oarg_bt; path_vars; sized } ->
     let sym = GenUtils.get_mangled_name (fsym :: List.map fst iargs) in
-    let es = iargs |> List.map snd |> List.map (fun x -> A.(mk_expr (AilEident x))) in
+    let es = iargs |> List.map snd |> List.map (fun x -> A.(AilEident x)) in
+    let es =
+      List.map
+        mk_expr
+        (es
+         @ A.(
+             match sized with
+             | Some 1 ->
+               [ AilEbinary
+                   ( mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")),
+                     Arithmetic Sub,
+                     mk_expr
+                       (AilEconst (ConstantInteger (IConstant (Z.one, Decimal, None)))) )
+               ]
+             | Some n ->
+               [ AilEbinary
+                   ( mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")),
+                     Arithmetic Div,
+                     mk_expr
+                       (AilEconst
+                          (ConstantInteger (IConstant (Z.of_int n, Decimal, None)))) )
+               ]
+             | None
+               when (not (GenBuiltins.is_builtin fsym))
+                    && (ctx |> List.assoc Sym.equal fsym |> List.hd |> snd).sized ->
+               [ AilEcall (mk_expr (AilEident (Sym.fresh_named "cn_gen_get_size")), []) ]
+             | None -> []))
+    in
     let x = Sym.fresh () in
     let b = Utils.create_binding x (bt_to_ctype fsym oarg_bt) in
     let wrap_to_string (sym : Sym.t) =
@@ -232,7 +265,7 @@ let rec compile_term
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
     in
-    let b4, s4, e4 = compile_term sigma name rest in
+    let b4, s4, e4 = compile_term sigma ctx name rest in
     (b1 @ b2 @ b3 @ b4, s1 @ s2 @ s3 @ s4, e4)
   | Let { backtracks; x; x_bt; value; last_var; rest } ->
     let s1 =
@@ -250,7 +283,7 @@ let rec compile_term
                       ] )))
         ]
     in
-    let b2, s2, e2 = compile_term sigma name value in
+    let b2, s2, e2 = compile_term sigma ctx name value in
     let s3 =
       A.(
         [ AilSexpr
@@ -265,7 +298,13 @@ let rec compile_term
                                 (Option.value
                                    ~default:name
                                    (match value with
-                                    | Call { fsym; iargs; oarg_bt = _; path_vars = _ } ->
+                                    | Call
+                                        { fsym;
+                                          iargs;
+                                          oarg_bt = _;
+                                          path_vars = _;
+                                          sized = _
+                                        } ->
                                       Some
                                         (GenUtils.get_mangled_name
                                            (fsym :: List.map fst iargs))
@@ -302,7 +341,7 @@ let rec compile_term
                       @ [ mk_expr (AilEconst ConstantNull) ] )))
           ])
     in
-    let b4, s4, e4 = compile_term sigma name rest in
+    let b4, s4, e4 = compile_term sigma ctx name rest in
     (b2 @ [ Utils.create_binding x (bt_to_ctype name x_bt) ] @ b4, s1 @ s2 @ s3 @ s4, e4)
   | Return { value } ->
     let b, s, e = compile_it sigma name value in
@@ -332,12 +371,12 @@ let rec compile_term
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
     in
-    let b2, s2, e2 = compile_term sigma name rest in
+    let b2, s2, e2 = compile_term sigma ctx name rest in
     (b1 @ b2, s1 @ s_assert @ s2, e2)
   | ITE { bt; cond; t; f } ->
     let b_if, s_if, e_if = compile_it sigma name cond in
-    let b_then, s_then, e_then = compile_term sigma name t in
-    let b_else, s_else, e_else = compile_term sigma name f in
+    let b_then, s_then, e_then = compile_term sigma ctx name t in
+    let b_else, s_else, e_else = compile_term sigma ctx name f in
     let res_sym = Sym.fresh () in
     let res_expr = mk_expr (AilEident res_sym) in
     let res_binding = Utils.create_binding res_sym (bt_to_ctype name bt) in
@@ -406,7 +445,7 @@ let rec compile_term
                     (mk_expr (AilEident (Sym.fresh_named "CN_GEN_MAP_BODY")), [ e_perm ])))
           ])
     in
-    let b_val, s_val, e_val = compile_term sigma name inner in
+    let b_val, s_val, e_val = compile_term sigma ctx name inner in
     let s_end =
       A.(
         s_val
@@ -424,6 +463,7 @@ let rec compile_term
 
 let compile_gen_def
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (ctx : GR.context)
   ((name, gr) : Sym.t * GR.definition)
   : A.sigma_tag_definition * (A.sigma_declaration * 'a A.sigma_function_definition)
   =
@@ -437,7 +477,12 @@ let compile_gen_def
     A.Decl_function
       ( false,
         (C.no_qualifiers, ct_ret),
-        List.map (fun (_, bt) -> (C.no_qualifiers, bt_to_ctype name bt, false)) gr.iargs,
+        (List.map (fun (_, bt) -> (C.no_qualifiers, bt_to_ctype name bt, false)) gr.iargs
+         @
+         if gr.sized then
+           [ (C.no_qualifiers, C.mk_ctype_integer Size_t, false) ]
+         else
+           []),
         false,
         false,
         false )
@@ -446,15 +491,26 @@ let compile_gen_def
   let s1 =
     A.(
       AilSexpr
-        (mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_named "CN_GEN_INIT")), []))))
+        (mk_expr
+           (if gr.sized then
+              AilEcall
+                ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_INIT_SIZED")),
+                  [ mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")) ] )
+            else
+              AilEcall (mk_expr (AilEident (Sym.fresh_named "CN_GEN_INIT")), []))))
   in
-  let b2, s2, e2 = compile_term sigma name gr.body in
+  let b2, s2, e2 = compile_term sigma ctx name gr.body in
   let sigma_def : CF.GenTypes.genTypeCategory A.sigma_function_definition =
     ( name,
       ( loc,
         0,
         CF.Annot.Attrs [],
-        List.map fst gr.iargs,
+        (List.map fst gr.iargs
+         @
+         if gr.sized then
+           [ Sym.fresh_named "cn_gen_rec_size" ]
+         else
+           []),
         mk_stmt
           (A.AilSblock
              ( b2,
@@ -467,9 +523,7 @@ let compile_gen_def
                           (mk_expr
                              (AilEcall
                                 ( mk_expr
-                                    (AilEident
-                                       (Sym.fresh_named
-                                          "cn_gen_backtrack_decrement_depth")),
+                                    (AilEident (Sym.fresh_named "cn_gen_decrement_depth")),
                                   [] )))
                       ]
                   @ A.
@@ -504,7 +558,7 @@ let compile (sigma : CF.GenTypes.genTypeCategory A.sigma) (ctx : GR.context) : P
       BT.Record (List.map (fun (x, bt) -> (Id.id (Sym.pp_string x), bt)) def.oargs)
     in
     CtA.augment_record_map ~cn_sym:name bt);
-  let tag_definitions, funcs = List.split (List.map (compile_gen_def sigma) defs) in
+  let tag_definitions, funcs = List.split (List.map (compile_gen_def sigma ctx) defs) in
   let declarations, function_definitions = List.split funcs in
   let sigma : 'a A.sigma =
     { A.empty_sigma with tag_definitions; declarations; function_definitions }

@@ -6,6 +6,7 @@ module LC = LogicalConstraints
 module RP = ResourcePredicates
 module LAT = LogicalArgumentTypes
 module GT = GenTerms
+module GD = GenDefinitions
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
 
@@ -209,3 +210,36 @@ let get_recursive_preds (preds : (Sym.t * RP.definition) list) : SymSet.t =
   |> List.map fst
   |> List.filter (fun fsym -> G.mem_edge closure fsym fsym)
   |> SymSet.of_list
+
+
+module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
+
+open struct
+  let get_calls (gd : GD.t) : SymSet.t =
+    let rec aux (gt : GT.t) : SymSet.t =
+      let (GT (gt_, _, _)) = gt in
+      match gt_ with
+      | Arbitrary | Uniform _ | Alloc _ | Return _ -> SymSet.empty
+      | Pick wgts ->
+        wgts |> List.map snd |> List.map aux |> List.fold_left SymSet.union SymSet.empty
+      | Call (fsym, _) -> SymSet.singleton fsym
+      | Asgn (_, _, gt') | Assert (_, gt') | Map (_, gt') -> aux gt'
+      | Let (_, (_, gt1), gt2) | ITE (_, gt1, gt2) -> SymSet.union (aux gt1) (aux gt2)
+    in
+    aux (Option.get gd.body)
+
+
+  module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
+  module Oper = Graph.Oper.P (SymGraph)
+end
+
+let get_call_graph (ctx : GD.context) : SymGraph.t =
+  ctx
+  |> List.map_snd (List.map snd)
+  |> List.map_snd (fun gds -> match gds with [ gd ] -> gd | _ -> failwith __LOC__)
+  |> List.map_snd get_calls
+  |> List.fold_left
+       (fun cg (fsym, calls) ->
+         SymSet.fold (fun fsym' cg' -> SymGraph.add_edge cg' fsym fsym') calls cg)
+       SymGraph.empty
+  |> Oper.transitive_closure

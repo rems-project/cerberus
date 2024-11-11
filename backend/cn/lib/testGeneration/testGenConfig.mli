@@ -11,12 +11,15 @@ type t =
     interactive : bool;
     until_timeout : int option;
     exit_fast : bool;
-    max_stack_depth : int option
+    max_stack_depth : int option;
+    max_generator_size : int option
   }
 
 val default : t
 
 val initialize : t -> unit
+
+val get_num_samples : unit -> int
 
 val get_max_backtracks : unit -> int
 
@@ -38,4 +41,4 @@ val is_exit_fast : unit -> bool
 
 val has_max_stack_depth : unit -> int option
 
-val get_num_samples : unit -> int
+val has_max_generator_size : unit -> int option

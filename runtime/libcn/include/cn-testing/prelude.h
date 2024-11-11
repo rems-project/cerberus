@@ -7,6 +7,7 @@
 #include <cn-testing/alloc.h>
 #include <cn-testing/uniform.h>
 #include <cn-testing/urn.h>
+#include <cn-testing/size.h>
 
 #include <cn-testing/result.h>
 #include <cn-testing/test.h>

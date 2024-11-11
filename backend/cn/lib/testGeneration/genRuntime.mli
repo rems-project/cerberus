@@ -18,12 +18,16 @@ type term =
         choices : (int * term) list;
         last_var : Sym.t
       }
-  | Alloc of { bytes : IT.t }
+  | Alloc of
+      { bytes : IT.t;
+        sized : bool
+      }
   | Call of
       { fsym : Sym.t;
         iargs : (Sym.t * Sym.t) list;
         oarg_bt : BT.t;
-        path_vars : SymSet.t
+        path_vars : SymSet.t;
+        sized : int option
       }
   | Asgn of
       { pointer : Sym.t;
@@ -72,6 +76,7 @@ val pp_term : term -> Pp.document
 
 type definition =
   { filename : string;
+    sized : bool;
     name : Sym.t;
     iargs : (Sym.t * BT.t) list;
     oargs : (Sym.t * BT.t) list;

@@ -2,29 +2,6 @@
 
 #include <cn-testing/backtrack.h>
 
-static uint16_t stack_depth = 0;
-static uint16_t max_stack_depth = UINT8_MAX;
-
-uint16_t cn_gen_backtrack_depth() {
-    return stack_depth;
-}
-
-uint16_t cn_gen_backtrack_max_depth() {
-    return max_stack_depth;
-}
-
-void cn_gen_backtrack_set_max_depth(uint16_t msd) {
-    max_stack_depth = msd;
-}
-
-void cn_gen_backtrack_increment_depth() {
-    stack_depth++;
-}
-
-void cn_gen_backtrack_decrement_depth() {
-    stack_depth--;
-}
-
 
 static enum cn_gen_backtrack_request type = CN_GEN_BACKTRACK_NONE;
 
