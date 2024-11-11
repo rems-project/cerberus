@@ -9,10 +9,14 @@ RUN yum update -y && \
 
 # Install additional FEDORA packages
 # from https://www.cyberciti.biz/faq/install-epel-repo-on-an-rhel-8-x/
-# Currently the FEDORA packages are needed only for Z3
-# NOTE: we might have to eventually use *only* RedHat packages
+# NOTE: Import the GPG key is needed, see https://www.redhat.com/en/blog/rpm-gpg-verify-packages
+# NOTE: Currently the FEDORA packages are needed only for Z3
+# NOTE: We might have to eventually use *only* RedHat packages
 # which would mean installing Z3 directly from the release page
-RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
+RUN wget https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9 && \
+    rpm --import RPM-GPG-KEY-EPEL-9 && \
+    rm RPM-GPG-KEY-EPEL-9 && \
+    yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
     yum update -y && \
     yum install -y z3
 
