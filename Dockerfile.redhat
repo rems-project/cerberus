@@ -7,19 +7,6 @@ RUN yum update -y && \
     git perl wget ca-certificates \
     mpfr-devel gmp-devel m4
 
-# Install additional FEDORA packages
-# from https://www.cyberciti.biz/faq/install-epel-repo-on-an-rhel-8-x/
-# NOTE: Import the GPG key is needed, see https://www.redhat.com/en/blog/rpm-gpg-verify-packages
-# NOTE: Currently the FEDORA packages are needed only for Z3
-# NOTE: We might have to eventually use *only* RedHat packages
-# which would mean installing Z3 directly from the release page
-RUN wget https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9 && \
-    rpm --import RPM-GPG-KEY-EPEL-9 && \
-    rm RPM-GPG-KEY-EPEL-9 && \
-    yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
-    yum update -y && \
-    yum install -y z3
-
 # Install OPAM
 # See https://opam.ocaml.org/doc/1.2/Install.html
 RUN curl -fsSL https://opam.ocaml.org/install.sh | sh
@@ -30,6 +17,7 @@ RUN opam init --disable-sandboxing
 ADD . /opt/cerberus
 WORKDIR /opt/cerberus
 RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
+RUN opam install z3
 
 RUN eval `opam env` \
   && make install_cn
