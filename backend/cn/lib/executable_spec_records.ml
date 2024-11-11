@@ -96,10 +96,7 @@ let add_records_to_map_from_instrumentation (i : Executable_spec_extract.instrum
       aux_lrt t
     | I -> ()
   in
-  let aux_rt = function
-    | ReturnTypes.Computational (_, _, t) ->
-      aux_lrt t
-  in
+  let aux_rt = function ReturnTypes.Computational (_, _, t) -> aux_lrt t in
   let rec aux_lat = function
     | LAT.Define ((_, it), _, lat) ->
       add_records_to_map_from_it it;
@@ -111,9 +108,7 @@ let add_records_to_map_from_instrumentation (i : Executable_spec_extract.instrum
       add_records_to_map_from_lc lc;
       aux_lat lat
     (* Postcondition *)
-    | I i -> 
-      i
-      
+    | I i -> i
   in
   let rec aux_at = function
     | AT.Computational ((_, _), _, at) -> aux_at at
@@ -121,15 +116,15 @@ let add_records_to_map_from_instrumentation (i : Executable_spec_extract.instrum
   in
   match i.internal with
   | None -> ()
-  | Some instr -> 
-    let (rt, (stmts, loops)) = aux_at instr in
+  | Some instr ->
+    let rt, (stmts, loops) = aux_at instr in
     aux_rt rt;
     List.iter add_records_to_map_from_cnprogs stmts;
-    List.iter (fun (_loc, loop_at) -> 
-      let loop_stmts = aux_at loop_at in
-      List.iter add_records_to_map_from_cnprogs loop_stmts
-      ) loops
-    
+    List.iter
+      (fun (_loc, loop_at) ->
+        let loop_stmts = aux_at loop_at in
+        List.iter add_records_to_map_from_cnprogs loop_stmts)
+      loops
 
 
 let rec populate ?cn_sym bt =

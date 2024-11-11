@@ -3323,7 +3323,8 @@ let rec cn_to_ail_lat_internal_2
     in
     prepend_to_precondition ail_executable_spec (b1, ss)
   (* Postcondition *)
-  | LAT.I (post, (stats, _loop)) -> (*TODO: handle loops *)
+  | LAT.I (post, (stats, _loop)) ->
+    (*TODO: handle loops *)
     let rec remove_duplicates locs stats =
       match stats with
       | [] -> []

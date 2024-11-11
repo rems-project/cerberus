@@ -50,8 +50,6 @@ type instrumentation =
     internal : fn_args_and_body option
   }
 
-
-
 (* replace `s_replace` of basetype `bt` with `s_with` *)
 let sym_subst (s_replace, bt, s_with) =
   let module IT = IndexTerms in
@@ -86,7 +84,7 @@ let rec stmts_in_expr (Mucore.Expr (loc, _, _, e_)) =
   | Erun _ -> ([], [])
   | CN_progs (stmts_s, stmts_i) -> ([ (loc, stmts_s) ], [ (loc, stmts_i) ])
 *)
-  
+
 let rec stmts_in_expr (Mucore.Expr (loc, _, _, e_)) =
   match e_ with
   | Epure _ -> []
@@ -104,15 +102,16 @@ let rec stmts_in_expr (Mucore.Expr (loc, _, _, e_)) =
   | Erun _ -> []
   | CN_progs (_stmts_s, stmts_i) -> [ (loc, stmts_i) ]
 
-let from_loop ((_label_sym : Sym.t), (label_def : _ label_def)) : loop option = 
-  match label_def with 
+
+let from_loop ((_label_sym : Sym.t), (label_def : _ label_def)) : loop option =
+  match label_def with
   | Return _ -> None
   | Label (_loc, label_args_and_body, _annots, _, `Loop loop_condition_loc) ->
     let label_args_and_body = Core_to_mucore.at_of_arguments Fun.id label_args_and_body in
-    let label_args_and_statements =
-      ArgumentTypes.map stmts_in_expr label_args_and_body in
+    let label_args_and_statements = ArgumentTypes.map stmts_in_expr label_args_and_body in
     Some (loop_condition_loc, label_args_and_statements)
-  
+
+
 let from_fn (fn, decl) =
   match decl with
   | ProcDecl (fn_loc, _fn) -> { fn; fn_loc; internal = None }
@@ -121,9 +120,9 @@ let from_fn (fn, decl) =
     let internal =
       ArgumentTypes.map
         (fun (body, labels, rt) ->
-         let stmts = stmts_in_expr body in
-         let loops = List.filter_map from_loop (Pmap.bindings_list labels) in 
-         (rt, (stmts, loops)))
+          let stmts = stmts_in_expr body in
+          let loops = List.filter_map from_loop (Pmap.bindings_list labels) in
+          (rt, (stmts, loops)))
         args_and_body
     in
     { fn; fn_loc; internal = Some internal }
@@ -132,5 +131,6 @@ let from_fn (fn, decl) =
 let from_file (file : _ Mucore.file) =
   let instrs = List.map from_fn (Pmap.bindings_list file.funs) in
   (instrs, Compile.symtable)
+
 
 let collect_instrumentation = from_file
