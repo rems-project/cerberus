@@ -446,6 +446,7 @@ let run_tests
   exit_fast
   max_stack_depth
   max_generator_size
+  coverage
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -509,7 +510,8 @@ let run_tests
               until_timeout;
               exit_fast;
               max_stack_depth;
-              max_generator_size
+              max_generator_size;
+              coverage
             }
           in
           TestGeneration.run
@@ -969,6 +971,11 @@ module Testing_flags = struct
       value
       & opt (some int) TestGeneration.default_cfg.max_generator_size
       & info [ "max-generator-size" ] ~doc)
+
+
+  let test_coverage =
+    let doc = "Record coverage of tests" in
+    Arg.(value & flag & info [ "coverage" ] ~doc)
 end
 
 let testing_cmd =
@@ -1001,6 +1008,7 @@ let testing_cmd =
     $ Testing_flags.test_exit_fast
     $ Testing_flags.test_max_stack_depth
     $ Testing_flags.test_max_generator_size
+    $ Testing_flags.test_coverage
   in
   let doc =
     "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\

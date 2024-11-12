@@ -12,7 +12,8 @@ type t =
     until_timeout : int option;
     exit_fast : bool;
     max_stack_depth : int option;
-    max_generator_size : int option
+    max_generator_size : int option;
+    coverage : bool
   }
 
 let default =
@@ -27,7 +28,8 @@ let default =
     until_timeout = None;
     exit_fast = false;
     max_stack_depth = None;
-    max_generator_size = None
+    max_generator_size = None;
+    coverage = false
   }
 
 
@@ -58,3 +60,5 @@ let is_exit_fast () = !instance.exit_fast
 let has_max_stack_depth () = !instance.max_stack_depth
 
 let has_max_generator_size () = !instance.max_generator_size
+
+let is_coverage () = !instance.coverage
