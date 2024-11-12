@@ -449,6 +449,7 @@ let run_tests
   max_stack_depth
   max_generator_size
   coverage
+  disable_passes
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -514,7 +515,8 @@ let run_tests
               exit_fast;
               max_stack_depth;
               max_generator_size;
-              coverage
+              coverage;
+              disable_passes
             }
           in
           TestGeneration.run
@@ -989,6 +991,23 @@ module Testing_flags = struct
   let test_coverage =
     let doc = "Record coverage of tests" in
     Arg.(value & flag & info [ "coverage" ] ~doc)
+
+
+  let disable_passes =
+    let doc = "skip this optimization pass (or comma-separated names)" in
+    Arg.(
+      value
+      & opt
+          (list
+             (enum
+                [ ("reorder", "reorder");
+                  ("picks", "picks");
+                  ("flatten", "flatten");
+                  ("consistency", "consistency");
+                  ("lift_constraints", "lift_constraints")
+                ]))
+          []
+      & info [ "disable" ] ~doc)
 end
 
 let testing_cmd =
@@ -1024,6 +1043,7 @@ let testing_cmd =
     $ Testing_flags.test_max_stack_depth
     $ Testing_flags.test_max_generator_size
     $ Testing_flags.test_coverage
+    $ Testing_flags.disable_passes
   in
   let doc =
     "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\

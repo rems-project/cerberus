@@ -13,7 +13,8 @@ type t =
     exit_fast : bool;
     max_stack_depth : int option;
     max_generator_size : int option;
-    coverage : bool
+    coverage : bool;
+    disable_passes : string list
   }
 
 let default =
@@ -29,7 +30,8 @@ let default =
     exit_fast = false;
     max_stack_depth = None;
     max_generator_size = None;
-    coverage = false
+    coverage = false;
+    disable_passes = []
   }
 
 
@@ -62,3 +64,5 @@ let has_max_stack_depth () = !instance.max_stack_depth
 let has_max_generator_size () = !instance.max_generator_size
 
 let is_coverage () = !instance.coverage
+
+let has_pass s = not (List.mem String.equal s !instance.disable_passes)
