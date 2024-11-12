@@ -558,12 +558,16 @@ let generate
     := Some
          (let open Stdlib in
           open_out "generatorCompilation.log");
+  let insts = prog5 |> Core_to_mucore.collect_instrumentation |> fst in
+  let selected_fsyms =
+    Check.select_functions
+      (SymSet.of_list
+         (List.map (fun (inst : Core_to_mucore.instrumentation) -> inst.fn) insts))
+  in
   let insts =
-    prog5
-    |> Core_to_mucore.collect_instrumentation
-    |> fst
+    insts
     |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
-      Option.is_some inst.internal)
+      Option.is_some inst.internal && SymSet.mem inst.fn selected_fsyms)
   in
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in
