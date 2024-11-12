@@ -433,6 +433,8 @@ let run_tests
     without_ownership_checking
   (* Test Generation *)
     output_dir
+  only
+  skip
   dont_run
   num_samples
   max_backtracks
@@ -451,6 +453,7 @@ let run_tests
   (* flags *)
   Cerb_debug.debug_level := debug_level;
   Pp.print_level := print_level;
+  Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   Sym.executable_spec_enabled := true;
   let handle_error (e : TypeErrors.type_error) =
     let report = TypeErrors.pp_message e.msg in
@@ -876,6 +879,16 @@ module Testing_flags = struct
     Arg.(required & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
 
 
+  let only =
+    let doc = "only test this function (or comma-separated names)" in
+    Arg.(value & opt (some string) None & info [ "only" ] ~doc)
+
+
+  let skip =
+    let doc = "skip testing of this function (or comma-separated names)" in
+    Arg.(value & opt (some string) None & info [ "skip" ] ~doc)
+
+
   let dont_run_tests =
     let doc = "Do not run tests, only generate them" in
     Arg.(value & flag & info [ "no-run" ] ~doc)
@@ -995,6 +1008,8 @@ let testing_cmd =
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.without_ownership_checking
     $ Testing_flags.output_test_dir
+    $ Testing_flags.only
+    $ Testing_flags.skip
     $ Testing_flags.dont_run_tests
     $ Testing_flags.gen_num_samples
     $ Testing_flags.gen_backtrack_attempts
