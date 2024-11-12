@@ -99,4 +99,4 @@ jobs:
     - name: Run CN CI tests
       run: |
         docker pull ${{env.CERBERUS_IMAGE_ID}}:${{ matrix.tag }}
-        docker run -v $PWD:/work ${{env.CERBERUS_IMAGE_ID}}:${{ matrix.tag }} bash tests/run-cn.sh
+        docker run -v $PWD:/work -w /work ${{env.CERBERUS_IMAGE_ID}}:${{ matrix.tag }} bash tests/run-cn.sh
