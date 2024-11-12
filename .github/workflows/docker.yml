@@ -2,13 +2,13 @@ name: docker
 
 on:
   # Run this action every day
-  schedule:
-    - cron: '30 18 * * *'
+  # schedule:
+  #   - cron: '30 18 * * *'
   # Run this action any time any dockerfile changes
   push:
     paths:
       - 'Dockerfile.**'
-      - '**/docker.yml'
+      - '**docker.yml'
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn
