@@ -7,8 +7,8 @@ on:
   # Run this action any time any dockerfile changes
   push:
     paths:
-      - 'Dockerfile**'
-      - '.github/wokflows/docker.yml'
+      - 'Dockerfile.**'
+      - '**/docker.yml'
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn
