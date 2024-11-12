@@ -8,6 +8,7 @@ on:
   push:
     paths:
       - 'Dockerfile**'
+      - '.github/wokflows/docker.yml'
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn
