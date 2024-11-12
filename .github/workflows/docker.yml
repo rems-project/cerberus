@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: '30 18 * * *'
   # Run this action any time any dockerfile changes
-  push:
+  pull_request:
     paths:
       - 'Dockerfile.**'
       - '**docker.yml'
