@@ -562,7 +562,9 @@ let generate
   let selected_fsyms =
     Check.select_functions
       (SymSet.of_list
-         (List.map (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn) insts))
+         (List.map 
+            (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn) 
+            insts))
   in
   let insts =
     insts
