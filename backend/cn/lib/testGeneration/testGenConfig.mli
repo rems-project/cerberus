@@ -13,7 +13,8 @@ type t =
     exit_fast : bool;
     max_stack_depth : int option;
     max_generator_size : int option;
-    coverage : bool
+    coverage : bool;
+    disable_passes : string list
   }
 
 val default : t
@@ -45,3 +46,5 @@ val has_max_stack_depth : unit -> int option
 val has_max_generator_size : unit -> int option
 
 val is_coverage : unit -> bool
+
+val has_pass : string -> bool
