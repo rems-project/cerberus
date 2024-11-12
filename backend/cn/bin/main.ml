@@ -433,6 +433,8 @@ let run_tests
     without_ownership_checking
   (* Test Generation *)
     output_dir
+  only
+  skip
   dont_run
   num_samples
   max_backtracks
@@ -446,10 +448,13 @@ let run_tests
   exit_fast
   max_stack_depth
   max_generator_size
+  coverage
+  disable_passes
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
   Pp.print_level := print_level;
+  Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   Sym.executable_spec_enabled := true;
   let handle_error (e : TypeErrors.type_error) =
     let report = TypeErrors.pp_message e.msg in
@@ -509,7 +514,9 @@ let run_tests
               until_timeout;
               exit_fast;
               max_stack_depth;
-              max_generator_size
+              max_generator_size;
+              coverage;
+              disable_passes
             }
           in
           TestGeneration.run
@@ -874,6 +881,16 @@ module Testing_flags = struct
     Arg.(required & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
 
 
+  let only =
+    let doc = "only test this function (or comma-separated names)" in
+    Arg.(value & opt (some string) None & info [ "only" ] ~doc)
+
+
+  let skip =
+    let doc = "skip testing of this function (or comma-separated names)" in
+    Arg.(value & opt (some string) None & info [ "skip" ] ~doc)
+
+
   let dont_run_tests =
     let doc = "Do not run tests, only generate them" in
     Arg.(value & flag & info [ "no-run" ] ~doc)
@@ -969,6 +986,28 @@ module Testing_flags = struct
       value
       & opt (some int) TestGeneration.default_cfg.max_generator_size
       & info [ "max-generator-size" ] ~doc)
+
+
+  let test_coverage =
+    let doc = "Record coverage of tests" in
+    Arg.(value & flag & info [ "coverage" ] ~doc)
+
+
+  let disable_passes =
+    let doc = "skip this optimization pass (or comma-separated names)" in
+    Arg.(
+      value
+      & opt
+          (list
+             (enum
+                [ ("reorder", "reorder");
+                  ("picks", "picks");
+                  ("flatten", "flatten");
+                  ("consistency", "consistency");
+                  ("lift_constraints", "lift_constraints")
+                ]))
+          []
+      & info [ "disable" ] ~doc)
 end
 
 let testing_cmd =
@@ -988,6 +1027,8 @@ let testing_cmd =
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.without_ownership_checking
     $ Testing_flags.output_test_dir
+    $ Testing_flags.only
+    $ Testing_flags.skip
     $ Testing_flags.dont_run_tests
     $ Testing_flags.gen_num_samples
     $ Testing_flags.gen_backtrack_attempts
@@ -1001,6 +1042,8 @@ let testing_cmd =
     $ Testing_flags.test_exit_fast
     $ Testing_flags.test_max_stack_depth
     $ Testing_flags.test_max_generator_size
+    $ Testing_flags.test_coverage
+    $ Testing_flags.disable_passes
   in
   let doc =
     "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\

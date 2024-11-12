@@ -12,7 +12,9 @@ type t =
     until_timeout : int option;
     exit_fast : bool;
     max_stack_depth : int option;
-    max_generator_size : int option
+    max_generator_size : int option;
+    coverage : bool;
+    disable_passes : string list
   }
 
 val default : t
@@ -42,3 +44,7 @@ val is_exit_fast : unit -> bool
 val has_max_stack_depth : unit -> int option
 
 val has_max_generator_size : unit -> int option
+
+val is_coverage : unit -> bool
+
+val has_pass : string -> bool

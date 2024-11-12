@@ -6,6 +6,7 @@ module GT = GenTerms
 module GS = GenStatements
 module GD = GenDefinitions
 module GA = GenAnalysis
+module Config = TestGenConfig
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
 module StringSet = Set.Make (String)
@@ -3453,14 +3454,14 @@ module Specialization = struct
 end
 
 let all_passes (prog5 : unit Mucore.file) =
-  (PartialEvaluation.pass prog5
-   :: PushPull.pass
-   :: MemberIndirection.pass
-   :: Inline.passes)
+  [ PartialEvaluation.pass prog5 ]
+  @ (if Config.has_pass "flatten" then [ PushPull.pass ] else [])
+  @ [ MemberIndirection.pass ]
+  @ Inline.passes
   @ RemoveUnused.passes
   @ [ TermSimplification.pass prog5; TermSimplification'.pass; PointerOffsets.pass ]
   @ BranchPruning.passes
-  @ SplitConstraints.passes
+  @ if Config.has_pass "lift_constraints" then SplitConstraints.passes else []
 
 
 let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) : GT.t =
@@ -3496,13 +3497,18 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   |> aux
   |> Fusion.Each.transform
   |> aux
-  |> FlipIfs.transform
+  |> (if Config.has_pass "picks" then FlipIfs.transform else fun gd' -> gd')
   |> aux
-  |> Reordering.transform []
-  |> ConstraintPropagation.transform
-  |> Specialization.Equality.transform
-  |> Specialization.Integer.transform
-  |> Specialization.Pointer.transform
+  |> (if Config.has_pass "reorder" then Reordering.transform [] else fun gd' -> gd')
+  |> (if Config.has_pass "consistency" then
+        fun gd' ->
+      gd'
+      |> ConstraintPropagation.transform
+      |> Specialization.Equality.transform
+      |> Specialization.Integer.transform
+      |> Specialization.Pointer.transform
+      else
+        fun gd' -> gd')
   |> InferAllocationSize.transform
   |> aux
 

@@ -260,6 +260,19 @@ let compile_assumes
        (None, { A.empty_sigma with declarations; function_definitions })
 
 
+let should_be_unit_test
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (inst : Executable_spec_extract.instrumentation)
+  =
+  let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
+  match decl with
+  | Decl_function (_, _, args, _, _, _) ->
+    List.is_empty args
+    && SymSet.is_empty
+         (LAT.free_vars (fun _ -> SymSet.empty) (AT.get_lat (Option.get inst.internal)))
+  | Decl_object _ -> failwith __LOC__
+
+
 let compile_tests
   ~(without_ownership_checking : bool)
   (filename_base : string)
@@ -267,20 +280,7 @@ let compile_tests
   (prog5 : unit Mucore.file)
   (insts : Executable_spec_extract.instrumentation list)
   =
-  let unit_tests, random_tests =
-    List.partition
-      (fun (inst : Executable_spec_extract.instrumentation) ->
-        let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
-        match decl with
-        | Decl_function (_, _, args, _, _, _) ->
-          List.is_empty args
-          && SymSet.is_empty
-               (LAT.free_vars
-                  (fun _ -> SymSet.empty)
-                  (AT.get_lat (Option.get inst.internal)))
-        | Decl_object _ -> failwith __LOC__)
-      insts
-  in
+  let unit_tests, random_tests = List.partition (should_be_unit_test sigma) insts in
   let unit_tests_doc = compile_unit_tests unit_tests in
   let random_tests_doc = compile_random_tests sigma prog5 random_tests in
   let open Pp in
@@ -366,7 +366,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
         ^^ hardline)
   ^^ twice hardline
   ^^ string "TEST_DIR="
-  ^^ string output_dir
+  ^^ string (Filename.dirname (Filename.concat output_dir "junk"))
   ^^ hardline
   ^^ twice hardline
   ^^ string "# Compile"
@@ -381,7 +381,8 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "\"-I${RUNTIME_PREFIX}/include/\"";
          "-o";
          "\"${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o\"";
-         "\"${TEST_DIR}/" ^ test_file ^ "\";";
+         "\"${TEST_DIR}/" ^ test_file ^ "\"";
+         (if Config.is_coverage () then "--coverage;" else ";");
          "then"
        ]
   ^^ nest 4 (hardline ^^ string "echo \"Compiled C files.\"")
@@ -405,9 +406,11 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "cc";
          "-g";
          "\"-I${RUNTIME_PREFIX}/include\"";
-         "-o \"${TEST_DIR}/tests.out\"";
+         "-o";
+         "\"${TEST_DIR}/tests.out\"";
          "${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o";
-         "\"${RUNTIME_PREFIX}/libcn.a\";";
+         "\"${RUNTIME_PREFIX}/libcn.a\"";
+         (if Config.is_coverage () then "--coverage;" else ";");
          "then"
        ]
   ^^ nest 4 (hardline ^^ string "echo \"Linked C .o files.\"")
@@ -429,7 +432,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
     separate_map
       space
       string
-      ([ "${TEST_DIR}/tests.out" ]
+      ([ "\"${TEST_DIR}/tests.out\"" ]
        @ (Config.has_null_in_every ()
           |> Option.map (fun null_in_every ->
             [ "--null-in-every"; string_of_int null_in_every ])
@@ -465,19 +468,68 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
           |> Option.to_list
           |> List.flatten))
   in
-  string "if"
-  ^^ space
-  ^^ cmd
+  cmd
   ^^ semi
-  ^^ space
-  ^^ string "then"
-  ^^ nest 4 (hardline ^^ string "exit 0")
   ^^ hardline
-  ^^ string "else"
-  ^^ nest 4 (hardline ^^ string "exit 1")
-  ^^ hardline
-  ^^ string "fi"
-  ^^ hardline
+  ^^
+  if Config.is_coverage () then
+    string "# Coverage"
+    ^^ hardline
+    ^^ string "test_exit_code=$? # Save tests exit code for later"
+    ^^ twice hardline
+    ^^ string "pushd \"${TEST_DIR}\""
+    ^^ twice hardline
+    ^^ string ("if gcov \"" ^ test_file ^ "\"; then")
+    ^^ nest 4 (hardline ^^ string "echo \"Recorded coverage via gcov.\"")
+    ^^ hardline
+    ^^ string "else"
+    ^^ nest
+         4
+         (hardline
+          ^^ string "printf \"Failed to record coverage.\""
+          ^^ hardline
+          ^^ string "exit 1")
+    ^^ hardline
+    ^^ string "fi"
+    ^^ twice hardline
+    ^^ string "if lcov --capture --directory . --output-file coverage.info; then"
+    ^^ nest 4 (hardline ^^ string "echo \"Collected coverage via lcov.\"")
+    ^^ hardline
+    ^^ string "else"
+    ^^ nest
+         4
+         (hardline
+          ^^ string "printf \"Failed to collect coverage.\""
+          ^^ hardline
+          ^^ string "exit 1")
+    ^^ hardline
+    ^^ string "fi"
+    ^^ twice hardline
+    ^^ separate_map
+         space
+         string
+         [ "if"; "genhtml"; "--output-directory"; "html"; "\"coverage.info\";"; "then" ]
+    ^^ nest
+         4
+         (hardline
+          ^^ string "echo \"Generated HTML report at \\\"${TEST_DIR}/html/\\\".\"")
+    ^^ hardline
+    ^^ string "else"
+    ^^ nest
+         4
+         (hardline
+          ^^ string "printf \"Failed to generate HTML report.\""
+          ^^ hardline
+          ^^ string "exit 1")
+    ^^ hardline
+    ^^ string "fi"
+    ^^ twice hardline
+    ^^ string "popd"
+    ^^ twice hardline
+    ^^ string "exit \"$test_exit_code\""
+    ^^ hardline
+  else
+    empty
 
 
 let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.document)
@@ -506,16 +558,25 @@ let generate
     := Some
          (let open Stdlib in
           open_out "generatorCompilation.log");
+  let insts = prog5 |> Executable_spec_extract.collect_instrumentation |> fst in
+  let selected_fsyms =
+    Check.select_functions
+      (SymSet.of_list
+         (List.map (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn) insts))
+  in
   let insts =
-    prog5
-    |> Executable_spec_extract.collect_instrumentation
-    |> fst
+    insts
     |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
-      Option.is_some inst.internal)
+      Option.is_some inst.internal && SymSet.mem inst.fn selected_fsyms)
   in
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in
-  let generators_doc = compile_generators sigma prog5 insts in
+  let generators_doc =
+    compile_generators
+      sigma
+      prog5
+      (List.filter (fun inst -> not (should_be_unit_test sigma inst)) insts)
+  in
   let generators_fn = filename_base ^ "_gen.h" in
   save output_dir generators_fn generators_doc;
   let tests_doc =
