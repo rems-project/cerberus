@@ -39,11 +39,11 @@ let pp_label ?(width : int = 30) (label : string) : Pp.document =
   ^^ repeat width slash
 
 
-let compile_unit_tests (insts : Core_to_mucore.instrumentation list) =
+let compile_unit_tests (insts : Executable_spec_extract.instrumentation list) =
   let open Pp in
   separate_map
     (semi ^^ twice hardline)
-    (fun (inst : Core_to_mucore.instrumentation) ->
+    (fun (inst : Executable_spec_extract.instrumentation) ->
       CF.Pp_ail.pp_statement
         A.(
           Utils.mk_stmt
@@ -58,7 +58,7 @@ let compile_unit_tests (insts : Core_to_mucore.instrumentation list) =
 let compile_generators
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Core_to_mucore.instrumentation list)
+  (insts : Executable_spec_extract.instrumentation list)
   : PPrint.document
   =
   let ctx = GenCompile.compile prog5.resource_predicates insts in
@@ -80,7 +80,7 @@ let compile_random_test_case
   (prog5 : unit Mucore.file)
   (args_map : (Sym.t * (Sym.t * C.ctype) list) list)
   (convert_from : Sym.t * C.ctype -> Pp.document)
-  (inst : Core_to_mucore.instrumentation)
+  (inst : Executable_spec_extract.instrumentation)
   : Pp.document
   =
   let open Pp in
@@ -177,17 +177,17 @@ let compile_random_test_case
 let compile_random_tests
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Core_to_mucore.instrumentation list)
+  (insts : Executable_spec_extract.instrumentation list)
   : Pp.document
   =
   let declarations : A.sigma_declaration list =
     insts
-    |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
+    |> List.map (fun (inst : Executable_spec_extract.instrumentation) ->
       (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
   in
   let args_map : (Sym.t * (Sym.t * C.ctype) list) list =
     List.map
-      (fun (inst : Core_to_mucore.instrumentation) ->
+      (fun (inst : Executable_spec_extract.instrumentation) ->
         ( inst.fn,
           let _, _, _, xs, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
           match List.assoc Sym.equal inst.fn declarations with
@@ -222,7 +222,7 @@ let compile_assumes
   ~(without_ownership_checking : bool)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Core_to_mucore.instrumentation list)
+  (insts : Executable_spec_extract.instrumentation list)
   : Pp.document
   =
   let declarations, function_definitions =
@@ -262,7 +262,7 @@ let compile_assumes
 
 let should_be_unit_test
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
-  (inst : Core_to_mucore.instrumentation)
+  (inst : Executable_spec_extract.instrumentation)
   =
   let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
   match decl with
@@ -278,7 +278,7 @@ let compile_tests
   (filename_base : string)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Core_to_mucore.instrumentation list)
+  (insts : Executable_spec_extract.instrumentation list)
   =
   let unit_tests, random_tests = List.partition (should_be_unit_test sigma) insts in
   let unit_tests_doc = compile_unit_tests unit_tests in
@@ -334,7 +334,7 @@ let compile_tests
                   ^^ semi
                   ^^ hardline)
                 (List.map
-                   (fun (inst : Core_to_mucore.instrumentation) ->
+                   (fun (inst : Executable_spec_extract.instrumentation) ->
                      (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
                    insts)
            ^^ string "return cn_test_main(argc, argv);")
@@ -558,15 +558,17 @@ let generate
     := Some
          (let open Stdlib in
           open_out "generatorCompilation.log");
-  let insts = prog5 |> Core_to_mucore.collect_instrumentation |> fst in
+  let insts = prog5 |> Executable_spec_extract.collect_instrumentation |> fst in
   let selected_fsyms =
     Check.select_functions
       (SymSet.of_list
-         (List.map (fun (inst : Core_to_mucore.instrumentation) -> inst.fn) insts))
+         (List.map
+            (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn)
+            insts))
   in
   let insts =
     insts
-    |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+    |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
       Option.is_some inst.internal && SymSet.mem inst.fn selected_fsyms)
   in
   if List.is_empty insts then failwith "No testable functions";

@@ -6,6 +6,7 @@ module CF = Cerb_frontend
 open CF.Cn
 open Compile
 open Executable_spec_utils
+module ESE = Executable_spec_extract
 module A = CF.AilSyntax
 module C = CF.Ctype
 module BT = BaseTypes
@@ -3135,9 +3136,7 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
   | LRT.Define ((name, it), (_loc, _), t) ->
     (* Printf.printf "LRT.Define\n"; *)
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
-    let new_lrt =
-      Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, IT.bt it, new_name) t
-    in
+    let new_lrt = LogicalReturnTypes.subst (ESE.sym_subst (name, IT.bt it, new_name)) t in
     let binding = create_binding new_name (bt_to_ail_ctype (IT.bt it)) in
     let decl = A.(AilSdeclaration [ (new_name, None) ]) in
     let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
@@ -3150,9 +3149,7 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
     let b1, s1 =
       cn_to_ail_resource_internal ~is_pre:false new_name dts globals preds loc re
     in
-    let new_lrt =
-      Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, bt, new_name) t
-    in
+    let new_lrt = LogicalReturnTypes.subst (ESE.sym_subst (name, bt, new_name)) t in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
     (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
   | LRT.Constraint (lc, (loc, _str_opt), t) ->
@@ -3276,7 +3273,7 @@ let rec cn_to_ail_lat_internal_2
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let new_lat =
-      Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, IT.bt it, new_name) lat
+      ESE.fn_largs_and_body_subst (ESE.sym_subst (name, IT.bt it, new_name)) lat
     in
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding new_name ctype in
@@ -3299,9 +3296,7 @@ let rec cn_to_ail_lat_internal_2
     let b1, s1 =
       cn_to_ail_resource_internal ~is_pre:true new_name dts globals preds loc ret
     in
-    let new_lat =
-      Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, bt, new_name) lat
-    in
+    let new_lat = ESE.fn_largs_and_body_subst (ESE.sym_subst (name, bt, new_name)) lat in
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
         without_ownership_checking
@@ -3328,7 +3323,8 @@ let rec cn_to_ail_lat_internal_2
     in
     prepend_to_precondition ail_executable_spec (b1, ss)
   (* Postcondition *)
-  | LAT.I (post, stats) ->
+  | LAT.I (post, (stats, _loop)) ->
+    (*TODO: handle loops *)
     let rec remove_duplicates locs stats =
       match stats with
       | [] -> []
@@ -3405,9 +3401,7 @@ let rec cn_to_ail_pre_post_aux_internal
     let binding = create_binding cn_sym cn_ctype in
     let rhs = wrap_with_convert_to A.(AilEident sym) bt in
     let decl = A.(AilSdeclaration [ (cn_sym, Some (mk_expr rhs)) ]) in
-    let subst_at =
-      Core_to_mucore.fn_spec_instrumentation_sym_subst_at (sym, bt, cn_sym) at
-    in
+    let subst_at = ESE.fn_args_and_body_subst (ESE.sym_subst (sym, bt, cn_sym)) at in
     let ail_executable_spec =
       cn_to_ail_pre_post_aux_internal
         without_ownership_checking

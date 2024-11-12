@@ -83,7 +83,7 @@ let add_records_to_map_from_cnprogs (_, cn_progs) =
   List.iter aux cn_progs
 
 
-let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation) =
+let add_records_to_map_from_instrumentation (i : Executable_spec_extract.instrumentation) =
   let rec aux_lrt = function
     | LRT.Define ((_, it), _, t) ->
       add_records_to_map_from_it it;
@@ -96,6 +96,7 @@ let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation)
       aux_lrt t
     | I -> ()
   in
+  let aux_rt = function ReturnTypes.Computational (_, _, t) -> aux_lrt t in
   let rec aux_lat = function
     | LAT.Define ((_, it), _, lat) ->
       add_records_to_map_from_it it;
@@ -107,15 +108,23 @@ let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation)
       add_records_to_map_from_lc lc;
       aux_lat lat
     (* Postcondition *)
-    | I (ReturnTypes.Computational (_, _, t), stats) ->
-      List.iter add_records_to_map_from_cnprogs stats;
-      aux_lrt t
+    | I i -> i
   in
   let rec aux_at = function
     | AT.Computational ((_, _), _, at) -> aux_at at
     | L lat -> aux_lat lat
   in
-  match i.internal with Some instr -> aux_at instr | None -> ()
+  match i.internal with
+  | None -> ()
+  | Some instr ->
+    let rt, (stmts, loops) = aux_at instr in
+    aux_rt rt;
+    List.iter add_records_to_map_from_cnprogs stmts;
+    List.iter
+      (fun (_loc, loop_at) ->
+        let loop_stmts = aux_at loop_at in
+        List.iter add_records_to_map_from_cnprogs loop_stmts)
+      loops
 
 
 let rec populate ?cn_sym bt =
@@ -167,7 +176,7 @@ let add_records_to_map_from_struct (tag_def : Mucore.tag_definition) =
 
 (* Populate record table *)
 let populate_record_map
-  (instrumentation : Core_to_mucore.instrumentation list)
+  (instrumentation : Executable_spec_extract.instrumentation list)
   (prog5 : unit Mucore.file)
   =
   add_records_to_map_from_fns_and_preds prog5.logical_predicates prog5.resource_predicates;
