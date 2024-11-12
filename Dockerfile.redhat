@@ -1,6 +1,7 @@
+# Build a minimal cerberus release image
 FROM redhat/ubi9:9.4
 
-# Install basic dependencies
+# Install system packages
 RUN yum update -y && \
     yum install -y xz sudo gcc unzip \
     diffutils patch pkgconfig bzip2 \
