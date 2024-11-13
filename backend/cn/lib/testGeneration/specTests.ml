@@ -259,100 +259,147 @@ let compile_assumes
        ~show_include:true
        (None, { A.empty_sigma with declarations; function_definitions })
 
-let callable (ctx : (Sym.t * C.ctype) list) ((_, (_, args)) : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) : bool 
-= 
-List.for_all (fun x -> x) (List.map (fun (_, (ty : C.ctype)) -> 
-  (match ty with 
-  | Ctype(_, ty) ->
-    (match ty with
-    | Basic(Integer(Char)) | Basic(Integer(Bool)) | Basic(Integer(Signed(_))) 
-    | Basic(Integer(Unsigned(_))) | Basic(Floating(_)) | Void -> true
-    | _ -> false)) 
-  || List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx) 
-  args)
+let rec pick 
+  (distribution : (int * (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) list) 
+  (i : int)
+  : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))
+  =
+  match distribution with
+  | [] -> failwith "impossible case"
+  | (score, f)::fs -> if i <= score then f else pick fs (i - score)
+     
+let callable 
+  (ctx : (Sym.t * C.ctype) list) 
+  ((_, (_, args)) : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) 
+  : bool 
+  = 
+  List.for_all (fun x -> x) (List.map (fun (_, (ty : C.ctype)) -> 
+    (match ty with 
+    | Ctype(_, ty) ->
+      (match ty with
+      | Basic(Integer(Char)) | Basic(Integer(Bool)) | Basic(Integer(Signed(_))) 
+      | Basic(Integer(Unsigned(_))) | Basic(Floating(_)) | Void -> true
+      | _ -> false)) 
+    || List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx) 
+    args)
+     
+let calc_score
+  (ctx : (Sym.t * C.ctype) list) 
+  (args : (Sym.t * C.ctype) list)
+  : int
+  =
+  List.fold_left 
+  (fun acc (_, ty) -> 
+    if (List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx) then acc + 10
+    else acc) 
+  1 args
 
-let rec gen_nested 
-(args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list)
-(fuel : int)
-(ctx : (Sym.t * C.ctype) list)
-(prev : int)
-: Pp.document
-= 
-let open Pp in 
-let gen_arg (ctx : (Sym.t * C.ctype) list)  ((_, ty) : Sym.t * C.ctype) =
-    match ty with 
-    | Ctype(_, ty1) ->
-      match ty1 with
-      | Basic(Integer(Char)) -> string "\'" ^^ char (char_of_int ((Random.int 96) + 32)) ^^ string "\'"
-      | Basic(Integer(Bool)) -> if Random.int 2 = 1 then string "true" else string "false"
-      | Basic(Integer(Signed(_))) -> let rand_int =  Random.int 32767 in int (if Random.int 2 = 1 then (rand_int * -1) else rand_int)
-      | Basic(Integer(Unsigned(_))) -> int (Random.int 65536)
-      | Basic(Floating(_)) -> string (string_of_float (Random.float 65536.0))
-      | Void -> empty
-      | _ -> 
+let gen_arg 
+  (ctx : (Sym.t * C.ctype) list)  
+  ((_, ty) : Sym.t * C.ctype) 
+  : Pp.document
+  =
+  let open Pp in 
+  let generated_base_ty = 
+  (match ty with 
+  | Ctype(_, ty1) ->
+    (match ty1 with
+    | Basic(Integer(Char))        -> [string "\'" ^^ char (char_of_int ((Random.int 96) + 32)) ^^ string "\'"]
+    | Basic(Integer(Bool))        -> [if Random.int 2 = 1 then string "true" else string "false"]
+    | Basic(Integer(Signed(_)))   -> let rand_int = Random.int 32767 in 
+                                      [int (if Random.int 2 = 1 then (rand_int * -1) else rand_int)]
+    | Basic(Integer(Unsigned(_))) -> [int (Random.int 65536)]
+    | Basic(Floating(_))          -> [string (string_of_float (Random.float 65536.0))]
+    | Void                        -> [empty]
+    | _                           -> []))
+    in
+    let prev_call = 
         let prev_calls = List.filter (fun (_, ct) -> C.ctypeEqual ty ct) ctx in
         (match List.length prev_calls with
-        | 0 -> failwith "cannot generate value and no previous call reusable"
-        | n -> let (name, _) = List.nth prev_calls (Random.int n) in Sym.pp name)
-  in
-let gen_test (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) =
+        | 0 -> []
+        | n -> let (name, _) = List.nth prev_calls (Random.int n) in [Sym.pp name])
+    in
+    let options = List.append generated_base_ty prev_call in
+    match List.length options with
+    | 0 -> failwith "unable to generate arg or reuse context"
+    | n -> List.nth options (Random.int n)
+
+let gen_test 
+  (ctx : (Sym.t * C.ctype) list)  
+  (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) 
+  (prev : int)
+  =
+  let open Pp in 
   (match args_map with
   | (f, ((qualifiers, ret_ty), args)) -> 
     let (ctx', assign) = 
     (match ret_ty with 
     | Ctype(_, Void) -> (ctx, empty) (* attempted to use fresh_cn but did not work for some reason?*)
     | _ -> let name = Sym.fresh_named ("x" ^ string_of_int prev) in 
-           ((name, ret_ty)::ctx, separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals]))
+          ((name, ret_ty)::ctx, separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals]))
     in 
     (ctx', assign ^^ Sym.pp f ^^ parens
     (separate
       (comma ^^ space)
       [ separate_map (comma ^^ space) (gen_arg ctx) args ])
       ^^ semi ^^ hardline))
-  in
-  (match fuel with
-  | 0 -> empty
-  | n -> 
-    (let fs = List.filter (callable ctx) args_map in
-    let (ctx', curr_test) =
-    (match (List.length fs) with
-    | 0 -> (ctx, empty) (* should warn that some tests could not be generated *)
-    | n -> gen_test (List.nth fs (Random.int n)))
-    in
-    curr_test ^^ gen_nested args_map (n - 1) ctx' (prev + 1)))
 
-(* random generation in ocaml rather than reusing existing generators 
-fuel parameter default 10 for now (10 calls generated)
-*)
-let compile_nested 
-(sigma : CF.GenTypes.genTypeCategory A.sigma)
-(insts : Core_to_mucore.instrumentation list)
-: Pp.document
-= 
-let fuel = 10 in
-let declarations : A.sigma_declaration list =
-  insts
-  |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
-    (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
-in
-let args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list =
-  List.map
-    (fun (inst : Core_to_mucore.instrumentation) ->
-      ( inst.fn,
-        let _, _, _, xs, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
-        match List.assoc Sym.equal inst.fn declarations with
-        | _, _, Decl_function (_, (qual, ret), cts, _, _, _) ->
-          ((qual, ret), List.combine xs (List.map (fun (_, ct, _) -> ct) cts))
-        | _ ->
-          failwith
-            (String.concat
-               " "
-               [ "Function declaration not found for";
-                 Sym.pp_string inst.fn;
-                 "@";
-                 __LOC__
-               ]) )) insts in
-    gen_nested args_map fuel [] 0
+(* let rec dist_to_str
+(distribution : (int * (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) list) =
+match distribution with
+[] -> " "
+| (score, (f, (_, _)))::l -> string_of_int score ^ "," ^ (Sym.pp_string f) ^  "; " ^ dist_to_str l *)
+
+let rec gen_sequence 
+  (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list)
+  (fuel : int)
+  (ctx : (Sym.t * C.ctype) list)
+  (prev : int)
+  : Pp.document
+  = 
+    let open Pp in 
+    (match fuel with
+    | 0 -> empty
+    | n -> 
+      let fs = List.map 
+        (fun ((_, (_, args)) as f)  -> (calc_score ctx args, f))
+      (List.filter (callable ctx) args_map) in
+      let (ctx', curr_test) =
+      (match (List.length fs) with
+      | 0 -> (ctx, string "unable to generate call at this point")
+      | _ -> gen_test ctx (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) prev )
+      in
+      curr_test ^^ gen_sequence args_map (n - 1) ctx' (prev + 1))
+
+let compile_sequence 
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (insts : Core_to_mucore.instrumentation list)
+  : Pp.document
+  = 
+  let fuel = 10 in
+  let declarations : A.sigma_declaration list =
+    insts
+    |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
+      (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
+  in
+  let args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list =
+    List.map
+      (fun (inst : Core_to_mucore.instrumentation) ->
+        ( inst.fn,
+          let _, _, _, xs, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
+          match List.assoc Sym.equal inst.fn declarations with
+          | _, _, Decl_function (_, (qual, ret), cts, _, _, _) ->
+            ((qual, ret), List.combine xs (List.map (fun (_, ct, _) -> ct) cts))
+          | _ ->
+            failwith
+              (String.concat
+                  " "
+                  [ "Function declaration not found for";
+                    Sym.pp_string inst.fn;
+                    "@";
+                    __LOC__
+                  ]) )) insts in
+      gen_sequence args_map fuel [] 0
 
 let compile_tests
   ~(without_ownership_checking : bool)
@@ -376,7 +423,7 @@ let compile_tests
       insts
   in
   let unit_tests_doc = compile_unit_tests unit_tests in
-  let nested = compile_nested sigma insts in
+  let sequence = compile_sequence sigma insts in
   let random_tests_doc = compile_random_tests sigma prog5 random_tests in
   let open Pp in
   string "#include "
@@ -435,7 +482,7 @@ let compile_tests
            ^^ hardline 
            ^^ pp_label "Nested tests"
            ^^ twice hardline
-           ^^ nested
+           ^^ sequence
            ^^ hardline
            ^^ string "return cn_test_main(argc, argv);")
         ^^ hardline)
