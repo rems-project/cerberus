@@ -95,4 +95,4 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; ./run-cn-vip.sh
+        tests/run-cn-vip.sh

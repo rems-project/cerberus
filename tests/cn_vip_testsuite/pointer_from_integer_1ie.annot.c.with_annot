@@ -1,0 +1,3 @@
+return code: 0
+[1/2]: f -- pass
+[2/2]: main -- pass

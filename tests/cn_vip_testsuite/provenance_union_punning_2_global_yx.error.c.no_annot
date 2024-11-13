@@ -1,0 +1,4 @@
+return code: 2
+tests/cn_vip_testsuite/provenance_union_punning_2_global_yx.error.c:5:9: error: unsupported union types
+typedef union { uintptr_t ui; int *p; } un;
+        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
