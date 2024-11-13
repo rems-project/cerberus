@@ -96,11 +96,10 @@ def main(args):
 # top level
 parser = argparse.ArgumentParser(description="Script for running an executable and diffing the output.")
 parser.set_defaults(func=(lambda _: parser.parse_args(['-h'])))
+parser.add_argument('prog')
+parser.add_argument('config', help='Path to JSON config file: { "name": string; "args": string list; "filter": python regexp; "timeout": seconds }.')
 parser.add_argument('-v', '--verbose', help='Print commands used.', action='store_true')
 parser.add_argument('--dry-run', help='Print but do not run commands.', action='store_true')
-parser.add_argument('config', help='Path to JSON config file: { "name": string; "args": string list; "filter": python regexp; "timeout": seconds }.')
-
-parser.add_argument('prog')
 parser.add_argument('--suffix', help='Uniquely identifying suffix of a file in the test directory.')
 parser.add_argument('--quiet', help='Don\'t show tests completed so far on std out.', action='store_true')
 parser.set_defaults(func=main)
