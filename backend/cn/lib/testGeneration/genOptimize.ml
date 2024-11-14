@@ -3199,14 +3199,20 @@ module Specialization = struct
       let of_it (x : Sym.t) (it : IT.t) : t option =
         let (IT (it_, _, _)) = it in
         match it_ with
-        | Binop (LT, IT (Sym x', _, _), it') when Sym.equal x x' -> Some (of_max it')
-        | Binop (LE, IT (Sym x', x_bt, _), it') when Sym.equal x x' ->
+        | Binop (LT, IT (Sym x', _, _), it')
+          when Sym.equal x x' && not (SymSet.mem x (IT.free_vars it')) ->
+          Some (of_max it')
+        | Binop (LE, IT (Sym x', x_bt, _), it')
+          when Sym.equal x x' && not (SymSet.mem x (IT.free_vars it')) ->
           let loc = Locations.other __LOC__ in
           Some (of_max (IT.add_ (it', IT.num_lit_ Z.one x_bt loc) loc))
-        | Binop (LT, it', IT (Sym x', x_bt, _)) when Sym.equal x x' ->
+        | Binop (LT, it', IT (Sym x', x_bt, _))
+          when Sym.equal x x' && not (SymSet.mem x (IT.free_vars it')) ->
           let loc = Locations.other __LOC__ in
           Some (of_min (IT.sub_ (it', IT.num_lit_ Z.one x_bt loc) loc))
-        | Binop (LE, it', IT (Sym x', _, _)) when Sym.equal x x' -> Some (of_min it')
+        | Binop (LE, it', IT (Sym x', _, _))
+          when Sym.equal x x' && not (SymSet.mem x (IT.free_vars it')) ->
+          Some (of_min it')
         | _ -> None
 
 
