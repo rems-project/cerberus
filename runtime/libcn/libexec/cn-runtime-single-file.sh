@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail -o noclobber
 
-USAGE="USAGE: $0 -h\n       $0 [-nvq] FILE.c"
+USAGE="USAGE: $0 -h\n       $0 [-nq] FILE.c"
 
 function echo_and_err() {
     printf "$1\n"
