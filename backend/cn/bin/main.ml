@@ -415,6 +415,81 @@ let generate_executable_specs
           Resultat.return ())
         ())
 
+let run_seq_tests
+  (* Common *)
+    filename
+  macros
+  incl_dirs
+  incl_files
+  debug_level
+  print_level
+  csv_times
+  log_times
+  astprints
+  no_inherit_loc
+  magic_comment_char_dollar
+  (* Executable spec *)
+    without_ownership_checking
+  (* Test Generation *)
+    output_dir
+  =
+  (* flags *)
+  Cerb_debug.debug_level := debug_level;
+  Pp.print_level := print_level;
+  Sym.executable_spec_enabled := true;
+  let handle_error (e : TypeErrors.type_error) =
+    let report = TypeErrors.pp_message e.msg in
+    Pp.error e.loc report.short (Option.to_list report.descr);
+    match e.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
+  in
+  with_well_formedness_check (* CLI arguments *)
+    ~filename
+    ~macros
+    ~incl_dirs
+    ~incl_files
+    ~csv_times
+    ~log_times
+    ~astprints
+    ~no_inherit_loc
+    ~magic_comment_char_dollar (* Callbacks *)
+    ~handle_error
+    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+      Cerb_colour.without_colour
+        (fun () ->
+          if
+            prog5
+            |> Core_to_mucore.collect_instrumentation
+            |> fst
+            |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+              Option.is_some inst.internal)
+            |> List.is_empty
+          then (
+            print_endline "No testable functions, aborting";
+            exit 1);
+          if not (Sys.file_exists output_dir) then (
+            print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
+            Sys.mkdir output_dir 0o777;
+            print_endline
+              ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
+          let _, sigma = ail_prog in
+          Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
+          Executable_spec.main
+            ~without_ownership_checking
+            ~with_test_gen:true
+            ~copy_source_dir:false
+            filename
+            ail_prog
+            None
+            (Some output_dir)
+            prog5
+            statement_locs;
+          SeqTests.generate
+            ~output_dir
+            ~filename
+            sigma
+            prog5;)
+        ();
+      Resultat.return ())
 
 let run_tests
   (* Common *)
@@ -1000,6 +1075,43 @@ let testing_cmd =
   let info = Cmd.info "test" ~doc in
   Cmd.v info test_t
 
+  let seq_test_cmd =
+    let open Term in
+    let test_t =
+      const run_tests
+      $ Common_flags.file
+      $ Common_flags.macros
+      $ Common_flags.incl_dirs
+      $ Common_flags.incl_files
+      $ Common_flags.debug_level
+      $ Common_flags.print_level
+      $ Common_flags.csv_times
+      $ Common_flags.log_times
+      $ Common_flags.astprints
+      $ Common_flags.no_inherit_loc
+      $ Common_flags.magic_comment_char_dollar
+      $ Executable_spec_flags.without_ownership_checking
+      $ Testing_flags.output_test_dir
+      $ Testing_flags.dont_run_tests
+      $ Testing_flags.gen_num_samples
+      $ Testing_flags.gen_backtrack_attempts
+      $ Testing_flags.gen_max_unfolds
+      $ Testing_flags.test_max_array_length
+      $ Testing_flags.test_null_in_every
+      $ Testing_flags.test_seed
+      $ Testing_flags.test_logging_level
+      $ Testing_flags.interactive_testing
+      $ Testing_flags.test_until_timeout
+      $ Testing_flags.test_exit_fast
+      $ Testing_flags.test_max_stack_depth
+    in
+    let doc =
+      "Generates sequences of calls for the API in [FILE].\n\
+      \    The tests use randomized inputs or previous calls.\n\
+      \    A [.c] file containing the test harnesses will be placed in [output-dir]."
+    in
+    let info = Cmd.info "seq_test" ~doc in
+    Cmd.v info test_t
 
 let instrument_cmd =
   let open Term in
@@ -1042,7 +1154,7 @@ let instrument_cmd =
   Cmd.v info instrument_t
 
 
-let subcommands = [ wf_cmd; verify_cmd; testing_cmd; instrument_cmd ]
+let subcommands = [ wf_cmd; verify_cmd; testing_cmd; instrument_cmd; seq_test_cmd ]
 
 let () =
   let version_str = Cn_version.git_version ^ " [" ^ Cn_version.git_version_date ^ "]" in
