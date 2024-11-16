@@ -19,3 +19,15 @@ let run
   Cerb_debug.begin_csv_timing ();
   SpecTests.generate ~output_dir ~filename ~without_ownership_checking sigma prog5;
   Cerb_debug.end_csv_timing "specification test generation"
+
+let run_nest
+  ~output_dir
+  ~filename
+  (num_samples : int)
+  (sigma : Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma)
+  (prog5 : unit Mucore.file)
+  : unit
+  =
+  if Option.is_some prog5.main then
+    failwith "Cannot test a file with a `main` function";
+  SeqTests.generate ~output_dir ~filename num_samples sigma prog5 ;

@@ -10,3 +10,11 @@ val run
   Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
   unit Mucore.file ->
   unit
+
+val run_nest
+  :  output_dir:string ->
+  filename:string ->
+  int ->
+  Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
+  unit Mucore.file ->
+  unit

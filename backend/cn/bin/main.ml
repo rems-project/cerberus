@@ -428,10 +428,9 @@ let run_seq_tests
   astprints
   no_inherit_loc
   magic_comment_char_dollar
-  (* Executable spec *)
-    without_ownership_checking
   (* Test Generation *)
     output_dir
+    num_samples
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -472,20 +471,11 @@ let run_seq_tests
             print_endline
               ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
           let _, sigma = ail_prog in
-          Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
-          Executable_spec.main
-            ~without_ownership_checking
-            ~with_test_gen:true
-            ~copy_source_dir:false
-            filename
-            ail_prog
-            None
-            (Some output_dir)
-            prog5
-            statement_locs;
-          SeqTests.generate
+          let _ = statement_locs in
+          TestGeneration.run_nest
             ~output_dir
             ~filename
+            num_samples
             sigma
             prog5;)
         ();
@@ -1078,7 +1068,7 @@ let testing_cmd =
   let seq_test_cmd =
     let open Term in
     let test_t =
-      const run_tests
+      const run_seq_tests
       $ Common_flags.file
       $ Common_flags.macros
       $ Common_flags.incl_dirs
@@ -1090,20 +1080,8 @@ let testing_cmd =
       $ Common_flags.astprints
       $ Common_flags.no_inherit_loc
       $ Common_flags.magic_comment_char_dollar
-      $ Executable_spec_flags.without_ownership_checking
       $ Testing_flags.output_test_dir
-      $ Testing_flags.dont_run_tests
       $ Testing_flags.gen_num_samples
-      $ Testing_flags.gen_backtrack_attempts
-      $ Testing_flags.gen_max_unfolds
-      $ Testing_flags.test_max_array_length
-      $ Testing_flags.test_null_in_every
-      $ Testing_flags.test_seed
-      $ Testing_flags.test_logging_level
-      $ Testing_flags.interactive_testing
-      $ Testing_flags.test_until_timeout
-      $ Testing_flags.test_exit_fast
-      $ Testing_flags.test_max_stack_depth
     in
     let doc =
       "Generates sequences of calls for the API in [FILE].\n\

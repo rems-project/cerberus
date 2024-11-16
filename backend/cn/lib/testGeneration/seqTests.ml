@@ -125,9 +125,10 @@ let rec gen_sequence
 let compile_sequence 
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (insts : Core_to_mucore.instrumentation list)
+  (num_samples : int)
   : Pp.document
   = 
-  let fuel = 10 in
+  let fuel = num_samples in
   let declarations : A.sigma_declaration list =
     insts
     |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
@@ -156,8 +157,9 @@ let compile_tests
 (filename_base : string)
 (sigma : CF.GenTypes.genTypeCategory A.sigma)
 (insts : Core_to_mucore.instrumentation list)
+(num_samples : int)
 =
-  let sequence = compile_sequence sigma insts in
+  let sequence = compile_sequence sigma insts num_samples in
   let open Pp in
   string "#include "
   ^^ dquotes (string (filename_base ^ ".c"))
@@ -182,8 +184,10 @@ let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.doc
 let generate
 ~(output_dir : string)
 ~(filename : string)
+(num_samples : int)
 (sigma : CF.GenTypes.genTypeCategory A.sigma)
 (prog5 : unit Mucore.file)
+
 : unit
 =
   let insts =
@@ -196,7 +200,7 @@ let generate
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in
   let tests_doc =
-    compile_tests filename_base sigma insts
+    compile_tests filename_base sigma insts num_samples
   in
   let test_file = filename_base ^ "_test.c" in
   save output_dir test_file tests_doc;
