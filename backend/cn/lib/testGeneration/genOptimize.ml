@@ -2568,8 +2568,17 @@ module ConstraintPropagation = struct
     let is_const (Int r) = IntRep.is_const r
 
     let to_stmts (x : Sym.t) (bt : BT.t) (Int r : t) : GS.t list =
+      let loc = Locations.other __LOC__ in
+      let lit n =
+        if BT.equal bt (Loc ()) then
+          IT.pointer_ ~alloc_id:Z.zero ~addr:n loc
+        else
+          IT.num_lit_ n bt loc
+      in
+      let le (n, m) =
+        if BT.equal bt (Loc ()) then IT.lePointer_ (n, m) loc else IT.le_ (n, m) loc
+      in
       let aux (sgn : BT.sign) (sz : int) : GS.t list =
-        let loc = Locations.other __LOC__ in
         let min_bt, max_bt = BT.bits_range (sgn, sz) in
         if IntRep.is_empty r then
           [ GS.Assert (T (IT.bool_ false loc)) ]
@@ -2577,22 +2586,17 @@ module ConstraintPropagation = struct
           let min, max = (Option.get (IntRep.minimum r), Option.get (IntRep.maximum r)) in
           let stmts_range =
             if Z.equal min max then
-              [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), IT.num_lit_ min bt loc) loc))
-              ]
+              [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), lit min) loc)) ]
             else (
               let stmt_min =
                 if Z.lt min_bt min then
-                  [ GS.Assert
-                      (LC.T (IT.le_ (IT.num_lit_ min bt loc, IT.sym_ (x, bt, loc)) loc))
-                  ]
+                  [ GS.Assert (LC.T (le (lit min, IT.sym_ (x, bt, loc)))) ]
                 else
                   []
               in
               let stmt_max =
                 if Z.lt max max_bt then
-                  [ GS.Assert
-                      (LC.T (IT.le_ (IT.sym_ (x, bt, loc), IT.num_lit_ max bt loc) loc))
-                  ]
+                  [ GS.Assert (LC.T (le (IT.sym_ (x, bt, loc), lit max))) ]
                 else
                   []
               in
@@ -2605,8 +2609,17 @@ module ConstraintPropagation = struct
               [ GS.Assert
                   (LC.T
                      (IT.eq_
-                        ( IT.mod_ (IT.sym_ (x, bt, loc), IT.num_lit_ r.mult bt loc) loc,
-                          IT.num_lit_ Z.zero bt loc )
+                        ( IT.mod_
+                            (if BT.equal bt (Loc ()) then
+                               ( IT.cast_ Memory.uintptr_bt (IT.sym_ (x, bt, loc)) loc,
+                                 IT.num_lit_ r.mult Memory.uintptr_bt loc )
+                             else
+                               (IT.sym_ (x, bt, loc), lit r.mult))
+                            loc,
+                          IT.num_lit_
+                            Z.zero
+                            (if BT.equal bt (Loc ()) then Memory.uintptr_bt else bt)
+                            loc )
                         loc))
               ]
           in
@@ -3090,7 +3103,7 @@ module Specialization = struct
           (stmt :: stmts', v)
         | [] ->
           (match bt with
-           | Bits _ -> ([], { mult = None; min = None; max = None })
+           | Bits _ | Loc _ -> ([], { mult = None; min = None; max = None })
            | _ -> failwith __LOC__)
       in
       aux stmts
@@ -3157,7 +3170,9 @@ module Specialization = struct
         | Let (backtracks, (x, gt)) :: stmts' ->
           let vars = SymSet.add x vars in
           let stmts', (gt, stmts'') =
-            if Option.is_some (BT.is_bits_bt (GT.bt gt)) then (
+            if
+              BT.equal (GT.bt gt) (BT.Loc ()) || Option.is_some (BT.is_bits_bt (GT.bt gt))
+            then (
               let stmts', v = collect_constraints vars x (GT.bt gt) stmts' in
               (stmts', compile_constraints x v gt))
             else
