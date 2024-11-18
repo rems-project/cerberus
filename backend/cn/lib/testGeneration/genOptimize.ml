@@ -1266,210 +1266,6 @@ module BranchPruning = struct
   let passes = [ Unused.pass; Inconsistent.pass ]
 end
 
-module MemberIndirection = struct
-  type kind =
-    | Struct of Sym.t
-    | Record
-
-  let rec replace_memberof_it
-    (k : kind)
-    (sym : Sym.t)
-    (dict : (Id.t * Sym.t) list)
-    (it : IT.t)
-    : IT.t
-    =
-    let repl = replace_memberof_it k sym dict in
-    let (IT (it_, bt, loc)) = it in
-    let it_ =
-      match it_ with
-      | Const _ | Sym _ | SizeOf _ | OffsetOf _ | Nil _ -> it_
-      | Unop (op, it') -> IT.Unop (op, repl it')
-      | Binop (op, it1, it2) -> IT.Binop (op, repl it1, repl it2)
-      | ITE (it1, it2, it3) -> IT.ITE (repl it1, repl it2, repl it3)
-      | EachI ((min, (i_sym, i_bt), max), it') ->
-        IT.EachI ((min, (i_sym, i_bt), max), repl it')
-      | Tuple its -> IT.Tuple (List.map repl its)
-      | NthTuple (n, it') -> IT.NthTuple (n, repl it')
-      | Struct (tag, xits) -> IT.Struct (tag, List.map_snd repl xits)
-      | StructMember (it', x) ->
-        (match (k, IT.is_sym it') with
-         | Struct _tag, Some (y, _y_bt) when Sym.equal y sym ->
-           IT.Sym (List.assoc Id.equal x dict)
-         | _ -> IT.StructMember (repl it', x))
-      | StructUpdate ((it_struct, x), it_val) ->
-        IT.StructUpdate ((repl it_struct, x), repl it_val)
-      | Record xits -> IT.Record (List.map_snd repl xits)
-      | RecordMember (it', x) ->
-        (match (k, IT.is_sym it') with
-         | Record, Some (y, _y_bt) when Sym.equal y sym ->
-           IT.Sym (List.assoc Id.equal x dict)
-         | _ -> IT.RecordMember (repl it', x))
-      | RecordUpdate ((it_record, x), it_val) ->
-        IT.RecordUpdate ((repl it_record, x), repl it_val)
-      | Constructor (tag, xits) -> IT.Constructor (tag, List.map_snd repl xits)
-      | MemberShift (it', tag, member) -> IT.MemberShift (it', tag, member)
-      | ArrayShift { base; ct; index } ->
-        IT.ArrayShift { base = repl base; ct; index = repl index }
-      | CopyAllocId { addr; loc } -> IT.CopyAllocId { addr = repl addr; loc = repl loc }
-      | HasAllocId it' -> IT.HasAllocId (repl it')
-      | Cons (it1, it2) -> IT.Cons (repl it1, repl it2)
-      | Head it' -> IT.Head (repl it')
-      | Tail it' -> IT.Tail (repl it')
-      | NthList (it1, it2, it3) -> IT.NthList (repl it1, repl it2, repl it3)
-      | ArrayToList (it1, it2, it3) -> IT.ArrayToList (repl it1, repl it2, repl it3)
-      | Representable (sct, it') -> IT.Representable (sct, repl it')
-      | Good (sct, it') -> IT.Good (sct, repl it')
-      | Aligned { t; align } -> IT.Aligned { t = repl t; align = repl align }
-      | WrapI (sct, it') -> IT.WrapI (sct, repl it')
-      | MapConst (bt, it') -> IT.MapConst (bt, repl it')
-      | MapSet (it1, it2, it3) -> IT.MapSet (repl it1, repl it2, repl it3)
-      | MapGet (it1, it2) -> IT.MapGet (repl it1, repl it2)
-      | MapDef ((x, bt), it') -> IT.MapDef ((x, bt), repl it')
-      | Apply (fsym, its) -> IT.Apply (fsym, List.map repl its)
-      | Let ((x, it1), it2) -> IT.Let ((x, repl it1), it2)
-      | Match (it', pits) -> IT.Match (repl it', List.map_snd repl pits)
-      | Cast (bt, it') -> IT.Cast (bt, repl it')
-    in
-    IT (it_, bt, loc)
-
-
-  let replace_memberof_gt
-    (k : kind)
-    (sym : Sym.t)
-    (dict : (Id.t * Sym.t) list)
-    (gt : GT.t)
-    : GT.t
-    =
-    let repl = replace_memberof_it k sym dict in
-    let aux (gt : GT.t) : GT.t =
-      let (GT (gt_, bt, loc)) = gt in
-      let gt_ =
-        match gt_ with
-        | Alloc it -> GT.Alloc (repl it)
-        | Call (fsym, xits) -> GT.Call (fsym, List.map_snd repl xits)
-        | Asgn ((it_addr, sct), it_val, gt') ->
-          GT.Asgn ((repl it_addr, sct), repl it_val, gt')
-        | Return it -> GT.Return (repl it)
-        | Assert (T it, gt') -> GT.Assert (LC.T (repl it), gt')
-        | Assert (Forall ((i_sym, i_bt), it), gt') ->
-          GT.Assert (LC.Forall ((i_sym, i_bt), repl it), gt')
-        | ITE (it_if, gt_then, gt_else) -> GT.ITE (repl it_if, gt_then, gt_else)
-        | Map ((i_sym, i_bt, it_perm), gt_inner) ->
-          GT.Map ((i_sym, i_bt, repl it_perm), gt_inner)
-        | _ -> gt_
-      in
-      GT (gt_, bt, loc)
-    in
-    GT.map_gen_pre aux gt
-
-
-  let transform (gt : GT.t) : GT.t =
-    let aux (gt : GT.t) : GT.t =
-      match gt with
-      | GT
-          ( Let
-              ( _backtracks,
-                (x, GT (Return (IT (Struct (_, xits), bt, loc_it)), _, loc_ret)),
-                gt' ),
-            _,
-            loc )
-      | GT
-          ( Let
-              ( _backtracks,
-                (x, GT (Return (IT (Record xits, bt, loc_it)), _, loc_ret)),
-                gt' ),
-            _,
-            loc ) ->
-        let k =
-          match bt with
-          | Struct tag -> Struct tag
-          | Record _ -> Record
-          | _ -> failwith __LOC__
-        in
-        let members_to_indirect, members_to_leave =
-          xits |> List.partition (fun (_, it) -> Option.is_none (IT.is_sym it))
-        in
-        let indirect_map =
-          List.map_snd (fun _ -> Sym.fresh ()) members_to_indirect
-          @ List.map
-              (fun (y, it) -> (y, fst (Option.get (IT.is_sym it))))
-              members_to_leave
-        in
-        let gt_main =
-          GT.let_
-            ( 0,
-              ( x,
-                GT.return_
-                  (let members =
-                     indirect_map
-                     |> List.map (fun (y, z) ->
-                       let it = List.assoc Id.equal y xits in
-                       (y, IT.sym_ (z, IT.bt it, IT.loc it)))
-                   in
-                   match k with
-                   | Struct tag -> IT.struct_ (tag, members) loc_it
-                   | Record -> IT.record_ members loc_it)
-                  loc_ret ),
-              replace_memberof_gt k x indirect_map gt' )
-            loc
-        in
-        let here = Locations.other __LOC__ in
-        members_to_indirect
-        |> List.fold_left
-             (fun gt'' (y, it) ->
-               GT.let_
-                 (0, (List.assoc Id.equal y indirect_map, GT.return_ it here), gt'')
-                 here)
-             gt_main
-      | _ -> gt
-    in
-    GT.map_gen_post aux gt
-
-
-  let pass = { name = "member_indirection"; transform }
-end
-
-(** This pass performs makes pointer offsets consistent *)
-module PointerOffsets = struct
-  let transform (gt : GT.t) : GT.t =
-    let aux (gt : GT.t) : GT.t =
-      match gt with
-      | GT (Asgn ((it_addr, sct), it_val, gt'), _, loc) ->
-        let it_addr =
-          match it_addr with
-          | IT
-              ( Binop (Add, IT (ArrayShift { base; ct; index }, _, loc_shift), it_offset),
-                _,
-                loc_add ) ->
-            let index =
-              if BT.equal (IT.bt index) Memory.size_bt then
-                index
-              else
-                IT.cast_ Memory.size_bt index (Locations.other __LOC__)
-            in
-            IT.add_
-              ( base,
-                IT.add_
-                  (IT.mul_ (index, IT.sizeOf_ ct loc_shift) loc_shift, it_offset)
-                  loc_add )
-              loc_shift
-          | IT
-              ( Binop
-                  (Add, IT (Binop (Add, it_base, it_offset_1), _, loc_shift), it_offset_2),
-                _,
-                loc_add ) ->
-            IT.add_ (it_base, IT.add_ (it_offset_1, it_offset_2) loc_add) loc_shift
-          | _ -> it_addr
-        in
-        GT.asgn_ ((it_addr, sct), it_val, gt') loc
-      | _ -> gt
-    in
-    GT.map_gen_post aux gt
-
-
-  let pass = { name = "rewrite"; transform }
-end
-
 (** This pass performs various inlinings *)
 module Inline = struct
   (** This pass inlines generators that just return a constant or symbol *)
@@ -1854,7 +1650,7 @@ end
 (** This pass infers how much allocation is needed
     for each pointer given the current intraprocedural
     context *)
-module InferAllocationSize = struct
+(* module InferAllocationSize = struct
   let name = "infer_alloc_size"
 
   let infer_size (vars : SymSet.t) (x : Sym.t) (gt : GT.t) : IT.t option =
@@ -1941,7 +1737,7 @@ module InferAllocationSize = struct
       Some (aux (gd.iargs |> List.map fst |> SymSet.of_list) (Option.get gd.body))
     in
     { gd with body }
-end
+end *)
 
 (** This pass uses [Simplify] to rewrite [IndexTerms.t] *)
 module TermSimplification = struct
@@ -3491,10 +3287,9 @@ let debug msg = Cerb_debug.print_debug 2 [] (fun _ -> msg)
 let all_passes (prog5 : unit Mucore.file) =
   [ PartialEvaluation.pass prog5 ]
   @ (if Config.has_pass "flatten" then [ PushPull.pass ] else [])
-  @ [ MemberIndirection.pass ]
   @ Inline.passes
   @ RemoveUnused.passes
-  @ [ TermSimplification.pass prog5; TermSimplification'.pass; PointerOffsets.pass ]
+  @ [ TermSimplification.pass prog5; TermSimplification'.pass ]
   @ BranchPruning.passes
   @ if Config.has_pass "lift_constraints" then SplitConstraints.passes else []
 
@@ -3511,7 +3306,11 @@ let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) :
       else
         None)
   in
-  let opt (gt : GT.t) : GT.t = List.fold_left (fun gt pass -> pass gt) gt passes in
+  let opt (gt : GT.t) : GT.t =
+    gt
+    |> List.fold_right (fun pass gt -> pass gt) passes
+    |> GenNormalize.MemberIndirection.transform
+  in
   let rec loop (fuel : int) (gt : GT.t) : GT.t =
     if fuel <= 0 then
       gt
@@ -3564,7 +3363,7 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
        Specialization.Pointer.transform)
       else
         fun gd' -> gd')
-  |> InferAllocationSize.transform
+  (* |> InferAllocationSize.transform *)
   |> aux
 
 

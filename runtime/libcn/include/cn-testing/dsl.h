@@ -88,18 +88,19 @@
         cn_gen_backtrack_relevant_add_many(toAdd);                                      \
     }
 
-#define CN_GEN_ASSIGN(p, offset, addr_ty, value, tmp, gen_name, last_var, ...)          \
-    if (convert_from_cn_pointer(p) == 0) {                                              \
-        cn_gen_backtrack_relevant_add((char*)#p);                                       \
+#define CN_GEN_ASSIGN(pointer, addr, addr_ty, value, tmp, gen_name, last_var, ...)      \
+    if (convert_from_cn_pointer(pointer) == 0) {                                        \
+        cn_gen_backtrack_relevant_add((char*)#pointer);                                 \
         cn_gen_backtrack_alloc_set(8);                                                  \
         goto cn_label_##last_var##_backtrack;                                           \
     }                                                                                   \
-    void *tmp##_ptr = convert_from_cn_pointer(cn_pointer_add_cn_bits_u64(p, offset));   \
+    void* tmp##_ptr = convert_from_cn_pointer(addr);                                    \
     if (!cn_gen_alloc_check(tmp##_ptr, sizeof(addr_ty))) {                              \
-        cn_gen_backtrack_relevant_add((char*)#p);                                       \
-        cn_bits_u64* tmp##_size = cn_bits_u64_add(                                      \
-                offset,                                                                 \
-                convert_to_cn_bits_u64(sizeof(addr_ty)));                               \
+        cn_gen_backtrack_relevant_add((char*)#pointer);                                 \
+        cn_bits_u64* tmp##_size = convert_to_cn_bits_u64(                               \
+            (uintptr_t)tmp##_ptr                                                        \
+            + sizeof(addr_ty)                                                           \
+            - (uintptr_t)convert_from_cn_pointer(pointer));                             \
         cn_gen_backtrack_alloc_set(convert_from_cn_bits_u64(tmp##_size));               \
         goto cn_label_##last_var##_backtrack;                                           \
     }                                                                                   \
