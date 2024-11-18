@@ -1838,11 +1838,7 @@ module SplitConstraints = struct
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
         | Assert (T (IT (Binop (Implies, it_if, it_then), _, loc_implies)), gt') ->
-          GT.pick_
-            [ (Z.one, GT.assert_ (T (IT.not_ it_if loc_implies), gt') loc);
-              (Z.one, GT.assert_ (T it_then, gt') loc)
-            ]
-            loc_implies
+          GT.ite_ (it_if, GT.assert_ (T it_then, gt') loc, gt') loc_implies
         | _ -> gt
       in
       GT.map_gen_pre aux gt
@@ -2148,9 +2144,10 @@ module RemoveUnused = struct
     let aux (gt : GT.t) : GT.t =
       let (GT (gt_, _, _)) = gt in
       match gt_ with
-      | Let (_, (x, gt1), gt2)
-        when GA.is_pure gt1 && not (SymSet.mem x (GT.free_vars gt2)) ->
-        gt2
+      | Let (_, (x, gt_inner), gt_rest)
+        when GA.is_pure gt_inner && not (SymSet.mem x (GT.free_vars gt_rest)) ->
+        gt_rest
+      | Assert (T it, gt_rest) when IT.is_true it -> gt_rest
       | _ -> gt
     in
     GT.map_gen_post aux gt
@@ -2734,7 +2731,37 @@ module ConstraintPropagation = struct
           ( EQ,
             IT (Const (Bits (_, m)), _, _),
             IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _) )
-        when Z.equal m Z.zero ->
+      | Binop
+          ( EQ,
+            IT
+              ( Binop
+                  ( Mod,
+                    IT (Cast (_, IT (Sym x, x_bt, _)), _, _),
+                    IT (Const (Bits (_, n)), _, _) ),
+                _,
+                _ ),
+            IT (Const (Bits (_, m)), _, _) )
+      | Binop
+          ( EQ,
+            IT (Const (Bits (_, m)), _, _),
+            IT
+              ( Binop
+                  ( Mod,
+                    IT (Cast (_, IT (Sym x, x_bt, _)), _, _),
+                    IT (Const (Bits (_, n)), _, _) ),
+                _,
+                _ ) )
+        when Z.equal m Z.zero
+             &&
+             let sgn, sz =
+               Option.get
+                 (BT.is_bits_bt
+                    (if BT.equal x_bt (Loc ()) then
+                       Memory.uintptr_bt
+                     else
+                       x_bt))
+             in
+             BT.fits_range (sgn, sz) n ->
         let@ bt_rep = IntRep.of_bt x_bt in
         Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.of_mult n))))
       | _ -> None
@@ -3459,6 +3486,8 @@ module Specialization = struct
   end
 end
 
+let debug msg = Cerb_debug.print_debug 2 [] (fun _ -> msg)
+
 let all_passes (prog5 : unit Mucore.file) =
   [ PartialEvaluation.pass prog5 ]
   @ (if Config.has_pass "flatten" then [ PushPull.pass ] else [])
@@ -3474,7 +3503,13 @@ let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) :
   let passes =
     all_passes prog5
     |> List.filter_map (fun { name; transform } ->
-      if StringSet.mem name passes then Some transform else None)
+      if StringSet.mem name passes then
+        Some
+          (fun gt ->
+            debug name;
+            transform gt)
+      else
+        None)
   in
   let opt (gt : GT.t) : GT.t = List.fold_left (fun gt pass -> pass gt) gt passes in
   let rec loop (fuel : int) (gt : GT.t) : GT.t =
@@ -3501,18 +3536,32 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   in
   gd
   |> aux
-  |> Fusion.Each.transform
+  |> (debug "fusion_each";
+      Fusion.Each.transform)
   |> aux
-  |> (if Config.has_pass "picks" then FlipIfs.transform else fun gd' -> gd')
+  |> (if Config.has_pass "picks" then (
+        debug "flip_ifs";
+        FlipIfs.transform)
+      else
+        fun gd' -> gd')
   |> aux
-  |> (if Config.has_pass "reorder" then Reordering.transform [] else fun gd' -> gd')
+  |> (if Config.has_pass "reorder" then (
+        debug "reorder";
+        Reordering.transform [])
+      else
+        fun gd' -> gd')
   |> (if Config.has_pass "consistency" then
         fun gd' ->
       gd'
-      |> ConstraintPropagation.transform
-      |> Specialization.Equality.transform
-      |> Specialization.Integer.transform
-      |> Specialization.Pointer.transform
+      |> (debug "constraint_propagation";
+          ConstraintPropagation.transform)
+      |> (debug "specialization_equality";
+          Specialization.Equality.transform)
+      |> (debug "specialization_integer";
+          Specialization.Integer.transform)
+      |>
+      (debug "specialization_pointer";
+       Specialization.Pointer.transform)
       else
         fun gd' -> gd')
   |> InferAllocationSize.transform
