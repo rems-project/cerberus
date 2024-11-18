@@ -91,6 +91,7 @@ jobs:
 
   test-docker-images:
     runs-on: ubuntu-latest
+    needs: [docker-release-redhat, docker-release-ubuntu]
     strategy:
       matrix:
         tag: [release, release-redhat]
