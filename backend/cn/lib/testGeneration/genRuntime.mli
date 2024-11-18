@@ -31,7 +31,7 @@ type term =
       }
   | Asgn of
       { pointer : Sym.t;
-        offset : IT.t;
+        addr : IT.t;
         sct : Sctypes.t;
         value : IT.t;
         last_var : Sym.t;

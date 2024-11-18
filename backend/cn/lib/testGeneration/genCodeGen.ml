@@ -211,16 +211,9 @@ let rec compile_term
                (path_vars |> GR.SymSet.to_seq |> List.of_seq |> List.map wrap_to_string)
            ]),
       mk_expr (AilEident x) )
-  | Asgn { pointer; offset; sct; value; last_var; rest } ->
+  | Asgn { pointer; addr; sct; value; last_var; rest } ->
     let tmp_sym = Sym.fresh () in
-    let bt = BT.Bits (Unsigned, 64) in
-    let offset =
-      if BT.equal (IT.bt offset) bt then
-        offset
-      else
-        IT.cast_ bt offset (Locations.other __LOC__)
-    in
-    let b1, s1, e1 = compile_it sigma name offset in
+    let b1, s1, e1 = compile_it sigma name addr in
     let b2, s2, AnnotatedExpression (_, _, _, e2_) = compile_it sigma name value in
     let b3 = [ Utils.create_binding tmp_sym C.(mk_ctype_pointer no_qualifiers void) ] in
     let s3 =
@@ -260,8 +253,7 @@ let rec compile_term
                                       ( None,
                                         [ (Locations.other __LOC__, [ Sym.pp_string x ]) ]
                                       )) )))
-                        (List.of_seq
-                           (SymSet.to_seq (SymSet.add pointer (IT.free_vars offset))))
+                        (List.of_seq (SymSet.to_seq (IT.free_vars addr)))
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
     in

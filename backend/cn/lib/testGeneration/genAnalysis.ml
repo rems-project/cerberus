@@ -152,36 +152,6 @@ end
 
 let get_bounds = Bounds.get_bounds
 
-let get_addr_offset_opt (it : IT.t) : (Sym.t * IT.t) option =
-  let (IT (it_, _, loc)) = it in
-  match it_ with
-  | ArrayShift { base = IT (Sym p_sym, _, _); ct; index = it_offset } ->
-    let it_offset =
-      if BT.equal (IT.bt it_offset) Memory.size_bt then
-        it_offset
-      else
-        IT.cast_ Memory.size_bt it_offset loc
-    in
-    Some (p_sym, IT.mul_ (IT.sizeOf_ ct loc, it_offset) loc)
-  | Binop (Add, IT (Sym p_sym, _, _), it_offset) ->
-    let it_offset =
-      if BT.equal (IT.bt it_offset) Memory.size_bt then
-        it_offset
-      else
-        IT.cast_ Memory.size_bt it_offset loc
-    in
-    Some (p_sym, it_offset)
-  | Sym p_sym -> Some (p_sym, IT.num_lit_ Z.zero Memory.size_bt loc)
-  | _ -> None
-
-
-let get_addr_offset (it : IT.t) : Sym.t * IT.t =
-  match get_addr_offset_opt it with
-  | Some r -> r
-  | None ->
-    failwith ("unsupported format for address: " ^ CF.Pp_utils.to_plain_string (IT.pp it))
-
-
 let get_recursive_preds (preds : (Sym.t * RP.definition) list) : SymSet.t =
   let get_calls (pred : RP.definition) : SymSet.t =
     pred.clauses

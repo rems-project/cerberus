@@ -8,6 +8,7 @@ module GD = GenDefinitions
 module GBT = GenBaseTypes
 module GA = GenAnalysis
 module SymSet = Set.Make (Sym)
+module SymMap = Map.Make (Sym)
 module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
 module StringMap = Map.Make (String)
 
@@ -37,7 +38,7 @@ type term =
       }
   | Asgn of
       { pointer : Sym.t;
-        offset : IT.t;
+        addr : IT.t;
         sct : Sctypes.t;
         value : IT.t;
         last_var : Sym.t;
@@ -84,14 +85,8 @@ let rec free_vars_term (tm : term) : SymSet.t =
   | Alloc { bytes; sized = _ } -> IT.free_vars bytes
   | Call { fsym = _; iargs; oarg_bt = _; path_vars = _; sized = _ } ->
     SymSet.of_list (List.map snd iargs)
-  | Asgn { pointer; offset; sct = _; value; last_var = _; rest } ->
-    List.fold_left
-      SymSet.union
-      SymSet.empty
-      [ SymSet.singleton pointer;
-        IT.free_vars_list [ offset; value ];
-        free_vars_term rest
-      ]
+  | Asgn { pointer = _; addr; sct = _; value; last_var = _; rest } ->
+    SymSet.union (IT.free_vars_list [ addr; value ]) (free_vars_term rest)
   | Let { backtracks = _; x; x_bt = _; value; last_var = _; rest } ->
     SymSet.union (free_vars_term value) (SymSet.remove x (free_vars_term rest))
   | Return { value } -> IT.free_vars value
@@ -162,32 +157,22 @@ let rec pp_term (tm : term) : Pp.document =
                   (comma ^^ space)
                   Sym.pp
                   (path_vars |> SymSet.to_seq |> List.of_seq)))
-  | Asgn
-      { pointer : Sym.t;
-        offset : IT.t;
-        sct : Sctypes.t;
-        value : IT.t;
-        last_var : Sym.t;
-        rest : term
-      } ->
+  | Asgn { pointer; addr; sct; value; last_var; rest } ->
     Sctypes.pp sct
     ^^ space
-    ^^ Sym.pp pointer
-    ^^ space
-    ^^ plus
-    ^^ space
-    ^^ IT.pp offset
+    ^^ IT.pp addr
     ^^ space
     ^^ string ":="
     ^^ space
     ^^ IT.pp value
     ^^ semi
     ^^ space
-    ^^ twice slash
-    ^^ space
-    ^^ string "backtracks to"
-    ^^ space
-    ^^ Sym.pp last_var
+    ^^ c_comment
+         (string "backtracks to"
+          ^^ space
+          ^^ Sym.pp last_var
+          ^^ string " allocs via "
+          ^^ Sym.pp pointer)
     ^^ break 1
     ^^ pp_term rest
   | Let
@@ -274,12 +259,12 @@ let nice_names (inputs : SymSet.t) (gt : GT.t) : GT.t =
     | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> (vars, gt)
     | Pick wgts ->
       let vars, wgts =
-        List.fold_left
-          (fun (vars', choices') (w, gr') ->
+        List.fold_right
+          (fun (w, gr') (vars', choices') ->
             let vars'', gr'' = aux vars' gr' in
             (vars'', (w, gr'') :: choices'))
-          (vars, [])
           wgts
+          (vars, [])
       in
       (vars, GT.pick_ wgts loc)
     | Asgn ((it_addr, sct), it_val, gt') ->
@@ -392,16 +377,32 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
           ([], fun _ gr -> gr)
       in
       gt_lets last_var (Call { fsym; iargs; oarg_bt = bt; path_vars; sized = None })
-    | Asgn ((it_addr, sct), value, rest) ->
-      let pointer, offset = GA.get_addr_offset it_addr in
-      if not (SymSet.mem pointer inputs || List.exists (Sym.equal pointer) vars) then
-        failwith
-          (Sym.pp_string pointer
-           ^ " not in ["
-           ^ String.concat "; " (List.map Sym.pp_string vars)
-           ^ "] from "
-           ^ Pp.plain (Locations.pp (IT.loc it_addr)));
-      Asgn { pointer; offset; sct; value; last_var; rest = aux vars path_vars rest }
+    | Asgn ((addr, sct), value, rest) ->
+      let pointer =
+        let pointers =
+          let free_vars = IT.free_vars_bts addr in
+          if SymMap.cardinal free_vars == 1 then
+            free_vars
+          else
+            free_vars |> SymMap.filter (fun _ bt -> BT.equal bt (BT.Loc ()))
+        in
+        if not (SymMap.cardinal pointers == 1) then
+          Cerb_debug.print_debug 2 [] (fun () ->
+            Pp.(
+              plain
+                (braces
+                   (separate_map
+                      (comma ^^ space)
+                      Sym.pp
+                      (List.map fst (SymMap.bindings pointers)))
+                 ^^ space
+                 ^^ string " in "
+                 ^^ IT.pp addr)));
+        List.find
+          (fun x -> SymMap.mem x pointers)
+          (vars @ List.of_seq (SymSet.to_seq inputs))
+      in
+      Asgn { pointer; addr; sct; value; last_var; rest = aux vars path_vars rest }
     | Let (backtracks, (x, gt1), gt2) ->
       Let
         { backtracks;
@@ -473,7 +474,10 @@ let elaborate_gd ({ filename; recursive; spec = _; name; iargs; oargs; body } : 
     name;
     iargs = List.map_snd GBT.bt iargs;
     oargs = List.map_snd GBT.bt oargs;
-    body = elaborate_gt (SymSet.of_list (List.map fst iargs)) (Option.get body)
+    body =
+      Option.get body
+      |> GenNormalize.MemberIndirection.transform
+      |> elaborate_gt (SymSet.of_list (List.map fst iargs))
   }
 
 
