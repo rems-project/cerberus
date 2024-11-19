@@ -671,10 +671,11 @@ type ail_bindings_and_statements =
 type ail_executable_spec =
   { pre : ail_bindings_and_statements;
     post : ail_bindings_and_statements;
-    in_stmt : (Locations.t * ail_bindings_and_statements) list
-  }
+    in_stmt : (Locations.t * ail_bindings_and_statements) list;
+    loops: (Locations.t * ail_bindings_and_statements) list;
+   }
 
-let empty_ail_executable_spec = { pre = ([], []); post = ([], []); in_stmt = [] }
+let empty_ail_executable_spec = { pre = ([], []); post = ([], []); in_stmt = []; loops = [] }
 
 type 'a dest =
   | Assert : Cerb_location.t -> ail_bindings_and_statements dest
@@ -3256,6 +3257,16 @@ let cn_to_ail_statements dts globals (loc, cn_progs) =
   (loc, (List.concat bs, upd_s @ List.concat ss @ pop_s))
 
 
+
+let cn_to_ail_loop dts globals (loc, at) = match at with 
+  | AT.Computational (_, _, _ ) -> (loc, [])
+  | L stats -> 
+    (* let ail_statements =
+      List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
+    in *)
+    (loc, [])
+
+
 let prepend_to_precondition ail_executable_spec (b1, s1) =
   let b2, s2 = ail_executable_spec.pre in
   { ail_executable_spec with pre = (b1 @ b2, s1 @ s2) }
@@ -3323,7 +3334,7 @@ let rec cn_to_ail_lat_internal_2
     in
     prepend_to_precondition ail_executable_spec (b1, ss)
   (* Postcondition *)
-  | LAT.I (post, (stats, _loop)) ->
+  | LAT.I (post, (stats, loop)) ->
     (*TODO: handle loops *)
     let rec remove_duplicates locs stats =
       match stats with
@@ -3369,6 +3380,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_statements =
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
+    let ail_loop_invariants = List.map (cn_to_ail_loop dts globals) loop in 
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stat_ =
       if without_ownership_checking then
@@ -3385,7 +3397,7 @@ let rec cn_to_ail_lat_internal_2
       A.(
         AilSblock (return_cn_binding @ post_bs, return_cn_decl @ post_ss @ ownership_stat_))
     in
-    { pre = ([], []); post = ([], [ block ]); in_stmt = ail_statements }
+    { pre = ([], []); post = ([], [ block ]); in_stmt = ail_statements; loops = [] }
 
 
 let rec cn_to_ail_pre_post_aux_internal
