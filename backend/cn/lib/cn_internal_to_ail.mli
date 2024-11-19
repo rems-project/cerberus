@@ -54,7 +54,11 @@ type ail_bindings_and_statements =
 type ail_executable_spec =
   { pre : ail_bindings_and_statements;
     post : ail_bindings_and_statements;
-    in_stmt : (Locations.t * ail_bindings_and_statements) list
+    in_stmt : (Locations.t * ail_bindings_and_statements) list;
+    loops :
+      ((Locations.t * ail_bindings_and_statements)
+      * (Locations.t * ail_bindings_and_statements))
+        list
   }
 
 val generate_get_or_put_ownership_function
