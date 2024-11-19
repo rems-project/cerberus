@@ -10,10 +10,10 @@ type statements = statement list
 
 let statements_subst subst = List.map (statement_subst subst)
 
-type loop = Locations.t * statements ArgumentTypes.t
+type loop = Locations.t * Locations.t * statements ArgumentTypes.t
 
-let loop_subst subst ((loc, at) : loop) =
-  (loc, ArgumentTypes.subst statements_subst subst at)
+let loop_subst subst ((cond_loc, loop_loc, at) : loop) =
+  (cond_loc, loop_loc, ArgumentTypes.subst statements_subst subst at)
 
 
 type loops = loop list
@@ -106,11 +106,10 @@ let rec stmts_in_expr (Mucore.Expr (loc, _, _, e_)) =
 let from_loop ((_label_sym : Sym.t), (label_def : _ label_def)) : loop option =
   match label_def with
   | Return _ -> None
-  | Label (_loc, label_args_and_body, _annots, _, `Loop (loop_condition_loc, _loop_loc))
-    ->
+  | Label (_loc, label_args_and_body, _annots, _, `Loop (loop_condition_loc, loop_loc)) ->
     let label_args_and_body = Core_to_mucore.at_of_arguments Fun.id label_args_and_body in
     let label_args_and_statements = ArgumentTypes.map stmts_in_expr label_args_and_body in
-    Some (loop_condition_loc, label_args_and_statements)
+    Some (loop_condition_loc, loop_loc, label_args_and_statements)
 
 
 let from_fn (fn, decl) =

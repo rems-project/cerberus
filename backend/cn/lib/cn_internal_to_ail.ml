@@ -672,10 +672,15 @@ type ail_executable_spec =
   { pre : ail_bindings_and_statements;
     post : ail_bindings_and_statements;
     in_stmt : (Locations.t * ail_bindings_and_statements) list;
-    loops: (Locations.t * ail_bindings_and_statements) list;
-   }
+    loops :
+      ((Locations.t * ail_bindings_and_statements)
+      * (Locations.t * ail_bindings_and_statements))
+        list
+  }
 
-let empty_ail_executable_spec = { pre = ([], []); post = ([], []); in_stmt = []; loops = [] }
+let empty_ail_executable_spec =
+  { pre = ([], []); post = ([], []); in_stmt = []; loops = [] }
+
 
 type 'a dest =
   | Assert : Cerb_location.t -> ail_bindings_and_statements dest
@@ -3257,14 +3262,78 @@ let cn_to_ail_statements dts globals (loc, cn_progs) =
   (loc, (List.concat bs, upd_s @ List.concat ss @ pop_s))
 
 
+let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = function
+  | LAT.Define ((name, it), _info, lat) ->
+    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let binding = create_binding name ctype in
+    let decl = A.(AilSdeclaration [ (name, None) ]) in
+    let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar name) in
+    let b2, s2 = cn_to_ail_lat_internal_loop ~is_toplevel dts globals preds lat in
+    (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
+  | LAT.Resource ((name, (ret, _bt)), (loc, _str_opt), lat) ->
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
+    let b1, s1 =
+      cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret
+    in
+    let b2, s2 = cn_to_ail_lat_internal_loop ~is_toplevel dts globals preds lat in
+    (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
+  | LAT.Constraint (lc, (loc, _str_opt), lat) ->
+    let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
+    let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
+    let pop_s = generate_cn_pop_msg_info in
+    let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
+    let b2, s2 = cn_to_ail_lat_internal_loop ~is_toplevel dts globals preds lat in
+    (b1 @ b2, ss @ s2)
+  | LAT.I ss ->
+    let ail_statements =
+      List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) ss
+    in
+    let _, bs_and_ss = List.split ail_statements in
+    let bs, ss = List.split bs_and_ss in
+    (List.concat bs, List.concat ss)
 
-let cn_to_ail_loop dts globals (loc, at) = match at with 
-  | AT.Computational (_, _, _ ) -> (loc, [])
-  | L stats -> 
-    (* let ail_statements =
-      List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
-    in *)
-    (loc, [])
+
+let cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
+  match at with
+  | AT.Computational (_, _, _) ->
+    (* TODO: Loop computational args *)
+    ((cond_loc, ([], [])), (loop_loc, ([], [])))
+  | L lat ->
+    let rec modify_decls_for_loop decls modified_stats =
+      let rec collect_initialised_syms_and_exprs = function
+        | [] -> []
+        | (sym, Some expr) :: xs -> (sym, expr) :: collect_initialised_syms_and_exprs xs
+        | (_, None) :: xs -> collect_initialised_syms_and_exprs xs
+      in
+      function
+      | [] -> (decls, modified_stats)
+      | s :: ss ->
+        (match s with
+         (*
+            Separate initialised variable declarations into declaration and initialisation (assignment).
+            Needed so that CN invariant ghost variables are in scope for assertions in the loop body.
+         *)
+         | A.(AilSdeclaration syms_and_exprs) ->
+           let sym_some_expr_pairs = collect_initialised_syms_and_exprs syms_and_exprs in
+           let none_pairs = List.map (fun (sym, _) -> (sym, None)) syms_and_exprs in
+           let none_decl = A.(AilSdeclaration none_pairs) in
+           let assign_stats =
+             List.map
+               (fun (sym, rhs_expr) ->
+                 let ident = mk_expr A.(AilEident sym) in
+                 A.(AilSexpr (mk_expr (AilEassign (ident, rhs_expr)))))
+               sym_some_expr_pairs
+           in
+           modify_decls_for_loop
+             (decls @ [ none_decl ])
+             (modified_stats @ assign_stats)
+             ss
+         | _ -> modify_decls_for_loop decls (modified_stats @ [ s ]) ss)
+    in
+    let bs, ss = cn_to_ail_lat_internal_loop dts globals preds lat in
+    let decls, modified_stats = modify_decls_for_loop [] [] ss in
+    ((cond_loc, ([], modified_stats)), (loop_loc, (bs, decls)))
 
 
 let prepend_to_precondition ail_executable_spec (b1, s1) =
@@ -3335,7 +3404,6 @@ let rec cn_to_ail_lat_internal_2
     prepend_to_precondition ail_executable_spec (b1, ss)
   (* Postcondition *)
   | LAT.I (post, (stats, loop)) ->
-    (*TODO: handle loops *)
     let rec remove_duplicates locs stats =
       match stats with
       | [] -> []
@@ -3380,7 +3448,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_statements =
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
-    let ail_loop_invariants = List.map (cn_to_ail_loop dts globals) loop in 
+    let ail_loop_invariants = List.map (cn_to_ail_loop dts globals preds) loop in
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stat_ =
       if without_ownership_checking then
@@ -3397,7 +3465,11 @@ let rec cn_to_ail_lat_internal_2
       A.(
         AilSblock (return_cn_binding @ post_bs, return_cn_decl @ post_ss @ ownership_stat_))
     in
-    { pre = ([], []); post = ([], [ block ]); in_stmt = ail_statements; loops = [] }
+    { pre = ([], []);
+      post = ([], [ block ]);
+      in_stmt = ail_statements;
+      loops = ail_loop_invariants
+    }
 
 
 let rec cn_to_ail_pre_post_aux_internal

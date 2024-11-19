@@ -2,8 +2,8 @@ type statement = Locations.t * Cnprog.t list
 
 type statements = statement list
 
-type loop =
-  Locations.t * statements ArgumentTypes.t (* location is for the loop condition *)
+type loop = Locations.t * Locations.t * statements ArgumentTypes.t
+(* first location is for the loop condition; second is for the entire loop *)
 
 type loops = loop list
 
