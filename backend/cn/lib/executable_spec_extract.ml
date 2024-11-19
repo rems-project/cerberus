@@ -106,7 +106,8 @@ let rec stmts_in_expr (Mucore.Expr (loc, _, _, e_)) =
 let from_loop ((_label_sym : Sym.t), (label_def : _ label_def)) : loop option =
   match label_def with
   | Return _ -> None
-  | Label (_loc, label_args_and_body, _annots, _, `Loop loop_condition_loc) ->
+  | Label (_loc, label_args_and_body, _annots, _, `Loop (loop_condition_loc, _loop_loc))
+    ->
     let label_args_and_body = Core_to_mucore.at_of_arguments Fun.id label_args_and_body in
     let label_args_and_statements = ArgumentTypes.map stmts_in_expr label_args_and_body in
     Some (loop_condition_loc, label_args_and_statements)

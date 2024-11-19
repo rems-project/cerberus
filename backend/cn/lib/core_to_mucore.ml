@@ -1128,7 +1128,7 @@ let normalise_label
   fsym
   (markers_env, precondition_cn_desugaring_state)
   (global_types, visible_objects_env)
-  (accesses, loop_attributes)
+  (accesses, (loop_attributes : CF.Annot.loop_attributes))
   (env : C.env)
   st
   _label_name
@@ -1141,7 +1141,7 @@ let normalise_label
      | Some (LAloop loop_id) ->
        let@ desugared_inv, cn_desugaring_state, loop_condition_loc =
          match Pmap.lookup loop_id loop_attributes with
-         | Some (marker_id, attrs, loop_condition_loc) ->
+         | Some { marker_id; attributes = attrs; loc_condition; loc_loop } ->
            let@ inv = Parse.loop_spec attrs in
            let d_st =
              CAE.
@@ -1153,7 +1153,7 @@ let normalise_label
                }
            in
            let@ inv, d_st = desugar_conds d_st inv in
-           return (inv, d_st.inner.cn_state, loop_condition_loc)
+           return (inv, d_st.inner.cn_state, (loc_condition, loc_loop))
          | None -> assert false
          (* return ([], precondition_cn_desugaring_state) *)
        in
