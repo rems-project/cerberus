@@ -380,7 +380,8 @@ type 'TY label_def =
       * 'TY expr arguments
       * Cerb_frontend.Annot.annot list
       * parse_ast_label_spec
-      * [ `Loop of Locations.t ]
+      * [ `Loop of Locations.t * Locations.t ]
+(*first loc is condition, second is whole loop*)
 (*loop condition location, for executable checking *)
 
 type trusted =
