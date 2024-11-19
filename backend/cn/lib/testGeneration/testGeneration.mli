@@ -11,7 +11,7 @@ val run
   unit Mucore.file ->
   unit
 
-val run_nest
+val run_seq
   :  output_dir:string ->
   filename:string ->
   int ->

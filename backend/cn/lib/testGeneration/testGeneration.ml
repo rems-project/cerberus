@@ -20,7 +20,7 @@ let run
   SpecTests.generate ~output_dir ~filename ~without_ownership_checking sigma prog5;
   Cerb_debug.end_csv_timing "specification test generation"
 
-let run_nest
+let run_seq
   ~output_dir
   ~filename
   (num_samples : int)

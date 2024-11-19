@@ -472,7 +472,7 @@ let run_seq_tests
               ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
           let _, sigma = ail_prog in
           let _ = statement_locs in
-          TestGeneration.run_nest
+          TestGeneration.run_seq
             ~output_dir
             ~filename
             num_samples
