@@ -3464,20 +3464,19 @@ let rec cn_to_ail_lat_internal_2
     in
     let ail_loop_invariants = List.map (cn_to_ail_loop dts globals preds) loop in
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
-    let ownership_stat_ =
+    let ownership_stats_ =
       if without_ownership_checking then
         []
-      else (
-        let cn_stack_depth_decr_stat_ =
-          mk_stmt
-            (A.AilSexpr
-               (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_decr_sym), []))))
-        in
-        [ cn_stack_depth_decr_stat_ ])
+      else
+        List.map
+          (fun fn_sym ->
+            mk_stmt (A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident fn_sym), [])))))
+          OE.[ cn_stack_depth_decr_sym; cn_postcondition_leak_check_sym ]
     in
     let block =
       A.(
-        AilSblock (return_cn_binding @ post_bs, return_cn_decl @ post_ss @ ownership_stat_))
+        AilSblock
+          (return_cn_binding @ post_bs, return_cn_decl @ post_ss @ ownership_stats_))
     in
     { pre = ([], []);
       post = ([], [ block ]);
