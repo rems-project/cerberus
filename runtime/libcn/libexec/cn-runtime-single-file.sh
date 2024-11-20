@@ -60,7 +60,7 @@ if cn instrument "${INPUT_FN}" \
     ${NO_CHECK_OWNERSHIP}; then
   [ "${QUIET}" ] || echo "Generating C files from CN-annotated source."
 else
-  echo_and_err "Failed to generate C files from CN-annotatated source."
+  echo_and_err "Failed to generate C files from CN-annotated source."
 fi
 
 # Compile

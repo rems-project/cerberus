@@ -2580,8 +2580,11 @@ let cn_to_ail_resource_internal
       let matching_preds =
         List.filter (fun (pred_sym', _def) -> Sym.equal pname pred_sym') preds
       in
+      Printf.printf "Pred sym: %s\n" (Sym.pp_string pname);
       let pred_sym', pred_def' =
-        match matching_preds with [] -> failwith "Predicate not found" | p :: _ -> p
+        match matching_preds with
+        | [] -> failwith "cn_to_ail_resource_internal: Predicate not found"
+        | p :: _ -> p
       in
       let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
       let ctype =
@@ -3294,11 +3297,12 @@ let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = fu
     (List.concat bs, List.concat ss)
 
 
-let cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
+let rec cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
   match at with
-  | AT.Computational (_, _, _) ->
+  | AT.Computational (_, _, at') ->
     (* TODO: Loop computational args *)
-    ((cond_loc, ([], [])), (loop_loc, ([], [])))
+    (* ((cond_loc, ([], [])), (loop_loc, ([], []))) *)
+    cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at')
   | L lat ->
     let rec modify_decls_for_loop decls modified_stats =
       let rec collect_initialised_syms_and_exprs = function
@@ -3627,7 +3631,9 @@ let cn_to_ail_assume_resource_internal
         List.filter (fun (pred_sym', _def) -> Sym.equal pname pred_sym') preds
       in
       let pred_sym', pred_def' =
-        match matching_preds with [] -> failwith "Predicate not found" | p :: _ -> p
+        match matching_preds with
+        | [] -> failwith "cn_to_ail_assume_resource_internal: Predicate not found"
+        | p :: _ -> p
       in
       let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
       let ctype =
