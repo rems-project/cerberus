@@ -2814,6 +2814,7 @@ let cn_to_ail_resource_internal
         let cn_map_type =
           mk_ctype ~annots:[ CF.Annot.Atypedef (Sym.fresh_pretty "cn_map") ] C.Void
         in
+        Printf.printf "HERE IN MAP CREATE\n";
         let sym_binding =
           create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, cn_map_type)))
         in
@@ -2863,7 +2864,7 @@ let cn_to_ail_resource_internal
                 0 ))
         in
         let ail_block =
-          A.(AilSblock ([], List.map mk_stmt [ start_assign; while_loop ]))
+          A.(AilSblock ([ start_binding ], List.map mk_stmt [ start_assign; while_loop ]))
         in
         ([ sym_binding ], [ sym_decl; ail_block ])
     in
@@ -3329,10 +3330,10 @@ let rec cn_to_ail_loop_inv_aux dts globals preds (cond_loc, loop_loc, at) =
     let subst_loop =
       ESE.loop_subst (ESE.sym_subst (sym, bt, cn_sym)) (cond_loc, loop_loc, at')
     in
-    let (_, (_, cond_ss)), (_, (loop_bs, loop_ss)) =
+    let (_, (cond_bs, cond_ss)), (_, (loop_bs, loop_ss)) =
       cn_to_ail_loop_inv_aux dts globals preds subst_loop
     in
-    ( (cond_loc, ([], assign :: cond_ss)),
+    ( (cond_loc, (cond_bs, assign :: cond_ss)),
       (loop_loc, (binding :: loop_bs, decl :: loop_ss)) )
   | L lat ->
     let rec modify_decls_for_loop decls modified_stats =
@@ -3364,15 +3365,18 @@ let rec cn_to_ail_loop_inv_aux dts globals preds (cond_loc, loop_loc, at) =
              (decls @ [ none_decl ])
              (modified_stats @ assign_stats)
              ss
+         (* | A.(AilSblock (bs, block_ss)) ->
+            let decls', modified_stats' = modify_decls_for_loop decls [] (List.map rm_stmt block_ss) in 
+            modify_decls_for_loop (decls' @ decls) (modified_stats @ [A.(AilSblock (bs, (List.map mk_stmt modified_stats')))]) ss *)
          | _ -> modify_decls_for_loop decls (modified_stats @ [ s ]) ss)
     in
     let bs, ss = cn_to_ail_lat_internal_loop dts globals preds lat in
     let decls, modified_stats = modify_decls_for_loop [] [] ss in
-    ((cond_loc, ([], modified_stats)), (loop_loc, (bs, decls)))
+    ((cond_loc, (bs, modified_stats)), (loop_loc, (bs, decls)))
 
 
 let cn_to_ail_loop_inv dts globals preds ((cond_loc, loop_loc, _) as loop) =
-  let (_, (_, cond_ss)), (_, loop_bs_and_ss) =
+  let (_, (cond_bs, cond_ss)), (_, loop_bs_and_ss) =
     cn_to_ail_loop_inv_aux dts globals preds loop
   in
   let cn_stack_depth_incr_call =
@@ -3396,7 +3400,7 @@ let cn_to_ail_loop_inv dts globals preds ((cond_loc, loop_loc, _) as loop) =
   in
   let ail_gcc_stat_as_expr = A.(AilEgcc_statement ([], List.map mk_stmt stats)) in
   let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
-  ((cond_loc, ([], [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss))
+  ((cond_loc, (cond_bs, [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss))
 
 
 let prepend_to_precondition ail_executable_spec (b1, s1) =
