@@ -163,20 +163,24 @@ void ghost_stack_depth_decr(void) {
     cn_stack_depth--;
     // update_error_message_info(0);
     // print_error_msg_info();
-    // leak checking
-    hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
-    // cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
-    while (ht_next(&it)) {
-        uintptr_t *key = (uintptr_t *) it.key;
-        int *depth = it.value;
-        if (*depth > cn_stack_depth) {
-          print_error_msg_info(error_msg_info);
-          cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR"\n", *key);
-          cn_failure(CN_FAILURE_OWNERSHIP_LEAK);
-            // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
-        }
-    }
+    
     // cn_printf(CN_LOGGING_INFO, "\n");
+}
+
+void cn_postcondition_leak_check(void) {
+  // leak checking
+  hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
+  // cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
+  while (ht_next(&it)) {
+      uintptr_t *key = (uintptr_t *) it.key;
+      int *depth = it.value;
+      if (*depth > cn_stack_depth) {
+        print_error_msg_info(error_msg_info);
+        cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR"\n", *key);
+        cn_failure(CN_FAILURE_OWNERSHIP_LEAK);
+          // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
+      }
+  }
 }
 
 int ownership_ghost_state_get(signed long *address_key) {

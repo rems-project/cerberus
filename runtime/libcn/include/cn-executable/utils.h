@@ -127,6 +127,7 @@ void initialise_ghost_stack_depth(void);
 signed long get_cn_stack_depth(void);
 void ghost_stack_depth_incr(void);
 void ghost_stack_depth_decr(void);
+void cn_postcondition_leak_check(void);
 
 
 /* malloc, free */
