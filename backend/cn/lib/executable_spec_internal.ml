@@ -145,8 +145,21 @@ let generate_c_pres_and_posts_internal
       (fun (loc, e_opt, strs) -> (loc, e_opt, [ String.concat "\n" strs ]))
       return_ownership_stmts
   in
+  let ail_loop_invariants = ail_executable_spec.loops in
+  let ail_cond_stats, ail_loop_decls = List.split ail_loop_invariants in
+  let ail_cond_injs =
+    List.map
+      (fun (loc, bs_and_ss) ->
+        (get_start_loc loc, generate_ail_stat_strs bs_and_ss @ [ ", " ]))
+      ail_cond_stats
+  in
+  let ail_loop_decl_injs =
+    List.map
+      (fun (loc, bs_and_ss) -> (get_start_loc loc, generate_ail_stat_strs bs_and_ss))
+      ail_loop_decls
+  in
   ( [ (instrumentation.fn, (pre_str, post_str)) ],
-    in_stmt @ block_ownership_stmts,
+    in_stmt @ block_ownership_stmts @ ail_cond_injs @ ail_loop_decl_injs,
     return_ownership_stmts )
 
 

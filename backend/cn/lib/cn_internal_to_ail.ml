@@ -2605,6 +2605,7 @@ let cn_to_ail_resource_internal
       let matching_preds =
         List.filter (fun (pred_sym', _def) -> Sym.equal pname pred_sym') preds
       in
+      Printf.printf "Pred sym: %s\n" (Sym.pp_string pname);
       let pred_sym', pred_def' =
         match matching_preds with
         | [] ->
@@ -3285,7 +3286,7 @@ let cn_to_ail_statements dts globals (loc, cn_progs) =
 
 let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = function
   | LAT.Define ((name, it), _info, lat) ->
-    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let binding = create_binding name ctype in
     let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar name) in
@@ -3315,11 +3316,12 @@ let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = fu
     (List.concat bs, List.concat ss)
 
 
-let cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
+let rec cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
   match at with
-  | AT.Computational (_, _, _) ->
+  | AT.Computational (_, _, at') ->
     (* TODO: Loop computational args *)
-    ((cond_loc, ([], [])), (loop_loc, ([], [])))
+    (* ((cond_loc, ([], [])), (loop_loc, ([], []))) *)
+    cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at')
   | L lat ->
     let rec modify_decls_for_loop decls modified_stats =
       let rec collect_initialised_syms_and_exprs = function
