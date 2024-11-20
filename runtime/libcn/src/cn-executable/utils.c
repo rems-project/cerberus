@@ -207,9 +207,14 @@ void ghost_stack_depth_incr(void) {
 #define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
 
 void ghost_stack_depth_decr(void) {
-  cn_stack_depth--;
-  // update_error_message_info(0);
-  // print_error_msg_info();
+    cn_stack_depth--;
+    // update_error_message_info(0);
+    // print_error_msg_info();
+    
+    // cn_printf(CN_LOGGING_INFO, "\n");
+}
+
+void cn_postcondition_leak_check(void) {
   // leak checking
   hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
   // cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
@@ -225,12 +230,11 @@ void ghost_stack_depth_decr(void) {
       // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
     }
   }
-  // cn_printf(CN_LOGGING_INFO, "\n");
 }
 
-int ownership_ghost_state_get(signed long* address_key) {
-  int* curr_depth_maybe = (int*)ht_get(cn_ownership_global_ghost_state, address_key);
-  return curr_depth_maybe ? *curr_depth_maybe : -1;
+int ownership_ghost_state_get(signed long *address_key) {
+    int *curr_depth_maybe = (int *) ht_get(cn_ownership_global_ghost_state, address_key);
+    return curr_depth_maybe ? *curr_depth_maybe : -1;
 }
 
 void ownership_ghost_state_set(signed long* address_key, int stack_depth_val) {
