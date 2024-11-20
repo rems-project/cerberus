@@ -3,6 +3,17 @@ open Executable_spec_utils
 module A = CF.AilSyntax
 module C = CF.Ctype
 
+type ownership_mode =
+  | Pre
+  | Post
+  | Loop
+
+let get_enum_str_from_ownership_mode = function
+  | Pre -> "GET"
+  | Post -> "PUT"
+  | Loop -> "LOOP"
+
+
 let cn_ghost_state_sym = Sym.fresh_pretty "cn_ownership_global_ghost_state"
 
 let cn_ghost_state_struct_type =
@@ -18,6 +29,8 @@ let cn_stack_depth_incr_sym = Sym.fresh_pretty "ghost_stack_depth_incr"
 let cn_stack_depth_decr_sym = Sym.fresh_pretty "ghost_stack_depth_decr"
 
 let cn_postcondition_leak_check_sym = Sym.fresh_pretty "cn_postcondition_leak_check"
+
+let cn_loop_leak_check_and_decr_sym = Sym.fresh_pretty "cn_loop_leak_check_and_decr"
 
 let c_add_ownership_fn_sym = Sym.fresh_pretty "c_add_to_ghost_state"
 
