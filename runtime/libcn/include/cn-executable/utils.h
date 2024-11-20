@@ -128,6 +128,7 @@ signed long get_cn_stack_depth(void);
 void ghost_stack_depth_incr(void);
 void ghost_stack_depth_decr(void);
 void cn_postcondition_leak_check(void);
+void cn_loop_leak_check_and_decr(void);
 
 
 /* malloc, free */
@@ -523,7 +524,8 @@ CN_GEN_MAP_GET(cn_map)
 
 enum OWNERSHIP {
     GET,
-    PUT
+    PUT,
+    LOOP
 };
 
 int ownership_ghost_state_get(signed long *address_key);
@@ -531,7 +533,7 @@ void ownership_ghost_state_set(signed long* address_key, int stack_depth_val);
 void ownership_ghost_state_remove(signed long* address_key);
 
 /* CN ownership checking */
-void cn_get_ownership(uintptr_t generic_c_ptr, size_t size);
+void cn_get_ownership(uintptr_t generic_c_ptr, size_t size, char *check_msg);
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size);
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun);
 void cn_get_or_put_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size);

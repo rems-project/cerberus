@@ -2564,12 +2564,12 @@ let cn_to_ail_struct ((sym, (loc, attrs, tag_def)) : A.sigma_tag_definition)
 
 (* is_pre used for ownership checking, to see if ownership needs to be taken or put back *)
 let cn_to_ail_resource_internal
-  ?(is_pre = true)
   ?(is_toplevel = true)
   sym
   dts
   globals
   (preds : (Sym.t * RP.definition) list)
+  ownership_mode
   _loc
   =
   let calculate_return_type = function
@@ -2602,7 +2602,7 @@ let cn_to_ail_resource_internal
   | ResourceTypes.P p ->
     let ctype, bt = calculate_return_type p.name in
     let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
-    let enum_str = if is_pre then "GET" else "PUT" in
+    let enum_str = OE.get_enum_str_from_ownership_mode ownership_mode in
     let enum_str = if not is_toplevel then "owned_enum" else enum_str in
     let enum_sym = Sym.fresh_pretty enum_str in
     let rhs, bs, ss, _owned_ctype =
@@ -2709,7 +2709,7 @@ let cn_to_ail_resource_internal
     let cn_pointer_return_type = bt_to_ail_ctype BT.(Loc ()) in
     let ptr_add_binding = create_binding ptr_add_sym cn_pointer_return_type in
     let ptr_add_stat = A.(AilSdeclaration [ (ptr_add_sym, Some e4) ]) in
-    let enum_str = if is_pre then "GET" else "PUT" in
+    let enum_str = OE.get_enum_str_from_ownership_mode ownership_mode in
     let enum_str = if not is_toplevel then "owned_enum" else enum_str in
     let enum_sym = Sym.fresh_pretty enum_str in
     let rhs, bs, ss, _owned_ctype =
@@ -3014,7 +3014,7 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
     let b1, s1 =
-      cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret
+      cn_to_ail_resource_internal ~is_toplevel name dts globals preds OE.Pre loc ret
     in
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
@@ -3155,9 +3155,7 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
-    let b1, s1 =
-      cn_to_ail_resource_internal ~is_pre:false new_name dts globals preds loc re
-    in
+    let b1, s1 = cn_to_ail_resource_internal new_name dts globals preds OE.Post loc re in
     let new_lrt = LogicalReturnTypes.subst (ESE.sym_subst (name, bt, new_name)) t in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
     (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
@@ -3277,7 +3275,7 @@ let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = fu
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
     let b1, s1 =
-      cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret
+      cn_to_ail_resource_internal ~is_toplevel name dts globals preds OE.Loop loc ret
     in
     let b2, s2 = cn_to_ail_lat_internal_loop ~is_toplevel dts globals preds lat in
     (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
@@ -3297,12 +3295,13 @@ let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = fu
     (List.concat bs, List.concat ss)
 
 
-let rec cn_to_ail_loop_aux dts globals preds (cond_loc, loop_loc, at) =
+let rec cn_to_ail_loop_inv_aux dts globals preds (cond_loc, loop_loc, at) =
   match at with
   | AT.Computational ((sym, bt), _, at') ->
-    let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
-    let cn_ctype = bt_to_ail_ctype bt in
+    let cn_sym = generate_sym_with_suffix ~suffix:"_addr_cn" sym in
+    let cn_ctype = bt_to_ail_ctype (BT.Loc ()) in
     let binding = create_binding cn_sym cn_ctype in
+    (* TODO: Check this should always translate to the address of the given sym in the loop invariant case *)
     let rhs = wrap_with_convert_to A.(AilEunary (Address, mk_expr (AilEident sym))) bt in
     let decl = A.(AilSdeclaration [ (cn_sym, None) ]) in
     let assign =
@@ -3312,7 +3311,7 @@ let rec cn_to_ail_loop_aux dts globals preds (cond_loc, loop_loc, at) =
       ESE.loop_subst (ESE.sym_subst (sym, bt, cn_sym)) (cond_loc, loop_loc, at')
     in
     let (_, (_, cond_ss)), (_, (loop_bs, loop_ss)) =
-      cn_to_ail_loop_aux dts globals preds subst_loop
+      cn_to_ail_loop_inv_aux dts globals preds subst_loop
     in
     ( (cond_loc, ([], assign :: cond_ss)),
       (loop_loc, (binding :: loop_bs, decl :: loop_ss)) )
@@ -3353,18 +3352,30 @@ let rec cn_to_ail_loop_aux dts globals preds (cond_loc, loop_loc, at) =
     ((cond_loc, ([], modified_stats)), (loop_loc, (bs, decls)))
 
 
-let cn_to_ail_loop dts globals preds ((cond_loc, loop_loc, _) as loop) =
+let cn_to_ail_loop_inv dts globals preds ((cond_loc, loop_loc, _) as loop) =
   let (_, (_, cond_ss)), (_, loop_bs_and_ss) =
-    cn_to_ail_loop_aux dts globals preds loop
+    cn_to_ail_loop_inv_aux dts globals preds loop
+  in
+  let cn_stack_depth_incr_call =
+    A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_incr_sym), [])))
+  in
+  let cn_loop_leak_check_and_decr_call =
+    A.AilSexpr
+      (mk_expr (AilEcall (mk_expr (AilEident OE.cn_loop_leak_check_and_decr_sym), [])))
+  in
+  let cn_stack_depth_decr_call =
+    A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_decr_sym), [])))
   in
   let dummy_expr_as_stat =
     A.(
       AilSexpr
         (mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))
   in
-  let ail_gcc_stat_as_expr =
-    A.(AilEgcc_statement ([], List.map mk_stmt (cond_ss @ [ dummy_expr_as_stat ])))
+  let stats =
+    (cn_stack_depth_incr_call :: cond_ss)
+    @ [ cn_loop_leak_check_and_decr_call; cn_stack_depth_decr_call; dummy_expr_as_stat ]
   in
+  let ail_gcc_stat_as_expr = A.(AilEgcc_statement ([], List.map mk_stmt stats)) in
   let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
   ((cond_loc, ([], [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss))
 
@@ -3406,9 +3417,7 @@ let rec cn_to_ail_lat_internal_2
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
-    let b1, s1 =
-      cn_to_ail_resource_internal ~is_pre:true new_name dts globals preds loc ret
-    in
+    let b1, s1 = cn_to_ail_resource_internal new_name dts globals preds OE.Pre loc ret in
     let new_lat = ESE.fn_largs_and_body_subst (ESE.sym_subst (name, bt, new_name)) lat in
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
@@ -3481,7 +3490,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_statements =
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
-    let ail_loop_invariants = List.map (cn_to_ail_loop dts globals preds) loop in
+    let ail_loop_invariants = List.map (cn_to_ail_loop_inv dts globals preds) loop in
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stats_ =
       if without_ownership_checking then
