@@ -159,7 +159,6 @@ let generate_c_pres_and_posts_internal
       let split_x = String.split_on_char ';' x in
       let without_whitespace_x = remove_last split_x in
       let res = String.concat ";" without_whitespace_x in
-      Printf.printf "res: %s\n" res;
       [ res ]
     | x :: xs -> x :: remove_last_semicolon xs
   in
