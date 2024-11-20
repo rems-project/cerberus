@@ -147,10 +147,27 @@ let generate_c_pres_and_posts_internal
   in
   let ail_loop_invariants = ail_executable_spec.loops in
   let ail_cond_stats, ail_loop_decls = List.split ail_loop_invariants in
+  (* A bit of a hack *)
+  let rec remove_last = function
+    | [] -> []
+    | [ _ ] -> []
+    | x :: xs -> x :: remove_last xs
+  in
+  let rec remove_last_semicolon = function
+    | [] -> []
+    | [ x ] ->
+      let split_x = String.split_on_char ';' x in
+      let without_whitespace_x = remove_last split_x in
+      let res = String.concat ";" without_whitespace_x in
+      Printf.printf "res: %s\n" res;
+      [ res ]
+    | x :: xs -> x :: remove_last_semicolon xs
+  in
   let ail_cond_injs =
     List.map
       (fun (loc, bs_and_ss) ->
-        (get_start_loc loc, generate_ail_stat_strs bs_and_ss @ [ ", " ]))
+        ( get_start_loc loc,
+          remove_last_semicolon (generate_ail_stat_strs bs_and_ss) @ [ ", " ] ))
       ail_cond_stats
   in
   let ail_loop_decl_injs =

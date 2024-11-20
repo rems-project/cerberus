@@ -3337,7 +3337,17 @@ let rec cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
     in
     let bs, ss = cn_to_ail_lat_internal_loop dts globals preds lat in
     let decls, modified_stats = modify_decls_for_loop [] [] ss in
-    ((cond_loc, ([], modified_stats)), (loop_loc, (bs, decls)))
+    let dummy_expr_as_stat =
+      A.(
+        AilSexpr
+          (mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))
+    in
+    let ail_gcc_stat_as_expr =
+      A.(
+        AilEgcc_statement (bs, List.map mk_stmt (modified_stats @ [ dummy_expr_as_stat ])))
+    in
+    let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
+    ((cond_loc, ([], [ ail_stat_as_expr_stat ])), (loop_loc, (bs, decls)))
 
 
 let prepend_to_precondition ail_executable_spec (b1, s1) =
