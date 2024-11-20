@@ -20,6 +20,8 @@ val sym_subst
   :  Sym.t * BaseTypes.t * Sym.t ->
   [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t
 
+val loop_subst : [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> loop -> loop
+
 val fn_args_and_body_subst
   :  [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t ->
   fn_args_and_body ->

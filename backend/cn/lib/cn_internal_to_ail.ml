@@ -3316,12 +3316,25 @@ let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = fu
     (List.concat bs, List.concat ss)
 
 
-let rec cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
+let rec cn_to_ail_loop_aux dts globals preds (cond_loc, loop_loc, at) =
   match at with
-  | AT.Computational (_, _, at') ->
-    (* TODO: Loop computational args *)
-    (* ((cond_loc, ([], [])), (loop_loc, ([], []))) *)
-    cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at')
+  | AT.Computational ((sym, bt), _, at') ->
+    let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
+    let cn_ctype = bt_to_ail_ctype bt in
+    let binding = create_binding cn_sym cn_ctype in
+    let rhs = wrap_with_convert_to A.(AilEunary (Address, mk_expr (AilEident sym))) bt in
+    let decl = A.(AilSdeclaration [ (cn_sym, None) ]) in
+    let assign =
+      A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_sym), mk_expr rhs))))
+    in
+    let subst_loop =
+      ESE.loop_subst (ESE.sym_subst (sym, bt, cn_sym)) (cond_loc, loop_loc, at')
+    in
+    let (_, (_, cond_ss)), (_, (loop_bs, loop_ss)) =
+      cn_to_ail_loop_aux dts globals preds subst_loop
+    in
+    ( (cond_loc, ([], assign :: cond_ss)),
+      (loop_loc, (binding :: loop_bs, decl :: loop_ss)) )
   | L lat ->
     let rec modify_decls_for_loop decls modified_stats =
       let rec collect_initialised_syms_and_exprs = function
@@ -3356,17 +3369,23 @@ let rec cn_to_ail_loop dts globals preds (cond_loc, loop_loc, at) =
     in
     let bs, ss = cn_to_ail_lat_internal_loop dts globals preds lat in
     let decls, modified_stats = modify_decls_for_loop [] [] ss in
-    let dummy_expr_as_stat =
-      A.(
-        AilSexpr
-          (mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))
-    in
-    let ail_gcc_stat_as_expr =
-      A.(
-        AilEgcc_statement (bs, List.map mk_stmt (modified_stats @ [ dummy_expr_as_stat ])))
-    in
-    let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
-    ((cond_loc, ([], [ ail_stat_as_expr_stat ])), (loop_loc, (bs, decls)))
+    ((cond_loc, ([], modified_stats)), (loop_loc, (bs, decls)))
+
+
+let cn_to_ail_loop dts globals preds ((cond_loc, loop_loc, _) as loop) =
+  let (_, (_, cond_ss)), (_, loop_bs_and_ss) =
+    cn_to_ail_loop_aux dts globals preds loop
+  in
+  let dummy_expr_as_stat =
+    A.(
+      AilSexpr
+        (mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))
+  in
+  let ail_gcc_stat_as_expr =
+    A.(AilEgcc_statement ([], List.map mk_stmt (cond_ss @ [ dummy_expr_as_stat ])))
+  in
+  let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
+  ((cond_loc, ([], [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss))
 
 
 let prepend_to_precondition ail_executable_spec (b1, s1) =
