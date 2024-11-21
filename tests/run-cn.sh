@@ -13,6 +13,8 @@ function echo_and_err() {
     exit 1
 }
 
+printf "\033[31mDEPRECATED\033[0m please use diff-prog.py (see ci-cn.yml)\n" "$result"
+
 LEMMATA=0
 
 while getopts "hl" flag; do

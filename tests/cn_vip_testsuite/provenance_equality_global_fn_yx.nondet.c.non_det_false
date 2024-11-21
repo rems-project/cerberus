@@ -1,0 +1,10 @@
+return code: 1
+[1/2]: f -- fail
+[2/2]: main -- pass
+tests/cn_vip_testsuite/provenance_equality_global_fn_yx.nondet.c:11:17: error: Unprovable constraint
+  /*CN_VIP*//*@ assert (b == 0u8); @*/ // non-det in PNVI-ae-udi; true in VIP
+                ^~~~~~~~~~~~~~~~~~ 
+Constraint from tests/cn_vip_testsuite/provenance_equality_global_fn_yx.nondet.c:11:17:
+  /*CN_VIP*//*@ assert (b == 0u8); @*/ // non-det in PNVI-ae-udi; true in VIP
+                ^~~~~~~~~~~~~~~~~~ 
+State file: file:///tmp/state__provenance_equality_global_fn_yx.nondet.c__f.html

@@ -1,0 +1,8 @@
+return code: 1
+tests/cn/failing_precond.error.c:2:18: error: Type error
+/*@ requires x < 2147483647; @*/
+                 ^
+Expression '2147483647' has type 'integer'.
+I expected it to have type 'i32' because of tests/cn/failing_precond.error.c:2:14:
+/*@ requires x < 2147483647; @*/
+             ^

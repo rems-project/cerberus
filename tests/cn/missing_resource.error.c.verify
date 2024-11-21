@@ -1,0 +1,8 @@
+return code: 1
+[1/1]: f -- fail
+tests/cn/missing_resource.error.c:11:3: error: Missing resource for returning
+  return x;
+  ^~~~~~~~~ 
+Resource needed: Owned<signed int>(p)
+      tests/cn/missing_resource.error.c:9:18: (arg Resource_From_Nothing)
+State file: file:///tmp/state__missing_resource.error.c__f.html

@@ -1,0 +1,8 @@
+return code: 1
+tests/cn/bad_constructor_user.error.c:9:19: error: Type error
+    Cons { head : 0, tail : Nil {} }
+                  ^
+Expression '0' has type 'integer'.
+I expected it to have type 'i32' because of tests/cn/bad_constructor_user.error.c:9:5:
+    Cons { head : 0, tail : Nil {} }
+    ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~ 

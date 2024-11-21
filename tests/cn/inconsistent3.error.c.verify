@@ -1,0 +1,5 @@
+return code: 1
+tests/cn/inconsistent3.error.c:1:1: error: return type makes inconsistent assumptions
+void f (int *p)
+~~~~~^~~~~~~~~~ 
+State file: file:///tmp/state__inconsistent3.error.c.html

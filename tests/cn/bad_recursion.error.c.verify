@@ -1,0 +1,6 @@
+return code: 1
+tests/cn/bad_recursion.error.c:3:1: error: Illegal datatype definition.
+Constructor argument 'b' is given type 'map<u8, datatype bad>', which indirectly refers to 'datatype bad'.
+Indirect recursion via map, set, record, or tuple types is not permitted.
+datatype bad { Bad { map<u8, datatype bad> b } }
+^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 

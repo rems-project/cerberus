@@ -71,7 +71,7 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        USE_OPAM='' cd backend/cn && dune build @fmt
+        cd backend/cn && dune build @fmt
 
     - name: Checkout cn-tutorial
       uses: actions/checkout@v4
@@ -79,20 +79,20 @@ jobs:
         repository: rems-project/cn-tutorial
         path: cn-tutorial
 
-    - name: Run CN CI tests
+    - name: Run CN tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-cn.sh
+        ./tests/diff-prog.py cn tests/cn/verify.json 2> diff.patch || (cat diff.patch; exit 1)
 
-    - name: Run CN Tutorial CI tests
+    - name: Run CN Tutorial tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
+        tests/run-cn-tutorial-ci.sh cn-tutorial
 
-    - name: Run CN VIP CI tests
+    - name: Run CN VIP tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-cn-vip.sh
+        tests/run-cn-vip.sh

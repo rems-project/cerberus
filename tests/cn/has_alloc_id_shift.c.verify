@@ -1,0 +1,4 @@
+return code: 0
+[1/3]: array_shift -- pass
+[2/3]: member_shift -- pass
+[3/3]: main -- pass

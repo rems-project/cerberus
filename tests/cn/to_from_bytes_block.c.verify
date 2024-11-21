@@ -1,0 +1,10 @@
+return code: 0
+tests/cn/to_from_bytes_block.c:9:9: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
+    /*@ from_bytes Block(p); @*/
+        ^~~~~~~~~~ 
+tests/cn/to_from_bytes_block.c:20:9: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
+    /*@ to_bytes Block(p); @*/
+        ^~~~~~~~ 
+[1/3]: from_bytes -- pass
+[2/3]: to_bytes -- pass
+[3/3]: main -- pass

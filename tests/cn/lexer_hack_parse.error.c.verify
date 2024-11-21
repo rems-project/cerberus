@@ -1,0 +1,5 @@
+return code: 2
+tests/cn/lexer_hack_parse.error.c:14:13: error: unexpected token after '>' and before 'Cons'
+parsing "match_case": seen "pattern EQ GT", expecting "LBRACE expr RBRACE"
+            Cons {}
+            ^~~~ 

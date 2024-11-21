@@ -90,7 +90,7 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh
+        cd tests; ./run-ci-benchmarks.sh
         mv benchmark-data.json ${{ env.PR_DATA }}
         cd ..
 
@@ -117,7 +117,7 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh; mv benchmark-data.json ${{ env.BASE_DATA }}
+        cd tests; ./run-ci-benchmarks.sh; mv benchmark-data.json ${{ env.BASE_DATA }}
         cd ..
 
     - name: Compare results

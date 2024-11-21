@@ -80,5 +80,5 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
+        cd tests; ./run-cn-test-gen.sh
 
