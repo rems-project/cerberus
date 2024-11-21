@@ -1,6 +1,7 @@
-# Build a minimal release image
+# Build a minimal cerberus release image
 FROM ubuntu:22.04
 
+# Install system packages
 RUN apt-get update
 RUN apt-get upgrade -y
 RUN apt-get install -y opam libgmp-dev libmpfr-dev
