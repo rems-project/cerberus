@@ -8,7 +8,7 @@ type ownership_mode =
   | Post
   | Loop
 
-let get_enum_str_from_ownership_mode = function
+let ownership_mode_to_enum_str = function
   | Pre -> "GET"
   | Post -> "PUT"
   | Loop -> "LOOP"

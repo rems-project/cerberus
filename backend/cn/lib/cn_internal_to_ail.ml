@@ -2637,7 +2637,7 @@ let cn_to_ail_resource_internal
   | Request.P p ->
     let ctype, bt = calculate_return_type p.name in
     let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
-    let enum_str = OE.get_enum_str_from_ownership_mode ownership_mode in
+    let enum_str = OE.ownership_mode_to_enum_str ownership_mode in
     let enum_str = if not is_toplevel then "owned_enum" else enum_str in
     let enum_sym = Sym.fresh_pretty enum_str in
     let rhs, bs, ss, _owned_ctype =
@@ -2734,7 +2734,7 @@ let cn_to_ail_resource_internal
     let cn_pointer_return_type = bt_to_ail_ctype BT.(Loc ()) in
     let ptr_add_binding = create_binding ptr_add_sym cn_pointer_return_type in
     let ptr_add_stat = A.(AilSdeclaration [ (ptr_add_sym, Some e4) ]) in
-    let enum_str = OE.get_enum_str_from_ownership_mode ownership_mode in
+    let enum_str = OE.ownership_mode_to_enum_str ownership_mode in
     let enum_str = if not is_toplevel then "owned_enum" else enum_str in
     let enum_sym = Sym.fresh_pretty enum_str in
     let rhs, bs, ss, _owned_ctype =
@@ -2814,7 +2814,6 @@ let cn_to_ail_resource_internal
         let cn_map_type =
           mk_ctype ~annots:[ CF.Annot.Atypedef (Sym.fresh_pretty "cn_map") ] C.Void
         in
-        Printf.printf "HERE IN MAP CREATE\n";
         let sym_binding =
           create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, cn_map_type)))
         in
