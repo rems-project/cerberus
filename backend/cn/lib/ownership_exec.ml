@@ -8,11 +8,7 @@ type ownership_mode =
   | Post
   | Loop
 
-let ownership_mode_to_enum_str = function
-  | Pre -> "GET"
-  | Post -> "PUT"
-  | Loop -> "LOOP"
-
+let ownership_mode_to_enum_str = function Pre -> "GET" | Post -> "PUT" | Loop -> "LOOP"
 
 let cn_ghost_state_sym = Sym.fresh_pretty "cn_ownership_global_ghost_state"
 

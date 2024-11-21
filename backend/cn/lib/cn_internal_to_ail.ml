@@ -2781,7 +2781,7 @@ let cn_to_ail_resource_internal
                 0 ))
         in
         let ail_block =
-          A.(AilSblock ([start_binding], List.map mk_stmt [ start_assign; while_loop ]))
+          A.(AilSblock ([ start_binding ], List.map mk_stmt [ start_assign; while_loop ]))
         in
         ([], [ ail_block ])
       | _ ->
@@ -3876,7 +3876,7 @@ let cn_to_ail_assume_resource_internal
                 0 ))
         in
         let ail_block =
-          A.(AilSblock ([start_binding], List.map mk_stmt [ start_assign; while_loop ]))
+          A.(AilSblock ([ start_binding ], List.map mk_stmt [ start_assign; while_loop ]))
         in
         ([], [ ail_block ])
       | _ ->
@@ -3933,7 +3933,7 @@ let cn_to_ail_assume_resource_internal
                 0 ))
         in
         let ail_block =
-          A.(AilSblock ([start_binding], List.map mk_stmt [ start_assign; while_loop ]))
+          A.(AilSblock ([ start_binding ], List.map mk_stmt [ start_assign; while_loop ]))
         in
         ([ sym_binding ], [ sym_decl; ail_block ])
     in
