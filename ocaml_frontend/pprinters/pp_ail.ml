@@ -622,7 +622,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEprint_type e ->
               pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
         | AilEgcc_statement (bs, ss) ->
-            P.parens (pp_statement_aux mk_pp_annot ~bs:[] (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
+            P.parens (pp_statement_aux ~executable_spec mk_pp_annot ~bs:[] (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
 
       )) in
   pp None a_expr
