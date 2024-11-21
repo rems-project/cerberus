@@ -627,7 +627,7 @@ let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt = None) (bs, 
         [ A.(
             AilSif
               ( wrap_with_convert_from_cn_bool if_cond_expr,
-                mk_stmt (AilSblock ([], List.map mk_stmt (ss @ [ b_assign; incr_stat ]))),
+                mk_stmt (AilSblock ([], List.map mk_stmt (ss @ [ b_assign ]))),
                 mk_stmt (AilSblock ([], [ mk_stmt AilSskip ])) ));
           incr_stat
         ]
@@ -2781,7 +2781,7 @@ let cn_to_ail_resource_internal
                 0 ))
         in
         let ail_block =
-          A.(AilSblock ([], List.map mk_stmt [ start_assign; while_loop ]))
+          A.(AilSblock ([start_binding], List.map mk_stmt [ start_assign; while_loop ]))
         in
         ([], [ ail_block ])
       | _ ->
@@ -2842,7 +2842,7 @@ let cn_to_ail_resource_internal
         in
         ([ sym_binding ], [ sym_decl; ail_block ])
     in
-    (b1 @ b2 @ b3 @ [ start_binding ] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
+    (b1 @ b2 @ b3 @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
 
 
 let cn_to_ail_logical_constraint_internal
@@ -3876,7 +3876,7 @@ let cn_to_ail_assume_resource_internal
                 0 ))
         in
         let ail_block =
-          A.(AilSblock ([], List.map mk_stmt [ start_assign; while_loop ]))
+          A.(AilSblock ([start_binding], List.map mk_stmt [ start_assign; while_loop ]))
         in
         ([], [ ail_block ])
       | _ ->
@@ -3933,11 +3933,11 @@ let cn_to_ail_assume_resource_internal
                 0 ))
         in
         let ail_block =
-          A.(AilSblock ([], List.map mk_stmt [ start_assign; while_loop ]))
+          A.(AilSblock ([start_binding], List.map mk_stmt [ start_assign; while_loop ]))
         in
         ([ sym_binding ], [ sym_decl; ail_block ])
     in
-    (b1 @ b2 @ b3 @ [ start_binding ] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
+    (b1 @ b2 @ b3 @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
 
 
 let rec cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds = function
