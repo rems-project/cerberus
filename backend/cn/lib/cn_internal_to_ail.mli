@@ -56,9 +56,8 @@ type ail_executable_spec =
     post : ail_bindings_and_statements;
     in_stmt : (Locations.t * ail_bindings_and_statements) list;
     loops :
-      ((Locations.t * ail_bindings_and_statements)
-      * (Locations.t * ail_bindings_and_statements))
-        list
+      (Locations.t * ail_bindings_and_statements) list
+      * (Locations.t * ail_bindings_and_statements) list
   }
 
 val generate_get_or_put_ownership_function
@@ -170,7 +169,7 @@ val cn_to_ail_predicates_internal
     list
   * A.sigma_tag_definition option list
 
-val cn_to_ail_pre_post_internal
+val cn_to_ail_executable_spec
   :  without_ownership_checking:bool ->
   A.sigma_cn_datatype list ->
   (Sym.t * ResourcePredicates.definition) list ->
