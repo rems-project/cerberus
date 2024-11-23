@@ -169,18 +169,6 @@ let compile_tests
   ^^ break 1
   ^^ braces (nest 2 (hardline ^^ sequence ^^ hardline ^^ (string "return 0;")) ^^ hardline)
 
-let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.document)
-: unit
-=
-  let oc =
-    Stdlib.open_out_gen
-      [ Open_wronly; Open_creat; Open_trunc; Open_text ]
-      perm
-      (Filename.concat output_dir filename)
-  in
-  output_string oc (Pp.plain ~width:80 doc);
-  close_out oc
-
 let generate
 ~(output_dir : string)
 ~(filename : string)
@@ -203,5 +191,7 @@ let generate
     compile_tests filename_base sigma insts num_samples
   in
   let test_file = filename_base ^ "_test.c" in
-  save output_dir test_file tests_doc;
+  SpecTests.save output_dir test_file tests_doc;
+  let script_doc = SpecTests.compile_script ~output_dir ~test_file in
+  SpecTests.save ~perm:0o777 output_dir "run_tests.sh" script_doc;
   ()

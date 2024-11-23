@@ -8,3 +8,17 @@ val generate
   CF.GenTypes.genTypeCategory A.sigma ->
   unit Mucore.file ->
   unit
+
+val save 
+  : 
+  ?perm:int ->
+  string ->
+  string -> 
+  Pp.document ->
+  unit
+
+val compile_script
+  : 
+  output_dir:string ->
+  test_file:string ->
+  Pp.document
