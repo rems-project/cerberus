@@ -1,8 +1,12 @@
 # CN
 
 CN is tool for verifying C code is free of undefined behaviour and meets
-user-written specifications. It can also convert those specifications into
-C assertions to be checked at runtime on concrete test cases.
+user-written specifications of its ownership and functional correctness, and for translating those specifications into
+C assertions that can be checked at runtime on concrete test cases.
+
+## Tutorial
+
+See the [tutorial documentation](https://rems-project.github.io/cn-tutorial/).
 
 ## Installation
 
@@ -56,6 +60,3 @@ for logistics and our [onboarding
 guide](https://github.com/rems-project/cerberus/blob/master/backend/cn/ONBOARDING.md)
 for learning the code base.
 
-## Funding Acknowledgements
-
-TODO (PS?)
