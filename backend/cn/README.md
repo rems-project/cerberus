@@ -1,8 +1,37 @@
 # CN
 
-CN is tool for verifying C code is free of undefined behaviour and meets
+CN is a tool for verifying that C code is free of undefined behaviour and meets
 user-written specifications of its ownership and functional correctness, and for translating those specifications into
 C assertions that can be checked at runtime on concrete test cases.
+
+## Papers
+
+
+<ul>
+
+<li> <a name="fulminate-popl2025"></a> 
+   <a href="http://www.cl.cam.ac.uk/users/pes20/cn-testing-popl2025.pdf">Fulminate: Testing CN Separation-Logic Specifications in C</a>.
+ Rini Banerjee, Kayvan Memarian, Dhruv Makwana, Christopher Pulte, Neel Krishnaswami, and Peter Sewell.
+ In POPL 2025.
+[
+<a href="http://dx.doi.org/10.1145/3704879">doi</a>&nbsp;| 
+<a href="http://www.cl.cam.ac.uk/users/pes20/cn-testing-popl2025.pdf">pdf</a> 
+]
+</li>
+
+
+<li>
+<a name="2023-popl-cn"></a>
+<a href="http://www.cl.cam.ac.uk/users/pes20/cn-draft.pdf">CN: Verifying systems C code with separation-logic refinement types</a>.
+ Christopher Pulte, Dhruv&nbsp;C. Makwana, Thomas Sewell, Kayvan Memarian, Peter Sewell, and Neel Krishnaswami.
+ In POPL 2023.
+[
+<a href="http://dx.doi.org/10.1145/3571194">doi</a>&nbsp;| 
+<a href="https://www.cl.cam.ac.uk/~cp526/popl23.html">project page</a>&nbsp;| 
+<a href="http://www.cl.cam.ac.uk/users/pes20/cn-draft.pdf">pdf</a>
+]
+</li>
+</ul>
 
 ## Tutorial
 
