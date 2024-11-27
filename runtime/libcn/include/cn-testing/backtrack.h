@@ -4,12 +4,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-uint16_t cn_gen_backtrack_depth();
-uint16_t cn_gen_backtrack_max_depth();
-void cn_gen_backtrack_set_max_depth(uint16_t msd);
-void cn_gen_backtrack_increment_depth();
-void cn_gen_backtrack_decrement_depth();
-
 enum cn_gen_backtrack_request {
     CN_GEN_BACKTRACK_NONE,
     CN_GEN_BACKTRACK_ASSERT,

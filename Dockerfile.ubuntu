@@ -1,6 +1,7 @@
-# Build a minimal release image
+# Build a minimal cerberus release image
 FROM ubuntu:22.04
 
+# Install system packages
 RUN apt-get update
 RUN apt-get upgrade -y
 RUN apt-get install -y opam libgmp-dev libmpfr-dev
@@ -11,6 +12,7 @@ RUN opam init --disable-sandboxing
 ADD . /opt/cerberus
 WORKDIR /opt/cerberus
 RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
+RUN opam install z3
 
 RUN eval `opam env` \
   && make install_cn

@@ -1,172 +1,246 @@
-struct int_list {
-  int head;
-  struct int_list* tail;
+struct node {
+  int value;
+  struct node *next;
 };
 
 /*@
-datatype seq {
-  Seq_Nil {},
-  Seq_Cons {i32 head, datatype seq tail}
+datatype list {
+  Nil {},
+  Cons {i32 head, list tail}
 }
 
-predicate (datatype seq) IntList(pointer p) {
+predicate (list) List(pointer p) {
   if (is_null(p)) {
-    return Seq_Nil{};
+    return Nil {};
   } else {
-    take H = Owned<struct int_list>(p);
-    assert (is_null(H.tail) || !addr_eq(H.tail, NULL));
-    take tl = IntList(H.tail);
-    return (Seq_Cons { head: H.head, tail: tl });
+    take node = Owned<struct node>(p);
+    take tl = List(node.next);
+    return (Cons { head: node.value, tail: tl });
   }
-}
-
-function [rec] ({datatype seq fst, datatype seq snd}) cn_split(datatype seq xs)
-{
-  match xs {
-    Seq_Nil {} => {
-      {fst: Seq_Nil{}, snd: Seq_Nil{}}
-    }
-    Seq_Cons {head: h1, tail: Seq_Nil{}} => {
-      {fst: Seq_Nil{}, snd: xs}
-    }
-    Seq_Cons {head: h1, tail: Seq_Cons {head : h2, tail : tl2 }} => {
-      let P = cn_split(tl2);
-      {fst: Seq_Cons { head: h1, tail: P.fst},
-       snd: Seq_Cons { head: h2, tail: P.snd}}
-    }
-  }
-}
-
-function [rec] (datatype seq) cn_merge(datatype seq xs, datatype seq ys) {
-  match xs {
-      Seq_Nil {} => { ys }
-      Seq_Cons {head: x, tail: xs1} => {
-	match ys {
-	  Seq_Nil {} => { xs }
-	  Seq_Cons{ head: y, tail: ys1} => {
-	    let tail = cn_merge(xs1, ys1);
-	    (x < y) ?
-	    (Seq_Cons{ head: x, tail: Seq_Cons {head: y, tail: tail}})
-	    : (Seq_Cons{ head: y, tail: Seq_Cons {head: x, tail: tail}})
-	  }
-	}
-      }
-  }
-}
-
-function [rec] (datatype seq) cn_mergesort(datatype seq xs) {
-  match xs {
-      Seq_Nil{} => { xs }
-      Seq_Cons{head: x, tail: Seq_Nil{}} => { xs }
-      Seq_Cons{head: x, tail: Seq_Cons{head: y, tail: zs}} => {
-	let P = cn_split(xs);
-	let L1 = cn_mergesort(P.fst);
-	let L2 = cn_mergesort(P.snd);
-	cn_merge(L1, L2)
-      }
-    }
 }
 @*/
 
-struct int_list_pair {
-  struct int_list* fst;
-  struct int_list* snd;
-};
-
-struct int_list_pair split(struct int_list *xs)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
-/*@ requires take Xs = IntList(xs); @*/
-/*@ ensures take Ys = IntList(return.fst); @*/
-/*@ ensures take Zs = IntList(return.snd); @*/
-/*@ ensures is_null(return.fst) || !addr_eq(return.fst, NULL); @*/
-/*@ ensures is_null(return.snd) || !addr_eq(return.snd, NULL); @*/
-/*@ ensures {fst: Ys, snd: Zs} == cn_split(Xs); @*/
-{
-  if (xs == 0) {
-    /*@ unfold cn_split(Xs); @*/
-    struct int_list_pair r = {.fst = 0, .snd = 0};
-    return r;
-  } else {
-    struct int_list *cdr = xs -> tail;
-    if (cdr == 0) {
-      /*@ unfold cn_split(Xs); @*/
-      struct int_list_pair r = {.fst = 0, .snd = xs};
-      return r;
-    } else {
-      /*@ unfold cn_split(Xs); @*/
-      struct int_list_pair p = split(cdr->tail);
-      xs->tail = p.fst;
-      cdr->tail = p.snd;
-      struct int_list_pair r = {.fst = xs, .snd = cdr};
-      return r;
+/*@
+function [rec] ({list fst, list snd}) cn_split(list xs) {
+  match xs {
+    Nil {} => {
+      {fst: Nil {}, snd: Nil {}}
+    }
+    Cons {head: h1, tail: Nil {}} => {
+      {fst: xs, snd: Nil {}}
+    }
+    Cons {head: h1, tail: Cons {head : h2, tail : tl2 }} => {
+      let P = cn_split(tl2);
+      {fst: Cons { head: h1, tail: P.fst},
+       snd: Cons { head: h2, tail: P.snd}}
     }
   }
 }
 
-struct int_list* merge(struct int_list *xs, struct int_list *ys)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
-/*@ requires is_null(ys) || !addr_eq(ys, NULL); @*/
-/*@ requires take Xs = IntList(xs); @*/
-/*@ requires take Ys = IntList(ys); @*/
-/*@ ensures is_null(return) || !addr_eq(return, NULL); @*/
-/*@ ensures take Zs = IntList(return); @*/
-/*@ ensures Zs == cn_merge(Xs, Ys); @*/
-{
-  if (xs == 0) {
-    /*@ unfold cn_merge(Xs, Ys); @*/
-    return ys;
-  } else {
-    /*@ unfold cn_merge(Xs, Ys); @*/
-    if (ys == 0) {
-      /*@ unfold cn_merge(Xs, Ys); @*/
-      return xs;
-    } else {
-      /*@ unfold cn_merge(Xs, Ys); @*/
-      struct int_list *zs = merge(xs->tail, ys->tail);
-      if (xs->head < ys->head) {
-	xs->tail = ys;
-	ys->tail = zs;
-	return xs;
-      } else {
-	ys->tail = xs;
-	xs->tail = zs;
-	return ys;
+function [rec] (list) cn_merge(list xs, list ys) {
+  match xs {
+    Nil {} => {
+      ys
+    }
+    Cons {head: x, tail: xs_} => {
+      match ys {
+        Nil {} => {
+          xs
+        }
+        Cons {head: y, tail: ys_} => {
+          if (x <= y) {
+            Cons {head: x, tail: cn_merge(xs_, ys)}
+          } else {
+            Cons {head: y, tail: cn_merge(xs, ys_)}
+          }
+        }
       }
     }
   }
 }
 
-struct int_list* naive_mergesort(struct int_list *xs)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
-/*@ requires take Xs = IntList(xs); @*/
-/*@ ensures take Ys = IntList(return); @*/
-/*@ ensures is_null(return) || !addr_eq(return, NULL); @*/
-/*@ ensures Ys == cn_mergesort(Xs); @*/
-{
-  if (xs == 0) {
-    /*@ unfold cn_mergesort(Xs); @*/
-    return xs;
-  } else {
-    struct int_list *tail = xs->tail;
-    if (tail == 0) {
-      /*@ unfold cn_mergesort(Xs); @*/
-      return xs;
-    } else {
-      /*@ unfold cn_mergesort(Xs); @*/
-      struct int_list_pair p = split(xs);
-      p.fst = naive_mergesort(p.fst);
-      p.snd = naive_mergesort(p.snd);
-      return merge(p.fst, p.snd);
+function [rec] (list) cn_mergesort(list xs) {
+  match xs {
+    Nil {} => { 
+      xs 
+    }
+    Cons {head: x, tail: Nil {}} => { 
+      xs 
+    }
+    Cons {head: x, tail: Cons {head: y, tail: zs}} => {
+      let P = cn_split(xs);
+      let L1 = cn_mergesort(P.fst);
+      let L2 = cn_mergesort(P.snd);
+      cn_merge(L1, L2)
     }
   }
 }
+
+function (boolean) smaller (i32 head, list xs) {
+  match xs {
+    Nil {} => {
+      true
+    }
+    Cons {head : x, tail : _} => {
+      head <= x
+    }
+  }
+}
+
+function [rec] (boolean) is_sorted(list xs) {
+  match xs {
+    Nil {} => { 
+      true 
+    }
+    Cons {head: head, tail: tail} => { 
+      smaller (head, tail) && is_sorted(tail)
+    }
+  }
+}
+
+function (list) tl (list xs) {
+  match xs {
+    Nil {} => {
+      Nil {}
+    }
+    Cons {head : _, tail : tail} => {
+      tail
+    }
+  }
+}
+@*/
+
+struct node_pair {
+  struct node *fst;
+  struct node *snd;
+};
+
+struct node_pair split(struct node *xs)
+/*@ requires take Xs = List(xs);
+    ensures take Ys = List(return.fst);
+    ensures take Zs = List(return.snd);
+    ensures {fst: Ys, snd: Zs} == cn_split(Xs); @*/
+{
+  /*@ unfold cn_split(Xs); @*/
+  if (xs == 0) {
+    struct node_pair r = {.fst = 0, .snd = 0};
+    return r;
+  } else {
+    struct node *cdr = xs->next;
+    if (cdr == 0) {
+      struct node_pair r = {.fst = xs, .snd = 0};
+      return r;
+    } else {
+      struct node_pair p = split(cdr->next);
+      xs->next = p.fst;
+      cdr->next = p.snd;
+      struct node_pair r = {.fst = xs, .snd = cdr};
+      return r;
+    }
+  }
+}
+
+struct node *merge(struct node *xs, struct node *ys)
+/*@ requires take Xs = List(xs);
+    requires take Ys = List(ys);
+    ensures take Zs = List(return);
+    ensures Zs == cn_merge(Xs, Ys); @*/
+{
+  /*@ unfold cn_merge(Xs, Ys); @*/
+  if (xs == 0) {
+    return ys;
+  } else if (ys == 0) {
+    return xs;
+  } else if (xs->value <= ys->value) {
+    xs->next = merge(xs->next, ys);
+    return xs;
+  } else {
+    ys->next = merge(xs, ys->next);
+    return ys;
+  }
+}
+
+struct node *naive_mergesort(struct node *xs)
+/*@ requires take Xs = List(xs);
+    ensures take Ys = List(return);
+    ensures Ys == cn_mergesort(Xs); @*/
+{
+  /*@ unfold cn_mergesort(Xs); @*/
+  if (xs == 0) {
+    return xs;
+  } else if (xs->next == 0) {
+    return xs;
+  } else {
+    struct node_pair p = split(xs);
+    p.fst = naive_mergesort(p.fst);
+    p.snd = naive_mergesort(p.snd);
+    return merge(p.fst, p.snd);
+  }
+}
+
+
+
 
 int main(void)
 /*@ trusted; @*/
 {
-  struct int_list i3 = {.head = 3, .tail = 0};
-  struct int_list i2 = {.head = 4, .tail = &i3};
-  struct int_list i1 = {.head = 2, .tail = &i2};
+  struct node i3 = {.value = 3, .next = 0};
+  struct node i2 = {.value = 4, .next = &i3};
+  struct node i1 = {.value = 2, .next = &i2};
 
-  struct int_list *sorted_i1 = naive_mergesort(&i1);
+  struct node *sorted_i1 = naive_mergesort(&i1);
+}
+
+
+
+
+
+void prove_merge_sorted(struct node *p, struct node *q)
+/*@ requires take xs_in = List(p);
+             take ys_in = List(q);
+             is_sorted(xs_in);
+             is_sorted(ys_in);
+             let merged = cn_merge(xs_in, ys_in);
+    ensures  take xs_out = List(p);
+             take ys_out = List(q);
+             xs_out == xs_in && ys_out == ys_in;
+             is_sorted(merged);
+@*/
+{
+  /* Unfold the definition of `merged`. */
+  /*@ unfold cn_merge(xs_in, ys_in); @*/
+
+  /* If either list is empty, cn_merge just picks the other, which is
+     sorted by assumption, so nothing left to do. */
+  if (p == 0 || q == 0) {
+    return;
+  } 
+  /* For non-empty lists, cn_merge picks the smaller head and merges
+     the rest. */
+  else {
+    /* If `xs_in` has the smaller head, it merges `tl(xs_in)` with
+       `ys_in`. */
+    if (p->value <= q->value) {
+      /* By induction hypothesis (IH) `cn_merge(tl(xs_in), ys_in))` is
+         sorted. To "apply" IH, expand the definition of
+         `is_sorted(xs_in)` to prove `is_sorted(tl(xs_in))`. */
+      /*@ unfold is_sorted(xs_in); @*/
+      prove_merge_sorted(p->next, q);
+      /* By definition of `cn_merge(tl(xs_in), ys_in)`, that merged
+         list starts with the minimum of either head, ... */
+      /*@ unfold cn_merge(tl(xs_in), ys_in); @*/
+      /* ... so that list with `hd(xs_in)` cons'ed on is also
+         sorted. @*/
+      /*@ unfold is_sorted(merged); @*/
+      return;
+    }
+    else {
+      /* This is symmetric to the proof above. */
+      /*@ unfold is_sorted(ys_in); @*/
+      prove_merge_sorted(p, q->next);
+      /*@ unfold cn_merge(xs_in, tl(ys_in)); @*/
+      /*@ unfold is_sorted(merged); @*/
+      return;
+    }
+  }
 }

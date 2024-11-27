@@ -2162,7 +2162,7 @@ let check_procedure
            pure
              (match def with
               | Mu.Return _loc -> return ()
-              | Label (loc, label_args_and_body, _annots, _) ->
+              | Label (loc, label_args_and_body, _annots, _, _loop_info) ->
                 debug
                   2
                   (lazy
@@ -2384,24 +2384,27 @@ let c_function_name ((fsym, (_loc, _args_and_body)) : c_function) : string =
 
 (** Filter functions according to [skip_and_only]: first according to "only",
     then according to "skip" *)
-let select_functions (funs : c_function list) : c_function list =
+let select_functions (fsyms : SymSet.t) : SymSet.t =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
   let str_fsyms s =
-    match List.filter (matches_str s) (List.map fst funs) with
-    | [] ->
+    let ss = SymSet.filter (matches_str s) fsyms in
+    if SymSet.is_empty ss then (
       Pp.warn_noloc (!^"function" ^^^ !^s ^^^ !^"not found");
-      []
-    | ss -> ss
+      SymSet.empty)
+    else
+      ss
   in
-  let strs_fsyms ss = SymSet.of_list (List.concat_map str_fsyms ss) in
+  let strs_fsyms ss =
+    ss |> List.map str_fsyms |> List.fold_left SymSet.union SymSet.empty
+  in
   let skip = strs_fsyms (fst !skip_and_only) in
   let only = strs_fsyms (snd !skip_and_only) in
   let only_funs =
     match snd !skip_and_only with
-    | [] -> funs
-    | _ss -> List.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
+    | [] -> fsyms
+    | _ss -> SymSet.filter (fun fsym -> SymSet.mem fsym only) fsyms
   in
-  List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs
+  SymSet.filter (fun fsym -> not (SymSet.mem fsym skip)) only_funs
 
 
 (** Check a single C function. Failure of the check is encoded monadically. *)
@@ -2464,7 +2467,10 @@ let check_c_functions_all (funs : c_function list) : (string * TypeErrors.t) lis
     with the name of the function in which they occurred. When [fail_fast] is
     set, the first error encountered will halt checking. *)
 let check_c_functions (funs : c_function list) : (string * TypeErrors.t) list m =
-  let selected_funs = select_functions funs in
+  let selected_fsyms = select_functions (SymSet.of_list (List.map fst funs)) in
+  let selected_funs =
+    List.filter (fun (fsym, _) -> SymSet.mem fsym selected_fsyms) funs
+  in
   match !fail_fast with
   | true ->
     let@ error_opt = check_c_functions_fast selected_funs in

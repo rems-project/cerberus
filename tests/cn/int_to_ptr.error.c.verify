@@ -1,0 +1,8 @@
+return code: 1
+[1/2]: cast -- pass
+[2/2]: main -- fail
+tests/cn/int_to_ptr.error.c:16:12: error: Missing resource for reading
+    return *p == 0;
+           ^~ 
+Resource needed: Owned<signed int>(call_cast0.return)
+State file: file:///tmp/state__int_to_ptr.error.c__main.html

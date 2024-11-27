@@ -1302,11 +1302,18 @@ let register_cn_datatype magic_loc ident loc mk_cases =
 
 
 
-val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
-let record_loop_attribute id attr = 
+val record_loop_attribute: Annot.loop_id -> Annot.attributes -> Loc.t -> Loc.t -> desugM unit
+let record_loop_attribute id attr loc_condition loc_loop = 
   record_marker () >>= fun marker_id ->
   get_inner >>= fun st ->
-  put_inner <|st with loop_attributes = (Map.insert id (marker_id, attr) st.loop_attributes) |>
+  let loop_attribute = 
+    <| Annot.marker_id = marker_id;
+       Annot.attributes = attr; 
+       Annot.loc_condition = loc_condition;
+       Annot.loc_loop = loc_loop;
+    |>
+  in
+  put_inner <|st with loop_attributes = (Map.insert id loop_attribute st.loop_attributes) |>
 
 val get_loop_attributes: unit -> desugM Annot.loop_attributes
 let get_loop_attributes () = 

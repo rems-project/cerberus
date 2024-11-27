@@ -31,7 +31,7 @@ jobs:
 
     - name: System dependencies (ubuntu)
       run: |
-        sudo apt install build-essential libgmp-dev z3 opam cmake
+        sudo apt-get install build-essential libgmp-dev z3 opam cmake
 
     - name: Restore cached opam
       id: cache-opam-restore
@@ -39,20 +39,7 @@ jobs:
       with:
         path: ~/.opam
         key: ${{ matrix.version }}
-
-    - name: Setup opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-      run: |
-        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-        opam install --deps-only --yes ./cerberus-lib.opam
-
-    - name: Save cached opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-      id: cache-opam-save
-      uses: actions/cache/save@v4
-      with:
-        path: ~/.opam
-        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+        fail-on-cache-miss: true
 
     - name: Install Cerberus
       run: |
@@ -93,5 +80,5 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
+        cd tests; ./run-cn-test-gen.sh
 

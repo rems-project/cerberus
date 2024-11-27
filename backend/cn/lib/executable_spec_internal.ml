@@ -56,7 +56,7 @@ let rec extract_global_variables = function
 
 let generate_c_pres_and_posts_internal
   without_ownership_checking
-  (instrumentation : Core_to_mucore.instrumentation)
+  (instrumentation : Executable_spec_extract.instrumentation)
   _
   (sigm : _ CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
@@ -151,11 +151,11 @@ let generate_c_pres_and_posts_internal
 
 
 let generate_c_assume_pres_internal
-  (instrumentation_list : Core_to_mucore.instrumentation list)
+  (instrumentation_list : Executable_spec_extract.instrumentation list)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   =
-  let aux (inst : Core_to_mucore.instrumentation) =
+  let aux (inst : Executable_spec_extract.instrumentation) =
     let dts = sigma.cn_datatypes in
     let preds = prog5.resource_predicates in
     let args =
@@ -176,12 +176,12 @@ let generate_c_assume_pres_internal
       (AT.get_lat (Option.get inst.internal))
   in
   instrumentation_list
-  |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+  |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
     Option.is_some inst.internal)
   |> List.map aux
 
 
-(* Core_to_mucore.instrumentation list -> executable_spec *)
+(* Executable_spec_extract.instrumentation list -> executable_spec *)
 let generate_c_specs_internal
   without_ownership_checking
   instrumentation_list
@@ -190,7 +190,7 @@ let generate_c_specs_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
   =
-  let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
+  let generate_c_spec (instrumentation : Executable_spec_extract.instrumentation) =
     generate_c_pres_and_posts_internal
       without_ownership_checking
       instrumentation

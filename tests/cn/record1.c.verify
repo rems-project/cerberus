@@ -1,0 +1,11 @@
+return code: 0
+tests/cn/record1.c:13:18: warning: Treating exponentiation 'power(2'i32
+  , 31'i32 /* 0x1f */)' as uninterpreted.
+/*@ requires x < power(2i32, 31i32) - 1i32; 
+                 ~~~~~^~~~~~~~~~~~~ 
+tests/cn/record1.c:14:18: warning: Treating exponentiation 'power(2'i32
+  , 31'i32 /* 0x1f */)' as uninterpreted.
+    requires y < power(2i32, 31i32) - 1i32; @*/
+                 ~~~~~^~~~~~~~~~~~~ 
+[1/2]: incr_one -- pass
+[2/2]: decr_one -- pass

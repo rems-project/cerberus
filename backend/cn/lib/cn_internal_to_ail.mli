@@ -172,7 +172,7 @@ val cn_to_ail_pre_post_internal
   (Sym.t * ResourcePredicates.definition) list ->
   (Sym.t * C.ctype) list ->
   C.ctype ->
-  Core_to_mucore.fn_spec_instrumentation option ->
+  Executable_spec_extract.fn_args_and_body option ->
   ail_executable_spec
 
 val cn_to_ail_assume_predicates_internal

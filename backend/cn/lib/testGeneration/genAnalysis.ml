@@ -6,6 +6,7 @@ module LC = LogicalConstraints
 module RP = ResourcePredicates
 module LAT = LogicalArgumentTypes
 module GT = GenTerms
+module GD = GenDefinitions
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
 
@@ -151,36 +152,6 @@ end
 
 let get_bounds = Bounds.get_bounds
 
-let get_addr_offset_opt (it : IT.t) : (Sym.t * IT.t) option =
-  let (IT (it_, _, loc)) = it in
-  match it_ with
-  | ArrayShift { base = IT (Sym p_sym, _, _); ct; index = it_offset } ->
-    let it_offset =
-      if BT.equal (IT.bt it_offset) Memory.size_bt then
-        it_offset
-      else
-        IT.cast_ Memory.size_bt it_offset loc
-    in
-    Some (p_sym, IT.mul_ (IT.sizeOf_ ct loc, it_offset) loc)
-  | Binop (Add, IT (Sym p_sym, _, _), it_offset) ->
-    let it_offset =
-      if BT.equal (IT.bt it_offset) Memory.size_bt then
-        it_offset
-      else
-        IT.cast_ Memory.size_bt it_offset loc
-    in
-    Some (p_sym, it_offset)
-  | Sym p_sym -> Some (p_sym, IT.num_lit_ Z.zero Memory.size_bt loc)
-  | _ -> None
-
-
-let get_addr_offset (it : IT.t) : Sym.t * IT.t =
-  match get_addr_offset_opt it with
-  | Some r -> r
-  | None ->
-    failwith ("unsupported format for address: " ^ CF.Pp_utils.to_plain_string (IT.pp it))
-
-
 let get_recursive_preds (preds : (Sym.t * RP.definition) list) : SymSet.t =
   let get_calls (pred : RP.definition) : SymSet.t =
     pred.clauses
@@ -209,3 +180,36 @@ let get_recursive_preds (preds : (Sym.t * RP.definition) list) : SymSet.t =
   |> List.map fst
   |> List.filter (fun fsym -> G.mem_edge closure fsym fsym)
   |> SymSet.of_list
+
+
+module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
+
+open struct
+  let get_calls (gd : GD.t) : SymSet.t =
+    let rec aux (gt : GT.t) : SymSet.t =
+      let (GT (gt_, _, _)) = gt in
+      match gt_ with
+      | Arbitrary | Uniform _ | Alloc _ | Return _ -> SymSet.empty
+      | Pick wgts ->
+        wgts |> List.map snd |> List.map aux |> List.fold_left SymSet.union SymSet.empty
+      | Call (fsym, _) -> SymSet.singleton fsym
+      | Asgn (_, _, gt') | Assert (_, gt') | Map (_, gt') -> aux gt'
+      | Let (_, (_, gt1), gt2) | ITE (_, gt1, gt2) -> SymSet.union (aux gt1) (aux gt2)
+    in
+    aux (Option.get gd.body)
+
+
+  module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
+  module Oper = Graph.Oper.P (SymGraph)
+end
+
+let get_call_graph (ctx : GD.context) : SymGraph.t =
+  ctx
+  |> List.map_snd (List.map snd)
+  |> List.map_snd (fun gds -> match gds with [ gd ] -> gd | _ -> failwith __LOC__)
+  |> List.map_snd get_calls
+  |> List.fold_left
+       (fun cg (fsym, calls) ->
+         SymSet.fold (fun fsym' cg' -> SymGraph.add_edge cg' fsym fsym') calls cg)
+       SymGraph.empty
+  |> Oper.transitive_closure

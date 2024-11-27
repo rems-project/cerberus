@@ -24,6 +24,7 @@
     uniform.o
     urn.o
     rand.o
+    size.o
     test.o))))
 
 (install
@@ -38,6 +39,7 @@
   (include/cn-testing/uniform.h as runtime/include/cn-testing/uniform.h)
   (include/cn-testing/urn.h as runtime/include/cn-testing/urn.h)
   (include/cn-testing/rand.h as runtime/include/cn-testing/rand.h)
+  (include/cn-testing/size.h as runtime/include/cn-testing/size.h)
   (include/cn-testing/dsl.h as runtime/include/cn-testing/dsl.h)
   (include/cn-testing/result.h as runtime/include/cn-testing/result.h)
   (include/cn-testing/test.h as runtime/include/cn-testing/test.h)

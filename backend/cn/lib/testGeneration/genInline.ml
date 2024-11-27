@@ -29,7 +29,16 @@ let unfold (ctx : GD.context) : GD.context =
       else
         loop (Option.map (fun x -> x - 1) fuel) { gd with body = Some gt' })
   in
-  List.map_snd (List.map_snd (loop (TestGenConfig.get_max_unfolds ()))) ctx
+  let unfolds = TestGenConfig.get_max_unfolds () in
+  ctx
+  |> List.map_snd (List.map_snd (loop unfolds))
+  |> List.filter_map (fun (x, gds) ->
+    if Option.is_some unfolds then
+      Some (x, gds)
+    else (
+      match List.filter (fun ((_, gd) : _ * GD.t) -> gd.spec || gd.recursive) gds with
+      | [] -> None
+      | gds' -> Some (x, gds')))
 
 
 let inline (ctx : GD.context) : GD.context = unfold ctx

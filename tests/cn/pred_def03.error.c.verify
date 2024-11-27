@@ -1,0 +1,5 @@
+return code: 1
+tests/cn/pred_def03.error.c:14:13: error: Unexpected member wrong
+    assert( tail.wrong ) ;
+            ~~~~^~~~~~ 
+the struct only has members len
