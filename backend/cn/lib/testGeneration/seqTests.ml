@@ -162,7 +162,10 @@ let compile_tests
   let sequence = compile_sequence sigma insts num_samples in
   let open Pp in
   string "#include "
-  ^^ dquotes (string (filename_base ^ ".c"))
+  ^^ dquotes (string (filename_base ^ "-exec.c"))
+  ^^ hardline
+  ^^ string "#include "
+  ^^ dquotes (string "cn.c")
   ^^ twice hardline
   ^^ string "int main"
   ^^ parens (string "int argc, char* argv[]")

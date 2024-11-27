@@ -428,6 +428,8 @@ let run_seq_tests
   astprints
   no_inherit_loc
   magic_comment_char_dollar
+  (* Executable spec *)
+  without_ownership_checking
   (* Test Generation *)
     output_dir
     num_samples
@@ -471,6 +473,17 @@ let run_seq_tests
             print_endline
               ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
           let _, sigma = ail_prog in
+          Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
+          Executable_spec.main
+            ~without_ownership_checking
+            ~with_test_gen:true
+            ~copy_source_dir:false
+            filename
+            ail_prog
+            None
+            (Some output_dir)
+            prog5
+            statement_locs;
           let _ = statement_locs in
           TestGeneration.run_seq
             ~output_dir
@@ -1134,6 +1147,7 @@ let testing_cmd =
       $ Common_flags.astprints
       $ Common_flags.no_inherit_loc
       $ Common_flags.magic_comment_char_dollar
+      $ Executable_spec_flags.without_ownership_checking
       $ Testing_flags.output_test_dir
       $ Testing_flags.gen_num_samples
     in
