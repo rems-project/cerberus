@@ -124,19 +124,19 @@ let rec gen_sequence
 
 let compile_sequence 
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
-  (insts : Core_to_mucore.instrumentation list)
+  (insts : Executable_spec_extract.instrumentation list)
   (num_samples : int)
   : Pp.document
   = 
   let fuel = num_samples in
   let declarations : A.sigma_declaration list =
     insts
-    |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
+    |> List.map (fun (inst : Executable_spec_extract.instrumentation) ->
       (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
   in
   let args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list =
     List.map
-      (fun (inst : Core_to_mucore.instrumentation) ->
+      (fun (inst : Executable_spec_extract.instrumentation) ->
         ( inst.fn,
           let _, _, _, xs, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
           match List.assoc Sym.equal inst.fn declarations with
@@ -156,7 +156,7 @@ let compile_sequence
 let compile_tests
 (filename_base : string)
 (sigma : CF.GenTypes.genTypeCategory A.sigma)
-(insts : Core_to_mucore.instrumentation list)
+(insts : Executable_spec_extract.instrumentation list)
 (num_samples : int)
 =
   let sequence = compile_sequence sigma insts num_samples in
@@ -180,9 +180,9 @@ let generate
 =
   let insts =
     prog5
-    |> Core_to_mucore.collect_instrumentation
+    |> Executable_spec_extract.collect_instrumentation
     |> fst
-    |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+    |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
       Option.is_some inst.internal)
   in
   if List.is_empty insts then failwith "No testable functions";
