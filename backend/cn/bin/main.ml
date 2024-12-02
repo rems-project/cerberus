@@ -448,6 +448,7 @@ let run_tests
   exit_fast
   max_stack_depth
   max_generator_size
+  sized_null
   coverage
   disable_passes
   =
@@ -515,6 +516,7 @@ let run_tests
               exit_fast;
               max_stack_depth;
               max_generator_size;
+              sized_null;
               coverage;
               disable_passes
             }
@@ -882,16 +884,16 @@ module Testing_flags = struct
 
 
   let only =
-    let doc = "only test this function (or comma-separated names)" in
+    let doc = "Only test this function (or comma-separated names)" in
     Arg.(value & opt (some string) None & info [ "only" ] ~doc)
 
 
   let skip =
-    let doc = "skip testing of this function (or comma-separated names)" in
+    let doc = "Skip testing of this function (or comma-separated names)" in
     Arg.(value & opt (some string) None & info [ "skip" ] ~doc)
 
 
-  let dont_run_tests =
+  let dont_run =
     let doc = "Do not run tests, only generate them" in
     Arg.(value & flag & info [ "no-run" ] ~doc)
 
@@ -921,7 +923,7 @@ module Testing_flags = struct
       & info [ "max-unfolds" ] ~doc)
 
 
-  let test_max_array_length =
+  let max_array_length =
     let doc = "Set the maximum length for an array generated" in
     Arg.(
       value
@@ -929,7 +931,7 @@ module Testing_flags = struct
       & info [ "max-array-length" ] ~doc)
 
 
-  let test_null_in_every =
+  let null_in_every =
     let doc = "Set the likelihood of NULL being generated as 1 in every <n>" in
     Arg.(
       value
@@ -937,12 +939,12 @@ module Testing_flags = struct
       & info [ "null-in-every" ] ~doc)
 
 
-  let test_seed =
+  let seed =
     let doc = "Set the seed for random testing" in
     Arg.(value & opt (some string) TestGeneration.default_cfg.seed & info [ "seed" ] ~doc)
 
 
-  let test_logging_level =
+  let logging_level =
     let doc = "Set the logging level for failing inputs from tests" in
     Arg.(
       value
@@ -950,14 +952,14 @@ module Testing_flags = struct
       & info [ "logging-level" ] ~doc)
 
 
-  let interactive_testing =
+  let interactive =
     let doc =
       "Enable interactive features for testing, such as requesting more detailed logs"
     in
     Arg.(value & flag & info [ "interactive" ] ~doc)
 
 
-  let test_until_timeout =
+  let until_timeout =
     let doc =
       "Keep rerunning tests until the given timeout (in seconds) has been reached"
     in
@@ -967,12 +969,12 @@ module Testing_flags = struct
       & info [ "until-timeout" ] ~doc)
 
 
-  let test_exit_fast =
+  let exit_fast =
     let doc = "Stop testing upon finding the first failure" in
     Arg.(value & flag & info [ "exit-fast" ] ~doc)
 
 
-  let test_max_stack_depth =
+  let max_stack_depth =
     let doc = "Maximum stack depth for generators" in
     Arg.(
       value
@@ -980,7 +982,7 @@ module Testing_flags = struct
       & info [ "max-stack-depth" ] ~doc)
 
 
-  let test_max_generator_size =
+  let max_generator_size =
     let doc = "Maximum size for generated values" in
     Arg.(
       value
@@ -988,8 +990,15 @@ module Testing_flags = struct
       & info [ "max-generator-size" ] ~doc)
 
 
-  let test_coverage =
-    let doc = "Record coverage of tests" in
+  let sized_null =
+    let doc =
+      "Scale the likelihood of [NULL] proportionally for a desired size (1/n for size n)"
+    in
+    Arg.(value & flag & info [ "sized-null" ] ~doc)
+
+
+  let coverage =
+    let doc = "(Experimental) Record coverage of tests via [lcov]" in
     Arg.(value & flag & info [ "coverage" ] ~doc)
 
 
@@ -1029,27 +1038,29 @@ let testing_cmd =
     $ Testing_flags.output_test_dir
     $ Testing_flags.only
     $ Testing_flags.skip
-    $ Testing_flags.dont_run_tests
+    $ Testing_flags.dont_run
     $ Testing_flags.gen_num_samples
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
-    $ Testing_flags.test_max_array_length
-    $ Testing_flags.test_null_in_every
-    $ Testing_flags.test_seed
-    $ Testing_flags.test_logging_level
-    $ Testing_flags.interactive_testing
-    $ Testing_flags.test_until_timeout
-    $ Testing_flags.test_exit_fast
-    $ Testing_flags.test_max_stack_depth
-    $ Testing_flags.test_max_generator_size
-    $ Testing_flags.test_coverage
+    $ Testing_flags.max_array_length
+    $ Testing_flags.null_in_every
+    $ Testing_flags.seed
+    $ Testing_flags.logging_level
+    $ Testing_flags.interactive
+    $ Testing_flags.until_timeout
+    $ Testing_flags.exit_fast
+    $ Testing_flags.max_stack_depth
+    $ Testing_flags.max_generator_size
+    $ Testing_flags.sized_null
+    $ Testing_flags.coverage
     $ Testing_flags.disable_passes
   in
   let doc =
-    "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\
+    "Generates tests for all functions in [FILE] with CN specifications.\n\
     \    The tests use randomized inputs, which are guaranteed to satisfy the CN \
      precondition.\n\
-    \    A [.cpp] file containing the test harnesses will be placed in [output-dir]."
+    \    A script [run_tests.sh] for building and running the tests will be placed in \
+     [output-dir]."
   in
   let info = Cmd.info "test" ~doc in
   Cmd.v info test_t
