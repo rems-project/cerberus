@@ -365,9 +365,9 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
            ^^ string "exit 1")
         ^^ hardline)
   ^^ twice hardline
-  ^^ string "TEST_DIR="
-  ^^ string (Filename.dirname (Filename.concat output_dir "junk"))
+  ^^ string ("TEST_DIR=" ^ Filename.dirname (Filename.concat output_dir "junk"))
   ^^ hardline
+  ^^ string "pushd $TEST_DIR > /dev/null"
   ^^ twice hardline
   ^^ string "# Compile"
   ^^ hardline
@@ -380,8 +380,8 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "-c";
          "\"-I${RUNTIME_PREFIX}/include/\"";
          "-o";
-         "\"${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o\"";
-         "\"${TEST_DIR}/" ^ test_file ^ "\"";
+         "\"./" ^ Filename.chop_extension test_file ^ ".o\"";
+         "\"./" ^ test_file ^ "\"";
          (if Config.is_coverage () then "--coverage;" else ";");
          "then"
        ]
@@ -407,8 +407,8 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "-g";
          "\"-I${RUNTIME_PREFIX}/include\"";
          "-o";
-         "\"${TEST_DIR}/tests.out\"";
-         "${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o";
+         "\"./tests.out\"";
+         Filename.chop_extension test_file ^ ".o";
          "\"${RUNTIME_PREFIX}/libcn.a\"";
          (if Config.is_coverage () then "--coverage;" else ";");
          "then"
@@ -432,7 +432,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
     separate_map
       space
       string
-      ([ "\"${TEST_DIR}/tests.out\"" ]
+      ([ "./tests.out" ]
        @ (Config.has_null_in_every ()
           |> Option.map (fun null_in_every ->
             [ "--null-in-every"; string_of_int null_in_every ])
@@ -474,67 +474,71 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          [])
   in
   cmd
-  ^^ semi
   ^^ hardline
-  ^^
-  if Config.is_coverage () then
-    string "# Coverage"
-    ^^ hardline
-    ^^ string "test_exit_code=$? # Save tests exit code for later"
-    ^^ twice hardline
-    ^^ string "pushd \"${TEST_DIR}\""
-    ^^ twice hardline
-    ^^ string ("if gcov \"" ^ test_file ^ "\"; then")
-    ^^ nest 4 (hardline ^^ string "echo \"Recorded coverage via gcov.\"")
-    ^^ hardline
-    ^^ string "else"
-    ^^ nest
-         4
-         (hardline
-          ^^ string "printf \"Failed to record coverage.\""
-          ^^ hardline
-          ^^ string "exit 1")
-    ^^ hardline
-    ^^ string "fi"
-    ^^ twice hardline
-    ^^ string "if lcov --capture --directory . --output-file coverage.info; then"
-    ^^ nest 4 (hardline ^^ string "echo \"Collected coverage via lcov.\"")
-    ^^ hardline
-    ^^ string "else"
-    ^^ nest
-         4
-         (hardline
-          ^^ string "printf \"Failed to collect coverage.\""
-          ^^ hardline
-          ^^ string "exit 1")
-    ^^ hardline
-    ^^ string "fi"
-    ^^ twice hardline
-    ^^ separate_map
-         space
-         string
-         [ "if"; "genhtml"; "--output-directory"; "html"; "\"coverage.info\";"; "then" ]
-    ^^ nest
-         4
-         (hardline
-          ^^ string "echo \"Generated HTML report at \\\"${TEST_DIR}/html/\\\".\"")
-    ^^ hardline
-    ^^ string "else"
-    ^^ nest
-         4
-         (hardline
-          ^^ string "printf \"Failed to generate HTML report.\""
-          ^^ hardline
-          ^^ string "exit 1")
-    ^^ hardline
-    ^^ string "fi"
-    ^^ twice hardline
-    ^^ string "popd"
-    ^^ twice hardline
-    ^^ string "exit \"$test_exit_code\""
-    ^^ hardline
-  else
-    empty
+  ^^ string "test_exit_code=$? # Save tests exit code for later"
+  ^^ twice hardline
+  ^^ hardline
+  ^^ (if Config.is_coverage () then
+        hardline
+        ^^ string "# Coverage"
+        ^^ hardline
+        ^^ string ("if gcov \"" ^ test_file ^ "\"; then")
+        ^^ nest 4 (hardline ^^ string "echo \"Recorded coverage via gcov.\"")
+        ^^ hardline
+        ^^ string "else"
+        ^^ nest
+             4
+             (hardline
+              ^^ string "printf \"Failed to record coverage.\""
+              ^^ hardline
+              ^^ string "exit 1")
+        ^^ hardline
+        ^^ string "fi"
+        ^^ twice hardline
+        ^^ string "if lcov --capture --directory . --output-file coverage.info; then"
+        ^^ nest 4 (hardline ^^ string "echo \"Collected coverage via lcov.\"")
+        ^^ hardline
+        ^^ string "else"
+        ^^ nest
+             4
+             (hardline
+              ^^ string "printf \"Failed to collect coverage.\""
+              ^^ hardline
+              ^^ string "exit 1")
+        ^^ hardline
+        ^^ string "fi"
+        ^^ twice hardline
+        ^^ separate_map
+             space
+             string
+             [ "if";
+               "genhtml";
+               "--output-directory";
+               "html";
+               "\"coverage.info\";";
+               "then"
+             ]
+        ^^ nest
+             4
+             (hardline
+              ^^ string "echo \"Generated HTML report at \\\"${TEST_DIR}/html/\\\".\"")
+        ^^ hardline
+        ^^ string "else"
+        ^^ nest
+             4
+             (hardline
+              ^^ string "printf \"Failed to generate HTML report.\""
+              ^^ hardline
+              ^^ string "exit 1")
+        ^^ hardline
+        ^^ string "fi"
+      else
+        empty)
+  ^^ twice hardline
+  ^^ string "popd > /dev/null"
+  ^^ twice hardline
+  ^^ string "exit $test_exit_code"
+  ^^ hardline
 
 
 let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.document)

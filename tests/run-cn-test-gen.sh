@@ -27,45 +27,54 @@ function separator() {
   printf '\n\n'
 }
 
-# Test each `*.c` file
-for TEST in $FILES; do
-  CLEANUP="rm -rf test/* run_tests.sh;separator"
+CONFIGS=("--coverage" "--sized-null")
 
-  # Run passing tests
-  if [[ $TEST == *.pass.c ]]; then
-    $CN test "$TEST" --output-dir="test"
-    RET=$?
-    if [[ "$RET" != 0 ]]; then
-      echo
-      echo "$TEST -- Tests failed unexpectedly"
-      NUM_FAILED=$(($NUM_FAILED + 1))
-      FAILED="$FAILED $TEST"
-      eval "$CLEANUP"
-      continue
-    else
-      echo
-      echo "$TEST -- Tests passed successfully"
+# For each configuration
+for CONFIG in ${CONFIGS[@]}; do
+  separator
+  echo "Running CI with CLI config \"$CONFIG\""
+  separator
+
+  # Test each `*.c` file
+  for TEST in $FILES; do
+    CLEANUP="rm -rf test/* run_tests.sh;separator"
+
+    # Run passing tests
+    if [[ $TEST == *.pass.c ]]; then
+      $CN test "$TEST" --output-dir="test" $CONFIG
+      RET=$?
+      if [[ "$RET" != 0 ]]; then
+        echo
+        echo "$TEST -- Tests failed unexpectedly"
+        NUM_FAILED=$(($NUM_FAILED + 1))
+        FAILED="$FAILED $TEST"
+        eval "$CLEANUP"
+        continue
+      else
+        echo
+        echo "$TEST -- Tests passed successfully"
+      fi
     fi
-  fi
 
-  # Run failing tests
-  if [[ $TEST == *.fail.c ]]; then
-    $CN test "$TEST" --output-dir="test"
-    RET=$?
-    if [[ "$RET" = 0 ]]; then
-      echo
-      echo "$TEST -- Tests passed unexpectedly"
-      NUM_FAILED=$(($NUM_FAILED + 1))
-      FAILED="$FAILED $TEST"
-      eval "$CLEANUP"
-      continue
-    else
-      echo
-      echo "$TEST -- Tests failed successfully"
+    # Run failing tests
+    if [[ $TEST == *.fail.c ]]; then
+      $CN test "$TEST" --output-dir="test" $CONFIG
+      RET=$?
+      if [[ "$RET" = 0 ]]; then
+        echo
+        echo "$TEST -- Tests passed unexpectedly"
+        NUM_FAILED=$(($NUM_FAILED + 1))
+        FAILED="$FAILED $TEST"
+        eval "$CLEANUP"
+        continue
+      else
+        echo
+        echo "$TEST -- Tests failed successfully"
+      fi
     fi
-  fi
 
-  eval "$CLEANUP"
+    eval "$CLEANUP"
+  done
 done
 
 echo 'Done running tests.'
