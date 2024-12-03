@@ -52,3 +52,13 @@ void cn_gen_set_depth_failures_allowed(uint16_t allowed) {
 uint16_t cn_gen_get_depth_failures_allowed() {
     return depth_failures_allowed;
 }
+
+static uint16_t size_split_backtracks_allowed = 0;
+
+void cn_gen_set_size_split_backtracks_allowed(uint16_t allowed) {
+    size_split_backtracks_allowed = allowed;
+}
+
+uint16_t cn_gen_get_size_split_backtracks_allowed() {
+    return size_split_backtracks_allowed;
+}

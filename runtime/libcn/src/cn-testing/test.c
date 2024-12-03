@@ -105,6 +105,10 @@ int cn_test_main(int argc, char* argv[]) {
             cn_gen_set_depth_failures_allowed(strtoul(argv[i + 1], NULL, 10));
             i++;
         }
+        else if (strcmp("--allowed-size-split-backtracks", arg) == 0) {
+            cn_gen_set_size_split_backtracks_allowed(strtoul(argv[i + 1], NULL, 10));
+            i++;
+        }
     }
 
     if (interactive) {

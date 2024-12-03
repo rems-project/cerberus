@@ -15,3 +15,6 @@ void cn_gen_decrement_depth();
 
 void cn_gen_set_depth_failures_allowed(uint16_t allowed);
 uint16_t cn_gen_get_depth_failures_allowed();
+
+void cn_gen_set_size_split_backtracks_allowed(uint16_t allowed);
+uint16_t cn_gen_get_size_split_backtracks_allowed();

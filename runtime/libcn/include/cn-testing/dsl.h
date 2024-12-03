@@ -240,6 +240,7 @@
     urn_free(tmp##_urn);                                                                \
 
 #define CN_GEN_SPLIT_BEGIN(tmp, size, ...)                                              \
+    int tmp##_backtracks = cn_gen_get_size_split_backtracks_allowed();                  \
     alloc_checkpoint tmp##_checkpoint = alloc_save_checkpoint();                        \
     void *tmp##_alloc_checkpoint = cn_gen_alloc_save();                                 \
     void *tmp##_ownership_checkpoint = cn_gen_ownership_save();                         \
@@ -254,7 +255,7 @@
 #define CN_GEN_SPLIT_END(ty, tmp, size, last_var, ...)                                  \
         if (count >= size) {                                                            \
             cn_gen_backtrack_depth_exceeded();                                          \
-            char* toAdd[] = { __VA_ARGS__, NULL };                                      \
+            char* toAdd[] = { __VA_ARGS__ };                                            \
             cn_gen_backtrack_relevant_add_many(toAdd);                                  \
             goto cn_label_##last_var##_backtrack;                                       \
         }                                                                               \
@@ -275,6 +276,12 @@
         cn_gen_alloc_restore(tmp##_alloc_checkpoint);                                   \
         cn_gen_ownership_restore(tmp##_ownership_checkpoint);                           \
         if (cn_gen_backtrack_relevant_contains(#tmp)) {                                 \
+            char* toAdd[] = { __VA_ARGS__ };                                            \
+            cn_gen_backtrack_relevant_add_many(toAdd);                                  \
+            if (tmp##_backtracks <= 0) {                                                \
+                goto cn_label_##last_var##_backtrack;                                   \
+            }                                                                           \
+            tmp##_backtracks--;                                                         \
             cn_gen_backtrack_reset();                                                   \
             goto cn_label_##tmp##_gen;                                                  \
         } else {                                                                        \
