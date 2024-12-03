@@ -144,33 +144,33 @@ let rec compile_term
   | Call { fsym; iargs; oarg_bt; path_vars; sized } ->
     let sym = GenUtils.get_mangled_name (fsym :: List.map fst iargs) in
     let es = iargs |> List.map snd |> List.map (fun x -> A.(AilEident x)) in
-    let es =
-      List.map
-        mk_expr
-        (es
-         @ A.(
-             match sized with
-             | Some 1 ->
-               [ AilEbinary
-                   ( mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")),
-                     Arithmetic Sub,
-                     mk_expr
-                       (AilEconst (ConstantInteger (IConstant (Z.one, Decimal, None)))) )
-               ]
-             | Some n ->
-               [ AilEbinary
-                   ( mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")),
-                     Arithmetic Div,
-                     mk_expr
-                       (AilEconst
-                          (ConstantInteger (IConstant (Z.of_int n, Decimal, None)))) )
-               ]
-             | None
-               when (not (GenBuiltins.is_builtin fsym))
-                    && (ctx |> List.assoc Sym.equal fsym |> List.hd |> snd).sized ->
-               [ AilEcall (mk_expr (AilEident (Sym.fresh_named "cn_gen_get_size")), []) ]
-             | None -> []))
+    let sized_call =
+      A.(
+        match sized with
+        | Some (n, _) when n <= 0 -> failwith "Invalid sized call"
+        | Some (1, _) ->
+          [ AilEbinary
+              ( mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")),
+                Arithmetic Sub,
+                mk_expr (AilEconst (ConstantInteger (IConstant (Z.one, Decimal, None))))
+              )
+          ]
+        | Some (_, sym_size) when TestGenConfig.is_random_size_splits () ->
+          [ AilEident sym_size ]
+        | Some (n, _) ->
+          [ AilEbinary
+              ( mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")),
+                Arithmetic Div,
+                mk_expr
+                  (AilEconst (ConstantInteger (IConstant (Z.of_int n, Decimal, None)))) )
+          ]
+        | None
+          when (not (GenBuiltins.is_builtin fsym))
+               && (ctx |> List.assoc Sym.equal fsym |> List.hd |> snd).sized ->
+          [ AilEcall (mk_expr (AilEident (Sym.fresh_named "cn_gen_get_size")), []) ]
+        | None -> [])
     in
+    let es = List.map mk_expr (es @ sized_call) in
     let x = Sym.fresh () in
     let b = Utils.create_binding x (bt_to_ctype fsym oarg_bt) in
     let wrap_to_string (sym : Sym.t) =
@@ -451,6 +451,47 @@ let rec compile_term
     ( [ b_map; b_i ] @ b_min @ b_perm @ b_val,
       s_begin @ s_body @ s_end,
       mk_expr (AilEident sym_map) )
+  | SplitSize { rest; _ } when not (TestGenConfig.is_random_size_splits ()) ->
+    compile_term sigma ctx name rest
+  | SplitSize { marker_var; syms; path_vars; last_var; rest } ->
+    let e_ty = mk_expr (AilEident (Sym.fresh_named (name_of_bt name Memory.size_bt))) in
+    let e_tmp = mk_expr (AilEident marker_var) in
+    let e_size = mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")) in
+    let syms_l = syms |> GR.SymSet.to_seq |> List.of_seq in
+    let b =
+      syms_l |> List.map (fun x -> Utils.create_binding x (C.mk_ctype_integer Size_t))
+    in
+    let e_syms =
+      syms_l |> List.map (fun x -> mk_expr (AilEunary (Address, mk_expr (AilEident x))))
+    in
+    let wrap_to_string (sym : Sym.t) =
+      let open A in
+      mk_expr
+        (AilEcast
+           ( C.no_qualifiers,
+             C.pointer_to_char,
+             mk_expr
+               (AilEstr (None, [ (Locations.other __LOC__, [ Sym.pp_string sym ]) ])) ))
+    in
+    let s =
+      let open A in
+      List.map (fun x -> AilSdeclaration [ (x, None) ]) syms_l
+      @ [ AilSexpr
+            (mk_expr
+               (AilEcall
+                  ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_SPLIT_BEGIN")),
+                    [ e_tmp; e_size ] @ e_syms @ [ mk_expr (AilEconst ConstantNull) ] )));
+          AilSexpr
+            (mk_expr
+               (AilEcall
+                  ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_SPLIT_END")),
+                    [ e_ty; e_tmp; e_size; mk_expr (AilEident last_var) ]
+                    @ List.map wrap_to_string (List.of_seq (GR.SymSet.to_seq path_vars))
+                    @ [ mk_expr (AilEconst ConstantNull) ] )))
+        ]
+    in
+    let b', s', e' = compile_term sigma ctx name rest in
+    (b @ b', s @ s', e')
 
 
 let compile_gen_def

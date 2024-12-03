@@ -34,7 +34,7 @@ type term =
         iargs : (Sym.t * Sym.t) list;
         oarg_bt : BT.t;
         path_vars : SymSet.t;
-        sized : int option
+        sized : (int * Sym.t) option
       }
   | Asgn of
       { pointer : Sym.t;
@@ -73,6 +73,13 @@ type term =
         inner : term;
         last_var : Sym.t
       }
+  | SplitSize of
+      { marker_var : Sym.t;
+        syms : SymSet.t;
+        path_vars : SymSet.t;
+        last_var : Sym.t;
+        rest : term
+      }
 [@@deriving eq, ord]
 
 let is_return (tm : term) : bool = match tm with Return _ -> true | _ -> false
@@ -98,6 +105,8 @@ let rec free_vars_term (tm : term) : SymSet.t =
     SymSet.remove
       i
       (SymSet.union (IT.free_vars_list [ min; max; perm ]) (free_vars_term inner))
+  | SplitSize { marker_var = _; syms = _; path_vars = _; last_var = _; rest } ->
+    free_vars_term rest
 
 
 and free_vars_term_list : term list -> SymSet.t =
@@ -138,7 +147,9 @@ let rec pp_term (tm : term) : Pp.document =
   | Call { fsym; iargs; oarg_bt; path_vars; sized } ->
     parens
       (Sym.pp fsym
-       ^^ optional (fun n -> brackets (int n)) sized
+       ^^ optional
+            (fun (n, sym) -> brackets (int n ^^ comma ^^ space ^^ Sym.pp sym))
+            sized
        ^^ parens
             (nest
                2
@@ -242,6 +253,27 @@ let rec pp_term (tm : term) : Pp.document =
                (IT.pp min ^^ string " <= " ^^ Sym.pp i ^^ string " <= " ^^ IT.pp max)
           ^^ c_comment (string "backtracks to" ^^ space ^^ Sym.pp last_var))
     ^^ braces (c_comment (BT.pp bt) ^^ nest 2 (break 1 ^^ pp_term inner) ^^ break 1)
+  | SplitSize { marker_var; syms; path_vars; last_var; rest } ->
+    string "split_size"
+    ^^ brackets (Sym.pp marker_var)
+    ^^ parens
+         (separate_map (comma ^^ space) Sym.pp (syms |> SymSet.to_seq |> List.of_seq))
+    ^^ space
+    ^^ c_comment
+         (string "backtracks to"
+          ^^ space
+          ^^ Sym.pp last_var
+          ^^ comma
+          ^^ space
+          ^^ string "path affected by"
+          ^^ space
+          ^^ separate_map
+               (comma ^^ space)
+               Sym.pp
+               (path_vars |> SymSet.to_seq |> List.of_seq))
+    ^^ semi
+    ^^ break 1
+    ^^ pp_term rest
 
 
 let nice_names (inputs : SymSet.t) (gt : GT.t) : GT.t =
@@ -350,7 +382,10 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
                Z.to_int
                  (Z.max Z.one (Z.div w (Z.div (Z.add w_sum (Z.pred max_int)) max_int)))
              in
-             List.map (fun (w, gt) -> (f w, aux (choice_var :: vars) path_vars gt)) wgts);
+             List.map
+               (fun (w, gt) ->
+                 (f w, aux (choice_var :: vars) (SymSet.add choice_var path_vars) gt))
+               wgts);
           last_var
         }
     | Alloc bytes -> Alloc { bytes; sized = false }
@@ -510,40 +545,91 @@ module Sizing = struct
       | Assert { rest; _ } -> aux rest
       | ITE { t; f; _ } -> max (aux t) (aux f)
       | Map { inner; _ } -> aux inner
+      | SplitSize _ -> failwith ("unreachable @ " ^ __LOC__)
     in
     aux gr
 
 
-  let size_recursive_calls (syms : SymSet.t) (size : int) (gr : term) : term =
-    let rec aux (gr : term) : term =
+  let size_recursive_calls (marker_var : Sym.t) (syms : SymSet.t) (size : int) (gr : term)
+    : term * SymSet.t
+    =
+    let rec aux (gr : term) : term * SymSet.t =
       match gr with
-      | Call ({ fsym; _ } as gr) when SymSet.mem fsym syms ->
-        Call { gr with sized = Some size }
-      | Uniform _ | Call _ | Return _ -> gr
-      | Alloc { bytes; sized = _ } -> Alloc { bytes; sized = true }
+      | Call ({ fsym; path_vars; _ } as gr) when SymSet.mem fsym syms ->
+        let sym = Sym.fresh () in
+        let gr' =
+          if size > 1 && TestGenConfig.is_random_size_splits () then
+            Call
+              { gr with
+                sized = Some (size, sym);
+                path_vars = SymSet.add marker_var path_vars
+              }
+          else
+            Call { gr with sized = Some (size, sym) }
+        in
+        (gr', SymSet.singleton sym)
+      | Uniform _ | Call _ | Return _ -> (gr, SymSet.empty)
+      | Alloc { bytes; sized = _ } -> (Alloc { bytes; sized = true }, SymSet.empty)
       | Pick ({ choices; _ } as gr) ->
-        Pick { gr with choices = choices |> List.map_snd aux }
-      | Asgn ({ rest; _ } as gr) -> Asgn { gr with rest = aux rest }
+        let choices, syms =
+          choices
+          |> List.map (fun (w, gr) ->
+            let gr, syms = aux gr in
+            ((w, gr), syms))
+          |> List.split
+        in
+        (Pick { gr with choices }, List.fold_left SymSet.union SymSet.empty syms)
+      | Asgn ({ rest; _ } as gr) ->
+        let rest, syms = aux rest in
+        (Asgn { gr with rest }, syms)
       | Let ({ value; rest; _ } as gr) ->
-        Let { gr with value = aux value; rest = aux rest }
-      | Assert ({ rest; _ } as gr) -> Assert { gr with rest = aux rest }
-      | ITE ({ t; f; _ } as gr) -> ITE { gr with t = aux t; f = aux f }
-      | Map ({ inner; _ } as gr) -> Map { gr with inner = aux inner }
+        let value, syms = aux value in
+        let rest, syms' = aux rest in
+        (Let { gr with value; rest }, SymSet.union syms syms')
+      | Assert ({ rest; _ } as gr) ->
+        let rest, syms = aux rest in
+        (Assert { gr with rest }, syms)
+      | ITE ({ t; f; _ } as gr) ->
+        let t, syms = aux t in
+        let f, syms' = aux f in
+        (ITE { gr with t; f }, SymSet.union syms syms')
+      | Map ({ inner; _ } as gr) ->
+        let inner, syms = aux inner in
+        (Map { gr with inner }, syms)
+      | SplitSize _ -> failwith ("unreachable @ " ^ __LOC__)
     in
     aux gr
 
 
   let transform_gr (syms : SymSet.t) (gr : term) : term =
-    let rec aux (gr : term) : term =
+    let rec aux (path_vars : SymSet.t) (gr : term) : term =
       match gr with
-      | ITE { bt; cond; t; f } -> ITE { bt; cond; t = aux t; f = aux f }
+      | ITE { bt; cond; t; f } ->
+        let path_vars = SymSet.union path_vars (IT.free_vars cond) in
+        ITE { bt; cond; t = aux path_vars t; f = aux path_vars f }
       | Pick { bt; choice_var; choices; last_var } ->
-        Pick { bt; choice_var; choices = List.map_snd aux choices; last_var }
+        Pick
+          { bt;
+            choice_var;
+            choices = List.map_snd (aux (SymSet.add choice_var path_vars)) choices;
+            last_var
+          }
       | _ ->
         let count = count_recursive_calls syms gr in
-        size_recursive_calls syms count gr
+        let marker_var = Sym.fresh () in
+        let gr, syms = size_recursive_calls marker_var syms count gr in
+        if count > 1 then
+          SplitSize
+            { marker_var;
+              syms;
+              last_var = Sym.fresh_named "bennet";
+              path_vars;
+              rest = gr
+            }
+        else
+          gr
     in
-    aux gr
+    aux SymSet.empty gr
 
 
   let transform_def

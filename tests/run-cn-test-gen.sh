@@ -27,13 +27,15 @@ function separator() {
   printf '\n\n'
 }
 
-CONFIGS=("--coverage" "--sized-null")
+CONFIGS=("--coverage" "--sized-null" "--random-size-splits")
 
 # For each configuration
 for CONFIG in ${CONFIGS[@]}; do
   separator
   echo "Running CI with CLI config \"$CONFIG\""
   separator
+
+  CONFIG="$CONFIG --max-generator-size=10"
 
   # Test each `*.c` file
   for TEST in $FILES; do
