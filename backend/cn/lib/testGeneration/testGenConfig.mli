@@ -15,6 +15,7 @@ type t =
     allowed_depth_failures : int option;
     max_generator_size : int option;
     random_size_splits : bool;
+    allowed_size_split_backtracks : int option;
     sized_null : bool;
     coverage : bool;
     disable_passes : string list
@@ -51,6 +52,8 @@ val has_allowed_depth_failures : unit -> int option
 val has_max_generator_size : unit -> int option
 
 val is_random_size_splits : unit -> bool
+
+val has_allowed_size_split_backtracks : unit -> int option
 
 val is_sized_null : unit -> bool
 

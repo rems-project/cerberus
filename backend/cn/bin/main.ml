@@ -450,6 +450,7 @@ let run_tests
   allowed_depth_failures
   max_generator_size
   random_size_splits
+  allowed_size_split_backtracks
   sized_null
   coverage
   disable_passes
@@ -520,6 +521,7 @@ let run_tests
               allowed_depth_failures;
               max_generator_size;
               random_size_splits;
+              allowed_size_split_backtracks;
               sized_null;
               coverage;
               disable_passes
@@ -1007,6 +1009,17 @@ module Testing_flags = struct
     Arg.(value & flag & info [ "random-size-splits" ] ~doc)
 
 
+  let allowed_size_split_backtracks =
+    let doc =
+      "Set the maximum attempts to split up a generator's size (between recursive calls) \
+       before backtracking further, during input generation"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.allowed_size_split_backtracks
+      & info [ "allowed-size-split-backtracks" ] ~doc)
+
+
   let sized_null =
     let doc =
       "Scale the likelihood of [NULL] proportionally for a desired size (1/n for size n)"
@@ -1070,6 +1083,7 @@ let testing_cmd =
     $ Testing_flags.allowed_depth_failures
     $ Testing_flags.max_generator_size
     $ Testing_flags.random_size_splits
+    $ Testing_flags.allowed_size_split_backtracks
     $ Testing_flags.sized_null
     $ Testing_flags.coverage
     $ Testing_flags.disable_passes

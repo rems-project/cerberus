@@ -475,6 +475,13 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
           |> Option.map (fun allowed_depth_failures ->
             [ "--allowed-depth-failures"; string_of_int allowed_depth_failures ])
           |> Option.to_list
+          |> List.flatten)
+       @ (Config.has_allowed_size_split_backtracks ()
+          |> Option.map (fun allowed_size_split_backtracks ->
+            [ "--allowed-size-split-backtracks";
+              string_of_int allowed_size_split_backtracks
+            ])
+          |> Option.to_list
           |> List.flatten))
   in
   cmd
