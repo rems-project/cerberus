@@ -12,3 +12,6 @@ uint16_t cn_gen_max_depth();
 void cn_gen_set_max_depth(uint16_t msd);
 void cn_gen_increment_depth();
 void cn_gen_decrement_depth();
+
+void cn_gen_set_depth_failures_allowed(uint16_t allowed);
+uint16_t cn_gen_get_depth_failures_allowed();

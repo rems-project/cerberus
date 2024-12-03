@@ -35,7 +35,7 @@ for CONFIG in ${CONFIGS[@]}; do
   echo "Running CI with CLI config \"$CONFIG\""
   separator
 
-  CONFIG="$CONFIG --max-generator-size=10"
+  CONFIG="$CONFIG --max-generator-size=10 --allowed-depth-failures=100"
 
   # Test each `*.c` file
   for TEST in $FILES; do
