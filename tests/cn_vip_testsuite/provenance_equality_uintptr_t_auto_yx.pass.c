@@ -13,3 +13,8 @@ int main() {
   /*CN_VIP*//*@ assert (b == 1u8); @*/
   return 0;
 }
+
+// The evaluation table in the appendix of the VIP paper is misleading.
+// This file has UB under PNVI-ae-udi without annotations because
+// of allocation address non-determinism (demonic)
+// The desired behaviour can be obtained by asserting the addresses are adjacent.
