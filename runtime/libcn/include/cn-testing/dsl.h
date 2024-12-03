@@ -237,5 +237,49 @@
     }                                                                                   \
     urn_free(tmp##_urn);                                                                \
 
+#define CN_GEN_SPLIT_BEGIN(tmp, size, ...)                                              \
+    alloc_checkpoint tmp##_checkpoint = alloc_save_checkpoint();                        \
+    void *tmp##_alloc_checkpoint = cn_gen_alloc_save();                                 \
+    void *tmp##_ownership_checkpoint = cn_gen_ownership_save();                         \
+    cn_label_##tmp##_gen:                                                               \
+    {                                                                                   \
+        size_t* vars[] = { __VA_ARGS__ };                                               \
+        int count = 0;                                                                  \
+        for (int i = 0; vars[i] != NULL; i++) {                                         \
+            count += 1;                                                                 \
+        }
+
+#define CN_GEN_SPLIT_END(ty, tmp, size, last_var, ...)                                  \
+        if (count >= size) {                                                            \
+            cn_gen_backtrack_depth_exceeded();                                          \
+            char* toAdd[] = { __VA_ARGS__, NULL };                                      \
+            cn_gen_backtrack_relevant_add_many(toAdd);                                  \
+            goto cn_label_##last_var##_backtrack;                                       \
+        }                                                                               \
+        size_t used = 0;                                                                \
+        for (int i = 0; i < count - 1; i++) {                                           \
+            int left = size - (count - i) + 1 - used;                                   \
+            ty* one = convert_to_##ty(1);                                               \
+            ty* bound = convert_to_##ty(left + 1);                                      \
+            ty* rnd = cn_gen_range_##ty(one, bound);                                    \
+            *vars[i] = convert_from_##ty(rnd);                                          \
+            used += convert_from_##ty(rnd);                                             \
+        }                                                                               \
+        *vars[count - 1] = size - 1 - used;                                             \
+    }                                                                                   \
+    if (0) {                                                                            \
+    cn_label_##tmp##_backtrack:                                                         \
+        free_after(tmp##_checkpoint);                                                   \
+        cn_gen_alloc_restore(tmp##_alloc_checkpoint);                                   \
+        cn_gen_ownership_restore(tmp##_ownership_checkpoint);                           \
+        if (cn_gen_backtrack_relevant_contains(#tmp)) {                                 \
+            cn_gen_backtrack_reset();                                                   \
+            goto cn_label_##tmp##_gen;                                                  \
+        } else {                                                                        \
+            goto cn_label_##last_var##_backtrack;                                       \
+        }                                                                               \
+    }
+
+
 
 #endif // CN_GEN_DSL_H

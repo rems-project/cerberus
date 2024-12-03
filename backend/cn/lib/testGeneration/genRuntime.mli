@@ -27,7 +27,7 @@ type term =
         iargs : (Sym.t * Sym.t) list;
         oarg_bt : BT.t;
         path_vars : SymSet.t;
-        sized : int option
+        sized : (int * Sym.t) option
       }
   | Asgn of
       { pointer : Sym.t;
@@ -65,6 +65,13 @@ type term =
         perm : IT.t;
         inner : term;
         last_var : Sym.t
+      }
+  | SplitSize of
+      { marker_var : Sym.t;
+        syms : SymSet.t;
+        path_vars : SymSet.t;
+        last_var : Sym.t;
+        rest : term
       }
 [@@deriving eq, ord]
 

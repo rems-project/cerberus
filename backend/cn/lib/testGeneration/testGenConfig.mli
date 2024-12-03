@@ -13,6 +13,7 @@ type t =
     exit_fast : bool;
     max_stack_depth : int option;
     max_generator_size : int option;
+    random_size_splits : bool;
     sized_null : bool;
     coverage : bool;
     disable_passes : string list
@@ -45,6 +46,8 @@ val is_exit_fast : unit -> bool
 val has_max_stack_depth : unit -> int option
 
 val has_max_generator_size : unit -> int option
+
+val is_random_size_splits : unit -> bool
 
 val is_sized_null : unit -> bool
 

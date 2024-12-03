@@ -13,6 +13,7 @@ type t =
     exit_fast : bool;
     max_stack_depth : int option;
     max_generator_size : int option;
+    random_size_splits : bool;
     sized_null : bool;
     coverage : bool;
     disable_passes : string list
@@ -31,6 +32,7 @@ let default =
     exit_fast = false;
     max_stack_depth = None;
     max_generator_size = None;
+    random_size_splits = false;
     sized_null = false;
     coverage = false;
     disable_passes = []
@@ -64,6 +66,8 @@ let is_exit_fast () = !instance.exit_fast
 let has_max_stack_depth () = !instance.max_stack_depth
 
 let has_max_generator_size () = !instance.max_generator_size
+
+let is_random_size_splits () = !instance.random_size_splits
 
 let is_sized_null () = !instance.sized_null
 
