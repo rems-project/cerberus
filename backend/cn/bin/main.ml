@@ -447,6 +447,7 @@ let run_tests
   until_timeout
   exit_fast
   max_stack_depth
+  allowed_depth_failures
   max_generator_size
   random_size_splits
   sized_null
@@ -516,6 +517,7 @@ let run_tests
               until_timeout;
               exit_fast;
               max_stack_depth;
+              allowed_depth_failures;
               max_generator_size;
               random_size_splits;
               sized_null;
@@ -984,6 +986,14 @@ module Testing_flags = struct
       & info [ "max-stack-depth" ] ~doc)
 
 
+  let allowed_depth_failures =
+    let doc = "Maximum stack depth failures before discarding an attempt" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.allowed_depth_failures
+      & info [ "allowed-depth-failures" ] ~doc)
+
+
   let max_generator_size =
     let doc = "Maximum size for generated values" in
     Arg.(
@@ -1057,6 +1067,7 @@ let testing_cmd =
     $ Testing_flags.until_timeout
     $ Testing_flags.exit_fast
     $ Testing_flags.max_stack_depth
+    $ Testing_flags.allowed_depth_failures
     $ Testing_flags.max_generator_size
     $ Testing_flags.random_size_splits
     $ Testing_flags.sized_null

@@ -12,6 +12,7 @@ type t =
     until_timeout : int option;
     exit_fast : bool;
     max_stack_depth : int option;
+    allowed_depth_failures : int option;
     max_generator_size : int option;
     random_size_splits : bool;
     sized_null : bool;
@@ -44,6 +45,8 @@ val is_until_timeout : unit -> int option
 val is_exit_fast : unit -> bool
 
 val has_max_stack_depth : unit -> int option
+
+val has_allowed_depth_failures : unit -> int option
 
 val has_max_generator_size : unit -> int option
 

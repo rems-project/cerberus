@@ -27,11 +27,13 @@
     }                                                                                   \
     cn_gen_increment_depth();                                                           \
     if (size <= 0 || cn_gen_depth() == cn_gen_max_depth()) {                            \
-        static int backtracks;                                                          \
-        backtracks++;                                                                   \
-        if (backtracks >= 100) {                                                        \
-            cn_gen_backtrack_assert_failure();                                          \
-            goto cn_label_bennet_backtrack;                                             \
+        if (cn_gen_get_depth_failures_allowed() != UINT16_MAX) {                        \
+            static int backtracks;                                                      \
+            backtracks++;                                                               \
+            if (backtracks >= cn_gen_get_depth_failures_allowed()) {                    \
+                cn_gen_backtrack_assert_failure();                                      \
+                goto cn_label_bennet_backtrack;                                         \
+            }                                                                           \
         }                                                                               \
         cn_gen_backtrack_depth_exceeded();                                              \
         goto cn_label_bennet_backtrack;                                                 \

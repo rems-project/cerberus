@@ -467,11 +467,15 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
             [ "--max-generator-size"; string_of_int max_generator_size ])
           |> Option.to_list
           |> List.flatten)
-       @
-       if Config.is_sized_null () then
-         [ "--sized-null" ]
-       else
-         [])
+       @ (if Config.is_sized_null () then
+            [ "--sized-null" ]
+          else
+            [])
+       @ (Config.has_allowed_depth_failures ()
+          |> Option.map (fun allowed_depth_failures ->
+            [ "--allowed-depth-failures"; string_of_int allowed_depth_failures ])
+          |> Option.to_list
+          |> List.flatten))
   in
   cmd
   ^^ hardline
