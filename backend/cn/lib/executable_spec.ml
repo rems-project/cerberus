@@ -381,6 +381,7 @@ let main
       let global_ownership_init_pair = generate_ownership_global_assignments sigm prog5 in
       global_ownership_init_pair @ executable_spec.pre_post)
   in
+  let _ = source_file_in_stmt_injs in ();
   (match
      Source_injection.(
        output_injections
