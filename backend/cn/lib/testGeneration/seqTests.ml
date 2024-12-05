@@ -182,7 +182,7 @@ let rec gen_sequence
             if is_precond_violation (drop (List.length src_code - violation_line_num) src_code) then
               gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs))))
             else
-              ctx', Either.Left(string "/* post-condition violation detected on this call: " ^^ curr_test ^^ string "*/"))
+              ctx', Either.Left(string "/* post-condition violation detected on this call: */" ^^ hardline ^^ curr_test))
             in
       (match (List.length fs) with
       | 0 -> string "unable to generate call at this point"
