@@ -78,6 +78,7 @@ let derived_lc2 (resource, _) (resource', _) =
 let disable_resource_derived_constraints = ref false
 
 let pointer_facts ~new_resource ~old_resources =
-  if !disable_resource_derived_constraints 
-  then []
-  else derived_lc1 new_resource @ List.concat_map (derived_lc2 new_resource) old_resources
+  if !disable_resource_derived_constraints then
+    []
+  else
+    derived_lc1 new_resource @ List.concat_map (derived_lc2 new_resource) old_resources
