@@ -901,5 +901,5 @@ let cvc5 : solver_config =
 
 let z3 : solver_config =
   (* let params = [ ("sat.smt", "true") ] in *)
-  let params = [] in
+  let params = [ ("smt.relevancy", "0") ] in
   { exe = "z3"; opts = [ "-in"; "-smt2" ]; params; exts = Z3; log = quiet_log }
