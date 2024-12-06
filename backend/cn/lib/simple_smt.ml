@@ -320,6 +320,7 @@ let arr_store arr i v = app_ "store" [ arr; i; v ]
     to decide how to generate terms for those cases. *)
 type solver_extensions =
   | Z3
+  | Z3new
   | CVC5
   | Other
 
@@ -545,7 +546,7 @@ let get_model s =
   match s.config.exts with
   | CVC5 -> ans
   | Other -> ans
-  | Z3 ->
+  | (Z3 | Z3new) ->
     (* Workaround for https://github.com/Z3Prover/z3/issues/7270:
        remove `as-array` *)
     let rec drop_as_array x =
@@ -903,3 +904,8 @@ let z3 : solver_config =
   (* let params = [ ("sat.smt", "true") ] in *)
   let params = [] in
   { exe = "z3"; opts = [ "-in"; "-smt2" ]; params; exts = Z3; log = quiet_log }
+
+
+let z3new : solver_config =
+  let params = [ ("sat.smt", "true"); ("model.completion", "true"); ] in
+  { exe = "z3"; opts = [ "-in"; "-smt2" ]; params; exts = Z3new; log = quiet_log }

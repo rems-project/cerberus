@@ -727,7 +727,7 @@ module Verify_flags = struct
     let doc = "Specify the SMT solver interface" in
     Arg.(
       value
-      & opt (some (enum [ ("z3", Simple_smt.Z3); ("cvc5", Simple_smt.CVC5) ])) None
+      & opt (some (enum [ ("z3", Simple_smt.Z3); ("z3new", Simple_smt.Z3new); ("cvc5", Simple_smt.CVC5) ])) None
       & info [ "solver-type" ] ~docv:"z3|cvc5" ~doc)
 
 
