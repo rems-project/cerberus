@@ -32,3 +32,8 @@ int main()
     /*CN_VIP*//*@ assert(x == 11i32 && *p == 11i32 && *q == 11i32); @*/
   }
 }
+
+// The evaluation table in the appendix of the VIP paper is misleading.
+// This file has UB under PNVI-ae-udi without annotations because
+// of allocation address non-determinism (demonic)
+// The desired behaviour can be obtained by asserting the addresses are equal.
