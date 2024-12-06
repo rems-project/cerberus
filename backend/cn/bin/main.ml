@@ -282,6 +282,7 @@ let verify
   quiet
   no_inherit_loc
   magic_comment_char_dollar
+  disable_resource_derived_constraints
   =
   if json then (
     if debug_level > 0 then
@@ -309,6 +310,7 @@ let verify
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
+  Resources.disable_resource_derived_constraints := disable_resource_derived_constraints;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -760,6 +762,10 @@ module Verify_flags = struct
   let output_dir =
     let doc = "directory in which to output state files" in
     Arg.(value & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
+
+  let disable_resource_derived_constraints =
+    let doc = "disable resource-derived constraints" in
+    Arg.(value & flag & info [ "disable-resource-derived-constraints" ] ~doc)
 end
 
 module Executable_spec_flags = struct
@@ -871,6 +877,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.quiet
   $ Common_flags.no_inherit_loc
   $ Common_flags.magic_comment_char_dollar
+  $ Verify_flags.disable_resource_derived_constraints
 
 
 let verify_cmd =
