@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail -o noclobber
 
-USAGE="USAGE: $0 -h\n       $0 [-nvq] FILE.c"
+USAGE="USAGE: $0 -h\n       $0 [-nq] FILE.c"
 
 function echo_and_err() {
     printf "$1\n"
@@ -60,7 +60,7 @@ if cn instrument "${INPUT_FN}" \
     ${NO_CHECK_OWNERSHIP}; then
   [ "${QUIET}" ] || echo "Generating C files from CN-annotated source."
 else
-  echo_and_err "Failed to generate C files from CN-annotatated source."
+  echo_and_err "Failed to generate C files from CN-annotated source."
 fi
 
 # Compile
