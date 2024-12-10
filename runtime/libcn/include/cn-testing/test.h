@@ -41,16 +41,17 @@ void print_test_info(char* suite, char* name, int tests, int discards);
     enum cn_test_result cn_test_##Name (int printing) {                                 \
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
         int i = 0, d = 0;                                                               \
+        set_cn_failure_cb(&cn_test_##Name##_fail);                                      \
         switch (setjmp(buf_##Name)) {                                                   \
             case CN_FAILURE_ASSERT:                                                     \
             case CN_FAILURE_CHECK_OWNERSHIP:                                            \
             case CN_FAILURE_OWNERSHIP_LEAK:                                             \
                 return CN_TEST_FAIL;                                                    \
             case CN_FAILURE_ALLOC:                                                      \
+                cn_gen_rand_replace(checkpoint);                                        \
                 d++;                                                                    \
                 break;                                                                  \
         }                                                                               \
-        set_cn_failure_cb(&cn_test_##Name##_fail);                                      \
         for (; i < Samples; i++) {                                                      \
             if (printing) {                                                             \
                 printf("\r");                                                           \
@@ -59,12 +60,13 @@ void print_test_info(char* suite, char* name, int tests, int discards);
             if (d == 10 * Samples) {                                                    \
                 return CN_TEST_GEN_FAIL;                                                \
             }                                                                           \
-            cn_gen_rand_replace(checkpoint);                                            \
             size_t sz = cn_gen_uniform_cn_bits_u16(cn_gen_get_max_size())->val + 1;     \
             cn_gen_set_size(sz);                                                        \
             CN_TEST_INIT();                                                             \
+            cn_gen_set_input_timer(cn_gen_get_milliseconds());                          \
             struct cn_gen_##Name##_record *res = cn_gen_##Name();                       \
             if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                     \
+                cn_gen_rand_replace(checkpoint);                                        \
                 i--;                                                                    \
                 d++;                                                                    \
                 continue;                                                               \
@@ -72,6 +74,7 @@ void print_test_info(char* suite, char* name, int tests, int discards);
             assume_##Name(__VA_ARGS__);                                                 \
             Init(res);                                                                  \
             Name(__VA_ARGS__);                                                          \
+            cn_gen_rand_replace(checkpoint);                                            \
         }                                                                               \
                                                                                         \
         if (printing) {                                                                 \

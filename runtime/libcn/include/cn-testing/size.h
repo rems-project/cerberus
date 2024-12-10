@@ -18,3 +18,11 @@ uint16_t cn_gen_get_depth_failures_allowed();
 
 void cn_gen_set_size_split_backtracks_allowed(uint16_t allowed);
 uint16_t cn_gen_get_size_split_backtracks_allowed();
+
+void cn_gen_set_input_timeout(uint8_t seconds);
+uint8_t cn_gen_get_input_timeout(void);
+
+void cn_gen_set_input_timer(uint64_t time);
+uint64_t cn_gen_get_input_timer(void);
+
+uint64_t cn_gen_get_milliseconds(void);

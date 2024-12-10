@@ -458,6 +458,7 @@ let run_tests
   max_backtracks
   max_unfolds
   max_array_length
+  input_timeout
   null_in_every
   seed
   logging_level
@@ -532,6 +533,7 @@ let run_tests
               max_backtracks;
               max_unfolds;
               max_array_length;
+              input_timeout;
               null_in_every;
               seed;
               logging_level;
@@ -967,6 +969,14 @@ module Testing_flags = struct
       & info [ "max-array-length" ] ~doc)
 
 
+  let input_timeout =
+    let doc = "Timeout for discarding a generation attempt (ms)" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.input_timeout
+      & info [ "input-timeout" ] ~doc)
+
+
   let null_in_every =
     let doc = "Set the likelihood of NULL being generated as 1 in every <n>" in
     Arg.(
@@ -1103,6 +1113,7 @@ let testing_cmd =
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.max_array_length
+    $ Testing_flags.input_timeout
     $ Testing_flags.null_in_every
     $ Testing_flags.seed
     $ Testing_flags.logging_level
