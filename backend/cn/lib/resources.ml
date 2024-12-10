@@ -44,17 +44,18 @@ let derived_lc1 (resource, O oarg) =
     let addr = IT.addr_ pointer here in
     let upper = upper_bound addr ct here in
     let alloc_bounds =
-      if !IT.use_vip then (
-        let lookup = Alloc.History.lookup_ptr pointer here in
-        let base, size = Alloc.History.get_base_size lookup here in
-        [ IT.(le_ (base, addr) here); IT.(le_ (upper, add_ (base, size) here) here) ])
+      if !IT.use_vip then
+        let module H = Alloc.History in
+        let H.{ base; size } = H.(split (lookup_ptr pointer here) here) in
+        [ IT.(le_ (base, addr) here); IT.(le_ (upper, add_ (base, size) here) here) ]
       else
         []
     in
     [ IT.hasAllocId_ pointer here; IT.(le_ (addr, upper) here) ] @ alloc_bounds
   | P { name; pointer; iargs = [] } when !IT.use_vip && equal_predicate_name name alloc ->
-    let lookup = Alloc.History.lookup_ptr pointer here in
-    let base, size = Alloc.History.get_base_size lookup here in
+    let module H = Alloc.History in
+    let lookup = H.lookup_ptr pointer here in
+    let H.{ base; size } = H.split lookup here in
     [ IT.(eq_ (lookup, oarg) here); IT.(le_ (base, add_ (base, size) here) here) ]
   | Q { name = Owned _; pointer; _ } -> [ IT.hasAllocId_ pointer here ]
   | P { name = PName _; pointer = _; iargs = _ } | Q { name = PName _; _ } -> []

@@ -437,8 +437,8 @@ let check_has_alloc_id loc ptr ub_unspec =
 let check_alloc_bounds loc ~ptr ub_unspec =
   if !use_vip then (
     let here = Locations.other __FUNCTION__ in
-    let base_size = Alloc.History.lookup_ptr ptr here in
-    let base, size = Alloc.History.get_base_size base_size here in
+    let module H = Alloc.History in
+    let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
     let addr = addr_ ptr here in
     let lower = le_ (base, addr) here in
     let upper = le_ (addr, add_ (base, size) here) here in
@@ -476,7 +476,7 @@ let check_both_eq_alloc loc arg1 arg2 ub =
 let check_live_alloc_bounds reason loc arg ub term constr =
   let@ base_size = RI.Special.get_live_alloc reason loc arg in
   let here = Locations.other __FUNCTION__ in
-  let base, size = Alloc.History.get_base_size base_size here in
+  let Alloc.History.{ base; size } = Alloc.History.split base_size here in
   if !use_vip then (
     let constr = constr ~base ~size in
     let@ provable = provable loc in
@@ -2298,9 +2298,9 @@ let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> unit m =
         let ptr = sym_ (sym, bt, here) in
         let@ () = add_c here (LC.T (IT.hasAllocId_ ptr here)) in
         let@ () =
-          if !IT.use_vip then (
-            let base_size = Alloc.History.lookup_ptr ptr here in
-            let base, size = Alloc.History.get_base_size base_size here in
+          if !IT.use_vip then
+            let module H = Alloc.History in
+            let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
             let addr = addr_ ptr here in
             let upper = Resources.upper_bound addr ct here in
             let bounds =
@@ -2311,7 +2311,7 @@ let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> unit m =
                 ]
                 here
             in
-            add_c here (LC.T bounds))
+            add_c here (LC.T bounds)
           else
             return ()
         in

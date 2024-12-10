@@ -21,7 +21,12 @@ module History : sig
 
   val lookup_ptr : IndexTerms.t -> Locations.t -> IndexTerms.t
 
-  val get_base_size : IndexTerms.t -> Cerb_location.t -> IndexTerms.t * IndexTerms.t
+  type value =
+    { base : IndexTerms.t;
+      size : IndexTerms.t
+    }
+
+  val split : IndexTerms.t -> Cerb_location.t -> value
 
   val sbt : BaseTypes.Surface.t
 end

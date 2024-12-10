@@ -27,10 +27,16 @@ module History = struct
     IndexTerms.(map_get_ (it loc') (allocId_ ptr loc') loc')
 
 
-  let get_base_size ptr loc' =
+  type value =
+    { base : IndexTerms.t;
+      size : IndexTerms.t
+    }
+
+  let split value loc' =
     IndexTerms.
-      ( recordMember_ ~member_bt:base_bt (ptr, base_id) loc',
-        recordMember_ ~member_bt:size_bt (ptr, size_id) loc' )
+      { base = recordMember_ ~member_bt:base_bt (value, base_id) loc';
+        size = recordMember_ ~member_bt:size_bt (value, size_id) loc'
+      }
 
 
   let sbt = BaseTypes.Surface.inj bt
