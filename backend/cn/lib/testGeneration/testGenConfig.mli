@@ -5,6 +5,7 @@ type t =
     max_unfolds : int option;
     max_array_length : int;
     (* Run time *)
+    input_timeout : int option;
     null_in_every : int option;
     seed : string option;
     logging_level : int option;
@@ -32,6 +33,8 @@ val get_max_backtracks : unit -> int
 val get_max_unfolds : unit -> int option
 
 val get_max_array_length : unit -> int
+
+val has_input_timeout : unit -> int option
 
 val has_null_in_every : unit -> int option
 

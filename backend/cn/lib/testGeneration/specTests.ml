@@ -433,6 +433,11 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
       space
       string
       ([ "./tests.out" ]
+       @ (Config.has_input_timeout ()
+          |> Option.map (fun input_timeout ->
+            [ "--input-timeout"; string_of_int input_timeout ])
+          |> Option.to_list
+          |> List.flatten)
        @ (Config.has_null_in_every ()
           |> Option.map (fun null_in_every ->
             [ "--null-in-every"; string_of_int null_in_every ])
