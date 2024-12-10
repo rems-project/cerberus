@@ -27,7 +27,6 @@ module IntWithHash = struct
 end
 
 module Int_Table = Hashtbl.Make (IntWithHash)
-module LCSet = Set.Make (LC)
 module CTypeMap = Map.Make (Sctypes)
 open Global
 open Pp
@@ -1126,7 +1125,7 @@ let translate_goal solver assumptions lc =
         translate_term solver new_asmp :: acc
       | _ -> acc
     in
-    LCSet.fold check_asmp assumptions acc0
+    LC.Set.fold check_asmp assumptions acc0
   in
   { instantiated with extra = List.fold_left add_asmps [] instantiated.qs }
 

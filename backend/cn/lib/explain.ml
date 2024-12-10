@@ -182,7 +182,7 @@ let state ctxt log model_with_q extras =
         | LC.T (IT (Representable _, _, _)) -> false
         | LC.T (IT (Good _, _, _)) -> false
         | _ -> true)
-      (LCSet.elements ctxt.constraints)
+      (LC.Set.elements ctxt.constraints)
   in
   let not_given_to_solver =
     (* get predicates from past steps of trace not given to solver *)

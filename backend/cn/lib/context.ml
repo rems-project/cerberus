@@ -4,7 +4,6 @@ module BT = BaseTypes
 module LS = LogicalSorts
 module RE = Resources
 module LC = LogicalConstraints
-module LCSet = Set.Make (LC)
 module Loc = Locations
 module IntMap = Map.Make (Int)
 
@@ -39,7 +38,7 @@ type t =
     logical : (basetype_or_value * l_info) Sym.Map.t;
     resources : (RE.t * int) list * int;
     resource_history : resource_history IntMap.t;
-    constraints : LCSet.t;
+    constraints : LC.Set.t;
     global : Global.t;
     where : Where.t
   }
@@ -54,7 +53,7 @@ let empty =
     logical;
     resources = ([], 0);
     resource_history = IntMap.empty;
-    constraints = LCSet.empty;
+    constraints = LC.Set.empty;
     global = Global.empty;
     where = Where.empty
   }
@@ -80,7 +79,7 @@ let pp_constraints constraints =
         LC.pp lc
       else
         parens !^"...")
-    (LCSet.elements constraints)
+    (LC.Set.elements constraints)
 
 
 let pp (ctxt : t) =
@@ -140,10 +139,10 @@ let remove_a s ctxt =
 
 let add_c c (ctxt : t) =
   let s = ctxt.constraints in
-  if LCSet.mem c s then
+  if LC.Set.mem c s then
     ctxt
   else
-    { ctxt with constraints = LCSet.add c s }
+    { ctxt with constraints = LC.Set.add c s }
 
 
 let modify_where (f : Where.t -> Where.t) ctxt = { ctxt with where = f ctxt.where }
@@ -254,7 +253,7 @@ let json (ctxt : t) : Yojson.Safe.t =
       (Sym.Map.bindings ctxt.logical)
   in
   let resources = List.map RE.json (get_rs ctxt) in
-  let constraints = List.map LC.json (LCSet.elements ctxt.constraints) in
+  let constraints = List.map LC.json (LC.Set.elements ctxt.constraints) in
   let json_record =
     `Assoc
       [ ("computational", `List computational);
@@ -271,7 +270,7 @@ let json (ctxt : t) : Yojson.Safe.t =
 let not_given_to_solver ctxt =
   let global = ctxt.global in
   let constraints =
-    filter LogicalConstraints.is_forall (LCSet.elements ctxt.constraints)
+    filter LogicalConstraints.is_forall (LC.Set.elements ctxt.constraints)
   in
   let funs =
     Sym.Map.bindings

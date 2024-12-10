@@ -415,7 +415,7 @@ let init_solver () =
   modify (fun s ->
     let c = s.typing_context in
     let solver = Solver.make c.global in
-    LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
+    LC.Set.iter (Solver.add_assumption solver c.global) c.constraints;
     { s with solver = Some solver })
 
 

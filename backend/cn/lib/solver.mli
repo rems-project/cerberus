@@ -45,7 +45,7 @@ val provable
   :  loc:Locations.t ->
   solver:solver ->
   global:Global.t ->
-  assumptions:Context.LCSet.t ->
+  assumptions:Context.LC.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
   [> `True | `False ]
@@ -74,7 +74,7 @@ val debug_solver_to_string : solver -> unit
 val debug_solver_query
   :  solver ->
   Global.t ->
-  Context.LCSet.t ->
+  Context.LC.Set.t ->
   IndexTerms.t list ->
   LogicalConstraints.t ->
   unit

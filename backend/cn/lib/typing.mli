@@ -34,7 +34,7 @@ val print_with_ctxt : (Context.t -> unit) -> unit m
 
 val get_global : unit -> Global.t m
 
-val get_cs : unit -> Context.LCSet.t m
+val get_cs : unit -> Context.LC.Set.t m
 
 val simp_ctxt : unit -> Simplify.simp_ctxt m
 

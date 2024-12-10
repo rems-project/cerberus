@@ -1,6 +1,5 @@
 open Typing
 module LC = LogicalConstraints
-module LCSet = Set.Make (LC)
 module IT = IndexTerms
 
 open Effectful.Make (Typing)
@@ -88,7 +87,7 @@ let rec bool_subterms_of t =
 let constraint_ts () =
   let@ cs = get_cs () in
   let ts =
-    List.filter_map (function LC.T t -> Some t | _ -> None) (LCSet.elements cs)
+    List.filter_map (function LC.T t -> Some t | _ -> None) (LC.Set.elements cs)
   in
   return ts
 

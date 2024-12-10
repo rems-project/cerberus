@@ -1,6 +1,3 @@
-module LCSet :
-  Set.S with type elt = LogicalConstraints.t and type t = Set.Make(LogicalConstraints).t
-
 type init =
   | Init
   | Uninit

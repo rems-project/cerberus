@@ -1216,7 +1216,7 @@ let instantiate loc filter arg =
   let extra_assumptions1 =
     List.filter_map
       (function LC.Forall ((s, bt), t) when filter t -> Some ((s, bt), t) | _ -> None)
-      (ResourceTypes.LCSet.elements constraints)
+      (LC.Set.elements constraints)
   in
   let extra_assumptions2, type_mismatch =
     List.partition (fun ((_, bt), _) -> BT.equal bt (IT.bt arg_it)) extra_assumptions1
