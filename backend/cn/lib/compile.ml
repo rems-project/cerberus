@@ -331,9 +331,8 @@ let register_cn_functions env (defs : cn_function list) =
 
 let add_datatype_info env (dt : cn_datatype) =
   Pp.debug 2 (lazy (Pp.item "translating datatype declaration" (Sym.pp dt.cn_dt_name)));
-  (* This seems to require that variables aren't simply unique to the constructor, but to
-     the entire datatype declaration. This is weird, and is probably an arbitrary
-     restriction that should be lifted, but it will require effort. *)
+  (* SMT format constraints seem to require variables to be unique to the
+     datatype, not just the constructor. *)
   let add_param m (nm, ty) =
     match StringMap.find_opt (Id.s nm) m with
     | None ->
@@ -343,7 +342,9 @@ let add_datatype_info env (dt : cn_datatype) =
         { loc = Id.loc nm;
           msg =
             Generic
-              (!^"Re-using member name" ^^^ Id.pp nm ^^^ !^"within datatype definition.")
+              (!^"Re-using member name"
+               ^^^ Id.pp nm
+               ^^^ !^"within datatype definition (SMT limitation).")
         }
   in
   let@ all_params =
