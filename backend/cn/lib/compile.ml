@@ -6,7 +6,7 @@ module IT = IndexTerms
 module LAT = LogicalArgumentTypes
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
-module RET = ResourceTypes
+module Req = Request
 module Mu = Mucore
 module RT = ReturnTypes
 open Pp
@@ -1013,7 +1013,7 @@ module EffectfulTranslation = struct
 
 
   let translate_cn_res_info res_loc loc env res args =
-    let open RET in
+    let open Req in
     let@ ptr_expr, iargs =
       match args with
       | [] -> fail { loc; msg = First_iarg_missing }
@@ -1053,11 +1053,11 @@ module EffectfulTranslation = struct
         (* we don't take Resources.owned_oargs here because we want to maintain the C-type
            information *)
         let oargs_ty = Memory.sbt_of_sct scty in
-        return (RET.Owned (scty, Init), oargs_ty)
+        return (Req.Owned (scty, Init), oargs_ty)
       | CN_block oty ->
         let@ scty = infer_scty "Block" oty in
         let oargs_ty = Memory.sbt_of_sct scty in
-        return (RET.Owned (scty, Uninit), oargs_ty)
+        return (Req.Owned (scty, Uninit), oargs_ty)
       | CN_named pred ->
         let@ pred_sig =
           match lookup_predicate pred env with
@@ -1066,7 +1066,7 @@ module EffectfulTranslation = struct
           | Some pred_sig -> return pred_sig
         in
         let output_bt = pred_sig.pred_output in
-        return (RET.PName pred, SBT.inj output_bt)
+        return (Req.PName pred, SBT.inj output_bt)
     in
     return (pname, ptr_expr, iargs, oargs_ty)
 
@@ -1085,11 +1085,11 @@ module EffectfulTranslation = struct
   let owned_good _sym (res_t, _oargs_ty) =
     let here = Locations.other __FUNCTION__ in
     match res_t with
-    | RET.P { pointer; name = Owned (scty, _); _ } ->
+    | Req.P { pointer; name = Owned (scty, _); _ } ->
       [ ( LC.T (IT.good_ (Pointer scty, pointer) here),
           (here, Some "default pointer constraint") )
       ]
-    | RET.Q { pointer; name = Owned (scty, _); _ } ->
+    | Req.Q { pointer; name = Owned (scty, _); _ } ->
       [ ( LC.T (IT.good_ (Pointer scty, pointer) here),
           (here, Some "default pointer constraint") )
       ]
@@ -1102,7 +1102,7 @@ module EffectfulTranslation = struct
       translate_cn_res_info res_loc pred_loc env res args
     in
     let pt =
-      ( RET.P
+      ( Req.P
           { name = pname;
             pointer = IT.Surface.proj ptr_expr;
             iargs = List.map IT.Surface.proj iargs
@@ -1131,7 +1131,7 @@ module EffectfulTranslation = struct
     let@ ptr_base, step = split_pointer_linear_step pred_loc (q, bt', here) ptr_expr in
     let m_oargs_ty = SBT.make_map_bt bt' oargs_ty in
     let pt =
-      ( RET.Q
+      ( Req.Q
           { name = pname;
             q = (q, SBT.proj bt');
             q_loc = here;
@@ -1258,8 +1258,8 @@ let allocation_token loc addr_s =
     | SD_ObjectAddress obj_name -> Sym.fresh_make_uniq ("A_" ^ obj_name)
     | _ -> assert false
   in
-  let alloc_ret = ResourceTypes.make_alloc (IT.sym_ (addr_s, BT.Loc (), loc)) in
-  ((name, (ResourceTypes.P alloc_ret, Alloc.History.value_bt)), (loc, None))
+  let alloc_ret = Request.make_alloc (IT.sym_ (addr_s, BT.Loc (), loc)) in
+  ((name, (Request.P alloc_ret, Alloc.History.value_bt)), (loc, None))
 
 
 module LocalState = struct

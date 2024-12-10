@@ -1,7 +1,7 @@
 module CF = Cerb_frontend
 module IT = IndexTerms
 module LC = LogicalConstraints
-module RT = ResourceTypes
+module RT = Request
 
 type oargs = O of IT.t
 
@@ -15,17 +15,15 @@ let request (r, _oargs) = r
 
 let oargs_bt (_re, O oargs) = IT.bt oargs
 
-let pp (r, O oargs) = ResourceTypes.pp_aux r (Some oargs)
+let pp (r, O oargs) = Request.pp_aux r (Some oargs)
 
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))
 
 let subst substitution ((r, O oargs) : t) =
-  (ResourceTypes.subst substitution r, O (IT.subst substitution oargs))
+  (Request.subst substitution r, O (IT.subst substitution oargs))
 
 
-let free_vars (r, O oargs) =
-  Sym.Set.union (ResourceTypes.free_vars r) (IT.free_vars oargs)
-
+let free_vars (r, O oargs) = Sym.Set.union (Request.free_vars r) (IT.free_vars oargs)
 
 let range_size ct =
   let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in

@@ -163,7 +163,7 @@ let try_coerce_res (ftyp : AT.lemmat) =
     | LRT.Constraint (lc, info, t) -> LRT.Constraint (lc, info, erase_res r t)
     | LRT.Resource ((name, (re, bt)), ((loc, _) as info), t) ->
       let arg_name, arg_re = r in
-      if ResourceTypes.alpha_equivalent arg_re re then (
+      if Request.alpha_equivalent arg_re re then (
         Pp.debug 2 (lazy (Pp.item "erasing" (Sym.pp name)));
         LRT.subst (IT.make_subst [ (name, IT.sym_ (arg_name, bt, loc)) ]) t)
       else

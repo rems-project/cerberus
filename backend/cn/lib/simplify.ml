@@ -629,9 +629,9 @@ module LogicalConstraints = struct
        | _ -> LC.Forall ((q, qbt), body))
 end
 
-module ResourceTypes = struct
+module Request = struct
   module Predicate = struct
-    open ResourceTypes.Predicate
+    open Request.Predicate
 
     let simp simp_ctxt (p : t) =
       { name = p.name;
@@ -641,12 +641,12 @@ module ResourceTypes = struct
   end
 
   module QPredicate = struct
-    open ResourceTypes.QPredicate
+    open Request.QPredicate
 
     let simp simp_ctxt (qp : t) =
       let qp = alpha_rename qp in
       let permission = IndexTerms.simp_flatten simp_ctxt qp.permission in
-      ResourceTypes.QPredicate.
+      Request.QPredicate.
         { name = qp.name;
           pointer = IndexTerms.simp simp_ctxt qp.pointer;
           q = qp.q;
@@ -657,7 +657,7 @@ module ResourceTypes = struct
         }
   end
 
-  let simp simp_ctxt : ResourceTypes.t -> ResourceTypes.t = function
+  let simp simp_ctxt : Request.t -> Request.t = function
     | P p -> P (Predicate.simp simp_ctxt p)
     | Q qp -> Q (QPredicate.simp simp_ctxt qp)
 end

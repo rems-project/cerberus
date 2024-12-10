@@ -1,7 +1,7 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
 module IT = IndexTerms
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
 module RP = ResourcePredicates
 module LAT = LogicalArgumentTypes
@@ -159,8 +159,8 @@ let get_recursive_preds (preds : (Sym.t * RP.definition) list) : Sym.Set.t =
     |> List.flatten
     |> List.map snd
     |> List.map fst
-    |> List.map RET.get_name
-    |> List.filter_map (fun (n : RET.name) ->
+    |> List.map Req.get_name
+    |> List.filter_map (fun (n : Req.name) ->
       match n with PName name -> Some name | Owned _ -> None)
     |> Sym.Set.of_list
   in

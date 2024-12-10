@@ -1,5 +1,5 @@
 open IndexTerms
-open ResourceTypes
+open Request
 open Resources
 open ResourcePredicates
 open Memory
@@ -144,14 +144,14 @@ let unpack loc global provable (ret, O o) =
 let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O o) =
   (* let tmsg hd tail =  *)
   (*   if verb *)
-  (*   then Pp.print stdout (Pp.item hd (ResourceTypes.pp ret ^^ Pp.hardline ^^ *)
+  (*   then Pp.print stdout (Pp.item hd (Request.pp ret ^^ Pp.hardline ^^ *)
   (*         Pp.string "--" ^^ Pp.hardline ^^ Lazy.force tail)) *)
   (*   else () *)
   (* in *)
   match ret with
   | Q ret
-    when ResourceTypes.equal_name predicate_name ret.name
-         && BT.equal (IT.bt index) (snd ret.q) ->
+    when Request.equal_name predicate_name ret.name && BT.equal (IT.bt index) (snd ret.q)
+    ->
     let su = IT.make_subst [ (fst ret.q, index) ] in
     let index_permission = IT.subst su ret.permission in
     (match prove_or_model (LC.t_ index_permission) with
@@ -188,10 +188,10 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
        (*   (lazy (IndexTerms.pp_with_eval eval_f index_permission)); *)
        None)
   (* | Q qret -> *)
-  (*   if not (ResourceTypes.equal_name predicate_name qret.name) *)
+  (*   if not (Request.equal_name predicate_name qret.name) *)
   (*   then () *)
   (*     (\* tmsg "not extracting, predicate name differs" *\) *)
-  (*     (\*   (lazy (ResourceTypes.pp_predicate_name predicate_name)) *\) *)
+  (*     (\*   (lazy (Request.pp_predicate_name predicate_name)) *\) *)
   (*   else if not (BT.equal (IT.bt index) (snd qret.q)) *)
   (*   then  *)
   (*     () *)

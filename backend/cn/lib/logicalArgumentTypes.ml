@@ -2,12 +2,12 @@ open Locations
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
 
 type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
-  | Resource of (Sym.t * (RET.t * BT.t)) * info * 'i t
+  | Resource of (Sym.t * (Req.t * BT.t)) * info * 'i t
   | Constraint of LC.t * info * 'i t
   | I of 'i
 
@@ -31,7 +31,7 @@ let rec subst i_subst =
       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
       Define ((name, it), info, aux substitution t)
     | Resource ((name, (re, bt)), info, t) ->
-      let re = RET.subst substitution re in
+      let re = Req.subst substitution re in
       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
       let t = aux substitution t in
       Resource ((name, (re, bt)), info, t)
@@ -70,7 +70,7 @@ let free_vars_bts i_free_vars_bts =
       let t_vars = Sym.Map.remove s (aux t) in
       union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
-      let re_vars = RET.free_vars_bts re in
+      let re_vars = Req.free_vars_bts re in
       let t_vars = Sym.Map.remove s (aux t) in
       union re_vars t_vars
     | Constraint (lc, _info, t) ->
@@ -89,7 +89,7 @@ let free_vars i_free_vars =
       let t_vars = Sym.Set.remove s (aux t) in
       Sym.Set.union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
-      let re_vars = RET.free_vars re in
+      let re_vars = Req.free_vars re in
       let t_vars = Sym.Set.remove s (aux t) in
       Sym.Set.union re_vars t_vars
     | Constraint (lc, _info, t) ->
@@ -127,7 +127,7 @@ let rec pp_aux i_pp = function
   | Define ((name, it), _info, t) ->
     group (!^"let" ^^^ Sym.pp name ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux i_pp t
   | Resource ((name, (re, _bt)), _info, t) ->
-    group (!^"take" ^^^ Sym.pp name ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
+    group (!^"take" ^^^ Sym.pp name ^^^ equals ^^^ Req.pp re ^^ semi) :: pp_aux i_pp t
   | Constraint (lc, _info, t) ->
     let op = equals ^^ rangle () in
     group (LC.pp lc ^^^ op) :: pp_aux i_pp t
@@ -222,7 +222,7 @@ let dtree dtree_i =
       Dnode (pp_ctor "Define", [ Dleaf (Sym.pp s); IT.dtree it; aux t ])
     | Resource ((s, (rt, bt)), _, t) ->
       Dnode
-        (pp_ctor "Resource", [ Dleaf (Sym.pp s); RET.dtree rt; Dleaf (BT.pp bt); aux t ])
+        (pp_ctor "Resource", [ Dleaf (Sym.pp s); Req.dtree rt; Dleaf (BT.pp bt); aux t ])
     | Constraint (lc, _, t) -> Dnode (pp_ctor "Constraint", [ LC.dtree lc; aux t ])
     | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
   in

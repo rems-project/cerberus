@@ -17,7 +17,7 @@ type log = log_entry list
 
 (** Additional information about what went wrong. *)
 type state_extras =
-  { request : ResourceTypes.t option; (** Requested resource *)
+  { request : Request.t option; (** Requested resource *)
     unproven_constraint : LogicalConstraints.t option (** Unproven constraint *)
   }
 

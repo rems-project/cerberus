@@ -2567,7 +2567,7 @@ let cn_to_ail_resource_internal
   _loc
   =
   let calculate_return_type = function
-    | ResourceTypes.Owned (sct, _) ->
+    | Request.Owned (sct, _) ->
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
     | PName pname ->
@@ -2590,7 +2590,7 @@ let cn_to_ail_resource_internal
   in
   (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in *)
   function
-  | ResourceTypes.P p ->
+  | Request.P p ->
     let ctype, bt = calculate_return_type p.name in
     let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
     let enum_str = if is_pre then "GET" else "PUT" in
@@ -2639,7 +2639,7 @@ let cn_to_ail_resource_internal
       | _ -> A.(AilSdeclaration [ (sym, Some rhs) ])
     in
     (b @ bs, s @ ss @ [ s_decl ])
-  | ResourceTypes.Q q ->
+  | Request.Q q ->
     (*
        Input is expr of the form:
       take sym = each (integer q.q; q.permission){ Owned(q.pointer + (q.q * q.step)) }
@@ -3535,7 +3535,7 @@ let cn_to_ail_assume_resource_internal
   loc
   =
   let calculate_return_type = function
-    | ResourceTypes.Owned (sct, _) ->
+    | Request.Owned (sct, _) ->
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
     | PName pname ->
@@ -3558,7 +3558,7 @@ let cn_to_ail_assume_resource_internal
   in
   (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in *)
   function
-  | ResourceTypes.P p ->
+  | Request.P p ->
     let ctype, bt = calculate_return_type p.name in
     let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
     let rhs, bs, ss, _owned_ctype =
@@ -3611,7 +3611,7 @@ let cn_to_ail_assume_resource_internal
       | _ -> A.(AilSdeclaration [ (sym, Some rhs) ])
     in
     (b @ bs, s @ ss @ [ s_decl ])
-  | ResourceTypes.Q q ->
+  | Request.Q q ->
     (*
        Input is expr of the form:
         take sym = each (integer q.q; q.permission){ Owned(q.pointer + (q.q * q.step)) }

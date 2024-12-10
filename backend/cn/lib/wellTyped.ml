@@ -3,7 +3,7 @@ module LS = LogicalSorts
 module BT = BaseTypes
 module TE = TypeErrors
 module RE = Resources
-module RET = ResourceTypes
+module Req = Request
 module LRT = LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
@@ -981,13 +981,13 @@ let warn_when_not_quantifier_bt
        ^^^ !^"was provided. This will become an error in the future.")
 
 
-module WRET = struct
+module WReq = struct
   open IndexTerms
 
   let welltyped loc r =
-    Pp.debug 22 (lazy (Pp.item "WRET: checking" (RET.pp r)));
+    Pp.debug 22 (lazy (Pp.item "WReq: checking" (Req.pp r)));
     let@ spec_iargs =
-      match RET.get_name r with
+      match Req.get_name r with
       | Owned (_ct, _init) -> return []
       | PName name ->
         let@ def = Typing.get_resource_predicate_def loc name in
@@ -1007,7 +1007,7 @@ module WRET = struct
           spec_iargs
           p.iargs
       in
-      return (RET.P { name = p.name; pointer; iargs })
+      return (Req.P { name = p.name; pointer; iargs })
     | Q p ->
       (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
       let@ pointer = WIT.check loc (BT.Loc ()) p.pointer in
@@ -1082,20 +1082,20 @@ module WRET = struct
            return (permission, iargs))
       in
       return
-        (RET.Q
+        (Req.Q
            { name = p.name; pointer; q = p.q; q_loc = p.q_loc; step; permission; iargs })
 end
 
 let oarg_bt_of_pred loc = function
-  | RET.Owned (ct, _init) -> return (Memory.bt_of_sct ct)
-  | RET.PName pn ->
+  | Req.Owned (ct, _init) -> return (Memory.bt_of_sct ct)
+  | Req.PName pn ->
     let@ def = Typing.get_resource_predicate_def loc pn in
     return def.oarg_bt
 
 
 let oarg_bt loc = function
-  | RET.P pred -> oarg_bt_of_pred loc pred.name
-  | RET.Q pred ->
+  | Req.P pred -> oarg_bt_of_pred loc pred.name
+  | Req.Q pred ->
     let@ item_bt = oarg_bt_of_pred loc pred.name in
     return (BT.make_map_bt (snd pred.q) item_bt)
 
@@ -1103,7 +1103,7 @@ let oarg_bt loc = function
 module WRS = struct
   let welltyped loc (resource, bt) =
     Pp.(debug 6 (lazy !^__FUNCTION__));
-    let@ resource = WRET.welltyped loc resource in
+    let@ resource = WReq.welltyped loc resource in
     let@ bt = WBT.is_bt loc bt in
     let@ oarg_bt = oarg_bt loc resource in
     let@ () = ensure_base_type loc ~expect:oarg_bt bt in
@@ -1825,12 +1825,12 @@ module BaseTyping = struct
            (CF.Pp_ast.pp_doc_tree (dtree_of_statement stmt))));
     match stmt with
     | Pack_unpack (pack_unpack, pt) ->
-      let@ p_pt = WRET.welltyped loc (P pt) in
-      let[@warning "-8"] (RET.P pt) = p_pt in
+      let@ p_pt = WReq.welltyped loc (P pt) in
+      let[@warning "-8"] (Req.P pt) = p_pt in
       return (Pack_unpack (pack_unpack, pt))
     | To_from_bytes (to_from, pt) ->
-      let@ pt = WRET.welltyped loc (P pt) in
-      let[@warning "-8"] (RET.P pt) = pt in
+      let@ pt = WReq.welltyped loc (P pt) in
+      let[@warning "-8"] (Req.P pt) = pt in
       return (To_from_bytes (to_from, pt))
     | Have lc ->
       let@ lc = WLC.welltyped loc lc in

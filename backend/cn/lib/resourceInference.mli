@@ -28,12 +28,12 @@ module Special : sig
   val predicate_request
     :  Locations.t ->
     TypeErrors.situation ->
-    ResourceTypes.Predicate.t * (Locations.t * string) option ->
-    ((ResourceTypes.Predicate.t * Resources.oargs) * int list) Typing.m
+    Request.Predicate.t * (Locations.t * string) option ->
+    ((Request.Predicate.t * Resources.oargs) * int list) Typing.m
 
   val qpredicate_request
     :  Locations.t ->
     TypeErrors.situation ->
-    ResourceTypes.QPredicate.t * (Locations.t * string) option ->
-    ((ResourceTypes.QPredicate.t * Resources.oargs) * int list) Typing.m
+    Request.QPredicate.t * (Locations.t * string) option ->
+    ((Request.QPredicate.t * Resources.oargs) * int list) Typing.m
 end

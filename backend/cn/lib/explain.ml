@@ -3,7 +3,7 @@ module IT = IndexTerms
 module BT = BaseTypes
 module RE = Resources
 module REP = ResourcePredicates
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
 module LF = LogicalFunctions
 module LAT = LogicalArgumentTypes
@@ -12,7 +12,7 @@ module StringMap = Map.Make (String)
 module C = Context
 module Loc = Locations
 module S = Solver
-open ResourceTypes
+open Request
 open IndexTerms
 open Pp
 open C
@@ -36,7 +36,7 @@ type log = log_entry list (* most recent first *)
 let clause_has_resource req c =
   let open LogicalArgumentTypes in
   let rec f = function
-    | Resource ((_, (r, _)), _, c) -> RET.same_name req r || f c
+    | Resource ((_, (r, _)), _, c) -> Req.same_name req r || f c
     | Constraint (_, _, c) -> f c
     | Define (_, _, c) -> f c
     | I _ -> false
@@ -61,7 +61,7 @@ let relevant_predicate_clauses global name req =
 
 
 type state_extras =
-  { request : RET.t option;
+  { request : Req.t option;
     unproven_constraint : LC.t option
   }
 
@@ -299,13 +299,13 @@ let state ctxt log model_with_q extras =
       match extras.request with
       | None -> ([], get_rs ctxt)
       | Some req ->
-        List.partition (fun r -> RET.same_name req (RE.request r)) (get_rs ctxt)
+        List.partition (fun r -> Req.same_name req (RE.request r)) (get_rs ctxt)
     in
     let interesting_diff_res, uninteresting_diff_res =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when RET.equal_name ret.name RET.Predicate.alloc -> false
+          | P ret when Req.equal_name ret.name Req.Predicate.alloc -> false
           | _ -> true)
         diff_res
     in
@@ -335,7 +335,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
   (* let req_cmp = Option.bind extras.request (Spans.spans_compare_for_pp model
      ctxt.global) in *)
   (* let req_entry req_cmp req = { *)
-  (*     res = RET.pp req; *)
+  (*     res = Req.pp req; *)
   (*     res_span = Spans.pp_model_spans model ctxt.global req_cmp req *)
   (*   } *)
   (* in *)
@@ -345,7 +345,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
   (*       ^^ (if same then !^" - same-type" else !^"") *)
   (*   } *)
   (* in *)
-  let req_entry ret = RET.pp ret in
+  let req_entry ret = Req.pp ret in
   let trace =
     let statef ctxt = state ctxt log model_with_q extras in
     List.rev
@@ -359,7 +359,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
     | None -> []
     | Some req ->
       let open ResourcePredicates in
-      (match RET.get_name req with
+      (match Req.get_name req with
        | Owned _ -> []
        | PName pname ->
          let doc_clause (_name, c) =

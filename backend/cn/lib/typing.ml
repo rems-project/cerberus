@@ -1,7 +1,7 @@
 open Context
 module IT = IndexTerms
 module ITSet = Set.Make (IT)
-module RET = ResourceTypes
+module Req = Request
 module RE = Resources
 open TypeErrors
 
@@ -13,7 +13,7 @@ type s =
     sym_eqs : IT.t Sym.Map.t;
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
-    movable_indices : (RET.name * IT.t) list;
+    movable_indices : (Req.name * IT.t) list;
     unfold_resources_required : bool;
     log : Explain.log
   }
@@ -440,7 +440,7 @@ let add_c_internal lc =
 let add_r_internal ?(derive_constraints = true) loc (r, RE.O oargs) =
   let@ s = get_typing_context () in
   let@ simp_ctxt = simp_ctxt () in
-  let r = Simplify.ResourceTypes.simp simp_ctxt r in
+  let r = Simplify.Request.simp simp_ctxt r in
   let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
   let pointer_facts =
     if derive_constraints then
@@ -701,7 +701,7 @@ let do_unfold_resources loc =
           (fun (re, i) (keep, unpack, extract) ->
             match Pack.unpack loc s.global provable_f2 re with
             | Some unpackable ->
-              let pname = RET.get_name (fst re) in
+              let pname = Req.get_name (fst re) in
               (keep, (i, pname, unpackable) :: unpack, extract)
             | None ->
               let re_reduced, extracted =
@@ -725,7 +725,7 @@ let do_unfold_resources loc =
           let@ _, members =
             make_return_record
               loc
-              ("unpack_" ^ Pp.plain (RET.pp_name pname))
+              ("unpack_" ^ Pp.plain (Req.pp_name pname))
               (LogicalReturnTypes.binders lrt)
           in
           bind_logical_return_internal loc members lrt

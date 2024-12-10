@@ -232,8 +232,7 @@ type 'TY globs =
 
 type 'i arguments_l =
   | Define of (Sym.t * IndexTerms.t) * Locations.info * 'i arguments_l
-  | Resource of
-      (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info * 'i arguments_l
+  | Resource of (Sym.t * (Request.t * BaseTypes.t)) * Locations.info * 'i arguments_l
   | Constraint of LogicalConstraints.t * Locations.info * 'i arguments_l
   | I of 'i
 
@@ -250,12 +249,12 @@ val mConstraints
   'a arguments_l
 
 val mResource
-  :  (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info ->
+  :  (Sym.t * (Request.t * BaseTypes.t)) * Locations.info ->
   'a arguments_l ->
   'a arguments_l
 
 val mResources
-  :  ((Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info) list ->
+  :  ((Sym.t * (Request.t * BaseTypes.t)) * Locations.info) list ->
   'a arguments_l ->
   'a arguments_l
 

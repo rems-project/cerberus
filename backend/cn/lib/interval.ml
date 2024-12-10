@@ -184,7 +184,7 @@ end
 
 module Solver = struct
   module IT = IndexTerms
-  module RT = ResourceTypes
+  module RT = Request
   open Terms
   open BaseTypes
 

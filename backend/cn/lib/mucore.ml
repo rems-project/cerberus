@@ -322,8 +322,7 @@ type 'TY globs =
 
 type 'i arguments_l =
   | Define of (Sym.t * IndexTerms.t) * Locations.info * 'i arguments_l
-  | Resource of
-      (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info * 'i arguments_l
+  | Resource of (Sym.t * (Request.t * BaseTypes.t)) * Locations.info * 'i arguments_l
   | Constraint of LogicalConstraints.t * Locations.info * 'i arguments_l
   | I of 'i
 
@@ -352,7 +351,7 @@ let dtree_of_arguments_l dtree_i =
     | Resource ((s, (rt, bt)), _, t) ->
       Dnode
         ( pp_ctor "Resource",
-          [ Dleaf (Sym.pp s); ResourceTypes.dtree rt; Dleaf (BaseTypes.pp bt); aux t ] )
+          [ Dleaf (Sym.pp s); Request.dtree rt; Dleaf (BaseTypes.pp bt); aux t ] )
     | Constraint (lc, _, t) ->
       Dnode (pp_ctor "Constraint", [ LogicalConstraints.dtree lc; aux t ])
     | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
