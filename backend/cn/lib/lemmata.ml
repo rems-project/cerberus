@@ -6,7 +6,7 @@ module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module TE = TypeErrors
 module Loc = Locations
-module LF = LogicalFunctions
+module LF = Definition.Function
 module LC = LogicalConstraints
 module IdSet = Set.Make (Id)
 module StringSet = Set.Make (String)
@@ -405,7 +405,7 @@ let it_adjust (global : Global.t) it =
       else
         IT.eachI_ (i1, (s, bt), i2) x loc
     | IT.Apply (name, args) ->
-      let open LogicalFunctions in
+      let open Definition.Function in
       let def = Sym.Map.find name global.logical_functions in
       (match (def.definition, def.emit_coq) with
        | Def body, false -> f (open_fun def.args body args)
@@ -442,7 +442,7 @@ let fun_prop_ret (global : Global.t) nm =
   match Sym.Map.find_opt nm global.logical_functions with
   | None -> fail "fun_prop_ret: not found" (Sym.pp nm)
   | Some def ->
-    let open LogicalFunctions in
+    let open Definition.Function in
     BaseTypes.equal BaseTypes.Bool def.return_bt
     && StringSet.mem (Sym.pp_string nm) prop_funs
 
@@ -778,7 +778,7 @@ let ensure_tuple_op is_upd nm (ix, l) =
 
 
 let ensure_pred global list_mono loc name aux =
-  let open LogicalFunctions in
+  let open Definition.Function in
   let def = Sym.Map.find name global.Global.logical_functions in
   let inf = (loc, Pp.typ (Pp.string "pred") (Sym.pp name)) in
   match def.definition with
@@ -848,7 +848,7 @@ let ensure_struct_mem is_good global list_mono loc ct aux =
 
 let rec unfold_if_possible global it =
   let open IT in
-  let open LogicalFunctions in
+  let open Definition.Function in
   match it with
   | IT (IT.Apply (name, args), _, _) ->
     let def = Option.get (Global.get_logical_function_def global name) in

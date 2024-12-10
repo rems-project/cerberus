@@ -1,7 +1,7 @@
 module CF = Cerb_frontend
 module SBT = BaseTypes.Surface
 module BT = BaseTypes
-module RP = ResourcePredicates
+module Def = Definition
 module IT = IndexTerms
 module LAT = LogicalArgumentTypes
 module LRT = LogicalReturnTypes
@@ -39,7 +39,7 @@ type env =
   }
 
 let init_env tagDefs fetch_enum_expr fetch_typedef =
-  let alloc_sig = { pred_iargs = []; pred_output = ResourcePredicates.alloc.oarg_bt } in
+  let alloc_sig = { pred_iargs = []; pred_output = Definition.alloc.oarg_bt } in
   { computationals = Sym.Map.empty;
     logicals = Sym.Map.(empty |> add Alloc.History.sym Alloc.History.sbt);
     predicates = Sym.Map.(empty |> add Alloc.Predicate.sym alloc_sig);
@@ -1197,7 +1197,6 @@ let translate_cn_func_body env body =
 let known_attrs = [ "rec"; "coq_unfold" ]
 
 let translate_cn_function env (def : cn_function) =
-  let open LogicalFunctions in
   Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args =
     List.map (fun (sym, bTy) -> (sym, translate_cn_base_type env bTy)) def.cn_func_args
@@ -1223,17 +1222,18 @@ let translate_cn_function env (def : cn_function) =
     match def.cn_func_body with
     | Some body ->
       let@ body = translate_cn_func_body env' body in
-      return (if is_rec then Rec_Def body else Def body)
-    | None -> return Uninterp
+      return (if is_rec then Def.Function.Rec_Def body else Def.Function.Def body)
+    | None -> return Def.Function.Uninterp
   in
   let return_bt = translate_cn_base_type env def.cn_func_return_bty in
   let def2 =
-    { loc = def.cn_func_loc;
-      args = List.map_snd SBT.proj args;
-      return_bt = SBT.proj return_bt;
-      emit_coq = not coq_unfold;
-      definition
-    }
+    Def.Function.
+      { loc = def.cn_func_loc;
+        args = List.map_snd SBT.proj args;
+        return_bt = SBT.proj return_bt;
+        emit_coq = not coq_unfold;
+        definition
+      }
   in
   return (def.cn_func_name, def2)
 
@@ -1374,13 +1374,13 @@ let translate_cn_clauses env clauses =
     | CN_clause (loc, cl_) ->
       let@ cl = translate_cn_clause env cl_ in
       let here = Locations.other __FUNCTION__ in
-      return (RP.Clause.{ loc; guard = IT.bool_ true here; packing_ft = cl } :: acc)
+      return (Def.Clause.{ loc; guard = IT.bool_ true here; packing_ft = cl } :: acc)
     | CN_if (loc, e_, cl_, clauses') ->
       let@ e =
         Pure.handle "Predicate guards" (ET.translate_cn_expr Sym.Set.empty env e_)
       in
       let@ cl = translate_cn_clause env cl_ in
-      self (RP.{ loc; guard = IT.Surface.proj e; packing_ft = cl } :: acc) clauses'
+      self (Def.{ loc; guard = IT.Surface.proj e; packing_ft = cl } :: acc) clauses'
   in
   let@ xs = self [] clauses in
   return (List.rev xs)
@@ -1394,7 +1394,6 @@ let translate_option_cn_clauses env = function
 
 
 let translate_cn_predicate env (def : cn_predicate) =
-  let open RP in
   Pp.debug 2 (lazy (Pp.item "translating predicate defn" (Sym.pp def.cn_pred_name)));
   let iargs, output_bt =
     match lookup_predicate def.cn_pred_name env with
@@ -1409,7 +1408,7 @@ let translate_cn_predicate env (def : cn_predicate) =
   | (iarg0, BaseTypes.Loc ()) :: iargs' ->
     return
       ( def.cn_pred_name,
-        Definition.
+        Def.Predicate.
           { loc = def.cn_pred_loc;
             pointer = iarg0;
             iargs = iargs';

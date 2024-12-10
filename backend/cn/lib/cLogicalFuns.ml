@@ -542,7 +542,7 @@ let rec symb_exec_expr ctxt state_vars expr =
     if Sym.Map.mem nm ctxt.c_fun_pred_map then (
       let loc, l_sym = Sym.Map.find nm ctxt.c_fun_pred_map in
       let@ def = get_logical_function_def loc l_sym in
-      rcval (IT.apply_ l_sym args_its def.LogicalFunctions.return_bt loc) state)
+      rcval (IT.apply_ l_sym args_its def.Definition.Function.return_bt loc) state)
     else (
       let bail = fail_fun_it "not a function with a pure/logical interpretation" in
       match Sym.has_id nm with
@@ -621,7 +621,7 @@ let rec get_ret_it loc body bt = function
 let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_decl) =
   let here = Locations.other __FUNCTION__ in
   let def_args =
-    def.LogicalFunctions.args
+    def.Definition.Function.args
     (* TODO - add location information to binders *)
     |> List.map (fun (s, bt) -> IndexTerms.sym_ (s, bt, here))
   in
@@ -678,7 +678,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
     let@ () =
       match rt with
       | ReturnTypes.Computational ((_, bt), _, _) ->
-        let l_ret_bt = def.LogicalFunctions.return_bt in
+        let l_ret_bt = def.Definition.Function.return_bt in
         if BT.equal bt l_ret_bt then
           return ()
         else
@@ -702,7 +702,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
            (WellTyped.BaseTyping.infer_expr label_context body))
     in
     let@ r = symb_exec_expr ctxt (init_state, arg_map) body in
-    let@ it = get_ret_it loc body def.LogicalFunctions.return_bt r in
+    let@ it = get_ret_it loc body def.Definition.Function.return_bt r in
     simp_const loc (lazy (Pp_mucore.pp_expr body)) it
   | _ ->
     fail_n
@@ -712,7 +712,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
 
 
 let upd_def (loc, sym, def_tm) =
-  let open LogicalFunctions in
+  let open Definition.Function in
   let@ def = get_logical_function_def loc sym in
   match def.definition with
   | Uninterp -> add_logical_function sym { def with definition = Def def_tm }

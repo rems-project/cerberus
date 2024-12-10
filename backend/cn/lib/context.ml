@@ -274,13 +274,13 @@ let not_given_to_solver ctxt =
   let funs =
     Sym.Map.bindings
       (Sym.Map.filter
-         (fun _ v -> not (LogicalFunctions.given_to_solver v))
+         (fun _ v -> not (Definition.Function.given_to_solver v))
          global.logical_functions)
   in
   let preds =
     Sym.Map.bindings
       (Sym.Map.filter
-         (fun _ v -> not (ResourcePredicates.given_to_solver v))
+         (fun _ v -> not (Definition.given_to_solver v))
          global.resource_predicates)
   in
   (constraints, funs, preds)

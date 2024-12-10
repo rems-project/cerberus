@@ -2563,7 +2563,7 @@ let cn_to_ail_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * RP.Definition.t) list)
+  (preds : (Sym.t * Def.Predicate.t) list)
   _loc
   =
   let calculate_return_type = function
@@ -2932,7 +2932,7 @@ let rec generate_record_opt pred_sym = function
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal
-  (fn_sym, (lf_def : LogicalFunctions.definition))
+  (fn_sym, (lf_def : Definition.Function.definition))
   (cn_datatypes : A.sigma_cn_datatype list)
   (cn_functions : A.sigma_cn_function list)
   : ((Locations.t * A.sigma_declaration)
@@ -3024,14 +3024,14 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
 
 
 let cn_to_ail_predicate_internal
-  (pred_sym, (rp_def : RP.Definition.t))
+  (pred_sym, (rp_def : Def.Predicate.t))
   dts
   globals
   preds
   cn_preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : RP.Clause.t list) =
+  let rec clause_translate (clauses : Def.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->
@@ -3531,7 +3531,7 @@ let cn_to_ail_assume_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * RP.Definition.t) list)
+  (preds : (Sym.t * Def.Predicate.t) list)
   loc
   =
   let calculate_return_type = function
@@ -3835,13 +3835,13 @@ let rec cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds = function
 
 
 let cn_to_ail_assume_predicate_internal
-  (pred_sym, (rp_def : RP.Definition.t))
+  (pred_sym, (rp_def : Def.Predicate.t))
   dts
   globals
   preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : RP.Clause.t list) =
+  let rec clause_translate (clauses : Def.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->

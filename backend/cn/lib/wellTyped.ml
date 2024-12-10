@@ -3,6 +3,7 @@ module BT = BaseTypes
 module TE = TypeErrors
 module Res = Resource
 module Req = Request
+module Def = Definition
 module LRT = LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
@@ -1862,7 +1863,7 @@ module BaseTyping = struct
       return (Extract (attrs, to_extract, it))
     | Unfold (f, its) ->
       let@ def = get_logical_function_def loc f in
-      if LogicalFunctions.is_recursive def then
+      if Definition.Function.is_recursive def then
         ()
       else
         Pp.warn loc (Pp.item "unfold of function not marked [rec] (no effect)" (Sym.pp f));
@@ -2250,9 +2251,7 @@ module WProc = struct
 end
 
 module WRPD = struct
-  open ResourcePredicates
-
-  let welltyped Definition.{ loc; pointer; iargs; oarg_bt; clauses } =
+  let welltyped Def.Predicate.{ loc; pointer; iargs; oarg_bt; clauses } =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure
       (let@ () = add_l pointer BT.(Loc ()) (loc, lazy (Pp.string "ptr-var")) in
@@ -2271,11 +2270,11 @@ module WRPD = struct
          | Some clauses ->
            let@ clauses =
              ListM.fold_leftM
-               (fun acc Clause.{ loc; guard; packing_ft } ->
+               (fun acc Def.Clause.{ loc; guard; packing_ft } ->
                  let@ guard = WIT.check loc BT.Bool guard in
                  let here = Locations.other __FUNCTION__ in
                  let negated_guards =
-                   List.map (fun clause -> IT.not_ clause.Clause.guard here) acc
+                   List.map (fun clause -> IT.not_ clause.Def.Clause.guard here) acc
                  in
                  pure
                    (let@ () = add_c loc (LC.T guard) in
@@ -2288,20 +2287,20 @@ module WRPD = struct
                         loc
                         packing_ft
                     in
-                    return (acc @ [ Clause.{ loc; guard; packing_ft } ])))
+                    return (acc @ [ Def.Clause.{ loc; guard; packing_ft } ])))
                []
                clauses
            in
            return (Some clauses)
        in
-       return Definition.{ loc; pointer; iargs; oarg_bt; clauses })
+       return Def.Predicate.{ loc; pointer; iargs; oarg_bt; clauses })
 end
 
 module WLFD = struct
-  open LogicalFunctions
+  open Definition.Function
 
   let welltyped
-    ({ loc; args; return_bt; emit_coq; definition } : LogicalFunctions.definition)
+    ({ loc; args; return_bt; emit_coq; definition } : Definition.Function.definition)
     =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure

@@ -597,7 +597,7 @@ module IndexTerms = struct
           t
         else (
           let def = Sym.Map.find name simp_ctxt.global.logical_functions in
-          match LogicalFunctions.try_open_fun def args with
+          match Definition.Function.try_open_fun def args with
           | Some inlined -> aux inlined
           | None -> t)
       | _ ->
