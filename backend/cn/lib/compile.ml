@@ -1053,11 +1053,11 @@ module EffectfulTranslation = struct
         (* we don't take Resources.owned_oargs here because we want to maintain the C-type
            information *)
         let oargs_ty = Memory.sbt_of_sct scty in
-        return (Owned (scty, Init), oargs_ty)
+        return (RET.Owned (scty, Init), oargs_ty)
       | CN_block oty ->
         let@ scty = infer_scty "Block" oty in
         let oargs_ty = Memory.sbt_of_sct scty in
-        return (Owned (scty, Uninit), oargs_ty)
+        return (RET.Owned (scty, Uninit), oargs_ty)
       | CN_named pred ->
         let@ pred_sig =
           match lookup_predicate pred env with
@@ -1066,7 +1066,7 @@ module EffectfulTranslation = struct
           | Some pred_sig -> return pred_sig
         in
         let output_bt = pred_sig.pred_output in
-        return (PName pred, SBT.inj output_bt)
+        return (RET.PName pred, SBT.inj output_bt)
     in
     return (pname, ptr_expr, iargs, oargs_ty)
 

@@ -12,8 +12,8 @@ type have_show =
 type extract = Id.t list * (Sym.t, Sctypes.t) CF.Cn.cn_to_extract * IndexTerms.t
 
 type statement =
-  | Pack_unpack of CF.Cn.pack_unpack * ResourceTypes.predicate_type
-  | To_from_bytes of CF.Cn.to_from * ResourceTypes.predicate_type
+  | Pack_unpack of CF.Cn.pack_unpack * ResourceTypes.Predicate.t
+  | To_from_bytes of CF.Cn.to_from * ResourceTypes.Predicate.t
   | Have of LogicalConstraints.t
   | Instantiate of (Sym.t, Sctypes.t) CF.Cn.cn_to_instantiate * IndexTerms.t
   | Split_case of LogicalConstraints.t
@@ -42,9 +42,9 @@ let rec subst substitution = function
     let stmt =
       match stmt with
       | Pack_unpack (pack_unpack, pt) ->
-        Pack_unpack (pack_unpack, RET.subst_predicate_type substitution pt)
+        Pack_unpack (pack_unpack, RET.Predicate.subst substitution pt)
       | To_from_bytes (to_from, pt) ->
-        To_from_bytes (to_from, RET.subst_predicate_type substitution pt)
+        To_from_bytes (to_from, RET.Predicate.subst substitution pt)
       | Have lc -> Have (LC.subst substitution lc)
       | Instantiate (o_s, it) ->
         (* o_s is not a (option) binder *)
@@ -105,13 +105,13 @@ let dtree_of_statement =
   let open Cerb_frontend.Pp_ast in
   function
   | Pack_unpack (Pack, pred) ->
-    Dnode (pp_ctor "Pack", [ ResourceTypes.dtree_of_predicate_type pred ])
+    Dnode (pp_ctor "Pack", [ ResourceTypes.Predicate.dtree pred ])
   | Pack_unpack (Unpack, pred) ->
-    Dnode (pp_ctor "Unpack", [ ResourceTypes.dtree_of_predicate_type pred ])
+    Dnode (pp_ctor "Unpack", [ ResourceTypes.Predicate.dtree pred ])
   | To_from_bytes (To, pred) ->
-    Dnode (pp_ctor "To_bytes", [ ResourceTypes.dtree_of_predicate_type pred ])
+    Dnode (pp_ctor "To_bytes", [ ResourceTypes.Predicate.dtree pred ])
   | To_from_bytes (From, pred) ->
-    Dnode (pp_ctor "From_bytes", [ ResourceTypes.dtree_of_predicate_type pred ])
+    Dnode (pp_ctor "From_bytes", [ ResourceTypes.Predicate.dtree pred ])
   | Have lc -> Dnode (pp_ctor "Have", [ LC.dtree lc ])
   | Instantiate (to_instantiate, it) ->
     Dnode (pp_ctor "Instantiate", [ dtree_of_to_instantiate to_instantiate; IT.dtree it ])

@@ -159,8 +159,8 @@ let get_recursive_preds (preds : (Sym.t * RP.definition) list) : Sym.Set.t =
     |> List.flatten
     |> List.map snd
     |> List.map fst
-    |> List.map ResourceTypes.predicate_name
-    |> List.filter_map (fun (n : RET.predicate_name) ->
+    |> List.map RET.get_name
+    |> List.filter_map (fun (n : RET.name) ->
       match n with PName name -> Some name | Owned _ -> None)
     |> Sym.Set.of_list
   in

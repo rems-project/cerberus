@@ -1271,7 +1271,7 @@ let add_trace_information _labels annots =
   return ()
 
 
-let bytes_qpred sym size pointer init : RET.qpredicate_type =
+let bytes_qpred sym size pointer init : RET.QPredicate.t =
   let here = Locations.other __FUNCTION__ in
   let bt' = WellTyped.quantifier_bt in
   { q = (sym, bt');
@@ -1300,7 +1300,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
         debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
         debug 3 (lazy (item "ctxt" (Context.pp ctxt))))
     in
-    let bytes_qpred sym ct pointer init : RET.qpredicate_type =
+    let bytes_qpred sym ct pointer init : RET.QPredicate.t =
       let here = Locations.other __FUNCTION__ in
       bytes_qpred sym (sizeOf_ ct here) pointer init
     in
@@ -1805,7 +1805,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        in
        aux es [] []
      | CN_progs (_, cn_progs) ->
-       let bytes_pred ct pointer init : RET.predicate_type =
+       let bytes_pred ct pointer init : RET.Predicate.t =
          { name = Owned (ct, init); pointer; iargs = [] }
        in
        let bytes_constraints ~(value : IT.t) ~(byte_arr : IT.t) (ct : Sctypes.t) =

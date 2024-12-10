@@ -2,75 +2,81 @@ type init =
   | Init
   | Uninit
 
-type predicate_name =
+val pp_init : init -> Pp.document
+
+type name =
   | Owned of Sctypes.t * init
   | PName of Sym.t
 [@@deriving eq]
 
-val alloc : predicate_name
+val pp_name : name -> Pp.document
 
-val pp_predicate_name : predicate_name -> Pp.document
+val dtree_of_name : name -> Cerb_frontend.Pp_ast.doc_tree
 
-type predicate_type =
-  { name : predicate_name;
-    pointer : IndexTerms.t;
-    iargs : IndexTerms.t list
-  }
+val subsumed : name -> name -> bool
 
-val make_alloc : IndexTerms.t -> predicate_type
+module Predicate : sig
+  type t =
+    { name : name;
+      pointer : IndexTerms.t;
+      iargs : IndexTerms.t list
+    }
 
-type qpredicate_type =
-  { name : predicate_name;
-    pointer : IndexTerms.t;
-    q : Sym.t * BaseTypes.t;
-    q_loc : Locations.t;
-    step : IndexTerms.t;
-    permission : IndexTerms.t;
-    iargs : IndexTerms.t list
-  }
+  val alloc : name
 
-val subsumed : predicate_name -> predicate_name -> bool
+  val subst : [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> t -> t
 
-type resource_type =
-  | P of predicate_type
-  | Q of qpredicate_type
+  val dtree : t -> Cerb_frontend.Pp_ast.doc_tree
+end
 
-type t = resource_type
+val make_alloc : IndexTerms.t -> Predicate.t
 
-val predicate_name : resource_type -> predicate_name
+module QPredicate : sig
+  type t =
+    { name : name;
+      pointer : IndexTerms.t;
+      q : Sym.t * BaseTypes.t;
+      q_loc : Locations.t;
+      step : IndexTerms.t;
+      permission : IndexTerms.t;
+      iargs : IndexTerms.t list
+    }
 
-val pp_aux : resource_type -> 'a Terms.annot option -> Pp.document
+  val alpha_rename_ : Sym.t -> t -> t
 
-val pp : resource_type -> Pp.document
+  val alpha_rename : t -> t
 
-val equal : resource_type -> resource_type -> bool
+  val subst : [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> t -> t
 
-val json : resource_type -> Yojson.Safe.t
+  val dtree : t -> Cerb_frontend.Pp_ast.doc_tree
+end
 
-val alpha_rename_qpredicate_type_ : Sym.t -> qpredicate_type -> qpredicate_type
+type t =
+  | P of Predicate.t
+  | Q of QPredicate.t
 
-val alpha_rename_qpredicate_type : qpredicate_type -> qpredicate_type
+val equal : t -> t -> bool
 
-val subst_predicate_type
-  :  [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t ->
-  predicate_type ->
-  predicate_type
+val compare : t -> t -> int
 
-val subst
-  :  [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t ->
-  resource_type ->
-  resource_type
+val get_name : t -> name
 
-val free_vars_bts : resource_type -> BaseTypes.t Sym.Map.t
+val same_name : t -> t -> bool
 
-val free_vars : resource_type -> Sym.Set.t
+val pp_aux : t -> 'a Terms.annot option -> Pp.document
 
-val same_predicate_name : resource_type -> resource_type -> bool
+val pp : t -> Pp.document
 
-val alpha_equivalent : resource_type -> resource_type -> bool
+val json : t -> Yojson.Safe.t
 
-val steps_constant : resource_type -> bool
+val subst : [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> t -> t
 
-val dtree_of_predicate_type : predicate_type -> Cerb_frontend.Pp_ast.doc_tree
+val free_vars_bts : t -> IndexTerms.BT.t Sym.Map.t
 
-val dtree : resource_type -> Cerb_frontend.Pp_ast.doc_tree
+val free_vars : t -> Sym.Set.t
+
+val alpha_equivalent : t -> t -> bool
+
+val steps_constant : t -> bool
+
+val dtree : t -> Cerb_frontend.Pp_ast.doc_tree

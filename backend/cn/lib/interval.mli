@@ -101,5 +101,5 @@ module Solver : sig
   module RT = ResourceTypes
 
   (** Try to simplify a resource type *)
-  val simp_rt : (IT.t -> IT.t option) -> RT.resource_type -> RT.resource_type
+  val simp_rt : (IT.t -> IT.t option) -> RT.t -> RT.t
 end

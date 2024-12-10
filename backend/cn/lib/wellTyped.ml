@@ -987,7 +987,7 @@ module WRET = struct
   let welltyped loc r =
     Pp.debug 22 (lazy (Pp.item "WRET: checking" (RET.pp r)));
     let@ spec_iargs =
-      match RET.predicate_name r with
+      match RET.get_name r with
       | Owned (_ct, _init) -> return []
       | PName name ->
         let@ def = Typing.get_resource_predicate_def loc name in
