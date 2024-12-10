@@ -30,12 +30,12 @@ function separator() {
 CONFIGS=("--coverage" "--sized-null" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
 
 # For each configuration
-for CONFIG in ${CONFIGS[@]}; do
+for CONFIG in "${CONFIGS[@]}"; do
   separator
   echo "Running CI with CLI config \"$CONFIG\""
   separator
 
-  CONFIG="$CONFIG --allowed-depth-failures=100 --input-timeout=1000"
+  FULL_CONFIG="$CONFIG --allowed-depth-failures=100 --input-timeout=1000 --progress-level=1"
 
   # Test each `*.c` file
   for TEST in $FILES; do
@@ -43,13 +43,13 @@ for CONFIG in ${CONFIGS[@]}; do
 
     # Run passing tests
     if [[ $TEST == *.pass.c ]]; then
-      $CN test "$TEST" --output-dir="test" $CONFIG
+      $CN test "$TEST" --output-dir="test" $FULL_CONFIG
       RET=$?
       if [[ "$RET" != 0 ]]; then
         echo
         echo "$TEST -- Tests failed unexpectedly"
         NUM_FAILED=$(($NUM_FAILED + 1))
-        FAILED="$FAILED $TEST"
+        FAILED="$FAILED $TEST($CONFIG)"
         eval "$CLEANUP"
         continue
       else
@@ -60,13 +60,13 @@ for CONFIG in ${CONFIGS[@]}; do
 
     # Run failing tests
     if [[ $TEST == *.fail.c ]]; then
-      $CN test "$TEST" --output-dir="test" $CONFIG
+      $CN test "$TEST" --output-dir="test" $FULL_CONFIG
       RET=$?
       if [[ "$RET" = 0 ]]; then
         echo
         echo "$TEST -- Tests passed unexpectedly"
         NUM_FAILED=$(($NUM_FAILED + 1))
-        FAILED="$FAILED $TEST"
+        FAILED="$FAILED $TEST($CONFIG)"
         eval "$CLEANUP"
         continue
       else

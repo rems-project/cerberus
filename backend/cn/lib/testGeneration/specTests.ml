@@ -451,6 +451,10 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
           |> Option.map (fun level -> [ "--logging-level"; string_of_int level ])
           |> Option.to_list
           |> List.flatten)
+       @ (Config.has_progress_level ()
+          |> Option.map (fun level -> [ "--progress-level"; string_of_int level ])
+          |> Option.to_list
+          |> List.flatten)
        @ (if Config.is_interactive () then
             [ "--interactive" ]
           else
