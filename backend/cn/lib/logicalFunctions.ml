@@ -4,8 +4,6 @@ module BT = BaseTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 open IndexTerms
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 
 type def_or_uninterp =
   | Def of IT.t
@@ -78,32 +76,32 @@ let try_open_fun def args =
    def.return_bt body ) (try_open_fun def name args) *)
 
 (* let add_unfolds_to_terms preds terms = let rec f acc t = match IT.term t with |
-   IT.Apply (name, ts) -> let def = SymMap.find name preds in begin match
+   IT.Apply (name, ts) -> let def = Sym.Map.find name preds in begin match
    try_open_fun_to_term def name ts with | None -> acc | Some t2 -> f (t2 :: acc) t2 end |
    _ -> acc in IT.fold_list (fun _ acc t -> f acc t) [] terms terms *)
 
 (* (\* Check for cycles in the logical predicate graph, which would cause *)
 (*    the system to loop trying to unfold them. Predicates whose definition *)
 (*    are marked with Rec_Def aren't checked, as cycles there are expected. *\) *)
-(* let cycle_check (defs : definition SymMap.t) = *)
+(* let cycle_check (defs : definition Sym.Map.t) = *)
 (*   let def_preds nm =  *)
-(*     let def =  SymMap.find nm defs in *)
+(*     let def =  Sym.Map.find nm defs in *)
 (*     begin match def.definition with *)
-(*     | Def t -> SymSet.elements (IT.preds_of (Body.to_term def.return_bt t)) *)
+(*     | Def t -> Sym.Set.elements (IT.preds_of (Body.to_term def.return_bt t)) *)
 (*     | _ -> [] *)
 (*     end *)
 (*   in *)
 (*   let rec search known_ok = function *)
 (*     | [] -> None *)
-(*     | (nm, Some path) :: q -> if SymSet.mem nm known_ok *)
+(*     | (nm, Some path) :: q -> if Sym.Set.mem nm known_ok *)
 (*       then search known_ok q *)
 (*       else if List.exists (Sym.equal nm) path *)
 (*       then Some (List.rev path @ [nm]) *)
 (*       else *)
 (*         let deps = List.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
 (*         search known_ok (deps @ [(nm, None)] @ q) *)
-(*     | (nm, None) :: q -> search (SymSet.add nm known_ok) q *)
-(* in search SymSet.empty (List.map (fun (p, _) -> (p, Some [])) (SymMap.bindings
+(*     | (nm, None) :: q -> search (Sym.Set.add nm known_ok) q *)
+(* in search Sym.Set.empty (List.map (fun (p, _) -> (p, Some [])) (Sym.Map.bindings
    defs)) *)
 
 (*Extensibility hook. For now, all functions are displayed as "interesting" in error reporting*)

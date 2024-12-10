@@ -1,7 +1,6 @@
 module CF = Cerb_frontend
 module LS = LogicalSorts
 module BT = BaseTypes
-module SymSet = Set.Make (Sym)
 module TE = TypeErrors
 module RE = Resources
 module RET = ResourceTypes
@@ -1373,13 +1372,12 @@ end
 module BaseTyping = struct
   open Typing
   open TypeErrors
-  module SymMap = Map.Make (Sym)
   module BT = BaseTypes
   module RT = ReturnTypes
   module AT = ArgumentTypes
   open BT
 
-  type label_context = (AT.lt * label_kind * Locations.t) SymMap.t
+  type label_context = (AT.lt * label_kind * Locations.t) Sym.Map.t
 
   let check_against_core_bt loc msg2 cbt bt =
     Typing.embed_resultat
@@ -2117,7 +2115,7 @@ module BaseTyping = struct
         | Erun (l, pes) ->
           (* copying from check.ml *)
           let@ lt, _lkind =
-            match SymMap.find_opt l label_context with
+            match Sym.Map.find_opt l label_context with
             | None ->
               fail (fun _ ->
                 { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l) })
@@ -2200,9 +2198,9 @@ module WProc = struct
         in
         (*debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym)); debug 6 (lazy
           (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));*)
-        SymMap.add sym (lt, kind, loc) label_context)
+        Sym.Map.add sym (lt, kind, loc) label_context)
       label_defs
-      SymMap.empty
+      Sym.Map.empty
 
 
   let typ p = WArgs.typ (fun (_body, _labels, rt) -> rt) p
@@ -2411,7 +2409,7 @@ module WDT = struct
     let@ () =
       ListM.iterM
         (fun scc ->
-          let scc_set = SymSet.of_list scc in
+          let scc_set = Sym.Set.of_list scc in
           ListM.iterM
             (fun dt ->
               let { loc; cases } = List.assoc Sym.equal dt datatypes in
@@ -2420,11 +2418,11 @@ module WDT = struct
                   ListM.iterM
                     (fun (id, bt) ->
                       let indirect_deps =
-                        SymSet.of_list
+                        Sym.Set.of_list
                           (List.filter_map BT.is_datatype_bt (BT.contained bt))
                       in
-                      let bad = SymSet.inter indirect_deps scc_set in
-                      match SymSet.elements bad with
+                      let bad = Sym.Set.inter indirect_deps scc_set in
+                      match Sym.Set.elements bad with
                       | [] -> return ()
                       | dt' :: _ ->
                         let err =

@@ -4,13 +4,20 @@ include S
 
 let executable_spec_enabled = ref false
 
-type t = S.sym
+module Ord = struct
+  type t = S.sym
+
+  let compare = S.symbol_compare
+end
+
+include Ord
 
 type sym = t
 
 let equal = S.symbolEquality
 
-let compare = S.symbol_compare
+module Set = Set.Make (Ord)
+module Map = Map.Make (Ord)
 
 type description = S.symbol_description
 

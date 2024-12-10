@@ -1,7 +1,5 @@
 open Pp.Infix
 module IT = IndexTerms
-module SymSet = IT.SymSet
-module SymMap = IT.SymMap
 module LCSet = Set.Make (LogicalConstraints)
 
 type init =
@@ -121,7 +119,7 @@ let subst_predicate_type substitution (p : predicate_type) =
 
 let subst_qpredicate_type substitution (qp : qpredicate_type) =
   let qp =
-    if SymSet.mem (fst qp.q) substitution.Subst.relevant then
+    if Sym.Set.mem (fst qp.q) substitution.Subst.relevant then
       alpha_rename_qpredicate_type qp
     else
       qp
@@ -144,20 +142,20 @@ let subst (substitution : _ Subst.t) = function
 let free_vars_bts = function
   | P p -> IT.free_vars_bts_list (p.pointer :: p.iargs)
   | Q p ->
-    SymMap.union
+    Sym.Map.union
       (fun _ bt1 bt2 ->
         assert (BaseTypes.equal bt1 bt2);
         Some bt1)
       (IT.free_vars_bts_list [ p.pointer; p.step ])
-      (SymMap.remove (fst p.q) (IT.free_vars_bts_list (p.permission :: p.iargs)))
+      (Sym.Map.remove (fst p.q) (IT.free_vars_bts_list (p.permission :: p.iargs)))
 
 
 let free_vars = function
   | P p -> IT.free_vars_list (p.pointer :: p.iargs)
   | Q p ->
-    SymSet.union
-      (SymSet.union (IT.free_vars p.pointer) (IT.free_vars p.step))
-      (SymSet.remove (fst p.q) (IT.free_vars_list (p.permission :: p.iargs)))
+    Sym.Set.union
+      (Sym.Set.union (IT.free_vars p.pointer) (IT.free_vars p.step))
+      (Sym.Set.remove (fst p.q) (IT.free_vars_list (p.permission :: p.iargs)))
 
 
 (* resources of the same type as a request, such that the resource coult potentially be

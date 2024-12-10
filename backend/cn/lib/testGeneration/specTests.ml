@@ -8,7 +8,6 @@ module CtA = Cn_internal_to_ail
 module Utils = Executable_spec_utils
 module ESpecInternal = Executable_spec_internal
 module Config = TestGenConfig
-module SymSet = Set.Make (Sym)
 
 let debug_log_file : out_channel option ref = ref None
 
@@ -91,8 +90,8 @@ let compile_random_test_case
       inst.internal
       |> Option.get
       |> AT.get_lat
-      |> LAT.free_vars (fun _ -> SymSet.empty)
-      |> SymSet.to_seq
+      |> LAT.free_vars (fun _ -> Sym.Set.empty)
+      |> Sym.Set.to_seq
       |> List.of_seq
       |> List.filter (fun x ->
         not
@@ -268,8 +267,8 @@ let should_be_unit_test
   match decl with
   | Decl_function (_, _, args, _, _, _) ->
     List.is_empty args
-    && SymSet.is_empty
-         (LAT.free_vars (fun _ -> SymSet.empty) (AT.get_lat (Option.get inst.internal)))
+    && Sym.Set.is_empty
+         (LAT.free_vars (fun _ -> Sym.Set.empty) (AT.get_lat (Option.get inst.internal)))
   | Decl_object _ -> failwith __LOC__
 
 
@@ -590,7 +589,7 @@ let generate
   let insts = prog5 |> Executable_spec_extract.collect_instrumentation |> fst in
   let selected_fsyms =
     Check.select_functions
-      (SymSet.of_list
+      (Sym.Set.of_list
          (List.map
             (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn)
             insts))
@@ -598,7 +597,7 @@ let generate
   let insts =
     insts
     |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
-      Option.is_some inst.internal && SymSet.mem inst.fn selected_fsyms)
+      Option.is_some inst.internal && Sym.Set.mem inst.fn selected_fsyms)
   in
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in

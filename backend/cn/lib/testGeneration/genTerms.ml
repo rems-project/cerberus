@@ -3,8 +3,6 @@ module IT = IndexTerms
 module LC = LogicalConstraints
 module CF = Cerb_frontend
 module GBT = GenBaseTypes
-module SymMap = Map.Make (Sym)
-module SymSet = Set.Make (Sym)
 
 type t_ =
   | Arbitrary (** Generate arbitrary values *)
@@ -263,31 +261,31 @@ and alpha_rename_gen x gt =
 
 
 and suitably_alpha_rename_gen syms x gt =
-  if SymSet.mem x syms then
+  if Sym.Set.mem x syms then
     alpha_rename_gen x gt
   else
     (x, gt)
 
 
-let rec free_vars_bts_ (gt_ : t_) : BT.t SymMap.t =
+let rec free_vars_bts_ (gt_ : t_) : BT.t Sym.Map.t =
   let loc = Locations.other __LOC__ in
   match gt_ with
-  | Arbitrary | Uniform _ -> SymMap.empty
+  | Arbitrary | Uniform _ -> Sym.Map.empty
   | Pick wgts -> free_vars_bts_list (List.map snd wgts)
   | Alloc it -> IT.free_vars_bts it
   | Call (_, xits) -> IT.free_vars_bts_list (List.map snd xits)
   | Asgn ((it_addr, _), it_val, gt') ->
     free_vars_bts_list [ return_ it_addr loc; return_ it_val loc; gt' ]
   | Let (_, (x, gt1), gt2) ->
-    SymMap.union
+    Sym.Map.union
       (fun _ bt1 bt2 ->
         assert (BT.equal bt1 bt2);
         Some bt1)
       (free_vars_bts gt1)
-      (SymMap.remove x (free_vars_bts gt2))
+      (Sym.Map.remove x (free_vars_bts gt2))
   | Return it -> IT.free_vars_bts it
   | Assert (lc, gt') ->
-    (SymMap.union (fun _ bt1 bt2 ->
+    (Sym.Map.union (fun _ bt1 bt2 ->
        assert (BT.equal bt1 bt2);
        Some bt1))
       (free_vars_bts gt')
@@ -295,27 +293,27 @@ let rec free_vars_bts_ (gt_ : t_) : BT.t SymMap.t =
   | ITE (it_if, gt_then, gt_else) ->
     free_vars_bts_list [ return_ it_if loc; gt_then; gt_else ]
   | Map ((i, _bt, it_perm), gt') ->
-    SymMap.remove i (free_vars_bts_list [ return_ it_perm loc; gt' ])
+    Sym.Map.remove i (free_vars_bts_list [ return_ it_perm loc; gt' ])
 
 
-and free_vars_bts (GT (gt_, _, _) : t) : BT.t SymMap.t = free_vars_bts_ gt_
+and free_vars_bts (GT (gt_, _, _) : t) : BT.t Sym.Map.t = free_vars_bts_ gt_
 
-and free_vars_bts_list : t list -> BT.t SymMap.t =
+and free_vars_bts_list : t list -> BT.t Sym.Map.t =
   fun xs ->
   List.fold_left
     (fun ss t ->
-      SymMap.union
+      Sym.Map.union
         (fun _ bt1 bt2 ->
           assert (BT.equal bt1 bt2);
           Some bt1)
         ss
         (free_vars_bts t))
-    SymMap.empty
+    Sym.Map.empty
     xs
 
 
-let free_vars (gt : t) : SymSet.t =
-  gt |> free_vars_bts |> SymMap.bindings |> List.map fst |> SymSet.of_list
+let free_vars (gt : t) : Sym.Set.t =
+  gt |> free_vars_bts |> Sym.Map.bindings |> List.map fst |> Sym.Set.of_list
 
 
 let rec map_gen_pre (f : t -> t) (g : t) : t =

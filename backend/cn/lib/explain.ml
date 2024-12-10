@@ -8,8 +8,6 @@ module LC = LogicalConstraints
 module LF = LogicalFunctions
 module LAT = LogicalArgumentTypes
 module LS = LogicalSorts
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 module StringMap = Map.Make (String)
 module C = Context
 module Loc = Locations
@@ -51,7 +49,7 @@ let relevant_predicate_clauses global name req =
   let open Global in
   let open ResourcePredicates in
   let clauses =
-    let defs = SymMap.bindings global.resource_predicates in
+    let defs = Sym.Map.bindings global.resource_predicates in
     List.concat_map
       (fun (nm, def) ->
         match def.clauses with
@@ -83,8 +81,8 @@ let subterms_without_bound_variables bindings =
     (fun bindings acc t ->
       let pats = List.map fst bindings in
       let bound = List.concat_map bound_by_pattern pats in
-      let bound = SymSet.of_list (List.map fst bound) in
-      if SymSet.(is_empty (inter bound (IT.free_vars t))) then
+      let bound = Sym.Set.of_list (List.map fst bound) in
+      if Sym.Set.(is_empty (inter bound (IT.free_vars t))) then
         ITSet.add t acc
       else
         acc)
@@ -237,8 +235,8 @@ let state ctxt log model_with_q extras =
       in
       ITSet.of_list
         (List.map (fun (s, ls) -> make s ls) quantifier_counter_model
-         @ List.filter_map basetype_binding (SymMap.bindings ctxt.computational)
-         @ List.filter_map basetype_binding (SymMap.bindings ctxt.logical))
+         @ List.filter_map basetype_binding (Sym.Map.bindings ctxt.computational)
+         @ List.filter_map basetype_binding (Sym.Map.bindings ctxt.logical))
     in
     let unproven =
       match extras.unproven_constraint with

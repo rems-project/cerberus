@@ -1,5 +1,4 @@
 module Loc = Locations
-module SymSet = Set.Make (Sym)
 
 type t = BaseTypes.t
 

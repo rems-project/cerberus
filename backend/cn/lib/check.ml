@@ -6,8 +6,6 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module IdSet = Set.Make (Id)
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 module Loc = Locations
 module RI = ResourceInference
 open IT
@@ -339,7 +337,7 @@ let check_single_ct loc expr =
 let is_fun_addr global t =
   match IT.is_sym t with
   | Some (s, _) ->
-    if SymMap.mem s global.Global.fun_decls then
+    if Sym.Map.mem s global.Global.fun_decls then
       Some s
     else
       None
@@ -353,7 +351,7 @@ let known_function_pointer loc p =
     match already_known with
     | Some _ -> (* no need to find more eqs *) return ()
     | None ->
-      let global_funs = SymMap.bindings global.Global.fun_decls in
+      let global_funs = Sym.Map.bindings global.Global.fun_decls in
       let fun_addrs =
         List.map (fun (sym, (loc, _, _)) -> IT.sym_ (sym, BT.(Loc ()), loc)) global_funs
       in
@@ -1192,7 +1190,7 @@ let _check_used_distinct loc used =
   ListM.iterM check_rd (List.concat (List.map fst used))
 
 
-(*type labels = (AT.lt * label_kind) SymMap.t*)
+(*type labels = (AT.lt * label_kind) Sym.Map.t*)
 
 let load loc pointer ct =
   let@ value =
@@ -2064,7 +2062,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
      | Erun (label_sym, pes) ->
        let@ () = ensure_base_type loc ~expect Unit in
        let@ lt, lkind =
-         match SymMap.find_opt label_sym labels with
+         match Sym.Map.find_opt label_sym labels with
          | None ->
            fail (fun _ ->
              { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym) })
@@ -2175,7 +2173,7 @@ let check_procedure
                   bind_arguments loc label_args_and_body
                 in
                 let@ () = add_rs loc label_resources in
-                let _, label_kind, loc = SymMap.find lsym label_context in
+                let _, label_kind, loc = Sym.Map.find lsym label_context in
                 let@ () =
                   modify_where Where.(set_section (Label { loc; label = label_kind }))
                 in
@@ -2384,27 +2382,27 @@ let c_function_name ((fsym, (_loc, _args_and_body)) : c_function) : string =
 
 (** Filter functions according to [skip_and_only]: first according to "only",
     then according to "skip" *)
-let select_functions (fsyms : SymSet.t) : SymSet.t =
+let select_functions (fsyms : Sym.Set.t) : Sym.Set.t =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
   let str_fsyms s =
-    let ss = SymSet.filter (matches_str s) fsyms in
-    if SymSet.is_empty ss then (
+    let ss = Sym.Set.filter (matches_str s) fsyms in
+    if Sym.Set.is_empty ss then (
       Pp.warn_noloc (!^"function" ^^^ !^s ^^^ !^"not found");
-      SymSet.empty)
+      Sym.Set.empty)
     else
       ss
   in
   let strs_fsyms ss =
-    ss |> List.map str_fsyms |> List.fold_left SymSet.union SymSet.empty
+    ss |> List.map str_fsyms |> List.fold_left Sym.Set.union Sym.Set.empty
   in
   let skip = strs_fsyms (fst !skip_and_only) in
   let only = strs_fsyms (snd !skip_and_only) in
   let only_funs =
     match snd !skip_and_only with
     | [] -> fsyms
-    | _ss -> SymSet.filter (fun fsym -> SymSet.mem fsym only) fsyms
+    | _ss -> Sym.Set.filter (fun fsym -> Sym.Set.mem fsym only) fsyms
   in
-  SymSet.filter (fun fsym -> not (SymSet.mem fsym skip)) only_funs
+  Sym.Set.filter (fun fsym -> not (Sym.Set.mem fsym skip)) only_funs
 
 
 (** Check a single C function. Failure of the check is encoded monadically. *)
@@ -2467,9 +2465,9 @@ let check_c_functions_all (funs : c_function list) : (string * TypeErrors.t) lis
     with the name of the function in which they occurred. When [fail_fast] is
     set, the first error encountered will halt checking. *)
 let check_c_functions (funs : c_function list) : (string * TypeErrors.t) list m =
-  let selected_fsyms = select_functions (SymSet.of_list (List.map fst funs)) in
+  let selected_fsyms = select_functions (Sym.Set.of_list (List.map fst funs)) in
   let selected_funs =
-    List.filter (fun (fsym, _) -> SymSet.mem fsym selected_fsyms) funs
+    List.filter (fun (fsym, _) -> Sym.Set.mem fsym selected_fsyms) funs
   in
   match !fail_fast with
   | true ->
@@ -2647,7 +2645,7 @@ let check_decls_lemmata_fun_specs (file : unit Mu.file) =
   let@ () = record_globals file.globs in
   let@ () = register_fun_syms file in
   let@ () =
-    ListM.iterM (add_stdlib_spec file.call_funinfo) (SymSet.elements file.stdlib_syms)
+    ListM.iterM (add_stdlib_spec file.call_funinfo) (Sym.Set.elements file.stdlib_syms)
   in
   Pp.debug 3 (lazy (Pp.headline "added top-level types and constants."));
   let@ () = record_and_check_logical_functions file.logical_predicates in

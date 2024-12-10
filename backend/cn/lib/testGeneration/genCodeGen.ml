@@ -8,7 +8,6 @@ module IT = IndexTerms
 module LC = LogicalConstraints
 module GT = GenTerms
 module GR = GenRuntime
-module SymSet = Set.Make (Sym)
 
 let mk_expr = Utils.mk_expr
 
@@ -203,12 +202,12 @@ let rec compile_term
               macro_call "CN_GEN_CALL_TO" to_vars
             ])
          @
-         if GR.SymSet.is_empty path_vars then
+         if Sym.Set.is_empty path_vars then
            []
          else
            [ macro_call
                "CN_GEN_CALL_PATH_VARS"
-               (path_vars |> GR.SymSet.to_seq |> List.of_seq |> List.map wrap_to_string)
+               (path_vars |> Sym.Set.to_seq |> List.of_seq |> List.map wrap_to_string)
            ]),
       mk_expr (AilEident x) )
   | Asgn { pointer; addr; sct; value; last_var; rest } ->
@@ -253,7 +252,7 @@ let rec compile_term
                                       ( None,
                                         [ (Locations.other __LOC__, [ Sym.pp_string x ]) ]
                                       )) )))
-                        (List.of_seq (SymSet.to_seq (IT.free_vars addr)))
+                        (List.of_seq (Sym.Set.to_seq (IT.free_vars addr)))
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
     in
@@ -329,7 +328,7 @@ let rec compile_term
                                         ( None,
                                           [ (Locations.other __LOC__, [ Sym.pp_string x ])
                                           ] )) )))
-                          (List.of_seq (GR.SymSet.to_seq (GR.free_vars_term value)))
+                          (List.of_seq (Sym.Set.to_seq (GR.free_vars_term value)))
                       @ [ mk_expr (AilEconst ConstantNull) ] )))
           ])
     in
@@ -359,7 +358,7 @@ let rec compile_term
                                       ( None,
                                         [ (Locations.other __LOC__, [ Sym.pp_string x ]) ]
                                       )) )))
-                        (List.of_seq (SymSet.to_seq (LC.free_vars prop)))
+                        (List.of_seq (Sym.Set.to_seq (LC.free_vars prop)))
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
     in
@@ -424,7 +423,7 @@ let rec compile_term
                                           [ (Locations.other __LOC__, [ Sym.pp_string x ])
                                           ] )) )))
                           (List.of_seq
-                             (SymSet.to_seq (SymSet.remove i (IT.free_vars perm))))
+                             (Sym.Set.to_seq (Sym.Set.remove i (IT.free_vars perm))))
                       @ [ mk_expr (AilEconst ConstantNull) ] )))
           ])
     in
@@ -457,7 +456,7 @@ let rec compile_term
     let e_ty = mk_expr (AilEident (Sym.fresh_named (name_of_bt name Memory.size_bt))) in
     let e_tmp = mk_expr (AilEident marker_var) in
     let e_size = mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")) in
-    let syms_l = syms |> GR.SymSet.to_seq |> List.of_seq in
+    let syms_l = syms |> Sym.Set.to_seq |> List.of_seq in
     let b =
       syms_l |> List.map (fun x -> Utils.create_binding x (C.mk_ctype_integer Size_t))
     in
@@ -486,7 +485,7 @@ let rec compile_term
                (AilEcall
                   ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_SPLIT_END")),
                     [ e_ty; e_tmp; e_size; mk_expr (AilEident last_var) ]
-                    @ List.map wrap_to_string (List.of_seq (GR.SymSet.to_seq path_vars))
+                    @ List.map wrap_to_string (List.of_seq (Sym.Set.to_seq path_vars))
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
     in

@@ -6,7 +6,6 @@ module RE = Resources
 module LC = LogicalConstraints
 module LCSet = Set.Make (LC)
 module Loc = Locations
-module SymMap = Map.Make (Sym)
 module IntMap = Map.Make (Int)
 
 type l_info = Locations.t * Pp.document Lazy.t
@@ -36,8 +35,8 @@ type resource_history =
   }
 
 type t =
-  { computational : (basetype_or_value * l_info) SymMap.t;
-    logical : (basetype_or_value * l_info) SymMap.t;
+  { computational : (basetype_or_value * l_info) Sym.Map.t;
+    logical : (basetype_or_value * l_info) Sym.Map.t;
     resources : (RE.t * int) list * int;
     resource_history : resource_history IntMap.t;
     constraints : LCSet.t;
@@ -49,9 +48,9 @@ let empty =
   let logical =
     let loc_str = __FILE__ ^ ":" ^ string_of_int __LINE__ in
     let l_info = (Locations.other loc_str, lazy (Pp.string loc_str)) in
-    SymMap.(empty |> add Alloc.History.sym (BaseType Alloc.History.bt, l_info))
+    Sym.Map.(empty |> add Alloc.History.sym (BaseType Alloc.History.bt, l_info))
   in
-  { computational = SymMap.empty;
+  { computational = Sym.Map.empty;
     logical;
     resources = ([], 0);
     resource_history = IntMap.empty;
@@ -71,7 +70,7 @@ let pp_basetype_or_value = function
 let pp_variable_bindings bindings =
   Pp.list
     (fun (sym, (binding, _)) -> typ (Sym.pp sym) (pp_basetype_or_value binding))
-    (SymMap.bindings bindings)
+    (Sym.Map.bindings bindings)
 
 
 let pp_constraints constraints =
@@ -91,27 +90,27 @@ let pp (ctxt : t) =
   ^/^ item "constraints" (pp_constraints ctxt.constraints)
 
 
-let bound_a s ctxt = SymMap.exists (fun s' _ -> Sym.equal s s') ctxt.computational
+let bound_a s ctxt = Sym.Map.exists (fun s' _ -> Sym.equal s s') ctxt.computational
 
-let bound_l s ctxt = SymMap.exists (fun s' _ -> Sym.equal s s') ctxt.logical
+let bound_l s ctxt = Sym.Map.exists (fun s' _ -> Sym.equal s s') ctxt.logical
 
 let bound s ctxt = bound_a s ctxt || bound_l s ctxt
 
 let get_a s ctxt =
-  match SymMap.find_opt s ctxt.computational with
+  match Sym.Map.find_opt s ctxt.computational with
   | Some (bt_v, _) -> bt_v
   | None -> failwith ("Context.get_a: not found: " ^ Pp.plain (Sym.pp_debug s))
 
 
 let get_l s ctxt =
-  match SymMap.find_opt s ctxt.logical with
+  match Sym.Map.find_opt s ctxt.logical with
   | Some (bt_v, _) -> bt_v
   | None -> failwith ("Context.get_l: not found: " ^ Pp.plain (Sym.pp_debug s))
 
 
 let add_a_binding s binding info ctxt =
   if bound s ctxt then failwith ("already bound: " ^ Sym.pp_string s);
-  { ctxt with computational = SymMap.add s (binding, info) ctxt.computational }
+  { ctxt with computational = Sym.Map.add s (binding, info) ctxt.computational }
 
 
 let add_a s bt info ctxt = add_a_binding s (BaseType bt) info ctxt
@@ -120,7 +119,7 @@ let add_a_value s value info ctxt = add_a_binding s (Value value) info ctxt
 
 let add_l_binding s binding info ctxt =
   if bound s ctxt then failwith ("already bound: " ^ Sym.pp_string s);
-  { ctxt with logical = SymMap.add s (binding, info) ctxt.logical }
+  { ctxt with logical = Sym.Map.add s (binding, info) ctxt.logical }
 
 
 let add_l s bt info ctxt = add_l_binding s (BaseType bt) info ctxt
@@ -131,12 +130,12 @@ let add_l_value s value info ctxt = add_l_binding s (Value value) info ctxt
    attached to s: s will still be bound "logically", but out of scope as far as the Core
    program goes. *)
 let remove_a s ctxt =
-  let binding, info = SymMap.find s ctxt.computational in
+  let binding, info = Sym.Map.find s ctxt.computational in
   add_l_binding
     s
     binding
     info
-    { ctxt with computational = SymMap.remove s ctxt.computational }
+    { ctxt with computational = Sym.Map.remove s ctxt.computational }
 
 
 let add_c c (ctxt : t) =
@@ -246,13 +245,13 @@ let json (ctxt : t) : Yojson.Safe.t =
     List.map
       (fun (sym, (binding, _)) ->
         `Assoc [ ("name", Sym.json sym); ("type", basetype_or_value binding) ])
-      (SymMap.bindings ctxt.computational)
+      (Sym.Map.bindings ctxt.computational)
   in
   let logical =
     List.map
       (fun (sym, (binding, _)) ->
         `Assoc [ ("name", Sym.json sym); ("type", basetype_or_value binding) ])
-      (SymMap.bindings ctxt.logical)
+      (Sym.Map.bindings ctxt.logical)
   in
   let resources = List.map RE.json (get_rs ctxt) in
   let constraints = List.map LC.json (LCSet.elements ctxt.constraints) in
@@ -275,14 +274,14 @@ let not_given_to_solver ctxt =
     filter LogicalConstraints.is_forall (LCSet.elements ctxt.constraints)
   in
   let funs =
-    SymMap.bindings
-      (SymMap.filter
+    Sym.Map.bindings
+      (Sym.Map.filter
          (fun _ v -> not (LogicalFunctions.given_to_solver v))
          global.logical_functions)
   in
   let preds =
-    SymMap.bindings
-      (SymMap.filter
+    Sym.Map.bindings
+      (Sym.Map.filter
          (fun _ v -> not (ResourcePredicates.given_to_solver v))
          global.resource_predicates)
   in

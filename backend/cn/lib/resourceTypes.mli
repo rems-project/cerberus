@@ -64,9 +64,9 @@ val subst
   resource_type ->
   resource_type
 
-val free_vars_bts : resource_type -> BaseTypes.t IndexTerms.SymMap.t
+val free_vars_bts : resource_type -> BaseTypes.t Sym.Map.t
 
-val free_vars : resource_type -> IndexTerms.SymSet.t
+val free_vars : resource_type -> Sym.Set.t
 
 val same_predicate_name : resource_type -> resource_type -> bool
 

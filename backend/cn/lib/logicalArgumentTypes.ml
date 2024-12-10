@@ -4,8 +4,6 @@ module IT = IndexTerms
 module LS = LogicalSorts
 module RET = ResourceTypes
 module LC = LogicalConstraints
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 
 type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
@@ -54,7 +52,7 @@ and alpha_rename i_subst s t =
 
 
 and suitably_alpha_rename i_subst syms s t =
-  if SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename i_subst s t
   else
     (s, t)
@@ -62,18 +60,18 @@ and suitably_alpha_rename i_subst syms s t =
 
 let free_vars_bts i_free_vars_bts =
   let union =
-    SymMap.union (fun _ bt1 bt2 ->
+    Sym.Map.union (fun _ bt1 bt2 ->
       assert (BT.equal bt1 bt2);
       Some bt1)
   in
   let rec aux = function
     | Define ((s, it), _info, t) ->
       let it_vars = IT.free_vars_bts it in
-      let t_vars = SymMap.remove s (aux t) in
+      let t_vars = Sym.Map.remove s (aux t) in
       union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
       let re_vars = RET.free_vars_bts re in
-      let t_vars = SymMap.remove s (aux t) in
+      let t_vars = Sym.Map.remove s (aux t) in
       union re_vars t_vars
     | Constraint (lc, _info, t) ->
       let lc_vars = LC.free_vars_bts lc in
@@ -88,16 +86,16 @@ let free_vars i_free_vars =
   let rec aux = function
     | Define ((s, it), _info, t) ->
       let it_vars = IT.free_vars it in
-      let t_vars = SymSet.remove s (aux t) in
-      SymSet.union it_vars t_vars
+      let t_vars = Sym.Set.remove s (aux t) in
+      Sym.Set.union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
       let re_vars = RET.free_vars re in
-      let t_vars = SymSet.remove s (aux t) in
-      SymSet.union re_vars t_vars
+      let t_vars = Sym.Set.remove s (aux t) in
+      Sym.Set.union re_vars t_vars
     | Constraint (lc, _info, t) ->
       let lc_vars = LC.free_vars lc in
       let t_vars = aux t in
-      SymSet.union lc_vars t_vars
+      Sym.Set.union lc_vars t_vars
     | I i -> i_free_vars i
   in
   aux
@@ -154,11 +152,11 @@ let alpha_unique ss =
     match at with
     | Define ((name, it), info, t) ->
       let name, t = rename_if ss name t in
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       Define ((name, it), info, t)
     | Resource ((name, (re, bt)), info, t) ->
       let name, t = rename_if ss name t in
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       Resource ((name, (re, bt)), info, f ss t)
     | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
     | I i -> I (RT.alpha_unique ss i)

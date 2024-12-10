@@ -46,7 +46,7 @@ let packing_ft loc global provable ret =
        let at = LAT.Resource ((o_s, (qpred, IT.bt o)), (loc, None), LAT.I o) in
        Some at
      | Owned (Struct tag, init) ->
-       let layout = SymMap.find tag global.Global.struct_decls in
+       let layout = Sym.Map.find tag global.Global.struct_decls in
        let lrt, value =
          List.fold_right
            (fun { offset; size; member_or_padding } (lrt, value) ->
@@ -84,7 +84,7 @@ let packing_ft loc global provable ret =
        let at = LAT.of_lrt lrt (LAT.I (struct_ (tag, value) loc)) in
        Some at
      | PName pn ->
-       let def = SymMap.find pn global.resource_predicates in
+       let def = Sym.Map.find pn global.resource_predicates in
        (match identify_right_clause provable def ret.pointer ret.iargs with
         | None -> None
         | Some right_clause -> Some right_clause.packing_ft))
@@ -97,7 +97,7 @@ let unpack_owned loc global (ct, init) pointer (O o) =
   | Void | Integer _ | Pointer _ | Function _ -> None
   | Array (ict, olength) -> Some [ (unfolded_array loc init (ict, olength) pointer, O o) ]
   | Struct tag ->
-    let layout = SymMap.find tag global.Global.struct_decls in
+    let layout = Sym.Map.find tag global.Global.struct_decls in
     let res =
       List.fold_right
         (fun { offset; size; member_or_padding } res ->
