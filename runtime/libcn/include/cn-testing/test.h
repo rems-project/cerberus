@@ -6,7 +6,13 @@
 #include <cn-testing/uniform.h>
 #include <cn-testing/result.h>
 
-typedef enum cn_test_result cn_test_case_fn(int);
+enum cn_test_gen_progress {
+    CN_TEST_GEN_PROGRESS_NONE = 0,
+    CN_TEST_GEN_PROGRESS_FINAL = 1,
+    CN_TEST_GEN_PROGRESS_ALL = 2
+};
+
+typedef enum cn_test_result cn_test_case_fn(enum cn_test_gen_progress);
 
 void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
 
@@ -38,7 +44,7 @@ void print_test_info(char* suite, char* name, int tests, int discards);
         longjmp(buf_##Name, mode);                                                      \
     }                                                                                   \
                                                                                         \
-    enum cn_test_result cn_test_##Name (int printing) {                                 \
+    enum cn_test_result cn_test_##Name (enum cn_test_gen_progress progress_level) {     \
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
         int i = 0, d = 0;                                                               \
         set_cn_failure_cb(&cn_test_##Name##_fail);                                      \
@@ -46,6 +52,9 @@ void print_test_info(char* suite, char* name, int tests, int discards);
             case CN_FAILURE_ASSERT:                                                     \
             case CN_FAILURE_CHECK_OWNERSHIP:                                            \
             case CN_FAILURE_OWNERSHIP_LEAK:                                             \
+                if (progress_level == CN_TEST_GEN_PROGRESS_FINAL) {                     \
+                    print_test_info(#Suite, #Name, i, d);                               \
+                }                                                                       \
                 return CN_TEST_FAIL;                                                    \
             case CN_FAILURE_ALLOC:                                                      \
                 cn_gen_rand_replace(checkpoint);                                        \
@@ -53,11 +62,14 @@ void print_test_info(char* suite, char* name, int tests, int discards);
                 break;                                                                  \
         }                                                                               \
         for (; i < Samples; i++) {                                                      \
-            if (printing) {                                                             \
+            if (progress_level == CN_TEST_GEN_PROGRESS_ALL) {                           \
                 printf("\r");                                                           \
                 print_test_info(#Suite, #Name, i, d);                                   \
             }                                                                           \
             if (d == 10 * Samples) {                                                    \
+                if (progress_level == CN_TEST_GEN_PROGRESS_FINAL) {                     \
+                    print_test_info(#Suite, #Name, i, d);                               \
+                }                                                                       \
                 return CN_TEST_GEN_FAIL;                                                \
             }                                                                           \
             size_t sz = cn_gen_uniform_cn_bits_u16(cn_gen_get_max_size())->val + 1;     \
@@ -77,8 +89,10 @@ void print_test_info(char* suite, char* name, int tests, int discards);
             cn_gen_rand_replace(checkpoint);                                            \
         }                                                                               \
                                                                                         \
-        if (printing) {                                                                 \
-            printf("\r");                                                               \
+        if (progress_level != CN_TEST_GEN_PROGRESS_NONE) {                              \
+            if (progress_level == CN_TEST_GEN_PROGRESS_ALL) {                           \
+                printf("\r");                                                           \
+            }                                                                           \
             print_test_info(#Suite, #Name, i, d);                                       \
         }                                                                               \
         return CN_TEST_PASS;                                                            \

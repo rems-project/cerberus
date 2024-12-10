@@ -462,6 +462,7 @@ let run_tests
   null_in_every
   seed
   logging_level
+  progress_level
   interactive
   until_timeout
   exit_fast
@@ -537,6 +538,7 @@ let run_tests
               null_in_every;
               seed;
               logging_level;
+              progress_level;
               interactive;
               until_timeout;
               exit_fast;
@@ -998,6 +1000,17 @@ module Testing_flags = struct
       & info [ "logging-level" ] ~doc)
 
 
+  let progress_level =
+    let doc =
+      "Set the level of detail for progress updates (0 = Quiet, 1 = Per function, 2 = \
+       Per test case)"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.progress_level
+      & info [ "progress-level" ] ~doc)
+
+
   let interactive =
     let doc =
       "Enable interactive features for testing, such as requesting more detailed logs"
@@ -1117,6 +1130,7 @@ let testing_cmd =
     $ Testing_flags.null_in_every
     $ Testing_flags.seed
     $ Testing_flags.logging_level
+    $ Testing_flags.progress_level
     $ Testing_flags.interactive
     $ Testing_flags.until_timeout
     $ Testing_flags.exit_fast

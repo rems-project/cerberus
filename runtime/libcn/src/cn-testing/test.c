@@ -57,6 +57,7 @@ int cn_test_main(int argc, char* argv[]) {
     set_cn_logging_level(CN_LOGGING_NONE);
 
     cn_gen_srand(cn_gen_get_milliseconds());
+    enum cn_test_gen_progress progress_level = CN_TEST_GEN_PROGRESS_ALL;
     uint64_t seed = cn_gen_rand();
     int interactive = 0;
     enum cn_logging_level logging_level = CN_LOGGING_ERROR;
@@ -75,6 +76,10 @@ int cn_test_main(int argc, char* argv[]) {
         }
         else if (strcmp("--logging-level", arg) == 0) {
             logging_level = strtol(argv[i + 1], NULL, 10);
+            i++;
+        }
+        else if (strcmp("--progress-level", arg) == 0) {
+            progress_level = strtol(argv[i + 1], NULL, 10);
             i++;
         }
         else if (strcmp("--input-timeout", arg) == 0) {
@@ -140,13 +145,19 @@ int cn_test_main(int argc, char* argv[]) {
             }
 
             struct cn_test_case* test_case = &test_cases[i];
-            print_test_info(test_case->suite, test_case->name, 0, 0);
+            if (progress_level == CN_TEST_GEN_PROGRESS_ALL) {
+                print_test_info(test_case->suite, test_case->name, 0, 0);
+            }
             checkpoints[i] = cn_gen_rand_save();
             cn_gen_set_input_timeout(input_timeout);
-            enum cn_test_result result = test_case->func(1);
+            enum cn_test_result result = test_case->func(progress_level);
             if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {
                 results[i] = result;
             }
+            if (progress_level == CN_TEST_GEN_PROGRESS_NONE) {
+                continue;
+            }
+
             printf("\n");
             switch (result) {
             case CN_TEST_PASS:
@@ -157,7 +168,7 @@ int cn_test_main(int argc, char* argv[]) {
                 set_cn_logging_level(logging_level);
                 cn_gen_rand_restore(checkpoints[i]);
                 cn_gen_set_input_timeout(0);
-                test_case->func(0);
+                test_case->func(CN_TEST_GEN_PROGRESS_NONE);
                 set_cn_logging_level(CN_LOGGING_NONE);
                 printf("\n\n");
                 break;
