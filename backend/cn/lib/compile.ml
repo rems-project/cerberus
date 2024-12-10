@@ -1218,7 +1218,7 @@ let translate_cn_function env (def : cn_function) =
             })
       def.cn_func_attrs
   in
-  let@ definition =
+  let@ body =
     match def.cn_func_body with
     | Some body ->
       let@ body = translate_cn_func_body env' body in
@@ -1232,7 +1232,7 @@ let translate_cn_function env (def : cn_function) =
         args = List.map_snd SBT.proj args;
         return_bt = SBT.proj return_bt;
         emit_coq = not coq_unfold;
-        definition
+        body
       }
   in
   return (def.cn_func_name, def2)
@@ -1380,7 +1380,7 @@ let translate_cn_clauses env clauses =
         Pure.handle "Predicate guards" (ET.translate_cn_expr Sym.Set.empty env e_)
       in
       let@ cl = translate_cn_clause env cl_ in
-      self (Def.{ loc; guard = IT.Surface.proj e; packing_ft = cl } :: acc) clauses'
+      self ({ loc; guard = IT.Surface.proj e; packing_ft = cl } :: acc) clauses'
   in
   let@ xs = self [] clauses in
   return (List.rev xs)

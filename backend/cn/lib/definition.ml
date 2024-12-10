@@ -3,33 +3,33 @@ module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 
 module Function = struct
-  type def_or_uninterp =
+  type body =
     | Def of IT.t
     | Rec_Def of IT.t
     | Uninterp
 
-  let subst_def_or_uninterp subst = function
+  let subst_body subst = function
     | Def it -> Def (IT.subst subst it)
     | Rec_Def it -> Rec_Def (IT.subst subst it)
     | Uninterp -> Uninterp
 
 
-  type definition =
+  type t =
     { loc : Locations.t;
       args : (Sym.t * BaseTypes.t) list;
       (* If the predicate is supposed to get used in a quantified form, one of the arguments
          has to be the index/quantified variable. For now at least. *)
       return_bt : BaseTypes.t;
       emit_coq : bool;
-      definition : def_or_uninterp
+      body : body
     }
 
   let is_recursive def =
-    match def.definition with Rec_Def _ -> true | Def _ -> false | Uninterp -> false
+    match def.body with Rec_Def _ -> true | Def _ -> false | Uninterp -> false
 
 
   let given_to_solver def =
-    match def.definition with Rec_Def _ -> false | Def _ -> true | Uninterp -> false
+    match def.body with Rec_Def _ -> false | Def _ -> true | Uninterp -> false
 
 
   let pp_args xs =
@@ -39,71 +39,39 @@ module Function = struct
       xs
 
 
-  let pp_def nm def =
+  let pp nm def =
     let open Pp in
     nm
     ^^ colon
     ^^^ pp_args def.args
     ^^ colon
     ^/^
-    match def.definition with
+    match def.body with
     | Uninterp -> !^"uninterpreted"
     | Def t -> IT.pp t
     | Rec_Def t -> !^"rec:" ^^^ IT.pp t
 
 
-  let open_fun def_args def_body args =
+  let open_ def_args def_body args =
     let su = IT.make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
     IT.subst su def_body
 
 
   let unroll_once def args =
-    match def.definition with
-    | Def body | Rec_Def body -> Some (open_fun def.args body args)
+    match def.body with
+    | Def body | Rec_Def body -> Some (open_ def.args body args)
     | Uninterp -> None
 
 
-  let try_open_fun def args =
-    match def.definition with
-    | Def body -> Some (open_fun def.args body args)
+  let try_open def args =
+    match def.body with
+    | Def body -> Some (open_ def.args body args)
     | Rec_Def _ -> None
     | Uninterp -> None
 
 
-  (* let try_open_fun_to_term def name args = Option.map (fun body -> Body.to_term
-     def.return_bt body ) (try_open_fun def name args) *)
-
-  (* let add_unfolds_to_terms preds terms = let rec f acc t = match IT.term t with |
-     IT.Apply (name, ts) -> let def = Sym.Map.find name preds in begin match
-     try_open_fun_to_term def name ts with | None -> acc | Some t2 -> f (t2 :: acc) t2 end |
-     _ -> acc in IT.fold_list (fun _ acc t -> f acc t) [] terms terms *)
-
-  (* (\* Check for cycles in the logical predicate graph, which would cause *)
-  (*    the system to loop trying to unfold them. Predicates whose definition *)
-  (*    are marked with Rec_Def aren't checked, as cycles there are expected. *\) *)
-  (* let cycle_check (defs : definition Sym.Map.t) = *)
-  (*   let def_preds nm =  *)
-  (*     let def =  Sym.Map.find nm defs in *)
-  (*     begin match def.definition with *)
-  (*     | Def t -> Sym.Set.elements (IT.preds_of (Body.to_term def.return_bt t)) *)
-  (*     | _ -> [] *)
-  (*     end *)
-  (*   in *)
-  (*   let rec search known_ok = function *)
-  (*     | [] -> None *)
-  (*     | (nm, Some path) :: q -> if Sym.Set.mem nm known_ok *)
-  (*       then search known_ok q *)
-  (*       else if List.exists (Sym.equal nm) path *)
-  (*       then Some (List.rev path @ [nm]) *)
-  (*       else *)
-  (*         let deps = List.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
-  (*         search known_ok (deps @ [(nm, None)] @ q) *)
-  (*     | (nm, None) :: q -> search (Sym.Set.add nm known_ok) q *)
-  (* in search Sym.Set.empty (List.map (fun (p, _) -> (p, Some [])) (Sym.Map.bindings
-     defs)) *)
-
   (*Extensibility hook. For now, all functions are displayed as "interesting" in error reporting*)
-  let is_interesting : definition -> bool = fun _ -> true
+  let is_interesting : t -> bool = fun _ -> true
 end
 
 module Clause = struct
@@ -160,6 +128,53 @@ module Predicate = struct
           (match def.clauses with
            | Some clauses -> Pp.list Clause.pp clauses
            | None -> !^"(uninterpreted)")
+
+
+  let instantiate (def : t) ptr_arg iargs =
+    match def.clauses with
+    | Some clauses ->
+      let subst =
+        IT.make_subst
+          ((def.pointer, ptr_arg)
+           :: List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs)
+      in
+      Some (List.map (Clause.subst subst) clauses)
+    | None -> None
+
+
+  let identify_right_clause provable (def : t) pointer iargs =
+    match instantiate def pointer iargs with
+    | None ->
+      (* "uninterpreted" predicates cannot be un/packed *)
+      None
+    | Some clauses ->
+      let rec try_clauses : Clause.t list -> _ = function
+        | [] -> None
+        | clause :: clauses ->
+          (match provable (LogicalConstraints.T clause.guard) with
+           | `True -> Some clause
+           | `False ->
+             let loc = Locations.other __FUNCTION__ in
+             (match provable (LogicalConstraints.T (IT.not_ clause.guard loc)) with
+              | `True -> try_clauses clauses
+              | `False ->
+                Pp.debug
+                  5
+                  (lazy
+                    (Pp.item "cannot prove or disprove clause guard" (IT.pp clause.guard)));
+                None))
+      in
+      try_clauses clauses
+
+
+  (* determines if a resource predicate will be given to the solver
+   *    TODO: right now this is an overapproximation *)
+  let given_to_solver (def : t) =
+    match def.clauses with
+    | None -> false
+    | Some [] -> true
+    | Some [ _ ] -> true
+    | _ -> false
 end
 
 let alloc =
@@ -170,53 +185,6 @@ let alloc =
       oarg_bt = Alloc.History.value_bt;
       clauses = None
     }
-
-
-let instantiate_clauses (def : Predicate.t) ptr_arg iargs =
-  match def.clauses with
-  | Some clauses ->
-    let subst =
-      IT.make_subst
-        ((def.pointer, ptr_arg)
-         :: List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs)
-    in
-    Some (List.map (Clause.subst subst) clauses)
-  | None -> None
-
-
-let identify_right_clause provable (def : Predicate.t) pointer iargs =
-  match instantiate_clauses def pointer iargs with
-  | None ->
-    (* "uninterpreted" predicates cannot be un/packed *)
-    None
-  | Some clauses ->
-    let rec try_clauses : Clause.t list -> _ = function
-      | [] -> None
-      | clause :: clauses ->
-        (match provable (LogicalConstraints.T clause.guard) with
-         | `True -> Some clause
-         | `False ->
-           let loc = Locations.other __FUNCTION__ in
-           (match provable (LogicalConstraints.T (IT.not_ clause.guard loc)) with
-            | `True -> try_clauses clauses
-            | `False ->
-              Pp.debug
-                5
-                (lazy
-                  (Pp.item "cannot prove or disprove clause guard" (IT.pp clause.guard)));
-              None))
-    in
-    try_clauses clauses
-
-
-(* determines if a resource predicate will be given to the solver
-   TODO: right now this is an overapproximation *)
-let given_to_solver (def : Predicate.t) =
-  match def.clauses with
-  | None -> false
-  | Some [] -> true
-  | Some [ _ ] -> true
-  | _ -> false
 
 
 (*Extensibility hook. For now, all predicates are displayed as "interesting" in error reporting*)

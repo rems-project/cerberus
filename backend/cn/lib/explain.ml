@@ -353,7 +353,6 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
     match extras.request with
     | None -> []
     | Some req ->
-      let open Definition in
       (match Req.get_name req with
        | Owned _ -> []
        | PName pname ->

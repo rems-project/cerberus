@@ -90,7 +90,7 @@ let packing_ft loc global provable ret =
        Some at
      | PName pn ->
        let def = Sym.Map.find pn global.resource_predicates in
-       (match identify_right_clause provable def ret.pointer ret.iargs with
+       (match Predicate.identify_right_clause provable def ret.pointer ret.iargs with
         | None -> None
         | Some right_clause -> Some right_clause.packing_ft))
   | Q _ -> None

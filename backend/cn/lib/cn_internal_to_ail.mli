@@ -148,7 +148,7 @@ val cn_to_ail_records
   A.sigma_tag_definition list
 
 val cn_to_ail_function_internal
-  :  Sym.t * Definition.Function.definition ->
+  :  Sym.t * Definition.Function.t ->
   A.sigma_cn_datatype list ->
   A.sigma_cn_function list ->
   ((Locations.t * A.sigma_declaration)

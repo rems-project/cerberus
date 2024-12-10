@@ -10,7 +10,7 @@ type t =
     datatype_order : Sym.t list list option;
     fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) Sym.Map.t;
     resource_predicates : Definition.Predicate.t Sym.Map.t;
-    logical_functions : Definition.Function.definition Sym.Map.t;
+    logical_functions : Definition.Function.t Sym.Map.t;
     lemmata : (Locations.t * AT.lemmat) Sym.Map.t
   }
 

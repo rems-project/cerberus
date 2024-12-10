@@ -764,11 +764,11 @@ module PartialEvaluation = struct
           eval_aux (divisible_ (addr, align) here)
       | Apply (fsym, its) ->
         (match List.assoc_opt Sym.equal fsym prog5.logical_predicates with
-         | Some { args; definition = Def it_body; _ }
-         | Some { args; definition = Rec_Def it_body; _ } ->
+         | Some { args; body = Def it_body; _ } | Some { args; body = Rec_Def it_body; _ }
+           ->
            return
            @@ IT.subst (IT.make_subst (List.combine (List.map fst args) its)) it_body
-         | Some { definition = Uninterp; _ } ->
+         | Some { body = Uninterp; _ } ->
            Error ("Function " ^ Sym.pp_string fsym ^ " is uninterpreted")
          | None -> Error ("Function " ^ Sym.pp_string fsym ^ " was not found"))
       | Let ((x, it_v), it_rest) ->
@@ -1018,9 +1018,9 @@ module PartialEvaluation = struct
            * substitution, diverging. As such, we force strict evaluation of recursive calls
            *)
           (match List.assoc_opt Sym.equal fsym prog5.logical_predicates with
-           | Some { definition = Def _; _ } -> f it
-           | Some { definition = Rec_Def _; _ } -> f ~mode:Strict it
-           | Some { definition = Uninterp; _ } | None -> it)
+           | Some { body = Def _; _ } -> f it
+           | Some { body = Rec_Def _; _ } -> f ~mode:Strict it
+           | Some { body = Uninterp; _ } | None -> it)
         | _ -> f it
       in
       IT.map_term_post aux it
