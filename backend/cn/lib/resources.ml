@@ -1,7 +1,6 @@
 module CF = Cerb_frontend
 module IT = IndexTerms
 module LC = LogicalConstraints
-module LCSet = Set.Make (LC)
 open ResourceTypes
 
 type oargs = O of IT.t

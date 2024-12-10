@@ -1,6 +1,5 @@
 open Pp.Infix
 module IT = IndexTerms
-module LCSet = Set.Make (LogicalConstraints)
 
 type init =
   | Init

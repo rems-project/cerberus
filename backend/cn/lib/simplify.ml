@@ -15,7 +15,6 @@ end
 
 module ITPairMap = Map.Make (ITPair)
 module ITSet = Set.Make (IT)
-module LCSet = Set.Make (LC)
 
 type simp_ctxt =
   { global : Global.t;
