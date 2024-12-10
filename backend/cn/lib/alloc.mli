@@ -3,8 +3,6 @@ module History : sig
 
   val sym : Sym.t
 
-  val loc : Locations.t
-
   val base_id : Id.t
 
   val base_bt : BaseTypes.t
@@ -19,7 +17,7 @@ module History : sig
 
   val bt : BaseTypes.t
 
-  val it : IndexTerms.t
+  val it : Cerb_location.t -> IndexTerms.t
 
   val lookup_ptr : IndexTerms.t -> Locations.t -> IndexTerms.t
 

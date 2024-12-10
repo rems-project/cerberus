@@ -66,7 +66,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
   let cn_init_scope : Cn_desugaring.init_scope =
     { predicates = [ Alloc.Predicate.(str, sym, Some loc) ];
       functions = List.map (fun (str, sym) -> (str, sym, None)) cn_builtin_fun_names;
-      idents = [ Alloc.History.(str, sym, Some loc) ]
+      idents = [ Alloc.History.(str, sym, None) ]
     }
   in
   let@ _, ail_prog_opt, prog0 =
