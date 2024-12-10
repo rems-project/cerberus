@@ -7,8 +7,6 @@ open IT
 module LC = LogicalConstraints
 module LCSet = Set.Make (LC)
 
-[@@@ocaml.warning "-32"]
-
 type init =
   | Init
   | Uninit
@@ -90,10 +88,6 @@ let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
   ^^ pp_maybe_oargs oargs
 
 
-let pp_predicate_type p = pp_predicate_type_aux p None
-
-let pp_qpredicate_type p = pp_qpredicate_type_aux p None
-
 let pp_aux r o =
   match r with P p -> pp_predicate_type_aux p o | Q qp -> pp_qpredicate_type_aux qp o
 
@@ -101,8 +95,6 @@ let pp_aux r o =
 let pp r = pp_aux r None
 
 let equal = equal_resource_type
-
-let compare = compare_resource_type
 
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))
 
@@ -186,8 +178,6 @@ let alpha_equivalent r1 r2 =
 
 
 let steps_constant = function Q qp -> Option.is_some (IT.is_const qp.step) | _ -> true
-
-let pointer = function P pred -> pred.pointer | Q pred -> pred.pointer
 
 open Cerb_frontend.Pp_ast
 open Pp
