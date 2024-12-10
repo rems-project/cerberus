@@ -453,7 +453,6 @@ let rec compile_term
   | SplitSize { rest; _ } when not (TestGenConfig.is_random_size_splits ()) ->
     compile_term sigma ctx name rest
   | SplitSize { marker_var; syms; path_vars; last_var; rest } ->
-    let e_ty = mk_expr (AilEident (Sym.fresh_named (name_of_bt name Memory.size_bt))) in
     let e_tmp = mk_expr (AilEident marker_var) in
     let e_size = mk_expr (AilEident (Sym.fresh_named "cn_gen_rec_size")) in
     let syms_l = syms |> Sym.Set.to_seq |> List.of_seq in
@@ -484,7 +483,7 @@ let rec compile_term
             (mk_expr
                (AilEcall
                   ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_SPLIT_END")),
-                    [ e_ty; e_tmp; e_size; mk_expr (AilEident last_var) ]
+                    [ e_tmp; e_size; mk_expr (AilEident last_var) ]
                     @ List.map wrap_to_string (List.of_seq (Sym.Set.to_seq path_vars))
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]

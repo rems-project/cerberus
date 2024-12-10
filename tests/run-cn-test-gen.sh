@@ -35,7 +35,7 @@ for CONFIG in "${CONFIGS[@]}"; do
   echo "Running CI with CLI config \"$CONFIG\""
   separator
 
-  FULL_CONFIG="$CONFIG --allowed-depth-failures=100 --input-timeout=1000 --progress-level=1"
+  FULL_CONFIG="$CONFIG --input-timeout=1000 --progress-level=1"
 
   # Test each `*.c` file
   for TEST in $FILES; do

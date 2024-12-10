@@ -248,23 +248,17 @@
             count += 1;                                                                 \
         }
 
-#define CN_GEN_SPLIT_END(ty, tmp, size, last_var, ...)                                  \
+#define CN_GEN_SPLIT_END(tmp, size, last_var, ...)                                      \
         if (count >= size) {                                                            \
             cn_gen_backtrack_depth_exceeded();                                          \
             char* toAdd[] = { __VA_ARGS__ };                                            \
             cn_gen_backtrack_relevant_add_many(toAdd);                                  \
             goto cn_label_##last_var##_backtrack;                                       \
         }                                                                               \
-        size_t used = 0;                                                                \
-        for (int i = 0; i < count - 1; i++) {                                           \
-            int left = size - (count - i) + 1 - used;                                   \
-            ty* one = convert_to_##ty(1);                                               \
-            ty* bound = convert_to_##ty(left + 1);                                      \
-            ty* rnd = cn_gen_range_##ty(one, bound);                                    \
-            *vars[i] = convert_from_##ty(rnd);                                          \
-            used += convert_from_##ty(rnd);                                             \
+        cn_gen_split(size - count - 1, vars, count);                                    \
+        for (int i = 0; i < count; i++) {                                               \
+            *(vars[i]) = *(vars[i]) + 1;                                                \
         }                                                                               \
-        *vars[count - 1] = size - 1 - used;                                             \
     }                                                                                   \
     if (0) {                                                                            \
     cn_label_##tmp##_backtrack:                                                         \
