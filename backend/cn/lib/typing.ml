@@ -556,7 +556,7 @@ let model_with_internal loc prop =
   | None ->
     let@ prover = provable_internal loc in
     let here = Locations.other __FUNCTION__ in
-    (match prover (LC.t_ (IT.not_ prop here)) with
+    (match prover (LC.T (IT.not_ prop here)) with
      | `True -> return None
      | `False ->
        let@ m = model () in
@@ -594,7 +594,7 @@ let bind_logical_return_internal loc =
     match (members, lrt) with
     | member :: members, LogicalReturnTypes.Define ((s, it), _, lrt) ->
       let@ () = ensure_base_type loc ~expect:(IT.bt it) (IT.bt member) in
-      let@ () = add_c_internal (LC.t_ (IT.eq__ member it loc)) in
+      let@ () = add_c_internal (LC.T (IT.eq__ member it loc)) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | member :: members, Resource ((s, (re, bt)), _, lrt) ->
       let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
@@ -798,8 +798,8 @@ let test_value_eqs loc guard x ys =
   let here = Locations.other __FUNCTION__ in
   let prop y =
     match guard with
-    | None -> LC.t_ (IT.eq_ (x, y) here)
-    | Some t -> LC.t_ (IT.impl_ (t, IT.eq_ (x, y) here) here)
+    | None -> LC.T (IT.eq_ (x, y) here)
+    | Some t -> LC.T (IT.impl_ (t, IT.eq_ (x, y) here) here)
   in
   let@ prover = provable loc in
   let guard_it = Option.value guard ~default:(IT.bool_ true here) in

@@ -11,7 +11,7 @@ let resource_empty provable resource =
   let loc = Cerb_location.other __FUNCTION__ in
   let constr =
     match resource with
-    | P _, _ -> LC.t_ (IT.bool_ false loc)
+    | P _, _ -> LC.T (IT.bool_ false loc)
     | Q p, _ -> LC.forall_ p.q (IT.not_ p.permission loc)
   in
   match provable constr with
@@ -157,7 +157,7 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
     ->
     let su = IT.make_subst [ (fst ret.q, index) ] in
     let index_permission = IT.subst su ret.permission in
-    (match prove_or_model (LC.t_ index_permission) with
+    (match prove_or_model (LC.T index_permission) with
      | `True ->
        let loc' = Cerb_location.other __FUNCTION__ in
        let at_index =

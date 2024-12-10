@@ -898,7 +898,7 @@ module WIT = struct
         let@ t1 = infer t1 in
         pure
           (let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
-           let@ () = add_c loc (LC.t_ (IT.def_ name t1 loc)) in
+           let@ () = add_c loc (LC.T (IT.def_ name t1 loc)) in
            let@ t2 = infer t2 in
            return (IT (Let ((name, t1), t2), IT.bt t2, loc)))
       | Constructor (s, args) ->
@@ -1136,7 +1136,7 @@ module WLRT = struct
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ it = WIT.infer it in
         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
+        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
         let@ lrt = aux lrt in
         return (Define ((s, it), info, lrt))
       | Resource ((s, (re, re_oa_spec)), ((loc, _) as info), lrt) ->
@@ -1155,7 +1155,7 @@ module WLRT = struct
         let@ provable = provable loc in
         let here = Locations.other __FUNCTION__ in
         let@ () =
-          match provable (LC.t_ (IT.bool_ false here)) with
+          match provable (LC.T (IT.bool_ false here)) with
           | `True ->
             fail (fun ctxt_log ->
               { loc; msg = Inconsistent_assumptions ("return type", ctxt_log) })
@@ -1214,7 +1214,7 @@ module WLAT = struct
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ it = WIT.infer it in
         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
+        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
         let@ at = aux at in
         return (LAT.Define ((s, it), info, at))
       | LAT.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
@@ -1233,7 +1233,7 @@ module WLAT = struct
         let@ provable = provable loc in
         let here = Locations.other __FUNCTION__ in
         let@ () =
-          match provable (LC.t_ (IT.bool_ false here)) with
+          match provable (LC.T (IT.bool_ false here)) with
           | `True ->
             fail (fun ctxt_log ->
               { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
@@ -1300,7 +1300,7 @@ module WLArgs = struct
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ it = WIT.infer it in
         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
+        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
         let@ at = aux at in
         return (Mu.Define ((s, it), info, at))
       | Mu.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
@@ -1319,7 +1319,7 @@ module WLArgs = struct
         let@ provable = provable loc in
         let here = Locations.other __FUNCTION__ in
         let@ () =
-          match provable (LC.t_ (IT.bool_ false here)) with
+          match provable (LC.T (IT.bool_ false here)) with
           | `True ->
             fail (fun ctxt_log ->
               { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
@@ -2278,8 +2278,8 @@ module WRPD = struct
                    List.map (fun clause -> IT.not_ clause.guard here) acc
                  in
                  pure
-                   (let@ () = add_c loc (LC.t_ guard) in
-                    let@ () = add_c loc (LC.t_ (IT.and_ negated_guards here)) in
+                   (let@ () = add_c loc (LC.T guard) in
+                    let@ () = add_c loc (LC.T (IT.and_ negated_guards here)) in
                     let@ packing_ft =
                       WLAT.welltyped
                         (fun loc it -> WIT.check loc oarg_bt it)

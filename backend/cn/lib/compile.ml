@@ -1485,7 +1485,7 @@ let make_rt loc (env : env) st (s, ct) (accesses, ensures) =
   in
   (* let info = (loc, Some "return value good") in *)
   (* let here = Locations.other __FUNCTION__ in *)
-  (* let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt, here)) here), info)
+  (* let lrt = LRT.mConstraint (LC.T (IT.good_ (ct, IT.sym_ (s, bt, here)) here), info)
      lrt in *)
   return (RT.mComputational ((s, bt), (loc, None)) lrt)
 
