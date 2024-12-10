@@ -630,30 +630,34 @@ module LogicalConstraints = struct
 end
 
 module ResourceTypes = struct
-  open IndexTerms
-  open ResourceTypes
+  module Predicate = struct
+    open ResourceTypes.Predicate
 
-  let simp_predicate_type simp_ctxt (p : predicate_type) =
-    { name = p.name;
-      pointer = simp simp_ctxt p.pointer;
-      iargs = List.map (simp simp_ctxt) p.iargs
-    }
+    let simp simp_ctxt (p : t) =
+      { name = p.name;
+        pointer = IndexTerms.simp simp_ctxt p.pointer;
+        iargs = List.map (IndexTerms.simp simp_ctxt) p.iargs
+      }
+  end
 
+  module QPredicate = struct
+    open ResourceTypes.QPredicate
 
-  let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
-    let qp = alpha_rename_qpredicate_type qp in
-    let permission = simp_flatten simp_ctxt qp.permission in
-    { name = qp.name;
-      pointer = simp simp_ctxt qp.pointer;
-      q = qp.q;
-      q_loc = qp.q_loc;
-      step = simp simp_ctxt qp.step;
-      permission = and_ permission (IT.loc qp.permission);
-      iargs = List.map (simp simp_ctxt) qp.iargs
-    }
+    let simp simp_ctxt (qp : t) =
+      let qp = alpha_rename qp in
+      let permission = IndexTerms.simp_flatten simp_ctxt qp.permission in
+      ResourceTypes.QPredicate.
+        { name = qp.name;
+          pointer = IndexTerms.simp simp_ctxt qp.pointer;
+          q = qp.q;
+          q_loc = qp.q_loc;
+          step = IndexTerms.simp simp_ctxt qp.step;
+          permission = and_ permission (IT.loc qp.permission);
+          iargs = List.map (IndexTerms.simp simp_ctxt) qp.iargs
+        }
+  end
 
-
-  let simp simp_ctxt = function
-    | P p -> P (simp_predicate_type simp_ctxt p)
-    | Q qp -> Q (simp_qpredicate_type simp_ctxt qp)
+  let simp simp_ctxt : ResourceTypes.t -> ResourceTypes.t = function
+    | P p -> P (Predicate.simp simp_ctxt p)
+    | Q qp -> Q (QPredicate.simp simp_ctxt qp)
 end

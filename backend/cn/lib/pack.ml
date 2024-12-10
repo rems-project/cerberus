@@ -150,7 +150,7 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
   (* in *)
   match ret with
   | Q ret
-    when equal_predicate_name predicate_name ret.name
+    when ResourceTypes.equal_name predicate_name ret.name
          && BT.equal (IT.bt index) (snd ret.q) ->
     let su = IT.make_subst [ (fst ret.q, index) ] in
     let index_permission = IT.subst su ret.permission in
@@ -188,7 +188,7 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
        (*   (lazy (IndexTerms.pp_with_eval eval_f index_permission)); *)
        None)
   (* | Q qret -> *)
-  (*   if not (equal_predicate_name predicate_name qret.name) *)
+  (*   if not (ResourceTypes.equal_name predicate_name qret.name) *)
   (*   then () *)
   (*     (\* tmsg "not extracting, predicate name differs" *\) *)
   (*     (\*   (lazy (ResourceTypes.pp_predicate_name predicate_name)) *\) *)

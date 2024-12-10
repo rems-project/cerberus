@@ -36,7 +36,7 @@ type log = log_entry list (* most recent first *)
 let clause_has_resource req c =
   let open LogicalArgumentTypes in
   let rec f = function
-    | Resource ((_, (r, _)), _, c) -> RET.same_predicate_name req r || f c
+    | Resource ((_, (r, _)), _, c) -> RET.same_name req r || f c
     | Constraint (_, _, c) -> f c
     | Define (_, _, c) -> f c
     | I _ -> false
@@ -299,13 +299,13 @@ let state ctxt log model_with_q extras =
       match extras.request with
       | None -> ([], get_rs ctxt)
       | Some req ->
-        List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
+        List.partition (fun r -> RET.same_name req (RE.request r)) (get_rs ctxt)
     in
     let interesting_diff_res, uninteresting_diff_res =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when equal_predicate_name ret.name ResourceTypes.alloc -> false
+          | P ret when RET.equal_name ret.name RET.Predicate.alloc -> false
           | _ -> true)
         diff_res
     in
@@ -359,7 +359,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
     | None -> []
     | Some req ->
       let open ResourcePredicates in
-      (match predicate_name req with
+      (match RET.get_name req with
        | Owned _ -> []
        | PName pname ->
          let doc_clause (_name, c) =

@@ -1,13 +1,13 @@
 module CF = Cerb_frontend
 module IT = IndexTerms
 module LC = LogicalConstraints
-open ResourceTypes
+module RT = ResourceTypes
 
 type oargs = O of IT.t
 
 let pp_oargs (O t) = IT.pp t
 
-type resource = resource_type * oargs
+type resource = RT.t * oargs
 
 type t = resource
 
@@ -36,7 +36,7 @@ let range_size ct =
 let upper_bound addr ct loc = IT.add_ (addr, range_size ct) loc
 
 (* assumption: the resource is owned *)
-let derived_lc1 (resource, O oarg) =
+let derived_lc1 ((resource : RT.t), O oarg) =
   let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
   match resource with
   | P { name = Owned (ct, _); pointer; iargs = _ } ->
@@ -51,7 +51,8 @@ let derived_lc1 (resource, O oarg) =
         []
     in
     [ IT.hasAllocId_ pointer here; IT.(le_ (addr, upper) here) ] @ alloc_bounds
-  | P { name; pointer; iargs = [] } when !IT.use_vip && equal_predicate_name name alloc ->
+  | P { name; pointer; iargs = [] }
+    when !IT.use_vip && RT.(equal_name name Predicate.alloc) ->
     let module H = Alloc.History in
     let lookup = H.lookup_ptr pointer here in
     let H.{ base; size } = H.split lookup here in
@@ -62,7 +63,7 @@ let derived_lc1 (resource, O oarg) =
 
 (* assumption: both resources are owned at the same *)
 (* todo, depending on how much we need *)
-let derived_lc2 (resource, _) (resource', _) =
+let derived_lc2 ((resource : RT.t), _) ((resource' : RT.t), _) =
   match (resource, resource') with
   | ( P { name = Owned (ct1, _); pointer = p1; iargs = _ },
       P { name = Owned (ct2, _); pointer = p2; iargs = _ } ) ->

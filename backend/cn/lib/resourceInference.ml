@@ -160,8 +160,8 @@ module General = struct
 
 
   (* TODO: check that oargs are in the same order? *)
-  let rec predicate_request loc (uiinfo : uiinfo) (requested : RET.predicate_type)
-    : ((RET.predicate_type * Resources.oargs) * int list) option m
+  let rec predicate_request loc (uiinfo : uiinfo) (requested : RET.Predicate.t)
+    : ((RET.Predicate.t * Resources.oargs) * int list) option m
     =
     Pp.(debug 7 (lazy (item __FUNCTION__ (RET.pp (P requested)))));
     let start_timing = Pp.time_log_start __FUNCTION__ "" in
@@ -251,7 +251,7 @@ module General = struct
     return res
 
 
-  and qpredicate_request_aux loc uiinfo (requested : RET.qpredicate_type) =
+  and qpredicate_request_aux loc uiinfo (requested : RET.QPredicate.t) =
     Pp.(debug 7 (lazy (item __FUNCTION__ (RET.pp (Q requested)))));
     let@ provable = provable loc in
     let@ simp_ctxt = simp_ctxt () in
@@ -285,7 +285,7 @@ module General = struct
               when RET.subsumed requested.name p'.name
                    && IT.equal step p'.step
                    && BaseTypes.equal (snd requested.q) (snd p'.q) ->
-              let p' = RET.alpha_rename_qpredicate_type_ (fst requested.q) p' in
+              let p' = RET.QPredicate.alpha_rename_ (fst requested.q) p' in
               let here = Locations.other __FUNCTION__ in
               let pmatch =
                 (* Work-around for https://github.com/Z3Prover/z3/issues/7352 *)
@@ -393,7 +393,7 @@ module General = struct
       return None
 
 
-  and qpredicate_request loc uiinfo (requested : RET.qpredicate_type) =
+  and qpredicate_request loc uiinfo (requested : RET.QPredicate.t) =
     let@ o_oarg = qpredicate_request_aux loc uiinfo requested in
     let@ oarg_item_bt = WellTyped.oarg_bt_of_pred loc requested.name in
     match o_oarg with
@@ -401,7 +401,7 @@ module General = struct
     | Some (oarg, rw_time) ->
       let@ oarg = cases_to_map loc uiinfo (snd requested.q) oarg_item_bt oarg in
       let r =
-        RET.
+        RET.QPredicate.
           { name = requested.name;
             pointer = requested.pointer;
             q = requested.q;

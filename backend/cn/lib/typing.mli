@@ -171,10 +171,10 @@ val bind_return : Locations.t -> IndexTerms.t list -> ReturnTypes.t -> IndexTerm
 val add_movable_index
   :  Locations.t ->
   (* verbose:bool -> *)
-  ResourceTypes.predicate_name * IndexTerms.t ->
+  ResourceTypes.name * IndexTerms.t ->
   unit m
 
-val get_movable_indices : unit -> (ResourceTypes.predicate_name * IndexTerms.t) list m
+val get_movable_indices : unit -> (ResourceTypes.name * IndexTerms.t) list m
 
 val record_action : Explain.action * Locations.t -> unit m
 

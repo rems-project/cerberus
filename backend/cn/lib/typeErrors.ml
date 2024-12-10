@@ -115,7 +115,7 @@ type message =
   (* some from Kayvan's compilePredicates module *)
   | First_iarg_missing
   | First_iarg_not_pointer of
-      { pname : ResourceTypes.predicate_name;
+      { pname : ResourceTypes.name;
         found_bty : BaseTypes.t
       }
   | Missing_member of Id.t
@@ -319,7 +319,7 @@ let pp_message te =
     let short = !^"Non-pointer first input argument" in
     let descr =
       !^"the first input argument of predicate"
-      ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname)
+      ^^^ Pp.squotes (ResourceTypes.pp_name pname)
       ^^^ !^"must have type"
       ^^^ Pp.squotes BaseTypes.(pp (Loc ()))
       ^^^ !^"but was found with type"

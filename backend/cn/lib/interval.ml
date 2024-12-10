@@ -244,7 +244,7 @@ module Solver = struct
     | _ -> None
 
 
-  let simp_rt eval (rt : RT.resource_type) : RT.resource_type =
+  let simp_rt eval (rt : RT.t) : RT.t =
     match rt with
     | RT.P _ -> rt
     | RT.Q qpred ->

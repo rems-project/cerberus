@@ -13,7 +13,7 @@ type s =
     sym_eqs : IT.t Sym.Map.t;
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
-    movable_indices : (RET.predicate_name * IT.t) list;
+    movable_indices : (RET.name * IT.t) list;
     unfold_resources_required : bool;
     log : Explain.log
   }
@@ -701,7 +701,7 @@ let do_unfold_resources loc =
           (fun (re, i) (keep, unpack, extract) ->
             match Pack.unpack loc s.global provable_f2 re with
             | Some unpackable ->
-              let pname = RET.predicate_name (fst re) in
+              let pname = RET.get_name (fst re) in
               (keep, (i, pname, unpackable) :: unpack, extract)
             | None ->
               let re_reduced, extracted =
@@ -725,7 +725,7 @@ let do_unfold_resources loc =
           let@ _, members =
             make_return_record
               loc
-              ("unpack_" ^ Pp.plain (RET.pp_predicate_name pname))
+              ("unpack_" ^ Pp.plain (RET.pp_name pname))
               (LogicalReturnTypes.binders lrt)
           in
           bind_logical_return_internal loc members lrt
