@@ -7,7 +7,6 @@ module Req = Request
 module LC = LogicalConstraints
 module LF = LogicalFunctions
 module LAT = LogicalArgumentTypes
-module LS = LogicalSorts
 module StringMap = Map.Make (String)
 module C = Context
 module Loc = Locations

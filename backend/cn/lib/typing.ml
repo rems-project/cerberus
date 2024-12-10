@@ -566,15 +566,11 @@ let model_with_internal loc prop =
 
 (* functions for binding return types and associated auxiliary functions *)
 
-let ensure_logical_sort (loc : Loc.t) ~(expect : LS.t) (has : LS.t) : unit m =
-  if LS.equal has expect then
+let ensure_base_type (loc : Loc.t) ~(expect : BT.t) (has : BT.t) : unit m =
+  if BT.equal has expect then
     return ()
   else
     fail (fun _ -> { loc; msg = Mismatch { has = BT.pp has; expect = BT.pp expect } })
-
-
-let ensure_base_type (loc : Loc.t) ~(expect : BT.t) (has : BT.t) : unit m =
-  ensure_logical_sort loc ~expect has
 
 
 let make_return_record loc (record_name : string) record_members =

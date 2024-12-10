@@ -3,7 +3,6 @@ open Pp
 open Locations
 module BT = BaseTypes
 module IT = IndexTerms
-module LS = LogicalSorts
 module CF = Cerb_frontend
 module Loc = Locations
 module Res = Resource

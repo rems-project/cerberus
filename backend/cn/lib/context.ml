@@ -1,7 +1,6 @@
 open Pp
 open List
 module BT = BaseTypes
-module LS = LogicalSorts
 module Res = Resource
 module LC = LogicalConstraints
 module Loc = Locations

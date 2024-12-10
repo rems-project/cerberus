@@ -1,6 +1,5 @@
 module IT = IndexTerms
 module BT = BaseTypes
-module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
