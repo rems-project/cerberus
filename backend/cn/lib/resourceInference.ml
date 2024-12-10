@@ -343,7 +343,7 @@ module General = struct
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
             let needed_at_index = IT.subst su needed in
-            match provable (LC.t_ needed_at_index) with
+            match provable (LC.T needed_at_index) with
             | `False -> continue
             | `True ->
               let@ o_re_index =

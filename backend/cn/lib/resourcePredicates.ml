@@ -5,7 +5,6 @@ module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module StringMap = Map.Make (String)
 module Loc = Locations
-open Pp
 
 type clause =
   { loc : Loc.t;
@@ -14,6 +13,7 @@ type clause =
   }
 
 let pp_clause { loc = _; guard; packing_ft } =
+  let open Pp in
   item "condition" (IT.pp guard) ^^ comma ^^^ item "return type" (LAT.pp IT.pp packing_ft)
 
 
@@ -28,7 +28,7 @@ let clause_lrt (pred_oarg : IT.t) clause_packing_ft =
     | LAT.Constraint (lc, info, lat) -> LRT.Constraint (lc, info, aux lat)
     | I output ->
       let loc = Loc.other __FUNCTION__ in
-      let lc = LC.t_ (IT.eq_ (pred_oarg, output) loc) in
+      let lc = LC.T (IT.eq_ (pred_oarg, output) loc) in
       LRT.Constraint (lc, (loc, None), LRT.I)
   in
   aux clause_packing_ft
@@ -52,6 +52,7 @@ let alloc =
 
 
 let pp_definition def =
+  let open Pp in
   item "pointer" (Sym.pp def.pointer)
   ^/^ item "iargs" (Pp.list (fun (s, _) -> Sym.pp s) def.iargs)
   ^/^ item "oarg_bt" (BaseTypes.pp def.oarg_bt)
@@ -74,9 +75,6 @@ let instantiate_clauses def ptr_arg iargs =
   | None -> None
 
 
-open IndexTerms
-open LogicalConstraints
-
 let identify_right_clause provable def pointer iargs =
   match instantiate_clauses def pointer iargs with
   | None ->
@@ -86,11 +84,11 @@ let identify_right_clause provable def pointer iargs =
     let rec try_clauses = function
       | [] -> None
       | clause :: clauses ->
-        (match provable (t_ clause.guard) with
+        (match provable (LC.T clause.guard) with
          | `True -> Some clause
          | `False ->
            let loc = Loc.other __FUNCTION__ in
-           (match provable (t_ (not_ clause.guard loc)) with
+           (match provable (LC.T (IT.not_ clause.guard loc)) with
             | `True -> try_clauses clauses
             | `False ->
               Pp.debug

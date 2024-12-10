@@ -61,8 +61,6 @@ let alpha_equivalent lc lc' =
   | _ -> false
 
 
-let t_ it = T it
-
 let forall_ (s, bt) it = Forall ((s, bt), it)
 
 let is_sym_lhs_equality = function
