@@ -1050,7 +1050,7 @@ module EffectfulTranslation = struct
       match res with
       | CN_owned oty ->
         let@ scty = infer_scty "Owned" oty in
-        (* we don't take Resources.owned_oargs here because we want to maintain the C-type
+        (* we don't take Resource.owned_oargs here because we want to maintain the C-type
            information *)
         let oargs_ty = Memory.sbt_of_sct scty in
         return (Req.Owned (scty, Init), oargs_ty)
@@ -1336,7 +1336,6 @@ module LocalState = struct
 end
 
 let translate_cn_clause env clause =
-  let open Resources in
   let open LocalState in
   let rec translate_cn_clause_aux env st acc clause =
     let module LAT = LogicalArgumentTypes in

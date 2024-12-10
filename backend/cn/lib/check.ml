@@ -1161,7 +1161,7 @@ let _check_used_distinct loc used =
                Generic
                  (Pp.item
                     "undefined behaviour: concurrent update"
-                    (Resources.pp r
+                    (Resource.pp r
                      ^^^ break 1
                      ^^^ render_upd h
                      ^^^ break 1
@@ -1180,7 +1180,7 @@ let _check_used_distinct loc used =
             Generic
               (Pp.item
                  "undefined behaviour: concurrent read & update"
-                 (Resources.pp r
+                 (Resource.pp r
                   ^^^ break 1
                   ^^^ render_read h
                   ^^^ break 1
@@ -2109,7 +2109,7 @@ let bind_arguments (_loc : Locations.t) (full_args : _ Mu.arguments) =
       aux_l resources args
     | Resource ((s, (re, bt)), ((loc, _) as info), args) ->
       let@ () = add_l s bt (fst info, lazy (Sym.pp s)) in
-      aux_l (resources @ [ (re, Resources.O (sym_ (s, bt, loc))) ]) args
+      aux_l (resources @ [ (re, Resource.O (sym_ (s, bt, loc))) ]) args
     | I i -> return (i, resources)
   in
   let rec aux_a = function
@@ -2300,7 +2300,7 @@ let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> unit m =
             let module H = Alloc.History in
             let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
             let addr = addr_ ptr here in
-            let upper = Resources.upper_bound addr ct here in
+            let upper = IT.upper_bound addr ct here in
             let bounds =
               and_
                 [ le_ (base, addr) here;

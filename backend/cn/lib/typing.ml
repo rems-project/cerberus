@@ -2,7 +2,7 @@ open Context
 module IT = IndexTerms
 module ITSet = Set.Make (IT)
 module Req = Request
-module RE = Resources
+module Res = Resource
 open TypeErrors
 
 type solver = Solver.solver
@@ -437,16 +437,14 @@ let add_c_internal lc =
   return ()
 
 
-let add_r_internal ?(derive_constraints = true) loc (r, RE.O oargs) =
+let add_r_internal ?(derive_constraints = true) loc (r, Res.O oargs) =
   let@ s = get_typing_context () in
   let@ simp_ctxt = simp_ctxt () in
   let r = Simplify.Request.simp simp_ctxt r in
   let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
   let pointer_facts =
     if derive_constraints then
-      Resources.pointer_facts
-        ~new_resource:(r, RE.O oargs)
-        ~old_resources:(Context.get_rs s)
+      Res.pointer_facts ~new_resource:(r, Res.O oargs) ~old_resources:(Context.get_rs s)
     else
       []
   in
@@ -604,7 +602,7 @@ let bind_logical_return_internal loc =
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | member :: members, Resource ((s, (re, bt)), _, lrt) ->
       let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
-      let@ () = add_r_internal loc (re, RE.O member) in
+      let@ () = add_r_internal loc (re, Res.O member) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | members, Constraint (lc, _, lrt) ->
       let@ () = add_c_internal lc in
@@ -640,9 +638,10 @@ let bind_return loc members (rt : ReturnTypes.t) =
 type changed =
   | Deleted
   | Unchanged
-  | Changed of RE.t
+  | Changed of Res.t
 
-let map_and_fold_resources_internal loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) =
+let map_and_fold_resources_internal loc (f : Res.t -> 'acc -> changed * 'acc) (acc : 'acc)
+  =
   let@ s = get_typing_context () in
   let@ provable_f = provable_internal loc in
   let resources, orig_ix = s.resources in

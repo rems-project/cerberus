@@ -38,9 +38,9 @@ val get_cs : unit -> Context.LC.Set.t m
 
 val simp_ctxt : unit -> Simplify.simp_ctxt m
 
-val all_resources : Locations.t -> Resources.t list m
+val all_resources : Locations.t -> Resource.t list m
 
-val all_resources_tagged : Locations.t -> ((Resources.t * int) list * int) m
+val all_resources_tagged : Locations.t -> ((Resource.t * int) list * int) m
 
 val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False ]) m
 
@@ -78,9 +78,9 @@ val add_c : Locations.t -> LogicalConstraints.t -> unit m
 
 val add_cs : Locations.t -> LogicalConstraints.t list -> unit m
 
-val add_r : Locations.t -> Resources.t -> unit m
+val add_r : Locations.t -> Resource.t -> unit m
 
-val add_rs : Locations.t -> Resources.t list -> unit m
+val add_rs : Locations.t -> Resource.t list -> unit m
 
 val set_datatype_order : Sym.t list list option -> unit m
 
@@ -91,11 +91,11 @@ val res_history : Locations.t -> int -> Context.resource_history m
 type changed =
   | Deleted
   | Unchanged
-  | Changed of Resources.t
+  | Changed of Resource.t
 
 val map_and_fold_resources
   :  Locations.t ->
-  (Resources.t -> 'acc -> changed * 'acc) ->
+  (Resource.t -> 'acc -> changed * 'acc) ->
   'acc ->
   ('acc * int list) m
 

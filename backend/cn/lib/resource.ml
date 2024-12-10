@@ -1,45 +1,33 @@
-module CF = Cerb_frontend
 module IT = IndexTerms
-module LC = LogicalConstraints
-module RT = Request
+module Req = Request
 
-type oargs = O of IT.t
+type output = O of IT.t [@@ocaml.unboxed]
 
-let pp_oargs (O t) = IT.pp t
+let pp_output (O t) = IT.pp t
 
-type resource = RT.t * oargs
+type predicate = Req.Predicate.t * output
 
-type t = resource
+type qpredicate = Req.QPredicate.t * output
 
-let request (r, _oargs) = r
+type t = Req.t * output
 
-let oargs_bt (_re, O oargs) = IT.bt oargs
-
-let pp (r, O oargs) = Request.pp_aux r (Some oargs)
+let pp (r, O output) = Req.pp_aux r (Some output)
 
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))
 
 let subst substitution ((r, O oargs) : t) =
-  (Request.subst substitution r, O (IT.subst substitution oargs))
+  (Req.subst substitution r, O (IT.subst substitution oargs))
 
 
-let free_vars (r, O oargs) = Sym.Set.union (Request.free_vars r) (IT.free_vars oargs)
-
-let range_size ct =
-  let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
-  let size = Memory.size_of_ctype ct in
-  IT.num_lit_ (Z.of_int size) Memory.uintptr_bt here
-
-
-let upper_bound addr ct loc = IT.add_ (addr, range_size ct) loc
+let free_vars (r, O oargs) = Sym.Set.union (Req.free_vars r) (IT.free_vars oargs)
 
 (* assumption: the resource is owned *)
-let derived_lc1 ((resource : RT.t), O oarg) =
+let derived_lc1 ((resource : Req.t), O output) =
   let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
   match resource with
   | P { name = Owned (ct, _); pointer; iargs = _ } ->
     let addr = IT.addr_ pointer here in
-    let upper = upper_bound addr ct here in
+    let upper = IT.upper_bound addr ct here in
     let alloc_bounds =
       if !IT.use_vip then
         let module H = Alloc.History in
@@ -50,26 +38,26 @@ let derived_lc1 ((resource : RT.t), O oarg) =
     in
     [ IT.hasAllocId_ pointer here; IT.(le_ (addr, upper) here) ] @ alloc_bounds
   | P { name; pointer; iargs = [] }
-    when !IT.use_vip && RT.(equal_name name Predicate.alloc) ->
+    when !IT.use_vip && Req.(equal_name name Predicate.alloc) ->
     let module H = Alloc.History in
     let lookup = H.lookup_ptr pointer here in
     let H.{ base; size } = H.split lookup here in
-    [ IT.(eq_ (lookup, oarg) here); IT.(le_ (base, add_ (base, size) here) here) ]
+    [ IT.(eq_ (lookup, output) here); IT.(le_ (base, add_ (base, size) here) here) ]
   | Q { name = Owned _; pointer; _ } -> [ IT.hasAllocId_ pointer here ]
   | P { name = PName _; pointer = _; iargs = _ } | Q { name = PName _; _ } -> []
 
 
 (* assumption: both resources are owned at the same *)
 (* todo, depending on how much we need *)
-let derived_lc2 ((resource : RT.t), _) ((resource' : RT.t), _) =
+let derived_lc2 ((resource : Req.t), _) ((resource' : Req.t), _) =
   match (resource, resource') with
   | ( P { name = Owned (ct1, _); pointer = p1; iargs = _ },
       P { name = Owned (ct2, _); pointer = p2; iargs = _ } ) ->
     let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
     let addr1 = IT.addr_ p1 here in
     let addr2 = IT.addr_ p2 here in
-    let up1 = upper_bound addr1 ct1 here in
-    let up2 = upper_bound addr2 ct2 here in
+    let up1 = IT.upper_bound addr1 ct1 here in
+    let up2 = IT.upper_bound addr2 ct2 here in
     [ IT.(or2_ (le_ (up2, addr1) here, le_ (up1, addr2) here) here) ]
   | _ -> []
 

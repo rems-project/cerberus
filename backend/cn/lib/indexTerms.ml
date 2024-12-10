@@ -729,6 +729,14 @@ let addr_ it loc =
   cast_ Memory.uintptr_bt it loc
 
 
+let upper_bound addr ct loc =
+  let range_size ct =
+    let size = Memory.size_of_ctype ct in
+    num_lit_ (Z.of_int size) Memory.uintptr_bt loc
+  in
+  add_ (addr, range_size ct) loc
+
+
 (* for integer-mode: cast_ Integer it *)
 
 let allocId_ it loc = cast_ Alloc_id it loc
