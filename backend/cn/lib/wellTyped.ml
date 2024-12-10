@@ -2299,9 +2299,7 @@ end
 module WLFD = struct
   open Definition.Function
 
-  let welltyped
-    ({ loc; args; return_bt; emit_coq; definition } : Definition.Function.definition)
-    =
+  let welltyped ({ loc; args; return_bt; emit_coq; body } : Definition.Function.t) =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure
       (let@ args =
@@ -2313,8 +2311,8 @@ module WLFD = struct
            args
        in
        let@ return_bt = WBT.is_bt loc return_bt in
-       let@ definition =
-         match definition with
+       let@ body =
+         match body with
          | Def body ->
            let@ body = WIT.check loc return_bt body in
            return (Def body)
@@ -2323,7 +2321,7 @@ module WLFD = struct
            return (Rec_Def body)
          | Uninterp -> return Uninterp
        in
-       return { loc; args; return_bt; emit_coq; definition })
+       return { loc; args; return_bt; emit_coq; body })
 end
 
 module WLemma = struct

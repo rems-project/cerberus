@@ -353,8 +353,7 @@ let bt_is_record_or_tuple = function BT.Record _ | BT.Tuple _ -> true | _ -> fal
 let fns_and_preds_with_record_rt (funs, preds) =
   let funs' =
     List.filter
-      (fun (_, (def : Definition.Function.definition)) ->
-        bt_is_record_or_tuple def.return_bt)
+      (fun (_, (def : Definition.Function.t)) -> bt_is_record_or_tuple def.return_bt)
       funs
   in
   let fun_syms = List.map (fun (fn_sym, _) -> fn_sym) funs' in
@@ -369,7 +368,7 @@ let fns_and_preds_with_record_rt (funs, preds) =
 
 let generate_c_functions_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (logical_predicates : (Sym.t * Definition.Function.definition) list)
+  (logical_predicates : (Sym.t * Definition.Function.t) list)
   =
   let ail_funs_and_records =
     List.map

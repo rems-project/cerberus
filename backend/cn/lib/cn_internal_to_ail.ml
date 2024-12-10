@@ -2932,7 +2932,7 @@ let rec generate_record_opt pred_sym = function
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal
-  (fn_sym, (lf_def : Definition.Function.definition))
+  (fn_sym, (lf_def : Definition.Function.t))
   (cn_datatypes : A.sigma_cn_datatype list)
   (cn_functions : A.sigma_cn_function list)
   : ((Locations.t * A.sigma_declaration)
@@ -2942,7 +2942,7 @@ let cn_to_ail_function_internal
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) lf_def.return_bt in
   (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
   let bs, ail_func_body_opt =
-    match lf_def.definition with
+    match lf_def.body with
     | Def it | Rec_Def it ->
       let bs, ss =
         cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return

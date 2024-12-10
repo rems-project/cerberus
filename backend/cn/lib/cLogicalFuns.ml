@@ -714,8 +714,8 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
 let upd_def (loc, sym, def_tm) =
   let open Definition.Function in
   let@ def = get_logical_function_def loc sym in
-  match def.definition with
-  | Uninterp -> add_logical_function sym { def with definition = Def def_tm }
+  match def.body with
+  | Uninterp -> add_logical_function sym { def with body = Def def_tm }
   | _ ->
     fail_n
       { loc;

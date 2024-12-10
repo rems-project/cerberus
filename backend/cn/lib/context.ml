@@ -280,7 +280,7 @@ let not_given_to_solver ctxt =
   let preds =
     Sym.Map.bindings
       (Sym.Map.filter
-         (fun _ v -> not (Definition.given_to_solver v))
+         (fun _ v -> not (Definition.Predicate.given_to_solver v))
          global.resource_predicates)
   in
   (constraints, funs, preds)

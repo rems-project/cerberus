@@ -2230,7 +2230,7 @@ let record_and_check_logical_functions funs =
   let@ () =
     ListM.iterM
       (fun (name, def) ->
-        let@ simple_def = WellTyped.WLFD.welltyped { def with definition = Uninterp } in
+        let@ simple_def = WellTyped.WLFD.welltyped { def with body = Uninterp } in
         add_logical_function name simple_def)
       recursive
   in

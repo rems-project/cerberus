@@ -407,8 +407,8 @@ let it_adjust (global : Global.t) it =
     | IT.Apply (name, args) ->
       let open Definition.Function in
       let def = Sym.Map.find name global.logical_functions in
-      (match (def.definition, def.emit_coq) with
-       | Def body, false -> f (open_fun def.args body args)
+      (match (def.body, def.emit_coq) with
+       | Def body, false -> f (open_ def.args body args)
        | _ -> t)
     | IT.Good (ct, t2) ->
       if Option.is_some (Sctypes.is_struct_ctype ct) then
@@ -781,7 +781,7 @@ let ensure_pred global list_mono loc name aux =
   let open Definition.Function in
   let def = Sym.Map.find name global.Global.logical_functions in
   let inf = (loc, Pp.typ (Pp.string "pred") (Sym.pp name)) in
-  match def.definition with
+  match def.body with
   | Uninterp ->
     gen_ensure
       1
@@ -852,10 +852,10 @@ let rec unfold_if_possible global it =
   match it with
   | IT (IT.Apply (name, args), _, _) ->
     let def = Option.get (Global.get_logical_function_def global name) in
-    (match def.definition with
+    (match def.body with
      | Rec_Def _ -> it
      | Uninterp -> it
-     | Def body -> unfold_if_possible global (open_fun def.args body args))
+     | Def body -> unfold_if_possible global (open_ def.args body args))
   | _ -> it
 
 

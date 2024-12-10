@@ -1002,8 +1002,8 @@ let rec translate_term s iterm =
   | MapDef _ -> failwith "MapDef"
   | Apply (name, args) ->
     let def = Option.get (get_logical_function_def s.globals name) in
-    (match def.definition with
-     | Def body -> translate_term s (Definition.Function.open_fun def.args body args)
+    (match def.body with
+     | Def body -> translate_term s (Definition.Function.open_ def.args body args)
      | _ ->
        let do_arg arg = translate_base_type (IT.basetype arg) in
        let args_ts = List.map do_arg args in
