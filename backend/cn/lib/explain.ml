@@ -159,7 +159,7 @@ let state ctxt log model_with_q extras =
     result
   in
   let model, quantifier_counter_model = model_with_q in
-  let evaluate it = Solver.eval ctxt.global model it in
+  let evaluate it = Solver.eval model it in
   (* let _mevaluate it = *)
   (*   match evaluate it with *)
   (*   | Some v -> IT.pp v *)
@@ -350,7 +350,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
        :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
   let model, _quantifier_counter_model = model_with_q in
-  let evaluate it = Solver.eval ctxt.global model it in
+  let evaluate it = Solver.eval model it in
   let predicate_hints =
     match extras.request with
     | None -> []

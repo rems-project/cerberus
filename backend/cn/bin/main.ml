@@ -258,8 +258,6 @@ let verify
   debug_level
   print_level
   print_sym_nums
-  slow_smt_threshold
-  slow_smt_dir
   no_timestamps
   json
   json_trace
@@ -270,7 +268,6 @@ let verify
   skip
   csv_times
   log_times
-  random_seed
   solver_logging
   solver_flags
   solver_path
@@ -295,8 +292,6 @@ let verify
   Pp.print_level := print_level;
   CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
-  Solver.set_slow_smt_settings slow_smt_threshold slow_smt_dir;
-  Solver.random_seed := random_seed;
   (match solver_logging with
    | Some d ->
      Solver.Logger.to_file := true;
@@ -709,27 +704,9 @@ module Verify_flags = struct
     Arg.(value & flag & info [ "quiet" ] ~doc)
 
 
-  let slow_smt_threshold =
-    let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
-    Arg.(value & opt (some float) None & info [ "slow-smt" ] ~docv:"TIMEOUT" ~doc)
-
-
-  let slow_smt_dir =
-    let doc =
-      "Set the destination dir for logging slow smt queries (default is in system \
-       temp-dir)."
-    in
-    Arg.(value & opt (some string) None & info [ "slow-smt-dir" ] ~docv:"FILE" ~doc)
-
-
   let diag =
     let doc = "explore branching diagnostics with key string" in
     Arg.(value & opt (some string) None & info [ "diag" ] ~doc)
-
-
-  let random_seed =
-    let doc = "Set the SMT solver random seed (default 1)." in
-    Arg.(value & opt int 0 & info [ "r"; "random-seed" ] ~docv:"I" ~doc)
 
 
   let solver_logging =
@@ -880,8 +857,6 @@ let verify_t : unit Term.t =
   $ Common_flags.debug_level
   $ Common_flags.print_level
   $ Common_flags.print_sym_nums
-  $ Verify_flags.slow_smt_threshold
-  $ Verify_flags.slow_smt_dir
   $ Common_flags.no_timestamps
   $ Verify_flags.json
   $ Verify_flags.json_trace
@@ -892,7 +867,6 @@ let verify_t : unit Term.t =
   $ Verify_flags.skip
   $ Common_flags.csv_times
   $ Common_flags.log_times
-  $ Verify_flags.random_seed
   $ Verify_flags.solver_logging
   $ Verify_flags.solver_flags
   $ Verify_flags.solver_path

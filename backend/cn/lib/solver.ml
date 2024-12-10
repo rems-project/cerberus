@@ -1429,16 +1429,6 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
    reason) *)
 
 (* ISD: Could these globs be different from the saved ones? *)
-let eval _globs mo t =
+let eval mo t =
   let model_fn = Hashtbl.find models_tbl mo in
   model_fn t
-
-
-(* Dummy implementations *)
-let random_seed = ref 0
-
-let set_slow_smt_settings _ _ = ()
-
-let debug_solver_to_string _ = ()
-
-let debug_solver_query _ _ _ _ _ = ()
