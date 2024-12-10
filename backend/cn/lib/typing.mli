@@ -150,9 +150,7 @@ val test_value_eqs
 
 val embed_resultat : 'a Resultat.t -> 'a m
 
-val ensure_logical_sort : Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
-
-val ensure_base_type : Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
+val ensure_base_type : Locations.t -> expect:BaseTypes.t -> BaseTypes.t -> unit m
 
 val make_return_record
   :  Locations.t ->

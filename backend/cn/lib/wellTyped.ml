@@ -1,5 +1,4 @@
 module CF = Cerb_frontend
-module LS = LogicalSorts
 module BT = BaseTypes
 module TE = TypeErrors
 module Res = Resource
@@ -205,10 +204,6 @@ module WBT = struct
     | None ->
       fail (fun _ ->
         { loc; msg = Generic (Pp.item "no standard encoding type for constant" (Pp.z z)) })
-end
-
-module WLS = struct
-  let is_ls = WBT.is_bt
 end
 
 module WCT = struct
@@ -948,13 +943,13 @@ module WIT = struct
 
 
   and check expect_loc expect_ls it =
-    let@ ls = WLS.is_ls expect_loc expect_ls in
+    let@ ls = WBT.is_bt expect_loc expect_ls in
     let@ it = infer it in
     let@ loc = get_location_for_type it in
-    if LS.equal ls (IT.bt it) then
+    if BT.equal ls (IT.bt it) then
       return it
     else (
-      let expected = Pp.plain @@ LS.pp ls in
+      let expected = Pp.plain @@ BT.pp ls in
       let reason = Either.Left expect_loc in
       fail (illtyped_index_term loc it (IT.bt it) ~expected ~reason))
 end
@@ -2263,10 +2258,10 @@ module WRPD = struct
       (let@ () = add_l pointer BT.(Loc ()) (loc, lazy (Pp.string "ptr-var")) in
        let@ iargs =
          ListM.mapM
-           (fun (s, ls) ->
-             let@ ls = WLS.is_ls loc ls in
-             let@ () = add_l s ls (loc, lazy (Pp.string "input-var")) in
-             return (s, ls))
+           (fun (s, bt) ->
+             let@ bt = WBT.is_bt loc bt in
+             let@ () = add_l s bt (loc, lazy (Pp.string "input-var")) in
+             return (s, bt))
            iargs
        in
        let@ oarg_bt = WBT.is_bt loc oarg_bt in
@@ -2312,10 +2307,10 @@ module WLFD = struct
     pure
       (let@ args =
          ListM.mapM
-           (fun (s, ls) ->
-             let@ ls = WLS.is_ls loc ls in
-             let@ () = add_l s ls (loc, lazy (Pp.string "arg-var")) in
-             return (s, ls))
+           (fun (s, bt) ->
+             let@ bt = WBT.is_bt loc bt in
+             let@ () = add_l s bt (loc, lazy (Pp.string "arg-var")) in
+             return (s, bt))
            args
        in
        let@ return_bt = WBT.is_bt loc return_bt in

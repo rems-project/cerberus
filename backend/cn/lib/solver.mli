@@ -3,14 +3,13 @@ type solver
 
 type model
 
-(* (TODO: BCP: The "with quantifiers" part will be the instantiations that the solver
-   found -- is that right?) *)
-type model_with_q = model * (Sym.t * LogicalSorts.t) list
+(** Model with quantifier instantiations *)
+type model_with_q = model * (Sym.t * BaseTypes.t) list
 
 val empty_model : model
 
-(* Global flags to pass to the solver (TODO: BCP: Could use a bit more documentation,
-   maybe) *)
+(** Global flags to pass to the solver. Useful for reproducing bugs which only
+    appear with specific counter-examples. *)
 val random_seed : int ref
 
 module Logger : sig

@@ -1,6 +1,4 @@
-module BT = BaseTypes
 module IT = IndexTerms
-module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module AT = ArgumentTypes
@@ -39,8 +37,8 @@ let clause_lrt (pred_oarg : IT.t) clause_packing_ft =
 type definition =
   { loc : Loc.t;
     pointer : Sym.t;
-    iargs : (Sym.t * LS.t) list;
-    oarg_bt : LS.t;
+    iargs : (Sym.t * BaseTypes.t) list;
+    oarg_bt : BaseTypes.t;
     clauses : clause list option
   }
 
@@ -56,7 +54,7 @@ let alloc =
 let pp_definition def =
   item "pointer" (Sym.pp def.pointer)
   ^/^ item "iargs" (Pp.list (fun (s, _) -> Sym.pp s) def.iargs)
-  ^/^ item "oarg_bt" (BT.pp def.oarg_bt)
+  ^/^ item "oarg_bt" (BaseTypes.pp def.oarg_bt)
   ^/^ item
         "clauses"
         (match def.clauses with

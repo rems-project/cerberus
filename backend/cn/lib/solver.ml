@@ -1299,7 +1299,7 @@ type model = int
 
 type model_fn = IT.t -> IT.t option
 
-type model_with_q = model * (Sym.t * LogicalSorts.t) list
+type model_with_q = model * (Sym.t * BaseTypes.t) list
 
 type model_table = (model, model_fn) Hashtbl.t
 

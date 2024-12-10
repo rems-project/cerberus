@@ -1063,7 +1063,7 @@ end = struct
     check_pexpr pe k
 
 
-  let check_arg_it (loc, it_arg) ~(expect : LogicalSorts.t) k =
+  let check_arg_it (loc, it_arg) ~(expect : BT.t) k =
     let@ it_arg = WellTyped.WIT.check loc expect it_arg in
     k it_arg
 

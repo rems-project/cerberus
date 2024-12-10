@@ -1,6 +1,5 @@
 module Loc = Locations
 module IT = IndexTerms
-module BT = BaseTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 open IndexTerms
@@ -18,10 +17,10 @@ let subst_def_or_uninterp subst = function
 
 type definition =
   { loc : Locations.t;
-    args : (Sym.t * LogicalSorts.t) list;
+    args : (Sym.t * BaseTypes.t) list;
     (* If the predicate is supposed to get used in a quantified form, one of the arguments
        has to be the index/quantified variable. For now at least. *)
-    return_bt : BT.t;
+    return_bt : BaseTypes.t;
     emit_coq : bool;
     definition : def_or_uninterp
   }
@@ -37,7 +36,7 @@ let given_to_solver def =
 let pp_args xs =
   Pp.flow_map
     (Pp.break 1)
-    (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BT.pp typ)))
+    (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BaseTypes.pp typ)))
     xs
 
 
