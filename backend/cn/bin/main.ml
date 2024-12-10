@@ -342,6 +342,19 @@ let verify
       Typing.run_from_pause check paused)
 
 
+let handle_error_with_user_guidance ~(label : string) (e : exn) : unit =
+  let msg = Printexc.to_string e in
+  let stack = Printexc.get_backtrace () in
+  Printf.eprintf "cn: internal error, uncaught exception:\n    %s\n" msg;
+  let lines = String.split_on_char '\n' stack in
+  List.iter (fun line -> Printf.eprintf "    %s\n" line) lines;
+  Printf.eprintf
+    "Issues can be made at https://github.com/rems-project/cerberus/issues.\n";
+  Printf.eprintf "Prefix your issue with \"[%s]\". " label;
+  Printf.eprintf "Check that there isn't already one for this error.\n";
+  exit 1
+
+
 let generate_executable_specs
   filename
   macros
@@ -404,16 +417,19 @@ let generate_executable_specs
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
-          Executable_spec.main
-            ~without_ownership_checking
-            ~with_test_gen
-            ~copy_source_dir
-            filename
-            ail_prog
-            output_decorated
-            output_decorated_dir
-            prog5
-            statement_locs;
+          (try
+             Executable_spec.main
+               ~without_ownership_checking
+               ~with_test_gen
+               ~copy_source_dir
+               filename
+               ail_prog
+               output_decorated
+               output_decorated_dir
+               prog5
+               statement_locs
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           Resultat.return ())
         ())
 
@@ -489,8 +505,8 @@ let run_tests
               Option.is_some inst.internal)
             |> List.is_empty
           then (
-            print_endline "No testable functions, aborting";
-            exit 1);
+            print_endline "No testable functions, trivially passing";
+            exit 0);
           if not (Sys.file_exists output_dir) then (
             print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
             Sys.mkdir output_dir 0o777;
@@ -498,16 +514,19 @@ let run_tests
               ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
           let _, sigma = ail_prog in
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
-          Executable_spec.main
-            ~without_ownership_checking
-            ~with_test_gen:true
-            ~copy_source_dir:false
-            filename
-            ail_prog
-            None
-            (Some output_dir)
-            prog5
-            statement_locs;
+          (try
+             Executable_spec.main
+               ~without_ownership_checking
+               ~with_test_gen:true
+               ~copy_source_dir:false
+               filename
+               ail_prog
+               None
+               (Some output_dir)
+               prog5
+               statement_locs
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           let config : TestGeneration.config =
             { num_samples;
               max_backtracks;
@@ -529,13 +548,16 @@ let run_tests
               disable_passes
             }
           in
-          TestGeneration.run
-            ~output_dir
-            ~filename
-            ~without_ownership_checking
-            config
-            sigma
-            prog5;
+          (try
+             TestGeneration.run
+               ~output_dir
+               ~filename
+               ~without_ownership_checking
+               config
+               sigma
+               prog5
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Test-Gen" e);
           if not dont_run then
             Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
