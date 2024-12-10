@@ -7,6 +7,8 @@ open IT
 module LC = LogicalConstraints
 module LCSet = Set.Make (LC)
 
+[@@@ocaml.warning "-32"]
+
 type init =
   | Init
   | Uninit
