@@ -360,7 +360,7 @@ let fns_and_preds_with_record_rt (funs, preds) =
   let fun_syms = List.map (fun (fn_sym, _) -> fn_sym) funs' in
   let preds' =
     List.filter
-      (fun (_, (def : ResourcePredicates.definition)) ->
+      (fun (_, (def : ResourcePredicates.Definition.t)) ->
         bt_is_record_or_tuple def.oarg_bt)
       preds
   in
@@ -440,7 +440,7 @@ let rec remove_duplicates eq_fun = function
 
 let generate_c_predicates_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (resource_predicates : (Sym.t * ResourcePredicates.definition) list)
+  (resource_predicates : (Sym.t * ResourcePredicates.Definition.t) list)
   =
   (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal
      cn_f sigm.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates

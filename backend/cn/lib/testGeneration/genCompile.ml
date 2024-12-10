@@ -33,7 +33,7 @@ let compile_oargs (ret_bt : BT.t) (iargs : (Sym.t * BT.t) list) : (Sym.t * BT.t)
 
 let add_request
   (recursive : Sym.Set.t)
-  (preds : (Sym.Map.key * RP.definition) list)
+  (preds : (Sym.Map.key * RP.Definition.t) list)
   (fsym : Sym.t)
   : unit m
   =
@@ -99,7 +99,7 @@ let compile_vars (generated : Sym.Set.t) (oargs : (Sym.t * GBT.t) list) (lat : I
 let rec compile_it_lat
   (filename : string)
   (recursive : Sym.Set.t)
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * RP.Definition.t) list)
   (name : Sym.t)
   (generated : Sym.Set.t)
   (oargs : (Sym.t * GBT.t) list)
@@ -270,11 +270,11 @@ let rec compile_it_lat
 let rec compile_clauses
   (filename : string)
   (recursive : Sym.Set.t)
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * RP.Definition.t) list)
   (name : Sym.t)
   (iargs : Sym.Set.t)
   (oargs : (Sym.t * GBT.t) list)
-  (cls : RP.clause list)
+  (cls : RP.Clause.t list)
   : GT.t m
   =
   match cls with
@@ -293,7 +293,7 @@ let rec compile_clauses
 
 let compile_pred
   (recursive_preds : Sym.Set.t)
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * RP.Definition.t) list)
   ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
   : unit m
   =
@@ -316,7 +316,7 @@ let compile_pred
 let compile_spec
   (filename : string)
   (recursive : Sym.Set.t)
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * RP.Definition.t) list)
   (name : Sym.t)
   (at : 'a AT.t)
   : unit m
@@ -374,7 +374,7 @@ let compile_spec
 
 let compile
   ?(ctx : GD.context option)
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * RP.Definition.t) list)
   (insts : Executable_spec_extract.instrumentation list)
   : GD.context
   =

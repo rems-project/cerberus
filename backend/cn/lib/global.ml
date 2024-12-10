@@ -9,7 +9,7 @@ type t =
     datatype_constrs : BaseTypes.constr_info Sym.Map.t;
     datatype_order : Sym.t list list option;
     fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) Sym.Map.t;
-    resource_predicates : ResourcePredicates.definition Sym.Map.t;
+    resource_predicates : ResourcePredicates.Definition.t Sym.Map.t;
     logical_functions : LogicalFunctions.definition Sym.Map.t;
     lemmata : (Locations.t * AT.lemmat) Sym.Map.t
   }
@@ -68,7 +68,7 @@ let pp_fun_decls decls = flow_map hardline pp_fun_decl (Sym.Map.bindings decls)
 let pp_resource_predicate_definitions defs =
   separate_map
     hardline
-    (fun (name, def) -> item (Sym.pp_string name) (ResourcePredicates.pp_definition def))
+    (fun (name, def) -> item (Sym.pp_string name) (ResourcePredicates.Definition.pp def))
     (Sym.Map.bindings defs)
 
 

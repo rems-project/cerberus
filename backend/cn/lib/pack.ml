@@ -4,6 +4,8 @@ open ResourcePredicates
 open Memory
 module IT = IndexTerms
 module LAT = LogicalArgumentTypes
+module LRT = LogicalReturnTypes
+module LC = LogicalConstraints
 
 (* open Cerb_pp_prelude *)
 
@@ -141,7 +143,7 @@ let unpack loc global provable (ret, O o) =
   | _ ->
     (match packing_ft loc global provable ret with
      | None -> None
-     | Some packing_ft -> Some (`LRT (ResourcePredicates.clause_lrt o packing_ft)))
+     | Some packing_ft -> Some (`LRT (ResourcePredicates.Clause.lrt o packing_ft)))
 
 
 let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O o) =

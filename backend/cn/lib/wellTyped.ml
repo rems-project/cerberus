@@ -2252,7 +2252,7 @@ end
 module WRPD = struct
   open ResourcePredicates
 
-  let welltyped { loc; pointer; iargs; oarg_bt; clauses } =
+  let welltyped Definition.{ loc; pointer; iargs; oarg_bt; clauses } =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure
       (let@ () = add_l pointer BT.(Loc ()) (loc, lazy (Pp.string "ptr-var")) in
@@ -2271,11 +2271,11 @@ module WRPD = struct
          | Some clauses ->
            let@ clauses =
              ListM.fold_leftM
-               (fun acc { loc; guard; packing_ft } ->
+               (fun acc Clause.{ loc; guard; packing_ft } ->
                  let@ guard = WIT.check loc BT.Bool guard in
                  let here = Locations.other __FUNCTION__ in
                  let negated_guards =
-                   List.map (fun clause -> IT.not_ clause.guard here) acc
+                   List.map (fun clause -> IT.not_ clause.Clause.guard here) acc
                  in
                  pure
                    (let@ () = add_c loc (LC.T guard) in
@@ -2288,13 +2288,13 @@ module WRPD = struct
                         loc
                         packing_ft
                     in
-                    return (acc @ [ { loc; guard; packing_ft } ])))
+                    return (acc @ [ Clause.{ loc; guard; packing_ft } ])))
                []
                clauses
            in
            return (Some clauses)
        in
-       return { loc; pointer; iargs; oarg_bt; clauses })
+       return Definition.{ loc; pointer; iargs; oarg_bt; clauses })
 end
 
 module WLFD = struct

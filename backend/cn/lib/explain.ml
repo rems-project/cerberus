@@ -39,17 +39,15 @@ let clause_has_resource req c =
     | Define (_, _, c) -> f c
     | I _ -> false
   in
-  let open ResourcePredicates in
-  f c.packing_ft
+  f c.REP.Clause.packing_ft
 
 
 let relevant_predicate_clauses global name req =
   let open Global in
-  let open ResourcePredicates in
   let clauses =
     let defs = Sym.Map.bindings global.resource_predicates in
     List.concat_map
-      (fun (nm, def) ->
+      (fun (nm, (def : REP.Definition.t)) ->
         match def.clauses with
         | Some clauses -> List.map (fun c -> (nm, c)) clauses
         | None -> [])
@@ -360,7 +358,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
        | Owned _ -> []
        | PName pname ->
          let doc_clause (_name, c) =
-           { cond = IT.pp c.guard;
+           { cond = IT.pp c.REP.Clause.guard;
              clause = LogicalArgumentTypes.pp IT.pp (simp_resource evaluate c.packing_ft)
            }
          in

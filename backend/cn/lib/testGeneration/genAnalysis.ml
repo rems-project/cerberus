@@ -150,11 +150,11 @@ end
 
 let get_bounds = Bounds.get_bounds
 
-let get_recursive_preds (preds : (Sym.t * RP.definition) list) : Sym.Set.t =
-  let get_calls (pred : RP.definition) : Sym.Set.t =
+let get_recursive_preds (preds : (Sym.t * RP.Definition.t) list) : Sym.Set.t =
+  let get_calls (pred : RP.Definition.t) : Sym.Set.t =
     pred.clauses
     |> Option.get
-    |> List.map (fun (cl : RP.clause) -> cl.packing_ft)
+    |> List.map (fun (cl : RP.Clause.t) -> cl.packing_ft)
     |> List.map LAT.r_resource_requests
     |> List.flatten
     |> List.map snd

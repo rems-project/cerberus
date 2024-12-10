@@ -428,7 +428,7 @@ type 'TY file =
     extern : Cerb_frontend.Core.extern_map;
     stdlib_syms : Sym.Set.t;
     mk_functions : function_to_convert list;
-    resource_predicates : (Sym.t * ResourcePredicates.definition) list;
+    resource_predicates : (Sym.t * ResourcePredicates.Definition.t) list;
     logical_predicates : (Sym.t * LogicalFunctions.definition) list;
     datatypes : (Sym.t * datatype) list;
     lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
