@@ -427,7 +427,7 @@ type 'TY file =
     globs : (Sym.t * 'TY globs) list;
     funs : (Sym.t, 'TY fun_map_decl) Pmap.map;
     extern : Cerb_frontend.Core.extern_map;
-    stdlib_syms : Set.Make(Sym).t;
+    stdlib_syms : Sym.Set.t;
     mk_functions : function_to_convert list;
     resource_predicates : (Sym.t * ResourcePredicates.definition) list;
     logical_predicates : (Sym.t * LogicalFunctions.definition) list;
@@ -442,9 +442,7 @@ let empty_file : 'TY file =
     globs = [];
     funs = Pmap.empty Sym.compare;
     extern = Pmap.empty Id.compare;
-    stdlib_syms =
-      (let open Set.Make (Sym) in
-       empty);
+    stdlib_syms = Sym.Set.empty;
     mk_functions = [];
     resource_predicates = [];
     logical_predicates = [];

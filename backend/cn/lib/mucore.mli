@@ -330,7 +330,7 @@ type 'TY file =
     globs : (Sym.t * 'TY globs) list;
     funs : (Sym.t, 'TY fun_map_decl) Pmap.map;
     extern : Cerb_frontend.Core.extern_map;
-    stdlib_syms : Set.Make(Sym).t;
+    stdlib_syms : Sym.Set.t;
     mk_functions : function_to_convert list;
     resource_predicates : (Sym.t * ResourcePredicates.definition) list;
     logical_predicates : (Sym.t * LogicalFunctions.definition) list;

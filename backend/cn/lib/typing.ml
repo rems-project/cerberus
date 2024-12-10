@@ -1,7 +1,6 @@
 open Context
 module IT = IndexTerms
 module ITSet = Set.Make (IT)
-module SymMap = Map.Make (Sym)
 module RET = ResourceTypes
 module RE = Resources
 open TypeErrors
@@ -11,7 +10,7 @@ type solver = Solver.solver
 type s =
   { typing_context : Context.t;
     solver : solver option;
-    sym_eqs : IT.t SymMap.t;
+    sym_eqs : IT.t Sym.Map.t;
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
     movable_indices : (RET.predicate_name * IT.t) list;
@@ -22,7 +21,7 @@ type s =
 let empty_s (c : Context.t) =
   { typing_context = c;
     solver = None;
-    sym_eqs = SymMap.empty;
+    sym_eqs = Sym.Map.empty;
     past_models = [];
     found_equalities = EqTable.empty;
     movable_indices = [];
@@ -224,21 +223,21 @@ let get_logical_function_def loc id =
 
 let get_struct_decl loc tag =
   let@ global = get_global () in
-  match SymMap.find_opt tag global.struct_decls with
+  match Sym.Map.find_opt tag global.struct_decls with
   | Some decl -> return decl
   | None -> fail (fun _ -> { loc; msg = Unknown_struct tag })
 
 
 let get_datatype loc tag =
   let@ global = get_global () in
-  match SymMap.find_opt tag global.datatypes with
+  match Sym.Map.find_opt tag global.datatypes with
   | Some dt -> return dt
   | None -> fail (fun _ -> { loc; msg = Unknown_datatype tag })
 
 
 let get_datatype_constr loc tag =
   let@ global = get_global () in
-  match SymMap.find_opt tag global.datatype_constrs with
+  match Sym.Map.find_opt tag global.datatype_constrs with
   | Some info -> return info
   | None -> fail (fun _ -> { loc; msg = Unknown_datatype_constr tag })
 
@@ -286,44 +285,42 @@ let get_resource_predicate_def loc id =
 
 let add_struct_decl tag layout : unit m =
   let@ global = get_global () in
-  set_global { global with struct_decls = SymMap.add tag layout global.struct_decls }
+  set_global { global with struct_decls = Sym.Map.add tag layout global.struct_decls }
 
 
 let add_fun_decl fname entry =
   let@ global = get_global () in
-  set_global { global with fun_decls = SymMap.add fname entry global.fun_decls }
+  set_global { global with fun_decls = Sym.Map.add fname entry global.fun_decls }
 
 
 let add_lemma lemma_s (loc, lemma_typ) =
   let@ global = get_global () in
-  set_global { global with lemmata = SymMap.add lemma_s (loc, lemma_typ) global.lemmata }
+  set_global { global with lemmata = Sym.Map.add lemma_s (loc, lemma_typ) global.lemmata }
 
 
 let add_resource_predicate name entry =
   let@ global = get_global () in
   set_global
     { global with
-      resource_predicates = Global.SymMap.add name entry global.resource_predicates
+      resource_predicates = Sym.Map.add name entry global.resource_predicates
     }
 
 
 let add_logical_function name entry =
   let@ global = get_global () in
   set_global
-    { global with
-      logical_functions = Global.SymMap.add name entry global.logical_functions
-    }
+    { global with logical_functions = Sym.Map.add name entry global.logical_functions }
 
 
 let add_datatype name entry =
   let@ global = get_global () in
-  set_global { global with datatypes = SymMap.add name entry global.datatypes }
+  set_global { global with datatypes = Sym.Map.add name entry global.datatypes }
 
 
 let add_datatype_constr name entry =
   let@ global = get_global () in
   set_global
-    { global with datatype_constrs = SymMap.add name entry global.datatype_constrs }
+    { global with datatype_constrs = Sym.Map.add name entry global.datatype_constrs }
 
 
 let set_datatype_order datatype_order =
@@ -341,7 +338,7 @@ let get_datatype_order () =
 let add_sym_eqs sym_eqs =
   modify (fun s ->
     let sym_eqs =
-      List.fold_left (fun acc (s, v) -> SymMap.add s v acc) s.sym_eqs sym_eqs
+      List.fold_left (fun acc (s, v) -> Sym.Map.add s v acc) s.sym_eqs sym_eqs
     in
     { s with sym_eqs })
 
@@ -526,7 +523,7 @@ let do_check_model loc m prop =
   let@ global = get_global () in
   let vs =
     Context.(
-      SymMap.bindings ctxt.computational @ SymMap.bindings ctxt.logical
+      Sym.Map.bindings ctxt.computational @ Sym.Map.bindings ctxt.logical
       |> List.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
       |> List.map (fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc)))
   in

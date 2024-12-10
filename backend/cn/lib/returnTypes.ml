@@ -1,5 +1,4 @@
 open Locations
-module SymSet = Set.Make (Sym)
 module IT = IndexTerms
 module LRT = LogicalReturnTypes
 
@@ -22,7 +21,7 @@ and alpha_rename from t =
 
 
 and suitably_alpha_rename syms s t =
-  if SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename s t
   else
     (s, t)
@@ -30,7 +29,7 @@ and suitably_alpha_rename syms s t =
 
 let alpha_unique ss = function
   | Computational ((name, bt), oinfo, t) ->
-    let t = LRT.alpha_unique (SymSet.add name ss) t in
+    let t = LRT.alpha_unique (Sym.Set.add name ss) t in
     let name, t = LRT.suitably_alpha_rename ss name t in
     Computational ((name, bt), oinfo, t)
 
@@ -51,7 +50,7 @@ let map (f : LRT.t -> LRT.t) = function
   | Computational (param, oinfo, t) -> Computational (param, oinfo, f t)
 
 
-let bound = function Computational ((s, _), _, lrt) -> SymSet.add s (LRT.bound lrt)
+let bound = function Computational ((s, _), _, lrt) -> Sym.Set.add s (LRT.bound lrt)
 
 let pp_aux rt =
   let open Pp in

@@ -191,7 +191,7 @@ module Solver = struct
   let interval_for (eval : IT.t -> IT.t option) q tyi =
     let is_q i = match IT.term i with Sym y -> Sym.equal q y | _ -> false in
     let eval_k e =
-      if IT.SymSet.mem q (IT.free_vars e) then
+      if Sym.Set.mem q (IT.free_vars e) then
         None
       else
         Option.bind (eval e) (fun v ->

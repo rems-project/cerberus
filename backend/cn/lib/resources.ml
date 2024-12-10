@@ -1,6 +1,4 @@
 module CF = Cerb_frontend
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 module IT = IndexTerms
 module LC = LogicalConstraints
 module LCSet = Set.Make (LC)
@@ -26,7 +24,9 @@ let subst substitution ((r, O oargs) : t) =
   (ResourceTypes.subst substitution r, O (IT.subst substitution oargs))
 
 
-let free_vars (r, O oargs) = SymSet.union (ResourceTypes.free_vars r) (IT.free_vars oargs)
+let free_vars (r, O oargs) =
+  Sym.Set.union (ResourceTypes.free_vars r) (IT.free_vars oargs)
+
 
 let range_size ct =
   let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in

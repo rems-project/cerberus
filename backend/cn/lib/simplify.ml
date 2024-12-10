@@ -19,11 +19,11 @@ module LCSet = Set.Make (LC)
 
 type simp_ctxt =
   { global : Global.t;
-    values : IT.t SymMap.t;
+    values : IT.t Sym.Map.t;
     simp_hook : IT.t -> IT.t option
   }
 
-let default global = { global; values = SymMap.empty; simp_hook = (fun _ -> None) }
+let default global = { global; values = Sym.Map.empty; simp_hook = (fun _ -> None) }
 
 let do_ctz_z z =
   let rec loop z found =
@@ -207,7 +207,7 @@ module IndexTerms = struct
       match the_term_ with
       | Sym _ when BT.equal the_bt BT.Unit -> unit_ the_loc
       | Sym sym ->
-        (match SymMap.find_opt sym simp_ctxt.values with
+        (match Sym.Map.find_opt sym simp_ctxt.values with
          | Some (IT ((Const _ | Sym _), _, _) as v) -> v
          | _ -> the_term)
       | Const _ -> the_term
@@ -597,7 +597,7 @@ module IndexTerms = struct
         if not inline_functions then
           t
         else (
-          let def = SymMap.find name simp_ctxt.global.logical_functions in
+          let def = Sym.Map.find name simp_ctxt.global.logical_functions in
           match LogicalFunctions.try_open_fun def args with
           | Some inlined -> aux inlined
           | None -> t)

@@ -5,8 +5,6 @@ module BT = BaseTypes
 open BaseTypes
 module LC = LogicalConstraints
 open LogicalConstraints
-module SymMap = Map.Make (Sym)
-module SymSet = Set.Make (Sym)
 
 module Int_BT_Table = Map.Make (struct
     type t = int * BT.t
@@ -76,7 +74,7 @@ end
 
 type solver_frame =
   { mutable commands : SMT.sexp list; (** Ack-style SMT commands, most recent first. *)
-    mutable uninterpreted : SMT.sexp SymMap.t;
+    mutable uninterpreted : SMT.sexp Sym.Map.t;
     (** Uninterpreted functions and variables that we've declared. *)
     mutable bt_uninterpreted : SMT.sexp Int_BT_Table.t;
     (** Uninterpreted constants, indexed by base type. *)
@@ -86,7 +84,7 @@ type solver_frame =
 
 let empty_solver_frame () =
   { commands = [];
-    uninterpreted = SymMap.empty;
+    uninterpreted = Sym.Map.empty;
     bt_uninterpreted = Int_BT_Table.empty;
     ctypes = CTypeMap.empty
   }
@@ -114,7 +112,7 @@ module Debug = struct
       rest ^/^ bar ^^^ BT.pp k ^^^ !^"|->" ^^^ !^(to_string v)
     in
     !^"# Symbols"
-    |> SymMap.fold dump_sym f.uninterpreted
+    |> Sym.Map.fold dump_sym f.uninterpreted
     |> append "# Basetypes "
     |> Int_BT_Table.fold dump_bts f.bt_uninterpreted
     |> append "+---------------------------------"
@@ -209,7 +207,7 @@ let fresh_name s x =
 
 (** Declare an uninterpreted function. *)
 let declare_uninterpreted s name args_ts res_t =
-  let check f = SymMap.find_opt name f.uninterpreted in
+  let check f = Sym.Map.find_opt name f.uninterpreted in
   match search_frames s check with
   | Some e -> e
   | None ->
@@ -217,7 +215,7 @@ let declare_uninterpreted s name args_ts res_t =
     ack_command s (SMT.declare_fun sname args_ts res_t);
     let e = SMT.atom sname in
     let f = !(s.cur_frame) in
-    f.uninterpreted <- SymMap.add name e f.uninterpreted;
+    f.uninterpreted <- Sym.Map.add name e f.uninterpreted;
     e
 
 
@@ -564,15 +562,15 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
     Tuple (List.map2 (get_ivalue gs ctys) bts vals)
   | Struct tag ->
     let _con, vals = SMT.to_con sexp in
-    let decl = SymMap.find tag gs.struct_decls in
+    let decl = Sym.Map.find tag gs.struct_decls in
     let fields = List.filter_map (fun x -> x.Memory.member_or_padding) decl in
     let mk_field (l, t) v = (l, get_ivalue gs ctys (Memory.bt_of_sct t) v) in
     Struct (tag, List.map2 mk_field fields vals)
   | Datatype tag ->
     let con, vals = SMT.to_con sexp in
-    let cons = (SymMap.find tag gs.datatypes).constrs in
+    let cons = (Sym.Map.find tag gs.datatypes).constrs in
     let do_con c =
-      let fields = (SymMap.find c gs.datatype_constrs).params in
+      let fields = (Sym.Map.find c gs.datatype_constrs).params in
       let mk_field (l, t) v = (l, get_ivalue gs ctys t v) in
       Constructor (c, List.map2 mk_field fields vals)
     in
@@ -675,7 +673,7 @@ let bv_ctz result_w =
 
 (** Translate a variable to SMT.  Declare if needed. *)
 let translate_var s name bt =
-  let check f = SymMap.find_opt name f.uninterpreted in
+  let check f = Sym.Map.find_opt name f.uninterpreted in
   match search_frames s check with
   | Some e -> e
   | None ->
@@ -683,7 +681,7 @@ let translate_var s name bt =
     ack_command s (SMT.declare sname (translate_base_type bt));
     let e = SMT.atom sname in
     let f = !(s.cur_frame) in
-    f.uninterpreted <- SymMap.add name e f.uninterpreted;
+    f.uninterpreted <- Sym.Map.add name e f.uninterpreted;
     e
 
 
@@ -891,7 +889,7 @@ let rec translate_term s iterm =
     SMT.app_ (CN_Names.struct_field_name f) [ translate_term s e1 ]
   | StructUpdate ((t, member), v) ->
     let tag = BT.struct_bt (IT.bt t) in
-    let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+    let layout = Sym.Map.find (struct_bt (IT.bt t)) struct_decls in
     let members = Memory.member_types layout in
     let str =
       List.map
@@ -907,7 +905,7 @@ let rec translate_term s iterm =
     in
     translate_term s (struct_ (tag, str) loc)
   | OffsetOf (tag, member) ->
-    let decl = SymMap.find tag struct_decls in
+    let decl = Sym.Map.find tag struct_decls in
     let v = Option.get (Memory.member_offset decl member) in
     translate_term s (int_lit_ v (IT.basetype iterm) loc)
   (* Records *)
@@ -1145,12 +1143,12 @@ let shortcut simp_ctxt lc =
 let declare_datatype_group s names =
   let mk_con_field (l, t) = (CN_Names.datatype_field_name l, translate_base_type t) in
   let mk_con c =
-    let ci = SymMap.find c s.globals.datatype_constrs in
+    let ci = Sym.Map.find c s.globals.datatype_constrs in
     (CN_Names.datatype_con_name c, List.map mk_con_field ci.params)
   in
   let cons (info : BT.dt_info) = List.map mk_con info.constrs in
   let to_smt (x : Sym.t) =
-    let info = SymMap.find x s.globals.datatypes in
+    let info = Sym.Map.find x s.globals.datatypes in
     (CN_Names.datatype_name x, [], cons info)
   in
   ack_command s (SMT.declare_datatypes (List.map to_smt names))
@@ -1160,15 +1158,15 @@ let declare_datatype_group s names =
     The `done_struct` keeps track of which structs we've already declared. *)
 let rec declare_struct s done_struct name decl =
   let mp = !done_struct in
-  if SymSet.mem name mp then
+  if Sym.Set.mem name mp then
     ()
   else (
-    done_struct := SymSet.add name mp;
+    done_struct := Sym.Set.add name mp;
     let mk_field (l, t) =
       let rec declare_nested ty =
         match ty with
         | Struct name' ->
-          let decl = SymMap.find name' s.globals.struct_decls in
+          let decl = Sym.Map.find name' s.globals.struct_decls in
           declare_struct s done_struct name' decl
         | Map (_, el) -> declare_nested el
         | _ -> ()
@@ -1196,8 +1194,8 @@ let declare_solver_basics s =
   CN_Pointer.declare s;
   (* structs may depend only on other structs. datatypes may depend on other datatypes and
      structs. *)
-  let done_structs = ref SymSet.empty in
-  SymMap.iter (declare_struct s done_structs) s.globals.struct_decls;
+  let done_structs = ref Sym.Set.empty in
+  Sym.Map.iter (declare_struct s done_structs) s.globals.struct_decls;
   List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 

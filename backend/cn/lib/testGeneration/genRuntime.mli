@@ -5,8 +5,6 @@ module IT = IndexTerms
 module LC = LogicalConstraints
 module GD = GenDefinitions
 
-module SymSet : Set.S with type elt = Sym.t
-
 type term =
   | Uniform of
       { bt : BT.t;
@@ -26,7 +24,7 @@ type term =
       { fsym : Sym.t;
         iargs : (Sym.t * Sym.t) list;
         oarg_bt : BT.t;
-        path_vars : SymSet.t;
+        path_vars : Sym.Set.t;
         sized : (int * Sym.t) option
       }
   | Asgn of
@@ -68,16 +66,16 @@ type term =
       }
   | SplitSize of
       { marker_var : Sym.t;
-        syms : SymSet.t;
-        path_vars : SymSet.t;
+        syms : Sym.Set.t;
+        path_vars : Sym.Set.t;
         last_var : Sym.t;
         rest : term
       }
 [@@deriving eq, ord]
 
-val free_vars_term : term -> SymSet.t
+val free_vars_term : term -> Sym.Set.t
 
-val free_vars_term_list : term list -> SymSet.t
+val free_vars_term_list : term list -> Sym.Set.t
 
 val pp_term : term -> Pp.document
 

@@ -3,8 +3,6 @@ open Typing
 
 open Effectful.Make (Typing)
 
-module SymMap = Map.Make (Sym)
-module SymSet = Set.Make (Sym)
 module StringMap = Map.Make (String)
 module IntMap = Map.Make (Int)
 module CF = Cerb_frontend
@@ -47,7 +45,7 @@ type state =
 type context =
   { label_defs : (Sym.t, unit Mu.label_def) Pmap.map;
     (* map from c functions to logical functions which we are building *)
-    c_fun_pred_map : (Locations.t * Sym.t) SymMap.t;
+    c_fun_pred_map : (Locations.t * Sym.t) Sym.Map.t;
     call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
   }
 
@@ -131,7 +129,7 @@ let rec is_const_num = function
 let rec add_pattern p v var_map =
   let (Mu.Pattern (loc, _, _, pattern)) = p in
   match pattern with
-  | CaseBase (Some s, _) -> return (SymMap.add s v var_map)
+  | CaseBase (Some s, _) -> return (Sym.Map.add s v var_map)
   | CaseBase (None, _) -> return var_map
   | CaseCtor (Ctuple, ps) ->
     let@ vs =
@@ -245,7 +243,7 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
   in
   match pe with
   | PEsym sym ->
-    (match SymMap.find_opt sym var_map with
+    (match Sym.Map.find_opt sym var_map with
      | Some r -> return r
      | _ -> fail_n { loc; msg = Unknown_variable sym })
   | PEval v ->
@@ -541,8 +539,8 @@ let rec symb_exec_expr ctxt state_vars expr =
       | None -> fail_fun_it "not a constant function address"
       | Some (nm, _) -> return nm
     in
-    if SymMap.mem nm ctxt.c_fun_pred_map then (
-      let loc, l_sym = SymMap.find nm ctxt.c_fun_pred_map in
+    if Sym.Map.mem nm ctxt.c_fun_pred_map then (
+      let loc, l_sym = Sym.Map.find nm ctxt.c_fun_pred_map in
       let@ def = get_logical_function_def loc l_sym in
       rcval (IT.apply_ l_sym args_its def.LogicalFunctions.return_bt loc) state)
     else (
@@ -578,7 +576,7 @@ let rec filter_syms ss p =
   let (Mu.Pattern (a, b, c, pat)) = p in
   let mk pat = Mu.Pattern (a, b, c, pat) in
   match pat with
-  | CaseBase (Some s, bt) -> if SymSet.mem s ss then p else mk (CaseBase (None, bt))
+  | CaseBase (Some s, bt) -> if Sym.Set.mem s ss then p else mk (CaseBase (None, bt))
   | CaseBase (None, _) -> p
   | CaseCtor (Ctuple, ps) ->
     let ps = List.map (filter_syms ss) ps in
@@ -645,7 +643,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
       match (args_and_body, def_args) with
       | Mu.Computational ((s, bt), _, args_and_body), v :: def_args ->
         if BT.equal bt (IT.bt v) then
-          mk_var_map (SymMap.add s v acc) args_and_body def_args
+          mk_var_map (Sym.Map.add s v acc) args_and_body def_args
         else
           fail_n
             { loc;
@@ -676,7 +674,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
           (fun () -> in_computational_ctxt args_and_body m)
       | L _ -> m
     in
-    let@ arg_map, (body, labels, rt) = mk_var_map SymMap.empty args_and_body def_args in
+    let@ arg_map, (body, labels, rt) = mk_var_map Sym.Map.empty args_and_body def_args in
     let@ () =
       match rt with
       | ReturnTypes.Computational ((_, bt), _, _) ->
@@ -729,8 +727,8 @@ let upd_def (loc, sym, def_tm) =
 let add_logical_funs_from_c call_funinfo funs_to_convert funs =
   let c_fun_pred_map =
     List.fold_left
-      (fun m Mu.{ c_fun_sym; loc; l_fun_sym } -> SymMap.add c_fun_sym (loc, l_fun_sym) m)
-      SymMap.empty
+      (fun m Mu.{ c_fun_sym; loc; l_fun_sym } -> Sym.Map.add c_fun_sym (loc, l_fun_sym) m)
+      Sym.Map.empty
       funs_to_convert
   in
   let global_context =

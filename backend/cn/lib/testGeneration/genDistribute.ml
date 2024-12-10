@@ -4,8 +4,6 @@ module LC = LogicalConstraints
 module GT = GenTerms
 module GD = GenDefinitions
 module GA = GenAnalysis
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 module Config = TestGenConfig
 
 let generated_size (bt : BT.t) : int =

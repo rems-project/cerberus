@@ -73,7 +73,7 @@ and alpha_rename from prog =
 
 
 and suitably_alpha_rename syms s prog =
-  if IT.SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename s prog
   else
     (s, prog)

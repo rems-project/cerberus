@@ -1,6 +1,5 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
-module SymMap = Map.Make (Sym)
 
 module IM = struct
   include CF.Impl_mem
@@ -80,7 +79,7 @@ type struct_layout = struct_piece list
 
 type struct_decl = struct_layout
 
-type struct_decls = struct_layout SymMap.t
+type struct_decls = struct_layout Sym.Map.t
 
 let members =
   List.filter_map (fun { member_or_padding; _ } -> Option.map fst member_or_padding)

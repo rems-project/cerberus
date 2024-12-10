@@ -1,10 +1,9 @@
-module SymSet = Set.Make (Sym)
 open Pp
 
 type 'a t =
   { replace : (Sym.t * 'a) list;
-    relevant : SymSet.t;
-    flags : SymSet.t
+    relevant : Sym.Set.t;
+    flags : Sym.Set.t
   }
 
 type 'a subst = 'a t
@@ -18,15 +17,15 @@ let pp ppf subst =
 let make free_vars replace =
   let relevant =
     List.fold_right
-      (fun (s, r) acc -> SymSet.union (free_vars r) (SymSet.add s acc))
+      (fun (s, r) acc -> Sym.Set.union (free_vars r) (Sym.Set.add s acc))
       replace
-      SymSet.empty
+      Sym.Set.empty
   in
-  { replace; relevant; flags = SymSet.empty }
+  { replace; relevant; flags = Sym.Set.empty }
 
 
 let add free_vars (s, r) subst =
   { subst with
     replace = (s, r) :: subst.replace;
-    relevant = SymSet.union (free_vars r) (SymSet.add s subst.relevant)
+    relevant = Sym.Set.union (free_vars r) (Sym.Set.add s subst.relevant)
   }

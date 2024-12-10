@@ -3339,7 +3339,7 @@ let rec cn_to_ail_lat_internal_2
         else
           (loc, s) :: remove_duplicates (loc :: locs) ss
     in
-    (* let substitution : IT.t Subst.t = {replace = [(Sym.fresh_pretty "return", IT.(IT (Sym (Sym.fresh_pretty "__cn_ret"), BT.Unit)))]; relevant = SymSet.empty} in *)
+    (* let substitution : IT.t Subst.t = {replace = [(Sym.fresh_pretty "return", IT.(IT (Sym (Sym.fresh_pretty "__cn_ret"), BT.Unit)))]; relevant = Sym.Set.empty} in *)
     (* let post_with_ret = RT.subst substitution post in *)
     let return_cn_binding, return_cn_decl =
       match rm_ctype c_return_type with
