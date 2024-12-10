@@ -1,6 +1,6 @@
 open Locations
 module BT = BaseTypes
-module RT = ResourceTypes
+module RT = Request
 module IT = IndexTerms
 module LC = LogicalConstraints
 

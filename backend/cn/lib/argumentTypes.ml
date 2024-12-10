@@ -2,7 +2,7 @@ open Locations
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
 module LAT = LogicalArgumentTypes
 

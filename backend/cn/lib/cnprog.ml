@@ -2,7 +2,7 @@ module BT = BaseTypes
 module IT = IndexTerms
 module Loc = Locations
 module CF = Cerb_frontend
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
 
 type have_show =
@@ -12,8 +12,8 @@ type have_show =
 type extract = Id.t list * (Sym.t, Sctypes.t) CF.Cn.cn_to_extract * IndexTerms.t
 
 type statement =
-  | Pack_unpack of CF.Cn.pack_unpack * ResourceTypes.Predicate.t
-  | To_from_bytes of CF.Cn.to_from * ResourceTypes.Predicate.t
+  | Pack_unpack of CF.Cn.pack_unpack * Request.Predicate.t
+  | To_from_bytes of CF.Cn.to_from * Request.Predicate.t
   | Have of LogicalConstraints.t
   | Instantiate of (Sym.t, Sctypes.t) CF.Cn.cn_to_instantiate * IndexTerms.t
   | Split_case of LogicalConstraints.t
@@ -42,9 +42,9 @@ let rec subst substitution = function
     let stmt =
       match stmt with
       | Pack_unpack (pack_unpack, pt) ->
-        Pack_unpack (pack_unpack, RET.Predicate.subst substitution pt)
+        Pack_unpack (pack_unpack, Req.Predicate.subst substitution pt)
       | To_from_bytes (to_from, pt) ->
-        To_from_bytes (to_from, RET.Predicate.subst substitution pt)
+        To_from_bytes (to_from, Req.Predicate.subst substitution pt)
       | Have lc -> Have (LC.subst substitution lc)
       | Instantiate (o_s, it) ->
         (* o_s is not a (option) binder *)
@@ -104,14 +104,13 @@ let dtree_of_to_extract =
 let dtree_of_statement =
   let open Cerb_frontend.Pp_ast in
   function
-  | Pack_unpack (Pack, pred) ->
-    Dnode (pp_ctor "Pack", [ ResourceTypes.Predicate.dtree pred ])
+  | Pack_unpack (Pack, pred) -> Dnode (pp_ctor "Pack", [ Request.Predicate.dtree pred ])
   | Pack_unpack (Unpack, pred) ->
-    Dnode (pp_ctor "Unpack", [ ResourceTypes.Predicate.dtree pred ])
+    Dnode (pp_ctor "Unpack", [ Request.Predicate.dtree pred ])
   | To_from_bytes (To, pred) ->
-    Dnode (pp_ctor "To_bytes", [ ResourceTypes.Predicate.dtree pred ])
+    Dnode (pp_ctor "To_bytes", [ Request.Predicate.dtree pred ])
   | To_from_bytes (From, pred) ->
-    Dnode (pp_ctor "From_bytes", [ ResourceTypes.Predicate.dtree pred ])
+    Dnode (pp_ctor "From_bytes", [ Request.Predicate.dtree pred ])
   | Have lc -> Dnode (pp_ctor "Have", [ LC.dtree lc ])
   | Instantiate (to_instantiate, it) ->
     Dnode (pp_ctor "Instantiate", [ dtree_of_to_instantiate to_instantiate; IT.dtree it ])

@@ -56,7 +56,7 @@ let rec add_records_to_map_from_it it =
 
 
 let add_records_to_map_from_resource = function
-  | ResourceTypes.P p -> List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
+  | Request.P p -> List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
   | Q q ->
     List.iter add_records_to_map_from_it (q.pointer :: q.step :: q.permission :: q.iargs)
 

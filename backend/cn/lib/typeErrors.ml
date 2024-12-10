@@ -8,7 +8,7 @@ module CF = Cerb_frontend
 module Loc = Locations
 module RE = Resources
 module LC = LogicalConstraints
-module RET = ResourceTypes
+module Req = Request
 
 type label_kind = Where.label
 
@@ -89,7 +89,7 @@ let for_situation = function
 
 
 type request_chain_elem =
-  { resource : RET.t;
+  { resource : Req.t;
     loc : Locations.t option;
     reason : string option
   }
@@ -115,7 +115,7 @@ type message =
   (* some from Kayvan's compilePredicates module *)
   | First_iarg_missing
   | First_iarg_not_pointer of
-      { pname : ResourceTypes.name;
+      { pname : Request.name;
         found_bty : BaseTypes.t
       }
   | Missing_member of Id.t
@@ -253,7 +253,7 @@ type report =
 
 let request_chain_description requests =
   let pp_req req =
-    let doc = RET.pp req.resource in
+    let doc = Req.pp req.resource in
     let doc =
       match req.loc with
       | None -> doc
@@ -319,7 +319,7 @@ let pp_message te =
     let short = !^"Non-pointer first input argument" in
     let descr =
       !^"the first input argument of predicate"
-      ^^^ Pp.squotes (ResourceTypes.pp_name pname)
+      ^^^ Pp.squotes (Request.pp_name pname)
       ^^^ !^"must have type"
       ^^^ Pp.squotes BaseTypes.(pp (Loc ()))
       ^^^ !^"but was found with type"

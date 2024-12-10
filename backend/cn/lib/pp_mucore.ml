@@ -656,7 +656,7 @@ module Make (Config : CONFIG) = struct
       Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ IndexTerms.pp it)
       ^^^ pp_arguments_l ppf l
     | Resource ((s, (re, _bt)), _info, l) ->
-      Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ ResourceTypes.pp re)
+      Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ Request.pp re)
       ^^^ pp_arguments_l ppf l
     | Constraint (lc, _info, l) ->
       Pp.parens (LogicalConstraints.pp lc) ^^^ pp_arguments_l ppf l

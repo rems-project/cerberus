@@ -4,7 +4,7 @@ module AT = ArgumentTypes
 module LC = LogicalConstraints
 module LAT = LogicalArgumentTypes
 module RP = ResourcePredicates
-module RET = ResourceTypes
+module Req = Request
 module GBT = GenBaseTypes
 module GT = GenTerms
 module GD = GenDefinitions
@@ -71,8 +71,8 @@ let compile_vars (generated : Sym.Set.t) (oargs : (Sym.t * GBT.t) list) (lat : I
     match lat with
     | Define ((x, it), _info, _) -> (Sym.Set.singleton x, IT.free_vars_bts it)
     | Resource ((x, ((P { name = Owned _; _ } as ret), bt)), _, _) ->
-      (Sym.Set.singleton x, Sym.Map.add x bt (RET.free_vars_bts ret))
-    | Resource ((x, (ret, _)), _, _) -> (Sym.Set.singleton x, RET.free_vars_bts ret)
+      (Sym.Set.singleton x, Sym.Map.add x bt (Req.free_vars_bts ret))
+    | Resource ((x, (ret, _)), _, _) -> (Sym.Set.singleton x, Req.free_vars_bts ret)
     | Constraint (lc, _, _) -> (Sym.Set.empty, LC.free_vars_bts lc)
     | I it ->
       ( Sym.Set.empty,

@@ -1271,7 +1271,7 @@ let add_trace_information _labels annots =
   return ()
 
 
-let bytes_qpred sym size pointer init : RET.QPredicate.t =
+let bytes_qpred sym size pointer init : Req.QPredicate.t =
   let here = Locations.other __FUNCTION__ in
   let bt' = WellTyped.quantifier_bt in
   { q = (sym, bt');
@@ -1300,7 +1300,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
         debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
         debug 3 (lazy (item "ctxt" (Context.pp ctxt))))
     in
-    let bytes_qpred sym ct pointer init : RET.QPredicate.t =
+    let bytes_qpred sym ct pointer init : Req.QPredicate.t =
       let here = Locations.other __FUNCTION__ in
       bytes_qpred sym (sizeOf_ ct here) pointer init
     in
@@ -1629,7 +1629,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               else
                 return ()
             in
-            let@ () = add_r loc (P (RET.make_alloc ret), O lookup) in
+            let@ () = add_r loc (P (Req.make_alloc ret), O lookup) in
             let@ () = record_action (Create ret, loc) in
             k ret)
         | CreateReadOnly (_sym1, _ct, _sym2, _prefix) ->
@@ -1648,7 +1648,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 ({ name = Owned (ct, Uninit); pointer = arg; iargs = [] }, None)
             in
             let@ _ =
-              RI.Special.predicate_request loc (Access Kill) (RET.make_alloc arg, None)
+              RI.Special.predicate_request loc (Access Kill) (Req.make_alloc arg, None)
             in
             let@ () = record_action (Kill arg, loc) in
             k (unit_ loc))
@@ -1805,7 +1805,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        in
        aux es [] []
      | CN_progs (_, cn_progs) ->
-       let bytes_pred ct pointer init : RET.Predicate.t =
+       let bytes_pred ct pointer init : Req.Predicate.t =
          { name = Owned (ct, init); pointer; iargs = [] }
        in
        let bytes_constraints ~(value : IT.t) ~(byte_arr : IT.t) (ct : Sctypes.t) =
@@ -1919,16 +1919,16 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                fail (fun _ -> { loc; msg = Generic !^msg })
              | E_Pred (CN_owned (Some ct)) ->
                let@ () = WellTyped.WCT.is_ct loc ct in
-               return (ResourceTypes.Owned (ct, Init))
+               return (Request.Owned (ct, Init))
              | E_Pred (CN_block None) ->
                let msg = "'extract' requires a C-type annotation for 'Block'" in
                fail (fun _ -> { loc; msg = Generic !^msg })
              | E_Pred (CN_block (Some ct)) ->
                let@ () = WellTyped.WCT.is_ct loc ct in
-               return (ResourceTypes.Owned (ct, Uninit))
+               return (Request.Owned (ct, Uninit))
              | E_Pred (CN_named pn) ->
                let@ _ = get_resource_predicate_def loc pn in
-               return (ResourceTypes.PName pn)
+               return (Request.PName pn)
            in
            let@ it = WellTyped.WIT.infer it in
            let@ original_rs, _ = all_resources_tagged loc in
@@ -2539,8 +2539,8 @@ let memcpy_proxy_ft =
   let map_bt = BT.Map (q_bt, uchar_bt) in
   let destIn_sym, _ = IT.fresh_named map_bt "destIn" here in
   let srcIn_sym, srcIn = IT.fresh_named map_bt "srcIn" here in
-  let destRes str init = RET.Q (bytes_qpred (Sym.fresh_named str) n dest init) in
-  let srcRes str = RET.Q (bytes_qpred (Sym.fresh_named str) n src Init) in
+  let destRes str init = Req.Q (bytes_qpred (Sym.fresh_named str) n dest init) in
+  let srcRes str = Req.Q (bytes_qpred (Sym.fresh_named str) n src Init) in
   (* ensures *)
   let ret_sym, ret = IT.fresh_named (BT.Loc ()) "return" here in
   let destOut_sym, destOut = IT.fresh_named map_bt "destOut" here in
