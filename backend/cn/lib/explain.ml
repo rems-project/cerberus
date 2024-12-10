@@ -1,7 +1,7 @@
 open Report
 module IT = IndexTerms
 module BT = BaseTypes
-module RE = Resources
+module Res = Resource
 module REP = ResourcePredicates
 module Req = Request
 module LC = LogicalConstraints
@@ -16,7 +16,6 @@ open Request
 open IndexTerms
 open Pp
 open C
-open Resources
 
 (* perhaps somehow unify with above *)
 type action =
@@ -298,8 +297,7 @@ let state ctxt log model_with_q extras =
     let same_res, diff_res =
       match extras.request with
       | None -> ([], get_rs ctxt)
-      | Some req ->
-        List.partition (fun r -> Req.same_name req (RE.request r)) (get_rs ctxt)
+      | Some req -> List.partition (fun (r, _) -> Req.same_name req r) (get_rs ctxt)
     in
     let interesting_diff_res, uninteresting_diff_res =
       List.partition
@@ -311,9 +309,9 @@ let state ctxt log model_with_q extras =
     in
     let with_suff mb x = match mb with None -> x | Some d -> d ^^^ x in
     let pp_res mb_suff (rt, args) =
-      { original = with_suff mb_suff (RE.pp (rt, args));
+      { original = with_suff mb_suff (Res.pp (rt, args));
         simplified =
-          [ with_suff mb_suff (RE.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
+          [ with_suff mb_suff (Res.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
       }
     in
     let interesting =
@@ -340,8 +338,8 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
   (*   } *)
   (* in *)
   (* let res_entry req_cmp same res = { *)
-  (*     res = RE.pp res; *)
-  (*     res_span = Spans.pp_model_spans model ctxt.global req_cmp (RE.request res) *)
+  (*     res = Res.pp res; *)
+  (*     res_span = Spans.pp_model_spans model ctxt.global req_cmp (Res.request res) *)
   (*       ^^ (if same then !^" - same-type" else !^"") *)
   (*   } *)
   (* in *)

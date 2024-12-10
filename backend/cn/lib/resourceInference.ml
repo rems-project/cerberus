@@ -1,9 +1,6 @@
 module IT = IndexTerms
 module LC = LogicalConstraints
 module Req = Request
-
-type oargs = Resources.oargs = O of IT.t
-
 open Typing
 
 let debug_constraint_failure_diagnostics
@@ -127,7 +124,7 @@ module General = struct
                { requests = request_chain; situation; model; ctxt }
            in
            { loc; msg })
-       | Some ((re, O oargs), changed_or_deleted') ->
+       | Some ((re, Resource.O oargs), changed_or_deleted') ->
          assert (Request.equal re resource);
          let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
          let changed_or_deleted = changed_or_deleted @ changed_or_deleted' in
@@ -161,7 +158,7 @@ module General = struct
 
   (* TODO: check that oargs are in the same order? *)
   let rec predicate_request loc (uiinfo : uiinfo) (requested : Req.Predicate.t)
-    : ((Req.Predicate.t * Resources.oargs) * int list) option m
+    : (Resource.predicate * int list) option m
     =
     Pp.(debug 7 (lazy (item __FUNCTION__ (Req.pp (P requested)))));
     let start_timing = Pp.time_log_start __FUNCTION__ "" in
@@ -241,7 +238,7 @@ module General = struct
            let@ o, changed_or_deleted =
              ftyp_args_request_for_pack loc uiinfo packing_ft
            in
-           return (Some ((requested, O o), changed_or_deleted))
+           return (Some ((requested, Resource.O o), changed_or_deleted))
          | None ->
            let req_pp = lazy (Req.pp (P requested)) in
            Pp.debug 9 (Lazy.map (Pp.item "no pack rule for resource, failing") req_pp);
@@ -411,7 +408,7 @@ module General = struct
             iargs = requested.iargs
           }
       in
-      return (Some ((r, O oarg), rw_time))
+      return (Some ((r, Resource.O oarg), rw_time))
 
 
   and ftyp_args_request_for_pack loc uiinfo ftyp =
@@ -437,7 +434,7 @@ module General = struct
     loop ftyp []
 
 
-  and resource_request loc uiinfo (request : Req.t) : (Resources.t * int list) option m =
+  and resource_request loc uiinfo (request : Req.t) : (Resource.t * int list) option m =
     match request with
     | P request ->
       let@ result = predicate_request loc uiinfo request in

@@ -310,7 +310,7 @@ let verify
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
-  Resources.disable_resource_derived_constraints := disable_resource_derived_constraints;
+  Resource.disable_resource_derived_constraints := disable_resource_derived_constraints;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros

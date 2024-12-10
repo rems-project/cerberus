@@ -6,7 +6,7 @@ module IT = IndexTerms
 module LS = LogicalSorts
 module CF = Cerb_frontend
 module Loc = Locations
-module RE = Resources
+module Res = Resource
 module LC = LogicalConstraints
 module Req = Request
 
@@ -132,7 +132,7 @@ type message =
         model : Solver.model_with_q
       }
   | Unused_resource of
-      { resource : RE.t;
+      { resource : Res.t;
         ctxt : Context.t * log;
         model : Solver.model_with_q
       }
@@ -351,7 +351,7 @@ let pp_message te =
     let state = trace ctxt model Explain.{ no_ex with request = orequest } in
     { short; descr; state = Some state }
   | Unused_resource { resource; ctxt; model } ->
-    let resource = RE.pp resource in
+    let resource = Res.pp resource in
     let short = !^"Left-over unused resource" ^^^ squotes resource in
     let state = trace ctxt model Explain.no_ex in
     { short; descr = None; state = Some state }

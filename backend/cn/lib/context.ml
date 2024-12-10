@@ -2,7 +2,7 @@ open Pp
 open List
 module BT = BaseTypes
 module LS = LogicalSorts
-module RE = Resources
+module Res = Resource
 module LC = LogicalConstraints
 module Loc = Locations
 module IntMap = Map.Make (Int)
@@ -36,7 +36,7 @@ type resource_history =
 type t =
   { computational : (basetype_or_value * l_info) Sym.Map.t;
     logical : (basetype_or_value * l_info) Sym.Map.t;
-    resources : (RE.t * int) list * int;
+    resources : (Res.t * int) list * int;
     resource_history : resource_history IntMap.t;
     constraints : LC.Set.t;
     global : Global.t;
@@ -85,7 +85,7 @@ let pp_constraints constraints =
 let pp (ctxt : t) =
   item "computational" (pp_variable_bindings ctxt.computational)
   ^/^ item "logical" (pp_variable_bindings ctxt.logical)
-  ^/^ item "resources" (Pp.list RE.pp (get_rs ctxt))
+  ^/^ item "resources" (Pp.list Res.pp (get_rs ctxt))
   ^/^ item "constraints" (pp_constraints ctxt.constraints)
 
 
@@ -252,7 +252,7 @@ let json (ctxt : t) : Yojson.Safe.t =
         `Assoc [ ("name", Sym.json sym); ("type", basetype_or_value binding) ])
       (Sym.Map.bindings ctxt.logical)
   in
-  let resources = List.map RE.json (get_rs ctxt) in
+  let resources = List.map Res.json (get_rs ctxt) in
   let constraints = List.map LC.json (LC.Set.elements ctxt.constraints) in
   let json_record =
     `Assoc
