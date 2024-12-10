@@ -1,11 +1,8 @@
-open Pp
-module CF = Cerb_frontend
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
+open Pp.Infix
 module IT = IndexTerms
-open IT
-module LC = LogicalConstraints
-module LCSet = Set.Make (LC)
+module SymSet = IT.SymSet
+module SymMap = IT.SymMap
+module LCSet = Set.Make (LogicalConstraints)
 
 type init =
   | Init
@@ -22,8 +19,8 @@ let alloc = PName Alloc.Predicate.sym
 let pp_init = function Init -> !^"Init" | Uninit -> !^"Uninit"
 
 let pp_predicate_name = function
-  | Owned (ct, Init) -> !^"Owned" ^^ angles (Sctypes.pp ct)
-  | Owned (ct, Uninit) -> !^"Block" ^^ angles (Sctypes.pp ct)
+  | Owned (ct, Init) -> !^"Owned" ^^ Pp.angles (Sctypes.pp ct)
+  | Owned (ct, Uninit) -> !^"Block" ^^ Pp.angles (Sctypes.pp ct)
   | PName pn -> Sym.pp pn
 
 
@@ -39,7 +36,7 @@ let make_alloc pointer = { name = alloc; pointer; iargs = [] }
 type qpredicate_type =
   { name : predicate_name;
     pointer : IT.t; (* I *)
-    q : Sym.t * BT.t;
+    q : Sym.t * BaseTypes.t;
     q_loc : Locations.t; [@equal fun _ _ -> true] [@compare fun _ _ -> 0]
     step : IT.t;
     permission : IT.t; (* I, function of q *)
@@ -65,15 +62,16 @@ type t = resource_type
 
 let predicate_name = function P p -> p.name | Q p -> p.name
 
-let pp_maybe_oargs = function None -> Pp.empty | Some oargs -> parens (IT.pp oargs)
+let pp_maybe_oargs = function None -> Pp.empty | Some oargs -> Pp.parens (IT.pp oargs)
 
 let pp_predicate_type_aux (p : predicate_type) oargs =
   let args = List.map IT.pp (p.pointer :: p.iargs) in
-  c_app (pp_predicate_name p.name) args ^^ pp_maybe_oargs oargs
+  Pp.c_app (pp_predicate_name p.name) args ^^ pp_maybe_oargs oargs
 
 
 let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
-  (* XXX: this is `p + i * step` but that's "wrong" in a couple of ways:
+  let open Pp in
+  (* ISD: this is `p + i * step` but that's "wrong" in a couple of ways:
      - we are not using the correct precedences for `p` and `step`
      - in C pointer arithmetic takes account of the types, but here
        we seem to be doing it at the byte level.  Would `step` ever
@@ -83,7 +81,7 @@ let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
   let pointer = IT.pp p.pointer ^^^ plus ^^^ Sym.pp (fst p.q) ^^^ star ^^^ IT.pp p.step in
   let args = pointer :: List.map IT.pp p.iargs in
   !^"each"
-  ^^ parens (BT.pp (snd p.q) ^^^ Sym.pp (fst p.q) ^^ semi ^^^ IT.pp p.permission)
+  ^^ parens (BaseTypes.pp (snd p.q) ^^^ Sym.pp (fst p.q) ^^ semi ^^^ IT.pp p.permission)
   ^/^ braces (c_app (pp_predicate_name p.name) args)
   ^^ pp_maybe_oargs oargs
 
@@ -99,7 +97,7 @@ let equal = equal_resource_type
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))
 
 let alpha_rename_qpredicate_type_ (q' : Sym.t) (qp : qpredicate_type) =
-  let subst = make_rename ~from:(fst qp.q) ~to_:q' in
+  let subst = IT.make_rename ~from:(fst qp.q) ~to_:q' in
   { name = qp.name;
     pointer = qp.pointer;
     q = (q', snd qp.q);
@@ -148,7 +146,7 @@ let free_vars_bts = function
   | Q p ->
     SymMap.union
       (fun _ bt1 bt2 ->
-        assert (BT.equal bt1 bt2);
+        assert (BaseTypes.equal bt1 bt2);
         Some bt1)
       (IT.free_vars_bts_list [ p.pointer; p.step ])
       (SymMap.remove (fst p.q) (IT.free_vars_bts_list (p.permission :: p.iargs)))
@@ -199,7 +197,7 @@ let dtree_of_predicate_type (pred : predicate_type) =
 let dtree_of_qpredicate_type (pred : qpredicate_type) =
   Dnode
     ( pp_ctor "qpred",
-      Dleaf (Pp.parens (Pp.typ (Sym.pp (fst pred.q)) (BT.pp (snd pred.q))))
+      Dleaf (Pp.parens (Pp.typ (Sym.pp (fst pred.q)) (BaseTypes.pp (snd pred.q))))
       :: IT.dtree pred.step
       :: IT.dtree pred.permission
       :: dtree_of_predicate_name pred.name
