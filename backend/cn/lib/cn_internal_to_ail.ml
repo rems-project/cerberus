@@ -2563,7 +2563,7 @@ let cn_to_ail_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * RP.Definition.t) list)
   _loc
   =
   let calculate_return_type = function
@@ -3024,14 +3024,14 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
 
 
 let cn_to_ail_predicate_internal
-  (pred_sym, (rp_def : ResourcePredicates.definition))
+  (pred_sym, (rp_def : RP.Definition.t))
   dts
   globals
   preds
   cn_preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : RP.clause list) =
+  let rec clause_translate (clauses : RP.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->
@@ -3531,7 +3531,7 @@ let cn_to_ail_assume_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * RP.Definition.t) list)
   loc
   =
   let calculate_return_type = function
@@ -3835,13 +3835,13 @@ let rec cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds = function
 
 
 let cn_to_ail_assume_predicate_internal
-  (pred_sym, (rp_def : ResourcePredicates.definition))
+  (pred_sym, (rp_def : RP.Definition.t))
   dts
   globals
   preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : RP.clause list) =
+  let rec clause_translate (clauses : RP.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->

@@ -1374,7 +1374,7 @@ let translate_cn_clauses env clauses =
     | CN_clause (loc, cl_) ->
       let@ cl = translate_cn_clause env cl_ in
       let here = Locations.other __FUNCTION__ in
-      return (RP.{ loc; guard = IT.bool_ true here; packing_ft = cl } :: acc)
+      return (RP.Clause.{ loc; guard = IT.bool_ true here; packing_ft = cl } :: acc)
     | CN_if (loc, e_, cl_, clauses') ->
       let@ e =
         Pure.handle "Predicate guards" (ET.translate_cn_expr Sym.Set.empty env e_)
@@ -1409,12 +1409,13 @@ let translate_cn_predicate env (def : cn_predicate) =
   | (iarg0, BaseTypes.Loc ()) :: iargs' ->
     return
       ( def.cn_pred_name,
-        { loc = def.cn_pred_loc;
-          pointer = iarg0;
-          iargs = iargs';
-          oarg_bt = output_bt;
-          clauses
-        } )
+        Definition.
+          { loc = def.cn_pred_loc;
+            pointer = iarg0;
+            iargs = iargs';
+            oarg_bt = output_bt;
+            clauses
+          } )
   | (_, found_bty) :: _ ->
     fail
       { loc = def.cn_pred_loc;

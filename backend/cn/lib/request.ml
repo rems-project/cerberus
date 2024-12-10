@@ -1,7 +1,6 @@
 open Pp.Infix
 module IT = IndexTerms
 
-(* TODO move this? *)
 let pp_maybe_oargs = function None -> Pp.empty | Some oargs -> Pp.parens (IT.pp oargs)
 
 type init =

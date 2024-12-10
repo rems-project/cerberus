@@ -156,10 +156,10 @@ val cn_to_ail_function_internal
   * A.sigma_tag_definition option
 
 val cn_to_ail_predicates_internal
-  :  (Sym.t * ResourcePredicates.definition) list ->
+  :  (Sym.t * ResourcePredicates.Definition.t) list ->
   A.sigma_cn_datatype list ->
   (Sym.t * C.ctype) list ->
-  (Sym.t * ResourcePredicates.definition) list ->
+  (Sym.t * ResourcePredicates.Definition.t) list ->
   A.sigma_cn_predicate list ->
   ((Locations.t * A.sigma_declaration)
   * CF.GenTypes.genTypeCategory A.sigma_function_definition)
@@ -169,17 +169,17 @@ val cn_to_ail_predicates_internal
 val cn_to_ail_pre_post_internal
   :  without_ownership_checking:bool ->
   A.sigma_cn_datatype list ->
-  (Sym.t * ResourcePredicates.definition) list ->
+  (Sym.t * ResourcePredicates.Definition.t) list ->
   (Sym.t * C.ctype) list ->
   C.ctype ->
   Executable_spec_extract.fn_args_and_body option ->
   ail_executable_spec
 
 val cn_to_ail_assume_predicates_internal
-  :  (Sym.t * ResourcePredicates.definition) list ->
+  :  (Sym.t * ResourcePredicates.Definition.t) list ->
   A.sigma_cn_datatype list ->
   (Sym.t * C.ctype) list ->
-  (Sym.t * ResourcePredicates.definition) list ->
+  (Sym.t * ResourcePredicates.Definition.t) list ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
 val cn_to_ail_assume_pre_internal
@@ -187,6 +187,6 @@ val cn_to_ail_assume_pre_internal
   C.union_tag ->
   (C.union_tag * (BT.t * C.ctype)) list ->
   (C.union_tag * C.ctype) list ->
-  (C.union_tag * ResourcePredicates.definition) list ->
+  (C.union_tag * ResourcePredicates.Definition.t) list ->
   'a LogicalArgumentTypes.t ->
   A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
