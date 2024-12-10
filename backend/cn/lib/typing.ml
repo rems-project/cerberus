@@ -496,9 +496,8 @@ let get_just_models () =
 
 
 let model_has_prop () =
-  let@ global = get_global () in
   let is_some_true t = Option.is_some t && IT.is_true (Option.get t) in
-  return (fun prop m -> is_some_true (Solver.eval global (fst m) prop))
+  return (fun prop m -> is_some_true (Solver.eval (fst m) prop))
 
 
 let prove_or_model_with_past_model loc m =
@@ -518,7 +517,6 @@ let prove_or_model_with_past_model loc m =
 let do_check_model loc m prop =
   Pp.warn loc (Pp.string "doing model consistency check");
   let@ ctxt = get_typing_context () in
-  let@ global = get_global () in
   let vs =
     Context.(
       Sym.Map.bindings ctxt.computational @ Sym.Map.bindings ctxt.logical
@@ -529,7 +527,7 @@ let do_check_model loc m prop =
   let eqs =
     List.filter_map
       (fun v ->
-        match Solver.eval global (fst m) v with
+        match Solver.eval (fst m) v with
         | None -> None
         | Some x -> Some (IT.eq_ (v, x) here))
       vs

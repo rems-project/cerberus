@@ -312,8 +312,7 @@ let try_prove_constant loc expr =
     let here = Locations.other __FUNCTION__ in
     let@ m = model_with loc (IT.bool_ true here) in
     let@ m = fail_on_none "cannot get model" m in
-    let@ g = get_global () in
-    let@ y = fail_on_none "cannot eval term" (Solver.eval g (fst m) expr) in
+    let@ y = fail_on_none "cannot eval term" (Solver.eval (fst m) expr) in
     let@ _ = fail_on_none "eval to non-constant term" (IT.is_const y) in
     let eq = IT.eq_ (expr, y) here in
     let@ provable = provable loc in
@@ -1110,9 +1109,8 @@ let all_empty loc _original_resources =
   match remaining_resources with
   | [] -> return ()
   | (resource, constr, model) :: _ ->
-    let@ global = get_global () in
     let@ simp_ctxt = simp_ctxt () in
-    RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt constr;
+    RI.debug_constraint_failure_diagnostics 6 model simp_ctxt constr;
     fail (fun ctxt ->
       (* let ctxt = { ctxt with resources = original_resources } in *)
       { loc; msg = Unused_resource { resource; ctxt; model } })
@@ -1988,8 +1986,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
             | `False ->
               let@ model = model () in
               let@ simp_ctxt = simp_ctxt () in
-              let@ global = get_global () in
-              RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt lc;
+              RI.debug_constraint_failure_diagnostics 6 model simp_ctxt lc;
               let@ () = Diagnostics.investigate model lc in
               fail (fun ctxt ->
                 { loc;

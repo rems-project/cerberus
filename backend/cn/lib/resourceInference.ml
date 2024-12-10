@@ -6,7 +6,6 @@ open Typing
 let debug_constraint_failure_diagnostics
   lvl
   (model_with_q : Solver.model_with_q)
-  global
   simp_ctxt
   c
   =
@@ -14,7 +13,7 @@ let debug_constraint_failure_diagnostics
   if !Pp.print_level == 0 then
     ()
   else (
-    let pp_f = IT.pp_with_eval (Solver.eval global model) in
+    let pp_f = IT.pp_with_eval (Solver.eval model) in
     let diag msg c =
       match (c, model_with_q) with
       | LC.T tm, _ ->
@@ -141,10 +140,9 @@ module General = struct
        | `True -> return (ftyp, changed_or_deleted)
        | `False ->
          let@ model = model () in
-         let@ global = get_global () in
          let@ all_cs = get_cs () in
          let () = assert (not (Context.LC.Set.mem c all_cs)) in
-         debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
+         debug_constraint_failure_diagnostics 6 model simp_ctxt c;
          let@ () = Diagnostics.investigate model c in
          fail (fun ctxt ->
            (* let ctxt = { ctxt with resources = original_resources } in *)
@@ -184,7 +182,7 @@ module General = struct
           in
           let debug_failure model msg term =
             Pp.debug 9 (lazy (Pp.item msg (Req.pp (fst re))));
-            debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T term)
+            debug_constraint_failure_diagnostics 9 model simp_ctxt (LC.T term)
           in
           (match provable (LC.T addr_iargs_match) with
            | `True ->
@@ -252,7 +250,6 @@ module General = struct
     Pp.(debug 7 (lazy (item __FUNCTION__ (Req.pp (Q requested)))));
     let@ provable = provable loc in
     let@ simp_ctxt = simp_ctxt () in
-    let@ global = get_global () in
     let needed = requested.permission in
     let step = Simplify.IndexTerms.simp simp_ctxt requested.step in
     let@ () =
@@ -319,12 +316,7 @@ module General = struct
                     Pp.debug
                       9
                       (lazy (Pp.item "couldn't use q-resource" (Req.pp (fst re))));
-                    debug_constraint_failure_diagnostics
-                      9
-                      model
-                      global
-                      simp_ctxt
-                      (LC.T pmatch);
+                    debug_constraint_failure_diagnostics 9 model simp_ctxt (LC.T pmatch);
                     continue))
             | _re -> continue))
         (needed, C [])
@@ -386,7 +378,7 @@ module General = struct
     | `True -> return (Some (oarg, rw_time))
     | `False ->
       let@ model = model () in
-      debug_constraint_failure_diagnostics 9 model global simp_ctxt nothing_more_needed;
+      debug_constraint_failure_diagnostics 9 model simp_ctxt nothing_more_needed;
       return None
 
 
