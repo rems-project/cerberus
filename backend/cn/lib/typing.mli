@@ -116,9 +116,9 @@ val get_fun_decl
 
 val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat) m
 
-val get_resource_predicate_def : Locations.t -> Sym.t -> ResourcePredicates.Definition.t m
+val get_resource_predicate_def : Locations.t -> Sym.t -> Definition.Predicate.t m
 
-val get_logical_function_def : Locations.t -> Sym.t -> LogicalFunctions.definition m
+val get_logical_function_def : Locations.t -> Sym.t -> Definition.Function.definition m
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> unit m
 
@@ -129,9 +129,9 @@ val add_fun_decl
 
 val add_lemma : Sym.t -> Locations.t * ArgumentTypes.lemmat -> unit m
 
-val add_resource_predicate : Sym.t -> ResourcePredicates.Definition.t -> unit m
+val add_resource_predicate : Sym.t -> Definition.Predicate.t -> unit m
 
-val add_logical_function : Sym.t -> LogicalFunctions.definition -> unit m
+val add_logical_function : Sym.t -> Definition.Function.definition -> unit m
 
 val add_datatype : Sym.t -> BaseTypes.dt_info -> unit m
 

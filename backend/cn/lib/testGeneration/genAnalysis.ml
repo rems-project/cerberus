@@ -3,7 +3,7 @@ module BT = BaseTypes
 module IT = IndexTerms
 module Req = Request
 module LC = LogicalConstraints
-module RP = ResourcePredicates
+module Def = Definition
 module LAT = LogicalArgumentTypes
 module GT = GenTerms
 module GD = GenDefinitions
@@ -150,11 +150,11 @@ end
 
 let get_bounds = Bounds.get_bounds
 
-let get_recursive_preds (preds : (Sym.t * RP.Definition.t) list) : Sym.Set.t =
-  let get_calls (pred : RP.Definition.t) : Sym.Set.t =
+let get_recursive_preds (preds : (Sym.t * Def.Predicate.t) list) : Sym.Set.t =
+  let get_calls (pred : Def.Predicate.t) : Sym.Set.t =
     pred.clauses
     |> Option.get
-    |> List.map (fun (cl : RP.Clause.t) -> cl.packing_ft)
+    |> List.map (fun (cl : Def.Clause.t) -> cl.packing_ft)
     |> List.map LAT.r_resource_requests
     |> List.flatten
     |> List.map snd

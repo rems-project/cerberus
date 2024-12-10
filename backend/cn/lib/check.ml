@@ -1958,7 +1958,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                args
                def.args
            in
-           (match LogicalFunctions.unroll_once def args with
+           (match Definition.Function.unroll_once def args with
             | None ->
               let msg =
                 !^"Cannot unfold definition of uninterpreted function" ^^^ Sym.pp f ^^ dot
@@ -2222,7 +2222,7 @@ let check_tagdefs tagDefs =
 
 let record_and_check_logical_functions funs =
   let recursive, _nonrecursive =
-    List.partition (fun (_, def) -> LogicalFunctions.is_recursive def) funs
+    List.partition (fun (_, def) -> Definition.Function.is_recursive def) funs
   in
   let n_funs = List.length funs in
   (* Add all recursive functions (without their actual bodies), so that they

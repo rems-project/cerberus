@@ -2,10 +2,10 @@ open Report
 module IT = IndexTerms
 module BT = BaseTypes
 module Res = Resource
-module REP = ResourcePredicates
+module Def = Definition
 module Req = Request
 module LC = LogicalConstraints
-module LF = LogicalFunctions
+module LF = Definition.Function
 module LAT = LogicalArgumentTypes
 module StringMap = Map.Make (String)
 module C = Context
@@ -39,7 +39,7 @@ let clause_has_resource req c =
     | Define (_, _, c) -> f c
     | I _ -> false
   in
-  f c.REP.Clause.packing_ft
+  f c.Def.Clause.packing_ft
 
 
 let relevant_predicate_clauses global name req =
@@ -47,7 +47,7 @@ let relevant_predicate_clauses global name req =
   let clauses =
     let defs = Sym.Map.bindings global.resource_predicates in
     List.concat_map
-      (fun (nm, (def : REP.Definition.t)) ->
+      (fun (nm, (def : Def.Predicate.t)) ->
         match def.clauses with
         | Some clauses -> List.map (fun c -> (nm, c)) clauses
         | None -> [])
@@ -205,7 +205,7 @@ let state ctxt log model_with_q extras =
       List.partition (fun (_, v) -> LF.is_interesting v) funs
     in
     let interesting_preds, uninteresting_preds =
-      List.partition (fun (_, v) -> REP.is_interesting v) preds
+      List.partition (fun (_, v) -> Def.is_interesting v) preds
     in
     add_labeled
       lab_interesting
@@ -353,12 +353,12 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
     match extras.request with
     | None -> []
     | Some req ->
-      let open ResourcePredicates in
+      let open Definition in
       (match Req.get_name req with
        | Owned _ -> []
        | PName pname ->
          let doc_clause (_name, c) =
-           { cond = IT.pp c.REP.Clause.guard;
+           { cond = IT.pp c.Def.Clause.guard;
              clause = LogicalArgumentTypes.pp IT.pp (simp_resource evaluate c.packing_ft)
            }
          in
