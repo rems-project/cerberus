@@ -1,4 +1,4 @@
 return code: 1
-tests/cn/duplicate_datatype_var.error.c:5:22: error: Re-using member name x within datatype definition.
+tests/cn/duplicate_datatype_var.error.c:5:22: error: Re-using member name x within datatype definition (SMT limitation).
     Single { integer x }
                      ^
