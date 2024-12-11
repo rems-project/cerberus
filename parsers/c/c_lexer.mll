@@ -147,6 +147,7 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     "type_synonym"  , (Production, CN_TYPE_SYNONYM);
     "_"             , (Production, CN_WILD);
     "implies"       , (Production, CN_IMPLIES);
+    "pack"          , (Production, CN_PACK);
 
     (* CN 'experimental' keywords - functional in some cases but not recommended for
     general use *)
@@ -160,7 +161,6 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     "from_bytes"    , (Experimental, CN_FROM_BYTES);
 
     (* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
-    "pack"          , (Unimplemented, CN_PACK);
     "unpack"        , (Unimplemented, CN_UNPACK);
   ]
 
