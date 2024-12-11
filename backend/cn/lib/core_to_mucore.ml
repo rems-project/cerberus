@@ -233,7 +233,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.pexpr =
   | PEmemop (_mop, _pes) ->
     (* FIXME(CHERI merge) *)
     (* this construct is currently only used by the CHERI switch *)
-    assert_error loc !^"PEmemop"
+    assert_error loc !^"PEmemop (CHERI only)"
   | PEnot e' ->
     let e' = n_pexpr loc e' in
     annotate (PEnot e')
@@ -626,9 +626,12 @@ let n_memop ~inherit_loc loc memop pexprs =
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     CopyAllocId (pe1, pe2)
+  | PtrMemberShift _, _ -> assert_error loc !^"PtrMemberShift (CHERI only)"
   | memop, pexprs1 ->
     let err =
-      !^(show_n_memop memop)
+      !^__FUNCTION__
+      ^^ colon
+      ^^^ !^(show_n_memop memop)
       ^^^ !^"applied to"
       ^^^ int (List.length pexprs1)
       ^^^ !^"arguments"

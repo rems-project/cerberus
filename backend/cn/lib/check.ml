@@ -431,25 +431,14 @@ let check_has_alloc_id loc ptr ub_unspec =
     return ()
 
 
-let check_alloc_bounds loc ~ptr ub_unspec =
-  if !use_vip then (
-    let here = Locations.other __FUNCTION__ in
-    let module H = Alloc.History in
-    let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
-    let addr = addr_ ptr here in
-    let lower = le_ (base, addr) here in
-    let upper = le_ (addr, add_ (base, size) here) here in
-    let constr = and_ [ lower; upper ] here in
-    let@ provable = provable loc in
-    match provable @@ LC.T constr with
-    | `True -> return ()
-    | `False ->
-      let@ model = model () in
-      let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-      fail (fun ctxt ->
-        { loc; msg = Alloc_out_of_bounds { constr; term = ptr; ub; ctxt; model } }))
-  else
-    return ()
+let in_bounds ptr =
+  let here = Locations.other __FUNCTION__ in
+  let module H = Alloc.History in
+  let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
+  let addr = addr_ ptr here in
+  let lower = le_ (base, addr) here in
+  let upper = le_ (addr, add_ (base, size) here) here in
+  [ lower; upper ]
 
 
 let check_both_eq_alloc loc arg1 arg2 ub =
@@ -470,19 +459,25 @@ let check_both_eq_alloc loc arg1 arg2 ub =
   | `True -> return ()
 
 
-let check_live_alloc_bounds reason loc arg ub term constr =
-  let@ base_size = RI.Special.get_live_alloc reason loc arg in
-  let here = Locations.other __FUNCTION__ in
-  let Alloc.History.{ base; size } = Alloc.History.split base_size here in
-  if !use_vip then (
-    let constr = constr ~base ~size in
+(** If [ptrs] has more than one element, the allocation IDs must be equal *)
+let check_live_alloc_bounds ?(skip_live = false) reason loc ub ptrs =
+  if !use_vip then
+    let@ () =
+      if skip_live then
+        return ()
+      else
+        RI.Special.check_live_alloc reason loc (List.hd ptrs)
+    in
+    let here = Locations.other __FUNCTION__ in
+    let constr = and_ (List.concat_map in_bounds ptrs) here in
     let@ provable = provable loc in
     match provable @@ LC.T constr with
     | `True -> return ()
     | `False ->
       let@ model = model () in
       fail (fun ctxt ->
-        { loc; msg = Alloc_out_of_bounds { term; constr; ub; ctxt; model } }))
+        let term = if List.length ptrs = 1 then List.hd ptrs else IT.tuple_ ptrs here in
+        { loc; msg = Alloc_out_of_bounds { constr; term; ub; ctxt; model } })
   else
     return ()
 
@@ -585,23 +580,34 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
        let@ () = WellTyped.ensure_bits_type loc (Mu.bt_of_pexpr pe2) in
        check_pexpr pe1 (fun vt1 ->
          check_pexpr pe2 (fun vt2 ->
+           (* NOTE: This case should not be present - only PtrArrayShift. The issue
+              is that the elaboration of create_rdonly uses PtrArrayShift, but right
+              now we don't have fractional resources to prove that such objects are
+              live. Might be worth considering a read-only resource as a stop-gap.
+              But for now, I just skip the liveness check. *)
+           let unspec = CF.Undefined.UB_unspec_pointer_add in
+           let@ () = check_has_alloc_id loc vt1 unspec in
+           let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
            let result =
              arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc
            in
-           let unspec = CF.Undefined.UB_unspec_pointer_add in
-           let@ () = check_has_alloc_id loc vt1 unspec in
-           let@ () = check_alloc_bounds loc ~ptr:result unspec in
+           let@ () =
+             check_live_alloc_bounds ~skip_live:true `ISO_array_shift loc ub [ result ]
+           in
            k result))
      | PEmember_shift (pe, tag, member) ->
        let@ () = WellTyped.ensure_base_type loc ~expect (Loc ()) in
        let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe) in
        check_pexpr pe (fun vt ->
          let@ _ = get_struct_member_type loc tag member in
-         let result = memberShift_ (vt, tag, member) loc in
-         let@ () = check_has_alloc_id loc vt CF.Undefined.UB_unspec_pointer_add in
+         (* This should only be called after a PtrValidForDeref, so if we were
+            willing to optimise, we could skip the has_alloc_id, bounds and
+            liveness checks. *)
          let unspec = CF.Undefined.UB_unspec_pointer_add in
          let@ () = check_has_alloc_id loc vt unspec in
-         let@ () = check_alloc_bounds loc ~ptr:result unspec in
+         let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
+         let result = memberShift_ (vt, tag, member) loc in
+         let@ () = check_live_alloc_bounds `ISO_member_shift loc ub [ result ] in
          k result)
      | PEnot pe ->
        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
@@ -1378,15 +1384,6 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 here)
              *)))
        in
-       let both_in_bounds ~base ~size arg1 arg2 =
-         let addr1, addr2 = (addr_ arg1 here, addr_ arg2 here) in
-         let lower1, lower2 = (le_ (base, addr1) here, le_ (base, addr2) here) in
-         let upper1, upper2 =
-           ( le_ (addr1, add_ (base, size) here) here,
-             le_ (addr2, add_ (base, size) here) here )
-         in
-         and_ [ lower1; lower2; upper1; upper2 ] here
-       in
        let pointer_op op pe1 pe2 =
          let ub = CF.Undefined.UB053_distinct_aggregate_union_pointer_comparison in
          let@ () = ensure_base_type loc ~expect Bool in
@@ -1395,15 +1392,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          check_pexpr pe1 (fun arg1 ->
            check_pexpr pe2 (fun arg2 ->
              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
-             let@ () =
-               check_live_alloc_bounds
-                 `Ptr_cmp
-                 loc
-                 arg1
-                 ub
-                 (IT.tuple_ [ arg1; arg2 ] here)
-                 (both_in_bounds arg1 arg2)
-             in
+             let@ () = check_live_alloc_bounds `Ptr_cmp loc ub [ arg1; arg2 ] in
              k (op (arg1, arg2))))
        in
        (match memop with
@@ -1430,17 +1419,9 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               let@ () = check_both_eq_alloc loc arg1 arg2 ub in
               let ub_unspec = CF.Undefined.UB_unspec_pointer_sub in
               let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-              let@ () =
-                check_live_alloc_bounds
-                  `Ptr_diff
-                  loc
-                  arg1
-                  ub
-                  (IT.tuple_ [ arg1; arg2 ] here)
-                  (both_in_bounds arg1 arg2)
-              in
               let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
-              let value =
+              let@ () = check_live_alloc_bounds `Ptr_diff loc ub [ arg1; arg2 ] in
+              let result =
                 (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
                    yields the expected result, or signal
                    UB050_pointers_subtraction_not_representable *)
@@ -1449,7 +1430,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                     int_lit_ divisor ptr_diff_bt loc )
                   loc
               in
-              k value))
+              k result))
         | IntFromPtr (act_from, act_to, pe) ->
           let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
           let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
@@ -1509,18 +1490,27 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ () = WellTyped.ensure_base_type loc ~expect Bool in
           let@ () = WellTyped.ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe) in
-          (* TODO (DCM, VIP): check. Also: this is the same as PtrWellAligned *)
+          (* TODO (DCM, VIP): error if called on Void or Function Ctype.
+             return false if resource missing *)
           check_pexpr pe (fun arg ->
-            let value = aligned_ (arg, act.ct) loc in
-            k value)
+            (* let unspec = CF.Undefined.UB_unspec_pointer_add in *)
+            (* let@ () = check_has_alloc_id loc arg unspec in *)
+            (* let index = num_lit_ Z.one Memory.uintptr_bt here in *)
+            (* let check_this = arrayShift_ ~base:arg ~index act.ct loc in *)
+            (* let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in *)
+            (* let@ () = check_live_alloc_bounds `ISO_array_shift loc ub [ check_this ] in *)
+            let result = aligned_ (arg, act.ct) loc in
+            k result)
         | PtrWellAligned (act, pe) ->
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ () = WellTyped.ensure_base_type loc ~expect Bool in
           let@ () = WellTyped.ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe) in
-          (* TODO (DCM, VIP) check *)
+          (* TODO (DCM, VIP): error if called on Void or Function Ctype *)
           check_pexpr pe (fun arg ->
-            let value = aligned_ (arg, act.ct) loc in
-            k value)
+            (* let unspec = CF.Undefined.UB_unspec_pointer_add in *)
+            (* let@ () = check_has_alloc_id loc arg unspec in *)
+            let result = aligned_ (arg, act.ct) loc in
+            k result)
         | PtrArrayShift (pe1, act, pe2) ->
           let@ () = ensure_base_type loc ~expect (Loc ()) in
           let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe1) in
@@ -1528,31 +1518,18 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
           let@ () = WellTyped.ensure_bits_type loc (Mu.bt_of_pexpr pe2) in
           check_pexpr pe1 (fun vt1 ->
             check_pexpr pe2 (fun vt2 ->
+              let unspec = CF.Undefined.UB_unspec_pointer_add in
+              let@ () = check_has_alloc_id loc vt1 unspec in
+              let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
               let result =
                 arrayShift_ ~base:vt1 ~index:(cast_ Memory.uintptr_bt vt2 loc) act.ct loc
               in
-              let ub_unspec = CF.Undefined.UB_unspec_pointer_add in
-              let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-              let@ () = check_has_alloc_id loc vt1 ub_unspec in
-              let here = Locations.other __FUNCTION__ in
-              let@ () =
-                check_live_alloc_bounds
-                  `ISO_array_shift
-                  loc
-                  vt1
-                  ub
-                  result
-                  (fun ~base ~size ->
-                     let addr = addr_ result here in
-                     let lower = le_ (base, addr) here in
-                     let upper = le_ (addr, add_ (base, size) here) here in
-                     and_ [ lower; upper ] here)
-              in
+              let@ () = check_live_alloc_bounds `ISO_array_shift loc ub [ result ] in
               k result))
-        | PtrMemberShift (_tag_sym, _memb_ident, _pe) ->
-          (* FIXME(CHERI merge) *)
-          (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
-          Cerb_debug.error "todo: PtrMemberShift"
+        | PtrMemberShift _ ->
+          unsupported
+            (Loc.other __FUNCTION__)
+            !^"PtrMemberShift should be a CHERI only construct"
         | CopyAllocId (pe1, pe2) ->
           let@ () =
             WellTyped.ensure_base_type loc ~expect:Memory.uintptr_bt (Mu.bt_of_pexpr pe1)
@@ -1562,22 +1539,17 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
           in
           check_pexpr pe1 (fun vt1 ->
             check_pexpr pe2 (fun vt2 ->
+              let unspec = CF.Undefined.UB_unspec_copy_alloc_id in
+              let@ () = check_has_alloc_id loc vt2 unspec in
+              let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
               let result = copyAllocId_ ~addr:vt1 ~loc:vt2 loc in
-              let ub_unspec = CF.Undefined.UB_unspec_copy_alloc_id in
-              let@ () = check_has_alloc_id loc vt2 ub_unspec in
-              let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-              let@ () =
-                check_live_alloc_bounds `Copy_alloc_id loc vt2 ub vt1 (fun ~base ~size ->
-                  let addr = vt1 in
-                  let lower = le_ (base, addr) here in
-                  let upper = le_ (addr, add_ (base, size) here) here in
-                  and_ [ lower; upper ] here)
-              in
+              let@ () = check_live_alloc_bounds `Copy_alloc_id loc ub [ result ] in
               k result))
         | Memcpy _ ->
           (* should have been intercepted by memcpy_proxy *)
           assert false
-        | Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
+        | Memcmp _ ->
+          (* TODO (DCM, VIP) *)
           Cerb_debug.error "todo: Memcmp"
         | Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Cerb_debug.error "todo: Realloc"
@@ -1632,8 +1604,12 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
             k ret)
         | CreateReadOnly (_sym1, _ct, _sym2, _prefix) ->
           Cerb_debug.error "todo: CreateReadOnly"
-        | Alloc (_ct, _sym, _prefix) -> Cerb_debug.error "todo: Alloc"
-        | Kill (Dynamic, _asym) -> Cerb_debug.error "todo: Free"
+        | Alloc (_ct, _sym, _prefix) ->
+          (* TODO (DCM, VIP) *)
+          Cerb_debug.error "todo: Alloc"
+        | Kill (Dynamic, _asym) ->
+          (* TODO (DCM, VIP) *)
+          Cerb_debug.error "todo: Free"
         | Kill (Static ct, pe) ->
           let@ () = WellTyped.WCT.is_ct loc ct in
           let@ () = WellTyped.ensure_base_type loc ~expect Unit in

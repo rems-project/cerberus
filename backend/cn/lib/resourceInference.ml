@@ -484,7 +484,7 @@ module Special = struct
   (** This function checks whether [ptr1] belongs to a live allocation. It
       searches the context (without modification) for either an Alloc(p) or an
       Owned(p) such that (alloc_id) p == (alloc_id) ptr. *)
-  let get_live_alloc reason loc ptr =
+  let check_live_alloc reason loc ptr =
     let module Ans = struct
       type t =
         | Found
@@ -523,7 +523,7 @@ module Special = struct
     let@ found, _ = map_and_fold_resources loc f (return Ans.No_res) in
     let@ found in
     match found with
-    | Ans.Found -> return (Alloc.History.lookup_ptr ptr here)
+    | Ans.Found -> return ()
     | No_res ->
       fail (fun ctxt ->
         let msg =
