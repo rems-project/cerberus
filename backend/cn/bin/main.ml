@@ -59,6 +59,10 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
   Switches.set
     ([ "inner_arg_temps"; "at_magic_comments" ]
+     (* TODO (DCM, VIP) figure out how to support liveness checks for read-only
+        resources and then switch on "strict_pointer_arith" to elaborate array
+        shift to the effectful version. "strict_pointer_relationals" is also
+        assumed, but this does not affect elaboration. *)
      @ if magic_comment_char_dollar then [ "magic_comment_char_dollar" ] else []);
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in

@@ -18,11 +18,11 @@ module General : sig
 end
 
 module Special : sig
-  val get_live_alloc
-    :  [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift ] ->
+  val check_live_alloc
+    :  [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift | `ISO_member_shift ] ->
     Locations.t ->
     IndexTerms.t ->
-    IndexTerms.t Typing.m
+    unit Typing.m
 
   val predicate_request
     :  Locations.t ->

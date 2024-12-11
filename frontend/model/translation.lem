@@ -2819,7 +2819,7 @@ end
             E.return begin
               C.Expr [Annot.Astd "§6.5.2.3#3, sentence 2"] (
                 C.Esseq e_wrp.E.sym_pat core_e (
-begin if Global.has_strict_pointer_arith () || Global.is_CHERI () (* || Global.is_PNVI () *) then
+begin if Global.is_CHERI () then
                   (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [e_wrp.E.sym_pe])
 else
                   Caux.mk_pure_e (Caux.mk_member_shift_pe e_wrp.E.sym_pe tag_sym ident)
