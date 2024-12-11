@@ -1,7 +1,9 @@
 //CN_VIP #include <stdio.h>
 //CN_VIP #include <string.h>
+#include "cn_lemmas.h"
 int main() {
   int y=2, x=1;
+  /*CN_VIP*//*@ apply assert_equal((u64)&y, (u64)&x + sizeof<int>); @*/
   int *p = &x + 1;
   int *q = &y;
   //CN_VIP printf("Addresses: p=%p q=%p\n",(void*)p,(void*)q);

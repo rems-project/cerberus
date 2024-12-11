@@ -1,9 +1,12 @@
 return code: 1
+tests/cn_vip_testsuite/provenance_equality_auto_yx.nondet.c:10:13: warning: Cannot rule out ambiguous pointer equality case (addresses equal, but provenances differ)
+  _Bool b = (p==q);
+            ^~~~~~ 
 [1/1]: main -- fail
-tests/cn_vip_testsuite/provenance_equality_auto_yx.nondet.c:11:17: error: Unprovable constraint
+tests/cn_vip_testsuite/provenance_equality_auto_yx.nondet.c:13:17: error: Unprovable constraint
   /*CN_VIP*//*@ assert (b == 1u8); @*/ // non-det in PNVI-ae-udi; true in VIP
                 ^~~~~~~~~~~~~~~~~~ 
-Constraint from tests/cn_vip_testsuite/provenance_equality_auto_yx.nondet.c:11:17:
+Constraint from tests/cn_vip_testsuite/provenance_equality_auto_yx.nondet.c:13:17:
   /*CN_VIP*//*@ assert (b == 1u8); @*/ // non-det in PNVI-ae-udi; true in VIP
                 ^~~~~~~~~~~~~~~~~~ 
 State file: file:///tmp/state__provenance_equality_auto_yx.nondet.c__main.html
