@@ -1,2 +1,5 @@
 return code: 0
+tests/cn_vip_testsuite/provenance_equality_global_yx.nondet.c:10:13: warning: Cannot rule out ambiguous pointer equality case (addresses equal, but provenances differ)
+  _Bool b = (p==q);
+            ^~~~~~ 
 [1/1]: main -- pass

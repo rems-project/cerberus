@@ -1337,13 +1337,13 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              in
              let@ provable = provable loc in
              let@ () =
-               match provable @@ LC.T ambiguous with
-               | `False -> return ()
-               | `True ->
+               match provable @@ LC.T (not_ ambiguous here) with
+               | `True -> return ()
+               | `False ->
                  let msg =
                    Printf.sprintf
-                     "ambiguous pointer %sequality case: addresses equal, but \
-                      provenances differ"
+                     "Cannot rule out ambiguous pointer %sequality case (addresses \
+                      equal, but provenances differ)"
                      case
                  in
                  warn loc !^msg;
