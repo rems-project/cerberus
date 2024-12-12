@@ -56,8 +56,8 @@ let sym_subst (s_replace, bt, s_with) =
   IT.make_subst [ (s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown)) ]
 
 
-(**  
-let concat2 (x : 'a list * 'b list) (y : 'a list * 'b list) : 'a list * 'b list =
+(*
+   let concat2 (x : 'a list * 'b list) (y : 'a list * 'b list) : 'a list * 'b list =
   let a1, b1 = x in
   let a2, b2 = y in
   (a1 @ a2, b1 @ b2)
