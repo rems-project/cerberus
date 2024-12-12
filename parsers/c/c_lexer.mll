@@ -93,12 +93,12 @@ let lexicon: (string, token) Hashtbl.t =
 
 (* BEGIN CN *)
 
-type kw_kind =
+type cn_keyword_kind =
  | Production
  | Experimental
  | Unimplemented
 
-let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
+let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
     (* CN 'production' keywords: well-supported and suitable for general use *)
     "good"          , (Production, CN_GOOD);
     "boolean"       , (Production, CN_BOOL);
@@ -164,10 +164,25 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     "unpack"        , (Unimplemented, CN_UNPACK);
   ]
 
-let cn_kw_table =
-  let kw_table = Hashtbl.create 0 in
-  List.iter (fun (key, builder) -> Hashtbl.add kw_table key builder) cn_keywords;
-  kw_table
+
+(* This table is mutated during lexing to reduce the number of warnings
+   for experimental features. Unfortunately, this makes it so that the
+   behaviour of the lexer implicitly changes across multiple calls
+   to [create_lexer].
+
+   In some sense, this is fine, since Cerberus/CN only processes one
+   translation unit per invocation from the command line, and we would
+   likely want warnings to only occur once per invocation.
+
+   However, if this were to change, and especially if this were to be
+   made concurrent, this would need to be revisited.
+
+   It is possible to thread the seen experimental tokens back to the caller for
+   them to decide; it is also ugly. *)
+let cn_keywords =
+  let table = Hashtbl.create 0 in
+  List.iter (fun (key, builder) -> Hashtbl.add table key builder) cn_keywords;
+  table
 
 (* Attempt to lex a CN keyword. These may be:
   * 'production' - well-supported and suitable for general use
@@ -177,9 +192,11 @@ let cn_kw_table =
 May raise `Not_found`, indicating `id` is not a recognized CN keyword. *)
 let cn_lex_keyword id start_pos end_pos =
   (* Try to lex CN production keywords *)
-  match Hashtbl.find cn_kw_table id with
+  match Hashtbl.find cn_keywords id with
   | (Production, kw) -> kw
   | (Experimental, kw) ->
+    (* Only want to warn once _per CN/Cerberus invocation_ *)
+    Hashtbl.replace cn_keywords id (Production, kw);
     prerr_endline
       (Pp_errors.make_message
         Cerb_location.(region (start_pos, end_pos) NoCursor)

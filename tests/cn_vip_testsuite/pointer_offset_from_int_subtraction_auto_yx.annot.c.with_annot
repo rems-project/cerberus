@@ -2,13 +2,7 @@ return code: 0
 tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_auto_yx.annot.c:21:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
   /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
                 ^~~~~~~~ 
-tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_auto_yx.annot.c:22:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
-                ^~~~~~~~ 
 tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_auto_yx.annot.c:24:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
   /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
-                ^~~~~~~~~~ 
-tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_auto_yx.annot.c:25:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
                 ^~~~~~~~~~ 
 [1/1]: main -- pass
