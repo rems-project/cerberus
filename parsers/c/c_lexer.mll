@@ -93,14 +93,14 @@ let lexicon: (string, token) Hashtbl.t =
 
 (* BEGIN CN *)
 
-type kw_kind = 
- | Production 
- | Experimental 
- | Unimplemented 
+type kw_kind =
+ | Production
+ | Experimental
+ | Unimplemented
 
 let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     (* CN 'production' keywords: well-supported and suitable for general use *)
-    "good"          , (Production, CN_GOOD); 
+    "good"          , (Production, CN_GOOD);
     "boolean"       , (Production, CN_BOOL);
     "integer"       , (Production, CN_INTEGER);
     "u8"            , (Production, CN_BITS (`U,8));
@@ -150,7 +150,7 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
 
     (* CN 'experimental' keywords - functional in some cases but not recommended for
     general use *)
-    "cn_list"       , (Experimental, CN_LIST); 
+    "cn_list"       , (Experimental, CN_LIST);
     "cn_tuple"      , (Experimental, CN_TUPLE);
     "cn_set"        , (Experimental, CN_SET);
     "cn_have"       , (Experimental, CN_HAVE);
@@ -164,28 +164,28 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     "unpack"        , (Unimplemented, CN_UNPACK);
   ]
 
-let cn_kw_table = 
+let cn_kw_table =
   let kw_table = Hashtbl.create 0 in
-  List.iter (fun (key, builder) -> Hashtbl.add kw_table key builder) cn_keywords; 
-  kw_table 
+  List.iter (fun (key, builder) -> Hashtbl.add kw_table key builder) cn_keywords;
+  kw_table
 
-(* Attempt to lex a CN keyword. These may be: 
+(* Attempt to lex a CN keyword. These may be:
   * 'production' - well-supported and suitable for general use
-  * 'experimental' - functional in some cases but not recommended for general use 
-  * 'unimplemented' - non-functional, but the keyword is reserved 
+  * 'experimental' - functional in some cases but not recommended for general use
+  * 'unimplemented' - non-functional, but the keyword is reserved
 
 May raise `Not_found`, indicating `id` is not a recognized CN keyword. *)
-let cn_lex_keyword id start_pos end_pos = 
+let cn_lex_keyword id start_pos end_pos =
   (* Try to lex CN production keywords *)
-  match Hashtbl.find cn_kw_table id with 
-  | (Production, kw) -> kw 
-  | (Experimental, kw) -> 
-    prerr_endline       
+  match Hashtbl.find cn_kw_table id with
+  | (Production, kw) -> kw
+  | (Experimental, kw) ->
+    prerr_endline
       (Pp_errors.make_message
         Cerb_location.(region (start_pos, end_pos) NoCursor)
         Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
         Warning);
-    kw 
+    kw
   | (Unimplemented, _) -> raise (Error (Errors.Cparser_unimplemented_keyword id))
 
 (* END CN *)
@@ -588,10 +588,10 @@ and initial flags = parse
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
       {
         if flags.inside_cn then
-          try 
-            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p  
+          try
+            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p
           with Not_found ->
-            UNAME id 
+            UNAME id
         else
           UNAME id
       }
@@ -601,10 +601,10 @@ and initial flags = parse
         Hashtbl.find lexicon id
       with Not_found ->
         if flags.inside_cn then
-          try 
-            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p 
+          try
+            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p
           with Not_found ->
-            LNAME id 
+            LNAME id
         else
           LNAME id
     }
@@ -627,7 +627,7 @@ let create_lexer ~(inside_cn:bool) : [ `LEXER of lexbuf -> token ] =
   match !lexer_state with
   | LSRegular ->
       let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
-      let magic_comment_char = 
+      let magic_comment_char =
         if Switches.(has_switch SW_magic_comment_char_dollar)
         then '$'
         else '@'
