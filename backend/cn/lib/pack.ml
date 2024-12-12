@@ -1,10 +1,11 @@
-open IndexTerms
-open ResourceTypes
-open Resources
-open ResourcePredicates
+open Request
+open Resource
+open Definition
 open Memory
 module IT = IndexTerms
 module LAT = LogicalArgumentTypes
+module LRT = LogicalReturnTypes
+module LC = LogicalConstraints
 
 (* open Cerb_pp_prelude *)
 
@@ -12,26 +13,29 @@ let resource_empty provable resource =
   let loc = Cerb_location.other __FUNCTION__ in
   let constr =
     match resource with
-    | P _, _ -> LC.t_ (bool_ false loc)
-    | Q p, _ -> LC.forall_ p.q (not_ p.permission loc)
+    | P _, _ -> LC.T (IT.bool_ false loc)
+    | Q p, _ -> LC.forall_ p.q (IT.not_ p.permission loc)
   in
   match provable constr with
   | `True -> `Empty
   | `False -> `NonEmpty (constr, Solver.model ())
 
 
-let unfolded_array loc init (ict, olength) pointer =
+let unfolded_array loc' init (ict, olength) pointer =
   let length = Option.get olength in
-  let q_s, q = IT.fresh_named Memory.uintptr_bt "i" loc in
+  let q_s, q = IT.fresh_named Memory.uintptr_bt "i" loc' in
   Q
     { name = Owned (ict, init);
       pointer;
       q = (q_s, Memory.uintptr_bt);
-      q_loc = loc;
-      step = uintptr_int_ (Memory.size_of_ctype ict) loc;
+      q_loc = loc';
+      step = IT.uintptr_int_ (Memory.size_of_ctype ict) loc';
       iargs = [];
       permission =
-        and_ [ (uintptr_int_ 0 loc %<= q) loc; (q %< uintptr_int_ length loc) loc ] loc
+        IT.(
+          and_
+            [ (uintptr_int_ 0 loc' %<= q) loc'; (q %< uintptr_int_ length loc') loc' ]
+            loc')
     }
 
 
@@ -46,7 +50,7 @@ let packing_ft loc global provable ret =
        let at = LAT.Resource ((o_s, (qpred, IT.bt o)), (loc, None), LAT.I o) in
        Some at
      | Owned (Struct tag, init) ->
-       let layout = SymMap.find tag global.Global.struct_decls in
+       let layout = Sym.Map.find tag global.Global.struct_decls in
        let lrt, value =
          List.fold_right
            (fun { offset; size; member_or_padding } (lrt, value) ->
@@ -55,7 +59,7 @@ let packing_ft loc global provable ret =
                let request =
                  P
                    { name = Owned (mct, init);
-                     pointer = memberShift_ (ret.pointer, tag, member) loc;
+                     pointer = IT.memberShift_ (ret.pointer, tag, member) loc;
                      iargs = []
                    }
                in
@@ -69,7 +73,8 @@ let packing_ft loc global provable ret =
                let request =
                  P
                    { name = Owned (padding_ct, Uninit);
-                     pointer = pointer_offset_ (ret.pointer, uintptr_int_ offset loc) loc;
+                     pointer =
+                       IT.pointer_offset_ (ret.pointer, IT.uintptr_int_ offset loc) loc;
                      iargs = []
                    }
                in
@@ -81,11 +86,11 @@ let packing_ft loc global provable ret =
            layout
            (LRT.I, [])
        in
-       let at = LAT.of_lrt lrt (LAT.I (struct_ (tag, value) loc)) in
+       let at = LAT.of_lrt lrt (LAT.I (IT.struct_ (tag, value) loc)) in
        Some at
      | PName pn ->
-       let def = SymMap.find pn global.resource_predicates in
-       (match identify_right_clause provable def ret.pointer ret.iargs with
+       let def = Sym.Map.find pn global.resource_predicates in
+       (match Predicate.identify_right_clause provable def ret.pointer ret.iargs with
         | None -> None
         | Some right_clause -> Some right_clause.packing_ft))
   | Q _ -> None
@@ -97,7 +102,7 @@ let unpack_owned loc global (ct, init) pointer (O o) =
   | Void | Integer _ | Pointer _ | Function _ -> None
   | Array (ict, olength) -> Some [ (unfolded_array loc init (ict, olength) pointer, O o) ]
   | Struct tag ->
-    let layout = SymMap.find tag global.Global.struct_decls in
+    let layout = Sym.Map.find tag global.Global.struct_decls in
     let res =
       List.fold_right
         (fun { offset; size; member_or_padding } res ->
@@ -106,10 +111,10 @@ let unpack_owned loc global (ct, init) pointer (O o) =
             let mresource =
               ( P
                   { name = Owned (mct, init);
-                    pointer = memberShift_ (pointer, tag, member) loc;
+                    pointer = IT.memberShift_ (pointer, tag, member) loc;
                     iargs = []
                   },
-                O (member_ ~member_bt:(Memory.bt_of_sct mct) (o, member) loc) )
+                O (IT.member_ ~member_bt:(Memory.bt_of_sct mct) (o, member) loc) )
             in
             mresource :: res
           | None ->
@@ -117,10 +122,10 @@ let unpack_owned loc global (ct, init) pointer (O o) =
             let mresource =
               ( P
                   { name = Owned (padding_ct, Uninit);
-                    pointer = pointer_offset_ (pointer, uintptr_int_ offset loc) loc;
+                    pointer = IT.pointer_offset_ (pointer, IT.uintptr_int_ offset loc) loc;
                     iargs = []
                   },
-                O (default_ (Memory.bt_of_sct padding_ct) loc) )
+                O (IT.default_ (Memory.bt_of_sct padding_ct) loc) )
             in
             mresource :: res)
         layout
@@ -138,46 +143,48 @@ let unpack loc global provable (ret, O o) =
   | _ ->
     (match packing_ft loc global provable ret with
      | None -> None
-     | Some packing_ft -> Some (`LRT (ResourcePredicates.clause_lrt o packing_ft)))
+     | Some packing_ft -> Some (`LRT (Definition.Clause.lrt o packing_ft)))
 
 
 let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O o) =
   (* let tmsg hd tail =  *)
   (*   if verb *)
-  (*   then Pp.print stdout (Pp.item hd (ResourceTypes.pp ret ^^ Pp.hardline ^^ *)
+  (*   then Pp.print stdout (Pp.item hd (Request.pp ret ^^ Pp.hardline ^^ *)
   (*         Pp.string "--" ^^ Pp.hardline ^^ Lazy.force tail)) *)
   (*   else () *)
   (* in *)
   match ret with
   | Q ret
-    when equal_predicate_name predicate_name ret.name
-         && BT.equal (IT.bt index) (snd ret.q) ->
+    when Request.equal_name predicate_name ret.name && BT.equal (IT.bt index) (snd ret.q)
+    ->
     let su = IT.make_subst [ (fst ret.q, index) ] in
     let index_permission = IT.subst su ret.permission in
-    (match prove_or_model (LC.t_ index_permission) with
+    (match prove_or_model (LC.T index_permission) with
      | `True ->
-       let loc = Cerb_location.other __FUNCTION__ in
+       let loc' = Cerb_location.other __FUNCTION__ in
        let at_index =
          ( P
              { name = ret.name;
                pointer =
-                 pointer_offset_
-                   ( ret.pointer,
-                     mul_
-                       ( cast_ Memory.uintptr_bt ret.step loc,
-                         cast_ Memory.uintptr_bt index loc )
-                       loc )
-                   loc;
+                 IT.(
+                   pointer_offset_
+                     ( ret.pointer,
+                       mul_
+                         ( cast_ Memory.uintptr_bt ret.step loc',
+                           cast_ Memory.uintptr_bt index loc' )
+                         loc' )
+                     loc');
                iargs = List.map (IT.subst su) ret.iargs
              },
-           O (map_get_ o index loc) )
+           O (IT.map_get_ o index loc') )
        in
        let ret_reduced =
          { ret with
            permission =
-             and_
-               [ ret.permission; ne__ (sym_ (fst ret.q, snd ret.q, loc)) index loc ]
-               loc
+             IT.(
+               and_
+                 [ ret.permission; ne__ (sym_ (fst ret.q, snd ret.q, loc')) index loc' ]
+                 loc')
          }
        in
        (* tmsg "successfully extracted" (lazy (IT.pp index)); *)
@@ -188,10 +195,10 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
        (*   (lazy (IndexTerms.pp_with_eval eval_f index_permission)); *)
        None)
   (* | Q qret -> *)
-  (*   if not (equal_predicate_name predicate_name qret.name) *)
+  (*   if not (Request.equal_name predicate_name qret.name) *)
   (*   then () *)
   (*     (\* tmsg "not extracting, predicate name differs" *\) *)
-  (*     (\*   (lazy (ResourceTypes.pp_predicate_name predicate_name)) *\) *)
+  (*     (\*   (lazy (Request.pp_predicate_name predicate_name)) *\) *)
   (*   else if not (BT.equal (IT.bt index) (snd qret.q)) *)
   (*   then  *)
   (*     () *)

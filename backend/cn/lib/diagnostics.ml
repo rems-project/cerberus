@@ -1,6 +1,5 @@
 open Typing
 module LC = LogicalConstraints
-module LCSet = Set.Make (LC)
 module IT = IndexTerms
 
 open Effectful.Make (Typing)
@@ -48,9 +47,8 @@ let continue_with (opts : opt list) cfg =
 
 
 let term_with_model_name nm cfg x =
-  let@ g = get_global () in
   let open Pp in
-  match Solver.eval g (fst cfg.model) x with
+  match Solver.eval (fst cfg.model) x with
   | None ->
     return (bold nm ^^ colon ^^^ parens (string "cannot eval") ^^ colon ^^^ IT.pp x)
   | Some r ->
@@ -88,7 +86,7 @@ let rec bool_subterms_of t =
 let constraint_ts () =
   let@ cs = get_cs () in
   let ts =
-    List.filter_map (function LC.T t -> Some t | _ -> None) (LCSet.elements cs)
+    List.filter_map (function LC.T t -> Some t | _ -> None) (LC.Set.elements cs)
   in
   return ts
 

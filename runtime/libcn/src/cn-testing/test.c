@@ -1,4 +1,3 @@
-#include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -54,14 +53,16 @@ void print_test_info(char* suite, char* name, int tests, int discards) {
 }
 
 int cn_test_main(int argc, char* argv[]) {
-    int begin_time = time(NULL);
+    int begin_time = cn_gen_get_milliseconds();
     set_cn_logging_level(CN_LOGGING_NONE);
 
-    cn_gen_srand(time(NULL));
+    cn_gen_srand(cn_gen_get_milliseconds());
+    enum cn_test_gen_progress progress_level = CN_TEST_GEN_PROGRESS_ALL;
     uint64_t seed = cn_gen_rand();
     int interactive = 0;
     enum cn_logging_level logging_level = CN_LOGGING_ERROR;
     int timeout = 0;
+    int input_timeout = 0;
     int exit_fast = 0;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
@@ -75,6 +76,14 @@ int cn_test_main(int argc, char* argv[]) {
         }
         else if (strcmp("--logging-level", arg) == 0) {
             logging_level = strtol(argv[i + 1], NULL, 10);
+            i++;
+        }
+        else if (strcmp("--progress-level", arg) == 0) {
+            progress_level = strtol(argv[i + 1], NULL, 10);
+            i++;
+        }
+        else if (strcmp("--input-timeout", arg) == 0) {
+            input_timeout = strtol(argv[i + 1], NULL, 10);
             i++;
         }
         else if (strcmp("--null-in-every", arg) == 0) {
@@ -100,6 +109,13 @@ int cn_test_main(int argc, char* argv[]) {
         }
         else if (strcmp("--sized-null", arg) == 0) {
             set_sized_null();
+        }
+        else if (strcmp("--allowed-depth-failures", arg) == 0) {
+            cn_gen_set_depth_failures_allowed(strtoul(argv[i + 1], NULL, 10));
+            i++;
+        }
+        else if (strcmp("--allowed-size-split-backtracks", arg) == 0) {
+            cn_gen_set_size_split_backtracks_allowed(strtoul(argv[i + 1], NULL, 10));
             i++;
         }
     }
@@ -129,12 +145,19 @@ int cn_test_main(int argc, char* argv[]) {
             }
 
             struct cn_test_case* test_case = &test_cases[i];
-            print_test_info(test_case->suite, test_case->name, 0, 0);
+            if (progress_level == CN_TEST_GEN_PROGRESS_ALL) {
+                print_test_info(test_case->suite, test_case->name, 0, 0);
+            }
             checkpoints[i] = cn_gen_rand_save();
-            enum cn_test_result result = test_case->func(1);
+            cn_gen_set_input_timeout(input_timeout);
+            enum cn_test_result result = test_case->func(progress_level);
             if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {
                 results[i] = result;
             }
+            if (progress_level == CN_TEST_GEN_PROGRESS_NONE) {
+                continue;
+            }
+
             printf("\n");
             switch (result) {
             case CN_TEST_PASS:
@@ -144,7 +167,8 @@ int cn_test_main(int argc, char* argv[]) {
                 printf("FAILED\n");
                 set_cn_logging_level(logging_level);
                 cn_gen_rand_restore(checkpoints[i]);
-                test_case->func(0);
+                cn_gen_set_input_timeout(0);
+                test_case->func(CN_TEST_GEN_PROGRESS_NONE);
                 set_cn_logging_level(CN_LOGGING_NONE);
                 printf("\n\n");
                 break;
@@ -161,7 +185,7 @@ int cn_test_main(int argc, char* argv[]) {
             }
 
             if (timeout != 0) {
-                timediff = time(NULL) - begin_time;
+                timediff = cn_gen_get_milliseconds() / 1000 - begin_time;
             }
         }
         if (timediff < timeout) {

@@ -11,8 +11,6 @@ module IT = IndexTerms
 module IdMap = Map.Make (Id)
 module SBT = BaseTypes.Surface
 module Mu = Mucore
-module SymMap = Map.Make (Sym)
-module SymSet = Set.Make (Sym)
 
 (* Short forms *)
 module Desugar = struct
@@ -895,7 +893,9 @@ let make_largs f_i =
            ((name, (pt_ret, SBT.proj oa_bt)), (loc, None))
            (Mu.mConstraints lcs lat))
     | Cn.CN_cletExpr (loc, name, expr) :: conditions ->
-      let@ expr = C.LocalState.handle st (C.ET.translate_cn_expr SymSet.empty env expr) in
+      let@ expr =
+        C.LocalState.handle st (C.ET.translate_cn_expr Sym.Set.empty env expr)
+      in
       let@ lat = aux (C.add_logical name (IT.bt expr) env) st conditions in
       return (Mu.mDefine ((name, IT.Surface.proj expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conditions ->
@@ -944,7 +944,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
       (* let good_pointer_lc = *)
       (*   let info = (loc, Some (Sym.pp_string s ^ " good")) in *)
       (*   let here = Locations.other __FUNCTION__ in *)
-      (*   (LC.t_ (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc, here)) here), info) *)
+      (*   (LC.T (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc, here)) here), info) *)
       (* in *)
       let@ oa_name, ((pt_ret, oa_bt), lcs), value = C.ownership (loc, (s, ct)) env in
       let env = C.add_logical oa_name oa_bt env in
@@ -981,7 +981,7 @@ let make_function_args f_i loc env args (accesses, requires) =
       (* let good_lc = *)
       (*   let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in *)
       (*   let here = Locations.other __FUNCTION__ in *)
-      (*   (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
+      (*   (LC.T (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
       (* in *)
       let@ at =
         aux (arg_states @ [ (mut_arg, arg_state) ]) (* good_lc :: *) good_lcs env st rest
@@ -1020,7 +1020,7 @@ let make_fun_with_spec_args f_i loc env args requires =
       (* let good_lc = *)
       (*   let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in *)
       (*   let here = Locations.other __FUNCTION__ in *)
-      (*   (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
+      (*   (LC.T (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
       (* in *)
       let@ at = aux (* good_lc :: *) good_lcs env st rest in
       return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
@@ -1267,7 +1267,7 @@ let normalise_fun_map_decl
        let@ ensures, _ret_d_st = desugar_conds ret_d_st (List.map snd ensures) in
        debug 6 (lazy (string "desugared ensures conds"));
        let@ spec_req, spec_ens, env =
-         match SymMap.find_opt fname fun_specs with
+         match Sym.Map.find_opt fname fun_specs with
          | Some (_, spec) ->
            let@ () =
              match defn_spec_sites with
@@ -1345,7 +1345,7 @@ let normalise_fun_map_decl
        return
          (Some (Mu.Proc { loc; args_and_body; trusted; desugared_spec }, mk_functions))
      | Mi_ProcDecl (loc, ret_bt, _bts) ->
-       (match SymMap.find_opt fname fun_specs with
+       (match Sym.Map.find_opt fname fun_specs with
         | Some (_ail_marker, (spec : (CF.Symbol.sym, Ctype.ctype) Cn.cn_fun_spec)) ->
           let@ () =
             check_against_core_bt loc ret_bt (Memory.bt_of_sct (convert_ct loc ret_ct))
@@ -1551,9 +1551,9 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
   let env = List.fold_left register_glob env globs in
   let fun_specs_map =
     List.fold_right
-      (fun (id, spec) acc -> SymMap.add spec.Cn.cn_spec_name (id, spec) acc)
+      (fun (id, spec) acc -> Sym.Map.add spec.Cn.cn_spec_name (id, spec) acc)
       ail_prog.cn_fun_specs
-      SymMap.empty
+      Sym.Map.empty
   in
   let@ funs, mk_functions =
     normalise_fun_map
@@ -1577,7 +1577,7 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
           })
       file.mi_funinfo
   in
-  let stdlib_syms = SymSet.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
+  let stdlib_syms = Sym.Set.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
   let datatypes = List.map (translate_datatype env) ail_prog.cn_datatypes in
   let file =
     Mu.

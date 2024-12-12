@@ -15,15 +15,14 @@ end
 
 module ITPairMap = Map.Make (ITPair)
 module ITSet = Set.Make (IT)
-module LCSet = Set.Make (LC)
 
 type simp_ctxt =
   { global : Global.t;
-    values : IT.t SymMap.t;
+    values : IT.t Sym.Map.t;
     simp_hook : IT.t -> IT.t option
   }
 
-let default global = { global; values = SymMap.empty; simp_hook = (fun _ -> None) }
+let default global = { global; values = Sym.Map.empty; simp_hook = (fun _ -> None) }
 
 let do_ctz_z z =
   let rec loop z found =
@@ -207,7 +206,7 @@ module IndexTerms = struct
       match the_term_ with
       | Sym _ when BT.equal the_bt BT.Unit -> unit_ the_loc
       | Sym sym ->
-        (match SymMap.find_opt sym simp_ctxt.values with
+        (match Sym.Map.find_opt sym simp_ctxt.values with
          | Some (IT ((Const _ | Sym _), _, _) as v) -> v
          | _ -> the_term)
       | Const _ -> the_term
@@ -597,8 +596,8 @@ module IndexTerms = struct
         if not inline_functions then
           t
         else (
-          let def = SymMap.find name simp_ctxt.global.logical_functions in
-          match LogicalFunctions.try_open_fun def args with
+          let def = Sym.Map.find name simp_ctxt.global.logical_functions in
+          match Definition.Function.try_open def args with
           | Some inlined -> aux inlined
           | None -> t)
       | _ ->
@@ -630,31 +629,35 @@ module LogicalConstraints = struct
        | _ -> LC.Forall ((q, qbt), body))
 end
 
-module ResourceTypes = struct
-  open IndexTerms
-  open ResourceTypes
+module Request = struct
+  module Predicate = struct
+    open Request.Predicate
 
-  let simp_predicate_type simp_ctxt (p : predicate_type) =
-    { name = p.name;
-      pointer = simp simp_ctxt p.pointer;
-      iargs = List.map (simp simp_ctxt) p.iargs
-    }
+    let simp simp_ctxt (p : t) =
+      { name = p.name;
+        pointer = IndexTerms.simp simp_ctxt p.pointer;
+        iargs = List.map (IndexTerms.simp simp_ctxt) p.iargs
+      }
+  end
 
+  module QPredicate = struct
+    open Request.QPredicate
 
-  let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
-    let qp = alpha_rename_qpredicate_type qp in
-    let permission = simp_flatten simp_ctxt qp.permission in
-    { name = qp.name;
-      pointer = simp simp_ctxt qp.pointer;
-      q = qp.q;
-      q_loc = qp.q_loc;
-      step = simp simp_ctxt qp.step;
-      permission = and_ permission (IT.loc qp.permission);
-      iargs = List.map (simp simp_ctxt) qp.iargs
-    }
+    let simp simp_ctxt (qp : t) =
+      let qp = alpha_rename qp in
+      let permission = IndexTerms.simp_flatten simp_ctxt qp.permission in
+      Request.QPredicate.
+        { name = qp.name;
+          pointer = IndexTerms.simp simp_ctxt qp.pointer;
+          q = qp.q;
+          q_loc = qp.q_loc;
+          step = IndexTerms.simp simp_ctxt qp.step;
+          permission = and_ permission (IT.loc qp.permission);
+          iargs = List.map (IndexTerms.simp simp_ctxt) qp.iargs
+        }
+  end
 
-
-  let simp simp_ctxt = function
-    | P p -> P (simp_predicate_type simp_ctxt p)
-    | Q qp -> Q (simp_qpredicate_type simp_ctxt qp)
+  let simp simp_ctxt : Request.t -> Request.t = function
+    | P p -> P (Predicate.simp simp_ctxt p)
+    | Q qp -> Q (QPredicate.simp simp_ctxt qp)
 end

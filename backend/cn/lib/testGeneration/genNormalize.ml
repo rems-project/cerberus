@@ -3,7 +3,6 @@ module IT = IndexTerms
 module LC = LogicalConstraints
 module GT = GenTerms
 module GD = GenDefinitions
-module SymMap = Map.Make (Sym)
 
 module MemberIndirection = struct
   type kind =

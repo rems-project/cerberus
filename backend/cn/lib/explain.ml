@@ -1,24 +1,20 @@
 open Report
 module IT = IndexTerms
 module BT = BaseTypes
-module RE = Resources
-module REP = ResourcePredicates
-module RET = ResourceTypes
+module Res = Resource
+module Def = Definition
+module Req = Request
 module LC = LogicalConstraints
-module LF = LogicalFunctions
+module LF = Definition.Function
 module LAT = LogicalArgumentTypes
-module LS = LogicalSorts
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 module StringMap = Map.Make (String)
 module C = Context
 module Loc = Locations
 module S = Solver
-open ResourceTypes
+open Request
 open IndexTerms
 open Pp
 open C
-open Resources
 
 (* perhaps somehow unify with above *)
 type action =
@@ -38,22 +34,20 @@ type log = log_entry list (* most recent first *)
 let clause_has_resource req c =
   let open LogicalArgumentTypes in
   let rec f = function
-    | Resource ((_, (r, _)), _, c) -> RET.same_predicate_name req r || f c
+    | Resource ((_, (r, _)), _, c) -> Req.same_name req r || f c
     | Constraint (_, _, c) -> f c
     | Define (_, _, c) -> f c
     | I _ -> false
   in
-  let open ResourcePredicates in
-  f c.packing_ft
+  f c.Def.Clause.packing_ft
 
 
 let relevant_predicate_clauses global name req =
   let open Global in
-  let open ResourcePredicates in
   let clauses =
-    let defs = SymMap.bindings global.resource_predicates in
+    let defs = Sym.Map.bindings global.resource_predicates in
     List.concat_map
-      (fun (nm, def) ->
+      (fun (nm, (def : Def.Predicate.t)) ->
         match def.clauses with
         | Some clauses -> List.map (fun c -> (nm, c)) clauses
         | None -> [])
@@ -63,7 +57,7 @@ let relevant_predicate_clauses global name req =
 
 
 type state_extras =
-  { request : RET.t option;
+  { request : Req.t option;
     unproven_constraint : LC.t option
   }
 
@@ -83,8 +77,8 @@ let subterms_without_bound_variables bindings =
     (fun bindings acc t ->
       let pats = List.map fst bindings in
       let bound = List.concat_map bound_by_pattern pats in
-      let bound = SymSet.of_list (List.map fst bound) in
-      if SymSet.(is_empty (inter bound (IT.free_vars t))) then
+      let bound = Sym.Set.of_list (List.map fst bound) in
+      if Sym.Set.(is_empty (inter bound (IT.free_vars t))) then
         ITSet.add t acc
       else
         acc)
@@ -163,7 +157,7 @@ let state ctxt log model_with_q extras =
     result
   in
   let model, quantifier_counter_model = model_with_q in
-  let evaluate it = Solver.eval ctxt.global model it in
+  let evaluate it = Solver.eval model it in
   (* let _mevaluate it = *)
   (*   match evaluate it with *)
   (*   | Some v -> IT.pp v *)
@@ -184,7 +178,7 @@ let state ctxt log model_with_q extras =
         | LC.T (IT (Representable _, _, _)) -> false
         | LC.T (IT (Good _, _, _)) -> false
         | _ -> true)
-      (LCSet.elements ctxt.constraints)
+      (LC.Set.elements ctxt.constraints)
   in
   let not_given_to_solver =
     (* get predicates from past steps of trace not given to solver *)
@@ -211,7 +205,7 @@ let state ctxt log model_with_q extras =
       List.partition (fun (_, v) -> LF.is_interesting v) funs
     in
     let interesting_preds, uninteresting_preds =
-      List.partition (fun (_, v) -> REP.is_interesting v) preds
+      List.partition (fun (_, v) -> Def.is_interesting v) preds
     in
     add_labeled
       lab_interesting
@@ -237,8 +231,8 @@ let state ctxt log model_with_q extras =
       in
       ITSet.of_list
         (List.map (fun (s, ls) -> make s ls) quantifier_counter_model
-         @ List.filter_map basetype_binding (SymMap.bindings ctxt.computational)
-         @ List.filter_map basetype_binding (SymMap.bindings ctxt.logical))
+         @ List.filter_map basetype_binding (Sym.Map.bindings ctxt.computational)
+         @ List.filter_map basetype_binding (Sym.Map.bindings ctxt.logical))
     in
     let unproven =
       match extras.unproven_constraint with
@@ -300,22 +294,21 @@ let state ctxt log model_with_q extras =
     let same_res, diff_res =
       match extras.request with
       | None -> ([], get_rs ctxt)
-      | Some req ->
-        List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
+      | Some req -> List.partition (fun (r, _) -> Req.same_name req r) (get_rs ctxt)
     in
     let interesting_diff_res, uninteresting_diff_res =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when equal_predicate_name ret.name ResourceTypes.alloc -> false
+          | P ret when Req.equal_name ret.name Req.Predicate.alloc -> false
           | _ -> true)
         diff_res
     in
     let with_suff mb x = match mb with None -> x | Some d -> d ^^^ x in
     let pp_res mb_suff (rt, args) =
-      { original = with_suff mb_suff (RE.pp (rt, args));
+      { original = with_suff mb_suff (Res.pp (rt, args));
         simplified =
-          [ with_suff mb_suff (RE.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
+          [ with_suff mb_suff (Res.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
       }
     in
     let interesting =
@@ -337,17 +330,17 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
   (* let req_cmp = Option.bind extras.request (Spans.spans_compare_for_pp model
      ctxt.global) in *)
   (* let req_entry req_cmp req = { *)
-  (*     res = RET.pp req; *)
+  (*     res = Req.pp req; *)
   (*     res_span = Spans.pp_model_spans model ctxt.global req_cmp req *)
   (*   } *)
   (* in *)
   (* let res_entry req_cmp same res = { *)
-  (*     res = RE.pp res; *)
-  (*     res_span = Spans.pp_model_spans model ctxt.global req_cmp (RE.request res) *)
+  (*     res = Res.pp res; *)
+  (*     res_span = Spans.pp_model_spans model ctxt.global req_cmp (Res.request res) *)
   (*       ^^ (if same then !^" - same-type" else !^"") *)
   (*   } *)
   (* in *)
-  let req_entry ret = RET.pp ret in
+  let req_entry ret = Req.pp ret in
   let trace =
     let statef ctxt = state ctxt log model_with_q extras in
     List.rev
@@ -355,17 +348,16 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
        :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
   let model, _quantifier_counter_model = model_with_q in
-  let evaluate it = Solver.eval ctxt.global model it in
+  let evaluate it = Solver.eval model it in
   let predicate_hints =
     match extras.request with
     | None -> []
     | Some req ->
-      let open ResourcePredicates in
-      (match predicate_name req with
+      (match Req.get_name req with
        | Owned _ -> []
        | PName pname ->
          let doc_clause (_name, c) =
-           { cond = IT.pp c.guard;
+           { cond = IT.pp c.Def.Clause.guard;
              clause = LogicalArgumentTypes.pp IT.pp (simp_resource evaluate c.packing_ft)
            }
          in

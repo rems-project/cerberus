@@ -2563,11 +2563,11 @@ let cn_to_ail_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * Def.Predicate.t) list)
   _loc
   =
   let calculate_return_type = function
-    | ResourceTypes.Owned (sct, _) ->
+    | Request.Owned (sct, _) ->
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
     | PName pname ->
@@ -2590,7 +2590,7 @@ let cn_to_ail_resource_internal
   in
   (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in *)
   function
-  | ResourceTypes.P p ->
+  | Request.P p ->
     let ctype, bt = calculate_return_type p.name in
     let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
     let enum_str = if is_pre then "GET" else "PUT" in
@@ -2639,7 +2639,7 @@ let cn_to_ail_resource_internal
       | _ -> A.(AilSdeclaration [ (sym, Some rhs) ])
     in
     (b @ bs, s @ ss @ [ s_decl ])
-  | ResourceTypes.Q q ->
+  | Request.Q q ->
     (*
        Input is expr of the form:
       take sym = each (integer q.q; q.permission){ Owned(q.pointer + (q.q * q.step)) }
@@ -2932,7 +2932,7 @@ let rec generate_record_opt pred_sym = function
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal
-  (fn_sym, (lf_def : LogicalFunctions.definition))
+  (fn_sym, (lf_def : Definition.Function.t))
   (cn_datatypes : A.sigma_cn_datatype list)
   (cn_functions : A.sigma_cn_function list)
   : ((Locations.t * A.sigma_declaration)
@@ -2942,7 +2942,7 @@ let cn_to_ail_function_internal
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) lf_def.return_bt in
   (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
   let bs, ail_func_body_opt =
-    match lf_def.definition with
+    match lf_def.body with
     | Def it | Rec_Def it ->
       let bs, ss =
         cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return
@@ -3024,14 +3024,14 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
 
 
 let cn_to_ail_predicate_internal
-  (pred_sym, (rp_def : ResourcePredicates.definition))
+  (pred_sym, (rp_def : Def.Predicate.t))
   dts
   globals
   preds
   cn_preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : RP.clause list) =
+  let rec clause_translate (clauses : Def.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->
@@ -3339,7 +3339,7 @@ let rec cn_to_ail_lat_internal_2
         else
           (loc, s) :: remove_duplicates (loc :: locs) ss
     in
-    (* let substitution : IT.t Subst.t = {replace = [(Sym.fresh_pretty "return", IT.(IT (Sym (Sym.fresh_pretty "__cn_ret"), BT.Unit)))]; relevant = SymSet.empty} in *)
+    (* let substitution : IT.t Subst.t = {replace = [(Sym.fresh_pretty "return", IT.(IT (Sym (Sym.fresh_pretty "__cn_ret"), BT.Unit)))]; relevant = Sym.Set.empty} in *)
     (* let post_with_ret = RT.subst substitution post in *)
     let return_cn_binding, return_cn_decl =
       match rm_ctype c_return_type with
@@ -3531,11 +3531,11 @@ let cn_to_ail_assume_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * RP.definition) list)
+  (preds : (Sym.t * Def.Predicate.t) list)
   loc
   =
   let calculate_return_type = function
-    | ResourceTypes.Owned (sct, _) ->
+    | Request.Owned (sct, _) ->
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
     | PName pname ->
@@ -3558,7 +3558,7 @@ let cn_to_ail_assume_resource_internal
   in
   (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in *)
   function
-  | ResourceTypes.P p ->
+  | Request.P p ->
     let ctype, bt = calculate_return_type p.name in
     let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
     let rhs, bs, ss, _owned_ctype =
@@ -3611,7 +3611,7 @@ let cn_to_ail_assume_resource_internal
       | _ -> A.(AilSdeclaration [ (sym, Some rhs) ])
     in
     (b @ bs, s @ ss @ [ s_decl ])
-  | ResourceTypes.Q q ->
+  | Request.Q q ->
     (*
        Input is expr of the form:
         take sym = each (integer q.q; q.permission){ Owned(q.pointer + (q.q * q.step)) }
@@ -3835,13 +3835,13 @@ let rec cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds = function
 
 
 let cn_to_ail_assume_predicate_internal
-  (pred_sym, (rp_def : ResourcePredicates.definition))
+  (pred_sym, (rp_def : Def.Predicate.t))
   dts
   globals
   preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : RP.clause list) =
+  let rec clause_translate (clauses : Def.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->

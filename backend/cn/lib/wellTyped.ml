@@ -1,10 +1,9 @@
 module CF = Cerb_frontend
-module LS = LogicalSorts
 module BT = BaseTypes
-module SymSet = Set.Make (Sym)
 module TE = TypeErrors
-module RE = Resources
-module RET = ResourceTypes
+module Res = Resource
+module Req = Request
+module Def = Definition
 module LRT = LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
@@ -206,10 +205,6 @@ module WBT = struct
     | None ->
       fail (fun _ ->
         { loc; msg = Generic (Pp.item "no standard encoding type for constant" (Pp.z z)) })
-end
-
-module WLS = struct
-  let is_ls = WBT.is_bt
 end
 
 module WCT = struct
@@ -904,7 +899,7 @@ module WIT = struct
         let@ t1 = infer t1 in
         pure
           (let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
-           let@ () = add_c loc (LC.t_ (IT.def_ name t1 loc)) in
+           let@ () = add_c loc (LC.T (IT.def_ name t1 loc)) in
            let@ t2 = infer t2 in
            return (IT (Let ((name, t1), t2), IT.bt t2, loc)))
       | Constructor (s, args) ->
@@ -949,13 +944,13 @@ module WIT = struct
 
 
   and check expect_loc expect_ls it =
-    let@ ls = WLS.is_ls expect_loc expect_ls in
+    let@ ls = WBT.is_bt expect_loc expect_ls in
     let@ it = infer it in
     let@ loc = get_location_for_type it in
-    if LS.equal ls (IT.bt it) then
+    if BT.equal ls (IT.bt it) then
       return it
     else (
-      let expected = Pp.plain @@ LS.pp ls in
+      let expected = Pp.plain @@ BT.pp ls in
       let reason = Either.Left expect_loc in
       fail (illtyped_index_term loc it (IT.bt it) ~expected ~reason))
 end
@@ -982,13 +977,13 @@ let warn_when_not_quantifier_bt
        ^^^ !^"was provided. This will become an error in the future.")
 
 
-module WRET = struct
+module WReq = struct
   open IndexTerms
 
   let welltyped loc r =
-    Pp.debug 22 (lazy (Pp.item "WRET: checking" (RET.pp r)));
+    Pp.debug 22 (lazy (Pp.item "WReq: checking" (Req.pp r)));
     let@ spec_iargs =
-      match RET.predicate_name r with
+      match Req.get_name r with
       | Owned (_ct, _init) -> return []
       | PName name ->
         let@ def = Typing.get_resource_predicate_def loc name in
@@ -1008,7 +1003,7 @@ module WRET = struct
           spec_iargs
           p.iargs
       in
-      return (RET.P { name = p.name; pointer; iargs })
+      return (Req.P { name = p.name; pointer; iargs })
     | Q p ->
       (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
       let@ pointer = WIT.check loc (BT.Loc ()) p.pointer in
@@ -1083,20 +1078,20 @@ module WRET = struct
            return (permission, iargs))
       in
       return
-        (RET.Q
+        (Req.Q
            { name = p.name; pointer; q = p.q; q_loc = p.q_loc; step; permission; iargs })
 end
 
 let oarg_bt_of_pred loc = function
-  | RET.Owned (ct, _init) -> return (Memory.bt_of_sct ct)
-  | RET.PName pn ->
+  | Req.Owned (ct, _init) -> return (Memory.bt_of_sct ct)
+  | Req.PName pn ->
     let@ def = Typing.get_resource_predicate_def loc pn in
     return def.oarg_bt
 
 
 let oarg_bt loc = function
-  | RET.P pred -> oarg_bt_of_pred loc pred.name
-  | RET.Q pred ->
+  | Req.P pred -> oarg_bt_of_pred loc pred.name
+  | Req.Q pred ->
     let@ item_bt = oarg_bt_of_pred loc pred.name in
     return (BT.make_map_bt (snd pred.q) item_bt)
 
@@ -1104,7 +1099,7 @@ let oarg_bt loc = function
 module WRS = struct
   let welltyped loc (resource, bt) =
     Pp.(debug 6 (lazy !^__FUNCTION__));
-    let@ resource = WRET.welltyped loc resource in
+    let@ resource = WReq.welltyped loc resource in
     let@ bt = WBT.is_bt loc bt in
     let@ oarg_bt = oarg_bt loc resource in
     let@ () = ensure_base_type loc ~expect:oarg_bt bt in
@@ -1142,7 +1137,7 @@ module WLRT = struct
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ it = WIT.infer it in
         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
+        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
         let@ lrt = aux lrt in
         return (Define ((s, it), info, lrt))
       | Resource ((s, (re, re_oa_spec)), ((loc, _) as info), lrt) ->
@@ -1161,7 +1156,7 @@ module WLRT = struct
         let@ provable = provable loc in
         let here = Locations.other __FUNCTION__ in
         let@ () =
-          match provable (LC.t_ (IT.bool_ false here)) with
+          match provable (LC.T (IT.bool_ false here)) with
           | `True ->
             fail (fun ctxt_log ->
               { loc; msg = Inconsistent_assumptions ("return type", ctxt_log) })
@@ -1220,7 +1215,7 @@ module WLAT = struct
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ it = WIT.infer it in
         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
+        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
         let@ at = aux at in
         return (LAT.Define ((s, it), info, at))
       | LAT.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
@@ -1239,7 +1234,7 @@ module WLAT = struct
         let@ provable = provable loc in
         let here = Locations.other __FUNCTION__ in
         let@ () =
-          match provable (LC.t_ (IT.bool_ false here)) with
+          match provable (LC.T (IT.bool_ false here)) with
           | `True ->
             fail (fun ctxt_log ->
               { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
@@ -1306,7 +1301,7 @@ module WLArgs = struct
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ it = WIT.infer it in
         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
+        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
         let@ at = aux at in
         return (Mu.Define ((s, it), info, at))
       | Mu.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
@@ -1325,7 +1320,7 @@ module WLArgs = struct
         let@ provable = provable loc in
         let here = Locations.other __FUNCTION__ in
         let@ () =
-          match provable (LC.t_ (IT.bool_ false here)) with
+          match provable (LC.T (IT.bool_ false here)) with
           | `True ->
             fail (fun ctxt_log ->
               { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
@@ -1373,13 +1368,12 @@ end
 module BaseTyping = struct
   open Typing
   open TypeErrors
-  module SymMap = Map.Make (Sym)
   module BT = BaseTypes
   module RT = ReturnTypes
   module AT = ArgumentTypes
   open BT
 
-  type label_context = (AT.lt * label_kind * Locations.t) SymMap.t
+  type label_context = (AT.lt * label_kind * Locations.t) Sym.Map.t
 
   let check_against_core_bt loc msg2 cbt bt =
     Typing.embed_resultat
@@ -1827,12 +1821,12 @@ module BaseTyping = struct
            (CF.Pp_ast.pp_doc_tree (dtree_of_statement stmt))));
     match stmt with
     | Pack_unpack (pack_unpack, pt) ->
-      let@ p_pt = WRET.welltyped loc (P pt) in
-      let[@warning "-8"] (RET.P pt) = p_pt in
+      let@ p_pt = WReq.welltyped loc (P pt) in
+      let[@warning "-8"] (Req.P pt) = p_pt in
       return (Pack_unpack (pack_unpack, pt))
     | To_from_bytes (to_from, pt) ->
-      let@ pt = WRET.welltyped loc (P pt) in
-      let[@warning "-8"] (RET.P pt) = pt in
+      let@ pt = WReq.welltyped loc (P pt) in
+      let[@warning "-8"] (Req.P pt) = pt in
       return (To_from_bytes (to_from, pt))
     | Have lc ->
       let@ lc = WLC.welltyped loc lc in
@@ -1869,7 +1863,7 @@ module BaseTyping = struct
       return (Extract (attrs, to_extract, it))
     | Unfold (f, its) ->
       let@ def = get_logical_function_def loc f in
-      if LogicalFunctions.is_recursive def then
+      if Definition.Function.is_recursive def then
         ()
       else
         Pp.warn loc (Pp.item "unfold of function not marked [rec] (no effect)" (Sym.pp f));
@@ -2117,7 +2111,7 @@ module BaseTyping = struct
         | Erun (l, pes) ->
           (* copying from check.ml *)
           let@ lt, _lkind =
-            match SymMap.find_opt l label_context with
+            match Sym.Map.find_opt l label_context with
             | None ->
               fail (fun _ ->
                 { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l) })
@@ -2200,9 +2194,9 @@ module WProc = struct
         in
         (*debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym)); debug 6 (lazy
           (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));*)
-        SymMap.add sym (lt, kind, loc) label_context)
+        Sym.Map.add sym (lt, kind, loc) label_context)
       label_defs
-      SymMap.empty
+      Sym.Map.empty
 
 
   let typ p = WArgs.typ (fun (_body, _labels, rt) -> rt) p
@@ -2257,18 +2251,16 @@ module WProc = struct
 end
 
 module WRPD = struct
-  open ResourcePredicates
-
-  let welltyped { loc; pointer; iargs; oarg_bt; clauses } =
+  let welltyped Def.Predicate.{ loc; pointer; iargs; oarg_bt; clauses } =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure
       (let@ () = add_l pointer BT.(Loc ()) (loc, lazy (Pp.string "ptr-var")) in
        let@ iargs =
          ListM.mapM
-           (fun (s, ls) ->
-             let@ ls = WLS.is_ls loc ls in
-             let@ () = add_l s ls (loc, lazy (Pp.string "input-var")) in
-             return (s, ls))
+           (fun (s, bt) ->
+             let@ bt = WBT.is_bt loc bt in
+             let@ () = add_l s bt (loc, lazy (Pp.string "input-var")) in
+             return (s, bt))
            iargs
        in
        let@ oarg_bt = WBT.is_bt loc oarg_bt in
@@ -2278,15 +2270,15 @@ module WRPD = struct
          | Some clauses ->
            let@ clauses =
              ListM.fold_leftM
-               (fun acc { loc; guard; packing_ft } ->
+               (fun acc Def.Clause.{ loc; guard; packing_ft } ->
                  let@ guard = WIT.check loc BT.Bool guard in
                  let here = Locations.other __FUNCTION__ in
                  let negated_guards =
-                   List.map (fun clause -> IT.not_ clause.guard here) acc
+                   List.map (fun clause -> IT.not_ clause.Def.Clause.guard here) acc
                  in
                  pure
-                   (let@ () = add_c loc (LC.t_ guard) in
-                    let@ () = add_c loc (LC.t_ (IT.and_ negated_guards here)) in
+                   (let@ () = add_c loc (LC.T guard) in
+                    let@ () = add_c loc (LC.T (IT.and_ negated_guards here)) in
                     let@ packing_ft =
                       WLAT.welltyped
                         (fun loc it -> WIT.check loc oarg_bt it)
@@ -2295,34 +2287,32 @@ module WRPD = struct
                         loc
                         packing_ft
                     in
-                    return (acc @ [ { loc; guard; packing_ft } ])))
+                    return (acc @ [ Def.Clause.{ loc; guard; packing_ft } ])))
                []
                clauses
            in
            return (Some clauses)
        in
-       return { loc; pointer; iargs; oarg_bt; clauses })
+       return Def.Predicate.{ loc; pointer; iargs; oarg_bt; clauses })
 end
 
 module WLFD = struct
-  open LogicalFunctions
+  open Definition.Function
 
-  let welltyped
-    ({ loc; args; return_bt; emit_coq; definition } : LogicalFunctions.definition)
-    =
+  let welltyped ({ loc; args; return_bt; emit_coq; body } : Definition.Function.t) =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure
       (let@ args =
          ListM.mapM
-           (fun (s, ls) ->
-             let@ ls = WLS.is_ls loc ls in
-             let@ () = add_l s ls (loc, lazy (Pp.string "arg-var")) in
-             return (s, ls))
+           (fun (s, bt) ->
+             let@ bt = WBT.is_bt loc bt in
+             let@ () = add_l s bt (loc, lazy (Pp.string "arg-var")) in
+             return (s, bt))
            args
        in
        let@ return_bt = WBT.is_bt loc return_bt in
-       let@ definition =
-         match definition with
+       let@ body =
+         match body with
          | Def body ->
            let@ body = WIT.check loc return_bt body in
            return (Def body)
@@ -2331,7 +2321,7 @@ module WLFD = struct
            return (Rec_Def body)
          | Uninterp -> return Uninterp
        in
-       return { loc; args; return_bt; emit_coq; definition })
+       return { loc; args; return_bt; emit_coq; body })
 end
 
 module WLemma = struct
@@ -2411,7 +2401,7 @@ module WDT = struct
     let@ () =
       ListM.iterM
         (fun scc ->
-          let scc_set = SymSet.of_list scc in
+          let scc_set = Sym.Set.of_list scc in
           ListM.iterM
             (fun dt ->
               let { loc; cases } = List.assoc Sym.equal dt datatypes in
@@ -2420,11 +2410,11 @@ module WDT = struct
                   ListM.iterM
                     (fun (id, bt) ->
                       let indirect_deps =
-                        SymSet.of_list
+                        Sym.Set.of_list
                           (List.filter_map BT.is_datatype_bt (BT.contained bt))
                       in
-                      let bad = SymSet.inter indirect_deps scc_set in
-                      match SymSet.elements bad with
+                      let bad = Sym.Set.inter indirect_deps scc_set in
+                      match Sym.Set.elements bad with
                       | [] -> return ()
                       | dt' :: _ ->
                         let err =

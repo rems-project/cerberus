@@ -6,8 +6,6 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module IdSet = Set.Make (Id)
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 module Loc = Locations
 module RI = ResourceInference
 open IT
@@ -314,8 +312,7 @@ let try_prove_constant loc expr =
     let here = Locations.other __FUNCTION__ in
     let@ m = model_with loc (IT.bool_ true here) in
     let@ m = fail_on_none "cannot get model" m in
-    let@ g = get_global () in
-    let@ y = fail_on_none "cannot eval term" (Solver.eval g (fst m) expr) in
+    let@ y = fail_on_none "cannot eval term" (Solver.eval (fst m) expr) in
     let@ _ = fail_on_none "eval to non-constant term" (IT.is_const y) in
     let eq = IT.eq_ (expr, y) here in
     let@ provable = provable loc in
@@ -339,7 +336,7 @@ let check_single_ct loc expr =
 let is_fun_addr global t =
   match IT.is_sym t with
   | Some (s, _) ->
-    if SymMap.mem s global.Global.fun_decls then
+    if Sym.Map.mem s global.Global.fun_decls then
       Some s
     else
       None
@@ -353,7 +350,7 @@ let known_function_pointer loc p =
     match already_known with
     | Some _ -> (* no need to find more eqs *) return ()
     | None ->
-      let global_funs = SymMap.bindings global.Global.fun_decls in
+      let global_funs = Sym.Map.bindings global.Global.fun_decls in
       let fun_addrs =
         List.map (fun (sym, (loc, _, _)) -> IT.sym_ (sym, BT.(Loc ()), loc)) global_funs
       in
@@ -437,8 +434,8 @@ let check_has_alloc_id loc ptr ub_unspec =
 let check_alloc_bounds loc ~ptr ub_unspec =
   if !use_vip then (
     let here = Locations.other __FUNCTION__ in
-    let base_size = Alloc.History.lookup_ptr ptr here in
-    let base, size = Alloc.History.get_base_size base_size here in
+    let module H = Alloc.History in
+    let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
     let addr = addr_ ptr here in
     let lower = le_ (base, addr) here in
     let upper = le_ (addr, add_ (base, size) here) here in
@@ -476,7 +473,7 @@ let check_both_eq_alloc loc arg1 arg2 ub =
 let check_live_alloc_bounds reason loc arg ub term constr =
   let@ base_size = RI.Special.get_live_alloc reason loc arg in
   let here = Locations.other __FUNCTION__ in
-  let base, size = Alloc.History.get_base_size base_size here in
+  let Alloc.History.{ base; size } = Alloc.History.split base_size here in
   if !use_vip then (
     let constr = constr ~base ~size in
     let@ provable = provable loc in
@@ -1065,7 +1062,7 @@ end = struct
     check_pexpr pe k
 
 
-  let check_arg_it (loc, it_arg) ~(expect : LogicalSorts.t) k =
+  let check_arg_it (loc, it_arg) ~(expect : BT.t) k =
     let@ it_arg = WellTyped.WIT.check loc expect it_arg in
     k it_arg
 
@@ -1112,9 +1109,8 @@ let all_empty loc _original_resources =
   match remaining_resources with
   | [] -> return ()
   | (resource, constr, model) :: _ ->
-    let@ global = get_global () in
     let@ simp_ctxt = simp_ctxt () in
-    RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt constr;
+    RI.debug_constraint_failure_diagnostics 6 model simp_ctxt constr;
     fail (fun ctxt ->
       (* let ctxt = { ctxt with resources = original_resources } in *)
       { loc; msg = Unused_resource { resource; ctxt; model } })
@@ -1163,7 +1159,7 @@ let _check_used_distinct loc used =
                Generic
                  (Pp.item
                     "undefined behaviour: concurrent update"
-                    (Resources.pp r
+                    (Resource.pp r
                      ^^^ break 1
                      ^^^ render_upd h
                      ^^^ break 1
@@ -1182,7 +1178,7 @@ let _check_used_distinct loc used =
             Generic
               (Pp.item
                  "undefined behaviour: concurrent read & update"
-                 (Resources.pp r
+                 (Resource.pp r
                   ^^^ break 1
                   ^^^ render_read h
                   ^^^ break 1
@@ -1192,7 +1188,7 @@ let _check_used_distinct loc used =
   ListM.iterM check_rd (List.concat (List.map fst used))
 
 
-(*type labels = (AT.lt * label_kind) SymMap.t*)
+(*type labels = (AT.lt * label_kind) Sym.Map.t*)
 
 let load loc pointer ct =
   let@ value =
@@ -1218,7 +1214,7 @@ let instantiate loc filter arg =
   let extra_assumptions1 =
     List.filter_map
       (function LC.Forall ((s, bt), t) when filter t -> Some ((s, bt), t) | _ -> None)
-      (ResourceTypes.LCSet.elements constraints)
+      (LC.Set.elements constraints)
   in
   let extra_assumptions2, type_mismatch =
     List.partition (fun ((_, bt), _) -> BT.equal bt (IT.bt arg_it)) extra_assumptions1
@@ -1273,7 +1269,7 @@ let add_trace_information _labels annots =
   return ()
 
 
-let bytes_qpred sym size pointer init : RET.qpredicate_type =
+let bytes_qpred sym size pointer init : Req.QPredicate.t =
   let here = Locations.other __FUNCTION__ in
   let bt' = WellTyped.quantifier_bt in
   { q = (sym, bt');
@@ -1302,7 +1298,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
         debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
         debug 3 (lazy (item "ctxt" (Context.pp ctxt))))
     in
-    let bytes_qpred sym ct pointer init : RET.qpredicate_type =
+    let bytes_qpred sym ct pointer init : Req.QPredicate.t =
       let here = Locations.other __FUNCTION__ in
       bytes_qpred sym (sizeOf_ ct here) pointer init
     in
@@ -1341,13 +1337,13 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              in
              let@ provable = provable loc in
              let@ () =
-               match provable @@ LC.T ambiguous with
-               | `False -> return ()
-               | `True ->
+               match provable @@ LC.T (not_ ambiguous here) with
+               | `True -> return ()
+               | `False ->
                  let msg =
                    Printf.sprintf
-                     "ambiguous pointer %sequality case: addresses equal, but \
-                      provenances differ"
+                     "Cannot rule out ambiguous pointer %sequality case (addresses \
+                      equal, but provenances differ)"
                      case
                  in
                  warn loc !^msg;
@@ -1631,7 +1627,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               else
                 return ()
             in
-            let@ () = add_r loc (P (RET.make_alloc ret), O lookup) in
+            let@ () = add_r loc (P (Req.make_alloc ret), O lookup) in
             let@ () = record_action (Create ret, loc) in
             k ret)
         | CreateReadOnly (_sym1, _ct, _sym2, _prefix) ->
@@ -1650,7 +1646,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 ({ name = Owned (ct, Uninit); pointer = arg; iargs = [] }, None)
             in
             let@ _ =
-              RI.Special.predicate_request loc (Access Kill) (RET.make_alloc arg, None)
+              RI.Special.predicate_request loc (Access Kill) (Req.make_alloc arg, None)
             in
             let@ () = record_action (Kill arg, loc) in
             k (unit_ loc))
@@ -1807,7 +1803,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        in
        aux es [] []
      | CN_progs (_, cn_progs) ->
-       let bytes_pred ct pointer init : RET.predicate_type =
+       let bytes_pred ct pointer init : Req.Predicate.t =
          { name = Owned (ct, init); pointer; iargs = [] }
        in
        let bytes_constraints ~(value : IT.t) ~(byte_arr : IT.t) (ct : Sctypes.t) =
@@ -1921,16 +1917,16 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                fail (fun _ -> { loc; msg = Generic !^msg })
              | E_Pred (CN_owned (Some ct)) ->
                let@ () = WellTyped.WCT.is_ct loc ct in
-               return (ResourceTypes.Owned (ct, Init))
+               return (Request.Owned (ct, Init))
              | E_Pred (CN_block None) ->
                let msg = "'extract' requires a C-type annotation for 'Block'" in
                fail (fun _ -> { loc; msg = Generic !^msg })
              | E_Pred (CN_block (Some ct)) ->
                let@ () = WellTyped.WCT.is_ct loc ct in
-               return (ResourceTypes.Owned (ct, Uninit))
+               return (Request.Owned (ct, Uninit))
              | E_Pred (CN_named pn) ->
                let@ _ = get_resource_predicate_def loc pn in
-               return (ResourceTypes.PName pn)
+               return (Request.PName pn)
            in
            let@ it = WellTyped.WIT.infer it in
            let@ original_rs, _ = all_resources_tagged loc in
@@ -1962,7 +1958,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                args
                def.args
            in
-           (match LogicalFunctions.unroll_once def args with
+           (match Definition.Function.unroll_once def args with
             | None ->
               let msg =
                 !^"Cannot unfold definition of uninterpreted function" ^^^ Sym.pp f ^^ dot
@@ -1990,8 +1986,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
             | `False ->
               let@ model = model () in
               let@ simp_ctxt = simp_ctxt () in
-              let@ global = get_global () in
-              RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt lc;
+              RI.debug_constraint_failure_diagnostics 6 model simp_ctxt lc;
               let@ () = Diagnostics.investigate model lc in
               fail (fun ctxt ->
                 { loc;
@@ -2064,7 +2059,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
      | Erun (label_sym, pes) ->
        let@ () = ensure_base_type loc ~expect Unit in
        let@ lt, lkind =
-         match SymMap.find_opt label_sym labels with
+         match Sym.Map.find_opt label_sym labels with
          | None ->
            fail (fun _ ->
              { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym) })
@@ -2111,7 +2106,7 @@ let bind_arguments (_loc : Locations.t) (full_args : _ Mu.arguments) =
       aux_l resources args
     | Resource ((s, (re, bt)), ((loc, _) as info), args) ->
       let@ () = add_l s bt (fst info, lazy (Sym.pp s)) in
-      aux_l (resources @ [ (re, Resources.O (sym_ (s, bt, loc))) ]) args
+      aux_l (resources @ [ (re, Resource.O (sym_ (s, bt, loc))) ]) args
     | I i -> return (i, resources)
   in
   let rec aux_a = function
@@ -2175,7 +2170,7 @@ let check_procedure
                   bind_arguments loc label_args_and_body
                 in
                 let@ () = add_rs loc label_resources in
-                let _, label_kind, loc = SymMap.find lsym label_context in
+                let _, label_kind, loc = Sym.Map.find lsym label_context in
                 let@ () =
                   modify_where Where.(set_section (Label { loc; label = label_kind }))
                 in
@@ -2227,7 +2222,7 @@ let check_tagdefs tagDefs =
 
 let record_and_check_logical_functions funs =
   let recursive, _nonrecursive =
-    List.partition (fun (_, def) -> LogicalFunctions.is_recursive def) funs
+    List.partition (fun (_, def) -> Definition.Function.is_recursive def) funs
   in
   let n_funs = List.length funs in
   (* Add all recursive functions (without their actual bodies), so that they
@@ -2235,7 +2230,7 @@ let record_and_check_logical_functions funs =
   let@ () =
     ListM.iterM
       (fun (name, def) ->
-        let@ simple_def = WellTyped.WLFD.welltyped { def with definition = Uninterp } in
+        let@ simple_def = WellTyped.WLFD.welltyped { def with body = Uninterp } in
         add_logical_function name simple_def)
       recursive
   in
@@ -2298,11 +2293,11 @@ let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> unit m =
         let ptr = sym_ (sym, bt, here) in
         let@ () = add_c here (LC.T (IT.hasAllocId_ ptr here)) in
         let@ () =
-          if !IT.use_vip then (
-            let base_size = Alloc.History.lookup_ptr ptr here in
-            let base, size = Alloc.History.get_base_size base_size here in
+          if !IT.use_vip then
+            let module H = Alloc.History in
+            let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
             let addr = addr_ ptr here in
-            let upper = Resources.upper_bound addr ct here in
+            let upper = IT.upper_bound addr ct here in
             let bounds =
               and_
                 [ le_ (base, addr) here;
@@ -2311,7 +2306,7 @@ let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> unit m =
                 ]
                 here
             in
-            add_c here (LC.T bounds))
+            add_c here (LC.T bounds)
           else
             return ()
         in
@@ -2384,27 +2379,27 @@ let c_function_name ((fsym, (_loc, _args_and_body)) : c_function) : string =
 
 (** Filter functions according to [skip_and_only]: first according to "only",
     then according to "skip" *)
-let select_functions (fsyms : SymSet.t) : SymSet.t =
+let select_functions (fsyms : Sym.Set.t) : Sym.Set.t =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
   let str_fsyms s =
-    let ss = SymSet.filter (matches_str s) fsyms in
-    if SymSet.is_empty ss then (
+    let ss = Sym.Set.filter (matches_str s) fsyms in
+    if Sym.Set.is_empty ss then (
       Pp.warn_noloc (!^"function" ^^^ !^s ^^^ !^"not found");
-      SymSet.empty)
+      Sym.Set.empty)
     else
       ss
   in
   let strs_fsyms ss =
-    ss |> List.map str_fsyms |> List.fold_left SymSet.union SymSet.empty
+    ss |> List.map str_fsyms |> List.fold_left Sym.Set.union Sym.Set.empty
   in
   let skip = strs_fsyms (fst !skip_and_only) in
   let only = strs_fsyms (snd !skip_and_only) in
   let only_funs =
     match snd !skip_and_only with
     | [] -> fsyms
-    | _ss -> SymSet.filter (fun fsym -> SymSet.mem fsym only) fsyms
+    | _ss -> Sym.Set.filter (fun fsym -> Sym.Set.mem fsym only) fsyms
   in
-  SymSet.filter (fun fsym -> not (SymSet.mem fsym skip)) only_funs
+  Sym.Set.filter (fun fsym -> not (Sym.Set.mem fsym skip)) only_funs
 
 
 (** Check a single C function. Failure of the check is encoded monadically. *)
@@ -2467,9 +2462,9 @@ let check_c_functions_all (funs : c_function list) : (string * TypeErrors.t) lis
     with the name of the function in which they occurred. When [fail_fast] is
     set, the first error encountered will halt checking. *)
 let check_c_functions (funs : c_function list) : (string * TypeErrors.t) list m =
-  let selected_fsyms = select_functions (SymSet.of_list (List.map fst funs)) in
+  let selected_fsyms = select_functions (Sym.Set.of_list (List.map fst funs)) in
   let selected_funs =
-    List.filter (fun (fsym, _) -> SymSet.mem fsym selected_fsyms) funs
+    List.filter (fun (fsym, _) -> Sym.Set.mem fsym selected_fsyms) funs
   in
   match !fail_fast with
   | true ->
@@ -2541,8 +2536,8 @@ let memcpy_proxy_ft =
   let map_bt = BT.Map (q_bt, uchar_bt) in
   let destIn_sym, _ = IT.fresh_named map_bt "destIn" here in
   let srcIn_sym, srcIn = IT.fresh_named map_bt "srcIn" here in
-  let destRes str init = RET.Q (bytes_qpred (Sym.fresh_named str) n dest init) in
-  let srcRes str = RET.Q (bytes_qpred (Sym.fresh_named str) n src Init) in
+  let destRes str init = Req.Q (bytes_qpred (Sym.fresh_named str) n dest init) in
+  let srcRes str = Req.Q (bytes_qpred (Sym.fresh_named str) n src Init) in
   (* ensures *)
   let ret_sym, ret = IT.fresh_named (BT.Loc ()) "return" here in
   let destOut_sym, destOut = IT.fresh_named map_bt "destOut" here in
@@ -2647,7 +2642,7 @@ let check_decls_lemmata_fun_specs (file : unit Mu.file) =
   let@ () = record_globals file.globs in
   let@ () = register_fun_syms file in
   let@ () =
-    ListM.iterM (add_stdlib_spec file.call_funinfo) (SymSet.elements file.stdlib_syms)
+    ListM.iterM (add_stdlib_spec file.call_funinfo) (Sym.Set.elements file.stdlib_syms)
   in
   Pp.debug 3 (lazy (Pp.headline "added top-level types and constants."));
   let@ () = record_and_check_logical_functions file.logical_predicates in

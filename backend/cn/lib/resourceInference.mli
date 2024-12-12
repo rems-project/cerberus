@@ -1,7 +1,6 @@
 val debug_constraint_failure_diagnostics
   :  int ->
   Solver.model_with_q ->
-  Global.t ->
   Simplify.simp_ctxt ->
   LogicalConstraints.logical_constraint ->
   unit
@@ -28,12 +27,12 @@ module Special : sig
   val predicate_request
     :  Locations.t ->
     TypeErrors.situation ->
-    ResourceTypes.predicate_type * (Locations.t * string) option ->
-    ((ResourceTypes.predicate_type * Resources.oargs) * int list) Typing.m
+    Request.Predicate.t * (Locations.t * string) option ->
+    (Resource.predicate * int list) Typing.m
 
   val qpredicate_request
     :  Locations.t ->
     TypeErrors.situation ->
-    ResourceTypes.qpredicate_type * (Locations.t * string) option ->
-    ((ResourceTypes.qpredicate_type * Resources.oargs) * int list) Typing.m
+    Request.QPredicate.t * (Locations.t * string) option ->
+    (Resource.qpredicate * int list) Typing.m
 end

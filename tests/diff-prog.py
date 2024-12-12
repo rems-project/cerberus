@@ -106,5 +106,4 @@ parser.set_defaults(func=main)
 
 # parse args and call func (as set using set_defaults)
 args = parser.parse_args()
-args.func(args)
-
+exit(args.func(args))

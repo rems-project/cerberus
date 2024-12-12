@@ -66,7 +66,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
   let cn_init_scope : Cn_desugaring.init_scope =
     { predicates = [ Alloc.Predicate.(str, sym, Some loc) ];
       functions = List.map (fun (str, sym) -> (str, sym, None)) cn_builtin_fun_names;
-      idents = [ Alloc.History.(str, sym, Some loc) ]
+      idents = [ Alloc.History.(str, sym, None) ]
     }
   in
   let@ _, ail_prog_opt, prog0 =
@@ -258,8 +258,6 @@ let verify
   debug_level
   print_level
   print_sym_nums
-  slow_smt_threshold
-  slow_smt_dir
   no_timestamps
   json
   json_trace
@@ -270,7 +268,6 @@ let verify
   skip
   csv_times
   log_times
-  random_seed
   solver_logging
   solver_flags
   solver_path
@@ -282,6 +279,7 @@ let verify
   quiet
   no_inherit_loc
   magic_comment_char_dollar
+  disable_resource_derived_constraints
   =
   if json then (
     if debug_level > 0 then
@@ -294,8 +292,6 @@ let verify
   Pp.print_level := print_level;
   CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
-  Solver.set_slow_smt_settings slow_smt_threshold slow_smt_dir;
-  Solver.random_seed := random_seed;
   (match solver_logging with
    | Some d ->
      Solver.Logger.to_file := true;
@@ -309,6 +305,7 @@ let verify
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
+  Resource.disable_resource_derived_constraints := disable_resource_derived_constraints;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -338,6 +335,19 @@ let verify
         Check.generate_lemmas lemmas lemmata
       in
       Typing.run_from_pause check paused)
+
+
+let handle_error_with_user_guidance ~(label : string) (e : exn) : unit =
+  let msg = Printexc.to_string e in
+  let stack = Printexc.get_backtrace () in
+  Printf.eprintf "cn: internal error, uncaught exception:\n    %s\n" msg;
+  let lines = String.split_on_char '\n' stack in
+  List.iter (fun line -> Printf.eprintf "    %s\n" line) lines;
+  Printf.eprintf
+    "Issues can be made at https://github.com/rems-project/cerberus/issues.\n";
+  Printf.eprintf "Prefix your issue with \"[%s]\". " label;
+  Printf.eprintf "Check that there isn't already one for this error.\n";
+  exit 1
 
 
 let generate_executable_specs
@@ -402,16 +412,19 @@ let generate_executable_specs
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
-          Executable_spec.main
-            ~without_ownership_checking
-            ~with_test_gen
-            ~copy_source_dir
-            filename
-            ail_prog
-            output_decorated
-            output_decorated_dir
-            prog5
-            statement_locs;
+          (try
+             Executable_spec.main
+               ~without_ownership_checking
+               ~with_test_gen
+               ~copy_source_dir
+               filename
+               ail_prog
+               output_decorated
+               output_decorated_dir
+               prog5
+               statement_locs
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           Resultat.return ())
         ())
 
@@ -518,14 +531,20 @@ let run_tests
   max_backtracks
   max_unfolds
   max_array_length
+  input_timeout
   null_in_every
   seed
   logging_level
+  progress_level
   interactive
   until_timeout
   exit_fast
   max_stack_depth
+  allowed_depth_failures
   max_generator_size
+  random_size_splits
+  allowed_size_split_backtracks
+  sized_null
   coverage
   disable_passes
   =
@@ -561,8 +580,8 @@ let run_tests
               Option.is_some inst.internal)
             |> List.is_empty
           then (
-            print_endline "No testable functions, aborting";
-            exit 1);
+            print_endline "No testable functions, trivially passing";
+            exit 0);
           if not (Sys.file_exists output_dir) then (
             print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
             Sys.mkdir output_dir 0o777;
@@ -570,40 +589,52 @@ let run_tests
               ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
           let _, sigma = ail_prog in
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
-          Executable_spec.main
-            ~without_ownership_checking
-            ~with_test_gen:true
-            ~copy_source_dir:false
-            filename
-            ail_prog
-            None
-            (Some output_dir)
-            prog5
-            statement_locs;
+          (try
+             Executable_spec.main
+               ~without_ownership_checking
+               ~with_test_gen:true
+               ~copy_source_dir:false
+               filename
+               ail_prog
+               None
+               (Some output_dir)
+               prog5
+               statement_locs
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           let config : TestGeneration.config =
             { num_samples;
               max_backtracks;
               max_unfolds;
               max_array_length;
+              input_timeout;
               null_in_every;
               seed;
               logging_level;
+              progress_level;
               interactive;
               until_timeout;
               exit_fast;
               max_stack_depth;
+              allowed_depth_failures;
               max_generator_size;
+              random_size_splits;
+              allowed_size_split_backtracks;
+              sized_null;
               coverage;
               disable_passes
             }
           in
-          TestGeneration.run
-            ~output_dir
-            ~filename
-            ~without_ownership_checking
-            config
-            sigma
-            prog5;
+          (try
+             TestGeneration.run
+               ~output_dir
+               ~filename
+               ~without_ownership_checking
+               config
+               sigma
+               prog5
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Test-Gen" e);
           if not dont_run then
             Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
@@ -751,27 +782,9 @@ module Verify_flags = struct
     Arg.(value & flag & info [ "quiet" ] ~doc)
 
 
-  let slow_smt_threshold =
-    let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
-    Arg.(value & opt (some float) None & info [ "slow-smt" ] ~docv:"TIMEOUT" ~doc)
-
-
-  let slow_smt_dir =
-    let doc =
-      "Set the destination dir for logging slow smt queries (default is in system \
-       temp-dir)."
-    in
-    Arg.(value & opt (some string) None & info [ "slow-smt-dir" ] ~docv:"FILE" ~doc)
-
-
   let diag =
     let doc = "explore branching diagnostics with key string" in
     Arg.(value & opt (some string) None & info [ "diag" ] ~doc)
-
-
-  let random_seed =
-    let doc = "Set the SMT solver random seed (default 1)." in
-    Arg.(value & opt int 0 & info [ "r"; "random-seed" ] ~docv:"I" ~doc)
 
 
   let solver_logging =
@@ -830,6 +843,11 @@ module Verify_flags = struct
   let output_dir =
     let doc = "directory in which to output state files" in
     Arg.(value & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
+
+
+  let disable_resource_derived_constraints =
+    let doc = "disable resource-derived constraints" in
+    Arg.(value & flag & info [ "disable-resource-derived-constraints" ] ~doc)
 end
 
 module Executable_spec_flags = struct
@@ -917,8 +935,6 @@ let verify_t : unit Term.t =
   $ Common_flags.debug_level
   $ Common_flags.print_level
   $ Common_flags.print_sym_nums
-  $ Verify_flags.slow_smt_threshold
-  $ Verify_flags.slow_smt_dir
   $ Common_flags.no_timestamps
   $ Verify_flags.json
   $ Verify_flags.json_trace
@@ -929,7 +945,6 @@ let verify_t : unit Term.t =
   $ Verify_flags.skip
   $ Common_flags.csv_times
   $ Common_flags.log_times
-  $ Verify_flags.random_seed
   $ Verify_flags.solver_logging
   $ Verify_flags.solver_flags
   $ Verify_flags.solver_path
@@ -941,6 +956,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.quiet
   $ Common_flags.no_inherit_loc
   $ Common_flags.magic_comment_char_dollar
+  $ Verify_flags.disable_resource_derived_constraints
 
 
 let verify_cmd =
@@ -960,16 +976,16 @@ module Testing_flags = struct
 
 
   let only =
-    let doc = "only test this function (or comma-separated names)" in
+    let doc = "Only test this function (or comma-separated names)" in
     Arg.(value & opt (some string) None & info [ "only" ] ~doc)
 
 
   let skip =
-    let doc = "skip testing of this function (or comma-separated names)" in
+    let doc = "Skip testing of this function (or comma-separated names)" in
     Arg.(value & opt (some string) None & info [ "skip" ] ~doc)
 
 
-  let dont_run_tests =
+  let dont_run =
     let doc = "Do not run tests, only generate them" in
     Arg.(value & flag & info [ "no-run" ] ~doc)
 
@@ -999,7 +1015,7 @@ module Testing_flags = struct
       & info [ "max-unfolds" ] ~doc)
 
 
-  let test_max_array_length =
+  let max_array_length =
     let doc = "Set the maximum length for an array generated" in
     Arg.(
       value
@@ -1007,7 +1023,15 @@ module Testing_flags = struct
       & info [ "max-array-length" ] ~doc)
 
 
-  let test_null_in_every =
+  let input_timeout =
+    let doc = "Timeout for discarding a generation attempt (ms)" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.input_timeout
+      & info [ "input-timeout" ] ~doc)
+
+
+  let null_in_every =
     let doc = "Set the likelihood of NULL being generated as 1 in every <n>" in
     Arg.(
       value
@@ -1015,12 +1039,12 @@ module Testing_flags = struct
       & info [ "null-in-every" ] ~doc)
 
 
-  let test_seed =
+  let seed =
     let doc = "Set the seed for random testing" in
     Arg.(value & opt (some string) TestGeneration.default_cfg.seed & info [ "seed" ] ~doc)
 
 
-  let test_logging_level =
+  let logging_level =
     let doc = "Set the logging level for failing inputs from tests" in
     Arg.(
       value
@@ -1028,14 +1052,25 @@ module Testing_flags = struct
       & info [ "logging-level" ] ~doc)
 
 
-  let interactive_testing =
+  let progress_level =
+    let doc =
+      "Set the level of detail for progress updates (0 = Quiet, 1 = Per function, 2 = \
+       Per test case)"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.progress_level
+      & info [ "progress-level" ] ~doc)
+
+
+  let interactive =
     let doc =
       "Enable interactive features for testing, such as requesting more detailed logs"
     in
     Arg.(value & flag & info [ "interactive" ] ~doc)
 
 
-  let test_until_timeout =
+  let until_timeout =
     let doc =
       "Keep rerunning tests until the given timeout (in seconds) has been reached"
     in
@@ -1045,12 +1080,12 @@ module Testing_flags = struct
       & info [ "until-timeout" ] ~doc)
 
 
-  let test_exit_fast =
+  let exit_fast =
     let doc = "Stop testing upon finding the first failure" in
     Arg.(value & flag & info [ "exit-fast" ] ~doc)
 
 
-  let test_max_stack_depth =
+  let max_stack_depth =
     let doc = "Maximum stack depth for generators" in
     Arg.(
       value
@@ -1058,7 +1093,15 @@ module Testing_flags = struct
       & info [ "max-stack-depth" ] ~doc)
 
 
-  let test_max_generator_size =
+  let allowed_depth_failures =
+    let doc = "Maximum stack depth failures before discarding an attempt" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.allowed_depth_failures
+      & info [ "allowed-depth-failures" ] ~doc)
+
+
+  let max_generator_size =
     let doc = "Maximum size for generated values" in
     Arg.(
       value
@@ -1066,8 +1109,31 @@ module Testing_flags = struct
       & info [ "max-generator-size" ] ~doc)
 
 
-  let test_coverage =
-    let doc = "Record coverage of tests" in
+  let random_size_splits =
+    let doc = "Randomly split sizes between recursive generator calls" in
+    Arg.(value & flag & info [ "random-size-splits" ] ~doc)
+
+
+  let allowed_size_split_backtracks =
+    let doc =
+      "Set the maximum attempts to split up a generator's size (between recursive calls) \
+       before backtracking further, during input generation"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.allowed_size_split_backtracks
+      & info [ "allowed-size-split-backtracks" ] ~doc)
+
+
+  let sized_null =
+    let doc =
+      "Scale the likelihood of [NULL] proportionally for a desired size (1/n for size n)"
+    in
+    Arg.(value & flag & info [ "sized-null" ] ~doc)
+
+
+  let coverage =
+    let doc = "(Experimental) Record coverage of tests via [lcov]" in
     Arg.(value & flag & info [ "coverage" ] ~doc)
 
 
@@ -1107,27 +1173,34 @@ let testing_cmd =
     $ Testing_flags.output_test_dir
     $ Testing_flags.only
     $ Testing_flags.skip
-    $ Testing_flags.dont_run_tests
+    $ Testing_flags.dont_run
     $ Testing_flags.gen_num_samples
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
-    $ Testing_flags.test_max_array_length
-    $ Testing_flags.test_null_in_every
-    $ Testing_flags.test_seed
-    $ Testing_flags.test_logging_level
-    $ Testing_flags.interactive_testing
-    $ Testing_flags.test_until_timeout
-    $ Testing_flags.test_exit_fast
-    $ Testing_flags.test_max_stack_depth
-    $ Testing_flags.test_max_generator_size
-    $ Testing_flags.test_coverage
+    $ Testing_flags.max_array_length
+    $ Testing_flags.input_timeout
+    $ Testing_flags.null_in_every
+    $ Testing_flags.seed
+    $ Testing_flags.logging_level
+    $ Testing_flags.progress_level
+    $ Testing_flags.interactive
+    $ Testing_flags.until_timeout
+    $ Testing_flags.exit_fast
+    $ Testing_flags.max_stack_depth
+    $ Testing_flags.allowed_depth_failures
+    $ Testing_flags.max_generator_size
+    $ Testing_flags.random_size_splits
+    $ Testing_flags.allowed_size_split_backtracks
+    $ Testing_flags.sized_null
+    $ Testing_flags.coverage
     $ Testing_flags.disable_passes
   in
   let doc =
-    "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\
+    "Generates tests for all functions in [FILE] with CN specifications.\n\
     \    The tests use randomized inputs, which are guaranteed to satisfy the CN \
      precondition.\n\
-    \    A [.cpp] file containing the test harnesses will be placed in [output-dir]."
+    \    A script [run_tests.sh] for building and running the tests will be placed in \
+     [output-dir]."
   in
   let info = Cmd.info "test" ~doc in
   Cmd.v info test_t

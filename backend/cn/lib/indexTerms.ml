@@ -1,7 +1,5 @@
 module BT = BaseTypes
 module CF = Cerb_frontend
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 include Terms
 
 let equal = equal_annot BT.equal
@@ -63,14 +61,14 @@ let rec bound_by_pattern (Pat (pat_, bt, _)) =
     List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
 
-let rec free_vars_bts (it : 'a annot) : BT.t SymMap.t =
+let rec free_vars_bts (it : 'a annot) : BT.t Sym.Map.t =
   match term it with
-  | Const _ -> SymMap.empty
-  | Sym s -> SymMap.singleton s (bt it)
+  | Const _ -> Sym.Map.empty
+  | Sym s -> Sym.Map.singleton s (bt it)
   | Unop (_uop, t1) -> free_vars_bts t1
   | Binop (_bop, t1, t2) -> free_vars_bts_list [ t1; t2 ]
   | ITE (t1, t2, t3) -> free_vars_bts_list [ t1; t2; t3 ]
-  | EachI ((_, (s, _), _), t) -> SymMap.remove s (free_vars_bts t)
+  | EachI ((_, (s, _), _), t) -> Sym.Map.remove s (free_vars_bts t)
   | Tuple ts -> free_vars_bts_list ts
   | NthTuple (_, t) -> free_vars_bts t
   | Struct (_tag, members) -> free_vars_bts_list (List.map snd members)
@@ -84,9 +82,9 @@ let rec free_vars_bts (it : 'a annot) : BT.t SymMap.t =
   | ArrayShift { base; ct = _; index } -> free_vars_bts_list [ base; index ]
   | CopyAllocId { addr; loc } -> free_vars_bts_list [ addr; loc ]
   | HasAllocId loc -> free_vars_bts_list [ loc ]
-  | SizeOf _t -> SymMap.empty
-  | OffsetOf (_tag, _member) -> SymMap.empty
-  | Nil _bt -> SymMap.empty
+  | SizeOf _t -> Sym.Map.empty
+  | OffsetOf (_tag, _member) -> Sym.Map.empty
+  | Nil _bt -> Sym.Map.empty
   | Cons (t1, t2) -> free_vars_bts_list [ t1; t2 ]
   | Head t -> free_vars_bts t
   | Tail t -> free_vars_bts t
@@ -99,25 +97,25 @@ let rec free_vars_bts (it : 'a annot) : BT.t SymMap.t =
   | MapConst (_bt, t) -> free_vars_bts t
   | MapSet (t1, t2, t3) -> free_vars_bts_list [ t1; t2; t3 ]
   | MapGet (t1, t2) -> free_vars_bts_list [ t1; t2 ]
-  | MapDef ((s, _bt), t) -> SymMap.remove s (free_vars_bts t)
+  | MapDef ((s, _bt), t) -> Sym.Map.remove s (free_vars_bts t)
   | Apply (_pred, ts) -> free_vars_bts_list ts
   | Let ((nm, t1), t2) ->
-    SymMap.union
+    Sym.Map.union
       (fun _ bt1 bt2 ->
         assert (BT.equal bt1 bt2);
         Some bt1)
       (free_vars_bts t1)
-      (SymMap.remove nm (free_vars_bts t2))
+      (Sym.Map.remove nm (free_vars_bts t2))
   | Match (e, cases) ->
     let rec aux acc = function
       | [] -> acc
       | (pat, body) :: cases ->
-        let bound = SymSet.of_list (List.map fst (bound_by_pattern pat)) in
+        let bound = Sym.Set.of_list (List.map fst (bound_by_pattern pat)) in
         let more =
-          SymMap.filter (fun x _ -> not (SymSet.mem x bound)) (free_vars_bts body)
+          Sym.Map.filter (fun x _ -> not (Sym.Set.mem x bound)) (free_vars_bts body)
         in
         aux
-          (SymMap.union
+          (Sym.Map.union
              (fun _ bt1 bt2 ->
                assert (BT.equal bt1 bt2);
                Some bt1)
@@ -129,34 +127,34 @@ let rec free_vars_bts (it : 'a annot) : BT.t SymMap.t =
   | Constructor (_s, args) -> free_vars_bts_list (List.map snd args)
 
 
-and free_vars_bts_list : 'a annot list -> BT.t SymMap.t =
+and free_vars_bts_list : 'a annot list -> BT.t Sym.Map.t =
   fun xs ->
   List.fold_left
     (fun ss t ->
-      SymMap.union
+      Sym.Map.union
         (fun _ bt1 bt2 ->
           assert (BT.equal bt1 bt2);
           Some bt1)
         ss
         (free_vars_bts t))
-    SymMap.empty
+    Sym.Map.empty
     xs
 
 
-let free_vars (it : 'a annot) : SymSet.t =
-  it |> free_vars_bts |> SymMap.bindings |> List.map fst |> SymSet.of_list
+let free_vars (it : 'a annot) : Sym.Set.t =
+  it |> free_vars_bts |> Sym.Map.bindings |> List.map fst |> Sym.Set.of_list
 
 
-let free_vars_ (t_ : 'a Terms.term) : SymSet.t =
+let free_vars_ (t_ : 'a Terms.term) : Sym.Set.t =
   IT (t_, Unit, Locations.other "")
   |> free_vars_bts
-  |> SymMap.bindings
+  |> Sym.Map.bindings
   |> List.map fst
-  |> SymSet.of_list
+  |> Sym.Set.of_list
 
 
-let free_vars_list (its : 'a annot list) : SymSet.t =
-  its |> free_vars_bts_list |> SymMap.bindings |> List.map fst |> SymSet.of_list
+let free_vars_list (its : 'a annot list) : Sym.Set.t =
+  its |> free_vars_bts_list |> Sym.Map.bindings |> List.map fst |> Sym.Set.of_list
 
 
 type 'bt bindings = ('bt pattern * 'bt annot option) list
@@ -261,15 +259,15 @@ let mentions_call f = fold_subterms (fun _binders acc it -> acc || is_call f it)
 let mentions_good ct = fold_subterms (fun _binders acc it -> acc || is_good ct it) false
 
 let preds_of t =
-  let add_p s = function IT (Apply (id, _), _, _) -> SymSet.add id s | _ -> s in
-  fold_subterms (fun _ -> add_p) SymSet.empty t
+  let add_p s = function IT (Apply (id, _), _, _) -> Sym.Set.add id s | _ -> s in
+  fold_subterms (fun _ -> add_p) Sym.Set.empty t
 
 
 let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
 
 let free_vars_with_rename = function
   | `Term t -> free_vars t
-  | `Rename s -> SymSet.singleton s
+  | `Rename s -> Sym.Set.singleton s
 
 
 let make_rename ~from ~to_ = Subst.make free_vars_with_rename [ (from, `Rename to_) ]
@@ -337,7 +335,7 @@ let rec subst (su : [ `Term of t | `Rename of Sym.t ] Subst.t) (IT (it, bt, loc)
     IT (MapDef ((s, abt), subst su body), bt, loc)
   | Apply (name, args) -> IT (Apply (name, List.map (subst su) args), bt, loc)
   | Let ((name, t1), t2) ->
-    if SymSet.mem substitute_lets_flag su.flags then (
+    if Sym.Set.mem substitute_lets_flag su.flags then (
       let t1 = subst su t1 in
       subst (Subst.add free_vars_with_rename (name, `Term t1) su) t2)
     else (
@@ -358,7 +356,7 @@ and alpha_rename s body =
 
 
 and suitably_alpha_rename syms s body =
-  if SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename s body
   else
     (s, body)
@@ -388,7 +386,7 @@ and suitably_alpha_rename_pattern su (Pat (pat_, bt, loc), body) =
 
 
 let substitute_lets =
-  let flags = SymSet.of_list [ substitute_lets_flag ] in
+  let flags = Sym.Set.of_list [ substitute_lets_flag ] in
   subst { (make_subst []) with flags }
 
 
@@ -690,7 +688,7 @@ let ( %. ) struct_decls t member =
   in
   let member_bt =
     match
-      List.assoc_opt Id.equal member (Memory.member_types (SymMap.find tag struct_decls))
+      List.assoc_opt Id.equal member (Memory.member_types (Sym.Map.find tag struct_decls))
     with
     | Some sct -> Memory.bt_of_sct sct
     | None ->
@@ -729,6 +727,14 @@ let uintptr_int_ n loc = uintptr_const_ (Z.of_int n) loc
 let addr_ it loc =
   assert (BT.equal (bt it) (Loc ()));
   cast_ Memory.uintptr_bt it loc
+
+
+let upper_bound addr ct loc =
+  let range_size ct =
+    let size = Memory.size_of_ctype ct in
+    num_lit_ (Z.of_int size) Memory.uintptr_bt loc
+  in
+  add_ (addr, range_size ct) loc
 
 
 (* for integer-mode: cast_ Integer it *)
@@ -1009,7 +1015,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
                let member_it = member_ ~member_bt (about, member) loc in
                Some (aux mct member_it)
              | None -> None)
-           (SymMap.find tag struct_layouts))
+           (Sym.Map.find tag struct_layouts))
         loc
     | Function _ -> Cerb_debug.error "todo: function types"
   in
@@ -1061,8 +1067,8 @@ let rec wrap_bindings_match bs default_v v =
     (match wrap_bindings_match bindings default_v v with
      | None -> None
      | Some v2 ->
-       let pat_ss = SymSet.of_list (List.map fst (bound_by_pattern pat)) in
-       if SymSet.is_empty (SymSet.inter pat_ss (free_vars v2)) then
+       let pat_ss = Sym.Set.of_list (List.map fst (bound_by_pattern pat)) in
+       if Sym.Set.is_empty (Sym.Set.inter pat_ss (free_vars v2)) then
          Some v2
        else (
          match x with

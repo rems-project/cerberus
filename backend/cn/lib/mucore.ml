@@ -322,8 +322,7 @@ type 'TY globs =
 
 type 'i arguments_l =
   | Define of (Sym.t * IndexTerms.t) * Locations.info * 'i arguments_l
-  | Resource of
-      (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info * 'i arguments_l
+  | Resource of (Sym.t * (Request.t * BaseTypes.t)) * Locations.info * 'i arguments_l
   | Constraint of LogicalConstraints.t * Locations.info * 'i arguments_l
   | I of 'i
 
@@ -352,7 +351,7 @@ let dtree_of_arguments_l dtree_i =
     | Resource ((s, (rt, bt)), _, t) ->
       Dnode
         ( pp_ctor "Resource",
-          [ Dleaf (Sym.pp s); ResourceTypes.dtree rt; Dleaf (BaseTypes.pp bt); aux t ] )
+          [ Dleaf (Sym.pp s); Request.dtree rt; Dleaf (BaseTypes.pp bt); aux t ] )
     | Constraint (lc, _, t) ->
       Dnode (pp_ctor "Constraint", [ LogicalConstraints.dtree lc; aux t ])
     | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
@@ -427,10 +426,10 @@ type 'TY file =
     globs : (Sym.t * 'TY globs) list;
     funs : (Sym.t, 'TY fun_map_decl) Pmap.map;
     extern : Cerb_frontend.Core.extern_map;
-    stdlib_syms : Set.Make(Sym).t;
+    stdlib_syms : Sym.Set.t;
     mk_functions : function_to_convert list;
-    resource_predicates : (Sym.t * ResourcePredicates.definition) list;
-    logical_predicates : (Sym.t * LogicalFunctions.definition) list;
+    resource_predicates : (Sym.t * Definition.Predicate.t) list;
+    logical_predicates : (Sym.t * Definition.Function.t) list;
     datatypes : (Sym.t * datatype) list;
     lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
     call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
@@ -442,9 +441,7 @@ let empty_file : 'TY file =
     globs = [];
     funs = Pmap.empty Sym.compare;
     extern = Pmap.empty Id.compare;
-    stdlib_syms =
-      (let open Set.Make (Sym) in
-       empty);
+    stdlib_syms = Sym.Set.empty;
     mk_functions = [];
     resource_predicates = [];
     logical_predicates = [];

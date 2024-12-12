@@ -1,14 +1,12 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
 module IT = IndexTerms
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
-module RP = ResourcePredicates
+module Def = Definition
 module LAT = LogicalArgumentTypes
 module GT = GenTerms
 module GD = GenDefinitions
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 
 let rec is_pure (gt : GT.t) : bool =
   let (GT (gt_, _, _)) = gt in
@@ -25,9 +23,9 @@ let rec is_pure (gt : GT.t) : bool =
   | Map _ -> false
 
 
-let get_single_uses ?(pure : bool = false) (gt : GT.t) : SymSet.t =
+let get_single_uses ?(pure : bool = false) (gt : GT.t) : Sym.Set.t =
   let union =
-    SymMap.union (fun _ oa ob ->
+    Sym.Map.union (fun _ oa ob ->
       Some
         (let open Option in
          let@ a = oa in
@@ -35,46 +33,46 @@ let get_single_uses ?(pure : bool = false) (gt : GT.t) : SymSet.t =
          return (a + b)))
   in
   let it_value : int option = if pure then Some 1 else None in
-  let aux_it (it : IT.t) : int option SymMap.t =
+  let aux_it (it : IT.t) : int option Sym.Map.t =
     it
     |> IT.free_vars
-    |> SymSet.to_seq
+    |> Sym.Set.to_seq
     |> Seq.map (fun x -> (x, it_value))
-    |> SymMap.of_seq
+    |> Sym.Map.of_seq
   in
-  let aux_lc (lc : LC.t) : int option SymMap.t =
+  let aux_lc (lc : LC.t) : int option Sym.Map.t =
     lc
     |> LC.free_vars
-    |> SymSet.to_seq
+    |> Sym.Set.to_seq
     |> Seq.map (fun x -> (x, it_value))
-    |> SymMap.of_seq
+    |> Sym.Map.of_seq
   in
-  let rec aux (gt : GT.t) : int option SymMap.t =
+  let rec aux (gt : GT.t) : int option Sym.Map.t =
     let (GT (gt_, _, _)) = gt in
     match gt_ with
-    | Arbitrary | Uniform _ -> SymMap.empty
+    | Arbitrary | Uniform _ -> Sym.Map.empty
     | Pick wgts ->
-      wgts |> List.map snd |> List.map aux |> List.fold_left union SymMap.empty
+      wgts |> List.map snd |> List.map aux |> List.fold_left union Sym.Map.empty
     | Alloc it | Return it -> aux_it it
     | Call (_, iargs) ->
-      iargs |> List.map snd |> List.map aux_it |> List.fold_left union SymMap.empty
+      iargs |> List.map snd |> List.map aux_it |> List.fold_left union Sym.Map.empty
     | Asgn ((it_addr, _), it_val, gt') ->
-      aux gt' :: List.map aux_it [ it_addr; it_val ] |> List.fold_left union SymMap.empty
-    | Let (_, (x, gt1), gt2) -> SymMap.remove x (union (aux gt1) (aux gt2))
+      aux gt' :: List.map aux_it [ it_addr; it_val ] |> List.fold_left union Sym.Map.empty
+    | Let (_, (x, gt1), gt2) -> Sym.Map.remove x (union (aux gt1) (aux gt2))
     | Assert (lc, gt') -> union (aux gt') (aux_lc lc)
     | ITE (it_if, gt_then, gt_else) ->
       aux_it it_if :: List.map aux [ gt_then; gt_else ]
-      |> List.fold_left union SymMap.empty
+      |> List.fold_left union Sym.Map.empty
     | Map ((i, _, it_perm), gt') ->
       union
         (aux_it it_perm)
-        (gt' |> aux |> SymMap.remove i |> SymMap.map (Option.map (Int.add 1)))
+        (gt' |> aux |> Sym.Map.remove i |> Sym.Map.map (Option.map (Int.add 1)))
   in
   aux gt
-  |> SymMap.filter (fun _ -> Option.equal Int.equal (Some 1))
-  |> SymMap.bindings
+  |> Sym.Map.filter (fun _ -> Option.equal Int.equal (Some 1))
+  |> Sym.Map.bindings
   |> List.map fst
-  |> SymSet.of_list
+  |> Sym.Set.of_list
 
 
 module Bounds = struct
@@ -152,25 +150,25 @@ end
 
 let get_bounds = Bounds.get_bounds
 
-let get_recursive_preds (preds : (Sym.t * RP.definition) list) : SymSet.t =
-  let get_calls (pred : RP.definition) : SymSet.t =
+let get_recursive_preds (preds : (Sym.t * Def.Predicate.t) list) : Sym.Set.t =
+  let get_calls (pred : Def.Predicate.t) : Sym.Set.t =
     pred.clauses
     |> Option.get
-    |> List.map (fun (cl : RP.clause) -> cl.packing_ft)
+    |> List.map (fun (cl : Def.Clause.t) -> cl.packing_ft)
     |> List.map LAT.r_resource_requests
     |> List.flatten
     |> List.map snd
     |> List.map fst
-    |> List.map ResourceTypes.predicate_name
-    |> List.filter_map (fun (n : RET.predicate_name) ->
+    |> List.map Req.get_name
+    |> List.filter_map (fun (n : Req.name) ->
       match n with PName name -> Some name | Owned _ -> None)
-    |> SymSet.of_list
+    |> Sym.Set.of_list
   in
   let module G = Graph.Persistent.Digraph.Concrete (Sym) in
   let g =
     List.fold_left
       (fun g (fsym, pred) ->
-        SymSet.fold (fun gsym g' -> G.add_edge g' fsym gsym) (get_calls pred) g)
+        Sym.Set.fold (fun gsym g' -> G.add_edge g' fsym gsym) (get_calls pred) g)
       G.empty
       preds
   in
@@ -179,22 +177,22 @@ let get_recursive_preds (preds : (Sym.t * RP.definition) list) : SymSet.t =
   preds
   |> List.map fst
   |> List.filter (fun fsym -> G.mem_edge closure fsym fsym)
-  |> SymSet.of_list
+  |> Sym.Set.of_list
 
 
 module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
 
 open struct
-  let get_calls (gd : GD.t) : SymSet.t =
-    let rec aux (gt : GT.t) : SymSet.t =
+  let get_calls (gd : GD.t) : Sym.Set.t =
+    let rec aux (gt : GT.t) : Sym.Set.t =
       let (GT (gt_, _, _)) = gt in
       match gt_ with
-      | Arbitrary | Uniform _ | Alloc _ | Return _ -> SymSet.empty
+      | Arbitrary | Uniform _ | Alloc _ | Return _ -> Sym.Set.empty
       | Pick wgts ->
-        wgts |> List.map snd |> List.map aux |> List.fold_left SymSet.union SymSet.empty
-      | Call (fsym, _) -> SymSet.singleton fsym
+        wgts |> List.map snd |> List.map aux |> List.fold_left Sym.Set.union Sym.Set.empty
+      | Call (fsym, _) -> Sym.Set.singleton fsym
       | Asgn (_, _, gt') | Assert (_, gt') | Map (_, gt') -> aux gt'
-      | Let (_, (_, gt1), gt2) | ITE (_, gt1, gt2) -> SymSet.union (aux gt1) (aux gt2)
+      | Let (_, (_, gt1), gt2) | ITE (_, gt1, gt2) -> Sym.Set.union (aux gt1) (aux gt2)
     in
     aux (Option.get gd.body)
 
@@ -210,6 +208,6 @@ let get_call_graph (ctx : GD.context) : SymGraph.t =
   |> List.map_snd get_calls
   |> List.fold_left
        (fun cg (fsym, calls) ->
-         SymSet.fold (fun fsym' cg' -> SymGraph.add_edge cg' fsym fsym') calls cg)
+         Sym.Set.fold (fun fsym' cg' -> SymGraph.add_edge cg' fsym fsym') calls cg)
        SymGraph.empty
   |> Oper.transitive_closure

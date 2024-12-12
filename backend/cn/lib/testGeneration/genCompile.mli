@@ -1,5 +1,5 @@
 val compile
   :  ?ctx:GenDefinitions.context ->
-  (Sym.t * ResourcePredicates.definition) list ->
+  (Sym.t * Definition.Predicate.t) list ->
   Executable_spec_extract.instrumentation list ->
   GenDefinitions.context

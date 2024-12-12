@@ -1,15 +1,12 @@
 open Locations
 module BT = BaseTypes
 module IT = IndexTerms
-module LS = LogicalSorts
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 
 type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
-  | Resource of (Sym.t * (RET.t * BT.t)) * info * 'i t
+  | Resource of (Sym.t * (Req.t * BT.t)) * info * 'i t
   | Constraint of LC.t * info * 'i t
   | I of 'i
 
@@ -33,7 +30,7 @@ let rec subst i_subst =
       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
       Define ((name, it), info, aux substitution t)
     | Resource ((name, (re, bt)), info, t) ->
-      let re = RET.subst substitution re in
+      let re = Req.subst substitution re in
       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
       let t = aux substitution t in
       Resource ((name, (re, bt)), info, t)
@@ -54,7 +51,7 @@ and alpha_rename i_subst s t =
 
 
 and suitably_alpha_rename i_subst syms s t =
-  if SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename i_subst s t
   else
     (s, t)
@@ -62,18 +59,18 @@ and suitably_alpha_rename i_subst syms s t =
 
 let free_vars_bts i_free_vars_bts =
   let union =
-    SymMap.union (fun _ bt1 bt2 ->
+    Sym.Map.union (fun _ bt1 bt2 ->
       assert (BT.equal bt1 bt2);
       Some bt1)
   in
   let rec aux = function
     | Define ((s, it), _info, t) ->
       let it_vars = IT.free_vars_bts it in
-      let t_vars = SymMap.remove s (aux t) in
+      let t_vars = Sym.Map.remove s (aux t) in
       union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
-      let re_vars = RET.free_vars_bts re in
-      let t_vars = SymMap.remove s (aux t) in
+      let re_vars = Req.free_vars_bts re in
+      let t_vars = Sym.Map.remove s (aux t) in
       union re_vars t_vars
     | Constraint (lc, _info, t) ->
       let lc_vars = LC.free_vars_bts lc in
@@ -88,16 +85,16 @@ let free_vars i_free_vars =
   let rec aux = function
     | Define ((s, it), _info, t) ->
       let it_vars = IT.free_vars it in
-      let t_vars = SymSet.remove s (aux t) in
-      SymSet.union it_vars t_vars
+      let t_vars = Sym.Set.remove s (aux t) in
+      Sym.Set.union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
-      let re_vars = RET.free_vars re in
-      let t_vars = SymSet.remove s (aux t) in
-      SymSet.union re_vars t_vars
+      let re_vars = Req.free_vars re in
+      let t_vars = Sym.Set.remove s (aux t) in
+      Sym.Set.union re_vars t_vars
     | Constraint (lc, _info, t) ->
       let lc_vars = LC.free_vars lc in
       let t_vars = aux t in
-      SymSet.union lc_vars t_vars
+      Sym.Set.union lc_vars t_vars
     | I i -> i_free_vars i
   in
   aux
@@ -129,7 +126,7 @@ let rec pp_aux i_pp = function
   | Define ((name, it), _info, t) ->
     group (!^"let" ^^^ Sym.pp name ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux i_pp t
   | Resource ((name, (re, _bt)), _info, t) ->
-    group (!^"take" ^^^ Sym.pp name ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
+    group (!^"take" ^^^ Sym.pp name ^^^ equals ^^^ Req.pp re ^^ semi) :: pp_aux i_pp t
   | Constraint (lc, _info, t) ->
     let op = equals ^^ rangle () in
     group (LC.pp lc ^^^ op) :: pp_aux i_pp t
@@ -154,11 +151,11 @@ let alpha_unique ss =
     match at with
     | Define ((name, it), info, t) ->
       let name, t = rename_if ss name t in
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       Define ((name, it), info, t)
     | Resource ((name, (re, bt)), info, t) ->
       let name, t = rename_if ss name t in
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       Resource ((name, (re, bt)), info, f ss t)
     | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
     | I i -> I (RT.alpha_unique ss i)
@@ -224,7 +221,7 @@ let dtree dtree_i =
       Dnode (pp_ctor "Define", [ Dleaf (Sym.pp s); IT.dtree it; aux t ])
     | Resource ((s, (rt, bt)), _, t) ->
       Dnode
-        (pp_ctor "Resource", [ Dleaf (Sym.pp s); RET.dtree rt; Dleaf (BT.pp bt); aux t ])
+        (pp_ctor "Resource", [ Dleaf (Sym.pp s); Req.dtree rt; Dleaf (BT.pp bt); aux t ])
     | Constraint (lc, _, t) -> Dnode (pp_ctor "Constraint", [ LC.dtree lc; aux t ])
     | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
   in

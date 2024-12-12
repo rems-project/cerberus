@@ -8,7 +8,6 @@ module CtA = Cn_internal_to_ail
 module Utils = Executable_spec_utils
 module ESpecInternal = Executable_spec_internal
 module Config = TestGenConfig
-module SymSet = Set.Make (Sym)
 
 let debug_log_file : out_channel option ref = ref None
 
@@ -91,8 +90,8 @@ let compile_random_test_case
       inst.internal
       |> Option.get
       |> AT.get_lat
-      |> LAT.free_vars (fun _ -> SymSet.empty)
-      |> SymSet.to_seq
+      |> LAT.free_vars (fun _ -> Sym.Set.empty)
+      |> Sym.Set.to_seq
       |> List.of_seq
       |> List.filter (fun x ->
         not
@@ -268,8 +267,8 @@ let should_be_unit_test
   match decl with
   | Decl_function (_, _, args, _, _, _) ->
     List.is_empty args
-    && SymSet.is_empty
-         (LAT.free_vars (fun _ -> SymSet.empty) (AT.get_lat (Option.get inst.internal)))
+    && Sym.Set.is_empty
+         (LAT.free_vars (fun _ -> Sym.Set.empty) (AT.get_lat (Option.get inst.internal)))
   | Decl_object _ -> failwith __LOC__
 
 
@@ -366,9 +365,9 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
            ^^ string "exit 1")
         ^^ hardline)
   ^^ twice hardline
-  ^^ string "TEST_DIR="
-  ^^ string (Filename.dirname (Filename.concat output_dir "junk"))
+  ^^ string ("TEST_DIR=" ^ Filename.dirname (Filename.concat output_dir "junk"))
   ^^ hardline
+  ^^ string "pushd $TEST_DIR > /dev/null"
   ^^ twice hardline
   ^^ string "# Compile"
   ^^ hardline
@@ -381,8 +380,8 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "-c";
          "\"-I${RUNTIME_PREFIX}/include/\"";
          "-o";
-         "\"${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o\"";
-         "\"${TEST_DIR}/" ^ test_file ^ "\"";
+         "\"./" ^ Filename.chop_extension test_file ^ ".o\"";
+         "\"./" ^ test_file ^ "\"";
          (if Config.is_coverage () then "--coverage;" else ";");
          "then"
        ]
@@ -408,8 +407,8 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "-g";
          "\"-I${RUNTIME_PREFIX}/include\"";
          "-o";
-         "\"${TEST_DIR}/tests.out\"";
-         "${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o";
+         "\"./tests.out\"";
+         Filename.chop_extension test_file ^ ".o";
          "\"${RUNTIME_PREFIX}/libcn.a\"";
          (if Config.is_coverage () then "--coverage;" else ";");
          "then"
@@ -433,7 +432,12 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
     separate_map
       space
       string
-      ([ "\"${TEST_DIR}/tests.out\"" ]
+      ([ "./tests.out" ]
+       @ (Config.has_input_timeout ()
+          |> Option.map (fun input_timeout ->
+            [ "--input-timeout"; string_of_int input_timeout ])
+          |> Option.to_list
+          |> List.flatten)
        @ (Config.has_null_in_every ()
           |> Option.map (fun null_in_every ->
             [ "--null-in-every"; string_of_int null_in_every ])
@@ -445,6 +449,10 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
           |> List.flatten)
        @ (Config.has_logging_level ()
           |> Option.map (fun level -> [ "--logging-level"; string_of_int level ])
+          |> Option.to_list
+          |> List.flatten)
+       @ (Config.has_progress_level ()
+          |> Option.map (fun level -> [ "--progress-level"; string_of_int level ])
           |> Option.to_list
           |> List.flatten)
        @ (if Config.is_interactive () then
@@ -467,70 +475,90 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
           |> Option.map (fun max_generator_size ->
             [ "--max-generator-size"; string_of_int max_generator_size ])
           |> Option.to_list
+          |> List.flatten)
+       @ (if Config.is_sized_null () then
+            [ "--sized-null" ]
+          else
+            [])
+       @ (Config.has_allowed_depth_failures ()
+          |> Option.map (fun allowed_depth_failures ->
+            [ "--allowed-depth-failures"; string_of_int allowed_depth_failures ])
+          |> Option.to_list
+          |> List.flatten)
+       @ (Config.has_allowed_size_split_backtracks ()
+          |> Option.map (fun allowed_size_split_backtracks ->
+            [ "--allowed-size-split-backtracks";
+              string_of_int allowed_size_split_backtracks
+            ])
+          |> Option.to_list
           |> List.flatten))
   in
   cmd
-  ^^ semi
   ^^ hardline
-  ^^
-  if Config.is_coverage () then
-    string "# Coverage"
-    ^^ hardline
-    ^^ string "test_exit_code=$? # Save tests exit code for later"
-    ^^ twice hardline
-    ^^ string "pushd \"${TEST_DIR}\""
-    ^^ twice hardline
-    ^^ string ("if gcov \"" ^ test_file ^ "\"; then")
-    ^^ nest 4 (hardline ^^ string "echo \"Recorded coverage via gcov.\"")
-    ^^ hardline
-    ^^ string "else"
-    ^^ nest
-         4
-         (hardline
-          ^^ string "printf \"Failed to record coverage.\""
-          ^^ hardline
-          ^^ string "exit 1")
-    ^^ hardline
-    ^^ string "fi"
-    ^^ twice hardline
-    ^^ string "if lcov --capture --directory . --output-file coverage.info; then"
-    ^^ nest 4 (hardline ^^ string "echo \"Collected coverage via lcov.\"")
-    ^^ hardline
-    ^^ string "else"
-    ^^ nest
-         4
-         (hardline
-          ^^ string "printf \"Failed to collect coverage.\""
-          ^^ hardline
-          ^^ string "exit 1")
-    ^^ hardline
-    ^^ string "fi"
-    ^^ twice hardline
-    ^^ separate_map
-         space
-         string
-         [ "if"; "genhtml"; "--output-directory"; "html"; "\"coverage.info\";"; "then" ]
-    ^^ nest
-         4
-         (hardline
-          ^^ string "echo \"Generated HTML report at \\\"${TEST_DIR}/html/\\\".\"")
-    ^^ hardline
-    ^^ string "else"
-    ^^ nest
-         4
-         (hardline
-          ^^ string "printf \"Failed to generate HTML report.\""
-          ^^ hardline
-          ^^ string "exit 1")
-    ^^ hardline
-    ^^ string "fi"
-    ^^ twice hardline
-    ^^ string "popd"
-    ^^ twice hardline
-    ^^ string "exit \"$test_exit_code\""
-    ^^ hardline
-  else
-    empty
+  ^^ string "test_exit_code=$? # Save tests exit code for later"
+  ^^ twice hardline
+  ^^ hardline
+  ^^ (if Config.is_coverage () then
+        hardline
+        ^^ string "# Coverage"
+        ^^ hardline
+        ^^ string ("if gcov \"" ^ test_file ^ "\"; then")
+        ^^ nest 4 (hardline ^^ string "echo \"Recorded coverage via gcov.\"")
+        ^^ hardline
+        ^^ string "else"
+        ^^ nest
+             4
+             (hardline
+              ^^ string "printf \"Failed to record coverage.\""
+              ^^ hardline
+              ^^ string "exit 1")
+        ^^ hardline
+        ^^ string "fi"
+        ^^ twice hardline
+        ^^ string "if lcov --capture --directory . --output-file coverage.info; then"
+        ^^ nest 4 (hardline ^^ string "echo \"Collected coverage via lcov.\"")
+        ^^ hardline
+        ^^ string "else"
+        ^^ nest
+             4
+             (hardline
+              ^^ string "printf \"Failed to collect coverage.\""
+              ^^ hardline
+              ^^ string "exit 1")
+        ^^ hardline
+        ^^ string "fi"
+        ^^ twice hardline
+        ^^ separate_map
+             space
+             string
+             [ "if";
+               "genhtml";
+               "--output-directory";
+               "html";
+               "\"coverage.info\";";
+               "then"
+             ]
+        ^^ nest
+             4
+             (hardline
+              ^^ string "echo \"Generated HTML report at \\\"${TEST_DIR}/html/\\\".\"")
+        ^^ hardline
+        ^^ string "else"
+        ^^ nest
+             4
+             (hardline
+              ^^ string "printf \"Failed to generate HTML report.\""
+              ^^ hardline
+              ^^ string "exit 1")
+        ^^ hardline
+        ^^ string "fi"
+      else
+        empty)
+  ^^ twice hardline
+  ^^ string "popd > /dev/null"
+  ^^ twice hardline
+  ^^ string "exit $test_exit_code"
+  ^^ hardline
 
 
 let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.document)
@@ -562,7 +590,7 @@ let generate
   let insts = prog5 |> Executable_spec_extract.collect_instrumentation |> fst in
   let selected_fsyms =
     Check.select_functions
-      (SymSet.of_list
+      (Sym.Set.of_list
          (List.map
             (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn)
             insts))
@@ -570,7 +598,7 @@ let generate
   let insts =
     insts
     |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
-      Option.is_some inst.internal && SymSet.mem inst.fn selected_fsyms)
+      Option.is_some inst.internal && Sym.Set.mem inst.fn selected_fsyms)
   in
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in

@@ -1,19 +1,16 @@
 module IT = IndexTerms
 module BT = BaseTypes
-module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module TE = TypeErrors
 module Loc = Locations
-module LF = LogicalFunctions
+module LF = Definition.Function
 module LC = LogicalConstraints
 module IdSet = Set.Make (Id)
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 
 module StringList = struct
   type t = string list
@@ -165,7 +162,7 @@ let try_coerce_res (ftyp : AT.lemmat) =
     | LRT.Constraint (lc, info, t) -> LRT.Constraint (lc, info, erase_res r t)
     | LRT.Resource ((name, (re, bt)), ((loc, _) as info), t) ->
       let arg_name, arg_re = r in
-      if ResourceTypes.alpha_equivalent arg_re re then (
+      if Request.alpha_equivalent arg_re re then (
         Pp.debug 2 (lazy (Pp.item "erasing" (Sym.pp name)));
         LRT.subst (IT.make_subst [ (name, IT.sym_ (arg_name, bt, loc)) ]) t)
       else
@@ -260,7 +257,7 @@ let struct_layout_field_bts xs =
 
 
 let get_struct_xs struct_decls tag =
-  match SymMap.find_opt tag struct_decls with
+  match Sym.Map.find_opt tag struct_decls with
   | Some def -> struct_layout_field_bts def
   | None -> fail "undefined struct" (Sym.pp tag)
 
@@ -305,12 +302,12 @@ let add_list_mono_datatype (bt, nm) global =
   let tl = Id.id ("tl_of_" ^ bt_name) in
   let mems = [ (hd, bt); (tl, BT.Datatype nm) ] in
   let datatypes =
-    SymMap.add nm Dt.{ constrs = [ nil; cons ]; all_params = mems } global.datatypes
+    Sym.Map.add nm Dt.{ constrs = [ nil; cons ]; all_params = mems } global.datatypes
   in
   let datatype_constrs =
     global.datatype_constrs
-    |> SymMap.add nil Dt.{ params = []; datatype_tag = nm }
-    |> SymMap.add cons Dt.{ params = mems; datatype_tag = nm }
+    |> Sym.Map.add nil Dt.{ params = []; datatype_tag = nm }
+    |> Sym.Map.add cons Dt.{ params = mems; datatype_tag = nm }
   in
   { global with datatypes; datatype_constrs }
 
@@ -326,13 +323,13 @@ let monomorphise_dt_lists global =
   let dt_lists = function BT.List (BT.Datatype sym) -> Some sym | _ -> None in
   let module Dt = BT.Datatype in
   let all_dt_types =
-    SymMap.fold
+    Sym.Map.fold
       (fun _ dt_info ss ->
         List.filter_map dt_lists (List.map snd dt_info.Dt.all_params) @ ss)
       global.Global.datatypes
       []
   in
-  let uniq_dt_types = SymSet.elements (SymSet.of_list all_dt_types) in
+  let uniq_dt_types = Sym.Set.elements (Sym.Set.of_list all_dt_types) in
   let new_sym sym = (sym, Sym.fresh_named ("list_of_" ^ Sym.pp_string sym)) in
   let new_syms = List.map new_sym uniq_dt_types in
   let list_mono = List.map (fun (s1, s2) -> (BT.Datatype s1, s2)) new_syms in
@@ -340,12 +337,12 @@ let monomorphise_dt_lists global =
   let map_bt bt = Option.value ~default:bt (mono_list_bt list_mono bt) in
   let map_mems = List.map (fun (nm, bt) -> (nm, map_bt bt)) in
   let datatypes =
-    SymMap.map
+    Sym.Map.map
       (fun info -> Dt.{ info with all_params = map_mems info.all_params })
       global.Global.datatypes
   in
   let datatype_constrs =
-    SymMap.map
+    Sym.Map.map
       (fun info -> Dt.{ info with params = map_mems info.params })
       global.Global.datatype_constrs
   in
@@ -364,7 +361,7 @@ let rec new_nm s nms i =
 let alpha_rename_if_pp_same s body =
   let vs = IT.free_vars body in
   let other_nms =
-    List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
+    List.filter (fun sym -> not (Sym.equal sym s)) (Sym.Set.elements vs)
     |> List.map Sym.pp_string
   in
   if List.exists (String.equal (Sym.pp_string s)) other_nms then (
@@ -402,16 +399,16 @@ let it_adjust (global : Global.t) it =
     | IT.EachI ((i1, (s, bt), i2), x) ->
       let x = f x in
       let s, x, vs = alpha_rename_if_pp_same s x in
-      if not (SymSet.mem s vs) then (
+      if not (Sym.Set.mem s vs) then (
         assert (i1 <= i2);
         x)
       else
         IT.eachI_ (i1, (s, bt), i2) x loc
     | IT.Apply (name, args) ->
-      let open LogicalFunctions in
-      let def = SymMap.find name global.logical_functions in
-      (match (def.definition, def.emit_coq) with
-       | Def body, false -> f (open_fun def.args body args)
+      let open Definition.Function in
+      let def = Sym.Map.find name global.logical_functions in
+      (match (def.body, def.emit_coq) with
+       | Def body, false -> f (open_ def.args body args)
        | _ -> t)
     | IT.Good (ct, t2) ->
       if Option.is_some (Sctypes.is_struct_ctype ct) then
@@ -430,7 +427,7 @@ let it_adjust (global : Global.t) it =
       let nm, y, vs = alpha_rename_if_pp_same nm y in
       if Option.is_some (IT.is_sym x) then
         IT.subst (IT.make_subst [ (nm, x) ]) y
-      else if not (SymSet.mem nm vs) then
+      else if not (Sym.Set.mem nm vs) then
         y
       else
         IT.let_ ((nm, x), y) loc
@@ -442,10 +439,10 @@ let it_adjust (global : Global.t) it =
 
 
 let fun_prop_ret (global : Global.t) nm =
-  match SymMap.find_opt nm global.logical_functions with
+  match Sym.Map.find_opt nm global.logical_functions with
   | None -> fail "fun_prop_ret: not found" (Sym.pp nm)
   | Some def ->
-    let open LogicalFunctions in
+    let open Definition.Function in
     BaseTypes.equal BaseTypes.Bool def.return_bt
     && StringSet.mem (Sym.pp_string nm) prop_funs
 
@@ -601,7 +598,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
     (lazy
       (let open Pp in
        let cons_line dt_tag c_tag =
-         let info = SymMap.find c_tag global.datatype_constrs in
+         let info = Sym.Map.find c_tag global.datatype_constrs in
          let@ argTs = ListM.mapM (fun (_, bt) -> bt_to_coq2 bt) info.params in
          return
            (!^"    | "
@@ -612,7 +609,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
        let@ dt_eqs =
          ListM.mapM
            (fun dt_tag ->
-             let info = SymMap.find dt_tag global.datatypes in
+             let info = Sym.Map.find dt_tag global.datatypes in
              let@ c_lines = ListM.mapM (cons_line dt_tag) info.constrs in
              return
                (!^"    "
@@ -638,11 +635,11 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
 let ensure_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
   let@ () = ensure_datatype global list_mono loc dt_tag in
   let op_nm = Sym.pp_string dt_tag ^ "_" ^ Id.pp_string mem_tag in
-  let dt_info = SymMap.find dt_tag global.Global.datatypes in
+  let dt_info = Sym.Map.find dt_tag global.Global.datatypes in
   let inf = (loc, Pp.typ (Pp.string "datatype acc for") (Sym.pp dt_tag)) in
   let@ bt_doc = bt_to_coq global list_mono inf bt in
   let cons_line c =
-    let c_info = SymMap.find c global.Global.datatype_constrs in
+    let c_info = Sym.Map.find c global.Global.datatype_constrs in
     let pats =
       List.map
         (fun (m2, _) ->
@@ -685,9 +682,9 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
 let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
   let@ () = ensure_datatype global list_mono loc dt_tag in
   let op_nm = Sym.pp_string dt_tag ^ "_" ^ Id.pp_string mem_tag in
-  let dt_info = SymMap.find dt_tag global.Global.datatypes in
+  let dt_info = Sym.Map.find dt_tag global.Global.datatypes in
   let cons_line c =
-    let c_info = SymMap.find c global.Global.datatype_constrs in
+    let c_info = Sym.Map.find c global.Global.datatype_constrs in
     let pats =
       List.map
         (fun (m2, _) ->
@@ -729,7 +726,7 @@ let ensure_list global list_mono _loc bt =
     | None -> fail "ensure_list: not a monomorphised list" (BT.pp bt)
   in
   let dt_sym = Option.get (BT.is_datatype_bt dt_bt) in
-  let dt_info = SymMap.find dt_sym global.Global.datatypes in
+  let dt_info = Sym.Map.find dt_sym global.Global.datatypes in
   let nil_nm, cons_nm =
     match dt_info.constrs with [ nil; cons ] -> (nil, cons) | _ -> assert false
   in
@@ -781,10 +778,10 @@ let ensure_tuple_op is_upd nm (ix, l) =
 
 
 let ensure_pred global list_mono loc name aux =
-  let open LogicalFunctions in
-  let def = SymMap.find name global.Global.logical_functions in
+  let open Definition.Function in
+  let def = Sym.Map.find name global.Global.logical_functions in
   let inf = (loc, Pp.typ (Pp.string "pred") (Sym.pp name)) in
-  match def.definition with
+  match def.body with
   | Uninterp ->
     gen_ensure
       1
@@ -851,14 +848,14 @@ let ensure_struct_mem is_good global list_mono loc ct aux =
 
 let rec unfold_if_possible global it =
   let open IT in
-  let open LogicalFunctions in
+  let open Definition.Function in
   match it with
   | IT (IT.Apply (name, args), _, _) ->
     let def = Option.get (Global.get_logical_function_def global name) in
-    (match def.definition with
+    (match def.body with
      | Rec_Def _ -> it
      | Uninterp -> it
-     | Def body -> unfold_if_possible global (open_fun def.args body args))
+     | Def body -> unfold_if_possible global (open_ def.args body args))
   | _ -> it
 
 
@@ -1094,7 +1091,7 @@ let it_to_coq loc global list_mono it =
       let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
       parensM (build [ rets op_nm; aux t2 ])
     | IT.Constructor (nm, id_args) ->
-      let info = SymMap.find nm global.datatype_constrs in
+      let info = Sym.Map.find nm global.datatype_constrs in
       let comp = Some (t, "datatype contents") in
       let@ () = ensure_datatype global list_mono loc info.datatype_tag in
       (* assuming here that the id's are in canonical order *)
@@ -1330,9 +1327,9 @@ let do_re_retype mu_file trusted_funs prev_mode pred_defs pre_retype_mu_file =
   | `CallByReference ->
   let prev_cut =
       let open Retype.Old in
-      let info2 = Pmap.filter (fun fsym _ -> SymSet.mem fsym trusted_funs)
+      let info2 = Pmap.filter (fun fsym _ -> Sym.Set.mem fsym trusted_funs)
           pre_retype_mu_file.mu_funinfo in
-      let funs2 = Pmap.filter (fun fsym _ -> SymSet.mem fsym trusted_funs)
+      let funs2 = Pmap.filter (fun fsym _ -> Sym.Set.mem fsym trusted_funs)
           pre_retype_mu_file.mu_funs in
       { pre_retype_mu_file with mu_funs = funs2; mu_funinfo = info2 }
   in
@@ -1372,8 +1369,8 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
         "skipping trusted fun with resource"
         (Sym.pp_string x.sym ^ ": " ^ Option.get x.scan_res.res))
     skip;
-  (* let fun_info = List.fold_right (fun (s, def) m -> SymMap.add s def m) *)
-  (*       mu_file.mu_logical_predicates SymMap.empty in *)
+  (* let fun_info = List.fold_right (fun (s, def) m -> Sym.Map.add s def m) *)
+  (*       mu_file.mu_logical_predicates Sym.Map.empty in *)
   (* let struct_decls = get_struct_decls mu_file in *)
   (* let global = Global.{ctxt.Context.global with struct_decls} in *)
   let list_mono, global = monomorphise_dt_lists global in

@@ -3,8 +3,6 @@ module History = struct
 
   let sym = Sym.fresh_named str
 
-  let loc = Locations.other __MODULE__
-
   let base_id = Id.id "base"
 
   let base_bt = Memory.uintptr_bt
@@ -22,17 +20,23 @@ module History = struct
 
   let bt = BaseTypes.Map (Alloc_id, value_bt)
 
-  let it = IndexTerms.sym_ (sym, bt, loc)
+  let it loc' = IndexTerms.sym_ (sym, bt, loc')
 
   let lookup_ptr ptr loc' =
     assert (BaseTypes.(equal (IndexTerms.bt ptr) (Loc ())));
-    IndexTerms.(map_get_ it (allocId_ ptr loc') loc')
+    IndexTerms.(map_get_ (it loc') (allocId_ ptr loc') loc')
 
 
-  let get_base_size ptr loc' =
+  type value =
+    { base : IndexTerms.t;
+      size : IndexTerms.t
+    }
+
+  let split value loc' =
     IndexTerms.
-      ( recordMember_ ~member_bt:base_bt (ptr, base_id) loc',
-        recordMember_ ~member_bt:size_bt (ptr, size_id) loc' )
+      { base = recordMember_ ~member_bt:base_bt (value, base_id) loc';
+        size = recordMember_ ~member_bt:size_bt (value, size_id) loc'
+      }
 
 
   let sbt = BaseTypes.Surface.inj bt

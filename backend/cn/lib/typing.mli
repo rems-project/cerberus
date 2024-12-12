@@ -34,13 +34,13 @@ val print_with_ctxt : (Context.t -> unit) -> unit m
 
 val get_global : unit -> Global.t m
 
-val get_cs : unit -> Context.LCSet.t m
+val get_cs : unit -> Context.LC.Set.t m
 
 val simp_ctxt : unit -> Simplify.simp_ctxt m
 
-val all_resources : Locations.t -> Resources.t list m
+val all_resources : Locations.t -> Resource.t list m
 
-val all_resources_tagged : Locations.t -> ((Resources.t * int) list * int) m
+val all_resources_tagged : Locations.t -> ((Resource.t * int) list * int) m
 
 val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False ]) m
 
@@ -78,9 +78,9 @@ val add_c : Locations.t -> LogicalConstraints.t -> unit m
 
 val add_cs : Locations.t -> LogicalConstraints.t list -> unit m
 
-val add_r : Locations.t -> Resources.t -> unit m
+val add_r : Locations.t -> Resource.t -> unit m
 
-val add_rs : Locations.t -> Resources.t list -> unit m
+val add_rs : Locations.t -> Resource.t list -> unit m
 
 val set_datatype_order : Sym.t list list option -> unit m
 
@@ -91,11 +91,11 @@ val res_history : Locations.t -> int -> Context.resource_history m
 type changed =
   | Deleted
   | Unchanged
-  | Changed of Resources.t
+  | Changed of Resource.t
 
 val map_and_fold_resources
   :  Locations.t ->
-  (Resources.t -> 'acc -> changed * 'acc) ->
+  (Resource.t -> 'acc -> changed * 'acc) ->
   'acc ->
   ('acc * int list) m
 
@@ -116,9 +116,9 @@ val get_fun_decl
 
 val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat) m
 
-val get_resource_predicate_def : Locations.t -> Sym.t -> ResourcePredicates.definition m
+val get_resource_predicate_def : Locations.t -> Sym.t -> Definition.Predicate.t m
 
-val get_logical_function_def : Locations.t -> Sym.t -> LogicalFunctions.definition m
+val get_logical_function_def : Locations.t -> Sym.t -> Definition.Function.t m
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> unit m
 
@@ -129,9 +129,9 @@ val add_fun_decl
 
 val add_lemma : Sym.t -> Locations.t * ArgumentTypes.lemmat -> unit m
 
-val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> unit m
+val add_resource_predicate : Sym.t -> Definition.Predicate.t -> unit m
 
-val add_logical_function : Sym.t -> LogicalFunctions.definition -> unit m
+val add_logical_function : Sym.t -> Definition.Function.t -> unit m
 
 val add_datatype : Sym.t -> BaseTypes.dt_info -> unit m
 
@@ -150,9 +150,7 @@ val test_value_eqs
 
 val embed_resultat : 'a Resultat.t -> 'a m
 
-val ensure_logical_sort : Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
-
-val ensure_base_type : Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
+val ensure_base_type : Locations.t -> expect:BaseTypes.t -> BaseTypes.t -> unit m
 
 val make_return_record
   :  Locations.t ->
@@ -171,10 +169,10 @@ val bind_return : Locations.t -> IndexTerms.t list -> ReturnTypes.t -> IndexTerm
 val add_movable_index
   :  Locations.t ->
   (* verbose:bool -> *)
-  ResourceTypes.predicate_name * IndexTerms.t ->
+  Request.name * IndexTerms.t ->
   unit m
 
-val get_movable_indices : unit -> (ResourceTypes.predicate_name * IndexTerms.t) list m
+val get_movable_indices : unit -> (Request.name * IndexTerms.t) list m
 
 val record_action : Explain.action * Locations.t -> unit m
 

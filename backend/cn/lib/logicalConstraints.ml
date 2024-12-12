@@ -1,7 +1,5 @@
 module IT = IndexTerms
 module BT = BaseTypes
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 open Pp
 
 type logical_constraint =
@@ -9,11 +7,16 @@ type logical_constraint =
   | Forall of (Sym.t * BT.t) * IT.t
 [@@deriving eq, ord]
 
-type t = logical_constraint
+module Ord = struct
+  type t = logical_constraint
 
-let equal = equal_logical_constraint
+  let equal = equal_logical_constraint
 
-let compare = compare_logical_constraint
+  let compare = compare_logical_constraint
+end
+
+include Ord
+module Set = Set.Make (Ord)
 
 let pp = function
   | T it -> IT.pp it
@@ -34,12 +37,12 @@ let subst_ su c = subst (IT.make_subst su) c
 
 let free_vars_bts = function
   | T c -> IT.free_vars_bts c
-  | Forall ((s, _), body) -> SymMap.remove s (IT.free_vars_bts body)
+  | Forall ((s, _), body) -> Sym.Map.remove s (IT.free_vars_bts body)
 
 
 let free_vars = function
   | T c -> IT.free_vars c
-  | Forall ((s, _), body) -> SymSet.remove s (IT.free_vars body)
+  | Forall ((s, _), body) -> Sym.Set.remove s (IT.free_vars body)
 
 
 let alpha_equivalent lc lc' =
@@ -57,8 +60,6 @@ let alpha_equivalent lc lc' =
       IT.equal c c')
   | _ -> false
 
-
-let t_ it = T it
 
 let forall_ (s, bt) it = Forall ((s, bt), it)
 

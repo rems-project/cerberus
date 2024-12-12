@@ -56,7 +56,7 @@ let rec add_records_to_map_from_it it =
 
 
 let add_records_to_map_from_resource = function
-  | ResourceTypes.P p -> List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
+  | Request.P p -> List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
   | Q q ->
     List.iter add_records_to_map_from_it (q.pointer :: q.step :: q.permission :: q.iargs)
 
@@ -140,14 +140,10 @@ let rec populate ?cn_sym bt =
 
 let add_records_to_map_from_fns_and_preds cn_funs cn_preds =
   let fun_syms_and_ret_types =
-    List.map
-      (fun (sym, (def : LogicalFunctions.definition)) -> (sym, def.return_bt))
-      cn_funs
+    List.map (fun (sym, (def : Definition.Function.t)) -> (sym, def.return_bt)) cn_funs
   in
   let pred_syms_and_ret_types =
-    List.map
-      (fun (sym, (def : ResourcePredicates.definition)) -> (sym, def.oarg_bt))
-      cn_preds
+    List.map (fun (sym, (def : Definition.Predicate.t)) -> (sym, def.oarg_bt)) cn_preds
   in
   List.iter
     (fun (cn_sym, bt) -> populate ~cn_sym bt)

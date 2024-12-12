@@ -1,7 +1,9 @@
 //CN_VIP #include <stdio.h>
 #include <string.h>
 int y=2, x=1;
-int main() {
+int main()
+/*CN_VIP*//*@ accesses x; requires (u64)&y == (u64)&x + sizeof<int>; @*/
+{
   int *p = &x + 1;
   int *q = &y;
   //CN_VIP printf("Addresses: p=%p q=%p\n",(void*)p,(void*)q);
