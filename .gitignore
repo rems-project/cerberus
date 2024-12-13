@@ -39,3 +39,7 @@ public/package-lock.json
 # debug stuff
 log*.txt
 *.cache
+cerberus.code-workspace
+.vscode/tasks.json
+.cursorignore
+cerb_times.csv
