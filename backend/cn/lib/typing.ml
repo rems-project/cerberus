@@ -14,6 +14,7 @@ type s =
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
     movable_indices : (Req.name * IT.t) list;
+    packable_resources : Request.Predicate.t list;
     unfold_resources_required : bool;
     log : Explain.log
   }
@@ -24,6 +25,7 @@ let empty_s (c : Context.t) =
     sym_eqs = Sym.Map.empty;
     past_models = [];
     found_equalities = EqTable.empty;
+    packable_resources = [];
     movable_indices = [];
     unfold_resources_required = false;
     log = []
@@ -419,6 +421,12 @@ let init_solver () =
     { s with solver = Some solver })
 
 
+let get_packable_resources () = inspect (fun s -> s.packable_resources)
+
+let set_packable_resources res : unit m =
+  modify (fun s -> { s with packable_resources = res })
+
+
 let get_movable_indices () = inspect (fun s -> s.movable_indices)
 
 let set_movable_indices ixs : unit m = modify (fun s -> { s with movable_indices = ixs })
@@ -450,6 +458,12 @@ let add_r_internal ?(derive_constraints = true) loc (r, Res.O oargs) =
   in
   let@ () = set_typing_context (Context.add_r loc (r, O oargs) s) in
   iterM (fun x -> add_c_internal (LC.T x)) pointer_facts
+
+
+let add_packable_resource _loc re =
+  let@ res = get_packable_resources () in
+  let@ () = set_packable_resources (re :: res) in
+  set_unfold_resources ()
 
 
 let add_movable_index _loc (pred, ix) =
@@ -678,6 +692,7 @@ let map_and_fold_resources_internal loc (f : Res.t -> 'acc -> changed * 'acc) (a
 let do_unfold_resources loc =
   let rec aux () =
     let@ s = get_typing_context () in
+    let@ packable_resources = get_packable_resources () in
     let@ movable_indices = get_movable_indices () in
     let@ _provable_f = provable_internal (Locations.other __FUNCTION__) in
     let resources, orig_ix = s.resources in
@@ -692,7 +707,7 @@ let do_unfold_resources loc =
       let keep, unpack, extract =
         List.fold_right
           (fun (re, i) (keep, unpack, extract) ->
-            match Pack.unpack loc s.global provable_f2 re with
+            match Pack.unpack loc s.global provable_f2 packable_resources re with
             | Some unpackable ->
               let pname = Req.get_name (fst re) in
               (keep, (i, pname, unpackable) :: unpack, extract)

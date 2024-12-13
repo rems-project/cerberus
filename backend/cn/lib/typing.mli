@@ -166,11 +166,15 @@ val bind_logical_return
 
 val bind_return : Locations.t -> IndexTerms.t list -> ReturnTypes.t -> IndexTerms.t m
 
+val add_packable_resource : Locations.t -> Request.Predicate.t -> unit m
+
 val add_movable_index
   :  Locations.t ->
   (* verbose:bool -> *)
   Request.name * IndexTerms.t ->
   unit m
+
+val get_packable_resources : unit -> Request.Predicate.t list m
 
 val get_movable_indices : unit -> (Request.name * IndexTerms.t) list m
 

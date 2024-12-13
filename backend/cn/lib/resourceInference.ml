@@ -227,7 +227,8 @@ module General = struct
       match needed with
       | false -> return (Some ((requested, oarg), changed_or_deleted))
       | true ->
-        (match Pack.packing_ft here global provable (P requested) with
+        let@ packable_resources = get_packable_resources () in
+        (match Pack.packing_ft here global provable packable_resources (P requested) with
          | Some packing_ft ->
            let ft_pp =
              lazy (LogicalArgumentTypes.pp (fun _ -> Pp.string "resource") packing_ft)
