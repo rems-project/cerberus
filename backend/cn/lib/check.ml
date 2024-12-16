@@ -482,6 +482,13 @@ let check_live_alloc_bounds ?(skip_live = false) reason loc ub ptrs =
     return ()
 
 
+let valid_for_deref loc pointer ct =
+  RI.Special.has_predicate
+    loc
+    (Access Deref)
+    ({ name = Owned (ct, Uninit); pointer; iargs = [] }, None)
+
+
 let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
   let orig_pe = pe in
   let (Mu.Pexpr (loc, _, expect, pe_)) = pe in
@@ -585,29 +592,38 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
               now we don't have fractional resources to prove that such objects are
               live. Might be worth considering a read-only resource as a stop-gap.
               But for now, I just skip the liveness check. *)
-           let unspec = CF.Undefined.UB_unspec_pointer_add in
-           let@ () = check_has_alloc_id loc vt1 unspec in
-           let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
            let result =
              arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc
            in
+           let@ has_owned = valid_for_deref loc result ct in
            let@ () =
-             check_live_alloc_bounds ~skip_live:true `ISO_array_shift loc ub [ result ]
+             if has_owned then
+               return ()
+             else (
+               let unspec = CF.Undefined.UB_unspec_pointer_add in
+               let@ () = check_has_alloc_id loc vt1 unspec in
+               let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
+               check_live_alloc_bounds ~skip_live:true `ISO_array_shift loc ub [ result ])
            in
            k result))
      | PEmember_shift (pe, tag, member) ->
        let@ () = WellTyped.ensure_base_type loc ~expect (Loc ()) in
        let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe) in
        check_pexpr pe (fun vt ->
-         let@ _ = get_struct_member_type loc tag member in
-         (* This should only be called after a PtrValidForDeref, so if we were
-            willing to optimise, we could skip the has_alloc_id, bounds and
-            liveness checks. *)
-         let unspec = CF.Undefined.UB_unspec_pointer_add in
-         let@ () = check_has_alloc_id loc vt unspec in
-         let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
+         let@ ct = get_struct_member_type loc tag member in
          let result = memberShift_ (vt, tag, member) loc in
-         let@ () = check_live_alloc_bounds `ISO_member_shift loc ub [ result ] in
+         (* This should only be called after a PtrValidForDeref, so if we
+            were willing to optimise, we could skip to [k result]. *)
+         let@ has_owned = valid_for_deref loc result ct in
+         let@ () =
+           if has_owned then
+             return ()
+           else (
+             let unspec = CF.Undefined.UB_unspec_pointer_add in
+             let@ () = check_has_alloc_id loc vt unspec in
+             let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
+             check_live_alloc_bounds `ISO_member_shift loc ub [ result ])
+         in
          k result)
      | PEnot pe ->
        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
@@ -1518,13 +1534,19 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
           let@ () = WellTyped.ensure_bits_type loc (Mu.bt_of_pexpr pe2) in
           check_pexpr pe1 (fun vt1 ->
             check_pexpr pe2 (fun vt2 ->
-              let unspec = CF.Undefined.UB_unspec_pointer_add in
-              let@ () = check_has_alloc_id loc vt1 unspec in
-              let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
               let result =
-                arrayShift_ ~base:vt1 ~index:(cast_ Memory.uintptr_bt vt2 loc) act.ct loc
+                arrayShift_ ~base:vt1 act.ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc
               in
-              let@ () = check_live_alloc_bounds `ISO_array_shift loc ub [ result ] in
+              let@ has_owned = valid_for_deref loc result act.ct in
+              let@ () =
+                if has_owned then
+                  k result
+                else (
+                  let unspec = CF.Undefined.UB_unspec_pointer_add in
+                  let@ () = check_has_alloc_id loc vt1 unspec in
+                  let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
+                  check_live_alloc_bounds `ISO_array_shift loc ub [ result ])
+              in
               k result))
         | PtrMemberShift _ ->
           unsupported

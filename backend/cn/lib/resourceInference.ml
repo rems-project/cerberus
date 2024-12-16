@@ -481,6 +481,11 @@ module Special = struct
     match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
 
 
+  let has_predicate loc situation (request, oinfo) =
+    let@ result = sandbox @@ predicate_request loc situation (request, oinfo) in
+    return (Result.is_ok result)
+
+
   (** This function checks whether [ptr1] belongs to a live allocation. It
       searches the context (without modification) for either an Alloc(p) or an
       Owned(p) such that (alloc_id) p == (alloc_id) ptr. *)
@@ -537,10 +542,6 @@ module Special = struct
             { reason; ptr; model_constr = Some (model, constr); ctxt }
         in
         { loc; msg })
-
-
-  let predicate_request loc situation (request, oinfo) =
-    predicate_request loc situation (request, oinfo)
 
 
   let qpredicate_request loc situation (request, oinfo) =
