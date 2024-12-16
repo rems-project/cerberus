@@ -30,6 +30,12 @@ module Special : sig
     Request.Predicate.t * (Locations.t * string) option ->
     (Resource.predicate * int list) Typing.m
 
+  val has_predicate
+    :  Locations.t ->
+    TypeErrors.situation ->
+    Request.Predicate.t * (Locations.t * string) option ->
+    bool Typing.m
+
   val qpredicate_request
     :  Locations.t ->
     TypeErrors.situation ->
