@@ -12,11 +12,11 @@ def time_cmd(cmd):
 
 class Prog:
 
-    def __init__(self, args, config):
-        self.prog = args.prog
+    def __init__(self, opts, config):
+        self.prog = opts.prog
         self.args = config['args']
-        self.print_cmd = args.dry_run or args.verbose
-        self.run_cmd = not args.dry_run
+        self.print_cmd = opts.dry_run or opts.verbose
+        self.run_cmd = not opts.dry_run
         self.timeout = config['timeout']
         self.name = config['name']
 
@@ -99,13 +99,13 @@ def output_bench(name, timings):
     with open(('benchmark-data-%s.json' % name), 'w') as f:
         json.dump([total] + timings, f, indent=2)
 
-def main(args):
-    with open(args.config) as config_file:
+def main(opts):
+    with open(opts.config) as config_file:
         config = json.load(config_file)
-        prog = Prog(args, config)
-        files = filter_tests(test_dir=os.path.dirname(args.config), suffix=args.suffix, matcher=re.compile(config['filter']))
-        result = run_tests(prog, test_rel_paths=files, quiet=args.quiet, max_workers=(1 if args.bench else None))
-        if args.bench:
+        prog = Prog(opts, config)
+        files = filter_tests(test_dir=os.path.dirname(opts.config), suffix=opts.suffix, matcher=re.compile(config['filter']))
+        result = run_tests(prog, test_rel_paths=files, quiet=opts.quiet, max_workers=(1 if opts.bench else None))
+        if opts.bench:
             output_bench(config['name'], result['timings'])
         return result['code']
 
@@ -122,5 +122,5 @@ parser.add_argument('--bench', help='Output a JSON file with benchmarks, includi
 parser.set_defaults(func=main)
 
 # parse args and call func (as set using set_defaults)
-args = parser.parse_args()
-exit(args.func(args))
+opts = parser.parse_args()
+exit(opts.func(opts))
