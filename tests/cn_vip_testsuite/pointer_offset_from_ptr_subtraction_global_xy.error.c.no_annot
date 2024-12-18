@@ -2,14 +2,8 @@ return code: 1
 tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:14:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
   /*CN_VIP*//*@ to_bytes Owned<int*>(&r); @*/
                 ^~~~~~~~ 
-tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:15:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
-                ^~~~~~~~ 
 tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:17:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
   /*CN_VIP*//*@ from_bytes Owned<int*>(&r); @*/
-                ^~~~~~~~~~ 
-tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:18:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
                 ^~~~~~~~~~ 
 [1/1]: main -- fail
 tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:12:22: error: Undefined behaviour
