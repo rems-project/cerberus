@@ -103,7 +103,19 @@ let gen_arg
             ^ (Sym.pp_string name) ^ " in context " ^ (ctx_to_string ctx))
     | n -> List.nth options (Random.int n)
 
-let create_test_file (sequence : Pp.document) (filename_base : string) : Pp.document=
+let stmt_to_doc 
+  (stmt: CF.GenTypes.genTypeCategory A.statement_)
+  : Pp.document
+  =
+  (CF.Pp_ail.pp_statement ~executable_spec:true ~bs:[] 
+      (Executable_spec_utils.mk_stmt 
+        (stmt))) 
+
+let create_test_file 
+  (sequence : Pp.document) 
+  (filename_base : string) 
+  : Pp.document
+  =
   let open Pp in
   string "#include "
   ^^ dquotes (string (filename_base ^ "-exec.c"))
@@ -117,9 +129,9 @@ let create_test_file (sequence : Pp.document) (filename_base : string) : Pp.docu
   ^^ braces 
       (nest 2 
         (hardline 
-          ^^ string "initialise_ownership_ghost_state();"
-          ^^ hardline
-          ^^ string "initialise_ghost_stack_depth();"
+          ^^ 
+          let init_ghost = Ownership_exec.get_ownership_global_init_stats () in
+          separate_map hardline stmt_to_doc init_ghost 
           ^^ hardline
           ^^ sequence 
           ^^ hardline 
@@ -150,16 +162,8 @@ let rec gen_sequence
   (output_dir : string)
   (filename_base : string)
   (src_code : string list)
-  :  (Pp.document * test_stats, Pp.document * test_stats) Either.either
+  : (Pp.document * test_stats, Pp.document * test_stats) Either.either
   =           
-    let stmt_to_doc 
-      (stmt: CF.GenTypes.genTypeCategory A.statement_)
-      : Pp.document
-      =
-      (CF.Pp_ail.pp_statement ~executable_spec:true ~bs:[] 
-          (Executable_spec_utils.mk_stmt 
-            (stmt))) 
-    in
     let open Pp 
     in 
     (match fuel with
@@ -172,18 +176,18 @@ let rec gen_sequence
       let rec gen_test 
         (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) 
         (retries_left : int)
-        : (SymSet.elt * C.ctype) list * (document, document) Either.either
+        : (SymSet.elt * C.ctype) list * int * (document, document) Either.either
         =
         if retries_left = 0 then 
-          ctx, Either.Left(empty)
+          ctx, prev, Either.Left(empty)
         else
         (match args_map with
         | (f, ((qualifiers, ret_ty), args)) -> 
-          let (ctx', name, assign) = 
+          let (ctx', name, assign, prev) = 
           (match ret_ty with 
-          | Ctype(_, Void) -> (ctx, None, empty) (* attempted to use fresh_cn but did not work for some reason?*)
+          | Ctype(_, Void) -> (ctx, None, empty, prev) (* attempted to use fresh_cn but did not work for some reason?*)
           | _ -> let name = Sym.fresh_named ("x" ^ string_of_int prev) in 
-                ((name, ret_ty)::ctx, Some(name), separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals]))
+                ((name, ret_ty)::ctx, Some(name), separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals], prev+1))
           in
           let curr_test = 
             (assign ^^ Sym.pp f ^^ parens
@@ -202,7 +206,7 @@ let rec gen_sequence
           let _ = SpecTests.save output_dir (filename_base ^ "_test.c") (create_test_file (seq_so_far ^^ curr_test) filename_base) in
           let (output, status) = out_to_list (output_dir ^ "/run_tests.sh") in
           match status with
-          | WEXITED(0) -> ctx', Either.Right(curr_test)
+          | WEXITED(0) -> ctx', prev, Either.Right(curr_test)
           | _ -> 
             let violation_regex = Str.regexp {| +\^~+ .+\.c:\([0-9]+\):[0-9]+-[0-9]+|} in
             let is_post_regex = Str.regexp {|\(/\*@\)?[ \t]*ensures|} in
@@ -235,7 +239,7 @@ let rec gen_sequence
             if is_precond_violation (drop (List.length src_code - violation_line_num) src_code) then
               gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) (retries_left - 1)
             else
-              (ctx', 
+              (ctx', prev,
               Either.Left(
                 string 
                   (Printf.sprintf "/* violation of post-condition at line number %d in %s detected on this call: */" 
@@ -249,8 +253,8 @@ let rec gen_sequence
       | 0 -> Left(seq_so_far ^^ (string "/* unable to generate call at this point */"), {stats with failures = stats.failures + 1})
       | _ -> 
         (match gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) max_retries with
-        | ctx', Either.Right(test) -> gen_sequence funcs (n - 1) max_retries {stats with successes = stats.successes + 1} ctx' (prev + 1) (seq_so_far ^^ test) output_dir filename_base src_code
-        | _, Either.Left(err) -> 
+        | ctx', prev, Either.Right(test) -> gen_sequence funcs (n - 1) max_retries {stats with successes = stats.successes + 1} ctx' prev (seq_so_far ^^ test) output_dir filename_base src_code
+        | _, prev, Either.Left(err) -> 
           (if is_empty err then 
             gen_sequence funcs (n - 1) max_retries {stats with skipped = stats.skipped + 1} ctx prev seq_so_far output_dir filename_base src_code
           else 
@@ -293,15 +297,14 @@ let compile_sequence
       gen_sequence args_map fuel max_retries {successes = 0; failures = 0; skipped = 0} [] 0 Pp.empty output_dir filename_base src_code
 
 let generate
-~(output_dir : string)
-~(filename : string)
-(num_samples : int)
-(max_retries : int)
-(sigma : CF.GenTypes.genTypeCategory A.sigma)
-(prog5 : unit Mucore.file)
-
-: unit
-=
+  ~(output_dir : string)
+  ~(filename : string)
+  (num_samples : int)
+  (max_retries : int)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
+  : unit
+  =
   let insts =
     prog5
     |> Executable_spec_extract.collect_instrumentation
@@ -318,11 +321,19 @@ let generate
   let compiled_seq = compile_sequence sigma insts num_samples max_retries output_dir filename_base src_code in
   let seq, output_msg = match compiled_seq with
   | Left(seq, stats) -> 
-      seq, (Printf.sprintf "Testing Summary:\n%d tests succeeded\nPOST-CONDITION VIOLATION DETECTED.\nSee %s/%s for details\n" stats.successes output_dir test_file)
+      seq, (Printf.sprintf 
+              "Testing Summary:\n\
+              %d tests succeeded\n\
+              POST-CONDITION VIOLATION DETECTED.\n\
+              See %s/%s for details"
+            stats.successes output_dir test_file)
   | Right(seq, stats) ->
-      seq, (Printf.sprintf "Testing Summary:\npassed: %d, failed: %d, skipped: %d\n" stats.successes stats.failures stats.skipped)
+      seq, (Printf.sprintf 
+              "Testing Summary:\n\
+              passed: %d, failed: %d, skipped: %d" 
+            stats.successes stats.failures stats.skipped)
   in
   let tests_doc = create_test_file seq filename_base in
-  print_string output_msg;
+  print_endline output_msg;
   SpecTests.save output_dir test_file tests_doc;
   ()
