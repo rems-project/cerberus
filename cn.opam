@@ -10,6 +10,7 @@ authors: [
   "Zain K Aamer"
   "Kayvan Memarian"
 ]
+license: "BSD-2-Clause"
 homepage: "https://rems-project.github.io/cn-tutorial"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
@@ -21,6 +22,9 @@ depends: [
   "cmdliner"
   "ocamlgraph"
   "zarith" {>= "1.13"}
+  "coq" {>= "8.18.0" & with-coq}
+  "coq-ext-lib" {with-coq}
+  "coq-struct-tact" {with-coq}  
 ]
 build: [
   ["dune" "subst"] {pinned}
