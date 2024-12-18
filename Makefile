@@ -312,3 +312,13 @@ uninstall: cerberus
 uninstall_cn: cn
 	@echo "[DUNE] uninstall cn"
 	$(Q)dune uninstall cn
+
+.PHONY: cn-coq
+cn-coq:
+	@echo "[DUNE] cn-coq"
+	$(Q)dune build -p cn-coq
+
+.PHONY: cn-coq-install
+cn-coq-install: cn-coq
+	@echo "[DUNE] install cn-coq"
+	$(Q)dune install cn-coq

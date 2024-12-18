@@ -24,8 +24,8 @@ Install the remaining dependencies using opam:
 ```shell
 opam pin add -ny cerberus-lib .
 opam pin add -ny cerberus-cheri .
-opam var --switch=`opam switch show` with-coq=true
-opam install --deps-only ./cn.opam
+opam pin add -ny cn .
+opam install --deps-only ./cn-coq.opam
 ```
 
 Then to build Cn-Coq:
