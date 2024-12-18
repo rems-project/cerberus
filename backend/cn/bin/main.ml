@@ -446,6 +446,7 @@ let run_seq_tests
   (* Test Generation *)
     output_dir
     num_samples
+    backtrack_attempts
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -502,6 +503,7 @@ let run_seq_tests
             ~output_dir
             ~filename
             num_samples
+            backtrack_attempts
             sigma
             prog5;)
         ();
@@ -1223,6 +1225,7 @@ let testing_cmd =
       $ Executable_spec_flags.without_ownership_checking
       $ Testing_flags.output_test_dir
       $ Testing_flags.gen_num_samples
+      $ Testing_flags.gen_backtrack_attempts
     in
     let doc =
       "Generates sequences of calls for the API in [FILE].\n\

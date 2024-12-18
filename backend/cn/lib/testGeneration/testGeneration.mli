@@ -15,6 +15,7 @@ val run_seq
   :  output_dir:string ->
   filename:string ->
   int ->
+  int ->
   Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
   unit Mucore.file ->
   unit

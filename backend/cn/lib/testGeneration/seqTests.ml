@@ -10,6 +10,8 @@ module ESpecInternal = Executable_spec_internal
 module Config = TestGenConfig
 module SymSet = Set.Make (Sym)
 
+type test_stats = {successes : int; failures : int; skipped: int}
+
 let rec pick 
   (distribution : (int * (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) list) 
   (i : int)
@@ -18,7 +20,7 @@ let rec pick
   match distribution with
   | [] -> failwith "impossible case"
   | (score, f)::fs -> if i <= score then f else pick fs (i - score)
-     
+
 let callable 
   (ctx : (Sym.t * C.ctype) list) 
   ((_, (_, args)) : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) 
@@ -30,6 +32,7 @@ let callable
       (match ty with
       | Basic(Integer(Char)) | Basic(Integer(Bool)) | Basic(Integer(Signed(_))) 
       | Basic(Integer(Unsigned(_))) | Basic(Floating(_)) | Void -> true
+      | Pointer(_, ty) -> List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx
       | _ -> false)) 
     || List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx) 
     args)
@@ -45,9 +48,19 @@ let calc_score
     else acc) 
   1 args
 
+let ctx_to_string 
+  (ctx : (Sym.t * C.ctype) list)
+  : string
+  =
+  List.fold_left (^) "" (
+    List.map (
+      fun (name, ty) ->
+        "(" ^ (Sym.pp_string name) ^ ":" ^ (CF.String_core_ctype.string_of_ctype ty) ^ ")"
+    ) ctx)
+
 let gen_arg 
   (ctx : (Sym.t * C.ctype) list)  
-  ((_, ty) : Sym.t * C.ctype) 
+  ((name, ty) : Sym.t * C.ctype) 
   : Pp.document
   =
   let open Pp in 
@@ -65,14 +78,29 @@ let gen_arg
     | _                           -> []))
     in
     let prev_call = 
-        let prev_calls = List.filter (fun (_, ct) -> C.ctypeEqual ty ct) ctx in
+        let prev_calls = 
+          List.filter (
+            fun (_, ct) -> 
+              C.ctypeEqual ty ct || 
+              (match ty with 
+              | Ctype(_, Pointer(_, ty)) -> (C.ctypeEqual ty ct)
+              | _ -> false
+              )
+          ) ctx in
         (match List.length prev_calls with
         | 0 -> []
-        | n -> let (name, _) = List.nth prev_calls (Random.int n) in [Sym.pp name])
+        | n -> 
+          let (name, ty') = List.nth prev_calls (Random.int n) in
+          if not (C.ctypeEqual ty' ty) then (* only way they're not directly equal is if pointer*)
+            [string "&" ^^ Sym.pp name]
+          else
+            [Sym.pp name])
     in
     let options = List.append generated_base_ty prev_call in
     match List.length options with
-    | 0 -> failwith "unable to generate arg or reuse context"
+    | 0 -> failwith 
+            ("unable to generate arg or reuse context for " 
+            ^ (Sym.pp_string name) ^ " in context " ^ (ctx_to_string ctx))
     | n -> List.nth options (Random.int n)
 
 let create_test_file (sequence : Pp.document) (filename_base : string) : Pp.document=
@@ -114,38 +142,63 @@ let out_to_list
 let rec gen_sequence 
   (funcs : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list)
   (fuel : int)
+  (max_retries : int)
+  (stats : test_stats)
   (ctx : (Sym.t * C.ctype) list)
   (prev : int)
   (seq_so_far : Pp.document)
   (output_dir : string)
   (filename_base : string)
   (src_code : string list)
-  : Pp.document
-  = 
-    let open Pp in 
+  :  (Pp.document * test_stats, Pp.document * test_stats) Either.either
+  =           
+    let stmt_to_doc 
+      (stmt: CF.GenTypes.genTypeCategory A.statement_)
+      : Pp.document
+      =
+      (CF.Pp_ail.pp_statement ~executable_spec:true ~bs:[] 
+          (Executable_spec_utils.mk_stmt 
+            (stmt))) 
+    in
+    let open Pp 
+    in 
     (match fuel with
-    | 0 -> seq_so_far
+    | 0 -> let unmap_stmts = List.map Ownership_exec.generate_c_local_ownership_exit ctx in
+           let unmap_str = hardline ^^ separate_map hardline stmt_to_doc unmap_stmts in Right(seq_so_far ^^ unmap_str, stats)
     | n -> 
       let fs = List.map 
         (fun ((_, (_, args)) as f)  -> (calc_score ctx args, f))
       (List.filter (callable ctx) funcs) in
       let rec gen_test 
-      (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) 
-      =
-        let open Pp in 
+        (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) 
+        (retries_left : int)
+        : (SymSet.elt * C.ctype) list * (document, document) Either.either
+        =
+        if retries_left = 0 then 
+          ctx, Either.Left(empty)
+        else
         (match args_map with
         | (f, ((qualifiers, ret_ty), args)) -> 
-          let (ctx', assign) = 
+          let (ctx', name, assign) = 
           (match ret_ty with 
-          | Ctype(_, Void) -> (ctx, empty) (* attempted to use fresh_cn but did not work for some reason?*)
+          | Ctype(_, Void) -> (ctx, None, empty) (* attempted to use fresh_cn but did not work for some reason?*)
           | _ -> let name = Sym.fresh_named ("x" ^ string_of_int prev) in 
-                ((name, ret_ty)::ctx, separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals]))
-          in 
-          let curr_test = (assign ^^ Sym.pp f ^^ parens
-          (separate
-            (comma ^^ space)
-            [ separate_map (comma ^^ space) (gen_arg ctx) args ])
-            ^^ semi ^^ hardline) in
+                ((name, ret_ty)::ctx, Some(name), separate space [CF.Pp_ail.pp_ctype qualifiers ret_ty; Sym.pp name; equals]))
+          in
+          let curr_test = 
+            (assign ^^ Sym.pp f ^^ parens
+            (separate
+              (comma ^^ space)
+              [ separate_map (comma ^^ space) (gen_arg ctx) args ])
+            ^^ semi 
+            ^^ hardline 
+            ^^ (match name with 
+            | None -> empty
+            | Some(name) -> 
+                stmt_to_doc(A.AilSexpr(Ownership_exec.generate_c_local_ownership_entry_fcall (name, ret_ty))) 
+                ^^ hardline)
+            ) 
+          in
           let _ = SpecTests.save output_dir (filename_base ^ "_test.c") (create_test_file (seq_so_far ^^ curr_test) filename_base) in
           let (output, status) = out_to_list (output_dir ^ "/run_tests.sh") in
           match status with
@@ -180,26 +233,39 @@ let rec gen_sequence
             in 
             let violation_line_num = get_violation_line output in
             if is_precond_violation (drop (List.length src_code - violation_line_num) src_code) then
-              gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs))))
+              gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) (retries_left - 1)
             else
-              ctx', Either.Left(string "/* post-condition violation detected on this call: */" ^^ hardline ^^ curr_test))
-            in
+              (ctx', 
+              Either.Left(
+                string 
+                  (Printf.sprintf "/* violation of post-condition at line number %d in %s detected on this call: */" 
+                    violation_line_num (filename_base ^ ".c")) 
+                ^^ hardline 
+                ^^ curr_test)
+              )
+        )
+      in
       (match (List.length fs) with
-      | 0 -> string "unable to generate call at this point"
+      | 0 -> Left(seq_so_far ^^ (string "/* unable to generate call at this point */"), {stats with failures = stats.failures + 1})
       | _ -> 
-        match gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) with
-        | ctx', Either.Right(test) -> gen_sequence funcs (n - 1) ctx' (prev + 1) (seq_so_far ^^ test) output_dir filename_base src_code
-        | _, Either.Left(err) -> (seq_so_far ^^ err))
+        (match gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) max_retries with
+        | ctx', Either.Right(test) -> gen_sequence funcs (n - 1) max_retries {stats with successes = stats.successes + 1} ctx' (prev + 1) (seq_so_far ^^ test) output_dir filename_base src_code
+        | _, Either.Left(err) -> 
+          (if is_empty err then 
+            gen_sequence funcs (n - 1) max_retries {stats with skipped = stats.skipped + 1} ctx prev seq_so_far output_dir filename_base src_code
+          else 
+            Either.Left(seq_so_far ^^ err, {stats with failures = 1}))))
     )
 
 let compile_sequence 
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (insts : Executable_spec_extract.instrumentation list)
   (num_samples : int)
+  (max_retries : int)
   (output_dir : string)
   (filename_base : string)
   (src_code : string list)
-  : Pp.document
+  : (Pp.document * test_stats, Pp.document * test_stats) Either.either
   = 
   let fuel = num_samples in
   let declarations : A.sigma_declaration list =
@@ -224,12 +290,13 @@ let compile_sequence
                     "@";
                     __LOC__
                   ]) )) insts in
-      gen_sequence args_map fuel [] 0 Pp.empty output_dir filename_base src_code
+      gen_sequence args_map fuel max_retries {successes = 0; failures = 0; skipped = 0} [] 0 Pp.empty output_dir filename_base src_code
 
 let generate
 ~(output_dir : string)
 ~(filename : string)
 (num_samples : int)
+(max_retries : int)
 (sigma : CF.GenTypes.genTypeCategory A.sigma)
 (prog5 : unit Mucore.file)
 
@@ -248,8 +315,14 @@ let generate
   let script_doc = SpecTests.compile_script ~output_dir ~test_file in
   let src_code, _ = out_to_list ("cat " ^ filename) in
   SpecTests.save ~perm:0o777 output_dir "run_tests.sh" script_doc;
-  let tests_doc =
-    create_test_file (compile_sequence sigma insts num_samples output_dir filename_base src_code) filename_base
+  let compiled_seq = compile_sequence sigma insts num_samples max_retries output_dir filename_base src_code in
+  let seq, output_msg = match compiled_seq with
+  | Left(seq, stats) -> 
+      seq, (Printf.sprintf "Testing Summary:\n%d tests succeeded\nPOST-CONDITION VIOLATION DETECTED.\nSee %s/%s for details\n" stats.successes output_dir test_file)
+  | Right(seq, stats) ->
+      seq, (Printf.sprintf "Testing Summary:\npassed: %d, failed: %d, skipped: %d\n" stats.successes stats.failures stats.skipped)
   in
+  let tests_doc = create_test_file seq filename_base in
+  print_string output_msg;
   SpecTests.save output_dir test_file tests_doc;
   ()

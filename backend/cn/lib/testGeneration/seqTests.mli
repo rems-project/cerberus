@@ -5,6 +5,7 @@ val generate
   :  output_dir:string ->
   filename:string ->
   int ->
+  int ->
   CF.GenTypes.genTypeCategory A.sigma ->
   unit Mucore.file ->
   unit
