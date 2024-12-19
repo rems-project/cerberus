@@ -102,7 +102,6 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "int_to_ptr.c" \
     ! -name "int_to_ptr.error.c" \
     ! -name "create_rdonly.c" \
-    ! -name "to_from_bytes_block.c" \
 )
 
 # Include files which cause error for proof but not testing
@@ -169,7 +168,6 @@ BUGGY="cn/division_casting.c \
        cn/int_to_ptr.c \
        cn/int_to_ptr.error.c \
        cn/create_rdonly.c \
-       cn/to_from_bytes_block.c \
        "
 
 # Exclude files which cause error for proof but not testing

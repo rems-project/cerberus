@@ -49,6 +49,12 @@ module QPredicate : sig
   val subst : [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> t -> t
 
   val dtree : t -> Cerb_frontend.Pp_ast.doc_tree
+
+  val get_lower_bound : t -> IndexTerms.t
+
+  val get_upper_bound : t -> IndexTerms.t
+
+  val get_bounds : t -> IndexTerms.t * IndexTerms.t
 end
 
 type t =

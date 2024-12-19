@@ -41,7 +41,7 @@ let apply_array_max_length (gt : GT.t) : GT.t =
     | Assert (lc, gt') -> GT.assert_ (lc, aux gt') here
     | ITE (it_if, gt_then, gt_else) -> GT.ite_ (it_if, aux gt_then, aux gt_else) here
     | Map ((i, i_bt, it_perm), gt') ->
-      let _it_min, it_max = GenAnalysis.get_bounds (i, i_bt) it_perm in
+      let _it_min, it_max = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
       let loc = Locations.other __LOC__ in
       let it_max_min =
         IT.le_
