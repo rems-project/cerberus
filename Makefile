@@ -322,3 +322,8 @@ cn-coq:
 cn-coq-install: cn-coq
 	@echo "[DUNE] install cn-coq"
 	$(Q)dune install cn-coq
+
+.PHONY: cn-with-coq
+cn-with-coq:
+	@echo "[DUNE] cn,cn-coq"
+	$(Q)dune build -p cn,cn-coq
