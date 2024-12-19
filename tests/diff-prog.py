@@ -76,7 +76,7 @@ def format_timing(name, value):
 
 def run_tests(prog, test_rel_paths, quiet, max_workers):
     test_rel_paths = list(test_rel_paths)
-    with concurrent.futures.ProcessPoolExecutor() as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         failed_tests = 0
         timings = []
         for test_rel_path, outcome in zip(test_rel_paths, executor.map(prog.get_diff, test_rel_paths), strict=True):
