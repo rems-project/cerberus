@@ -33,18 +33,27 @@ module Function = struct
 
 
   let pp_args xs =
-    Pp.flow_map
-      (Pp.break 1)
-      (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BaseTypes.pp typ)))
-      xs
+    let doc =
+      Pp.flow_map
+        (Pp.break 1)
+        (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BaseTypes.pp typ)))
+        xs
+    in
+    if PPrint.requirement doc = 0 then
+      Pp.parens Pp.empty
+    else
+      doc
+
+
+  let pp_sig nm def =
+    let open Pp in
+    nm ^^ pp_args def.args ^^^ colon ^^^ BaseTypes.pp def.return_bt
 
 
   let pp nm def =
     let open Pp in
-    nm
-    ^^ colon
-    ^^^ pp_args def.args
-    ^^ colon
+    pp_sig nm def
+    ^^^ equals
     ^/^
     match def.body with
     | Uninterp -> !^"uninterpreted"
