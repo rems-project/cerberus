@@ -3,6 +3,6 @@
  (package cn-coq)
  (synopsis "Coq formalization of CN's Mucore intermediate language")
  (mode vo)
- (modules MuCore)
+ (modules MuCore CerbTypes)
 )
 

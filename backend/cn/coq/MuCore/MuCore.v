@@ -5,8 +5,9 @@ Require Import String.
 Require Import List.
 Require Import ZArith.
 
+Require Import MuCore.CerbTypes.
+
 (* We'll need to declare some types that are imported from other modules *)
-Parameter Locations_t : Type.
 Parameter Annot_t : Type.
 Parameter Sctypes_t : Type.
 Parameter Sym_t : Type.
@@ -18,6 +19,7 @@ Parameter mem_iv_constraint : Type.
 Parameter binop : Type.
 Parameter iop : Type.
 Parameter undefined_behaviour : Type.
+
 
 (* Annotated C type *)
 Record act := {
