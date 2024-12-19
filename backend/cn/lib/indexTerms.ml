@@ -1205,3 +1205,113 @@ let rec map_term_post (f : t -> t) (it : t) : t =
     | Cast (bt', it') -> Cast (bt', loop it')
   in
   f (IT (it_, bt, here))
+
+
+module Bounds = struct
+  let get_lower_bound_opt ((x, bt) : Sym.sym * BT.t) (it : t) : t option =
+    let rec aux (it : t) : t option =
+      match it with
+      | IT (Binop (EQ, IT (Sym x', _, _), tm2), _, _)
+      | IT (Binop (EQ, tm2, IT (Sym x', _, _)), _, _) ->
+        if Sym.equal x x' then Some tm2 else None
+      | IT (Binop (LE, it', IT (Sym x', _, _)), _, _) when Sym.equal x x' -> Some it'
+      | IT (Binop (LT, it', IT (Sym x', _, _)), _, _) when Sym.equal x x' ->
+        Some
+          (IT
+             ( Binop (Add, it', num_lit_ Z.one bt Cerb_location.unknown),
+               bt,
+               Cerb_location.unknown ))
+      | IT (Binop (And, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None -> None
+         | None, it' | it', None -> it'
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Max, tm1, tm2), bt, Cerb_location.unknown)))
+      | IT (Binop (Or, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None | None, _ | _, None -> None
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Min, tm1, tm2), bt, Cerb_location.unknown)))
+      | _ -> None
+    in
+    aux it
+
+
+  let get_lower_bound ((x, bt) : Sym.sym * BT.t) (it : t) : t =
+    let min =
+      match bt with
+      | Bits (sign, sz) -> fst (BT.bits_range (sign, sz))
+      | _ ->
+        Cerb_colour.with_colour
+          (fun () ->
+            print_endline
+              Pp.(
+                plain
+                  (!^"unsupported type"
+                   ^^^ squotes (BT.pp bt)
+                   ^^^ !^"in permission"
+                   ^^^ squotes (pp it)
+                   ^^^ !^"at"
+                   ^^^ Locations.pp (loc it))))
+          ();
+        exit 2
+    in
+    get_lower_bound_opt (x, bt) it
+    |> Option.value ~default:(num_lit_ min bt Cerb_location.unknown)
+
+
+  let get_upper_bound_opt ((x, bt) : Sym.sym * BT.t) (it : t) : t option =
+    let rec aux (it : t) : t option =
+      match it with
+      | IT (Binop (EQ, IT (Sym x', _, _), tm2), _, _)
+      | IT (Binop (EQ, tm2, IT (Sym x', _, _)), _, _) ->
+        if Sym.equal x x' then Some tm2 else None
+      | IT (Binop (LE, IT (Sym x', _, _), it'), _, _) when Sym.equal x x' -> Some it'
+      | IT (Binop (LT, IT (Sym x', _, _), it'), _, _) when Sym.equal x x' ->
+        Some
+          (IT
+             ( Binop (Sub, it', num_lit_ Z.one bt Cerb_location.unknown),
+               bt,
+               Cerb_location.unknown ))
+      | IT (Binop (And, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None -> None
+         | None, it' | it', None -> it'
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Min, tm1, tm2), bt, Cerb_location.unknown)))
+      | IT (Binop (Or, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None | None, _ | _, None -> None
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Max, tm1, tm2), bt, Cerb_location.unknown)))
+      | _ -> None
+    in
+    aux it
+
+
+  let get_upper_bound ((x, bt) : Sym.sym * BT.t) (it : t) : t =
+    let max =
+      match bt with
+      | Bits (sign, sz) -> snd (BT.bits_range (sign, sz))
+      | _ ->
+        Cerb_colour.with_colour
+          (fun () ->
+            print_endline
+              Pp.(
+                plain
+                  (!^"unsupported type"
+                   ^^^ squotes (BT.pp bt)
+                   ^^^ !^"in permission"
+                   ^^^ squotes (pp it)
+                   ^^^ !^"at"
+                   ^^^ Locations.pp (loc it))))
+          ();
+        exit 2
+    in
+    get_upper_bound_opt (x, bt) it
+    |> Option.value ~default:(num_lit_ max bt Cerb_location.unknown)
+
+
+  let get_bounds ((x, bt) : Sym.sym * BT.t) (it : t) : t * t =
+    (get_lower_bound (x, bt) it, get_upper_bound (x, bt) it)
+end

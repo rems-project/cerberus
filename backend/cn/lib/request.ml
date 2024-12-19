@@ -1,5 +1,6 @@
 open Pp.Infix
 module IT = IndexTerms
+module BT = BaseTypes
 
 let pp_maybe_oargs = function None -> Pp.empty | Some oargs -> Pp.parens (IT.pp oargs)
 
@@ -142,6 +143,17 @@ module QPredicate = struct
         :: dtree_of_name qpred.name
         :: IT.dtree qpred.pointer
         :: List.map IT.dtree qpred.iargs )
+
+
+  let get_lower_bound (qpred : t) : IT.t =
+    IndexTerms.Bounds.get_lower_bound qpred.q qpred.permission
+
+
+  let get_upper_bound (qpred : t) : IT.t =
+    IndexTerms.Bounds.get_upper_bound qpred.q qpred.permission
+
+
+  let get_bounds (qpred : t) : IT.t * IT.t = (get_lower_bound qpred, get_upper_bound qpred)
 end
 
 type t =

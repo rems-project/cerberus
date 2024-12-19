@@ -498,80 +498,6 @@ let get_equality_fn_call bt e1 e2 _dts =
                (CF.Pp_utils.to_plain_pretty_string (BT.pp bt)))))
 
 
-let rearrange_start_inequality sym (IT.(IT (_, _, loc)) as e1) e2 =
-  match IT.term e2 with
-  | IT.Binop (binop, (IT.IT (Sym sym1, _, _) as expr1), (IT.IT (Sym sym2, _, _) as expr2))
-    ->
-    if Sym.equal sym sym1 then (
-      let inverse_binop =
-        match binop with
-        | Add -> IT.Sub
-        | Sub -> Add
-        | _ -> failwith "Other binops not supported"
-      in
-      IT.(Binop (inverse_binop, e1, expr2)))
-    else if Sym.equal sym sym2 then (
-      match binop with
-      | Add -> IT.Binop (Sub, e1, expr1)
-      | Sub -> failwith "Minus not supported"
-      | _ -> failwith "Other binops not supported")
-    else
-      failwith "Not of correct form"
-  | _ ->
-    failwith ("TODO rearrange_start_inequality at " ^ Cerb_location.simple_location loc)
-
-
-let generate_start_expr start_cond sym =
-  let start_expr, binop =
-    match IT.term start_cond with
-    | IT.(Binop (binop, expr1, IT.IT (Sym sym', _, _))) ->
-      if Sym.equal sym sym' then
-        (expr1, binop)
-      else
-        failwith "Not of correct form (unlikely case - i's not matching)"
-    | IT.(Binop (binop, expr1, expr2)) ->
-      ( IT.IT
-          (rearrange_start_inequality sym expr1 expr2, BT.Integer, Cerb_location.unknown),
-        binop )
-    | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
-  in
-  match binop with
-  | LE -> start_expr
-  | LT ->
-    let one =
-      IT.(IT (Const (IT.Z (Z.of_int 1)), IT.bt start_expr, Cerb_location.unknown))
-    in
-    IT.(IT (Binop (Add, start_expr, one), IT.bt start_expr, Cerb_location.unknown))
-  | _ -> failwith "Not of correct form: not Le or Lt"
-
-
-let rec get_leftmost_of_and_expr = function
-  | IT.IT (IT.(Binop (And, lhs, _rhs)), _, _) -> get_leftmost_of_and_expr lhs
-  | lhs -> lhs
-
-
-let rec get_rest_of_expr_r_aux it =
-  match IT.term it with
-  | IT.(Binop (And, lhs, rhs)) ->
-    let r = get_rest_of_expr_r_aux lhs in
-    (match IT.term r with
-     | Const (Bool true) -> rhs
-     | _ -> IT.IT (IT.(Binop (And, r, rhs)), BT.Bool, IT.loc it))
-  | _lhs -> IT.IT (Const (Bool true), BT.Bool, IT.loc it)
-
-
-let get_rest_of_expr_r it =
-  match IT.term it with
-  | IT.(Binop (And, lhs, rhs)) ->
-    let is_simple =
-      match (IT.term lhs, IT.term rhs) with
-      | Binop (And, _, _), _ | _, Binop (And, _, _) -> false
-      | _, _ -> true
-    in
-    if is_simple then rhs else get_rest_of_expr_r_aux it
-  | _ -> IT.IT (Const (Bool true), BT.Bool, IT.loc it)
-
-
 let convert_from_cn_bool_sym =
   Sym.fresh_named (Option.get (get_conversion_from_fn_str BT.Bool))
 
@@ -2556,6 +2482,64 @@ let cn_to_ail_struct ((sym, (loc, attrs, tag_def)) : A.sigma_tag_definition)
   | C.UnionDef _ -> []
 
 
+let get_while_bounds_and_cond (i_sym, i_bt) it =
+  (* Translation of q.pointer *)
+  let i_it = IT.IT (IT.(Sym i_sym), i_bt, Cerb_location.unknown) in
+  (* Start of range *)
+  let start_expr =
+    if BT.equal_sign (fst (Option.get (BT.is_bits_bt i_bt))) BT.Unsigned then
+      IndexTerms.Bounds.get_lower_bound (i_sym, i_bt) it
+    else (
+      match IndexTerms.Bounds.get_lower_bound_opt (i_sym, i_bt) it with
+      | Some e -> e
+      | None ->
+        Cerb_colour.with_colour
+          (fun () ->
+            print_endline
+              Pp.(
+                plain
+                  (Pp.item
+                     "Cannot infer lower bound for permission"
+                     (squotes (IT.pp it) ^^^ !^"at" ^^^ Locations.pp (IT.loc it)))))
+          ();
+        exit 2)
+  in
+  let start_expr =
+    IT.IT (IT.Cast (IT.bt start_expr, start_expr), IT.bt start_expr, Cerb_location.unknown)
+  in
+  let start_cond =
+    match start_expr with
+    | IT (Binop (Add, start_expr', IT (Const (Bits (_, n)), _, _)), _, _)
+      when Z.equal n Z.one ->
+      IT.lt_ (start_expr', i_it) Cerb_location.unknown
+    | _ -> IT.le_ (start_expr, i_it) Cerb_location.unknown
+  in
+  (* End of range *)
+  let end_expr =
+    match IndexTerms.Bounds.get_upper_bound_opt (i_sym, i_bt) it with
+    | Some e -> e
+    | None ->
+      Cerb_colour.with_colour
+        (fun () ->
+          print_endline
+            Pp.(
+              plain
+                (Pp.item
+                   "Cannot infer upper bound for permission"
+                   (squotes (IT.pp it) ^^^ !^"at" ^^^ Locations.pp (IT.loc it)))))
+        ();
+      exit 2
+  in
+  let end_cond =
+    match end_expr with
+    | IT (Binop (Sub, end_expr', IT (Const (Bits (_, n)), _, _)), _, _)
+      when Z.equal n Z.one ->
+      IT.lt_ (i_it, end_expr') Cerb_location.unknown
+    | _ -> IT.le_ (i_it, end_expr) Cerb_location.unknown
+  in
+  (start_expr, end_expr, IT.and2_ (start_cond, end_cond) Cerb_location.unknown)
+
+
 (* is_pre used for ownership checking, to see if ownership needs to be taken or put back *)
 let cn_to_ail_resource_internal
   ?(is_pre = true)
@@ -2654,22 +2638,12 @@ let cn_to_ail_resource_internal
     }
     *)
     let i_sym, i_bt = q.q in
-    let start_cond = get_leftmost_of_and_expr q.permission in
-    let start_expr = generate_start_expr start_cond (fst q.q) in
-    let start_expr =
-      IT.IT
-        (IT.Cast (IT.bt start_expr, start_expr), IT.bt start_expr, Cerb_location.unknown)
-    in
+    let start_expr, _, while_loop_cond = get_while_bounds_and_cond q.q q.permission in
     let _, _, e_start = cn_to_ail_expr_internal dts globals start_expr PassBack in
-    let end_cond = get_leftmost_of_and_expr (get_rest_of_expr_r q.permission) in
-    let if_stat_cond = get_rest_of_expr_r (get_rest_of_expr_r q.permission) in
-    let while_loop_cond =
-      IT.IT (Binop (And, start_cond, end_cond), BT.Bool, Cerb_location.unknown)
-    in
     let _, _, while_cond_expr =
       cn_to_ail_expr_internal dts globals while_loop_cond PassBack
     in
-    let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals if_stat_cond PassBack in
+    let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals q.permission PassBack in
     let cn_integer_ptr_ctype = bt_to_ail_ctype i_bt in
     (* let convert_to_cn_integer_sym =
        Sym.fresh_pretty (Option.get (get_conversion_to_fn_str BT.Integer))
@@ -2876,26 +2850,12 @@ let cn_to_ail_logical_constraint_internal
           
           assign/return/assert/passback b
        *)
-       let start_cond = get_leftmost_of_and_expr cond_it in
-       let start_expr = generate_start_expr start_cond sym in
-       let start_expr =
-         IT.IT
-           ( IT.Cast (IT.bt start_expr, start_expr),
-             IT.bt start_expr,
-             Cerb_location.unknown )
-       in
+       let start_expr, _, while_loop_cond = get_while_bounds_and_cond (sym, bt) cond_it in
        let _, _, e_start = cn_to_ail_expr_internal dts globals start_expr PassBack in
-       let end_cond = get_leftmost_of_and_expr (get_rest_of_expr_r cond_it) in
-       let if_stat_cond = get_rest_of_expr_r (get_rest_of_expr_r cond_it) in
-       let while_loop_cond =
-         IT.IT (Binop (And, start_cond, end_cond), BT.Bool, Cerb_location.unknown)
-       in
        let _, _, while_cond_expr =
          cn_to_ail_expr_internal dts globals while_loop_cond PassBack
        in
-       let _, _, if_cond_expr =
-         cn_to_ail_expr_internal dts globals if_stat_cond PassBack
-       in
+       let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals cond_it PassBack in
        let t_translated = cn_to_ail_expr_internal dts globals t PassBack in
        let bs, ss, e =
          gen_bool_while_loop
@@ -2957,8 +2917,7 @@ let cn_to_ail_function_internal
                 (Pp.item
                    "Uninterpreted CN functions not supported at runtime. Please provide \
                     a concrete function definition for"
-                   (space
-                    ^^^ squotes (Definition.Function.pp_sig (Sym.pp fn_sym) lf_def)
+                   (squotes (Definition.Function.pp_sig (Sym.pp fn_sym) lf_def)
                     ^^^ !^"at"
                     ^^^ Locations.pp lf_def.loc))))
         ();
@@ -3637,22 +3596,12 @@ let cn_to_ail_assume_resource_internal
       }
     *)
     let i_sym, i_bt = q.q in
-    let start_cond = get_leftmost_of_and_expr q.permission in
-    let start_expr = generate_start_expr start_cond (fst q.q) in
-    let start_expr =
-      IT.IT
-        (IT.Cast (IT.bt start_expr, start_expr), IT.bt start_expr, Cerb_location.unknown)
-    in
+    let start_expr, _, while_loop_cond = get_while_bounds_and_cond q.q q.permission in
     let _, _, e_start = cn_to_ail_expr_internal dts globals start_expr PassBack in
-    let end_cond = get_leftmost_of_and_expr (get_rest_of_expr_r q.permission) in
-    let if_stat_cond = get_rest_of_expr_r (get_rest_of_expr_r q.permission) in
-    let while_loop_cond =
-      IT.IT (Binop (And, start_cond, end_cond), BT.Bool, Cerb_location.unknown)
-    in
     let _, _, while_cond_expr =
       cn_to_ail_expr_internal dts globals while_loop_cond PassBack
     in
-    let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals if_stat_cond PassBack in
+    let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals q.permission PassBack in
     let cn_integer_ptr_ctype = bt_to_ail_ctype i_bt in
     (* let convert_to_cn_integer_sym =
        Sym.fresh_pretty (Option.get (get_conversion_to_fn_str BT.Integer))

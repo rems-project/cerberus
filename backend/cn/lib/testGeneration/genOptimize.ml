@@ -126,7 +126,7 @@ module Fusion = struct
                 ((i, i_bt), (IT (Binop (Implies, it_perm, it_body), _, loc_implies) as it)),
               gt' )
           when Sym.Set.mem x (IT.free_vars it) && check_index_ok x i it ->
-          let it_min', it_max' = GA.get_bounds (i, i_bt) it_perm in
+          let it_min', it_max' = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
           let gt', res = aux gt' in
           if
             IT.equal it_min it_min'
@@ -171,7 +171,7 @@ module Fusion = struct
         | Let
             (backtracks, (x, GT (Map ((i, i_bt, it_perm), gt_inner), _, loc_map)), gt_rest)
           ->
-          let its_bounds = GA.get_bounds (i, i_bt) it_perm in
+          let its_bounds = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
           let gt_rest, constraints =
             collect_constraints (Sym.Set.add x vars) x its_bounds gt_rest
           in
