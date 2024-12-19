@@ -18,7 +18,7 @@ RUN opam init --disable-sandboxing
 ADD . /opt/cerberus
 WORKDIR /opt/cerberus
 RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
-RUN opam install z3
+RUN opam install z3 cvc5
 
 RUN eval `opam env` \
   && make install_cn
