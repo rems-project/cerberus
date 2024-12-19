@@ -20,6 +20,8 @@ module Function : sig
 
   val pp_args : (Cerb_frontend.Symbol.sym * unit BaseTypes.t_gen) list -> Pp.document
 
+  val pp_sig : Pp.document -> t -> Pp.document
+
   val pp : Pp.document -> t -> Pp.document
 
   val open_ : (Sym.t * 'a) list -> IndexTerms.t -> IndexTerms.t list -> IndexTerms.t

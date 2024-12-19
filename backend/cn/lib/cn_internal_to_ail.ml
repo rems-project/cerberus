@@ -2949,9 +2949,20 @@ let cn_to_ail_function_internal
       in
       (bs, Some (List.map mk_stmt ss))
     | Uninterp ->
-      failwith
-        "Uninterpreted CN functions not supported at runtime. Please provide a concrete \
-         function definition"
+      Cerb_colour.with_colour
+        (fun () ->
+          print_endline
+            Pp.(
+              plain
+                (Pp.item
+                   "Uninterpreted CN functions not supported at runtime. Please provide \
+                    a concrete function definition for"
+                   (space
+                    ^^^ squotes (Definition.Function.pp_sig (Sym.pp fn_sym) lf_def)
+                    ^^^ !^"at"
+                    ^^^ Locations.pp lf_def.loc))))
+        ();
+      exit 2
   in
   let ail_record_opt = generate_record_opt fn_sym lf_def.return_bt in
   let params = List.map (fun (sym, bt) -> (sym, bt_to_ail_ctype bt)) lf_def.args in
