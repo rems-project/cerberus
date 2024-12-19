@@ -2548,18 +2548,41 @@ let cn_to_ail_resource_internal
   dts
   globals
   (preds : (Sym.t * Def.Predicate.t) list)
-  _loc
+  loc
   =
   let calculate_return_type = function
     | Request.Owned (sct, _) ->
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
     | PName pname ->
+      if Sym.equal pname Alloc.Predicate.sym then (
+        Cerb_colour.with_colour
+          (fun () ->
+            print_endline
+              Pp.(
+                plain
+                  (Pp.item
+                     "'Alloc' not currently supported at runtime"
+                     (!^"Used at" ^^^ Locations.pp loc))))
+          ();
+        exit 2);
       let matching_preds =
         List.filter (fun (pred_sym', _def) -> Sym.equal pname pred_sym') preds
       in
       let pred_sym', pred_def' =
-        match matching_preds with [] -> failwith "Predicate not found" | p :: _ -> p
+        match matching_preds with
+        | [] ->
+          Cerb_colour.with_colour
+            (fun () ->
+              print_endline
+                Pp.(
+                  plain
+                    (Pp.item
+                       "Predicate not found"
+                       (Sym.pp pname ^^^ !^"at" ^^^ Locations.pp loc))))
+            ();
+          exit 2
+        | p :: _ -> p
       in
       let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
       let ctype =
@@ -3509,11 +3532,34 @@ let cn_to_ail_assume_resource_internal
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
     | PName pname ->
+      if Sym.equal pname Alloc.Predicate.sym then (
+        Cerb_colour.with_colour
+          (fun () ->
+            print_endline
+              Pp.(
+                plain
+                  (Pp.item
+                     "'Alloc' not currently supported at runtime"
+                     (!^"Used at" ^^^ Locations.pp loc))))
+          ();
+        exit 2);
       let matching_preds =
         List.filter (fun (pred_sym', _def) -> Sym.equal pname pred_sym') preds
       in
       let pred_sym', pred_def' =
-        match matching_preds with [] -> failwith "Predicate not found" | p :: _ -> p
+        match matching_preds with
+        | [] ->
+          Cerb_colour.with_colour
+            (fun () ->
+              print_endline
+                Pp.(
+                  plain
+                    (Pp.item
+                       "Predicate not found"
+                       (Sym.pp pname ^^^ !^"at" ^^^ Locations.pp loc))))
+            ();
+          exit 2
+        | p :: _ -> p
       in
       let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
       let ctype =
