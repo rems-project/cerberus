@@ -10,11 +10,11 @@ Require Import Coq.Structures.OrderedTypeEx.
 
 Require Import Symbol.
 Require Import Location.
+Require Import BaseTypes.
 
 (* We'll need to declare some types that are imported from other modules *)
 Parameter Annot_t : Type.
 Parameter Sctypes_t : Type.
-Parameter BaseTypes_t : Type.
 Parameter IndexTerms_t : Type.
 Parameter Request_t : Type.
 Parameter mem_iv_constraint : Type.
@@ -29,6 +29,14 @@ Parameter Memory_struct_layout : Type.
 Parameter memory_order : Type.
 Parameter linux_memory_order : Type.
 Parameter polarity : Type.
+
+(* Object and value types - using mutual inductive definitions *)
+Inductive integer_value : Type. (* placeholder *)
+Inductive floating_value : Type. (* placeholder *)
+Inductive pointer_value : Type. (* placeholder *)
+Inductive mem_value : Type. (* placeholder *)
+
+
 
 (* Binary operators *)
 Inductive binop : Type :=
@@ -62,12 +70,6 @@ Record act := {
   ct : Sctypes_t
 }.
 
-(* Object and value types - using mutual inductive definitions *)
-Inductive integer_value : Type. (* placeholder *)
-Inductive floating_value : Type. (* placeholder *)
-Inductive pointer_value : Type. (* placeholder *)
-Inductive mem_value : Type. (* placeholder *)
-
 Inductive object_value_ (TY : Type) : Type :=
   | OVinteger : integer_value -> object_value_ TY
   | OVfloating : floating_value -> object_value_ TY
@@ -86,7 +88,7 @@ Inductive value_ (TY : Type) : Type :=
   | Vunit : value_ TY
   | Vtrue : value_ TY
   | Vfalse : value_ TY
-  | Vlist : BaseTypes_t -> list (value TY) -> value_ TY
+  | Vlist : BaseTypes.t -> list (value TY) -> value_ TY
   | Vtuple : list (value TY) -> value_ TY
 
 with value (TY : Type) : Type :=
@@ -94,14 +96,14 @@ with value (TY : Type) : Type :=
 
 (* Constructor types *)
 Inductive ctor : Type :=
-  | Cnil : BaseTypes_t -> ctor
+  | Cnil : BaseTypes.t -> ctor
   | Ccons : ctor
   | Ctuple : ctor
   | Carray : ctor.
 
 (* Pattern types *)
 Inductive pattern_ (TY : Type) : Type :=
-  | CaseBase : option sym * BaseTypes_t -> pattern_ TY
+  | CaseBase : option sym * BaseTypes.t -> pattern_ TY
   | CaseCtor : ctor -> list (pattern TY) -> pattern_ TY
 
 with pattern (TY : Type) : Type :=
@@ -256,7 +258,7 @@ Inductive globs (TY : Type) : Type :=
 (* Arguments list with logical constraints *)
 Inductive arguments (i : Type) : Type :=
   | Define : (sym * IndexTerms_t) * Location_t * arguments i -> arguments i
-  | Resource : (sym * (Request_t * BaseTypes_t)) * Location_t * arguments i -> arguments i
+  | Resource : (sym * (Request_t * BaseTypes.t)) * Location_t * arguments i -> arguments i
   | Constraint : LogicalConstraints_t * Location_t * arguments i -> arguments i
   | I : i -> arguments i.
 
@@ -315,11 +317,6 @@ Record function_to_convert := {
 (* Datatype *)
 Record datatype := {
   dt_loc : Location_t;
-  cases : list (sym * list (Symbol.identifier * BaseTypes_t))
+  cases : list (sym * list (Symbol.identifier * BaseTypes.t))
 }.
-
-(* Note: Some types like cn_condition, ReturnTypes_t, ArgumentTypes_ft, 
-   Memory_struct_layout will need to be defined or imported *)
-
-
 
