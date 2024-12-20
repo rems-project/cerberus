@@ -14,7 +14,6 @@ Require Import Location.
 (* We'll need to declare some types that are imported from other modules *)
 Parameter Annot_t : Type.
 Parameter Sctypes_t : Type.
-Parameter Id_t : Type.
 Parameter BaseTypes_t : Type.
 Parameter IndexTerms_t : Type.
 Parameter Request_t : Type.
@@ -30,7 +29,6 @@ Parameter Memory_struct_layout : Type.
 Parameter memory_order : Type.
 Parameter linux_memory_order : Type.
 Parameter polarity : Type.
-
 
 (* Binary operators *)
 Inductive binop : Type :=
@@ -75,8 +73,8 @@ Inductive object_value_ (TY : Type) : Type :=
   | OVfloating : floating_value -> object_value_ TY
   | OVpointer : pointer_value -> object_value_ TY
   | OVarray : list (object_value TY) -> object_value_ TY
-  | OVstruct : sym -> list (Id_t * Sctypes_t * mem_value) -> object_value_ TY
-  | OVunion : sym -> Id_t -> mem_value -> object_value_ TY
+  | OVstruct : sym -> list (Symbol.identifier * Sctypes_t * mem_value) -> object_value_ TY
+  | OVunion : sym -> Symbol.identifier -> mem_value -> object_value_ TY
 
 with object_value (TY : Type) : Type :=
   | OV : TY -> object_value_ TY -> object_value TY.
@@ -152,14 +150,14 @@ Inductive pexpr_ (TY: Type) : Type :=
   | Cfvfromint : pexpr TY -> pexpr_ TY
   | Civfromfloat : act -> pexpr TY -> pexpr_ TY
   | PEarray_shift : pexpr TY -> Sctypes_t -> pexpr TY -> pexpr_ TY
-  | PEmember_shift : pexpr TY -> sym -> Id_t -> pexpr_ TY
+  | PEmember_shift : pexpr TY -> sym -> Symbol.identifier -> pexpr_ TY
   | PEnot : pexpr TY -> pexpr_ TY
   | PEop : binop -> pexpr TY -> pexpr TY -> pexpr_ TY
   | PEapply_fun : mu_function -> list (pexpr TY) -> pexpr_ TY
-  | PEstruct : sym -> list (Id_t * pexpr TY) -> pexpr_ TY
-  | PEunion : sym -> Id_t -> pexpr TY -> pexpr_ TY
+  | PEstruct : sym -> list (Symbol.identifier * pexpr TY) -> pexpr_ TY
+  | PEunion : sym -> Symbol.identifier -> pexpr TY -> pexpr_ TY
   | PEcfunction : pexpr TY -> pexpr_ TY
-  | PEmemberof : sym -> Id_t -> pexpr TY -> pexpr_ TY
+  | PEmemberof : sym -> Symbol.identifier -> pexpr TY -> pexpr_ TY
   | PEbool_to_integer : pexpr TY -> pexpr_ TY
   | PEconv_int : pexpr TY -> pexpr TY -> pexpr_ TY
   | PEconv_loaded_int : pexpr TY -> pexpr TY -> pexpr_ TY
@@ -220,7 +218,7 @@ Inductive memop (TY : Type) : Type :=
   | PtrValidForDeref : act * pexpr TY -> memop TY
   | PtrWellAligned : act * pexpr TY -> memop TY
   | PtrArrayShift : pexpr TY * act * pexpr TY -> memop TY
-  | PtrMemberShift : sym * Id_t * pexpr TY -> memop TY
+  | PtrMemberShift : sym * Symbol.identifier * pexpr TY -> memop TY
   | Memcpy : pexpr TY * pexpr TY * pexpr TY -> memop TY
   | Memcmp : pexpr TY * pexpr TY * pexpr TY -> memop TY
   | Realloc : pexpr TY * pexpr TY * pexpr TY -> memop TY
@@ -317,7 +315,7 @@ Record function_to_convert := {
 (* Datatype *)
 Record datatype := {
   dt_loc : Location_t;
-  cases : list (sym * list (Id_t * BaseTypes_t))
+  cases : list (sym * list (Symbol.identifier * BaseTypes_t))
 }.
 
 (* Note: Some types like cn_condition, ReturnTypes_t, ArgumentTypes_ft, 
