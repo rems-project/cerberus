@@ -6,7 +6,6 @@ module Utils = Executable_spec_utils
 module BT = BaseTypes
 module IT = IndexTerms
 module LC = LogicalConstraints
-module GT = GenTerms
 module GR = GenRuntime
 
 let mk_expr = Utils.mk_expr

@@ -1,7 +1,6 @@
 module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
-module BT = BaseTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module CtA = Cn_internal_to_ail

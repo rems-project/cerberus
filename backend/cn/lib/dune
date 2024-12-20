@@ -4,7 +4,7 @@
  (name cn)
  (public_name cn)
  (flags
-  (:standard -w -37 -open Monomorphic.Int))
+  (:standard -w @60 -open Monomorphic.Int))
  (libraries
   cerb_backend
   cerb_frontend

@@ -1,6 +1,5 @@
 open Pp.Infix
 module IT = IndexTerms
-module BT = BaseTypes
 
 let pp_maybe_oargs = function None -> Pp.empty | Some oargs -> Pp.parens (IT.pp oargs)
 

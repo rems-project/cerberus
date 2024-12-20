@@ -1,8 +1,6 @@
 open Context
 module IT = IndexTerms
 module ITSet = Set.Make (IT)
-module Req = Request
-module Res = Resource
 open TypeErrors
 
 type solver = Solver.solver

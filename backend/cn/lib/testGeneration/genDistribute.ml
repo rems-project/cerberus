@@ -3,7 +3,6 @@ module IT = IndexTerms
 module LC = LogicalConstraints
 module GT = GenTerms
 module GD = GenDefinitions
-module GA = GenAnalysis
 module Config = TestGenConfig
 
 let generated_size (bt : BT.t) : int =

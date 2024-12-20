@@ -1,16 +1,10 @@
 open Report
 module IT = IndexTerms
-module BT = BaseTypes
-module Res = Resource
 module Def = Definition
 module Req = Request
-module LC = LogicalConstraints
 module LF = Definition.Function
 module LAT = LogicalArgumentTypes
-module StringMap = Map.Make (String)
 module C = Context
-module Loc = Locations
-module S = Solver
 open Request
 open IndexTerms
 open Pp
