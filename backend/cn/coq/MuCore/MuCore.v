@@ -19,8 +19,6 @@ Parameter BaseTypes_t : Type.
 Parameter IndexTerms_t : Type.
 Parameter Request_t : Type.
 Parameter mem_iv_constraint : Type.
-Parameter binop : Type.
-Parameter iop : Type.
 Parameter undefined_behaviour : Type.
 Parameter LogicalConstraints_t : Type.
 Parameter cn_condition : Type.
@@ -32,6 +30,32 @@ Parameter Memory_struct_layout : Type.
 Parameter memory_order : Type.
 Parameter linux_memory_order : Type.
 Parameter polarity : Type.
+
+
+(* Binary operators *)
+Inductive binop : Type :=
+  | OpAdd : binop    (* Addition *)
+  | OpSub : binop    (* Subtraction *)
+  | OpMul : binop    (* Multiplication *)
+  | OpDiv : binop    (* Division *)
+  | OpRem_t : binop  (* Remainder (truncated) *)
+  | OpRem_f : binop  (* Remainder (floored) *)
+  | OpExp : binop    (* Exponentiation *)
+  | OpEq : binop     (* Equality *)
+  | OpGt : binop     (* Greater than *)
+  | OpLt : binop     (* Less than *)
+  | OpGe : binop     (* Greater than or equal *)
+  | OpLe : binop     (* Less than or equal *)
+  | OpAnd : binop    (* Logical AND *)
+  | OpOr : binop.    (* Logical OR *)
+
+(* Integer operators *)
+Inductive iop : Type :=
+  | IOpAdd : iop     (* Integer addition *)
+  | IOpSub : iop     (* Integer subtraction *)
+  | IOpMul : iop     (* Integer multiplication *)
+  | IOpShl : iop     (* Left shift *)
+  | IOpShr : iop.    (* Right shift *)
 
 (* Annotated C type *)
 Record act := {
@@ -298,5 +322,6 @@ Record datatype := {
 
 (* Note: Some types like cn_condition, ReturnTypes_t, ArgumentTypes_ft, 
    Memory_struct_layout will need to be defined or imported *)
+
 
 
