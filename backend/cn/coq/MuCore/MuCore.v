@@ -14,7 +14,6 @@ Require Import Location.
 (* We'll need to declare some types that are imported from other modules *)
 Parameter Annot_t : Type.
 Parameter Sctypes_t : Type.
-Parameter Sym_t : Type.
 Parameter Id_t : Type.
 Parameter BaseTypes_t : Type.
 Parameter IndexTerms_t : Type.
@@ -52,8 +51,8 @@ Inductive object_value_ (TY : Type) : Type :=
   | OVfloating : floating_value -> object_value_ TY
   | OVpointer : pointer_value -> object_value_ TY
   | OVarray : list (object_value TY) -> object_value_ TY
-  | OVstruct : Sym_t -> list (Id_t * Sctypes_t * mem_value) -> object_value_ TY
-  | OVunion : Sym_t -> Id_t -> mem_value -> object_value_ TY
+  | OVstruct : sym -> list (Id_t * Sctypes_t * mem_value) -> object_value_ TY
+  | OVunion : sym -> Id_t -> mem_value -> object_value_ TY
 
 with object_value (TY : Type) : Type :=
   | OV : TY -> object_value_ TY -> object_value TY.
@@ -61,7 +60,7 @@ with object_value (TY : Type) : Type :=
 Inductive value_ (TY : Type) : Type :=
   | Vobject : object_value TY -> value_ TY
   | Vctype : Type -> value_ TY  (* simplified from ctype *)
-  | Vfunction_addr : Sym_t -> value_ TY
+  | Vfunction_addr : sym -> value_ TY
   | Vunit : value_ TY
   | Vtrue : value_ TY
   | Vfalse : value_ TY
@@ -80,7 +79,7 @@ Inductive ctor : Type :=
 
 (* Pattern types *)
 Inductive pattern_ (TY : Type) : Type :=
-  | CaseBase : option Sym_t * BaseTypes_t -> pattern_ TY
+  | CaseBase : option sym * BaseTypes_t -> pattern_ TY
   | CaseCtor : ctor -> list (pattern TY) -> pattern_ TY
 
 with pattern (TY : Type) : Type :=
@@ -120,7 +119,7 @@ Inductive m_kill_kind : Type :=
 
 (* Pure expressions *)
 Inductive pexpr_ (TY: Type) : Type :=
-  | PEsym : Sym_t -> pexpr_ TY
+  | PEsym : sym -> pexpr_ TY
   | PEval : value TY -> pexpr_ TY 
   | PEconstrained : list (mem_iv_constraint * pexpr TY) -> pexpr_ TY
   | PEctor : ctor -> list (pexpr TY) -> pexpr_ TY
@@ -129,14 +128,14 @@ Inductive pexpr_ (TY: Type) : Type :=
   | Cfvfromint : pexpr TY -> pexpr_ TY
   | Civfromfloat : act -> pexpr TY -> pexpr_ TY
   | PEarray_shift : pexpr TY -> Sctypes_t -> pexpr TY -> pexpr_ TY
-  | PEmember_shift : pexpr TY -> Sym_t -> Id_t -> pexpr_ TY
+  | PEmember_shift : pexpr TY -> sym -> Id_t -> pexpr_ TY
   | PEnot : pexpr TY -> pexpr_ TY
   | PEop : binop -> pexpr TY -> pexpr TY -> pexpr_ TY
   | PEapply_fun : mu_function -> list (pexpr TY) -> pexpr_ TY
-  | PEstruct : Sym_t -> list (Id_t * pexpr TY) -> pexpr_ TY
-  | PEunion : Sym_t -> Id_t -> pexpr TY -> pexpr_ TY
+  | PEstruct : sym -> list (Id_t * pexpr TY) -> pexpr_ TY
+  | PEunion : sym -> Id_t -> pexpr TY -> pexpr_ TY
   | PEcfunction : pexpr TY -> pexpr_ TY
-  | PEmemberof : Sym_t -> Id_t -> pexpr TY -> pexpr_ TY
+  | PEmemberof : sym -> Id_t -> pexpr TY -> pexpr_ TY
   | PEbool_to_integer : pexpr TY -> pexpr_ TY
   | PEconv_int : pexpr TY -> pexpr TY -> pexpr_ TY
   | PEconv_loaded_int : pexpr TY -> pexpr TY -> pexpr_ TY
@@ -154,9 +153,9 @@ with pexpr (TY: Type) : Type :=
 
 (* Action types *)
 Inductive action_ (TY : Type) : Type :=
-  | Create : pexpr TY -> act -> Sym_t -> action_ TY
-  | CreateReadOnly : pexpr TY -> act -> pexpr TY -> Sym_t -> action_ TY
-  | Alloc : pexpr TY -> pexpr TY -> Sym_t -> action_ TY
+  | Create : pexpr TY -> act -> Symbol.prefix -> action_ TY
+  | CreateReadOnly : pexpr TY -> act -> pexpr TY -> Symbol.prefix -> action_ TY
+  | Alloc : pexpr TY -> pexpr TY -> Symbol.prefix -> action_ TY
   | Kill : m_kill_kind -> pexpr TY -> action_ TY
   | Store : bool -> act -> pexpr TY -> pexpr TY -> memory_order -> action_ TY
   | Load : act -> pexpr TY -> memory_order -> action_ TY
@@ -197,7 +196,7 @@ Inductive memop (TY : Type) : Type :=
   | PtrValidForDeref : act * pexpr TY -> memop TY
   | PtrWellAligned : act * pexpr TY -> memop TY
   | PtrArrayShift : pexpr TY * act * pexpr TY -> memop TY
-  | PtrMemberShift : Sym_t * Id_t * pexpr TY -> memop TY
+  | PtrMemberShift : sym * Id_t * pexpr TY -> memop TY
   | Memcpy : pexpr TY * pexpr TY * pexpr TY -> memop TY
   | Memcmp : pexpr TY * pexpr TY * pexpr TY -> memop TY
   | Realloc : pexpr TY * pexpr TY * pexpr TY -> memop TY
@@ -221,7 +220,7 @@ Inductive expr_ (TY : Type) : Type :=
   | Eif : pexpr TY * expr TY * expr TY -> expr_ TY
   | Ebound : expr TY -> expr_ TY
   | End : list (expr TY) -> expr_ TY
-  | Erun : Sym_t * list (pexpr TY) -> expr_ TY
+  | Erun : sym * list (pexpr TY) -> expr_ TY
   (* Note: CN_progs constructor omitted as it requires additional types *)
 
 with expr (TY : Type) : Type :=
@@ -234,8 +233,8 @@ Inductive globs (TY : Type) : Type :=
 
 (* Arguments list with logical constraints *)
 Inductive arguments (i : Type) : Type :=
-  | Define : (Sym_t * IndexTerms_t) * Location_t * arguments i -> arguments i
-  | Resource : (Sym_t * (Request_t * BaseTypes_t)) * Location_t * arguments i -> arguments i
+  | Define : (sym * IndexTerms_t) * Location_t * arguments i -> arguments i
+  | Resource : (sym * (Request_t * BaseTypes_t)) * Location_t * arguments i -> arguments i
   | Constraint : LogicalConstraints_t * Location_t * arguments i -> arguments i
   | I : i -> arguments i.
 
@@ -261,7 +260,7 @@ Inductive trusted : Type :=
 
 (* Desugared specification *)
 Record desugared_spec := {
-  accesses : list (Sym_t * Type); (* simplified from ctype *)
+  accesses : list (sym * Type); (* simplified from ctype *)
   requires : list cn_condition;
   ensures : list cn_condition
 }.
@@ -287,14 +286,14 @@ Inductive tag_definition : Type :=
 (* Function to convert *)
 Record function_to_convert := {
   ftc_loc : Location_t;
-  c_fun_sym : Sym_t;
-  l_fun_sym : Sym_t
+  c_fun_sym : sym;
+  l_fun_sym : sym
 }.
 
 (* Datatype *)
 Record datatype := {
   dt_loc : Location_t;
-  cases : list (Sym_t * list (Id_t * BaseTypes_t))
+  cases : list (sym * list (Id_t * BaseTypes_t))
 }.
 
 (* Note: Some types like cn_condition, ReturnTypes_t, ArgumentTypes_ft, 
