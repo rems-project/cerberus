@@ -8,7 +8,6 @@ module Ctype = CF.Ctype
 module BT = BaseTypes
 module C = Compile
 module IT = IndexTerms
-module IdMap = Map.Make (Id)
 module SBT = BaseTypes.Surface
 module Mu = Mucore
 
@@ -849,9 +848,7 @@ let rec n_expr
   | Eexcluded _ -> assert_error loc !^"core_anormalisation: Eexcluded"
 
 
-module RT = ReturnTypes
 module AT = ArgumentTypes
-module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
 
 let rec lat_of_arguments f_i = function

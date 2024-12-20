@@ -1,5 +1,4 @@
 module IT = IndexTerms
-module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 
 module Function = struct

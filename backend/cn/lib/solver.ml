@@ -1,7 +1,5 @@
 module SMT = Simple_smt
-module IT = IndexTerms
 open IndexTerms
-module BT = BaseTypes
 open BaseTypes
 module LC = LogicalConstraints
 open LogicalConstraints
@@ -16,8 +14,6 @@ module Int_BT_Table = Map.Make (struct
       else
         BT.compare bt1 bt2
   end)
-
-module BT_Table = Hashtbl.Make (BT)
 
 module IntWithHash = struct
   (* For compatability with older ocamls *)

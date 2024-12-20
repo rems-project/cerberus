@@ -9,7 +9,6 @@ module GBT = GenBaseTypes
 module GT = GenTerms
 module GD = GenDefinitions
 module Config = TestGenConfig
-module CtA = Cn_internal_to_ail
 
 type s = GD.context
 
