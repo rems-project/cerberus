@@ -601,7 +601,8 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
     | AilEassert _ ->
         E.return false
     | AilEoffsetof _ _ ->
-        E.fail loc (Errors.Desugar_NotYetSupported "offsetof() in `integer constant expressions'")
+        (* STD §7.19#3 *)
+        E.return true
     | AilEstr _ ->
         E.return false
 (*
@@ -833,7 +834,9 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
 (*          E.return true *)
           (* TODO: is_lvalue might be wrong depending on the type of e? *)
           is_arithmetic_constant_expression is_lvalue e
-        
+    | AilEoffsetof _ _ ->
+        (* STD §7.19#3 *)
+        E.return true
     | _ ->
         E.return false
 
