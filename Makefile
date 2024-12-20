@@ -326,11 +326,11 @@ cn-coq-install: cn-coq
 .PHONY: cn-with-coq
 cn-with-coq:
 	@echo "[DUNE] cn,cn-coq"
-	$(Q)dune build cerberus.install cn.install cn-coq.install
+	$(Q)dune build -p cerberus-lib,cn,cn-coq
 
 # Developement target to watch for changes in cn/lib and rebuild
 # e.g. to be used with vscode IDE
 .PHONY: cn-dev-watch
 cn-dev-watch:
 	@echo "[DUNE] cn-dev-watch"
-	$(Q)dune build --watch backend/cn/lib
+	$(Q)dune build --watch -p cerberus-lib,cn,cn-coq
