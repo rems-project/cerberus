@@ -1253,6 +1253,7 @@ let make globals =
        | Some t ->
          (match t with
           | SMT.Z3 -> SMT.z3
+          | SMT.Z3new -> SMT.z3new
           | SMT.CVC5 -> SMT.cvc5
           | SMT.Other -> failwith "Unsupported solver.")
        | None ->
@@ -1272,6 +1273,7 @@ let make globals =
          Logger.make
            (match !cfg.exts with
             | SMT.Z3 -> "z3"
+            | SMT.Z3new -> "z3new"
             | SMT.CVC5 -> "cvc5"
             | SMT.Other -> "other")
      };
