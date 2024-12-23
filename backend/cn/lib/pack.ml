@@ -39,7 +39,7 @@ let unfolded_array loc' init (ict, olength) pointer =
     }
 
 
-let packing_ft loc global provable ret =
+let packing_ft loc global provable packable_resources ret =
   match ret with
   | P ret ->
     (match ret.name with
@@ -90,9 +90,39 @@ let packing_ft loc global provable ret =
        Some at
      | PName pn ->
        let def = Sym.Map.find pn global.resource_predicates in
-       (match Predicate.identify_right_clause provable def ret.pointer ret.iargs with
-        | None -> None
-        | Some right_clause -> Some right_clause.packing_ft))
+       let packing_permitted =
+         match def.clauses with
+         | None -> false
+         | Some [] -> assert false
+         | Some [ _single_clause ] -> true
+         | Some _multiple_clauses ->
+           let in_packable_list =
+             let open Request.Predicate in
+             let loc' = Cerb_location.other __FUNCTION__ in
+             IT.or_
+               (List.filter_map
+                  (fun packable ->
+                    match packable.name with
+                    | PName pn' when Sym.equal pn' pn ->
+                      Some
+                        (IT.and_
+                           (List.map2
+                              (fun a b -> IT.eq__ a b loc')
+                              (packable.pointer :: packable.iargs)
+                              (ret.pointer :: ret.iargs))
+                           loc')
+                    | _ -> None)
+                  packable_resources)
+               loc'
+           in
+           (match provable (LC.T in_packable_list) with `True -> true | `False -> false)
+       in
+       if not packing_permitted then
+         None
+       else (
+         match Predicate.identify_right_clause provable def ret.pointer ret.iargs with
+         | None -> None
+         | Some right_clause -> Some right_clause.packing_ft))
   | Q _ -> None
 
 
@@ -134,14 +164,14 @@ let unpack_owned loc global (ct, init) pointer (O o) =
     Some res
 
 
-let unpack loc global provable (ret, O o) =
+let unpack loc global provable packable_resources (ret, O o) =
   match ret with
   | P { name = Owned (ct, init); pointer; iargs = [] } ->
     (match unpack_owned loc global (ct, init) pointer (O o) with
      | None -> None
      | Some re -> Some (`RES re))
   | _ ->
-    (match packing_ft loc global provable ret with
+    (match packing_ft loc global provable packable_resources ret with
      | None -> None
      | Some packing_ft -> Some (`LRT (Definition.Clause.lrt o packing_ft)))
 
