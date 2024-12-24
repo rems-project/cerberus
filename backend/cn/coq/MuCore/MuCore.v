@@ -12,24 +12,22 @@ Require Import Symbol.
 Require Import Location.
 Require Import BaseTypes.
 Require Import IndexTerms.
+Require Import LogicalConstraints.
+Require Import Request.
+Require Import ReturnTypes.
+Require Import ArgumentTypes.
 
 (* We'll need to declare some types that are imported from other modules *)
-Parameter Annot_t : Type.
-Parameter Sctypes_t : Type.
-Parameter Request_t : Type.
-Parameter undefined_behaviour : Type.
-Parameter LogicalConstraints_t : Type.
-Parameter cn_condition : Type.
-Parameter ReturnTypes_t : Type.
-Parameter ArgumentTypes_ft : Type.
-Parameter Memory_struct_layout : Type.
+Parameter Annot_t : Type. (* placeholder *)
+Parameter Sctypes_t : Type. (* placeholder *)
+Parameter undefined_behaviour : Type. (* placeholder *)
+Parameter cn_condition : Type. (* placeholder *)
+Parameter Memory_struct_layout : Type. (* placeholder *)
 
-(* Memory orders - we'll need to declare these as parameters since they come from other modules *)
-Parameter memory_order : Type.
+Parameter memory_order : Type. (* placeholder *)
 Parameter linux_memory_order : Type.
 Parameter polarity : Type.
 
-(* Object and value types - using mutual inductive definitions *)
 Inductive integer_value : Type. (* placeholder *)
 Inductive floating_value : Type. (* placeholder *)
 Inductive pointer_value : Type. (* placeholder *)
@@ -267,8 +265,8 @@ Inductive globs (TY : Type) : Type :=
 (* Arguments list with logical constraints *)
 Inductive arguments (i : Type) : Type :=
   | Define : (sym * IndexTerms.t) * Location_t * arguments i -> arguments i
-  | Resource : (sym * (Request_t * BaseTypes.t)) * Location_t * arguments i -> arguments i
-  | Constraint : LogicalConstraints_t * Location_t * arguments i -> arguments i
+  | Resource : (sym * (Request.t * BaseTypes.t)) * Location_t * arguments i -> arguments i
+  | Constraint : LogicalConstraints.t * Location_t * arguments i -> arguments i
   | I : i -> arguments i.
 
 (* Label specification *)
@@ -300,7 +298,7 @@ Record desugared_spec := {
 
 (* Arguments and body *)
 Definition args_and_body (TY : Type) := 
-  arguments (expr TY * (SymMap.t (label_def TY)) * ReturnTypes_t).
+  arguments (expr TY * (SymMap.t (label_def TY)) * ReturnTypes.t).
 
 (* Function map declaration *)
 Inductive fun_map_decl (TY : Type) : Type :=
@@ -309,7 +307,7 @@ Inductive fun_map_decl (TY : Type) : Type :=
            trusted ->
            desugared_spec ->
            fun_map_decl TY
-  | ProcDecl : Location_t -> option ArgumentTypes_ft -> fun_map_decl TY.
+  | ProcDecl : Location_t -> option ArgumentTypes.ft -> fun_map_decl TY.
 
 (* Tag definition *)
 Inductive tag_definition : Type :=

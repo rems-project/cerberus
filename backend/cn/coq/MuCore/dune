@@ -4,6 +4,6 @@
  (synopsis "Coq formalization of CN's Mucore intermediate language")
  (mode vo)
  (theories StructTact)
- (modules MuCore Utils Symbol Location BaseTypes Terms IndexTerms)
+ (modules MuCore False Utils Symbol Location Locations BaseTypes Terms IndexTerms LogicalConstraints LogicalReturnTypes Request ReturnTypes ArgumentTypes LogicalArgumentTypes)
 )
 

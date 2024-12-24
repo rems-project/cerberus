@@ -482,6 +482,7 @@ Module Symbol_sym_as_OT <: OrderedType.
 
 End Symbol_sym_as_OT.
 
+Definition t := sym.
 
 Module SymMap := FMapAVL.Make(Symbol_sym_as_OT).
 
