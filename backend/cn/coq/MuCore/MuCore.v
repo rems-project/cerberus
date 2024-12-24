@@ -11,11 +11,11 @@ Require Import Coq.Structures.OrderedTypeEx.
 Require Import Symbol.
 Require Import Location.
 Require Import BaseTypes.
+Require Import IndexTerms.
 
 (* We'll need to declare some types that are imported from other modules *)
 Parameter Annot_t : Type.
 Parameter Sctypes_t : Type.
-Parameter IndexTerms_t : Type.
 Parameter Request_t : Type.
 Parameter mem_iv_constraint : Type.
 Parameter undefined_behaviour : Type.
@@ -257,7 +257,7 @@ Inductive globs (TY : Type) : Type :=
 
 (* Arguments list with logical constraints *)
 Inductive arguments (i : Type) : Type :=
-  | Define : (sym * IndexTerms_t) * Location_t * arguments i -> arguments i
+  | Define : (sym * IndexTerms.t) * Location_t * arguments i -> arguments i
   | Resource : (sym * (Request_t * BaseTypes.t)) * Location_t * arguments i -> arguments i
   | Constraint : LogicalConstraints_t * Location_t * arguments i -> arguments i
   | I : i -> arguments i.
