@@ -17,7 +17,6 @@ Require Import IndexTerms.
 Parameter Annot_t : Type.
 Parameter Sctypes_t : Type.
 Parameter Request_t : Type.
-Parameter mem_iv_constraint : Type.
 Parameter undefined_behaviour : Type.
 Parameter LogicalConstraints_t : Type.
 Parameter cn_condition : Type.
@@ -36,7 +35,17 @@ Inductive floating_value : Type. (* placeholder *)
 Inductive pointer_value : Type. (* placeholder *)
 Inductive mem_value : Type. (* placeholder *)
 
+Inductive mem_constraint (A : Type) : Type :=
+  | MC_empty : mem_constraint A
+  | MC_eq : A -> A -> mem_constraint A
+  | MC_le : A -> A -> mem_constraint A
+  | MC_lt : A -> A -> mem_constraint A
+  | MC_in_device : A -> mem_constraint A
+  | MC_or : mem_constraint A -> mem_constraint A -> mem_constraint A
+  | MC_conj : list (mem_constraint A) -> mem_constraint A
+  | MC_not : mem_constraint A -> mem_constraint A.
 
+Definition mem_iv_constraint := mem_constraint integer_value.
 
 (* Binary operators *)
 Inductive binop : Type :=
