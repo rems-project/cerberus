@@ -1,3 +1,5 @@
+(* Cerberus location type *)
+
 Require Import String.
 
 Record lexing_position := {

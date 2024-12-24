@@ -15,12 +15,13 @@ type core_file = (unit, unit) CF.Core.generic_file
 type file =
   | CORE of core_file
   | MUCORE of unit Mucore.file
+  | MUCORE_COQ of unit Mucore.file
 
 let print_file filename file =
   match file with
   | CORE file -> Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file)
   | MUCORE file -> Pp.print_file (filename ^ ".mucore") (Pp_mucore.pp_file file)
-
+  | MUCORE_COQ file -> Pp.print_file (filename ^ ".v") (Pp_mucore_coq.pp_file file)
 
 module Log : sig
   val print_log_file : string * file -> unit
