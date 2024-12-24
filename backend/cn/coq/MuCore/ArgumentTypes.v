@@ -1,6 +1,6 @@
 Require Import BaseTypes.
 Require Import IndexTerms.
-Require Import Symbol.
+Require Import Sym.
 Require Import LogicalConstraints.
 Require Import LogicalArgumentTypes.
 Require Import Locations.
@@ -10,7 +10,7 @@ Require Import False.
 
 (* Define the argument type *)
 Inductive argument_type (i : Type) : Type :=
-  | Computational : (Symbol.t * BaseTypes.t) -> info -> argument_type i -> argument_type i
+  | Computational : (Sym.t * BaseTypes.t) -> info -> argument_type i -> argument_type i
   | L : LogicalArgumentTypes.t i -> argument_type i.
 
 (* Type alias for the main type *)

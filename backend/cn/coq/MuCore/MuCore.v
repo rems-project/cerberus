@@ -8,7 +8,7 @@ Require Import Coq.FSets.FMapInterface.
 Require Import Coq.FSets.FMapList.
 Require Import Coq.Structures.OrderedTypeEx.
 
-Require Import Symbol.
+Require Import Sym.
 Require Import Location.
 Require Import BaseTypes.
 Require Import IndexTerms.
@@ -82,8 +82,8 @@ Inductive object_value_ (TY : Type) : Type :=
   | OVfloating : floating_value -> object_value_ TY
   | OVpointer : pointer_value -> object_value_ TY
   | OVarray : list (object_value TY) -> object_value_ TY
-  | OVstruct : sym -> list (Symbol.identifier * Sctypes_t * mem_value) -> object_value_ TY
-  | OVunion : sym -> Symbol.identifier -> mem_value -> object_value_ TY
+  | OVstruct : Sym.t -> list (Symbol.identifier * Sctypes_t * mem_value) -> object_value_ TY
+  | OVunion : Sym.t -> Symbol.identifier -> mem_value -> object_value_ TY
 
 with object_value (TY : Type) : Type :=
   | OV : TY -> object_value_ TY -> object_value TY.
@@ -91,7 +91,7 @@ with object_value (TY : Type) : Type :=
 Inductive value_ (TY : Type) : Type :=
   | Vobject : object_value TY -> value_ TY
   | Vctype : Type -> value_ TY  (* simplified from ctype *)
-  | Vfunction_addr : sym -> value_ TY
+  | Vfunction_addr : Sym.t -> value_ TY
   | Vunit : value_ TY
   | Vtrue : value_ TY
   | Vfalse : value_ TY
@@ -110,7 +110,7 @@ Inductive ctor : Type :=
 
 (* Pattern types *)
 Inductive pattern_ (TY : Type) : Type :=
-  | CaseBase : option sym * BaseTypes.t -> pattern_ TY
+  | CaseBase : option Sym.t * BaseTypes.t -> pattern_ TY
   | CaseCtor : ctor -> list (pattern TY) -> pattern_ TY
 
 with pattern (TY : Type) : Type :=
@@ -150,7 +150,7 @@ Inductive m_kill_kind : Type :=
 
 (* Pure expressions *)
 Inductive pexpr_ (TY: Type) : Type :=
-  | PEsym : sym -> pexpr_ TY
+  | PEsym : Sym.t -> pexpr_ TY
   | PEval : value TY -> pexpr_ TY 
   | PEconstrained : list (mem_iv_constraint * pexpr TY) -> pexpr_ TY
   | PEctor : ctor -> list (pexpr TY) -> pexpr_ TY
@@ -159,14 +159,14 @@ Inductive pexpr_ (TY: Type) : Type :=
   | Cfvfromint : pexpr TY -> pexpr_ TY
   | Civfromfloat : act -> pexpr TY -> pexpr_ TY
   | PEarray_shift : pexpr TY -> Sctypes_t -> pexpr TY -> pexpr_ TY
-  | PEmember_shift : pexpr TY -> sym -> Symbol.identifier -> pexpr_ TY
+  | PEmember_shift : pexpr TY -> Sym.t -> Symbol.identifier -> pexpr_ TY
   | PEnot : pexpr TY -> pexpr_ TY
   | PEop : binop -> pexpr TY -> pexpr TY -> pexpr_ TY
   | PEapply_fun : mu_function -> list (pexpr TY) -> pexpr_ TY
-  | PEstruct : sym -> list (Symbol.identifier * pexpr TY) -> pexpr_ TY
-  | PEunion : sym -> Symbol.identifier -> pexpr TY -> pexpr_ TY
+  | PEstruct : Sym.t -> list (Symbol.identifier * pexpr TY) -> pexpr_ TY
+  | PEunion : Sym.t -> Symbol.identifier -> pexpr TY -> pexpr_ TY
   | PEcfunction : pexpr TY -> pexpr_ TY
-  | PEmemberof : sym -> Symbol.identifier -> pexpr TY -> pexpr_ TY
+  | PEmemberof : Sym.t -> Symbol.identifier -> pexpr TY -> pexpr_ TY
   | PEbool_to_integer : pexpr TY -> pexpr_ TY
   | PEconv_int : pexpr TY -> pexpr TY -> pexpr_ TY
   | PEconv_loaded_int : pexpr TY -> pexpr TY -> pexpr_ TY
@@ -227,7 +227,7 @@ Inductive memop (TY : Type) : Type :=
   | PtrValidForDeref : act * pexpr TY -> memop TY
   | PtrWellAligned : act * pexpr TY -> memop TY
   | PtrArrayShift : pexpr TY * act * pexpr TY -> memop TY
-  | PtrMemberShift : sym * Symbol.identifier * pexpr TY -> memop TY
+  | PtrMemberShift : Sym.t * Symbol.identifier * pexpr TY -> memop TY
   | Memcpy : pexpr TY * pexpr TY * pexpr TY -> memop TY
   | Memcmp : pexpr TY * pexpr TY * pexpr TY -> memop TY
   | Realloc : pexpr TY * pexpr TY * pexpr TY -> memop TY
@@ -251,7 +251,7 @@ Inductive expr_ (TY : Type) : Type :=
   | Eif : pexpr TY * expr TY * expr TY -> expr_ TY
   | Ebound : expr TY -> expr_ TY
   | End : list (expr TY) -> expr_ TY
-  | Erun : sym * list (pexpr TY) -> expr_ TY
+  | Erun : Sym.t * list (pexpr TY) -> expr_ TY
   (* Note: CN_progs constructor omitted as it requires additional types *)
 
 with expr (TY : Type) : Type :=
@@ -264,8 +264,8 @@ Inductive globs (TY : Type) : Type :=
 
 (* Arguments list with logical constraints *)
 Inductive arguments (i : Type) : Type :=
-  | Define : (sym * IndexTerms.t) * Location_t * arguments i -> arguments i
-  | Resource : (sym * (Request.t * BaseTypes.t)) * Location_t * arguments i -> arguments i
+  | Define : (Sym.t * IndexTerms.t) * Location_t * arguments i -> arguments i
+  | Resource : (Sym.t * (Request.t * BaseTypes.t)) * Location_t * arguments i -> arguments i
   | Constraint : LogicalConstraints.t * Location_t * arguments i -> arguments i
   | I : i -> arguments i.
 
@@ -291,7 +291,7 @@ Inductive trusted : Type :=
 
 (* Desugared specification *)
 Record desugared_spec := {
-  accesses : list (sym * Type); (* simplified from ctype *)
+  accesses : list (Sym.t * Type); (* simplified from ctype *)
   requires : list cn_condition;
   ensures : list cn_condition
 }.
@@ -317,13 +317,13 @@ Inductive tag_definition : Type :=
 (* Function to convert *)
 Record function_to_convert := {
   ftc_loc : Location_t;
-  c_fun_sym : sym;
-  l_fun_sym : sym
+  c_fun_sym : Sym.t;
+  l_fun_sym : Sym.t
 }.
 
 (* Datatype *)
 Record datatype := {
   dt_loc : Location_t;
-  cases : list (sym * list (Symbol.identifier * BaseTypes.t))
+  cases : list (Sym.t * list (Symbol.identifier * BaseTypes.t))
 }.
 

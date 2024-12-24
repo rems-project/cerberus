@@ -1,6 +1,6 @@
 Require Import BaseTypes.
 Require Import IndexTerms.
-Require Import Symbol.
+Require Import Sym.
 Require Import LogicalConstraints.
 Require Import Locations.
 Require Import Request.
@@ -8,8 +8,8 @@ Require Import ReturnTypes.
 
 (* Define the logical argument type *)
 Inductive logical_argument_type (i : Type) : Type :=
-  | Define : (Symbol.t * IndexTerms.t) -> info -> logical_argument_type i -> logical_argument_type i
-  | Resource : (Symbol.t * (Request.t * BaseTypes.t)) -> info -> logical_argument_type i -> logical_argument_type i
+  | Define : (Sym.t * IndexTerms.t) -> info -> logical_argument_type i -> logical_argument_type i
+  | Resource : (Sym.t * (Request.t * BaseTypes.t)) -> info -> logical_argument_type i -> logical_argument_type i
   | Constraint : LogicalConstraints.logical_constraint -> info -> logical_argument_type i -> logical_argument_type i
   | I : i -> logical_argument_type i.
 

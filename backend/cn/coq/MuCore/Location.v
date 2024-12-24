@@ -20,3 +20,4 @@ Inductive Location_t :=
 | Loc_region: lexing_position -> lexing_position -> location_cursor -> Location_t
 | Loc_regions: list (lexing_position * lexing_position) -> location_cursor -> Location_t.
 
+Definition t := Location_t.
