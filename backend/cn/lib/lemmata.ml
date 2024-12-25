@@ -298,8 +298,9 @@ let add_list_mono_datatype (bt, nm) global =
   let bt_name = Sym.pp_string (Option.get (BT.is_datatype_bt bt)) in
   let nil = Sym.fresh_named ("Nil_of_" ^ bt_name) in
   let cons = Sym.fresh_named ("Cons_of_" ^ bt_name) in
-  let hd = Id.id ("hd_of_" ^ bt_name) in
-  let tl = Id.id ("tl_of_" ^ bt_name) in
+  let here = Locations.other __LOC__ in
+  let hd = Id.make here ("hd_of_" ^ bt_name) in
+  let tl = Id.make here ("tl_of_" ^ bt_name) in
   let mems = [ (hd, bt); (tl, BT.Datatype nm) ] in
   let datatypes =
     Sym.Map.add nm Dt.{ constrs = [ nil; cons ]; all_params = mems } global.datatypes
@@ -634,7 +635,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
 
 let ensure_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
   let@ () = ensure_datatype global list_mono loc dt_tag in
-  let op_nm = Sym.pp_string dt_tag ^ "_" ^ Id.pp_string mem_tag in
+  let op_nm = Sym.pp_string dt_tag ^ "_" ^ Id.get_string mem_tag in
   let dt_info = Sym.Map.find dt_tag global.Global.datatypes in
   let inf = (loc, Pp.typ (Pp.string "datatype acc for") (Sym.pp dt_tag)) in
   let@ bt_doc = bt_to_coq global list_mono inf bt in
@@ -662,7 +663,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
   let@ () =
     gen_ensure
       0
-      [ "types"; "datatype acc"; Sym.pp_string dt_tag; Id.pp_string mem_tag ]
+      [ "types"; "datatype acc"; Sym.pp_string dt_tag; Id.get_string mem_tag ]
       (lazy
         (let open Pp in
          let eline = [ !^"    end" ] in
@@ -681,7 +682,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
 
 let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
   let@ () = ensure_datatype global list_mono loc dt_tag in
-  let op_nm = Sym.pp_string dt_tag ^ "_" ^ Id.pp_string mem_tag in
+  let op_nm = Sym.pp_string dt_tag ^ "_" ^ Id.get_string mem_tag in
   let dt_info = Sym.Map.find dt_tag global.Global.datatypes in
   let cons_line c =
     let c_info = Sym.Map.find c global.Global.datatype_constrs in
@@ -700,7 +701,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) b
   let@ () =
     gen_ensure
       0
-      [ "types"; "datatype acc"; Sym.pp_string dt_tag; Id.pp_string mem_tag ]
+      [ "types"; "datatype acc"; Sym.pp_string dt_tag; Id.get_string mem_tag ]
       (lazy
         (let inf = (loc, Pp.typ (Pp.string "datatype acc for") (Sym.pp dt_tag)) in
          let@ bt_doc = bt_to_coq global list_mono inf bt in
@@ -869,7 +870,7 @@ let mk_forall global list_mono loc sym bt doc =
 let add_dt_param_counted (it, (m_nm : Id.t)) =
   let@ st = get in
   let idx = List.length st.dt_params in
-  let sym = Sym.fresh_named (Id.pp_string m_nm ^ "_" ^ Int.to_string idx) in
+  let sym = Sym.fresh_named (Id.get_string m_nm ^ "_" ^ Int.to_string idx) in
   let@ () = add_dt_param (it, m_nm, sym) in
   return sym
 
@@ -1036,7 +1037,7 @@ let it_to_coq loc global list_mono it =
         aux t
       else (
         let ix = find_tuple_element Id.equal m Id.pp (List.map fst flds) in
-        let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
+        let@ op_nm = ensure_tuple_op false (Id.get_string m) ix in
         parensM (build [ rets op_nm; aux t ]))
     | IT.RecordUpdate ((t, m), x) ->
       let flds = BT.record_bt (IT.get_bt t) in
@@ -1044,7 +1045,7 @@ let it_to_coq loc global list_mono it =
         aux x
       else (
         let ix = find_tuple_element Id.equal m Id.pp (List.map fst flds) in
-        let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
+        let@ op_nm = ensure_tuple_op true (Id.get_string m) ix in
         parensM (build [ rets op_nm; aux t; aux x ]))
     | IT.Record mems ->
       let@ xs = ListM.mapM aux (List.map snd mems) in
@@ -1056,7 +1057,7 @@ let it_to_coq loc global list_mono it =
       if List.length mems == 1 then
         aux t
       else
-        let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
+        let@ op_nm = ensure_tuple_op false (Id.get_string m) ix in
         parensM (build [ rets op_nm; aux t ])
     | IT.StructUpdate ((t, m), x) ->
       let tag = BaseTypes.struct_bt (IT.get_bt t) in
@@ -1065,7 +1066,7 @@ let it_to_coq loc global list_mono it =
       if List.length mems == 1 then
         aux x
       else
-        let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
+        let@ op_nm = ensure_tuple_op true (Id.get_string m) ix in
         parensM (build [ rets op_nm; aux t; aux x ])
     | IT.Cast (cbt, t) ->
       (match (IT.get_bt t, cbt) with

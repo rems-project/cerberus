@@ -15,11 +15,11 @@ module Surface = struct
 
   type t = BaseTypes.Surface.t annot
 
-  let compare = Terms.compare_annot BaseTypes.Surface.compare
+  let compare = compare_annot BaseTypes.Surface.compare
 
-  let proj = Terms.map_annot BaseTypes.Surface.proj
+  let proj = map_annot BaseTypes.Surface.proj
 
-  let inj x = Terms.map_annot BaseTypes.Surface.inj x
+  let inj x = map_annot BaseTypes.Surface.inj x
 end
 
 let get_bt : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
@@ -28,7 +28,7 @@ let get_term (IT (t, _, _)) = t
 
 let get_loc (IT (_, _, l)) = l
 
-let pp ?(prec = 0) = Terms.pp ~prec
+let pp ?(prec = 0) = pp ~prec
 
 let pp_with_typf f it = Pp.typ (pp it) (f (get_bt it))
 
@@ -140,7 +140,7 @@ let free_vars (it : 'a annot) : Sym.Set.t =
   it |> free_vars_bts |> Sym.Map.bindings |> List.map fst |> Sym.Set.of_list
 
 
-let free_vars_ (t_ : 'a Terms.term) : Sym.Set.t =
+let free_vars_ (t_ : 'a term) : Sym.Set.t =
   IT (t_, Unit, Locations.other "")
   |> free_vars_bts
   |> Sym.Map.bindings
@@ -688,7 +688,7 @@ let ( %. ) struct_decls t member =
     | Some sct -> Memory.bt_of_sct sct
     | None ->
       Cerb_debug.error
-        ("struct " ^ Sym.pp_string tag ^ " does not have member " ^ Id.pp_string member)
+        ("struct " ^ Sym.pp_string tag ^ " does not have member " ^ Id.get_string member)
   in
   member_ ~member_bt (t, member)
 

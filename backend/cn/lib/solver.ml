@@ -35,13 +35,13 @@ module CN_Names = struct
 
   let struct_con_name x = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
 
-  let struct_field_name x = Id.pp_string x ^ "_struct_fld"
+  let struct_field_name x = Id.get_string x ^ "_struct_fld"
 
   let datatype_name x = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
 
   let datatype_con_name x = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
 
-  let datatype_field_name x = Id.pp_string x ^ "_data_fld"
+  let datatype_field_name x = Id.get_string x ^ "_data_fld"
 end
 
 (** Names for constants that may be uninterpreted.  See [bt_uninterpreted] *)

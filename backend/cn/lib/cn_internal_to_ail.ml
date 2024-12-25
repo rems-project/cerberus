@@ -52,7 +52,7 @@ module MembersKey = struct
     | _, [] -> 1
     | [], _ -> -1
     | (id, bt) :: ms, (id', bt') :: ms' ->
-      let c = String.compare (Id.s id) (Id.s id') in
+      let c = String.compare (Id.get_string id) (Id.get_string id') in
       if c == 0 then (
         let c' = BaseTypes.compare bt bt' in
         if c' == 0 then
@@ -72,10 +72,11 @@ let generic_cn_dt_sym = Sym.fresh_pretty "cn_datatype"
 let create_id_from_sym ?(lowercase = false) sym =
   let str = Sym.pp_string sym in
   let str = if lowercase then String.lowercase_ascii str else str in
-  Id.id str
+  let here = Locations.other __FUNCTION__ in
+  Id.make here str
 
 
-let create_sym_from_id id = Sym.fresh_pretty (Id.pp_string id)
+let create_sym_from_id id = Sym.fresh_pretty (Id.get_string id)
 
 let generate_sym_with_suffix
   ?(suffix = "_tag")
@@ -677,13 +678,15 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
+  let here = Locations.other __FUNCTION__ in
   let cast_expr =
     mk_expr
       A.(
         AilEcast
           ( empty_qualifiers,
             mk_ctype C.(Pointer (empty_qualifiers, ctype)),
-            mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.id "ptr")) ))
+            mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.make here "ptr"))
+          ))
   in
   let generic_c_ptr_sym = Sym.fresh_pretty "generic_c_ptr" in
   let generic_c_ptr_bs, generic_c_ptr_ss =
@@ -1094,14 +1097,15 @@ let rec cn_to_ail_expr_aux_internal
     in
     let ail_decl = A.(AilSdeclaration [ (res_sym, Some (mk_expr fn_call)) ]) in
     let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true sym in
-    let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.id "u")) in
+    let here = Locations.other __FUNCTION__ in
+    let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.make here "u")) in
     let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
     let generate_ail_stat (id, it) =
       let b, s, e =
         cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack
       in
       let ail_memberof =
-        if Id.equal id (Id.id "tag") then
+        if Id.equal id (Id.make here "tag") then
           e
         else (
           let e_'' = A.(AilEmemberofptr (mk_expr e_', id)) in
@@ -1130,7 +1134,7 @@ let rec cn_to_ail_expr_aux_internal
     in
     let bs, ss, assign_stats = list_split_three (List.map generate_ail_stat ms) in
     let uc_constr_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true sym in
-    let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.id "tag")) in
+    let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.make here "tag")) in
     let tag_assign =
       A.(
         AilSexpr
@@ -1315,7 +1319,8 @@ let rec cn_to_ail_expr_aux_internal
       | _ :: _ -> failwith "Non-sum pattern"
       | [] -> assert false
     in
-    let transform_switch_expr e = A.(AilEmemberofptr (e, Id.id "tag")) in
+    let here = Locations.other __FUNCTION__ in
+    let transform_switch_expr e = A.(AilEmemberofptr (e, Id.make here "tag")) in
     (* Matrix algorithm for pattern compilation *)
     let rec translate
       :  int -> IT.t list -> (BT.t IT.pattern list * IT.t) list -> Sym.sym option ->
@@ -1374,7 +1379,7 @@ let rec cn_to_ail_expr_aux_internal
                  let count_sym =
                    generate_sym_with_suffix ~suffix ~lowercase:true constr_sym
                  in
-                 let rhs_memberof_ptr = A.(AilEmemberofptr (e1, Id.id "u")) in
+                 let rhs_memberof_ptr = A.(AilEmemberofptr (e1, Id.make here "u")) in
                  (* TODO: Remove hack *)
                  let rhs_memberof =
                    A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym))
@@ -1569,7 +1574,8 @@ let generate_map_get sym =
   let ret_sym = Sym.fresh_pretty "ret" in
   let ret_binding = create_binding ret_sym void_ptr_type in
   let key_val_mem =
-    mk_expr A.(AilEmemberofptr (mk_expr (AilEident param2_sym), Id.id "val"))
+    let here = Locations.other __FUNCTION__ in
+    mk_expr A.(AilEmemberofptr (mk_expr (AilEident param2_sym), Id.make here "val"))
   in
   let ht_get_fcall =
     mk_expr
@@ -1629,15 +1635,16 @@ let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
   =
   let enum_sym = generate_sym_with_suffix cn_datatype.cn_dt_name in
   let constructor_syms = List.map fst cn_datatype.cn_dt_cases in
+  let here = Locations.other __FUNCTION__ in
   let generate_enum_member sym =
     let doc = CF.Pp_ail.pp_id sym in
     let str = CF.Pp_utils.to_plain_string doc in
     let str = String.uppercase_ascii str in
-    Id.id str
+    Id.make here str
   in
   let enum_member_syms = List.map generate_enum_member constructor_syms in
   let attr : CF.Annot.attribute =
-    { attr_ns = None; attr_id = Id.id "enum"; attr_args = [] }
+    { attr_ns = None; attr_id = Id.make here "enum"; attr_args = [] }
   in
   let attrs = CF.Annot.Attrs [ attr ] in
   let enum_members =
@@ -1650,8 +1657,8 @@ let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
   let cntype_sym = Sym.fresh_pretty "cntype" in
   let cntype_pointer = C.(Pointer (empty_qualifiers, mk_ctype (Struct cntype_sym))) in
   let extra_members tag_type =
-    [ create_member (mk_ctype tag_type, Id.id "tag");
-      create_member (mk_ctype cntype_pointer, Id.id "cntype")
+    [ create_member (mk_ctype tag_type, Id.make here "tag");
+      create_member (mk_ctype cntype_pointer, Id.make here "cntype")
     ]
   in
   let bt_cases =
@@ -1687,7 +1694,7 @@ let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
       constructor_syms
   in
   let union_def = C.(UnionDef union_def_members) in
-  let union_member = create_member (mk_ctype C.(Union union_sym), Id.id "u") in
+  let union_member = create_member (mk_ctype C.(Union union_sym), Id.make here "u") in
   let structs =
     structs
     @ [ (union_sym, (Cerb_location.unknown, empty_attributes, union_def));
@@ -1717,7 +1724,8 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype)
   let fn_sym = Sym.fresh_pretty ("struct_" ^ Sym.pp_string dt_sym ^ "_equality") in
   let param1_sym = Sym.fresh_pretty "x" in
   let param2_sym = Sym.fresh_pretty "y" in
-  let id_tag = Id.id "tag" in
+  let here = Locations.other __FUNCTION__ in
+  let id_tag = Id.make here "tag" in
   let param_syms = [ param1_sym; param2_sym ] in
   let param_type =
     ( empty_qualifiers,
@@ -1782,7 +1790,8 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype)
         in
         let memberof_ptr_es =
           List.map
-            (fun sym -> mk_expr A.(AilEmemberofptr (mk_expr (AilEident sym), Id.id "u")))
+            (fun sym ->
+              mk_expr A.(AilEmemberofptr (mk_expr (AilEident sym), Id.make here "u")))
             param_syms
         in
         let decls =
@@ -1892,11 +1901,13 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
     }
   in
   let enum_ident = mk_expr A.(AilEident enum_sym) in
+  let here = Locations.other __FUNCTION__ in
   let res_tag_assign =
     A.(
       AilSexpr
         (mk_expr
-           (AilEassign (mk_expr (AilEmemberofptr (res_ident, Id.id "tag")), enum_ident))))
+           (AilEassign
+              (mk_expr (AilEmemberofptr (res_ident, Id.make here "tag")), enum_ident))))
   in
   let res_tag_assign_stat =
     A.(
@@ -1904,7 +1915,7 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
         (Cerb_location.unknown, CF.Annot.Attrs [ attribute ], res_tag_assign))
   in
   let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constructor in
-  let res_u = A.(AilEmemberofptr (res_ident, Id.id "u")) in
+  let res_u = A.(AilEmemberofptr (res_ident, Id.make here "u")) in
   let res_u_constr =
     mk_expr (AilEmemberof (mk_expr res_u, create_id_from_sym lc_constr_sym))
   in
@@ -2418,7 +2429,7 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
   let ret_ident = A.(AilEident ret_sym) in
   (* Function body *)
   let generate_member_default_assign (id, bt) =
-    (* Printf.printf "Member: %s\n" (Id.pp_string id); *)
+    (* Printf.printf "Member: %s\n" (Id.get_string id); *)
     let lhs = A.(AilEmemberofptr (mk_expr ret_ident, id)) in
     let member_ctype_str_opt = get_underscored_typedef_string_from_bt bt in
     let default_fun_str =
@@ -2840,16 +2851,12 @@ let cn_to_ail_resource_internal
 
 let cn_to_ail_logical_constraint_internal
   : type a.
-    _ CF.Cn.cn_datatype list ->
-    (C.union_tag * C.ctype) list ->
-    a dest ->
-    LC.logical_constraint ->
-    a
+    _ CF.Cn.cn_datatype list -> (C.union_tag * C.ctype) list -> a dest -> LC.t -> a
   =
   fun dts globals d lc ->
   match lc with
-  | LogicalConstraints.T it -> cn_to_ail_expr_internal dts globals it d
-  | LogicalConstraints.Forall ((sym, bt), it) ->
+  | LC.T it -> cn_to_ail_expr_internal dts globals it d
+  | LC.Forall ((sym, bt), it) ->
     let cond_it, t =
       match IT.get_term it with
       | Binop (Implies, it, it') -> (it, it')
@@ -3461,13 +3468,15 @@ let generate_assume_ownership_function ~without_ownership_checking ctype
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("assume_owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
+  let here = Locations.other __FUNCTION__ in
   let cast_expr =
     mk_expr
       A.(
         AilEcast
           ( empty_qualifiers,
             mk_ctype C.(Pointer (empty_qualifiers, ctype)),
-            mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.id "ptr")) ))
+            mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.make here "ptr"))
+          ))
   in
   let param2_sym = Sym.fresh_pretty "fun" in
   let param1 = (param1_sym, bt_to_ail_ctype BT.(Loc ())) in
@@ -3481,7 +3490,7 @@ let generate_assume_ownership_function ~without_ownership_checking ctype
       let ownership_fn_sym = Sym.fresh_pretty "cn_assume_ownership" in
       let ownership_fn_args =
         A.
-          [ AilEmemberofptr (mk_expr (AilEident param1_sym), Id.id "ptr");
+          [ AilEmemberofptr (mk_expr (AilEident param1_sym), Id.make here "ptr");
             AilEsizeof (empty_qualifiers, ctype);
             AilEident param2_sym
           ]

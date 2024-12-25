@@ -1935,7 +1935,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            let@ it = WellTyped.WIT.infer it in
            let@ original_rs, _ = all_resources_tagged loc in
            (* let verbose = List.exists (Id.is_str "verbose") attrs in *)
-           let quiet = List.exists (Id.is_str "quiet") attrs in
+           let quiet = List.exists (Id.equal_string "quiet") attrs in
            let@ () = add_movable_index loc (predicate_name, it) in
            let@ upd_rs, _ = all_resources_tagged loc in
            if

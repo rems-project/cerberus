@@ -2,7 +2,7 @@ val debug_constraint_failure_diagnostics
   :  int ->
   Solver.model_with_q ->
   Simplify.simp_ctxt ->
-  LogicalConstraints.logical_constraint ->
+  LogicalConstraints.t ->
   unit
 
 module General : sig

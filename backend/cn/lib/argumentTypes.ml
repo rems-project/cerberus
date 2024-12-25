@@ -91,7 +91,8 @@ let binders i_binders i_subst =
   let rec aux = function
     | Computational ((s, bt), _, t) ->
       let s, t = alpha_rename i_subst s t in
-      (Id.id (Sym.pp_string s), bt) :: aux t
+      let here = Locations.other __FUNCTION__ in
+      (Id.make here (Sym.pp_string s), bt) :: aux t
     | L t -> LAT.binders i_binders i_subst t
   in
   aux
