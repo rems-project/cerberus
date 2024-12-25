@@ -47,7 +47,7 @@ let packing_ft loc global provable ret =
      | Owned ((Array (ict, olength) as ct), init) ->
        let qpred = unfolded_array loc init (ict, olength) ret.pointer in
        let o_s, o = IT.fresh_named (Memory.bt_of_sct ct) "value" loc in
-       let at = LAT.Resource ((o_s, (qpred, IT.bt o)), (loc, None), LAT.I o) in
+       let at = LAT.Resource ((o_s, (qpred, IT.get_bt o)), (loc, None), LAT.I o) in
        Some at
      | Owned (Struct tag, init) ->
        let layout = Sym.Map.find tag global.Global.struct_decls in
@@ -66,7 +66,7 @@ let packing_ft loc global provable ret =
                let m_value_s, m_value =
                  IT.fresh_named (Memory.bt_of_sct mct) (Id.s member) loc
                in
-               ( LRT.Resource ((m_value_s, (request, IT.bt m_value)), (loc, None), lrt),
+               ( LRT.Resource ((m_value_s, (request, IT.get_bt m_value)), (loc, None), lrt),
                  (member, m_value) :: value )
              | None ->
                let padding_ct = Sctypes.Array (Sctypes.char_ct, Some size) in
@@ -81,7 +81,7 @@ let packing_ft loc global provable ret =
                let padding_s, padding =
                  IT.fresh_named (Memory.bt_of_sct padding_ct) "padding" loc
                in
-               ( LRT.Resource ((padding_s, (request, IT.bt padding)), (loc, None), lrt),
+               ( LRT.Resource ((padding_s, (request, IT.get_bt padding)), (loc, None), lrt),
                  value ))
            layout
            (LRT.I, [])
@@ -155,8 +155,8 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
   (* in *)
   match ret with
   | Q ret
-    when Request.equal_name predicate_name ret.name && BT.equal (IT.bt index) (snd ret.q)
-    ->
+    when Request.equal_name predicate_name ret.name
+         && BT.equal (IT.get_bt index) (snd ret.q) ->
     let su = IT.make_subst [ (fst ret.q, index) ] in
     let index_permission = IT.subst su ret.permission in
     (match prove_or_model (LC.T index_permission) with
@@ -199,11 +199,11 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
   (*   then () *)
   (*     (\* tmsg "not extracting, predicate name differs" *\) *)
   (*     (\*   (lazy (Request.pp_predicate_name predicate_name)) *\) *)
-  (*   else if not (BT.equal (IT.bt index) (snd qret.q)) *)
+  (*   else if not (BT.equal (IT.get_bt index) (snd qret.q)) *)
   (*   then  *)
   (*     () *)
   (*     (\* tmsg "not extracting, index type differs" *\) *)
-  (*     (\*   (lazy (Pp.typ (BT.pp (IT.bt index)) (BT.pp (snd qret.q)))) *\) *)
+  (*     (\*   (lazy (Pp.typ (BT.pp (IT.get_bt index)) (BT.pp (snd qret.q)))) *\) *)
   (*   else assert false; *)
   (*   None *)
   | _ -> None

@@ -331,7 +331,7 @@ module General = struct
           if
             (not (IT.is_false needed))
             && Req.subsumed requested.name predicate_name
-            && BaseTypes.equal (snd requested.q) (IT.bt index)
+            && BaseTypes.equal (snd requested.q) (IT.get_bt index)
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
             let needed_at_index = IT.subst su needed in

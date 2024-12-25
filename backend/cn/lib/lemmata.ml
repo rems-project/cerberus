@@ -380,8 +380,8 @@ let alpha_rename_if_pp_same s body =
 
 let it_adjust (global : Global.t) it =
   let rec f t =
-    let loc = IT.loc t in
-    match IT.term t with
+    let loc = IT.get_loc t in
+    match IT.get_term t with
     | IT.Binop (And, x1, x2) ->
       let xs = List.map f [ x1; x2 ] |> List.partition IT.is_true |> snd in
       IT.and_ xs loc
@@ -929,7 +929,7 @@ let it_to_coq loc global list_mono it =
     let abinop s x y = parensM (build [ aux x; rets s; aux y ]) in
     let enc_prop = Option.is_none comp_bool in
     let with_is_true x =
-      if enc_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool then
+      if enc_prop && BaseTypes.equal (IT.get_bt t) BaseTypes.Bool then
         f_appM "Is_true" [ x ]
       else
         x
@@ -949,7 +949,7 @@ let it_to_coq loc global list_mono it =
       *)
       f
     in
-    match IT.term t with
+    match IT.get_term t with
     | IT.Sym sym -> return (Sym.pp sym)
     | IT.Const l ->
       (match l with
@@ -959,7 +959,7 @@ let it_to_coq loc global list_mono it =
        | _ -> do_fail "const")
     | IT.Unop (op, x) ->
       norm_bv_op
-        (IT.bt t)
+        (IT.get_bt t)
         (match op with
          | IT.Not -> f_appM (if enc_prop then "~" else "negb") [ aux x ]
          | IT.BW_FFS_NoSMT -> f_appM "CN_Lib.find_first_set_z" [ aux x ]
@@ -967,7 +967,7 @@ let it_to_coq loc global list_mono it =
          | _ -> do_fail "unary op")
     | IT.Binop (op, x, y) ->
       norm_bv_op
-        (IT.bt t)
+        (IT.get_bt t)
         (match op with
          | Add -> abinop "+" x y
          | Sub -> abinop "-" x y
@@ -1027,11 +1027,11 @@ let it_to_coq loc global list_mono it =
       return (parens enc)
     | IT.MapSet (m, x, y) ->
       let@ () = ensure_fun_upd () in
-      let@ e = eq_of (IT.bt x) in
+      let@ e = eq_of (IT.get_bt x) in
       f_appM "fun_upd" [ return e; aux m; aux x; aux y ]
     | IT.MapGet (m, x) -> parensM (build [ aux m; aux x ])
     | IT.RecordMember (t, m) ->
-      let flds = BT.record_bt (IT.bt t) in
+      let flds = BT.record_bt (IT.get_bt t) in
       if List.length flds == 1 then
         aux t
       else (
@@ -1039,7 +1039,7 @@ let it_to_coq loc global list_mono it =
         let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
         parensM (build [ rets op_nm; aux t ]))
     | IT.RecordUpdate ((t, m), x) ->
-      let flds = BT.record_bt (IT.bt t) in
+      let flds = BT.record_bt (IT.get_bt t) in
       if List.length flds == 1 then
         aux x
       else (
@@ -1050,7 +1050,7 @@ let it_to_coq loc global list_mono it =
       let@ xs = ListM.mapM aux (List.map snd mems) in
       parensM (return (flow (comma ^^ break 1) xs))
     | IT.StructMember (t, m) ->
-      let tag = BaseTypes.struct_bt (IT.bt t) in
+      let tag = BaseTypes.struct_bt (IT.get_bt t) in
       let mems, _bts = get_struct_xs global.struct_decls tag in
       let ix = find_tuple_element Id.equal m Id.pp mems in
       if List.length mems == 1 then
@@ -1059,7 +1059,7 @@ let it_to_coq loc global list_mono it =
         let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
         parensM (build [ rets op_nm; aux t ])
     | IT.StructUpdate ((t, m), x) ->
-      let tag = BaseTypes.struct_bt (IT.bt t) in
+      let tag = BaseTypes.struct_bt (IT.get_bt t) in
       let mems, _bts = get_struct_xs global.struct_decls tag in
       let ix = find_tuple_element Id.equal m Id.pp mems in
       if List.length mems == 1 then
@@ -1068,7 +1068,7 @@ let it_to_coq loc global list_mono it =
         let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
         parensM (build [ rets op_nm; aux t; aux x ])
     | IT.Cast (cbt, t) ->
-      (match (IT.bt t, cbt) with
+      (match (IT.get_bt t, cbt) with
        | Integer, Loc () -> aux t
        | Loc (), Integer -> aux t
        | source, target ->
@@ -1097,10 +1097,10 @@ let it_to_coq loc global list_mono it =
       (* assuming here that the id's are in canonical order *)
       parensM (build ([ return (Sym.pp nm) ] @ List.map (f comp) (List.map snd id_args)))
     | IT.NthList (n, xs, d) ->
-      let@ _, _, dest = ensure_list global list_mono loc (IT.bt xs) in
+      let@ _, _, dest = ensure_list global list_mono loc (IT.get_bt xs) in
       parensM (build [ rets "CN_Lib.nth_list_z"; return dest; aux n; aux xs; aux d ])
     | IT.ArrayToList (arr, i, len) ->
-      let@ nil, cons, _ = ensure_list global list_mono loc (IT.bt t) in
+      let@ nil, cons, _ = ensure_list global list_mono loc (IT.get_bt t) in
       parensM
         (build
            [ rets "CN_Lib.array_to_list";

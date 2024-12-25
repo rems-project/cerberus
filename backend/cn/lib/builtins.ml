@@ -122,14 +122,15 @@ let array_to_list_def =
   ( "array_to_list",
     Sym.fresh_named "array_to_list",
     mk_arg3_err (fun (arr, i, len) loc ->
-      match SBT.is_map_bt (IT.bt arr) with
+      match SBT.is_map_bt (IT.get_bt arr) with
       | None ->
         let reason = "map/array operation" in
         let expected = "map/array" in
         fail
           { loc;
             msg =
-              Illtyped_it { it = IT.pp arr; has = SBT.pp (IT.bt arr); expected; reason }
+              Illtyped_it
+                { it = IT.pp arr; has = SBT.pp (IT.get_bt arr); expected; reason }
           }
       | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt loc)) )
 

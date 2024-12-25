@@ -66,13 +66,13 @@ let term_with_model_name nm cfg x =
 
 
 let bool_subterms1 t =
-  match IT.term t with
+  match IT.get_term t with
   | IT.Binop (And, it, it') -> [ it; it' ]
   | IT.Binop (Or, it, it') -> [ it; it' ]
   | IT.Binop (Implies, x, y) -> [ x; y ]
   | IT.Unop (Not, x) -> [ x ]
   | IT.Binop (EQ, x, y) ->
-    if BT.equal (IT.bt x) BT.Bool then
+    if BT.equal (IT.get_bt x) BT.Bool then
       [ x; y ]
     else
       []
@@ -92,13 +92,13 @@ let constraint_ts () =
 
 
 let same_pred nm t =
-  match IT.term t with IT.Apply (nm2, _) -> Sym.equal nm nm2 | _ -> false
+  match IT.get_term t with IT.Apply (nm2, _) -> Sym.equal nm nm2 | _ -> false
 
 
-let pred_args t = match IT.term t with IT.Apply (_, args) -> args | _ -> []
+let pred_args t = match IT.get_term t with IT.Apply (_, args) -> args | _ -> []
 
 let split_eq x y =
-  match (IT.term x, IT.term y) with
+  match (IT.get_term x, IT.get_term y) with
   | IT.MapGet (m1, x1), IT.MapGet (m2, x2) -> Some [ (m1, m2); (x1, x2) ]
   | IT.Apply (nm, xs), IT.Apply (nm2, ys) when Sym.equal nm nm2 ->
     Some (List.map2 (fun x y -> (x, y)) xs ys)
@@ -146,7 +146,7 @@ let rec investigate_term cfg t =
       return (List.concat trans_opts @ [ get_eq_opt ] @ split_opts)
   in
   let@ pred_opts =
-    match IT.term t with
+    match IT.get_term t with
     | IT.Apply (nm, _xs) -> investigate_pred cfg nm t
     | _ -> return []
   in
@@ -207,7 +207,8 @@ and investigate_trans_eq t cfg =
       (fun _ acc t ->
         match IT.is_eq t with
         | None -> acc
-        | Some (x, y) -> if BT.equal (IT.bt x) (IT.bt t) then [ x; y ] @ acc else acc)
+        | Some (x, y) ->
+          if BT.equal (IT.get_bt x) (IT.get_bt t) then [ x; y ] @ acc else acc)
       []
       []
       cs
@@ -236,7 +237,7 @@ and get_eqs_then_investigate cfg x y =
   let x_set =
     IT.fold_list
       (fun _ acc t ->
-        if BT.equal (IT.bt t) (IT.bt x) then
+        if BT.equal (IT.get_bt t) (IT.get_bt x) then
           ITSet.add t acc
         else
           acc)
@@ -279,7 +280,7 @@ and investigate_pred cfg nm t =
 and investigate_ite cfg t =
   let ites =
     IT.fold
-      (fun _ acc t -> match IT.term t with ITE (x, _y, _z) -> x :: acc | _ -> acc)
+      (fun _ acc t -> match IT.get_term t with ITE (x, _y, _z) -> x :: acc | _ -> acc)
       []
       []
       t

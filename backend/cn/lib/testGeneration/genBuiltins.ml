@@ -31,13 +31,15 @@ let gen_syms_bits (name : string) : (BT.t * Sym.t) list =
 
 
 let mult_check (it_mult : IT.t) gt loc =
-  GT.assert_ (T (IT.gt_ (it_mult, IT.num_lit_ Z.zero (IT.bt it_mult) loc) loc), gt) loc
+  GT.assert_
+    (T (IT.gt_ (it_mult, IT.num_lit_ Z.zero (IT.get_bt it_mult) loc) loc), gt)
+    loc
 
 
 let lt_check (it_max : IT.t) gt loc =
-  let sgn, sz = Option.get (BT.is_bits_bt (IT.bt it_max)) in
+  let sgn, sz = Option.get (BT.is_bits_bt (IT.get_bt it_max)) in
   let min, _ = BT.bits_range (sgn, sz) in
-  GT.assert_ (T (IT.gt_ (it_max, IT.num_lit_ min (IT.bt it_max) loc) loc), gt) loc
+  GT.assert_ (T (IT.gt_ (it_max, IT.num_lit_ min (IT.get_bt it_max) loc) loc), gt) loc
 
 
 let range_check (it_min : IT.t) (it_max : IT.t) gt loc =
@@ -139,13 +141,13 @@ let aligned_alloc_gen_sym = Sym.fresh_named "cn_gen_aligned_alloc"
 
 let aligned_alloc_gen (it_align : IT.t) (it_size : IT.t) loc : GT.t =
   let it_align =
-    if BT.equal (IT.bt it_align) Memory.size_bt then
+    if BT.equal (IT.get_bt it_align) Memory.size_bt then
       it_align
     else
       IT.cast_ Memory.size_bt it_align loc
   in
   let it_size =
-    if BT.equal (IT.bt it_size) Memory.size_bt then
+    if BT.equal (IT.get_bt it_size) Memory.size_bt then
       it_size
     else
       IT.cast_ Memory.size_bt it_align loc

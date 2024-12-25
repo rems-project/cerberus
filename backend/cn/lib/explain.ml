@@ -267,7 +267,7 @@ let state ctxt log model_with_q extras =
     let interesting, uninteresting =
       List.partition
         (fun (it, _entry) ->
-          match IT.bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
+          match IT.get_bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
         filtered
     in
     add_labeled

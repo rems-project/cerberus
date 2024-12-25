@@ -16,7 +16,7 @@ type basetype_or_value =
   | BaseType of BT.t
   | Value of IndexTerms.t
 
-let bt_of = function BaseType bt -> bt | Value v -> IndexTerms.bt v
+let bt_of = function BaseType bt -> bt | Value v -> IndexTerms.get_bt v
 
 let has_value = function BaseType _ -> false | Value _ -> true
 
