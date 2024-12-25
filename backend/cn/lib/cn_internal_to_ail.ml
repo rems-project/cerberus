@@ -72,7 +72,7 @@ let generic_cn_dt_sym = Sym.fresh_pretty "cn_datatype"
 let create_id_from_sym ?(lowercase = false) sym =
   let str = Sym.pp_string sym in
   let str = if lowercase then String.lowercase_ascii str else str in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   Id.make here str
 
 
@@ -96,6 +96,7 @@ let generate_error_msg_info_update_stats ?(cn_source_loc_opt = None) () =
     | Some loc ->
       let loc_str = Cerb_location.location_to_string loc in
       let _, loc_str_2 = Cerb_location.head_pos_of_location loc in
+      let loc_str_escaped = Str.global_replace (Str.regexp_string "\"") "\'" loc_str in
       let loc_str_2_escaped =
         Str.global_replace (Str.regexp_string "\n") "\\n" loc_str_2
       in
@@ -104,7 +105,9 @@ let generate_error_msg_info_update_stats ?(cn_source_loc_opt = None) () =
       in
       let cn_source_loc_str =
         mk_expr
-          A.(AilEstr (None, [ (Cerb_location.unknown, [ loc_str_2_escaped ^ loc_str ]) ]))
+          A.(
+            AilEstr
+              (None, [ (Cerb_location.unknown, [ loc_str_2_escaped ^ loc_str_escaped ]) ]))
       in
       cn_source_loc_str
     | None -> mk_expr A.(AilEconst ConstantNull)
@@ -142,9 +145,9 @@ let rec bt_to_cn_base_type = function
   | Bits (sign, size) ->
     CN_bits ((match sign with Unsigned -> CN_unsigned | Signed -> CN_signed), size)
   | Real -> CN_real
-  | MemByte -> failwith (__FUNCTION__ ^ ": TODO MemByte")
+  | MemByte -> failwith (__LOC__ ^ ": TODO MemByte")
   | Alloc_id -> CN_alloc_id
-  | CType -> failwith (__FUNCTION__ ^ ": TODO Ctype")
+  | CType -> failwith (__LOC__ ^ ": TODO Ctype")
   | Loc () -> CN_loc
   | Struct tag -> CN_struct tag
   | Datatype tag -> CN_datatype tag
@@ -223,7 +226,7 @@ let rec cn_to_ail_base_type ?pred_sym:(_ = None) cn_typ =
       generate_ail_array bt
       (* TODO: What is the optional second pair element for? Have just put None for now *)
     | CN_tuple _ts ->
-      failwith (__FUNCTION__ ^ ":Tuples not yet supported")
+      failwith (__LOC__ ^ ":Tuples not yet supported")
       (* Printf.printf "Entered CN_tuple case\n"; *)
       (* let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
          let members = List.map (fun t -> (some_id, t)) ts in
@@ -678,7 +681,7 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let cast_expr =
     mk_expr
       A.(
@@ -1097,7 +1100,7 @@ let rec cn_to_ail_expr_aux_internal
     in
     let ail_decl = A.(AilSdeclaration [ (res_sym, Some (mk_expr fn_call)) ]) in
     let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true sym in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.make here "u")) in
     let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
     let generate_ail_stat (id, it) =
@@ -1319,7 +1322,7 @@ let rec cn_to_ail_expr_aux_internal
       | _ :: _ -> failwith "Non-sum pattern"
       | [] -> assert false
     in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let transform_switch_expr e = A.(AilEmemberofptr (e, Id.make here "tag")) in
     (* Matrix algorithm for pattern compilation *)
     let rec translate
@@ -1574,7 +1577,7 @@ let generate_map_get sym =
   let ret_sym = Sym.fresh_pretty "ret" in
   let ret_binding = create_binding ret_sym void_ptr_type in
   let key_val_mem =
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     mk_expr A.(AilEmemberofptr (mk_expr (AilEident param2_sym), Id.make here "val"))
   in
   let ht_get_fcall =
@@ -1635,7 +1638,7 @@ let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
   =
   let enum_sym = generate_sym_with_suffix cn_datatype.cn_dt_name in
   let constructor_syms = List.map fst cn_datatype.cn_dt_cases in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let generate_enum_member sym =
     let doc = CF.Pp_ail.pp_id sym in
     let str = CF.Pp_utils.to_plain_string doc in
@@ -1724,7 +1727,7 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype)
   let fn_sym = Sym.fresh_pretty ("struct_" ^ Sym.pp_string dt_sym ^ "_equality") in
   let param1_sym = Sym.fresh_pretty "x" in
   let param2_sym = Sym.fresh_pretty "y" in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let id_tag = Id.make here "tag" in
   let param_syms = [ param1_sym; param2_sym ] in
   let param_type =
@@ -1901,7 +1904,7 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
     }
   in
   let enum_ident = mk_expr A.(AilEident enum_sym) in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let res_tag_assign =
     A.(
       AilSexpr
@@ -3468,7 +3471,7 @@ let generate_assume_ownership_function ~without_ownership_checking ctype
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("assume_owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let cast_expr =
     mk_expr
       A.(

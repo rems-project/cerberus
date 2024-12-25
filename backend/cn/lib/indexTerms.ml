@@ -164,7 +164,7 @@ let rec fold_ f binders acc = function
   | ITE (t1, t2, t3) -> fold_list f binders acc [ t1; t2; t3 ]
   | EachI ((_, (s, bt), _), t) ->
     (* TODO - add location information to binders *)
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     fold f (binders @ [ (Pat (PSym s, bt, here), None) ]) acc t
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
@@ -196,13 +196,13 @@ let rec fold_ f binders acc = function
   | MapGet (t1, t2) -> fold_list f binders acc [ t1; t2 ]
   | MapDef ((s, bt), t) ->
     (* TODO - add location information to binders *)
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     fold f (binders @ [ (Pat (PSym s, bt, here), None) ]) acc t
   | Apply (_pred, ts) -> fold_list f binders acc ts
   | Let ((nm, t1), t2) ->
     let acc' = fold f binders acc t1 in
     (* TODO - add location information to binders *)
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     fold f (binders @ [ (Pat (PSym nm, get_bt t1, here), Some t1) ]) acc' t2
   | Match (e, cases) ->
     (* TODO: check this is good *)
@@ -1000,7 +1000,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
           ()
         else
           Pp.warn
-            (Locations.other __FUNCTION__)
+            (Locations.other __LOC__)
             (Pp.item "unexpected type of array arg" (pp_with_typ about))
       in
       let i_s, i = fresh ix_bt loc in
@@ -1044,7 +1044,7 @@ let promote_to_compare it it' loc =
 
 
 let nth_array_to_list_fact n xs d =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   match get_term xs with
   | ArrayToList (arr, i, len) ->
     let lt_n_len = lt_ (promote_to_compare n len here) here in
@@ -1075,7 +1075,7 @@ let rec wrap_bindings_match bs default_v v =
          match x with
          | None -> None
          | Some match_e ->
-           let here = Locations.other __FUNCTION__ in
+           let here = Locations.other __LOC__ in
            Some
              (IT
                 ( Match
@@ -1086,7 +1086,7 @@ let rec wrap_bindings_match bs default_v v =
 
 
 let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let nths =
     List.filter_map
       (fun (bs, it) ->

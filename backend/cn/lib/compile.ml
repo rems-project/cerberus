@@ -238,7 +238,7 @@ let rec translate_cn_base_type env (bTy : CF.Symbol.sym cn_base_type) =
     failwith "user type-abbreviation not removed by cabs->ail elaboration"
   | CN_c_typedef_name sym ->
     (* FIXME handle errors here properly *)
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     (match env.fetch_typedef here sym with
      | Result.Ok r -> Memory.sbt_of_sct (Sctypes.of_ctype_unsafe here r)
      | Result.Error e -> failwith (Pp.plain TypeErrors.((pp_message e.msg).short)))
@@ -469,7 +469,7 @@ module EffectfulTranslation = struct
     | CN_sub, Loc oct ->
       (match oct with
        | Some ct ->
-         let here = Locations.other __FUNCTION__ in
+         let here = Locations.other __LOC__ in
          let (IT (it_, _, _)) =
            Surface.inj
              (arrayShift_
@@ -1082,13 +1082,13 @@ module EffectfulTranslation = struct
     let msg_s = "Iterated predicate pointer must be array_shift<ctype>(ptr, q_var):" in
     match IT.get_term ptr_expr with
     | ArrayShift { base = p; ct; index = x } when Terms.equal_annot SBT.equal x qs ->
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       return (p, IT.cast_ (SBT.proj bt) (IT.sizeOf_ ct here) here)
     | _ -> fail { loc; msg = Generic (!^msg_s ^^^ IT.pp ptr_expr) }
 
 
   let owned_good _sym (res_t, _oargs_ty) =
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     match res_t with
     | Req.P { pointer; name = Owned (scty, _); _ } ->
       [ ( LC.T (IT.good_ (Pointer scty, pointer) here),
@@ -1117,7 +1117,7 @@ module EffectfulTranslation = struct
     let pointee_value =
       match pname with
       | Owned (_, Init) ->
-        let here = Locations.other __FUNCTION__ in
+        let here = Locations.other __LOC__ in
         [ (ptr_expr, IT.sym_ (sym, oargs_ty, here)) ]
       | _ -> []
     in
@@ -1132,7 +1132,7 @@ module EffectfulTranslation = struct
     let@ pname, ptr_expr, iargs, oargs_ty =
       translate_cn_res_info res_loc pred_loc env_with_q res args
     in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ ptr_base, step = split_pointer_linear_step pred_loc (q, bt', here) ptr_expr in
     let m_oargs_ty = SBT.make_map_bt bt' oargs_ty in
     let pt =
@@ -1380,7 +1380,7 @@ let translate_cn_clauses env clauses =
   let rec self acc = function
     | CN_clause (loc, cl_) ->
       let@ cl = translate_cn_clause env cl_ in
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       return (Def.Clause.{ loc; guard = IT.bool_ true here; packing_ft = cl } :: acc)
     | CN_if (loc, e_, cl_, clauses') ->
       let@ e =
@@ -1493,7 +1493,7 @@ let make_rt loc (env : env) st (s, ct) (accesses, ensures) =
     make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures)
   in
   (* let info = (loc, Some "return value good") in *)
-  (* let here = Locations.other __FUNCTION__ in *)
+  (* let here = Locations.other __LOC__ in *)
   (* let lrt = LRT.mConstraint (LC.T (IT.good_ (ct, IT.sym_ (s, bt, here)) here), info)
      lrt in *)
   return (RT.mComputational ((s, bt), (loc, None)) lrt)
@@ -1565,7 +1565,7 @@ module UsingLoads = struct
       | ScopeExists (_loc, scope, k) -> aux (k (StringMap.mem scope old_states))
     and load loc action_pp pointer k =
       let@ pointee_ct = pointee_ct loc pointer in
-      let value_loc = Locations.other __FUNCTION__ in
+      let value_loc = Locations.other __LOC__ in
       let value_s = Sym.fresh_make_uniq (action_pp ^ "_" ^ Pp.plain (IT.pp pointer)) in
       let value_bt = Memory.sbt_of_sct pointee_ct in
       let value = IT.sym_ (value_s, value_bt, value_loc) in

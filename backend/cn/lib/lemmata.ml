@@ -836,7 +836,7 @@ let ensure_struct_mem is_good global list_mono loc ct aux =
         (lazy
           (let@ ty = bt_to_coq global list_mono (loc, Pp.string op_nm) bt in
            let x = Pp.parens (Pp.typ (Pp.string "x") ty) in
-           let here = Locations.other __FUNCTION__ in
+           let here = Locations.other __LOC__ in
            let x_it = IT.sym_ (Sym.fresh_named "x", bt, here) in
            let@ rhs =
              aux (it_adjust global (IT.good_value global.struct_decls ct x_it here))

@@ -86,7 +86,7 @@ let fun_param_types mu_fun =
 
 let evaluate_fun mu_fun args =
   let module IT = IndexTerms in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   match mu_fun with
   | F_params_length ->
     (match args with

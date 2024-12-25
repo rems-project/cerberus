@@ -3,7 +3,7 @@ module History = struct
 
   let sym = Sym.fresh_named str
 
-  let here = Locations.other __FUNCTION__
+  let here = Locations.other __LOC__
 
   let base_id = Id.make here "base"
 
