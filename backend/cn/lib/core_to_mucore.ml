@@ -1263,7 +1263,8 @@ let normalise_fun_map_decl
        let@ accesses = ListM.mapM (desugar_access d_st global_types) accesses in
        let@ requires, d_st = desugar_conds d_st (List.map snd requires) in
        debug 6 (lazy (string "desugared requires conds"));
-       let@ ret_s, ret_d_st = register_new_cn_local (Id.id "return") d_st in
+       let here = Locations.other __LOC__ in
+       let@ ret_s, ret_d_st = register_new_cn_local (Id.make here "return") d_st in
        let@ ensures, _ret_d_st = desugar_conds ret_d_st (List.map snd ensures) in
        debug 6 (lazy (string "desugared ensures conds"));
        let@ spec_req, spec_ens, env =

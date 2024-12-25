@@ -334,12 +334,16 @@ let add_datatype_info env (dt : cn_datatype) =
   (* SMT format constraints seem to require variables to be unique to the
      datatype, not just the constructor. *)
   let add_param m (nm, ty) =
-    match StringMap.find_opt (Id.s nm) m with
+    match StringMap.find_opt (Id.get_string nm) m with
     | None ->
-      return (StringMap.add (Id.s nm) (nm, SBT.proj (translate_cn_base_type env ty)) m)
+      return
+        (StringMap.add
+           (Id.get_string nm)
+           (nm, SBT.proj (translate_cn_base_type env ty))
+           m)
     | Some _ ->
       fail
-        { loc = Id.loc nm;
+        { loc = Id.get_loc nm;
           msg =
             Generic
               (!^"Re-using member name"
@@ -689,7 +693,7 @@ module EffectfulTranslation = struct
              ListM.fold_rightM
                (fun (id, v) expr ->
                  let@ v = self v in
-                 let start_pos = Option.get @@ Locations.start_pos @@ Id.loc id in
+                 let start_pos = Option.get @@ Locations.start_pos @@ Id.get_loc id in
                  let cursor = Cerb_location.PointCursor start_pos in
                  let loc = Locations.region (start_pos, end_pos) cursor in
                  return (IT (StructUpdate ((expr, id), v), bt, loc)))
@@ -1203,14 +1207,16 @@ let translate_cn_function env (def : cn_function) =
     List.map (fun (sym, bTy) -> (sym, translate_cn_base_type env bTy)) def.cn_func_args
   in
   let env' = List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc) env args in
-  let is_rec = List.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
+  let is_rec =
+    List.exists (fun id -> String.equal (Id.get_string id) "rec") def.cn_func_attrs
+  in
   let coq_unfold =
-    List.exists (fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs
+    List.exists (fun id -> String.equal (Id.get_string id) "coq_unfold") def.cn_func_attrs
   in
   let@ () =
     ListM.iterM
       (fun id ->
-        if List.exists (String.equal (Id.s id)) known_attrs then
+        if List.exists (String.equal (Id.get_string id)) known_attrs then
           return ()
         else
           fail

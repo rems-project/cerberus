@@ -62,7 +62,7 @@ let packing_ft loc global provable ret =
                    }
                in
                let m_value_s, m_value =
-                 IT.fresh_named (Memory.bt_of_sct mct) (Id.s member) loc
+                 IT.fresh_named (Memory.bt_of_sct mct) (Id.get_string member) loc
                in
                ( LRT.Resource ((m_value_s, (request, IT.get_bt m_value)), (loc, None), lrt),
                  (member, m_value) :: value )

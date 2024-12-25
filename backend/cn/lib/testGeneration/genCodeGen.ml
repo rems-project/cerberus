@@ -499,7 +499,7 @@ let compile_gen_def
   =
   let loc = Locations.other __LOC__ in
   let bt_ret =
-    BT.Record (List.map (fun (x, bt) -> (Id.id (Sym.pp_string x), bt)) gr.oargs)
+    BT.Record (List.map (fun (x, bt) -> (Id.make loc (Sym.pp_string x), bt)) gr.oargs)
   in
   let struct_def = CtA.generate_record_opt name bt_ret |> Option.get in
   let ct_ret = C.(mk_ctype_pointer no_qualifiers (Ctype ([], Struct (fst struct_def)))) in
@@ -584,8 +584,9 @@ let compile (sigma : CF.GenTypes.genTypeCategory A.sigma) (ctx : GR.context) : P
   in
   defs
   |> List.iter (fun ((name, def) : Sym.t * GR.definition) ->
+    let loc = Locations.other __LOC__ in
     let bt =
-      BT.Record (List.map (fun (x, bt) -> (Id.id (Sym.pp_string x), bt)) def.oargs)
+      BT.Record (List.map (fun (x, bt) -> (Id.make loc (Sym.pp_string x), bt)) def.oargs)
     in
     CtA.augment_record_map ~cn_sym:name bt);
   let tag_definitions, funcs = List.split (List.map (compile_gen_def sigma ctx) defs) in

@@ -3,11 +3,13 @@ module History = struct
 
   let sym = Sym.fresh_named str
 
-  let base_id = Id.id "base"
+  let here = Locations.other __FUNCTION__
+
+  let base_id = Id.make here "base"
 
   let base_bt = Memory.uintptr_bt
 
-  let size_id = Id.id "size"
+  let size_id = Id.make here "size"
 
   let size_bt = Memory.uintptr_bt
 

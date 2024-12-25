@@ -684,7 +684,7 @@ module WIT = struct
           match List.assoc_opt Id.equal member members with
           | Some bt -> return bt
           | None ->
-            let expected = "struct with member " ^ Id.pp_string member in
+            let expected = "struct with member " ^ Id.get_string member in
             let reason = Either.Left loc in
             fail (illtyped_index_term loc t (IT.get_bt t) ~expected ~reason)
         in
@@ -703,7 +703,7 @@ module WIT = struct
           match List.assoc_opt Id.equal member members with
           | Some bt -> return bt
           | None ->
-            let expected = "struct with member " ^ Id.pp_string member in
+            let expected = "struct with member " ^ Id.get_string member in
             let reason = Either.Left loc in
             fail (illtyped_index_term loc t (IT.get_bt t) ~expected ~reason)
         in
