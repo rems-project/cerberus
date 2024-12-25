@@ -595,11 +595,11 @@ let pp_message te =
       Some
         (squotes (IT.pp left)
          ^^^ !^"has type"
-         ^^^ squotes (BaseTypes.Surface.pp (IT.bt left))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.get_bt left))
          ^^ comma
          ^^^ squotes (IT.pp right)
          ^^^ !^"has type"
-         ^^^ squotes (BaseTypes.Surface.pp (IT.bt right))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.get_bt right))
          ^^ dot)
     in
     { short; descr; state = None }

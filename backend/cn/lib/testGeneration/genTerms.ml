@@ -52,7 +52,7 @@ let let_ ((retries, (x, gt1), gt2) : int * (Sym.t * t) * t) (loc : Locations.t) 
   GT (Let (retries, (x, gt1), gt2), basetype gt2, loc)
 
 
-let return_ (it : IT.t) (loc : Locations.t) : t = GT (Return it, IT.bt it, loc)
+let return_ (it : IT.t) (loc : Locations.t) : t = GT (Return it, IT.get_bt it, loc)
 
 let assert_ ((lc, gt') : LC.t * t) (loc : Locations.t) : t =
   GT (Assert (lc, gt'), basetype gt', loc)

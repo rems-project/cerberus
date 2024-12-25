@@ -896,7 +896,7 @@ let make_largs f_i =
       let@ expr =
         C.LocalState.handle st (C.ET.translate_cn_expr Sym.Set.empty env expr)
       in
-      let@ lat = aux (C.add_logical name (IT.bt expr) env) st conditions in
+      let@ lat = aux (C.add_logical name (IT.get_bt expr) env) st conditions in
       return (Mu.mDefine ((name, IT.Surface.proj expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conditions ->
       let@ lc = C.LocalState.handle st (C.ET.translate_cn_assrt env (loc, constr)) in

@@ -113,7 +113,7 @@ let rec compile_it_lat
     match lat with
     | Define ((x, it), (loc, _), lat') ->
       let@ gt' = compile_it_lat filename recursive preds name generated oargs lat' in
-      return (GT.let_ (backtrack_num, (x, GT.return_ it (IT.loc it)), gt') loc)
+      return (GT.let_ (backtrack_num, (x, GT.return_ it (IT.get_loc it)), gt') loc)
     | Resource ((x, (P { name = Owned (ct, _); pointer; iargs = _ }, bt)), (loc, _), lat')
       ->
       let@ gt' = compile_it_lat filename recursive preds name generated oargs lat' in
@@ -182,7 +182,7 @@ let rec compile_it_lat
       let gt_body =
         let sym_val = Sym.fresh () in
         let it_q = IT.sym_ (q_sym, k_bt, q_loc) in
-        let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.loc step)) loc in
+        let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.get_loc step)) loc in
         let gt_asgn =
           GT.asgn_
             ( (it_p, ct),
@@ -217,7 +217,7 @@ let rec compile_it_lat
       let pred = List.assoc Sym.equal fsym preds in
       let arg_syms = pred.pointer :: fst (List.split pred.iargs) in
       let it_q = IT.sym_ (q_sym, q_bt, q_loc) in
-      let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.loc step)) loc in
+      let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.get_loc step)) loc in
       let arg_its = it_p :: iargs in
       let args = List.combine arg_syms arg_its in
       (* Build [GT.t] *)
@@ -261,7 +261,7 @@ let rec compile_it_lat
       let it_ret =
         IT.record_ (List.map_fst (fun sym -> Id.id (Sym.pp_string sym)) it_oargs) here
       in
-      return (GT.return_ it_ret (IT.loc it))
+      return (GT.return_ it_ret (IT.get_loc it))
   in
   return (f_gt_init gt)
 

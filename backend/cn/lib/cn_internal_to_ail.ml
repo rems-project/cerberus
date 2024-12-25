@@ -841,15 +841,15 @@ let rec cn_to_ail_expr_aux_internal
     in
     (*
        let is_map it =
-       match IT.bt it with
+       match IT.get_bt it with
        | BT.Map (bt1, bt2) ->
-       Printf.printf "Type of %s: Map(%s, %s)\n" (str_of_it_ (IT.term it)) (str_of_ctype (bt_to_ail_ctype bt1)) (str_of_ctype (bt_to_ail_ctype bt2));
+       Printf.printf "Type of %s: Map(%s, %s)\n" (str_of_it_ (IT.get_term it)) (str_of_ctype (bt_to_ail_ctype bt1)) (str_of_ctype (bt_to_ail_ctype bt2));
        true
        | _ -> false
        in *)
     let ail_expr_ =
       match ail_bop with
-      | Eq -> get_equality_fn_call (IT.bt t1) e1 e2 dts
+      | Eq -> get_equality_fn_call (IT.get_bt t1) e1 e2 dts
       | _ -> default_ail_binop
     in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
@@ -857,7 +857,7 @@ let rec cn_to_ail_expr_aux_internal
     let b, s, e =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack
     in
-    let _ail_unop, annot = cn_to_ail_unop_internal (IT.bt t) unop in
+    let _ail_unop, annot = cn_to_ail_unop_internal (IT.get_bt t) unop in
     let str =
       match annot with Some str -> str | None -> failwith "No CN unop function found"
     in
@@ -871,7 +871,7 @@ let rec cn_to_ail_expr_aux_internal
   | ITE (t1, t2, t3) ->
     let result_sym = Sym.fresh () in
     let result_ident = A.(AilEident result_sym) in
-    let result_binding = create_binding result_sym (bt_to_ail_ctype (IT.bt t2)) in
+    let result_binding = create_binding result_sym (bt_to_ail_ctype (IT.get_bt t2)) in
     let result_decl = A.(AilSdeclaration [ (result_sym, None) ]) in
     let b1, s1, e1 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
@@ -987,7 +987,7 @@ let rec cn_to_ail_expr_aux_internal
     dest d (b, s, mk_expr ail_expr_)
   | StructUpdate ((struct_term, m), new_val) ->
     let struct_tag =
-      match IT.bt struct_term with
+      match IT.get_bt struct_term with
       | BT.Struct tag -> tag
       | _ -> failwith "Cannot do StructUpdate on non-struct term"
     in
@@ -1048,7 +1048,7 @@ let rec cn_to_ail_expr_aux_internal
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
     in
-    let transformed_ms = List.map (fun (id, it) -> (id, IT.bt it)) ms in
+    let transformed_ms = List.map (fun (id, it) -> (id, IT.get_bt it)) ms in
     let sym_name = lookup_records_map transformed_ms in
     let ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct sym_name))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
@@ -1199,7 +1199,7 @@ let rec cn_to_ail_expr_aux_internal
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack
     in
     let key_term =
-      if IT.bt key == BT.Integer then
+      if IT.get_bt key == BT.Integer then
         key
       else
         IT.IT (Cast (BT.Integer, key), BT.Integer, Cerb_location.unknown)
@@ -1211,7 +1211,7 @@ let rec cn_to_ail_expr_aux_internal
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals value PassBack
     in
     let new_map_sym = Sym.fresh () in
-    let new_map_binding = create_binding new_map_sym (bt_to_ail_ctype (IT.bt m)) in
+    let new_map_binding = create_binding new_map_sym (bt_to_ail_ctype (IT.get_bt m)) in
     let map_deep_copy_fcall =
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_deep_copy")), [ e1 ]))
     in
@@ -1235,7 +1235,7 @@ let rec cn_to_ail_expr_aux_internal
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack
     in
     let key_term =
-      if IT.bt key == BT.Integer then
+      if IT.get_bt key == BT.Integer then
         key
       else
         IT.IT (Cast (BT.Integer, key), BT.Integer, Cerb_location.unknown)
@@ -1243,7 +1243,9 @@ let rec cn_to_ail_expr_aux_internal
     let b2, s2, e2 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals key_term PassBack
     in
-    let is_record = match BT.map_bt (IT.bt m) with _, Record _ -> true | _ -> false in
+    let is_record =
+      match BT.map_bt (IT.get_bt m) with _, Record _ -> true | _ -> false
+    in
     let cntype_str_opt = get_underscored_typedef_string_from_bt ~is_record basetype in
     let map_get_str =
       match cntype_str_opt with
@@ -1253,7 +1255,7 @@ let rec cn_to_ail_expr_aux_internal
     let map_get_fcall =
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty map_get_str)), [ e1; e2 ]))
     in
-    let _key_bt, val_bt = BT.map_bt (IT.bt m) in
+    let _key_bt, val_bt = BT.map_bt (IT.get_bt m) in
     let ctype = bt_to_ail_ctype val_bt in
     let cast_expr_ = A.(AilEcast (empty_qualifiers, ctype, mk_expr map_get_fcall)) in
     dest d (b1 @ b2, s1 @ s2, mk_expr cast_expr_)
@@ -1277,7 +1279,7 @@ let rec cn_to_ail_expr_aux_internal
     let b1, s1, e1 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
     in
-    let ctype = bt_to_ail_ctype (IT.bt t1) in
+    let ctype = bt_to_ail_ctype (IT.get_bt t1) in
     let binding = create_binding var ctype in
     let ail_assign = A.(AilSdeclaration [ (var, Some e1) ]) in
     prefix
@@ -1348,7 +1350,7 @@ let rec cn_to_ail_expr_aux_internal
           let bindings', stats' = translate count vs cases res_sym_opt in
           (bindings', stats'))
         else (
-          match IT.bt term with
+          match IT.get_bt term with
           | BT.Datatype sym ->
             let cn_dt = List.filter (fun dt -> Sym.equal sym dt.cn_dt_name) dts in
             (match cn_dt with
@@ -1438,7 +1440,7 @@ let rec cn_to_ail_expr_aux_internal
                (b1, s1 @ [ switch ]))
           | _ ->
             (* Cannot have non-variable, non-wildcard pattern besides struct *)
-            let bt_string_opt = get_typedef_string (bt_to_ail_ctype (IT.bt term)) in
+            let bt_string_opt = get_typedef_string (bt_to_ail_ctype (IT.get_bt term)) in
             let bt_string =
               match bt_string_opt with
               | Some str -> str
@@ -1480,7 +1482,7 @@ let rec cn_to_ail_expr_aux_internal
         let ail_expr_ =
           match
             ( get_typedef_string (bt_to_ail_ctype bt),
-              get_typedef_string (bt_to_ail_ctype (IT.bt t)) )
+              get_typedef_string (bt_to_ail_ctype (IT.get_bt t)) )
           with
           | Some cast_type_str, Some original_type_str ->
             let fn_name = "cast_" ^ original_type_str ^ "_to_" ^ cast_type_str in
@@ -2500,12 +2502,15 @@ let get_while_bounds_and_cond (i_sym, i_bt) it =
                 plain
                   (Pp.item
                      "Cannot infer lower bound for permission"
-                     (squotes (IT.pp it) ^^^ !^"at" ^^^ Locations.pp (IT.loc it)))))
+                     (squotes (IT.pp it) ^^^ !^"at" ^^^ Locations.pp (IT.get_loc it)))))
           ();
         exit 2)
   in
   let start_expr =
-    IT.IT (IT.Cast (IT.bt start_expr, start_expr), IT.bt start_expr, Cerb_location.unknown)
+    IT.IT
+      ( IT.Cast (IT.get_bt start_expr, start_expr),
+        IT.get_bt start_expr,
+        Cerb_location.unknown )
   in
   let start_cond =
     match start_expr with
@@ -2526,7 +2531,7 @@ let get_while_bounds_and_cond (i_sym, i_bt) it =
               plain
                 (Pp.item
                    "Cannot infer upper bound for permission"
-                   (squotes (IT.pp it) ^^^ !^"at" ^^^ Locations.pp (IT.loc it)))))
+                   (squotes (IT.pp it) ^^^ !^"at" ^^^ Locations.pp (IT.get_loc it)))))
         ();
       exit 2
   in
@@ -2846,11 +2851,11 @@ let cn_to_ail_logical_constraint_internal
   | LogicalConstraints.T it -> cn_to_ail_expr_internal dts globals it d
   | LogicalConstraints.Forall ((sym, bt), it) ->
     let cond_it, t =
-      match IT.term it with
+      match IT.get_term it with
       | Binop (Implies, it, it') -> (it, it')
       | _ -> failwith "Incorrect form of forall logical constraint term"
     in
-    (match IT.term t with
+    (match IT.get_term t with
      | Good _ -> dest d ([], [], cn_bool_true_expr)
      | _ ->
        (* Assume cond_it is of a particular form *)
@@ -2986,7 +2991,7 @@ let cn_to_ail_function_internal
 let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals preds
   = function
   | LAT.Define ((name, it), _info, lat) ->
-    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let binding = create_binding name ctype in
     let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 =
@@ -3129,8 +3134,10 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
   | LRT.Define ((name, it), (_loc, _), t) ->
     (* Printf.printf "LRT.Define\n"; *)
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
-    let new_lrt = LogicalReturnTypes.subst (ESE.sym_subst (name, IT.bt it, new_name)) t in
-    let binding = create_binding new_name (bt_to_ail_ctype (IT.bt it)) in
+    let new_lrt =
+      LogicalReturnTypes.subst (ESE.sym_subst (name, IT.get_bt it, new_name)) t
+    in
+    let binding = create_binding new_name (bt_to_ail_ctype (IT.get_bt it)) in
     let decl = A.(AilSdeclaration [ (new_name, None) ]) in
     let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
@@ -3263,10 +3270,10 @@ let rec cn_to_ail_lat_internal_2
   c_return_type
   = function
   | LAT.Define ((name, it), _info, lat) ->
-    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let new_lat =
-      ESE.fn_largs_and_body_subst (ESE.sym_subst (name, IT.bt it, new_name)) lat
+      ESE.fn_largs_and_body_subst (ESE.sym_subst (name, IT.get_bt it, new_name)) lat
     in
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding new_name ctype in
@@ -3818,7 +3825,7 @@ let cn_to_ail_assume_resource_internal
 
 let rec cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds = function
   | LAT.Define ((name, it), _info, lat) ->
-    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let binding = create_binding name ctype in
     let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 =
@@ -3918,7 +3925,7 @@ let rec cn_to_ail_assume_predicates_internal pred_def_list dts globals preds
 
 let rec cn_to_ail_assume_lat_internal_2 dts pred_sym_opt globals preds = function
   | LAT.Define ((name, it), _info, lat) ->
-    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let binding = create_binding name ctype in
     let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 =

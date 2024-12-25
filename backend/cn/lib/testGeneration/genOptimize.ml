@@ -293,7 +293,7 @@ module Fusion = struct
                 loc,
               reqs )
           else (
-            let old_args = List.map_snd IT.bt xits in
+            let old_args = List.map_snd IT.get_bt xits in
             let ret_sym = Sym.fresh_make_uniq (Sym.pp_string x) in
             let xits' =
               lcs
@@ -314,11 +314,11 @@ module Fusion = struct
               :: (xits'
                   |> List.map (fun (y, it) ->
                     ( fst (Option.get (IT.is_sym it)),
-                      IT.sym_ (y, IT.bt it, Locations.other __LOC__) )))
+                      IT.sym_ (y, IT.get_bt it, Locations.other __LOC__) )))
             in
             let lcs = List.map (LC.subst (IT.make_subst subst)) lcs in
             let new_name = Sym.fresh_make_uniq (Sym.pp_string fsym) in
-            let new_args = xits' |> List.map (fun (y, it) -> (y, IT.bt it)) in
+            let new_args = xits' |> List.map (fun (y, it) -> (y, IT.get_bt it)) in
             ( GT.let_
                 ( backtracks,
                   (x, GT.call_ (new_name, xits @ xits') bt_call loc_call),
@@ -758,7 +758,7 @@ module PartialEvaluation = struct
         eval_aux (good_value struct_decls ty it' here)
       | Aligned { t; align } ->
         let addr = addr_ t here in
-        if not (BT.equal (IT.bt addr) (IT.bt align)) then
+        if not (BT.equal (IT.get_bt addr) (IT.get_bt align)) then
           Error "Mismatched types"
         else
           eval_aux (divisible_ (addr, align) here)
@@ -1254,7 +1254,7 @@ module BranchPruning = struct
           if contains_false_assertion gt_else then
             GT.assert_ (T it_if, gt_then) loc_ite
           else if contains_false_assertion gt_then then
-            GT.assert_ (T (IT.not_ it_if (IT.loc it_if)), gt_else) loc_ite
+            GT.assert_ (T (IT.not_ it_if (IT.get_loc it_if)), gt_else) loc_ite
           else
             gt
         | _ -> gt
@@ -1473,7 +1473,7 @@ module SplitConstraints = struct
         | Assert (T (IT (Let ((x, it_inner), it_rest), _, loc_let)), gt') ->
           GT.let_
             ( 0,
-              (x, GT.return_ it_inner (IT.loc it_inner)),
+              (x, GT.return_ it_inner (IT.get_loc it_inner)),
               GT.assert_ (LC.T it_rest, gt') loc )
             loc_let
         | Assert (Forall ((_i_sym, _i_bt), IT (Let _, _, _)), _) ->

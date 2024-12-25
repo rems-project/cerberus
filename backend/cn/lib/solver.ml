@@ -691,7 +691,7 @@ let translate_var s name bt =
 
 (** Translate a CN term to SMT *)
 let rec translate_term s iterm =
-  let loc = IT.loc iterm in
+  let loc = IT.get_loc iterm in
   let struct_decls = s.globals.struct_decls in
   let maybe_name e k =
     if SMT.is_atom e then
@@ -704,14 +704,14 @@ let rec translate_term s iterm =
     let here = Locations.other (__FUNCTION__ ^ string_of_int __LINE__) in
     translate_term s (IT.default_ bt here)
   in
-  match IT.term iterm with
+  match IT.get_term iterm with
   | Const c -> translate_const s c
   | Sym x -> translate_var s x (IT.basetype iterm)
   | Unop (op, e1) ->
     (match op with
      | BW_FFS_NoSMT ->
        (* NOTE: This desugaring duplicates e1 *)
-       let intl i = int_lit_ i (IT.bt e1) loc in
+       let intl i = int_lit_ i (IT.get_bt e1) loc in
        translate_term
          s
          (ite_
@@ -722,8 +722,8 @@ let rec translate_term s iterm =
      | BW_FLS_NoSMT ->
        (* copying and adjusting BW_FFS_NoSMT rule *)
        (* NOTE: This desugaring duplicates e1 *)
-       let sz = match IT.bt e1 with Bits (_sign, n) -> n | _ -> assert false in
-       let intl i = int_lit_ i (IT.bt e1) loc in
+       let sz = match IT.get_bt e1 with Bits (_sign, n) -> n | _ -> assert false in
+       let intl i = int_lit_ i (IT.get_bt e1) loc in
        translate_term
          s
          (ite_
@@ -789,7 +789,7 @@ let rec translate_term s iterm =
      | Exp ->
        (match (get_num_z e1, get_num_z e2) with
         | Some z1, Some z2 when Z.fits_int z2 ->
-          translate_term s (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.bt e1) loc)
+          translate_term s (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.get_bt e1) loc)
         | _, _ -> failwith "Exp")
      | ExpNoSMT -> uninterp_same_type CN_Constant.exp
      | Rem ->
@@ -889,8 +889,8 @@ let rec translate_term s iterm =
   | StructMember (e1, f) ->
     SMT.app_ (CN_Names.struct_field_name f) [ translate_term s e1 ]
   | StructUpdate ((t, member), v) ->
-    let tag = BT.struct_bt (IT.bt t) in
-    let layout = Sym.Map.find (struct_bt (IT.bt t)) struct_decls in
+    let tag = BT.struct_bt (IT.get_bt t) in
+    let layout = Sym.Map.find (struct_bt (IT.get_bt t)) struct_decls in
     let members = Memory.member_types layout in
     let str =
       List.map
@@ -923,7 +923,7 @@ let rec translate_term s iterm =
         | None -> failwith "Missing record field.")
      | _ -> failwith "RecordMemmber")
   | RecordUpdate ((t, member), v) ->
-    let members = BT.record_bt (IT.bt t) in
+    let members = BT.record_bt (IT.get_bt t) in
     let str =
       List.map
         (fun (member', bt) ->
@@ -936,7 +936,7 @@ let rec translate_term s iterm =
           (member', value))
         members
     in
-    translate_term s (IT (Record str, IT.bt t, loc))
+    translate_term s (IT (Record str, IT.get_bt t, loc))
   | MemberShift (t, tag, member) ->
     CN_Pointer.ptr_shift
       ~ptr:(translate_term s t)
@@ -950,7 +950,7 @@ let rec translate_term s iterm =
         (let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt loc in
          (* locations don't matter here - we are translating straight away *)
          let ix =
-           if BT.equal (IT.bt index) Memory.uintptr_bt then
+           if BT.equal (IT.get_bt index) Memory.uintptr_bt then
              index
            else
              cast_ Memory.uintptr_bt index loc
@@ -991,7 +991,7 @@ let rec translate_term s iterm =
   | Good (ct, t) -> translate_term s (good_value struct_decls ct t loc)
   | Aligned t ->
     let addr = addr_ t.t loc in
-    assert (BT.equal (IT.bt addr) (IT.bt t.align));
+    assert (BT.equal (IT.get_bt addr) (IT.get_bt t.align));
     translate_term s (divisible_ (addr, t.align) loc)
   (* Maps *)
   | MapConst (bt, e1) ->
@@ -1055,17 +1055,17 @@ let rec translate_term s iterm =
   | WrapI (ity, arg) ->
     bv_cast
       ~to_:(Memory.bt_of_sct (Sctypes.Integer ity))
-      ~from:(IT.bt arg)
+      ~from:(IT.get_bt arg)
       (translate_term s arg)
   | Cast (cbt, t) ->
     let smt_term = translate_term s t in
-    (match (IT.bt t, cbt) with
+    (match (IT.get_bt t, cbt) with
      | Bits _, Loc () ->
        let addr =
-         if BT.equal (IT.bt t) Memory.uintptr_bt then
+         if BT.equal (IT.get_bt t) Memory.uintptr_bt then
            smt_term
          else
-           bv_cast ~to_:Memory.uintptr_bt ~from:(IT.bt t) smt_term
+           bv_cast ~to_:Memory.uintptr_bt ~from:(IT.get_bt t) smt_term
        in
        CN_Pointer.bits_to_ptr ~bits:addr ~alloc_id:(default Alloc_id)
      | Loc (), Bits _ ->
@@ -1089,7 +1089,7 @@ let rec translate_term s iterm =
      | MemByte, Alloc_id -> SMT.app_ CN_MemByte.alloc_id_name [ smt_term ]
      | Real, Integer -> SMT.real_to_int smt_term
      | Integer, Real -> SMT.int_to_real smt_term
-     | Bits _, Bits _ -> bv_cast ~to_:cbt ~from:(IT.bt t) smt_term
+     | Bits _, Bits _ -> bv_cast ~to_:cbt ~from:(IT.get_bt t) smt_term
      | _ -> assert false)
 
 

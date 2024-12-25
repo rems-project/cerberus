@@ -589,11 +589,11 @@ let bind_logical_return_internal loc =
   let rec aux members lrt =
     match (members, lrt) with
     | member :: members, LogicalReturnTypes.Define ((s, it), _, lrt) ->
-      let@ () = ensure_base_type loc ~expect:(IT.bt it) (IT.bt member) in
+      let@ () = ensure_base_type loc ~expect:(IT.get_bt it) (IT.get_bt member) in
       let@ () = add_c_internal (LC.T (IT.eq__ member it loc)) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | member :: members, Resource ((s, (re, bt)), _, lrt) ->
-      let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
+      let@ () = ensure_base_type loc ~expect:bt (IT.get_bt member) in
       let@ () = add_r_internal loc (re, Res.O member) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | members, Constraint (lc, _, lrt) ->
@@ -614,7 +614,7 @@ let bind_logical_return loc members lrt =
 let bind_return loc members (rt : ReturnTypes.t) =
   match (members, rt) with
   | member :: members, Computational ((s, bt), _, lrt) ->
-    let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
+    let@ () = ensure_base_type loc ~expect:bt (IT.get_bt member) in
     let@ () =
       bind_logical_return
         loc

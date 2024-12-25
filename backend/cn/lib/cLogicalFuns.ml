@@ -81,7 +81,7 @@ let triv_simp_ctxt = Simplify.default Global.empty
 
 let simp_const loc lpp it =
   let it2 = Simplify.IndexTerms.simp triv_simp_ctxt it in
-  match (IT.is_z it2, IT.bt it2) with
+  match (IT.is_z it2, IT.get_bt it2) with
   | Some _z, _ -> return it2
   | _, BT.Integer ->
     fail_n
@@ -99,7 +99,7 @@ let do_wrapI loc ct it =
   match Sctypes.is_integer_type ct with
   | Some ity ->
     let ity_bt = Memory.bt_of_sct ct in
-    if BT.equal ity_bt (IT.bt it) then
+    if BT.equal ity_bt (IT.get_bt it) then
       return it
     else
       return (IT.wrapI_ (ity, it) loc)
@@ -166,13 +166,13 @@ let signed_int_ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_)
 let signed_int_ty = Memory.bt_of_sct (Sctypes.Integer signed_int_ity)
 
 let is_two_pow it =
-  match IT.term it with
+  match IT.get_term it with
   | Terms.Binop (Terms.ExpNoSMT, x, y)
     when Option.equal Z.equal (IT.get_num_z x) (Some (Z.of_int 2)) ->
-    Some (`Two_loc (IT.loc x), `Exp y)
+    Some (`Two_loc (IT.get_loc x), `Exp y)
   | Terms.Binop (Terms.Exp, x, y)
     when Option.equal Z.equal (IT.get_num_z x) (Some (Z.of_int 2)) ->
-    Some (`Two_loc (IT.loc x), `Exp y)
+    Some (`Two_loc (IT.get_loc x), `Exp y)
   | _ -> None
 
 
@@ -307,13 +307,13 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
     in
     (match (op, x_v, is_two_pow y_v) with
      | OpMul, _, Some (`Two_loc two_loc, `Exp exp) ->
-       let exp_loc = IT.loc y_v in
+       let exp_loc = IT.get_loc y_v in
        return
-         (IT.mul_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.bt x_v) two_loc, exp) exp_loc) loc)
+         (IT.mul_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.get_bt x_v) two_loc, exp) exp_loc) loc)
      | OpDiv, _, Some (`Two_loc two_loc, `Exp exp) ->
-       let exp_loc = IT.loc y_v in
+       let exp_loc = IT.get_loc y_v in
        return
-         (IT.div_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.bt x_v) two_loc, exp) exp_loc) loc)
+         (IT.div_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.get_bt x_v) two_loc, exp) exp_loc) loc)
      | _, _, _ ->
        let@ res = simp_const_pe (f x_v y_v) in
        return res)
@@ -364,7 +364,7 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
        simp_const_pe
          (bool_ite_1_0
             bool_rep_ty
-            (IT.not_ (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x) here) here) here)
+            (IT.not_ (IT.eq_ (x, IT.int_lit_ 0 (IT.get_bt x) here) here) here)
             loc)
      | _ -> do_wrapI loc ct x)
   | PEwrapI (act, pe) ->
@@ -382,8 +382,8 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
       | IOpAdd -> IT.add_ (x, y) loc
       | IOpSub -> IT.sub_ (x, y) loc
       | IOpMul -> IT.mul_ (x, y) loc
-      | IOpShl -> IT.arith_binop Terms.ShiftLeft (x, IT.cast_ (IT.bt x) y here) loc
-      | IOpShr -> IT.arith_binop Terms.ShiftRight (x, IT.cast_ (IT.bt x) y here) loc
+      | IOpShl -> IT.arith_binop Terms.ShiftLeft (x, IT.cast_ (IT.get_bt x) y here) loc
+      | IOpShr -> IT.arith_binop Terms.ShiftRight (x, IT.cast_ (IT.get_bt x) y here) loc
     in
     do_wrapI loc (Mu.bound_kind_act bk).ct it
   | PEcfunction pe ->
@@ -590,7 +590,7 @@ let rec filter_syms ss p =
 let rec get_ret_it loc body bt = function
   | Call_Ret v ->
     let@ () =
-      if BT.equal (IT.bt v) bt then
+      if BT.equal (IT.get_bt v) bt then
         return ()
       else
         fail_n
@@ -642,7 +642,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
     let rec mk_var_map acc args_and_body def_args =
       match (args_and_body, def_args) with
       | Mu.Computational ((s, bt), _, args_and_body), v :: def_args ->
-        if BT.equal bt (IT.bt v) then
+        if BT.equal bt (IT.get_bt v) then
           mk_var_map (Sym.Map.add s v acc) args_and_body def_args
         else
           fail_n
@@ -651,7 +651,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
                 Generic
                   Pp.(
                     !^"mismatched arguments:"
-                    ^^^ parens (BT.pp (IT.bt v) ^^^ IT.pp v)
+                    ^^^ parens (BT.pp (IT.get_bt v) ^^^ IT.pp v)
                     ^^^ !^"and"
                     ^^^ parens (BT.pp bt ^^^ Sym.pp s))
             }

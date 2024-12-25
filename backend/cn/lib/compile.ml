@@ -449,9 +449,9 @@ module EffectfulTranslation = struct
   let mk_translate_binop loc' bop (e1, e2) =
     let open IndexTerms in
     let loc = loc' in
-    match (bop, IT.bt e1) with
+    match (bop, IT.get_bt e1) with
     | CN_add, (BT.Integer | Real | Bits _) ->
-      return (IT (Binop (Add, e1, e2), IT.bt e1, loc))
+      return (IT (Binop (Add, e1, e2), IT.get_bt e1, loc))
     | CN_add, Loc oct ->
       (match oct with
        | Some ct ->
@@ -462,7 +462,7 @@ module EffectfulTranslation = struct
          return (IT (it_, Loc oct, loc))
        | None -> cannot_tell_pointee_ctype loc e1)
     | CN_sub, (Integer | Real | Bits _) ->
-      return (IT (Binop (Sub, e1, e2), IT.bt e1, loc))
+      return (IT (Binop (Sub, e1, e2), IT.get_bt e1, loc))
     | CN_sub, Loc oct ->
       (match oct with
        | Some ct ->
@@ -477,11 +477,11 @@ module EffectfulTranslation = struct
          in
          return (IT (it_, Loc oct, loc))
        | None -> cannot_tell_pointee_ctype loc e1)
-    | CN_mul, _ -> return (IT (Binop (Mul, e1, e2), IT.bt e1, loc))
-    | CN_div, _ -> return (IT (Binop (Div, e1, e2), IT.bt e1, loc))
-    | CN_mod, _ -> return (IT (Binop (Rem, e1, e2), IT.bt e1, loc))
+    | CN_mul, _ -> return (IT (Binop (Mul, e1, e2), IT.get_bt e1, loc))
+    | CN_div, _ -> return (IT (Binop (Div, e1, e2), IT.get_bt e1, loc))
+    | CN_mod, _ -> return (IT (Binop (Rem, e1, e2), IT.get_bt e1, loc))
     | CN_equal, _ ->
-      (match (IT.bt e1, IT.bt e2, !pointer_eq_warned) with
+      (match (IT.get_bt e1, IT.get_bt e2, !pointer_eq_warned) with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn
@@ -491,7 +491,7 @@ module EffectfulTranslation = struct
        | _, _, _ -> ());
       return (IT (Binop (EQ, e1, e2), BT.Bool, loc))
     | CN_inequal, _ ->
-      (match (IT.bt e1, IT.bt e2, !pointer_eq_warned) with
+      (match (IT.get_bt e1, IT.get_bt e2, !pointer_eq_warned) with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn
@@ -517,7 +517,7 @@ module EffectfulTranslation = struct
     | CN_implies, BT.Bool -> return (IT (Binop (Implies, e1, e2), BT.Bool, loc))
     | CN_map_get, _ ->
       let@ rbt =
-        match IT.bt e1 with
+        match IT.get_bt e1 with
         | Map (_, rbt) -> return rbt
         | has ->
           let expected = "map/array" in
@@ -536,7 +536,7 @@ module EffectfulTranslation = struct
 
   (* just copy-pasting and adapting Kayvan's older version of this code *)
   let translate_member_access loc env (t : IT.Surface.t) member =
-    match IT.bt t with
+    match IT.get_bt t with
     | BT.Record members ->
       let@ member_bt =
         match List.assoc_opt Id.equal member members with
@@ -657,7 +657,7 @@ module EffectfulTranslation = struct
           Option.get @@ Locations.get_region loc
         in
         let cons hd tl =
-          let hd_pos = Option.get @@ Locations.start_pos @@ IT.loc hd in
+          let hd_pos = Option.get @@ Locations.start_pos @@ IT.get_loc hd in
           let loc = Locations.(region (hd_pos, nil_pos) NoCursor) in
           IT (Cons (hd, tl), BT.List item_bt, loc)
         in
@@ -675,16 +675,16 @@ module EffectfulTranslation = struct
         translate_member_access loc env e xs
       | CNExpr_record members ->
         let@ members = ListM.mapsndM self members in
-        let bts = List.map_snd IT.bt members in
+        let bts = List.map_snd IT.get_bt members in
         return (IT (IT.Record members, BT.Record bts, loc))
       | CNExpr_struct (tag, members) ->
         let@ members = ListM.mapsndM self members in
         return (IT (IT.Struct (tag, members), BT.Struct tag, loc))
       | CNExpr_memberupdates (e, updates) ->
         let@ e = self e in
-        let bt = IT.bt e in
+        let bt = IT.get_bt e in
         let end_pos = Option.get @@ Locations.end_pos loc in
-        (match IT.bt e with
+        (match IT.get_bt e with
          | Struct _ ->
            let@ expr =
              ListM.fold_rightM
@@ -700,7 +700,7 @@ module EffectfulTranslation = struct
            return expr
          | _ ->
            fail
-             { loc = IT.loc e;
+             { loc = IT.get_loc e;
                msg =
                  Illtyped_it
                    { it = Terms.pp e;
@@ -713,7 +713,7 @@ module EffectfulTranslation = struct
              })
       | CNExpr_arrayindexupdates (e, updates) ->
         let@ e = self e in
-        let bt = IT.bt e in
+        let bt = IT.get_bt e in
         (* start_pos points to start_pos of e ignored cursor points to '[' end_pos points
            to ']' *)
         let start_pos, end_pos, _ =
@@ -725,10 +725,11 @@ module EffectfulTranslation = struct
             (fun acc (i, v) ->
               let@ i = self i in
               let@ v = self v in
-              let end_pos = Option.get @@ Locations.end_pos @@ IT.loc v in
+              let end_pos = Option.get @@ Locations.end_pos @@ IT.get_loc v in
               (* cursor for the first update doesn't point to '[' - oh well *)
               let cursor =
-                Cerb_location.PointCursor (Option.get @@ Locations.start_pos @@ IT.loc i)
+                Cerb_location.PointCursor
+                  (Option.get @@ Locations.start_pos @@ IT.get_loc i)
               in
               return
                 (IT
@@ -756,7 +757,7 @@ module EffectfulTranslation = struct
       | CNExpr_array_shift (base, ty_annot, index) ->
         let@ base = self base in
         let@ ct =
-          match (ty_annot, IT.bt base) with
+          match (ty_annot, IT.get_bt base) with
           | Some ty, _ ->
             (* this does not check whether the annotation and pointer type agree and just
                defers to what the user wrote, because pointer arithmetic can happen at any
@@ -772,10 +773,10 @@ module EffectfulTranslation = struct
                        pointer"
               }
         in
-        (match IT.bt base with
+        (match IT.get_bt base with
          | Loc _ ->
            let@ index = self index in
-           (match IT.bt index with
+           (match IT.get_bt index with
             | Integer | Bits _ ->
               return (IT (ArrayShift { base; ct; index }, Loc (Some ct), loc))
             | has ->
@@ -807,7 +808,7 @@ module EffectfulTranslation = struct
              now. *)
           return (IT (it_, Loc (Some member_ty), loc))
         in
-        (match (opt_tag, IT.bt e) with
+        (match (opt_tag, IT.get_bt e) with
          | Some tag, Loc (Some (Struct tag')) ->
            if Sym.equal tag tag' then
              with_tag tag
@@ -878,7 +879,7 @@ module EffectfulTranslation = struct
           ListM.mapM
             (fun (pat, body) ->
               let@ env', locally_bound', pat =
-                translate_cn_pat env locally_bound (pat, IT.bt x)
+                translate_cn_pat env locally_bound (pat, IT.get_bt x)
               in
               let@ body = trans evaluation_scope locally_bound' env' body in
               return (pat, body))
@@ -892,10 +893,10 @@ module EffectfulTranslation = struct
           trans
             evaluation_scope
             (Sym.Set.add s locally_bound)
-            (add_logical s (IT.bt e) env)
+            (add_logical s (IT.get_bt e) env)
             body
         in
-        return (IT (Let ((s, e), body), IT.bt body, loc))
+        return (IT (Let ((s, e), body), IT.get_bt body, loc))
       | CNExpr_ite (e1, e2, e3) ->
         let@ e1 = self e1 in
         let@ e2 = self e2 in
@@ -1025,7 +1026,7 @@ module EffectfulTranslation = struct
         match oty with
         | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
         | None ->
-          (match IT.bt ptr_expr with
+          (match IT.get_bt ptr_expr with
            | BT.Loc (Some ty) -> return ty
            | Loc None ->
              fail
@@ -1076,7 +1077,7 @@ module EffectfulTranslation = struct
     let open Pp in
     let qs = IT.sym_ sym_args in
     let msg_s = "Iterated predicate pointer must be array_shift<ctype>(ptr, q_var):" in
-    match IT.term ptr_expr with
+    match IT.get_term ptr_expr with
     | ArrayShift { base = p; ct; index = x } when Terms.equal_annot SBT.equal x qs ->
       let here = Locations.other __FUNCTION__ in
       return (p, IT.cast_ (SBT.proj bt) (IT.sizeOf_ ct here) here)
@@ -1442,7 +1443,9 @@ let rec make_lrt_generic env st =
         st )
   | CN_cletExpr (loc, name, expr) :: ensures ->
     let@ expr = handle st (ET.translate_cn_expr Sym.Set.empty env expr) in
-    let@ lrt, env, st = make_lrt_generic (add_logical name (IT.bt expr) env) st ensures in
+    let@ lrt, env, st =
+      make_lrt_generic (add_logical name (IT.get_bt expr) env) st ensures
+    in
     return (LRT.mDefine (name, IT.Surface.proj expr, (loc, None)) lrt, env, st)
   | CN_cconstr (loc, constr) :: ensures ->
     let@ lc = handle st (ET.translate_cn_assrt env (loc, constr)) in
@@ -1513,7 +1516,7 @@ let translate_cn_lemma env (def : cn_lemma) =
 
 module UsingLoads = struct
   let pointee_ct loc it =
-    match IT.bt it with
+    match IT.get_bt it with
     | BT.Loc (Some ct) -> return ct
     | BT.Loc None ->
       let msg = !^"Cannot tell pointee C-type of" ^^^ squotes (IT.pp it) ^^ dot in

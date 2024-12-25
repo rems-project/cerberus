@@ -269,7 +269,7 @@ let rec check_value (loc : Locations.t) (Mu.V (expect, v)) : IT.t m =
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
 let is_representable_integer arg ity =
   let here = Locations.other __FUNCTION__ in
-  let bt = IT.bt arg in
+  let bt = IT.get_bt arg in
   let arg_bits = Option.get (BT.is_bits_bt bt) in
   let maxInt = Memory.max_integer_type ity in
   assert (BT.fits_range arg_bits maxInt);
@@ -384,7 +384,7 @@ let check_conv_int loc ~expect ct arg =
     fail (fun ctxt ->
       { loc; msg = Int_unrepresentable { value = arg; ict = ct; ctxt; model } })
   in
-  let bt = IT.bt arg in
+  let bt = IT.get_bt arg in
   (* TODO: can we (later) optimise this? *)
   let here = Locations.other __FUNCTION__ in
   let@ value =
@@ -513,7 +513,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
           let@ () = WellTyped.ensure_base_type loc ~expect bt in
           k (sym_ (sym, bt, loc))
         | Value lvt ->
-          let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt lvt) in
+          let@ () = WellTyped.ensure_base_type loc ~expect (IT.get_bt lvt) in
           k lvt)
      | PEval v ->
        let@ () = ensure_base_type loc ~expect (Mu.bt_of_value v) in
@@ -826,7 +826,9 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
        in
        check_pexpr pe1 (fun arg1 ->
          check_pexpr pe2 (fun arg2 ->
-           let arg1_bt_range = BT.bits_range (Option.get (BT.is_bits_bt (IT.bt arg1))) in
+           let arg1_bt_range =
+             BT.bits_range (Option.get (BT.is_bits_bt (IT.get_bt arg1)))
+           in
            let here = Locations.other __FUNCTION__ in
            let arg2_bits_lost = IT.not_ (IT.in_z_range arg2 arg1_bt_range here) here in
            let x =
@@ -838,13 +840,17 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
                ite_
                  ( arg2_bits_lost,
                    IT.int_lit_ 0 expect loc,
-                   arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2 loc) loc )
+                   arith_binop Terms.ShiftLeft (arg1, cast_ (IT.get_bt arg1) arg2 loc) loc
+                 )
                  loc
              | IOpShr ->
                ite_
                  ( arg2_bits_lost,
                    IT.int_lit_ 0 expect loc,
-                   arith_binop Terms.ShiftRight (arg1, cast_ (IT.bt arg1) arg2 loc) loc )
+                   arith_binop
+                     Terms.ShiftRight
+                     (arg1, cast_ (IT.get_bt arg1) arg2 loc)
+                     loc )
                  loc
            in
            k x))
@@ -875,11 +881,11 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
              | IOpMul ->
                (mul_ (arg1, arg2) loc, mul_ (large arg1, large arg2) loc, bool_ true here)
              | IOpShl ->
-               ( arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2 loc) loc,
+               ( arith_binop Terms.ShiftLeft (arg1, cast_ (IT.get_bt arg1) arg2 loc) loc,
                  arith_binop Terms.ShiftLeft (large arg1, large arg2) loc,
                  IT.in_z_range arg2 (Z.zero, Z.of_int bits) loc )
              | IOpShr ->
-               ( arith_binop Terms.ShiftRight (arg1, cast_ (IT.bt arg1) arg2 loc) loc,
+               ( arith_binop Terms.ShiftRight (arg1, cast_ (IT.get_bt arg1) arg2 loc) loc,
                  arith_binop Terms.ShiftRight (large arg1, large arg2) loc,
                  IT.in_z_range arg2 (Z.zero, Z.of_int bits) loc )
            in
@@ -1229,8 +1235,8 @@ let load loc pointer ct =
 
 let instantiate loc filter arg =
   let arg_s = Sym.fresh_make_uniq "instance" in
-  let arg_it = sym_ (arg_s, IT.bt arg, loc) in
-  let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
+  let arg_it = sym_ (arg_s, IT.get_bt arg, loc) in
+  let@ () = add_l arg_s (IT.get_bt arg_it) (loc, lazy (Sym.pp arg_s)) in
   let@ () = add_c loc (LC.T (eq__ arg_it arg loc)) in
   let@ constraints = get_cs () in
   let extra_assumptions1 =
@@ -1239,7 +1245,7 @@ let instantiate loc filter arg =
       (LC.Set.elements constraints)
   in
   let extra_assumptions2, type_mismatch =
-    List.partition (fun ((_, bt), _) -> BT.equal bt (IT.bt arg_it)) extra_assumptions1
+    List.partition (fun ((_, bt), _) -> BT.equal bt (IT.get_bt arg_it)) extra_assumptions1
   in
   let extra_assumptions =
     List.map
@@ -1256,7 +1262,7 @@ let instantiate loc filter arg =
         Pp.warn
           loc
           (!^"did not instantiate on basetype mismatch:"
-           ^^^ Pp.list BT.pp [ bt; IT.bt arg_it ]))
+           ^^^ Pp.list BT.pp [ bt; IT.get_bt arg_it ]))
     type_mismatch;
   add_cs loc extra_assumptions
 
@@ -1488,7 +1494,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
           check_pexpr pe (fun arg ->
             let sym, result = IT.fresh_named (BT.Loc ()) "intToPtr" loc in
             let@ _ = add_a sym (Loc ()) (here, lazy (Sym.pp sym)) in
-            let cond = eq_ (arg, int_lit_ 0 (bt arg) here) here in
+            let cond = eq_ (arg, int_lit_ 0 (get_bt arg) here) here in
             let null_case = eq_ (result, null_ here) here in
             (* NOTE: the allocation ID is intentionally left unconstrained *)
             let alloc_case =
@@ -1598,7 +1604,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 IT.fresh_named (BT.Loc ()) ("&ARG" ^ string_of_int n) loc
               | _ -> IT.fresh (BT.Loc ()) loc
             in
-            let@ () = add_a ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
+            let@ () = add_a ret_s (IT.get_bt ret) (loc, lazy (Pp.string "allocation")) in
             (* let@ () = add_c loc (LC.T (representable_ (Pointer act.ct, ret) loc)) in *)
             let align_v = cast_ Memory.uintptr_bt arg loc in
             let@ () = add_c loc (LC.T (alignedI_ ~align:align_v ~t:ret loc)) in
@@ -1810,7 +1816,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          match ct with
          | Sctypes.Void | Array (_, _) | Struct _ | Function (_, _, _) -> assert false
          | Integer it ->
-           let bt = IT.bt value in
+           let bt = IT.get_bt value in
            let lhs = value in
            let rhs =
              let[@ocaml.warning "-8"] (b :: bytes) =
@@ -2096,7 +2102,7 @@ let check_expr_top loc labels rt e =
 let bind_arguments (_loc : Locations.t) (full_args : _ Mu.arguments) =
   let rec aux_l resources = function
     | Mu.Define ((s, it), ((loc, _) as info), args) ->
-      let@ () = add_l s (IT.bt it) (fst info, lazy (Sym.pp s)) in
+      let@ () = add_l s (IT.get_bt it) (fst info, lazy (Sym.pp s)) in
       let@ () = add_c (fst info) (LC.T (def_ s it loc)) in
       aux_l resources args
     | Constraint (lc, info, args) ->
@@ -2484,19 +2490,21 @@ let ctz_proxy_ft =
   let info = (here, Some "ctz_proxy builtin ft") in
   let n_sym, n = IT.fresh_named BT.(Bits (Unsigned, 32)) "n_" here in
   let ret_sym, ret = IT.fresh_named BT.(Bits (Signed, 32)) "return" here in
-  let neq_0 = LC.T (IT.not_ (IT.eq_ (n, IT.int_lit_ 0 (IT.bt n) here) here) here) in
+  let neq_0 = LC.T (IT.not_ (IT.eq_ (n, IT.int_lit_ 0 (IT.get_bt n) here) here) here) in
   let eq_ctz =
     LC.T
       (IT.eq_
-         (ret, cast_ (IT.bt ret) (IT.arith_unop Terms.BW_CTZ_NoSMT n here) here)
+         (ret, cast_ (IT.get_bt ret) (IT.arith_unop Terms.BW_CTZ_NoSMT n here) here)
          here)
   in
   let rt =
-    RT.mComputational ((ret_sym, IT.bt ret), info) (LRT.mConstraint (eq_ctz, info) LRT.I)
+    RT.mComputational
+      ((ret_sym, IT.get_bt ret), info)
+      (LRT.mConstraint (eq_ctz, info) LRT.I)
   in
   let ft =
     AT.mComputationals
-      [ (n_sym, IT.bt n, info) ]
+      [ (n_sym, IT.get_bt n, info) ]
       (AT.L (LAT.mConstraint (neq_0, info) (LAT.I rt)))
   in
   ft
