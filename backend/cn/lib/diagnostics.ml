@@ -53,7 +53,7 @@ let term_with_model_name nm cfg x =
     return (bold nm ^^ colon ^^^ parens (string "cannot eval") ^^ colon ^^^ IT.pp x)
   | Some r ->
     if IT.is_true r || IT.is_false r then (
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       let@ p = provable here in
       let info =
         match p (LC.T (IT.eq_ (x, r) here)) with
@@ -140,7 +140,7 @@ let rec investigate_term cfg t =
         match split_eq x y with
         | None -> return []
         | Some bits ->
-          let here = Locations.other __FUNCTION__ in
+          let here = Locations.other __LOC__ in
           ListM.mapM (fun (x, y) -> rec_opt "parametric eq" (IT.eq_ (x, y) here)) bits
       in
       return (List.concat trans_opts @ [ get_eq_opt ] @ split_opts)
@@ -184,7 +184,7 @@ and investigate_eq_side _cfg (side_nm, t, t2) =
                    { doc = IT.pp t;
                      continue =
                        (fun cfg ->
-                         let eq = IT.eq_ (t, t2) @@ Locations.other __FUNCTION__ in
+                         let eq = IT.eq_ (t, t2) @@ Locations.other __LOC__ in
                          print stdout (bold "investigating eq:" ^^^ IT.pp eq);
                          investigate_term cfg eq)
                    })
@@ -220,7 +220,7 @@ and investigate_trans_eq t cfg =
     |> ITSet.elements
   in
   let opt_of x =
-    let eq = IT.eq_ (t, x) @@ Locations.other __FUNCTION__ in
+    let eq = IT.eq_ (t, x) @@ Locations.other __LOC__ in
     let@ doc = term_with_model_name "eq to constraint elem" cfg eq in
     return { doc; continue = (fun cfg -> investigate_term cfg eq) }
   in
@@ -246,10 +246,10 @@ and get_eqs_then_investigate cfg x y =
       cs
   in
   let opt_xs = ITSet.elements x_set in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let@ () = test_value_eqs here None x opt_xs in
   let@ () = test_value_eqs here None y opt_xs in
-  investigate_term cfg (IT.eq_ (x, y) @@ Locations.other __FUNCTION__)
+  investigate_term cfg (IT.eq_ (x, y) @@ Locations.other __LOC__)
 
 
 and investigate_pred cfg nm t =
@@ -270,8 +270,7 @@ and investigate_pred cfg nm t =
     return
       { doc;
         continue =
-          (fun cfg ->
-            investigate_term cfg (IT.eq_ (t, p) @@ Locations.other __FUNCTION__))
+          (fun cfg -> investigate_term cfg (IT.eq_ (t, p) @@ Locations.other __LOC__))
       }
   in
   ListM.mapM pred_opt ps
@@ -299,7 +298,7 @@ and investigate_ite cfg t =
         continue =
           (fun cfg ->
             let open Pp in
-            let here = Locations.other __FUNCTION__ in
+            let here = Locations.other __LOC__ in
             let t' = simp x (IT.bool_ b here) t in
             print stdout (bold "rewrote to:" ^^^ IT.pp t');
             print

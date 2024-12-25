@@ -700,7 +700,7 @@ let rec translate_term s iterm =
       SMT.let_ [ (x, e) ] (k (SMT.atom x)))
   in
   let default bt =
-    let here = Locations.other (__FUNCTION__ ^ string_of_int __LINE__) in
+    let here = Locations.other __LOC__ in
     translate_term s (IT.default_ bt here)
   in
   match IT.get_term iterm with
@@ -735,11 +735,11 @@ let rec translate_term s iterm =
        (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_neg (translate_term s e1)
         | BT.Integer | BT.Real -> SMT.num_neg (translate_term s e1)
-        | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)"))
+        | _ -> failwith (__LOC__ ^ ":Unop (Negate, _)"))
      | BW_Compl ->
        (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_compl (translate_term s e1)
-        | _ -> failwith (__FUNCTION__ ^ ":Unop (BW_Compl, _)"))
+        | _ -> failwith (__LOC__ ^ ":Unop (BW_Compl, _)"))
      | BW_CLZ_NoSMT ->
        (match IT.get_bt iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_clz w w)
@@ -1106,7 +1106,7 @@ type reduction =
   }
 
 let translate_goal solver assumptions lc =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let instantiated =
     match lc with
     | LC.T it -> { expr = translate_term solver it; qs = []; extra = [] }

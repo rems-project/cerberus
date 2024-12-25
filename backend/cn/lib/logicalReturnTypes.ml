@@ -84,7 +84,7 @@ let alpha_unique ss =
 
 
 let binders =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let rec aux = function
     | Define ((s, it), _, t) ->
       let s, t = alpha_rename s t in

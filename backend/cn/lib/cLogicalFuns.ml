@@ -53,7 +53,7 @@ let init_state = { loc_map = IntMap.empty; next_loc = 1 }
 
 let mk_local_ptr state src_loc =
   let loc_ix = state.next_loc in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let ptr = IT.apply_ local_sym_ptr [ IT.int_ loc_ix here ] BT.(Loc ()) src_loc in
   let loc_map = IntMap.add loc_ix None state.loc_map in
   let state = { loc_map; next_loc = loc_ix + 1 } in
@@ -360,7 +360,7 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
     in
     (match ct with
      | Sctypes.Integer Sctypes.IntegerTypes.Bool ->
-       let here = Locations.other __FUNCTION__ in
+       let here = Locations.other __LOC__ in
        simp_const_pe
          (bool_ite_1_0
             bool_rep_ty
@@ -376,7 +376,7 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
   | PEbounded_binop (bk, op, pe_x, pe_y) ->
     let@ x = self var_map pe_x in
     let@ y = self var_map pe_y in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let it =
       match op with
       | IOpAdd -> IT.add_ (x, y) loc
@@ -619,7 +619,7 @@ let rec get_ret_it loc body bt = function
 
 
 let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_decl) =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let def_args =
     def.Definition.Function.args
     (* TODO - add location information to binders *)

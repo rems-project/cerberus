@@ -10,7 +10,7 @@ module LC = LogicalConstraints
 (* open Cerb_pp_prelude *)
 
 let resource_empty provable resource =
-  let loc = Cerb_location.other __FUNCTION__ in
+  let loc = Cerb_location.other __LOC__ in
   let constr =
     match resource with
     | P _, _ -> LC.T (IT.bool_ false loc)
@@ -159,7 +159,7 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
     let index_permission = IT.subst su ret.permission in
     (match prove_or_model (LC.T index_permission) with
      | `True ->
-       let loc = Cerb_location.other __FUNCTION__ in
+       let loc = Cerb_location.other __LOC__ in
        let at_index =
          ( P
              { name = ret.name;

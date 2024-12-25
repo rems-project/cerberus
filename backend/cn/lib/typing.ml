@@ -501,7 +501,7 @@ let model_has_prop () =
 let prove_or_model_with_past_model loc m =
   let@ has_prop = model_has_prop () in
   let@ p_f = provable_internal loc in
-  let loc = Locations.other __FUNCTION__ in
+  let loc = Locations.other __LOC__ in
   let res lc =
     match lc with
     | LC.T t when has_prop (IT.not_ t loc) m -> `Counterex (lazy m)
@@ -521,7 +521,7 @@ let do_check_model loc m prop =
       |> List.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
       |> List.map (fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc)))
   in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let eqs =
     List.filter_map
       (fun v ->
@@ -551,7 +551,7 @@ let model_with_internal loc prop =
   | Some m -> return (Some m)
   | None ->
     let@ prover = provable_internal loc in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     (match prover (LC.T (IT.not_ prop here)) with
      | `True -> return None
      | `False ->
@@ -651,7 +651,7 @@ let map_and_fold_resources_internal loc (f : Res.t -> 'acc -> changed * 'acc) (a
           let ix, hist = Context.res_written loc i "changed" (ix, hist) in
           (match re with
            | Q { q; permission; _ }, _ ->
-             let here = Locations.other __FUNCTION__ in
+             let here = Locations.other __LOC__ in
              (match provable_f (LC.forall_ q (IT.not_ permission here)) with
               | `True -> (resources, ix, hist, i :: changed_or_deleted, acc)
               | `False ->
@@ -677,11 +677,11 @@ let do_unfold_resources loc =
   let rec aux () =
     let@ s = get_typing_context () in
     let@ movable_indices = get_movable_indices () in
-    let@ _provable_f = provable_internal (Locations.other __FUNCTION__) in
+    let@ _provable_f = provable_internal (Locations.other __LOC__) in
     let resources, orig_ix = s.resources in
     let _orig_hist = s.resource_history in
     Pp.debug 8 (lazy (Pp.string "-- checking resource unfolds now --"));
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ true_m = model_with_internal loc (IT.bool_ true here) in
     match true_m with
     | None -> return () (* contradictory state *)
@@ -791,7 +791,7 @@ let value_eq_group guard x =
 
 
 let test_value_eqs loc guard x ys =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let prop y =
     match guard with
     | None -> LC.T (IT.eq_ (x, y) here)

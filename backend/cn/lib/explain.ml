@@ -219,7 +219,7 @@ let state ctxt log model_with_q extras =
   in
   let terms =
     let variables =
-      let make s ls = sym_ (s, ls, Locations.other __FUNCTION__) in
+      let make s ls = sym_ (s, ls, Locations.other __LOC__) in
       let basetype_binding (s, (binding, _)) =
         match binding with Value _ -> None | BaseType ls -> Some (make s ls)
       in
@@ -232,7 +232,7 @@ let state ctxt log model_with_q extras =
       match extras.unproven_constraint with
       | Some (T lc) -> subterms_without_bound_variables [] lc
       | Some (Forall ((s, bt), lc)) ->
-        let binder = (Pat (PSym s, bt, Loc.other __FUNCTION__), None) in
+        let binder = (Pat (PSym s, bt, Loc.other __LOC__), None) in
         subterms_without_bound_variables [ binder ] lc
       | None -> ITSet.empty
     in
@@ -241,7 +241,7 @@ let state ctxt log model_with_q extras =
       | Some (P ret) ->
         ITSet.bigunion_map (subterms_without_bound_variables []) (ret.pointer :: ret.iargs)
       | Some (Q ret) ->
-        let binder = (Pat (PSym (fst ret.q), snd ret.q, Loc.other __FUNCTION__), None) in
+        let binder = (Pat (PSym (fst ret.q), snd ret.q, Loc.other __LOC__), None) in
         ITSet.union
           (ITSet.bigunion_map
              (subterms_without_bound_variables [])

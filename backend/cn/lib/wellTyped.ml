@@ -1041,7 +1041,7 @@ module WReq = struct
           (let@ () = add_l (fst p.q) (snd p.q) (loc, lazy (Pp.string "forall-var")) in
            let@ permission = WIT.check loc BT.Bool p.permission in
            (* let@ provable = provable loc in *)
-           (* let here = Locations.other __FUNCTION__ in *)
+           (* let here = Locations.other __LOC__ in *)
            (* let only_nonnegative_indices = *)
            (*   (\* It is important to use `permission` here and NOT `p.permission`. *)
            (* If there is a record involved, `permission` is normalised but the
@@ -1098,7 +1098,7 @@ let oarg_bt loc = function
 
 module WRS = struct
   let welltyped loc (resource, bt) =
-    Pp.(debug 6 (lazy !^__FUNCTION__));
+    Pp.(debug 6 (lazy !^__LOC__));
     let@ resource = WReq.welltyped loc resource in
     let@ bt = WBT.is_bt loc bt in
     let@ oarg_bt = oarg_bt loc resource in
@@ -1131,7 +1131,7 @@ module WLRT = struct
 
   let welltyped loc lrt =
     let rec aux =
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       function
       | Define ((s, it), ((loc, _) as info), lrt) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -1154,7 +1154,7 @@ module WLRT = struct
         return (Constraint (lc, info, lrt))
       | I ->
         let@ provable = provable loc in
-        let here = Locations.other __FUNCTION__ in
+        let here = Locations.other __LOC__ in
         let@ () =
           match provable (LC.T (IT.bool_ false here)) with
           | `True ->
@@ -1175,7 +1175,7 @@ module WRT = struct
   let pp = ReturnTypes.pp
 
   let welltyped loc rt =
-    Pp.(debug 6 (lazy !^__FUNCTION__));
+    Pp.(debug 6 (lazy !^__LOC__));
     pure
       (match rt with
        | RT.Computational ((name, bt), info, lrt) ->
@@ -1209,7 +1209,7 @@ module WLAT = struct
       (lazy
         (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (LAT.pp i_pp at)));
     let rec aux =
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       function
       | LAT.Define ((s, it), info, at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -1232,7 +1232,7 @@ module WLAT = struct
         return (LAT.Constraint (lc, info, at))
       | LAT.I i ->
         let@ provable = provable loc in
-        let here = Locations.other __FUNCTION__ in
+        let here = Locations.other __LOC__ in
         let@ () =
           match provable (LC.T (IT.bool_ false here)) with
           | `True ->
@@ -1294,8 +1294,8 @@ module WLArgs = struct
     : 'j Mu.arguments_l m
     =
     let rec aux =
-      let here = Locations.other __FUNCTION__ in
-      Pp.(debug 6 (lazy !^__FUNCTION__));
+      let here = Locations.other __LOC__ in
+      Pp.(debug 6 (lazy !^__LOC__));
       function
       | Mu.Define ((s, it), ((loc, _) as info), at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -1318,7 +1318,7 @@ module WLArgs = struct
         return (Mu.Constraint (lc, info, at))
       | Mu.I i ->
         let@ provable = provable loc in
-        let here = Locations.other __FUNCTION__ in
+        let here = Locations.other __LOC__ in
         let@ () =
           match provable (LC.T (IT.bool_ false here)) with
           | `True ->
@@ -1343,7 +1343,7 @@ module WArgs = struct
     (Loc.t -> 'i -> 'j m) -> string -> Loc.t -> 'i Mu.arguments -> 'j Mu.arguments m
     =
     fun (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.arguments) ->
-    debug 6 (lazy !^__FUNCTION__);
+    debug 6 (lazy !^__LOC__);
     debug
       12
       (lazy
@@ -2203,7 +2203,7 @@ module WProc = struct
 
   let welltyped : Loc.t -> _ Mu.args_and_body -> _ Mu.args_and_body m =
     fun (loc : Loc.t) (at : 'TY1 Mu.args_and_body) ->
-    Pp.(debug 6 (lazy !^__FUNCTION__));
+    Pp.(debug 6 (lazy !^__LOC__));
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
         let@ rt = pure_and_no_initial_resources loc (WRT.welltyped loc rt) in
@@ -2272,7 +2272,7 @@ module WRPD = struct
              ListM.fold_leftM
                (fun acc Def.Clause.{ loc; guard; packing_ft } ->
                  let@ guard = WIT.check loc BT.Bool guard in
-                 let here = Locations.other __FUNCTION__ in
+                 let here = Locations.other __LOC__ in
                  let negated_guards =
                    List.map (fun clause -> IT.not_ clause.Def.Clause.guard here) acc
                  in

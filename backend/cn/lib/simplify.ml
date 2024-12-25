@@ -36,9 +36,9 @@ let do_ctz_z z =
 
 
 module IndexTerms = struct
-  let z1 = z_ Z.one (Cerb_location.other __FUNCTION__)
+  let z1 = z_ Z.one (Cerb_location.other __LOC__)
 
-  let z0 = z_ Z.zero (Cerb_location.other __FUNCTION__)
+  let z0 = z_ Z.zero (Cerb_location.other __LOC__)
 
   let rec dest_int_addition ts it =
     let loc = IT.get_loc it in
@@ -505,7 +505,7 @@ module IndexTerms = struct
         let a = aux a in
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
-          let loc = Cerb_location.other __FUNCTION__ in
+          let loc = Cerb_location.other __LOC__ in
           aux (lt_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ false the_loc
@@ -515,7 +515,7 @@ module IndexTerms = struct
         let a = aux a in
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
-          let loc = Cerb_location.other __FUNCTION__ in
+          let loc = Cerb_location.other __LOC__ in
           aux (le_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ true the_loc

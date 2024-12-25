@@ -201,7 +201,7 @@ let res_map_history m id =
   match IntMap.find_opt id m with
   | Some h -> h
   | None ->
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     { last_written = here;
       reason_written = "unknown";
       last_written_id = id;

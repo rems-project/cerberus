@@ -628,7 +628,7 @@ let n_memop ~inherit_loc loc memop pexprs =
   | PtrMemberShift _, _ -> assert_error loc !^"PtrMemberShift (CHERI only)"
   | memop, pexprs1 ->
     let err =
-      !^__FUNCTION__
+      !^__LOC__
       ^^ colon
       ^^^ !^(show_n_memop memop)
       ^^^ !^"applied to"
@@ -943,7 +943,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
       let env = C.add_computational s p_sbt env in
       (* let good_pointer_lc = *)
       (*   let info = (loc, Some (Sym.pp_string s ^ " good")) in *)
-      (*   let here = Locations.other __FUNCTION__ in *)
+      (*   let here = Locations.other __LOC__ in *)
       (*   (LC.T (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc, here)) here), info) *)
       (* in *)
       let@ oa_name, ((pt_ret, oa_bt), lcs), value = C.ownership (loc, (s, ct)) env in
@@ -980,7 +980,7 @@ let make_function_args f_i loc env args (accesses, requires) =
       let st = C.LocalState.add_c_variable_state mut_arg arg_state st in
       (* let good_lc = *)
       (*   let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in *)
-      (*   let here = Locations.other __FUNCTION__ in *)
+      (*   let here = Locations.other __LOC__ in *)
       (*   (LC.T (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
       (* in *)
       let@ at =
@@ -1019,7 +1019,7 @@ let make_fun_with_spec_args f_i loc env args requires =
       let env = C.add_computational pure_arg sbt env in
       (* let good_lc = *)
       (*   let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in *)
-      (*   let here = Locations.other __FUNCTION__ in *)
+      (*   let here = Locations.other __LOC__ in *)
       (*   (LC.T (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
       (* in *)
       let@ at = aux (* good_lc :: *) good_lcs env st rest in
@@ -1426,7 +1426,7 @@ let normalise_fun_map
 
 
 let normalise_globs ~inherit_loc env _sym g =
-  let loc = Locations.other __FUNCTION__ in
+  let loc = Locations.other __LOC__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
     let@ () = check_against_core_bt loc bt BT.(Loc ()) in

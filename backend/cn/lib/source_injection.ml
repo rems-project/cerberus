@@ -39,7 +39,7 @@ end = struct
 
   let offset_col ~off pos =
     if pos.col + off < 0 then
-      Error (__FUNCTION__ ^ ": pos.col < off")
+      Error (__LOC__ ^ ": pos.col < off")
     else
       Ok { pos with col = pos.col + off }
 
@@ -51,7 +51,7 @@ end = struct
        "\x1b[31mHEADER LOC: %s\x1b[0m\n" (Option.value ~default:"<unknown>"
        (Cerb_location.get_filename loc)) ; *)
     match Cerb_location.to_cartesian loc with
-    | None -> Error (__FUNCTION__ ^ ": failed to get line/col positions")
+    | None -> Error (__LOC__ ^ ": failed to get line/col positions")
     | Some ((start_line, start_col), (end_line, end_col)) ->
       Ok (v (start_line + 1) (start_col + 1), v (end_line + 1) (end_col + 1))
 end
@@ -320,7 +320,7 @@ let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =
   (* match stmt_ with | AilSblock (_bindings, []) -> Pos.of_location loc | AilSblock
      (_bindings, ss) -> let first = List.hd ss in let last = Lem_list_extra.last ss in
      let* (pre_pos, _) = posOf_stmt first in let* (_, post_pos) = posOf_stmt last in Ok
-     (pre_pos, post_pos) | _ -> Error (__FUNCTION__ ^ ": must be called on a function body
+     (pre_pos, post_pos) | _ -> Error (__LOC__ ^ ": must be called on a function body
      statement") in *)
   (* Printf.fprintf stderr "\x1b[35mPRE[%s], pos: %s\x1b[0m\n"
      (Cerb_location.location_to_string loc) (Pos.to_string pre_pos); Printf.fprintf stderr

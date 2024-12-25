@@ -100,7 +100,7 @@ let check_ptrval (loc : Locations.t) ~(expect : BT.t) (ptrval : pointer_value) :
         (* just to make sure it exists *)
         let@ _fun_loc, _, _ = get_fun_decl loc sym in
         (* the symbol of a function is the same as the symbol of its address *)
-        let here = Locations.other __FUNCTION__ in
+        let here = Locations.other __LOC__ in
         return (sym_ (sym, BT.(Loc ()), here)))
     (fun prov p ->
       let@ alloc_id =
@@ -268,7 +268,7 @@ let rec check_value (loc : Locations.t) (Mu.V (expect, v)) : IT.t m =
 
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
 let is_representable_integer arg ity =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let bt = IT.get_bt arg in
   let arg_bits = Option.get (BT.is_bits_bt bt) in
   let maxInt = Memory.max_integer_type ity in
@@ -309,7 +309,7 @@ let try_prove_constant loc expr =
       fail (fun _ -> { loc; msg = Generic (!^"model constant calculation:" ^^^ !^msg) })
     in
     let fail_on_none msg = function Some m -> return m | None -> fail2 msg in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ m = model_with loc (IT.bool_ true here) in
     let@ m = fail_on_none "cannot get model" m in
     let@ y = fail_on_none "cannot eval term" (Solver.eval (fst m) expr) in
@@ -386,7 +386,7 @@ let check_conv_int loc ~expect ct arg =
   in
   let bt = IT.get_bt arg in
   (* TODO: can we (later) optimise this? *)
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let@ value =
     match ity with
     | Bool ->
@@ -432,7 +432,7 @@ let check_has_alloc_id loc ptr ub_unspec =
 
 
 let in_bounds ptr =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let module H = Alloc.History in
   let H.{ base; size } = H.(split (lookup_ptr ptr here) here) in
   let addr = addr_ ptr here in
@@ -442,7 +442,7 @@ let in_bounds ptr =
 
 
 let check_both_eq_alloc loc arg1 arg2 ub =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let both_alloc =
     and_
       [ hasAllocId_ arg1 here;
@@ -468,7 +468,7 @@ let check_live_alloc_bounds ?(skip_live = false) reason loc ub ptrs =
       else
         RI.Special.check_live_alloc reason loc (List.hd ptrs)
     in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let constr = and_ (List.concat_map in_bounds ptrs) here in
     let@ provable = provable loc in
     match provable @@ LC.T constr with
@@ -492,7 +492,7 @@ let valid_for_deref loc pointer ct =
 let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
   let orig_pe = pe in
   let (Mu.Pexpr (loc, _, expect, pe_)) = pe in
-  let@ omodel = model_with loc (bool_ true @@ Locations.other __FUNCTION__) in
+  let@ omodel = model_with loc (bool_ true @@ Locations.other __LOC__) in
   let@ () =
     print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
@@ -649,7 +649,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
             check_pexpr pe2 (fun v2 ->
               let@ provable = provable loc in
               let v2_bt = Mu.bt_of_pexpr pe2 in
-              let here = Locations.other __FUNCTION__ in
+              let here = Locations.other __LOC__ in
               match provable (LC.T (ne_ (v2, int_lit_ 0 v2_bt here) here)) with
               | `True -> k (div_ (v1, v2) loc)
               | `False ->
@@ -664,7 +664,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
             check_pexpr pe2 (fun v2 ->
               let@ provable = provable loc in
               let v2_bt = Mu.bt_of_pexpr pe2 in
-              let here = Locations.other __FUNCTION__ in
+              let here = Locations.other __LOC__ in
               match provable (LC.T (ne_ (v2, int_lit_ 0 v2_bt here) here)) with
               | `True -> k (rem_ (v1, v2) loc)
               | `False ->
@@ -829,7 +829,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
            let arg1_bt_range =
              BT.bits_range (Option.get (BT.is_bits_bt (IT.get_bt arg1)))
            in
-           let here = Locations.other __FUNCTION__ in
+           let here = Locations.other __LOC__ in
            let arg2_bits_lost = IT.not_ (IT.in_z_range arg2 arg1_bt_range here) here in
            let x =
              match iop with
@@ -870,7 +870,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
        check_pexpr pe1 (fun arg1 ->
          check_pexpr pe2 (fun arg2 ->
            let large_bt = BT.Bits (BT.Signed, (2 * bits) + 4) in
-           let here = Locations.other __FUNCTION__ in
+           let here = Locations.other __LOC__ in
            let large x = cast_ large_bt x here in
            let direct_x, via_large_x, premise =
              match iop with
@@ -950,7 +950,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
              5
              (lazy (Pp.item ("checking consistency of " ^ name ^ "-branch") (IT.pp cond)));
            let@ provable = provable loc in
-           let here = Locations.other __FUNCTION__ in
+           let here = Locations.other __LOC__ in
            match provable (LC.T (bool_ false here)) with
            | `True ->
              Pp.debug 5 (lazy (Pp.headline "inconsistent, skipping"));
@@ -960,7 +960,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
              check_pexpr e k
          in
          let@ () = pure (aux e1 c "then") in
-         let here = Locations.other __FUNCTION__ in
+         let here = Locations.other __LOC__ in
          let@ () = pure (aux e2 (not_ c here) "else") in
          return ())
      | PElet (p, e1, e2) ->
@@ -973,7 +973,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
            k lvt))
      | PEundef (loc, ub) ->
        let@ provable = provable loc in
-       let here = Locations.other __FUNCTION__ in
+       let here = Locations.other __LOC__ in
        (match provable (LC.T (bool_ false here)) with
         | `True -> return ()
         | `False ->
@@ -981,7 +981,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
           fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } }))
      | PEerror (err, _pe) ->
        let@ provable = provable loc in
-       let here = Locations.other __FUNCTION__ in
+       let here = Locations.other __LOC__ in
        (match provable (LC.T (bool_ false here)) with
         | `True -> return ()
         | `False ->
@@ -1298,7 +1298,7 @@ let add_trace_information _labels annots =
 
 
 let bytes_qpred sym size pointer init : Req.QPredicate.t =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let bt' = WellTyped.quantifier_bt in
   { q = (sym, bt');
     q_loc = here;
@@ -1313,7 +1313,7 @@ let bytes_qpred sym size pointer init : Req.QPredicate.t =
 let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
   let (Expr (loc, annots, expect, e_)) = e in
   let@ () = add_trace_information labels annots in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let@ omodel = model_with loc (bool_ true here) in
   match omodel with
   | None ->
@@ -1327,7 +1327,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
         debug 3 (lazy (item "ctxt" (Context.pp ctxt))))
     in
     let bytes_qpred sym ct pointer init : Req.QPredicate.t =
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       bytes_qpred sym (sizeOf_ ct here) pointer init
     in
     (match e_ with
@@ -1335,7 +1335,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        let@ () = ensure_base_type loc ~expect (Mu.bt_of_pexpr pe) in
        check_pexpr pe (fun lvt -> k lvt)
      | Ememop memop ->
-       let here = Locations.other __FUNCTION__ in
+       let here = Locations.other __LOC__ in
        let pointer_eq ?(negate = false) pe1 pe2 =
          let@ () = WellTyped.ensure_base_type loc ~expect Bool in
          let k, case, res =
@@ -1468,7 +1468,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                allocations are exposed.
                (2) So, the only UB possible is unrepresentable results. *)
             let@ provable = provable loc in
-            let here = Locations.other __FUNCTION__ in
+            let here = Locations.other __LOC__ in
             let lc = LC.T (representable_ (act_to.ct, arg) here) in
             let@ () =
               match provable lc with
@@ -1556,7 +1556,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               k result))
         | PtrMemberShift _ ->
           unsupported
-            (Loc.other __FUNCTION__)
+            (Loc.other __LOC__)
             !^"PtrMemberShift should be a CHERI only construct"
         | CopyAllocId (pe1, pe2) ->
           let@ () =
@@ -1673,7 +1673,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                  representable and done the right thing. Pointers, as I
                  understand, are an exception. *)
               let@ () =
-                let here = Locations.other __FUNCTION__ in
+                let here = Locations.other __LOC__ in
                 let in_range_lc = representable_ (act.ct, varg) here in
                 let@ provable = provable loc in
                 let holds = provable (LC.T in_range_lc) in
@@ -1766,7 +1766,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          let aux lc _nm e =
            let@ () = add_c loc (LC.T lc) in
            let@ provable = provable loc in
-           let here = Locations.other __FUNCTION__ in
+           let here = Locations.other __LOC__ in
            match provable (LC.T (bool_ false here)) with
            | `True -> return ()
            | `False -> check_expr labels e k
@@ -1812,7 +1812,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        in
        let bytes_constraints ~(value : IT.t) ~(byte_arr : IT.t) (ct : Sctypes.t) =
          (* FIXME this hard codes big endianness but this should be switchable *)
-         let here = Locations.other __FUNCTION__ in
+         let here = Locations.other __LOC__ in
          match ct with
          | Sctypes.Void | Array (_, _) | Struct _ | Function (_, _, _) -> assert false
          | Integer it ->
@@ -2030,7 +2030,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 let@ () = add_c loc (LC.T it) in
                 debug 5 (lazy (item ("splitting case " ^ nm) (IT.pp it)));
                 let@ provable = provable loc in
-                let here = Locations.other __FUNCTION__ in
+                let here = Locations.other __LOC__ in
                 match provable (LC.T (bool_ false here)) with
                 | `True ->
                   Pp.debug 5 (lazy (Pp.headline "inconsistent, skipping"));
@@ -2194,7 +2194,7 @@ let record_tagdefs tagDefs =
   PmapM.iterM
     (fun tag def ->
       match def with
-      | Mu.UnionDef -> unsupported (Loc.other __FUNCTION__) !^"todo: union types"
+      | Mu.UnionDef -> unsupported (Loc.other __LOC__) !^"todo: union types"
       | StructDef layout -> add_struct_decl tag layout)
     tagDefs
 
@@ -2204,7 +2204,7 @@ let check_tagdefs tagDefs =
     (fun _tag def ->
       let open Memory in
       match def with
-      | Mu.UnionDef -> unsupported (Loc.other __FUNCTION__) !^"todo: union types"
+      | Mu.UnionDef -> unsupported (Loc.other __LOC__) !^"todo: union types"
       | StructDef layout ->
         let@ _ =
           ListM.fold_rightM
@@ -2214,7 +2214,7 @@ let check_tagdefs tagDefs =
                 (* this should have been checked earlier by the frontend *)
                 assert false
               | Some (name, ct) ->
-                let@ () = WellTyped.WCT.is_ct (Loc.other __FUNCTION__) ct in
+                let@ () = WellTyped.WCT.is_ct (Loc.other __LOC__) ct in
                 return (IdSet.add name have)
               | None -> return have)
             layout
@@ -2286,11 +2286,11 @@ let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> unit m =
     (fun (sym, def) ->
       match def with
       | Mu.GlobalDef (ct, _) | GlobalDecl ct ->
-        let@ () = WellTyped.WCT.is_ct (Loc.other __FUNCTION__) ct in
+        let@ () = WellTyped.WCT.is_ct (Loc.other __LOC__) ct in
         let bt = BT.(Loc ()) in
-        let info = (Loc.other __FUNCTION__, lazy (Pp.item "global" (Sym.pp sym))) in
+        let info = (Loc.other __LOC__, lazy (Pp.item "global" (Sym.pp sym))) in
         let@ () = add_a sym bt info in
-        let here = Locations.other __FUNCTION__ in
+        let here = Locations.other __LOC__ in
         let@ () =
           add_c here (LC.T (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt, here)) here))
         in
@@ -2486,7 +2486,7 @@ let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
 
 
 let ctz_proxy_ft =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let info = (here, Some "ctz_proxy builtin ft") in
   let n_sym, n = IT.fresh_named BT.(Bits (Unsigned, 32)) "n_" here in
   let ret_sym, ret = IT.fresh_named BT.(Bits (Signed, 32)) "return" here in
@@ -2511,11 +2511,11 @@ let ctz_proxy_ft =
 
 
 let ffs_proxy_ft sz =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let sz_name = CF.Pp_ail.string_of_integerBaseType sz in
   let bt = Memory.bt_of_sct Sctypes.(Integer (Signed sz)) in
   let ret_bt = Memory.bt_of_sct Sctypes.(Integer (Signed Int_)) in
-  let info = (Locations.other __FUNCTION__, Some ("ffs_proxy builtin ft: " ^ sz_name)) in
+  let info = (Locations.other __LOC__, Some ("ffs_proxy builtin ft: " ^ sz_name)) in
   let n_sym, n = IT.fresh_named bt "n_" here in
   let ret_sym, ret = IT.fresh_named ret_bt "return" here in
   let eq_ffs =
@@ -2530,7 +2530,7 @@ let ffs_proxy_ft sz =
 
 
 let memcpy_proxy_ft =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let info = (here, Some "memcpy_proxy") in
   (* C arguments *)
   let dest_sym, dest = IT.fresh_named (BT.Loc ()) "dest" here in
@@ -2591,7 +2591,7 @@ let add_stdlib_spec =
     Pp.debug
       2
       (lazy (Pp.headline ("adding builtin spec for procedure " ^ Sym.pp_string fsym)));
-    add_fun_decl fsym (Locations.other __FUNCTION__, Some ft, ct)
+    add_fun_decl fsym (Locations.other __LOC__, Some ft, ct)
   in
   fun call_sigs fsym ->
     match
