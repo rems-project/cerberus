@@ -21,21 +21,19 @@ let resource_empty provable resource =
   | `False -> `NonEmpty (constr, Solver.model ())
 
 
-let unfolded_array loc' init (ict, olength) pointer =
+let unfolded_array loc init (ict, olength) pointer =
   let length = Option.get olength in
-  let q_s, q = IT.fresh_named Memory.uintptr_bt "i" loc' in
+  let q_s, q = IT.fresh_named Memory.uintptr_bt "i" loc in
   Q
     { name = Owned (ict, init);
       pointer;
       q = (q_s, Memory.uintptr_bt);
-      q_loc = loc';
-      step = IT.uintptr_int_ (Memory.size_of_ctype ict) loc';
+      q_loc = loc;
+      step = IT.uintptr_int_ (Memory.size_of_ctype ict) loc;
       iargs = [];
       permission =
         IT.(
-          and_
-            [ (uintptr_int_ 0 loc' %<= q) loc'; (q %< uintptr_int_ length loc') loc' ]
-            loc')
+          and_ [ (uintptr_int_ 0 loc %<= q) loc; (q %< uintptr_int_ length loc) loc ] loc)
     }
 
 
@@ -161,7 +159,7 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
     let index_permission = IT.subst su ret.permission in
     (match prove_or_model (LC.T index_permission) with
      | `True ->
-       let loc' = Cerb_location.other __FUNCTION__ in
+       let loc = Cerb_location.other __FUNCTION__ in
        let at_index =
          ( P
              { name = ret.name;
@@ -170,21 +168,21 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
                    pointer_offset_
                      ( ret.pointer,
                        mul_
-                         ( cast_ Memory.uintptr_bt ret.step loc',
-                           cast_ Memory.uintptr_bt index loc' )
-                         loc' )
-                     loc');
+                         ( cast_ Memory.uintptr_bt ret.step loc,
+                           cast_ Memory.uintptr_bt index loc )
+                         loc )
+                     loc);
                iargs = List.map (IT.subst su) ret.iargs
              },
-           O (IT.map_get_ o index loc') )
+           O (IT.map_get_ o index loc) )
        in
        let ret_reduced =
          { ret with
            permission =
              IT.(
                and_
-                 [ ret.permission; ne__ (sym_ (fst ret.q, snd ret.q, loc')) index loc' ]
-                 loc')
+                 [ ret.permission; ne__ (sym_ (fst ret.q, snd ret.q, loc)) index loc ]
+                 loc)
          }
        in
        (* tmsg "successfully extracted" (lazy (IT.pp index)); *)

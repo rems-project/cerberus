@@ -22,9 +22,7 @@ module Surface = struct
   let inj x = Terms.map_annot BaseTypes.Surface.inj x
 end
 
-let basetype : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
-
-let get_bt = basetype
+let get_bt : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
 
 let get_term (IT (t, _, _)) = t
 
@@ -205,7 +203,7 @@ let rec fold_ f binders acc = function
     let acc' = fold f binders acc t1 in
     (* TODO - add location information to binders *)
     let here = Locations.other __FUNCTION__ in
-    fold f (binders @ [ (Pat (PSym nm, basetype t1, here), Some t1) ]) acc' t2
+    fold f (binders @ [ (Pat (PSym nm, get_bt t1, here), Some t1) ]) acc' t2
   | Match (e, cases) ->
     (* TODO: check this is good *)
     let acc' = fold f binders acc e in
@@ -280,7 +278,7 @@ let rec subst (su : [ `Term of t | `Rename of Sym.t ] Subst.t) (IT (it, bt, loc)
   | Sym sym ->
     (match List.assoc_opt Sym.equal sym su.replace with
      | Some (`Term after) ->
-       if BT.equal bt (basetype after) then
+       if BT.equal bt (get_bt after) then
          ()
        else
          failwith
@@ -580,7 +578,7 @@ let or_sterm_ its loc =
   vargs_binop (bool_sterm_ true loc) (Tools.curry (fun p -> or2_sterm_ p loc)) its
 
 
-let let_ ((nm, x), y) loc = IT (Let ((nm, x), y), basetype y, loc)
+let let_ ((nm, x), y) loc = IT (Let ((nm, x), y), get_bt y, loc)
 
 (* let disperse_not_ it = *)
 (*   match term it with *)
@@ -696,7 +694,7 @@ let ( %. ) struct_decls t member =
 
 
 let record_ members loc =
-  IT (Record members, BT.Record (List.map (fun (s, t) -> (s, basetype t)) members), loc)
+  IT (Record members, BT.Record (List.map (fun (s, t) -> (s, get_bt t)) members), loc)
 
 
 let recordMember_ ~member_bt (t, member) loc =
@@ -1082,8 +1080,8 @@ let rec wrap_bindings_match bs default_v v =
              (IT
                 ( Match
                     ( match_e,
-                      [ (pat, v2); (Pat (PWild, basetype match_e, here), default_v) ] ),
-                  basetype v2,
+                      [ (pat, v2); (Pat (PWild, get_bt match_e, here), default_v) ] ),
+                  get_bt v2,
                   here ))))
 
 

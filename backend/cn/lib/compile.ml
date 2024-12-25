@@ -446,12 +446,11 @@ module EffectfulTranslation = struct
 
   (* TODO: type checks and disambiguation at this stage seems ill-advised,
      ideally would be integrated into wellTyped.ml *)
-  let mk_translate_binop loc' bop (e1, e2) =
+  let mk_translate_binop loc bop (e1, e2) =
     let open IndexTerms in
-    let loc = loc' in
-    match (bop, IT.get_bt e1) with
+    match (bop, get_bt e1) with
     | CN_add, (BT.Integer | Real | Bits _) ->
-      return (IT (Binop (Add, e1, e2), IT.get_bt e1, loc))
+      return (IT (Binop (Add, e1, e2), get_bt e1, loc))
     | CN_add, Loc oct ->
       (match oct with
        | Some ct ->
@@ -462,7 +461,7 @@ module EffectfulTranslation = struct
          return (IT (it_, Loc oct, loc))
        | None -> cannot_tell_pointee_ctype loc e1)
     | CN_sub, (Integer | Real | Bits _) ->
-      return (IT (Binop (Sub, e1, e2), IT.get_bt e1, loc))
+      return (IT (Binop (Sub, e1, e2), get_bt e1, loc))
     | CN_sub, Loc oct ->
       (match oct with
        | Some ct ->
@@ -477,11 +476,11 @@ module EffectfulTranslation = struct
          in
          return (IT (it_, Loc oct, loc))
        | None -> cannot_tell_pointee_ctype loc e1)
-    | CN_mul, _ -> return (IT (Binop (Mul, e1, e2), IT.get_bt e1, loc))
-    | CN_div, _ -> return (IT (Binop (Div, e1, e2), IT.get_bt e1, loc))
-    | CN_mod, _ -> return (IT (Binop (Rem, e1, e2), IT.get_bt e1, loc))
+    | CN_mul, _ -> return (IT (Binop (Mul, e1, e2), get_bt e1, loc))
+    | CN_div, _ -> return (IT (Binop (Div, e1, e2), get_bt e1, loc))
+    | CN_mod, _ -> return (IT (Binop (Rem, e1, e2), get_bt e1, loc))
     | CN_equal, _ ->
-      (match (IT.get_bt e1, IT.get_bt e2, !pointer_eq_warned) with
+      (match (get_bt e1, get_bt e2, !pointer_eq_warned) with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn
@@ -491,7 +490,7 @@ module EffectfulTranslation = struct
        | _, _, _ -> ());
       return (IT (Binop (EQ, e1, e2), BT.Bool, loc))
     | CN_inequal, _ ->
-      (match (IT.get_bt e1, IT.get_bt e2, !pointer_eq_warned) with
+      (match (get_bt e1, get_bt e2, !pointer_eq_warned) with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn
@@ -517,7 +516,7 @@ module EffectfulTranslation = struct
     | CN_implies, BT.Bool -> return (IT (Binop (Implies, e1, e2), BT.Bool, loc))
     | CN_map_get, _ ->
       let@ rbt =
-        match IT.get_bt e1 with
+        match get_bt e1 with
         | Map (_, rbt) -> return rbt
         | has ->
           let expected = "map/array" in
@@ -651,7 +650,7 @@ module EffectfulTranslation = struct
         return (IT (Sym sym, bTy, loc))
       | CNExpr_list es ->
         let@ es = ListM.mapM self es in
-        let item_bt = basetype (List.hd es) in
+        let item_bt = get_bt (List.hd es) in
         let _, nil_pos, _ =
           (* parser should ensure loc is a region *)
           Option.get @@ Locations.get_region loc
@@ -885,7 +884,7 @@ module EffectfulTranslation = struct
               return (pat, body))
             ms
         in
-        let rbt = IT.basetype (snd (List.hd ms)) in
+        let rbt = IT.get_bt (snd (List.hd ms)) in
         return (IT (Match (x, ms), rbt, loc))
       | CNExpr_let (s, e, body) ->
         let@ e = self e in
@@ -1358,7 +1357,7 @@ let translate_cn_clause env clause =
     | CN_letExpr (loc, sym, e_, cl) ->
       let@ e = handle st (ET.translate_cn_expr Sym.Set.empty env e_) in
       let acc' z = acc (LAT.mDefine (sym, IT.Surface.proj e, (loc, None)) z) in
-      translate_cn_clause_aux (add_logical sym (IT.basetype e) env) st acc' cl
+      translate_cn_clause_aux (add_logical sym (IT.get_bt e) env) st acc' cl
     | CN_assert (loc, assrt, cl) ->
       let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
       let acc' z = acc (LAT.mConstraint (lc, (loc, None)) z) in
