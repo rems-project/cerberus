@@ -122,7 +122,7 @@ module IndexTerms = struct
 
 
   let simp_comp_if_int a b loc =
-    if BaseTypes.equal (IT.basetype a) BaseTypes.Integer then
+    if BaseTypes.equal (IT.get_bt a) BaseTypes.Integer then
       simp_int_comp a b loc
     else
       (a, b)

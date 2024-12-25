@@ -1,8 +1,7 @@
 module SMT = Simple_smt
-open IndexTerms
-open BaseTypes
+module IT = IndexTerms
+open IT
 module LC = LogicalConstraints
-open LogicalConstraints
 
 module Int_BT_Table = Map.Make (struct
     type t = int * BT.t
@@ -478,7 +477,7 @@ end
 
 (** Translate a base type to SMT *)
 let rec translate_base_type = function
-  | Unit -> CN_Tuple.t []
+  | BT.Unit -> CN_Tuple.t []
   | Bool -> SMT.t_bool
   | Integer -> SMT.t_int
   | MemByte -> CN_MemByte.t
@@ -507,11 +506,11 @@ let rec get_ivalue gs ctys bt sexp =
 
 and get_value gs ctys bt (sexp : SMT.sexp) =
   match bt with
-  | Unit -> Const Unit
+  | BT.Unit -> Const Unit
   | Bool -> Const (Bool (SMT.to_bool sexp))
   | Integer -> Const (Z (SMT.to_z sexp))
   | Bits (sign, n) ->
-    let signed = equal_sign sign Signed in
+    let signed = BT.(equal_sign sign Signed) in
     Const (Bits ((sign, n), SMT.to_bits n signed sexp))
   | Real -> Const (Q (SMT.to_q sexp))
   | MemByte ->
@@ -706,7 +705,7 @@ let rec translate_term s iterm =
   in
   match IT.get_term iterm with
   | Const c -> translate_const s c
-  | Sym x -> translate_var s x (IT.basetype iterm)
+  | Sym x -> translate_var s x (IT.get_bt iterm)
   | Unop (op, e1) ->
     (match op with
      | BW_FFS_NoSMT ->
@@ -733,20 +732,20 @@ let rec translate_term s iterm =
             loc)
      | Not -> SMT.bool_not (translate_term s e1)
      | Negate ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_neg (translate_term s e1)
         | BT.Integer | BT.Real -> SMT.num_neg (translate_term s e1)
         | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)"))
      | BW_Compl ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_compl (translate_term s e1)
         | _ -> failwith (__FUNCTION__ ^ ":Unop (BW_Compl, _)"))
      | BW_CLZ_NoSMT ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_clz w w)
         | _ -> failwith "solver: BW_CLZ_NoSMT: not a bitwise type")
      | BW_CTZ_NoSMT ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_ctz w w)
         | _ -> failwith "solver: BW_CTZ_NoSMT: not a bitwise type"))
   | Binop (op, e1, e2) ->
@@ -754,7 +753,7 @@ let rec translate_term s iterm =
     let s2 = translate_term s e2 in
     (* binary uninterpreted function, same type for arguments and result. *)
     let uninterp_same_type k =
-      let bt = IT.basetype iterm in
+      let bt = IT.get_bt iterm in
       let smt_t = translate_base_type bt in
       let f = declare_bt_uninterpreted s k bt [ smt_t; smt_t ] smt_t in
       SMT.app f [ s1; s2 ]
@@ -764,23 +763,23 @@ let rec translate_term s iterm =
      | Or -> SMT.bool_or s1 s2
      | Implies -> SMT.bool_implies s1 s2
      | Add ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_add s1 s2
         | BT.Integer | BT.Real -> SMT.num_add s1 s2
         | _ -> failwith "Add")
      | Sub ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_sub s1 s2
         | BT.Integer | BT.Real -> SMT.num_sub s1 s2
         | _ -> failwith "Sub")
      | Mul ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_mul s1 s2
         | BT.Integer | BT.Real -> SMT.num_mul s1 s2
         | _ -> failwith "Mul")
      | MulNoSMT -> uninterp_same_type CN_Constant.mul
      | Div ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits (BT.Signed, _) -> SMT.bv_sdiv s1 s2
         | BT.Bits (BT.Unsigned, _) -> SMT.bv_udiv s1 s2
         | BT.Integer | BT.Real -> SMT.num_div s1 s2
@@ -793,50 +792,48 @@ let rec translate_term s iterm =
         | _, _ -> failwith "Exp")
      | ExpNoSMT -> uninterp_same_type CN_Constant.exp
      | Rem ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits (BT.Signed, _) -> SMT.bv_srem s1 s2
         | BT.Bits (BT.Unsigned, _) -> SMT.bv_urem s1 s2
         | BT.Integer -> SMT.num_rem s1 s2 (* CVC5 ?? *)
         | _ -> failwith "Rem")
      | RemNoSMT -> uninterp_same_type CN_Constant.rem
      | Mod ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits (BT.Signed, _) -> SMT.bv_smod s1 s2
         | BT.Bits (BT.Unsigned, _) -> SMT.bv_urem s1 s2
         | BT.Integer -> SMT.num_mod s1 s2
         | _ -> failwith "Mod")
      | ModNoSMT -> uninterp_same_type CN_Constant.mod'
      | BW_Xor ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_xor s1 s2
         | _ -> failwith "BW_Xor")
      | BW_And ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_and s1 s2
         | _ -> failwith "BW_And")
      | BW_Or ->
-       (match IT.basetype iterm with
-        | BT.Bits _ -> SMT.bv_or s1 s2
-        | _ -> failwith "BW_Or")
+       (match IT.get_bt iterm with BT.Bits _ -> SMT.bv_or s1 s2 | _ -> failwith "BW_Or")
      (* Shift amount should be positive? *)
      | ShiftLeft ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits _ -> SMT.bv_shl s1 s2
         | _ -> failwith "ShiftLeft")
      (* Amount should be positive? *)
      | ShiftRight ->
-       (match IT.basetype iterm with
+       (match IT.get_bt iterm with
         | BT.Bits (BT.Signed, _) -> SMT.bv_ashr s1 s2
         | BT.Bits (BT.Unsigned, _) -> SMT.bv_lshr s1 s2
         | _ -> failwith "ShiftRight")
      | LT ->
-       (match IT.basetype e1 with
+       (match IT.get_bt e1 with
         | BT.Bits (BT.Signed, _) -> SMT.bv_slt s1 s2
         | BT.Bits (BT.Unsigned, _) -> SMT.bv_ult s1 s2
         | BT.Integer | BT.Real -> SMT.num_lt s1 s2
         | _ -> failwith "LT")
      | LE ->
-       (match IT.basetype e1 with
+       (match IT.get_bt e1 with
         | BT.Bits (BT.Signed, _) -> SMT.bv_sleq s1 s2
         | BT.Bits (BT.Unsigned, _) -> SMT.bv_uleq s1 s2
         | BT.Integer | BT.Real -> SMT.num_leq s1 s2
@@ -877,7 +874,7 @@ let rec translate_term s iterm =
   (* Tuples *)
   | Tuple es -> CN_Tuple.con (List.map (translate_term s) es)
   | NthTuple (n, e1) ->
-    (match IT.basetype e1 with
+    (match IT.get_bt e1 with
      | Tuple ts -> CN_Tuple.get (List.length ts) n (translate_term s e1)
      | _ -> failwith "NthTuple: not a tuple")
   (* Structs *)
@@ -890,7 +887,7 @@ let rec translate_term s iterm =
     SMT.app_ (CN_Names.struct_field_name f) [ translate_term s e1 ]
   | StructUpdate ((t, member), v) ->
     let tag = BT.struct_bt (IT.get_bt t) in
-    let layout = Sym.Map.find (struct_bt (IT.get_bt t)) struct_decls in
+    let layout = Sym.Map.find (BT.struct_bt (IT.get_bt t)) struct_decls in
     let members = Memory.member_types layout in
     let str =
       List.map
@@ -908,13 +905,13 @@ let rec translate_term s iterm =
   | OffsetOf (tag, member) ->
     let decl = Sym.Map.find tag struct_decls in
     let v = Option.get (Memory.member_offset decl member) in
-    translate_term s (int_lit_ v (IT.basetype iterm) loc)
+    translate_term s (int_lit_ v (IT.get_bt iterm) loc)
   (* Records *)
   | Record members ->
     let field (_, e) = translate_term s e in
     CN_Tuple.con (List.map field members)
   | RecordMember (e1, f) ->
-    (match IT.basetype e1 with
+    (match IT.get_bt e1 with
      | Record members ->
        let check (x, _) = Id.equal f x in
        let arity = List.length members in
@@ -967,26 +964,26 @@ let rec translate_term s iterm =
   | Cons (e1, e2) -> CN_List.cons (translate_term s e1) (translate_term s e2)
   | Head e1 ->
     maybe_name (translate_term s e1) (fun xs ->
-      CN_List.head xs (translate_term s (default_ (IT.basetype iterm) loc)))
+      CN_List.head xs (translate_term s (default_ (IT.get_bt iterm) loc)))
   | Tail e1 ->
     maybe_name (translate_term s e1) (fun xs ->
-      CN_List.tail xs (translate_term s (default_ (IT.basetype iterm) loc)))
+      CN_List.tail xs (translate_term s (default_ (IT.get_bt iterm) loc)))
   | NthList (x, y, z) ->
-    let arg x = (translate_base_type (IT.basetype x), translate_term s x) in
+    let arg x = (translate_base_type (IT.get_bt x), translate_term s x) in
     let arg_ts, args = List.split (List.map arg [ x; y; z ]) in
-    let bt = IT.basetype iterm in
+    let bt = IT.get_bt iterm in
     let res_t = translate_base_type bt in
     let f = declare_bt_uninterpreted s CN_Constant.nth_list bt arg_ts res_t in
     SMT.app f args
   | ArrayToList (x, y, z) ->
-    let arg x = (translate_base_type (IT.basetype x), translate_term s x) in
+    let arg x = (translate_base_type (IT.get_bt x), translate_term s x) in
     let arg_ts, args = List.split (List.map arg [ x; y; z ]) in
-    let bt = IT.basetype iterm in
+    let bt = IT.get_bt iterm in
     let res_t = translate_base_type bt in
     let f = declare_bt_uninterpreted s CN_Constant.array_to_list bt arg_ts res_t in
     SMT.app f args
   | SizeOf ct ->
-    translate_term s (IT.int_lit_ (Memory.size_of_ctype ct) (IT.basetype iterm) loc)
+    translate_term s (IT.int_lit_ (Memory.size_of_ctype ct) (IT.get_bt iterm) loc)
   | Representable (ct, t) -> translate_term s (representable struct_decls ct t loc)
   | Good (ct, t) -> translate_term s (good_value struct_decls ct t loc)
   | Aligned t ->
@@ -996,7 +993,7 @@ let rec translate_term s iterm =
   (* Maps *)
   | MapConst (bt, e1) ->
     let kt = translate_base_type bt in
-    let vt = translate_base_type (IT.basetype e1) in
+    let vt = translate_base_type (IT.get_bt e1) in
     SMT.arr_const kt vt (translate_term s e1)
   | MapSet (mp, k, v) ->
     SMT.arr_store (translate_term s mp) (translate_term s k) (translate_term s v)
@@ -1007,7 +1004,7 @@ let rec translate_term s iterm =
     (match def.body with
      | Def body -> translate_term s (Definition.Function.open_ def.args body args)
      | _ ->
-       let do_arg arg = translate_base_type (IT.basetype arg) in
+       let do_arg arg = translate_base_type (IT.get_bt arg) in
        let args_ts = List.map do_arg args in
        let res_t = translate_base_type def.return_bt in
        let fu = declare_uninterpreted s name args_ts res_t in
@@ -1043,7 +1040,7 @@ let rec translate_term s iterm =
     in
     let rec do_alts v alts =
       match alts with
-      | [] -> translate_term s (default_ (IT.basetype iterm) loc)
+      | [] -> translate_term s (default_ (IT.get_bt iterm) loc)
       | (pat, rhs) :: more ->
         let mb_cond, binds = match_pat v pat in
         let k = SMT.let_ binds (translate_term s rhs) in
@@ -1097,7 +1094,7 @@ let rec translate_term s iterm =
 let add_assumption solver global lc =
   let s1 = { solver with globals = global } in
   match lc with
-  | T it -> ack_command solver (SMT.assume (translate_term s1 it))
+  | LC.T it -> ack_command solver (SMT.assume (translate_term s1 it))
   | Forall _ -> ()
 
 
@@ -1112,7 +1109,7 @@ let translate_goal solver assumptions lc =
   let here = Locations.other __FUNCTION__ in
   let instantiated =
     match lc with
-    | T it -> { expr = translate_term solver it; qs = []; extra = [] }
+    | LC.T it -> { expr = translate_term solver it; qs = []; extra = [] }
     | Forall ((s, bt), it) ->
       let v_s, v = IT.fresh_same bt s here in
       let it = IT.subst (make_subst [ (s, v) ]) it in
@@ -1122,7 +1119,7 @@ let translate_goal solver assumptions lc =
     let v = sym_ (s, bt, here) in
     let check_asmp lc acc =
       match lc with
-      | Forall ((s', bt'), it') when BT.equal bt bt' ->
+      | LC.Forall ((s', bt'), it') when BT.equal bt bt' ->
         let new_asmp = IT.subst (make_subst [ (s', v) ]) it' in
         translate_term solver new_asmp :: acc
       | _ -> acc
@@ -1166,7 +1163,7 @@ let rec declare_struct s done_struct name decl =
     let mk_field (l, t) =
       let rec declare_nested ty =
         match ty with
-        | Struct name' ->
+        | BT.Struct name' ->
           let decl = Sym.Map.find name' s.globals.struct_decls in
           declare_struct s done_struct name' decl
         | Map (_, el) -> declare_nested el
@@ -1373,7 +1370,7 @@ let model_evaluator =
         | SMT.Sat ->
           let res = SMT.get_expr smt_solver inp in
           let ctys = get_ctype_table evaluator in
-          Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
+          Some (get_ivalue gs ctys (get_bt e) (SMT.no_let res))
         | _ -> None
       in
       Hashtbl.add models_tbl model_id model_fn;

@@ -832,7 +832,7 @@ let rec cn_to_ail_expr_aux_internal
     let b2, s2, e2 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals t2 PassBack
     in
-    let ail_bop, annot = cn_to_ail_binop_internal (IT.basetype t1) (IT.basetype t2) bop in
+    let ail_bop, annot = cn_to_ail_binop_internal (IT.get_bt t1) (IT.get_bt t2) bop in
     let str =
       match annot with Some str -> str | None -> failwith "No CN binop function found"
     in
@@ -1293,7 +1293,7 @@ let rec cn_to_ail_expr_aux_internal
       match ps with
       | T.(Pat (PSym sym', p_bt, pt_loc)) :: ps' ->
         ( mk_pattern T.PWild p_bt pt_loc :: ps',
-          T.(IT (Let ((sym', t1), t2), IT.basetype t2, pt_loc)) )
+          T.(IT (Let ((sym', t1), t2), IT.get_bt t2, pt_loc)) )
       | p :: ps' -> (p :: ps', t2)
       | [] -> assert false
     in
