@@ -1,14 +1,15 @@
-open Report
+module Rp = Report
+module BT = BaseTypes
 module IT = IndexTerms
 module Def = Definition
 module Req = Request
+module Res = Resource
 module LF = Definition.Function
 module LAT = LogicalArgumentTypes
+module LC = LogicalConstraints
+module Loc = Locations
 module C = Context
-open Request
-open IndexTerms
 open Pp
-open C
 
 (* perhaps somehow unify with above *)
 type action =
@@ -66,11 +67,11 @@ module ITSet = struct
 end
 
 let subterms_without_bound_variables bindings =
-  fold_subterms
+  IT.fold_subterms
     ~bindings
     (fun bindings acc t ->
       let pats = List.map fst bindings in
-      let bound = List.concat_map bound_by_pattern pats in
+      let bound = List.concat_map IT.bound_by_pattern pats in
       let bound = Sym.Set.of_list (List.map fst bound) in
       if Sym.Set.(is_empty (inter bound (IT.free_vars t))) then
         ITSet.add t acc
@@ -82,11 +83,11 @@ let subterms_without_bound_variables bindings =
 (** Simplify a constraint in the context of a model. *)
 let simp_constraint eval lct =
   let eval_to_bool it =
-    match eval it with Some (IT (Const (Bool b1), _, _)) -> Some b1 | _ -> None
+    match eval it with Some (IT.IT (Const (Bool b1), _, _)) -> Some b1 | _ -> None
   in
   let is b it = match eval_to_bool it with Some b1 -> Bool.equal b b1 | _ -> false in
-  let rec go (IT (term, bt, loc)) =
-    let mk x = IT (x, bt, loc) in
+  let rec go (IT.IT (term, bt, loc)) =
+    let mk x = IT.IT (x, bt, loc) in
     let ands xs = IT.and_ xs loc in
     let go1 t = ands (go t) in
     match term with
@@ -114,7 +115,7 @@ let rec simp_resource eval r =
     let is_true =
       match ct with
       | LC.T ct ->
-        (match eval ct with Some (IT (Const (Bool b), _, _)) -> b | _ -> false)
+        (match eval ct with Some (IT.IT (Const (Bool b), _, _)) -> b | _ -> false)
       | _ -> false
     in
     if is_true then
@@ -128,7 +129,7 @@ let rec simp_resource eval r =
   | I i -> I i
 
 
-let state ctxt log model_with_q extras =
+let state (ctxt : C.t) log model_with_q extras =
   let where =
     let cur_colour = !Cerb_colour.do_colour in
     Cerb_colour.do_colour := false;
@@ -158,10 +159,10 @@ let state ctxt log model_with_q extras =
   (*   | None -> parens !^"not evaluated" *)
   (* in *)
   let render_constraints c =
-    { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
+    Rp.{ original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
   in
   let render_sympair p =
-    { original = Sym.pp (fst p); simplified = [ Sym.pp (fst p) ] }
+    Rp.{ original = Sym.pp (fst p); simplified = [ Sym.pp (fst p) ] }
     (*Symbols do not need simplification*)
   in
   let interesting, uninteresting =
@@ -180,13 +181,13 @@ let state ctxt log model_with_q extras =
       let log_comb acc entry =
         match entry with
         | State ctxt ->
-          let _, _, ps = not_given_to_solver ctxt in
+          let _, _, ps = C.not_given_to_solver ctxt in
           List.append ps acc
         | Action _ -> acc
       in
       List.fold_left log_comb [] log
     in
-    let forall_constraints, funs, ctxt_preds = not_given_to_solver ctxt in
+    let forall_constraints, funs, ctxt_preds = C.not_given_to_solver ctxt in
     let preds =
       let pred_compare (s1, _) (s2, _) = Sym.compare s1 s2 in
       (*CHT TODO: deriving this would require changing a lot of files *)
@@ -201,27 +202,27 @@ let state ctxt log model_with_q extras =
     let interesting_preds, uninteresting_preds =
       List.partition (fun (_, v) -> Def.is_interesting v) preds
     in
-    add_labeled
-      lab_interesting
+    Rp.add_labeled
+      Rp.lab_interesting
       (List.concat
          [ List.map render_sympair interesting_preds;
            List.map render_sympair interesting_funs;
            List.map render_constraints interesting_constraints
          ])
-      (add_labeled
-         lab_uninteresting
+      (Rp.add_labeled
+         Rp.lab_uninteresting
          (List.concat
             [ List.map render_sympair uninteresting_preds;
               List.map render_sympair uninteresting_funs;
               List.map render_constraints uninteresting_constraints
             ])
-         labeled_empty)
+         Rp.labeled_empty)
   in
   let terms =
     let variables =
-      let make s ls = sym_ (s, ls, Locations.other __LOC__) in
+      let make s ls = IT.sym_ (s, ls, Locations.other __LOC__) in
       let basetype_binding (s, (binding, _)) =
-        match binding with Value _ -> None | BaseType ls -> Some (make s ls)
+        match binding with C.Value _ -> None | BaseType ls -> Some (make s ls)
       in
       ITSet.of_list
         (List.map (fun (s, ls) -> make s ls) quantifier_counter_model
@@ -232,7 +233,7 @@ let state ctxt log model_with_q extras =
       match extras.unproven_constraint with
       | Some (T lc) -> subterms_without_bound_variables [] lc
       | Some (Forall ((s, bt), lc)) ->
-        let binder = (Pat (PSym s, bt, Loc.other __LOC__), None) in
+        let binder = IT.(Pat (PSym s, bt, Loc.other __LOC__), None) in
         subterms_without_bound_variables [ binder ] lc
       | None -> ITSet.empty
     in
@@ -241,7 +242,7 @@ let state ctxt log model_with_q extras =
       | Some (P ret) ->
         ITSet.bigunion_map (subterms_without_bound_variables []) (ret.pointer :: ret.iargs)
       | Some (Q ret) ->
-        let binder = (Pat (PSym (fst ret.q), snd ret.q, Loc.other __LOC__), None) in
+        let binder = IT.(Pat (PSym (fst ret.q), snd ret.q, Loc.other __LOC__), None) in
         ITSet.union
           (ITSet.bigunion_map
              (subterms_without_bound_variables [])
@@ -259,7 +260,7 @@ let state ctxt log model_with_q extras =
         (fun it ->
           match evaluate it with
           | Some value when not (IT.equal value it) ->
-            Some (it, { term = IT.pp it; value = IT.pp value })
+            Some (it, Rp.{ term = IT.pp it; value = IT.pp value })
           | Some _ -> None
           | None -> None)
         (ITSet.elements subterms)
@@ -270,52 +271,53 @@ let state ctxt log model_with_q extras =
           match IT.get_bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
         filtered
     in
-    add_labeled
-      lab_interesting
+    Rp.add_labeled
+      Rp.lab_interesting
       (List.map snd interesting)
-      (add_labeled lab_uninteresting (List.map snd uninteresting) labeled_empty)
+      (Rp.add_labeled Rp.lab_uninteresting (List.map snd uninteresting) Rp.labeled_empty)
   in
   let constraints =
-    add_labeled
-      lab_interesting
+    Rp.add_labeled
+      Rp.lab_interesting
       (List.map render_constraints interesting)
-      (add_labeled
-         lab_uninteresting
+      (Rp.add_labeled
+         Rp.lab_uninteresting
          (List.map render_constraints uninteresting)
-         labeled_empty)
+         Rp.labeled_empty)
   in
   let resources =
     let same_res, diff_res =
       match extras.request with
-      | None -> ([], get_rs ctxt)
-      | Some req -> List.partition (fun (r, _) -> Req.same_name req r) (get_rs ctxt)
+      | None -> ([], C.get_rs ctxt)
+      | Some req -> List.partition (fun (r, _) -> Req.same_name req r) (C.get_rs ctxt)
     in
     let interesting_diff_res, uninteresting_diff_res =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when Req.equal_name ret.name Req.Predicate.alloc -> false
+          | Req.P ret when Req.equal_name ret.name Req.Predicate.alloc -> false
           | _ -> true)
         diff_res
     in
     let with_suff mb x = match mb with None -> x | Some d -> d ^^^ x in
     let pp_res mb_suff (rt, args) =
-      { original = with_suff mb_suff (Res.pp (rt, args));
-        simplified =
-          [ with_suff mb_suff (Res.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
-      }
+      Rp.
+        { original = with_suff mb_suff (Res.pp (rt, args));
+          simplified =
+            [ with_suff mb_suff (Res.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
+        }
     in
     let interesting =
       List.map (fun re -> pp_res (Some (parens !^"same type")) re) same_res
       @ List.map (pp_res None) interesting_diff_res
     in
     let uninteresting = List.map (pp_res None) uninteresting_diff_res in
-    add_labeled
-      lab_interesting
+    Rp.add_labeled
+      Rp.lab_interesting
       interesting
-      (add_labeled lab_uninteresting uninteresting labeled_empty)
+      (Rp.add_labeled Rp.lab_uninteresting uninteresting Rp.labeled_empty)
   in
-  { where; not_given_to_solver; terms; resources; constraints }
+  Rp.{ where; not_given_to_solver; terms; resources; constraints }
 
 
 let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extras) =
@@ -350,10 +352,12 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
       (match Req.get_name req with
        | Owned _ -> []
        | PName pname ->
-         let doc_clause (_name, c) =
-           { cond = IT.pp c.Def.Clause.guard;
-             clause = LogicalArgumentTypes.pp IT.pp (simp_resource evaluate c.packing_ft)
-           }
+         let doc_clause (_name, (c : Def.Clause.t)) =
+           Rp.
+             { cond = IT.pp c.guard;
+               clause =
+                 LogicalArgumentTypes.pp IT.pp (simp_resource evaluate c.packing_ft)
+             }
          in
          List.map doc_clause (relevant_predicate_clauses ctxt.global pname req))
   in
@@ -366,4 +370,4 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
     | None -> None
   in
   Pp.html_escapes := prev;
-  { requested; unproven; predicate_hints; trace }
+  Rp.{ requested; unproven; predicate_hints; trace }
