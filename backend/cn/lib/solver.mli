@@ -41,7 +41,7 @@ val provable
   :  loc:Locations.t ->
   solver:solver ->
   global:Global.t ->
-  assumptions:Context.LC.Set.t ->
+  assumptions:LogicalConstraints.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
   [> `True | `False ]

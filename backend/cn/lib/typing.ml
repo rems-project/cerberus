@@ -1,7 +1,10 @@
-open Context
+module BT = BaseTypes
+module Res = Resource
+module Req = Request
+module LC = LogicalConstraints
+module Loc = Locations
 module IT = IndexTerms
 module ITSet = Set.Make (IT)
-open TypeErrors
 
 type solver = Solver.solver
 
