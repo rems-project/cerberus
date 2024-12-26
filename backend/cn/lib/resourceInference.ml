@@ -141,7 +141,7 @@ module General = struct
        | `False ->
          let@ model = model () in
          let@ all_cs = get_cs () in
-         let () = assert (not (Context.LC.Set.mem c all_cs)) in
+         let () = assert (not (LC.Set.mem c all_cs)) in
          debug_constraint_failure_diagnostics 6 model simp_ctxt c;
          let@ () = Diagnostics.investigate model c in
          fail (fun ctxt ->

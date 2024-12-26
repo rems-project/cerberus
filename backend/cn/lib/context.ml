@@ -3,7 +3,6 @@ open List
 module BT = BaseTypes
 module Res = Resource
 module LC = LogicalConstraints
-module Loc = Locations
 module IntMap = Map.Make (Int)
 
 type l_info = Locations.t * Pp.document Lazy.t
