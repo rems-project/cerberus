@@ -32,7 +32,7 @@ module PrevDefs = struct
     { present : Sym.t list StringListMap.t;
       defs : Pp.document list IntMap.t;
       dt_params : (IT.t * Id.t * Sym.t) list;
-      failures : TypeErrors.type_error list
+      failures : TypeErrors.t list
     }
 
   let init_t =

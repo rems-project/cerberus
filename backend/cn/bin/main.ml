@@ -479,7 +479,7 @@ let run_tests
   Pp.print_level := print_level;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   Sym.executable_spec_enabled := true;
-  let handle_error (e : TypeErrors.type_error) =
+  let handle_error (e : TypeErrors.t) =
     let report = TypeErrors.pp_message e.msg in
     Pp.error e.loc report.short (Option.to_list report.descr);
     match e.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1

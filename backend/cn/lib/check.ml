@@ -2,6 +2,7 @@ module CF = Cerb_frontend
 module IT = IndexTerms
 module BT = BaseTypes
 module LRT = LogicalReturnTypes
+module Req = Request
 module RT = ReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
@@ -1008,7 +1009,7 @@ module Spine : sig
   val calltype_lt
     :  Loc.t ->
     BT.t Mu.pexpr list ->
-    AT.lt * label_kind ->
+    AT.lt * Where.label ->
     (False.t -> unit m) ->
     unit m
 

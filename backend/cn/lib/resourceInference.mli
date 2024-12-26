@@ -6,7 +6,7 @@ val debug_constraint_failure_diagnostics
   unit
 
 module General : sig
-  type uiinfo = TypeErrors.situation * TypeErrors.request_chain
+  type uiinfo = TypeErrors.situation * TypeErrors.RequestChain.t
 
   val ftyp_args_request_step
     :  ([ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> 'a -> 'a) ->
