@@ -37,28 +37,29 @@ module PrevDefs = struct
 
   let init_t =
     { present = StringListMap.empty; defs = IntMap.empty; dt_params = []; failures = [] }
+end
 
+module PrevDefsMonad = struct
+  type 'a t = PrevDefs.t -> ('a * PrevDefs.t) Or_TypeError.t
 
-  type 'a m = t -> ('a * t, TypeErrors.t) Result.t
+  let return (x : 'a) : 'a t = fun st -> Result.Ok (x, st)
 
-  let return (x : 'a) : 'a m = fun st -> Result.Ok (x, st)
-
-  let bind (x : 'a m) (f : 'a -> 'b m) : 'b m =
+  let bind (x : 'a t) (f : 'a -> 'b t) : 'b t =
     fun st ->
     match x st with Result.Error e -> Result.Error e | Result.Ok (xv, st) -> f xv st
 
 
-  let get : t m = fun st -> Result.Ok (st, st)
+  let get : PrevDefs.t t = fun st -> Result.Ok (st, st)
 
-  let set (st : t) : unit m = fun _ -> Result.Ok ((), st)
+  let set (st : PrevDefs.t) : unit t = fun _ -> Result.Ok ((), st)
 
-  let upd (f : t -> t) : unit m = bind get (fun st -> set (f st))
+  let upd (f : PrevDefs.t -> PrevDefs.t) : unit t = bind get (fun st -> set (f st))
 
-  let get_section section (st : t) =
+  let get_section section (st : PrevDefs.t) =
     match IntMap.find_opt section st.defs with None -> [] | Some docs -> docs
 
 
-  let add_to_section section doc (st : t) =
+  let add_to_section section doc (st : PrevDefs.t) =
     let current = get_section section st in
     let defs = IntMap.add section (doc :: current) st.defs in
     { st with defs }
@@ -87,9 +88,10 @@ module PrevDefs = struct
       return ())
 end
 
-module PrevMonad = Effectful.Make (PrevDefs)
+open Effectful.Make (PrevDefsMonad)
+
+open PrevDefsMonad
 open PrevDefs
-open PrevMonad
 
 let with_reset_dt_params f =
   let@ st = get in

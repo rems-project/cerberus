@@ -56,7 +56,7 @@ let get () : s t = fun s -> Ok (s, s)
 (* due to solver interaction, this has to be used carefully *)
 let set (s' : s) : unit t = fun _s -> Ok ((), s')
 
-let run (c : Context.t) (m : 'a t) : 'a Resultat.t =
+let run (c : Context.t) (m : 'a t) : 'a Or_TypeError.t =
   match m (empty_s c) with Ok (a, _) -> Ok a | Error e -> Error e
 
 
@@ -68,7 +68,7 @@ let run_from_pause (f : 'a -> 'b t) (pause : 'a pause) =
   match pause with Ok (a, s) -> Result.map fst @@ f a s | Error e -> Error e
 
 
-let pause_to_result (pause : 'a pause) : 'a Resultat.t = Result.map fst pause
+let pause_to_result (pause : 'a pause) : 'a Or_TypeError.t = Result.map fst pause
 
 let pure (m : 'a t) : 'a t =
   fun s ->
@@ -78,7 +78,7 @@ let pure (m : 'a t) : 'a t =
   outcome
 
 
-let sandbox (m : 'a t) : 'a Resultat.t t =
+let sandbox (m : 'a t) : 'a Or_TypeError.t t =
   fun s ->
   let n = Solver.num_scopes (Option.get s.solver) in
   Solver.push (Option.get s.solver);
@@ -97,14 +97,14 @@ let sandbox (m : 'a t) : 'a Resultat.t t =
   Ok (outcome, s)
 
 
-let embed_resultat (m : 'a Resultat.t) : 'a m =
+let lift (m : 'a Or_TypeError.t) : 'a m =
   fun s -> match m with Ok r -> Ok (r, s) | Error e -> Error e
 
 
 (* end basic functions *)
 
 module Eff = Effectful.Make (struct
-    type 'a m = 'a t
+    type nonrec 'a t = 'a t
 
     let bind = bind
 

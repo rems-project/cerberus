@@ -1,6 +1,6 @@
 (* comparisons between CN base types and Core base types *)
 
-open Effectful.Make (Resultat)
+open Effectful.Make (Or_TypeError)
 
 module BT = BaseTypes
 open Cerb_frontend.Core

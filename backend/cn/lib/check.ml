@@ -412,9 +412,9 @@ let check_conv_int loc ~expect ct arg =
 
 
 let check_against_core_bt loc msg2 cbt bt =
-  Typing.embed_resultat
+  Typing.lift
     (CoreTypeChecks.check_against_core_bt
-       (fun msg -> Resultat.fail { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
+       (fun msg -> Or_TypeError.fail { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
        cbt
        bt)
 
@@ -2678,7 +2678,7 @@ let time_check_c_functions (checked : c_function list) : (string * TypeErrors.t)
 let generate_lemmas lemmata o_lemma_mode =
   let@ global = get_global () in
   match o_lemma_mode with
-  | Some mode -> embed_resultat (Lemmata.generate global mode lemmata)
+  | Some mode -> lift (Lemmata.generate global mode lemmata)
   | None -> return ()
 
 (* TODO:

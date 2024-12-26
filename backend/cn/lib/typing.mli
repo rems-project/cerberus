@@ -26,7 +26,7 @@ val run_from_pause : ('a -> 'b m) -> 'a pause -> ('b, TypeErrors.t) Result.t
 
 val pause_to_result : 'a pause -> ('a, TypeErrors.t) Result.t
 
-val sandbox : 'a t -> 'a Resultat.t t
+val sandbox : 'a t -> 'a Or_TypeError.t t
 
 val get_typing_context : unit -> Context.t m
 
@@ -148,7 +148,7 @@ val test_value_eqs
   IndexTerms.t list ->
   unit m
 
-val embed_resultat : 'a Resultat.t -> 'a m
+val lift : 'a Or_TypeError.t -> 'a m
 
 val ensure_base_type : Locations.t -> expect:BaseTypes.t -> BaseTypes.t -> unit m
 

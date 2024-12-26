@@ -29,9 +29,9 @@ let get_loc_ = CF.Annot.get_loc_
 open CF.Core
 open Pp
 
-open Effectful.Make (Resultat)
+open Effectful.Make (Or_TypeError)
 
-let fail = Resultat.fail
+let fail = Or_TypeError.fail
 
 let do_ail_desugar_op desugar_state f =
   match f desugar_state with
@@ -646,7 +646,7 @@ let rec n_expr
   ((env, old_states), desugaring_things)
   (global_types, visible_objects_env)
   e
-  : unit Mucore.expr Resultat.m
+  : unit Mucore.expr Or_TypeError.t
   =
   let markers_env, cn_desugaring_state = desugaring_things in
   let (Expr (annots, pe)) = e in
