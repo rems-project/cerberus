@@ -1379,9 +1379,10 @@ module BaseTyping = struct
   type label_context = (AT.lt * Where.label * Locations.t) Sym.Map.t
 
   let check_against_core_bt loc msg2 cbt bt =
-    Typing.embed_resultat
+    Typing.lift
       (CoreTypeChecks.check_against_core_bt
-         (fun msg -> Resultat.fail { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
+         (fun msg ->
+           Or_TypeError.fail { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
          cbt
          bt)
 

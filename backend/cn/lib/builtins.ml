@@ -1,5 +1,5 @@
 module SBT = BaseTypes.Surface
-open Resultat
+open Or_TypeError
 open IndexTerms
 
 (* builtin function symbols *)

@@ -34,8 +34,8 @@ type env =
     datatypes : BaseTypes.dt_info Sym.Map.t;
     datatype_constrs : BaseTypes.constr_info Sym.Map.t;
     tagDefs : (Cerb_frontend.Symbol.sym, Mu.tag_definition) Pmap.map;
-    fetch_enum_expr : Locations.t -> Sym.t -> unit CF.AilSyntax.expression Resultat.t;
-    fetch_typedef : Locations.t -> Sym.t -> CF.Ctype.ctype Resultat.t
+    fetch_enum_expr : Locations.t -> Sym.t -> unit CF.AilSyntax.expression Or_TypeError.t;
+    fetch_typedef : Locations.t -> Sym.t -> CF.Ctype.ctype Or_TypeError.t
   }
 
 let init_env tagDefs fetch_enum_expr fetch_typedef =
@@ -258,9 +258,9 @@ let register_cn_predicates env (defs : cn_predicate list) =
   List.fold_left aux env defs
 
 
-open Resultat
+open Or_TypeError
 
-open Effectful.Make (Resultat)
+open Effectful.Make (Or_TypeError)
 
 (* TODO: handle more kinds of constant expression *)
 let convert_enum_expr =
@@ -372,21 +372,21 @@ let add_datatype_infos env dts = ListM.fold_leftM add_datatype_info env dts
 module E = struct
   type evaluation_scope = string
 
-  type 'a m =
+  type 'a t =
     | Done of 'a
     | Error of TypeErrors.t
-    | ScopeExists of Locations.t * evaluation_scope * (bool -> 'a m)
+    | ScopeExists of Locations.t * evaluation_scope * (bool -> 'a t)
     | Value_of_c_variable of
-        Locations.t * Sym.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
+        Locations.t * Sym.t * evaluation_scope option * (IT.Surface.t option -> 'a t)
     | Deref of
         Locations.t
         * IT.Surface.t
         * evaluation_scope option
-        * (IT.Surface.t option -> 'a m)
+        * (IT.Surface.t option -> 'a t)
 
   let return x = Done x
 
-  let rec bind (m : 'a m) (f : 'a -> 'b m) : 'b m =
+  let rec bind (m : 'a t) (f : 'a -> 'b t) : 'b t =
     match m with
     | Done x -> f x
     | Error err -> Error err
@@ -406,7 +406,7 @@ module E = struct
     Value_of_c_variable (loc, sym, scope, fun o_v_it -> Done o_v_it)
 
 
-  let liftResultat = function Result.Ok a -> Done a | Result.Error e -> Error e
+  let liftResult = function Result.Ok a -> Done a | Result.Error e -> Error e
 end
 
 let start_evaluation_scope = "start"
@@ -843,7 +843,7 @@ module EffectfulTranslation = struct
         return (IT (Cast (SBT.proj bt, expr), bt, loc))
       | CNExpr_call (fsym, exprs) ->
         let@ args = ListM.mapM self exprs in
-        let@ b = liftResultat (Builtins.apply_builtin_funs fsym args loc) in
+        let@ b = liftResult (Builtins.apply_builtin_funs fsym args loc) in
         (match b with
          | Some t -> return t
          | None ->
@@ -1015,7 +1015,7 @@ module EffectfulTranslation = struct
          | Some v -> return v)
       | CNExpr_value_of_c_atom (sym, C_kind_enum) ->
         assert (not (Sym.Set.mem sym locally_bound));
-        liftResultat (do_decode_enum env loc sym)
+        liftResult (do_decode_enum env loc sym)
     in
     trans None
 
@@ -1183,8 +1183,8 @@ module ET = EffectfulTranslation
 
 module Pure = struct
   let handle what = function
-    | E.Done x -> Resultat.return x
-    | E.Error e -> Resultat.fail e
+    | E.Done x -> Or_TypeError.return x
+    | E.Error e -> Or_TypeError.fail e
     | E.Value_of_c_variable (loc, _, _, _) ->
       let msg = !^what ^^^ !^"are not allowed to refer to (the state of) C variables." in
       fail { loc; msg = Generic msg }
@@ -1318,14 +1318,14 @@ module LocalState = struct
     List.fold_left (fun st (p, v) -> add_pointee_value p v st) st pvs
 
 
-  let handle { state; old_states } : 'a E.m -> 'a Resultat.m =
+  let handle { state; old_states } : 'a E.t -> 'a Or_TypeError.t =
     let state_for_scope = function
       | None -> state
       | Some s -> StringMap.find s old_states
     in
     let rec aux = function
-      | E.Done x -> Resultat.return x
-      | E.Error e -> Resultat.fail e
+      | E.Done x -> Or_TypeError.return x
+      | E.Error e -> Or_TypeError.fail e
       | E.Value_of_c_variable (loc, sym, scope, k) ->
         let variable_state = (state_for_scope scope).c_variable_state in
         let o_v =
@@ -1536,7 +1536,7 @@ module UsingLoads = struct
       fail { loc; msg }
 
 
-  let handle allocations old_states : Cnprog.t E.m -> Cnprog.t Resultat.m =
+  let handle allocations old_states : Cnprog.t E.t -> Cnprog.t Or_TypeError.t =
     let rec aux = function
       | E.Done x -> return x
       | E.Error e -> fail e

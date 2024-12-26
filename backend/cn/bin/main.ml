@@ -136,7 +136,7 @@ let with_well_formedness_check
      ail_prog:CF.GenTypes.genTypeCategory A.ail_program ->
      statement_locs:Cerb_location.t CStatements.LocMap.t ->
      paused:_ Typing.pause ->
-     unit Resultat.t)
+     unit Or_TypeError.t)
   =
   check_input_file filename;
   let prog, (markers_env, ail_prog), statement_locs =
@@ -157,7 +157,7 @@ let with_well_formedness_check
      | _ -> None);
   try
     let result =
-      let open Resultat in
+      let open Or_TypeError in
       let@ prog5 =
         Core_to_mucore.normalise_file
           ~inherit_loc:(not no_inherit_loc)
@@ -250,7 +250,7 @@ let well_formed
     ~no_inherit_loc
     ~magic_comment_char_dollar
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
-    ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Resultat.return ())
+    ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Or_TypeError.return ())
 
 
 let verify
@@ -429,7 +429,7 @@ let generate_executable_specs
                statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
-          Resultat.return ())
+          Or_TypeError.return ())
         ())
 
 
@@ -564,7 +564,7 @@ let run_tests
           if not dont_run then
             Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
-      Resultat.return ())
+      Or_TypeError.return ())
 
 
 open Cmdliner

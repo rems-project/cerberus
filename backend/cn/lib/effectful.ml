@@ -1,9 +1,9 @@
 module type S = sig
-  type 'a m
+  type 'a t
 
-  val return : 'a -> 'a m
+  val return : 'a -> 'a t
 
-  val bind : 'a m -> ('a -> 'b m) -> 'b m
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
 end
 
 module Make (T : S) = struct
@@ -12,9 +12,7 @@ module Make (T : S) = struct
   let ( let@ ) = T.bind
 
   module ListM = struct
-    open List
-
-    let rec mapM (f : 'a -> 'b m) (l : 'a list) : 'b list m =
+    let rec mapM (f : 'a -> 'b t) (l : 'a list) : 'b list t =
       match l with
       | [] -> return []
       | x :: xs ->
@@ -23,7 +21,7 @@ module Make (T : S) = struct
         return (y :: ys)
 
 
-    let mapfstM (f : 'a -> 'c m) (l : ('a * 'b) list) : ('c * 'b) list m =
+    let mapfstM (f : 'a -> 'c t) (l : ('a * 'b) list) : ('c * 'b) list t =
       mapM
         (fun (a, b) ->
           let@ c = f a in
@@ -31,7 +29,7 @@ module Make (T : S) = struct
         l
 
 
-    let mapsndM (f : 'b -> 'c m) (l : ('a * 'b) list) : ('a * 'c) list m =
+    let mapsndM (f : 'b -> 'c t) (l : ('a * 'b) list) : ('a * 'c) list t =
       mapM
         (fun (a, b) ->
           let@ c = f b in
@@ -39,7 +37,7 @@ module Make (T : S) = struct
         l
 
 
-    let mapiM (f : int -> 'a -> 'b m) (l : 'a list) : 'b list m =
+    let mapiM (f : int -> 'a -> 'b t) (l : 'a list) : 'b list t =
       let rec aux i l =
         match l with
         | [] -> return []
@@ -51,26 +49,26 @@ module Make (T : S) = struct
       aux 0 l
 
 
-    let map2M (f : 'a -> 'b -> 'c m) (l1 : 'a list) (l2 : 'b list) : 'c list m =
+    let map2M (f : 'a -> 'b -> 'c t) (l1 : 'a list) (l2 : 'b list) : 'c list t =
       let l12 = List.combine l1 l2 in
       mapM (Tools.uncurry f) l12
 
 
-    let iteriM (f : int -> 'a -> unit m) (l : 'a list) : unit m =
+    let iteriM (f : int -> 'a -> unit t) (l : 'a list) : unit t =
       let@ _ = mapiM f l in
       return ()
 
 
-    let iterM (f : 'a -> unit m) (l : 'a list) : unit m = iteriM (fun _ -> f) l
+    let iterM (f : 'a -> unit t) (l : 'a list) : unit t = iteriM (fun _ -> f) l
 
     let concat_mapM f l =
       let@ xs = mapM f l in
-      return (concat xs)
+      return (List.concat xs)
 
 
     let filter_mapM f l =
       let@ xs = mapM f l in
-      return (filter_map (fun x -> x) xs)
+      return (List.filter_map (fun x -> x) xs)
 
 
     let filterM f xs =
@@ -84,8 +82,8 @@ module Make (T : S) = struct
       return (List.map snd (List.filter fst ys))
 
 
-    let fold_leftM (f : 'a -> 'b -> 'c m) (a : 'a) (bs : 'b list) =
-      Stdlib.List.fold_left
+    let fold_leftM (f : 'a -> 'b -> 'c t) (a : 'a) (bs : 'b list) =
+      List.fold_left
         (fun aM b ->
           let@ a = aM in
           f a b)
@@ -93,9 +91,8 @@ module Make (T : S) = struct
         bs
 
 
-    (* maybe from Exception.lem *)
-    let fold_rightM (f : 'b -> 'a -> 'c m) (bs : 'b list) (a : 'a) =
-      Stdlib.List.fold_right
+    let fold_rightM (f : 'b -> 'a -> 'c t) (bs : 'b list) (a : 'a) =
+      List.fold_right
         (fun b aM ->
           let@ a = aM in
           f b a)
@@ -104,7 +101,7 @@ module Make (T : S) = struct
   end
 
   module PmapM = struct
-    let foldM (f : 'k -> 'x -> 'y -> 'y m) (map : ('k, 'x) Pmap.map) (init : 'y) : 'y m =
+    let foldM (f : 'k -> 'x -> 'y -> 'y t) (map : ('k, 'x) Pmap.map) (init : 'y) : 'y t =
       Pmap.fold
         (fun k v aM ->
           let@ a = aM in
@@ -113,8 +110,8 @@ module Make (T : S) = struct
         (return init)
 
 
-    let foldiM (f : int -> 'k -> 'x -> 'y -> 'y m) (map : ('k, 'x) Pmap.map) (init : 'y)
-      : 'y m
+    let foldiM (f : int -> 'k -> 'x -> 'y -> 'y t) (map : ('k, 'x) Pmap.map) (init : 'y)
+      : 'y t
       =
       ListM.fold_leftM
         (fun y (i, (k, x)) -> f i k x y)
@@ -131,8 +128,8 @@ module Make (T : S) = struct
         (return ())
 
 
-    let mapM (f : 'k -> 'v -> 'w m) (m : ('k, 'v) Pmap.map) (cmp : 'k -> 'k -> int)
-      : ('k, 'w) Pmap.map m
+    let mapM (f : 'k -> 'v -> 'w t) (m : ('k, 'v) Pmap.map) (cmp : 'k -> 'k -> int)
+      : ('k, 'w) Pmap.map t
       =
       foldM
         (fun k v m ->
