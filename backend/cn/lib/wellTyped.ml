@@ -1,5 +1,8 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
+module IT = IndexTerms
+module Loc = Locations
+module LC = LogicalConstraints
 module TE = TypeErrors
 module Res = Resource
 module Req = Request
@@ -1373,7 +1376,7 @@ module BaseTyping = struct
   module AT = ArgumentTypes
   open BT
 
-  type label_context = (AT.lt * label_kind * Locations.t) Sym.Map.t
+  type label_context = (AT.lt * Where.label * Locations.t) Sym.Map.t
 
   let check_against_core_bt loc msg2 cbt bt =
     Typing.embed_resultat

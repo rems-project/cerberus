@@ -375,11 +375,14 @@ module E = struct
   type 'a m =
     | Done of 'a
     | Error of TypeErrors.t
-    | ScopeExists of Loc.t * evaluation_scope * (bool -> 'a m)
+    | ScopeExists of Locations.t * evaluation_scope * (bool -> 'a m)
     | Value_of_c_variable of
-        Loc.t * Sym.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
+        Locations.t * Sym.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
     | Deref of
-        Loc.t * IT.Surface.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
+        Locations.t
+        * IT.Surface.t
+        * evaluation_scope option
+        * (IT.Surface.t option -> 'a m)
 
   let return x = Done x
 

@@ -47,7 +47,7 @@ module General = struct
       value : IT.t
     }
 
-  type uiinfo = TypeErrors.situation * TypeErrors.request_chain
+  type uiinfo = TypeErrors.situation * TypeErrors.RequestChain.t
 
   type case =
     | One of one
@@ -105,7 +105,7 @@ module General = struct
       let resource = Simplify.Request.simp simp_ctxt resource in
       let situation, request_chain = uiinfo in
       let step =
-        TypeErrors.
+        TypeErrors.RequestChain.
           { resource; loc = Some (fst info); reason = Some ("arg " ^ Sym.pp_string s) }
       in
       let request_chain = step :: request_chain in
@@ -469,7 +469,7 @@ module Special = struct
 
   let predicate_request loc situation (request, oinfo) =
     let requests =
-      [ TypeErrors.
+      [ TypeErrors.RequestChain.
           { resource = P request;
             loc = Option.map fst oinfo;
             reason = Option.map snd oinfo
@@ -546,7 +546,7 @@ module Special = struct
 
   let qpredicate_request loc situation (request, oinfo) =
     let requests =
-      [ TypeErrors.
+      [ TypeErrors.RequestChain.
           { resource = Q request;
             loc = Option.map fst oinfo;
             reason = Option.map snd oinfo
