@@ -2,29 +2,69 @@ module CF = Cerb_frontend
 module BT = BaseTypes
 module IT = IndexTerms
 module Loc = Locations
-module LC = LogicalConstraints
-module TE = TypeErrors
-module Res = Resource
-module Req = Request
-module Def = Definition
-module LRT = LogicalReturnTypes
-module AT = ArgumentTypes
-module LAT = LogicalArgumentTypes
-module Mu = Mucore
 module IdSet = Set.Make (Id)
-open Context
-open Global
-open TE
-open Pp
-open Typing
+open Pp.Infix
+
+let squotes, warn, dot, string, debug, item, colon, comma =
+  Pp.(squotes, warn, dot, string, debug, item, colon, comma)
+
+
+module type NoSolver = sig
+  (** TODO make this abstract, and one-way lifting functions? *)
+  type 'a m = 'a Typing.t
+
+  (* TODO: different error types for type errors, consistency errors, proof errors *)
+  type failure = Context.t * Explain.log -> TypeErrors.t
+
+  val pure : 'a m -> 'a m
+
+  val fail : failure -> 'a m
+
+  val bound_a : Sym.t -> bool m
+
+  val bound_l : Sym.t -> bool m
+
+  val get_a : Sym.t -> Context.basetype_or_value m
+
+  val get_l : Sym.t -> Context.basetype_or_value m
+
+  val add_a : Sym.t -> BT.t -> Context.l_info -> unit m
+
+  val add_l : Sym.t -> BT.t -> Context.l_info -> unit m
+
+  val get_struct_decl : Loc.t -> Sym.t -> Memory.struct_layout m
+
+  val get_struct_member_type : Loc.t -> Sym.t -> Id.t -> Sctypes.ctype m
+
+  val get_datatype : Loc.t -> Sym.t -> BT.dt_info m
+
+  val get_datatype_constr : Loc.t -> Sym.t -> BT.constr_info m
+
+  val get_resource_predicate_def : Loc.t -> Sym.t -> Definition.Predicate.t m
+
+  val get_logical_function_def : Loc.t -> Sym.t -> Definition.Function.t m
+
+  val get_lemma : Loc.t -> Sym.t -> (Cerb_location.t * ArgumentTypes.lemmat) m
+
+  val get_fun_decl
+    :  Loc.t ->
+    Sym.t ->
+    (Loc.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig) m
+
+  val ensure_base_type : Loc.t -> expect:BT.t -> BT.t -> unit m
+
+  val lift : 'a Or_TypeError.t -> 'a m
+end
+
+open (Typing : NoSolver)
+
+let fail typeErr = fail (fun _ -> typeErr)
 
 open Effectful.Make (Typing)
 
 let use_ity = ref true
 
-let ensure_base_type = Typing.ensure_base_type
-
-let illtyped_index_term (loc : Locations.t) it has ~expected ~reason (_ctxt, _log) =
+let illtyped_index_term (loc : Locations.t) it has ~expected ~reason =
   let reason =
     match reason with
     | Either.Left reason ->
@@ -32,16 +72,14 @@ let illtyped_index_term (loc : Locations.t) it has ~expected ~reason (_ctxt, _lo
       head ^ "\n" ^ pos
     | Either.Right reason -> reason
   in
-  { loc;
-    msg = TypeErrors.Illtyped_it { it = IT.pp it; has = BT.pp has; expected; reason }
-  }
+  TypeErrors.
+    { loc; msg = Illtyped_it { it = IT.pp it; has = BT.pp has; expected; reason } }
 
 
 let ensure_bits_type (loc : Loc.t) (has : BT.t) =
   match has with
   | BT.Bits (_sign, _n) -> return ()
-  | has ->
-    fail (fun _ -> { loc; msg = Mismatch { has = BT.pp has; expect = !^"bitvector" } })
+  | has -> fail { loc; msg = Mismatch { has = BT.pp has; expect = !^"bitvector" } }
 
 
 let ensure_z_fits_bits_type loc (sign, n) v =
@@ -49,7 +87,7 @@ let ensure_z_fits_bits_type loc (sign, n) v =
     return ()
   else (
     let err = !^"Value" ^^^ Pp.z v ^^^ !^"does not fit" ^^^ BT.pp (Bits (sign, n)) in
-    fail (fun _ -> { loc; msg = Generic err }))
+    fail { loc; msg = Generic err })
 
 
 let ensure_arith_type ~reason it =
@@ -117,9 +155,9 @@ let ensure_same_argument_number loc input_output has ~expect =
     return ()
   else (
     match input_output with
-    | `General -> fail (fun _ -> { loc; msg = Number_arguments { has; expect } })
-    | `Input -> fail (fun _ -> { loc; msg = Number_input_arguments { has; expect } })
-    | `Output -> fail (fun _ -> { loc; msg = Number_output_arguments { has; expect } }))
+    | `General -> fail { loc; msg = Number_arguments { has; expect } }
+    | `Input -> fail { loc; msg = Number_input_arguments { has; expect } }
+    | `Output -> fail { loc; msg = Number_output_arguments { has; expect } })
 
 
 let compare_by_fst_id (x, _) (y, _) = Id.compare x y
@@ -132,13 +170,13 @@ let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
         if IdSet.mem id needed then
           return (IdSet.remove id needed)
         else
-          fail (fun _ -> { loc; msg = Unexpected_member (List.map fst spec, id) }))
+          fail { loc; msg = Unexpected_member (List.map fst spec, id) })
       needed
       have
   in
   match IdSet.elements needed with
   | [] -> return ()
-  | missing :: _ -> fail (fun _ -> { loc; msg = Missing_member missing })
+  | missing :: _ -> fail { loc; msg = Missing_member missing }
 
 
 let correct_members_sorted_annotated loc spec have =
@@ -206,8 +244,8 @@ module WBT = struct
     match BT.pick_integer_encoding_type z with
     | Some bt -> return bt
     | None ->
-      fail (fun _ ->
-        { loc; msg = Generic (Pp.item "no standard encoding type for constant" (Pp.z z)) })
+      fail
+        { loc; msg = Generic (Pp.item "no standard encoding type for constant" (Pp.z z)) }
 end
 
 module WCT = struct
@@ -228,6 +266,7 @@ module WCT = struct
 end
 
 module WIT = struct
+  module LC = LogicalConstraints
   open BaseTypes
   open IndexTerms
 
@@ -280,7 +319,7 @@ module WIT = struct
     | [] ->
       assert (List.for_all (function [] -> true | _ -> false) cases);
       (match cases with
-       | [] -> fail (fun _ -> { loc; msg = Generic !^"Incomplete pattern" })
+       | [] -> fail { loc; msg = Generic !^"Incomplete pattern" }
        | _ -> return ())
       (* | [_(\*[]*\)] -> return () *)
       (* | _::_::_ -> fail (fun _ -> {loc; msg = Generic !^"Duplicate pattern"}) *)
@@ -358,7 +397,7 @@ module WIT = struct
               ^/^ !^prev_pos
               ^^ !^suggestion
             in
-            fail (fun _ -> { loc = pat_loc; msg = Redundant_pattern err }))
+            fail { loc = pat_loc; msg = Redundant_pattern err })
         []
         pats
     in
@@ -367,7 +406,7 @@ module WIT = struct
 
   let rec get_location_for_type = function
     | IT (Apply (name, _args), _, loc) ->
-      let@ def = Typing.get_logical_function_def loc name in
+      let@ def = get_logical_function_def loc name in
       return def.loc
     | IT ((MapSet (t, _, _) | Let (_, t)), _, _) -> get_location_for_type t
     | IT (Cons (it, _), _, _) | it -> return @@ IT.get_loc it
@@ -389,7 +428,7 @@ module WIT = struct
           match () with
           | () when is_a -> get_a s
           | () when is_l -> get_l s
-          | () -> fail (fun _ -> { loc; msg = TE.Unknown_variable s })
+          | () -> fail { loc; msg = TypeErrors.Unknown_variable s }
         in
         (match binding with
          | BaseType bt -> return (IT (Sym s, bt, loc))
@@ -718,10 +757,10 @@ module WIT = struct
         let@ () =
           match (IT.get_bt t, cbt) with
           | Integer, Loc () ->
-            fail (fun _ ->
+            fail
               { loc;
                 msg = Generic !^"cast from integer not allowed in bitvector version"
-              })
+              }
           | Loc (), Alloc_id -> return ()
           | Integer, Real -> return ()
           | Real, Integer -> return ()
@@ -741,7 +780,7 @@ module WIT = struct
               ^^^ BT.pp target
               ^^ dot
             in
-            fail (fun _ -> { loc; msg = Generic msg })
+            fail { loc; msg = Generic msg }
         in
         return (IT (Cast (cbt, t), cbt, loc))
       | MemberShift (t, tag, member) ->
@@ -853,14 +892,14 @@ module WIT = struct
           if BT.equal ix_bt (IT.get_bt i) then
             return ()
           else
-            fail (fun _ ->
+            fail
               { loc;
                 msg =
                   Generic
                     (Pp.item
                        "array_to_list: index type disagreement"
                        (Pp.list IT.pp_with_typ [ i; arr ]))
-              })
+              }
         in
         return (IT (ArrayToList (arr, i, len), BT.List bt, loc))
       | MapConst (index_bt, t) ->
@@ -886,7 +925,7 @@ module WIT = struct
            let@ body = infer body in
            return (IT (MapDef ((s, abt), body), Map (abt, IT.get_bt body), loc)))
       | Apply (name, args) ->
-        let@ def = Typing.get_logical_function_def loc name in
+        let@ def = get_logical_function_def loc name in
         let has_args, expect_args = (List.length args, List.length def.args) in
         let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
         let@ args =
@@ -902,7 +941,7 @@ module WIT = struct
         let@ t1 = infer t1 in
         pure
           (let@ () = add_l name (IT.get_bt t1) (loc, lazy (Pp.string "let-var")) in
-           let@ () = add_c loc (LC.T (IT.def_ name t1 loc)) in
+           (* let@ () = add_c loc (LC.T (IT.def_ name t1 loc)) in *)
            let@ t2 = infer t2 in
            return (IT (Let ((name, t1), t2), IT.get_bt t2, loc)))
       | Constructor (s, args) ->
@@ -937,7 +976,7 @@ module WIT = struct
         let@ () = cases_necessary (List.map (fun (pat, _) -> pat) cases) in
         let@ rbt =
           match rbt with
-          | None -> fail (fun _ -> { loc; msg = Empty_pattern })
+          | None -> fail { loc; msg = Empty_pattern }
           | Some rbt -> return rbt
         in
         return (IT (Match (e, cases), rbt, loc))
@@ -965,7 +1004,7 @@ let warn_when_not_quantifier_bt
   (ident : string)
   (loc : Locations.t)
   (bt : BaseTypes.t)
-  (sym : document option)
+  (sym : Pp.document option)
   : unit
   =
   if not (BT.equal bt quantifier_bt) then
@@ -981,6 +1020,7 @@ let warn_when_not_quantifier_bt
 
 
 module WReq = struct
+  module Req = Request
   open IndexTerms
 
   let welltyped loc r =
@@ -989,7 +1029,7 @@ module WReq = struct
       match Req.get_name r with
       | Owned (_ct, _init) -> return []
       | PName name ->
-        let@ def = Typing.get_resource_predicate_def loc name in
+        let@ def = get_resource_predicate_def loc name in
         return def.iargs
     in
     match r with
@@ -1023,16 +1063,16 @@ module WReq = struct
           if Z.lt Z.zero z then
             return step
           else
-            fail (fun _ ->
+            fail
               { loc;
                 msg =
                   Generic (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^"must be positive")
-              })
+              }
         | IT (SizeOf _, _, _) -> return step
         | IT (Cast (_, IT (SizeOf _, _, _)), _, _) -> return step
         | _ ->
           let hint = "Only constant iteration steps are allowed." in
-          fail (fun _ -> { loc; msg = NIA { it = p.step; hint } })
+          fail { loc; msg = NIA { it = p.step; hint } }
       in
       (*let@ () = match p.name with | (Owned (ct, _init)) -> let sz = Memory.size_of_ctype
         ct in if IT.equal step (IT.int_lit_ sz (snd p.q)) then return () else fail (fun _
@@ -1085,23 +1125,22 @@ module WReq = struct
            { name = p.name; pointer; q = p.q; q_loc = p.q_loc; step; permission; iargs })
 end
 
-let oarg_bt_of_pred loc = function
-  | Req.Owned (ct, _init) -> return (Memory.bt_of_sct ct)
-  | Req.PName pn ->
-    let@ def = Typing.get_resource_predicate_def loc pn in
-    return def.oarg_bt
-
-
-let oarg_bt loc = function
-  | Req.P pred -> oarg_bt_of_pred loc pred.name
-  | Req.Q pred ->
-    let@ item_bt = oarg_bt_of_pred loc pred.name in
-    return (BT.make_map_bt (snd pred.q) item_bt)
-
-
 module WRS = struct
+  let oarg_bt_of_pred loc = function
+    | Request.Owned (ct, _init) -> return (Memory.bt_of_sct ct)
+    | Request.PName pn ->
+      let@ def = get_resource_predicate_def loc pn in
+      return def.oarg_bt
+
+
+  let oarg_bt loc = function
+    | Request.P pred -> oarg_bt_of_pred loc pred.name
+    | Request.Q pred ->
+      let@ item_bt = oarg_bt_of_pred loc pred.name in
+      return (BT.make_map_bt (snd pred.q) item_bt)
+
+
   let welltyped loc (resource, bt) =
-    Pp.(debug 6 (lazy !^__LOC__));
     let@ resource = WReq.welltyped loc resource in
     let@ bt = WBT.is_bt loc bt in
     let@ oarg_bt = oarg_bt loc resource in
@@ -1110,7 +1149,7 @@ module WRS = struct
 end
 
 module WLC = struct
-  type t = LogicalConstraints.t
+  module LC = LogicalConstraints
 
   let welltyped loc lc =
     match lc with
@@ -1127,66 +1166,87 @@ module WLC = struct
 end
 
 module WLRT = struct
+  module LC = LogicalConstraints
   module LRT = LogicalReturnTypes
-  open LRT
 
-  type t = LogicalReturnTypes.t
-
-  let welltyped loc lrt =
+  let consistent loc lrt =
+    let open Typing in
     let rec aux =
       let here = Locations.other __LOC__ in
       function
-      | Define ((s, it), ((loc, _) as info), lrt) ->
+      | LRT.Define ((s, it), ((loc, _) as info), lrt) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
+        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
+        aux lrt
+      | Resource ((s, (re, re_oa_spec)), (loc, _), lrt) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
+        let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
+        aux lrt
+      | Constraint (lc, info, lrt) ->
+        (* TODO abort early if one of the constraints is the literal fase,
+           so that users are allowed to write such specs *)
+        let@ () = add_c (fst info) lc in
+        aux lrt
+      | I ->
+        let@ provable = provable loc in
+        let here = Locations.other __LOC__ in
+        (match provable (LC.T (IT.bool_ false here)) with
+         | `True ->
+           fail (fun ctxt_log ->
+             { loc; msg = Inconsistent_assumptions ("return type", ctxt_log) })
+         | `False -> return ())
+    in
+    pure (aux lrt)
+
+
+  let welltyped _loc lrt =
+    let rec aux = function
+      | LRT.Define ((s, it), ((loc, _) as info), lrt) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ it = WIT.infer it in
         let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
         let@ lrt = aux lrt in
-        return (Define ((s, it), info, lrt))
+        return (LRT.Define ((s, it), info, lrt))
       | Resource ((s, (re, re_oa_spec)), ((loc, _) as info), lrt) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
         let@ re, re_oa_spec = WRS.welltyped loc (re, re_oa_spec) in
         let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
         let@ lrt = aux lrt in
-        return (Resource ((s, (re, re_oa_spec)), info, lrt))
+        return (LRT.Resource ((s, (re, re_oa_spec)), info, lrt))
       | Constraint (lc, info, lrt) ->
         let@ lc = WLC.welltyped (fst info) lc in
-        let@ () = add_c (fst info) lc in
         let@ lrt = aux lrt in
-        return (Constraint (lc, info, lrt))
-      | I ->
-        let@ provable = provable loc in
-        let here = Locations.other __LOC__ in
-        let@ () =
-          match provable (LC.T (IT.bool_ false here)) with
-          | `True ->
-            fail (fun ctxt_log ->
-              { loc; msg = Inconsistent_assumptions ("return type", ctxt_log) })
-          | `False -> return ()
-        in
-        return I
+        return (LRT.Constraint (lc, info, lrt))
+      | I -> return LRT.I
     in
     pure (aux lrt)
 end
 
 module WRT = struct
-  type t = ReturnTypes.t
-
   let subst = ReturnTypes.subst
 
   let pp = ReturnTypes.pp
 
-  let welltyped loc rt =
-    Pp.(debug 6 (lazy !^__LOC__));
+  let consistent loc rt =
     pure
       (match rt with
-       | RT.Computational ((name, bt), info, lrt) ->
+       | ReturnTypes.Computational ((name, bt), info, lrt) ->
+         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+         let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
+         WLRT.consistent loc lrt)
+
+
+  let welltyped loc rt =
+    pure
+      (match rt with
+       | ReturnTypes.Computational ((name, bt), info, lrt) ->
          (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
          let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ lrt = WLRT.welltyped loc lrt in
-         return (RT.Computational ((name, bt), info, lrt)))
+         return (ReturnTypes.Computational ((name, bt), info, lrt)))
 end
 
 (* module WFalse = struct *)
@@ -1200,13 +1260,18 @@ end
 (* end *)
 
 let pure_and_no_initial_resources loc m =
+  let open Typing in
   pure
     (let@ (), _ = map_and_fold_resources loc (fun _re () -> (Deleted, ())) () in
      m)
 
 
 module WLAT = struct
-  let welltyped i_welltyped i_pp kind loc (at : 'i LAT.t) : 'i LAT.t m =
+  module LC = LogicalConstraints
+  module LAT = LogicalArgumentTypes
+
+  let consistent i_welltyped i_pp kind loc (at : 'i LAT.t) : unit m =
+    let open Typing in
     debug
       12
       (lazy
@@ -1216,23 +1281,17 @@ module WLAT = struct
       function
       | LAT.Define ((s, it), info, at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ it = WIT.infer it in
         let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
         let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
-        let@ at = aux at in
-        return (LAT.Define ((s, it), info, at))
-      | LAT.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
+        aux at
+      | LAT.Resource ((s, (re, re_oa_spec)), (loc, _), at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ re, re_oa_spec = WRS.welltyped (fst info) (re, re_oa_spec) in
         let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
-        let@ at = aux at in
-        return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
+        aux at
       | LAT.Constraint (lc, info, at) ->
-        let@ lc = WLC.welltyped (fst info) lc in
         let@ () = add_c (fst info) lc in
-        let@ at = aux at in
-        return (LAT.Constraint (lc, info, at))
+        aux at
       | LAT.I i ->
         let@ provable = provable loc in
         let here = Locations.other __LOC__ in
@@ -1243,6 +1302,34 @@ module WLAT = struct
               { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
           | `False -> return ()
         in
+        i_welltyped loc i
+    in
+    pure (aux at)
+
+
+  let welltyped i_welltyped i_pp kind loc (at : 'i LAT.t) : 'i LAT.t m =
+    debug
+      12
+      (lazy
+        (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (LAT.pp i_pp at)));
+    let rec aux = function
+      | LAT.Define ((s, it), info, at) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ it = WIT.infer it in
+        let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
+        let@ at = aux at in
+        return (LAT.Define ((s, it), info, at))
+      | LAT.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ re, re_oa_spec = WRS.welltyped (fst info) (re, re_oa_spec) in
+        let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
+        let@ at = aux at in
+        return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
+      | LAT.Constraint (lc, info, at) ->
+        let@ lc = WLC.welltyped (fst info) lc in
+        let@ at = aux at in
+        return (LAT.Constraint (lc, info, at))
+      | LAT.I i ->
         let@ i = i_welltyped loc i in
         return (LAT.I i)
     in
@@ -1250,6 +1337,23 @@ module WLAT = struct
 end
 
 module WAT = struct
+  module AT = ArgumentTypes
+
+  let consistent i_welltyped i_pp kind loc (at : 'i AT.t) : unit m =
+    debug
+      12
+      (lazy
+        (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (AT.pp i_pp at)));
+    let rec aux = function
+      | AT.Computational ((name, bt), info, at) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
+        aux at
+      | AT.L at -> WLAT.consistent i_welltyped i_pp kind loc at
+    in
+    pure (aux at)
+
+
   let welltyped i_welltyped i_pp kind loc (at : 'i AT.t) : 'i AT.t m =
     debug
       12
@@ -1270,6 +1374,12 @@ module WAT = struct
 end
 
 module WFT = struct
+  let consistent =
+    WAT.consistent
+      (fun loc rt -> pure_and_no_initial_resources loc (WRT.consistent loc rt))
+      WRT.pp
+
+
   let welltyped =
     WAT.welltyped
       (fun loc rt -> pure_and_no_initial_resources loc (WRT.welltyped loc rt))
@@ -1286,6 +1396,10 @@ end
    (pd.oargs)) *)
 
 module WLArgs = struct
+  module LC = LogicalConstraints
+  module LAT = LogicalArgumentTypes
+  module Mu = Mucore
+
   let rec typ ityp = function
     | Mu.Define (bound, info, lat) -> LAT.Define (bound, info, typ ityp lat)
     | Mu.Resource (bound, info, lat) -> LAT.Resource (bound, info, typ ityp lat)
@@ -1293,32 +1407,26 @@ module WLArgs = struct
     | Mu.I i -> LAT.I (ityp i)
 
 
-  let welltyped (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.arguments_l)
-    : 'j Mu.arguments_l m
+  let consistent (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.arguments_l)
+    : unit m
     =
+    let open Typing in
     let rec aux =
       let here = Locations.other __LOC__ in
-      Pp.(debug 6 (lazy !^__LOC__));
       function
       | Mu.Define ((s, it), ((loc, _) as info), at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ it = WIT.infer it in
         let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
         let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
-        let@ at = aux at in
-        return (Mu.Define ((s, it), info, at))
-      | Mu.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
+        aux at
+      | Mu.Resource ((s, (re, re_oa_spec)), (loc, _), at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ re, re_oa_spec = WRS.welltyped (fst info) (re, re_oa_spec) in
         let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
-        let@ at = aux at in
-        return (Mu.Resource ((s, (re, re_oa_spec)), info, at))
+        aux at
       | Mu.Constraint (lc, info, at) ->
-        let@ lc = WLC.welltyped (fst info) lc in
         let@ () = add_c (fst info) lc in
-        let@ at = aux at in
-        return (Mu.Constraint (lc, info, at))
+        aux at
       | Mu.I i ->
         let@ provable = provable loc in
         let here = Locations.other __LOC__ in
@@ -1329,6 +1437,32 @@ module WLArgs = struct
               { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
           | `False -> return ()
         in
+        i_welltyped loc i
+    in
+    pure (aux at)
+
+
+  let welltyped (i_welltyped : Loc.t -> 'i -> 'j m) _kind loc (at : 'i Mu.arguments_l)
+    : 'j Mu.arguments_l m
+    =
+    let rec aux = function
+      | Mu.Define ((s, it), ((loc, _) as info), at) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ it = WIT.infer it in
+        let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
+        let@ at = aux at in
+        return (Mu.Define ((s, it), info, at))
+      | Mu.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ re, re_oa_spec = WRS.welltyped (fst info) (re, re_oa_spec) in
+        let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
+        let@ at = aux at in
+        return (Mu.Resource ((s, (re, re_oa_spec)), info, at))
+      | Mu.Constraint (lc, info, at) ->
+        let@ lc = WLC.welltyped (fst info) lc in
+        let@ at = aux at in
+        return (Mu.Constraint (lc, info, at))
+      | Mu.I i ->
         let@ i = i_welltyped loc i in
         return (Mu.I i)
     in
@@ -1336,9 +1470,32 @@ module WLArgs = struct
 end
 
 module WArgs = struct
+  module AT = ArgumentTypes
+  module Mu = Mucore
+
   let rec typ ityp = function
     | Mu.Computational (bound, info, at) -> AT.Computational (bound, info, typ ityp at)
     | Mu.L lat -> AT.L (WLArgs.typ ityp lat)
+
+
+  let consistent : (Loc.t -> 'i -> 'j m) -> string -> Loc.t -> 'i Mu.arguments -> unit m =
+    fun (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.arguments) ->
+    debug 6 (lazy !^__LOC__);
+    debug
+      12
+      (lazy
+        (item
+           ("checking consistency of " ^ kind ^ " at " ^ Loc.to_string loc)
+           (CF.Pp_ast.pp_doc_tree
+              (Mucore.dtree_of_arguments (fun _i -> Dleaf !^"...") at))));
+    let rec aux = function
+      | Mu.Computational ((name, bt), info, at) ->
+        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+        let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
+        aux at
+      | Mu.L at -> WLArgs.consistent i_welltyped kind loc at
+    in
+    pure (aux at)
 
 
   let welltyped
@@ -1369,7 +1526,6 @@ module WArgs = struct
 end
 
 module BaseTyping = struct
-  open Typing
   open TypeErrors
   module BT = BaseTypes
   module RT = ReturnTypes
@@ -1379,13 +1535,15 @@ module BaseTyping = struct
   type label_context = (AT.lt * Where.label * Locations.t) Sym.Map.t
 
   let check_against_core_bt loc msg2 cbt bt =
-    Typing.lift
+    lift
       (CoreTypeChecks.check_against_core_bt
          (fun msg ->
            Or_TypeError.fail { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
          cbt
          bt)
 
+
+  module Mu = Mucore
 
   let rec check_and_bind_pattern bt = function
     | Mu.Pattern (loc, anns, _, p_) ->
@@ -1412,8 +1570,7 @@ module BaseTyping = struct
         match BT.is_list_bt bt with
         | Some bt -> return bt
         | None ->
-          fail (fun _ ->
-            { loc; msg = Generic (Pp.item "list pattern match against" (BT.pp bt)) })
+          fail { loc; msg = Generic (Pp.item "list pattern match against" (BT.pp bt)) }
       in
       let@ ctor, pats =
         match (ctor, pats) with
@@ -1421,22 +1578,20 @@ module BaseTyping = struct
           let@ _item_bt = get_item_bt bt in
           return (Mu.Cnil cbt, [])
         | Cnil _, _ ->
-          fail (fun _ ->
-            { loc; msg = Number_arguments { has = List.length pats; expect = 0 } })
+          fail { loc; msg = Number_arguments { has = List.length pats; expect = 0 } }
         | Ccons, [ p1; p2 ] ->
           let@ item_bt = get_item_bt bt in
           let@ p1 = check_and_bind_pattern item_bt p1 in
           let@ p2 = check_and_bind_pattern bt p2 in
           return (Mu.Ccons, [ p1; p2 ])
         | Ccons, _ ->
-          fail (fun _ ->
-            { loc; msg = Number_arguments { has = List.length pats; expect = 2 } })
+          fail { loc; msg = Number_arguments { has = List.length pats; expect = 2 } }
         | Ctuple, pats ->
           let@ bts =
             match BT.is_tuple_bt bt with
             | Some bts when List.length bts == List.length pats -> return bts
             | _ ->
-              fail (fun _ ->
+              fail
                 { loc;
                   msg =
                     Generic
@@ -1444,7 +1599,7 @@ module BaseTyping = struct
                          (Int.to_string (List.length pats)
                           ^ "-length tuple pattern match against")
                          (BT.pp bt))
-                })
+                }
           in
           let@ pats = ListM.map2M check_and_bind_pattern bts pats in
           return (Mu.Ctuple, pats)
@@ -1499,12 +1654,12 @@ module BaseTyping = struct
       if BT.fits_range (Option.get (BT.is_bits_bt bt)) z then
         return (Mu.OV (bt, OVinteger iv))
       else
-        fail (fun _ ->
+        fail
           { loc;
             msg =
               Generic
                 (!^"Value " ^^^ Pp.z z ^^^ !^"does not fit in expected type" ^^^ BT.pp bt)
-          })
+          }
     | _ ->
       let@ ov = infer_object_value loc ov_original in
       let@ () = ensure_base_type loc ~expect:bt (Mu.bt_of_object_value ov) in
@@ -1575,9 +1730,7 @@ module BaseTyping = struct
   let rec infer_pexpr : 'TY. 'TY Mu.pexpr -> BT.t Mu.pexpr m =
     fun pe ->
     let open Mu in
-    Pp.debug
-      22
-      (lazy (Pp.item "WellTyped.BaseTyping.infer_pexpr" (Pp_mucore_ast.pp_pexpr pe)));
+    Pp.debug 22 (lazy (Pp.item __FUNCTION__ (Pp_mucore_ast.pp_pexpr pe)));
     let (Pexpr (loc, annots, _, pe_)) = pe in
     match integer_annot annots with
     | Some ity when !use_ity ->
@@ -1703,8 +1856,8 @@ module BaseTyping = struct
                  let@ () = ensure_base_type loc ~expect:(List ibt) (bt_of_pexpr xs) in
                  return (bt_of_pexpr xs)
                | _ ->
-                 fail (fun _ ->
-                   { loc; msg = Number_arguments { has = List.length pes; expect = 2 } }))
+                 fail
+                   { loc; msg = Number_arguments { has = List.length pes; expect = 2 } })
             | Ctuple -> return (BT.Tuple (List.map bt_of_pexpr pes))
             | Carray ->
               let ibt = bt_of_pexpr (List.hd pes) in
@@ -1796,21 +1949,21 @@ module BaseTyping = struct
         let@ () = ensure_bits_type loc bt in
         return bt
       | None, _ ->
-        fail (fun _ ->
+        fail
           { loc;
             msg =
               Generic
                 (Pp.item "untypeable mucore function" (Pp_mucore_ast.pp_pexpr orig_pe))
-          })
+          }
       | Some `Returns_Integer, None ->
-        fail (fun _ ->
+        fail
           { loc;
             msg =
               Generic
                 (Pp.item
                    "mucore function requires type-annotation"
                    (Pp_mucore_ast.pp_pexpr orig_pe))
-          })
+          }
     in
     return (bt, pexps)
 
@@ -1819,10 +1972,7 @@ module BaseTyping = struct
     let open Cnprog in
     Pp.debug
       22
-      (lazy
-        (Pp.item
-           "WellTyped.check_cn_statement"
-           (CF.Pp_ast.pp_doc_tree (dtree_of_statement stmt))));
+      (lazy (Pp.item __FUNCTION__ (CF.Pp_ast.pp_doc_tree (dtree_of_statement stmt))));
     match stmt with
     | Pack_unpack (pack_unpack, pt) ->
       let@ p_pt = WReq.welltyped loc (P pt) in
@@ -1886,7 +2036,7 @@ module BaseTyping = struct
         let wrong_number_arguments () =
           let has = List.length its in
           let expect = AT.count_computational lemma_typ in
-          fail (fun _ -> { loc; msg = Number_arguments { has; expect } })
+          fail { loc; msg = Number_arguments { has; expect } }
         in
         let rec check_args lemma_typ its =
           match (lemma_typ, its) with
@@ -1935,9 +2085,7 @@ module BaseTyping = struct
   let rec infer_expr : 'TY. label_context -> 'TY Mu.expr -> BT.t Mu.expr m =
     fun label_context e ->
     let open Mu in
-    Pp.debug
-      22
-      (lazy (Pp.item "WellTyped.BaseTyping.infer_expr" (Pp_mucore_ast.pp_expr e)));
+    Pp.debug 22 (lazy (Pp.item __FUNCTION__ (Pp_mucore_ast.pp_expr e)));
     let (Expr (loc, annots, _, e_)) = e in
     match integer_annot annots with
     | Some ity when !use_ity ->
@@ -2062,12 +2210,12 @@ module BaseTyping = struct
               assert (not is_variadic);
               return (snd ret_v_ct, List.map fst arg_r_cts)
             | _ ->
-              fail (fun _ ->
+              fail
                 { loc;
                   msg =
                     Generic
                       (Pp.item "not a function pointer at call-site" (Sctypes.pp act.ct))
-                })
+                }
           in
           let@ f_pe = check_pexpr (Loc ()) f_pe in
           (* TODO: we'd have to check the arguments against the function type, but we
@@ -2116,16 +2264,14 @@ module BaseTyping = struct
           (* copying from check.ml *)
           let@ lt, _lkind =
             match Sym.Map.find_opt l label_context with
-            | None ->
-              fail (fun _ ->
-                { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l) })
+            | None -> fail { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l) }
             | Some (lt, lkind, _) -> return (lt, lkind)
           in
           let@ pes =
             let wrong_number_arguments () =
               let has = List.length pes in
               let expect = AT.count_computational lt in
-              fail (fun _ -> { loc; msg = Number_arguments { has; expect } })
+              fail { loc; msg = Number_arguments { has; expect } }
             in
             let rec check_args lt pes =
               match (lt, pes) with
@@ -2173,16 +2319,23 @@ module BaseTyping = struct
 end
 
 module WLabel = struct
-  open Mu
+  open Mucore
 
   let typ l = WArgs.typ (fun _body -> False.False) l
+
+  let consistent (loc : Loc.t) (lt : _ expr arguments) : unit m =
+    WArgs.consistent (fun _loc _body -> return ()) "loop/label" loc lt
+
 
   let welltyped (loc : Loc.t) (lt : _ expr arguments) : _ expr arguments m =
     WArgs.welltyped (fun _loc body -> return body) "loop/label" loc lt
 end
 
 module WProc = struct
-  open Mu
+  module AT = ArgumentTypes
+  module LAT = LogicalArgumentTypes
+  module Mu = Mucore
+  open Mucore
 
   let label_context function_rt label_defs =
     Pmap.fold
@@ -2205,9 +2358,42 @@ module WProc = struct
 
   let typ p = WArgs.typ (fun (_body, _labels, rt) -> rt) p
 
+  let consistent : Loc.t -> _ Mu.args_and_body -> unit m =
+    fun (loc : Loc.t) (at : 'TY1 Mu.args_and_body) ->
+    WArgs.consistent
+      (fun loc (_body, labels, rt) ->
+        let@ () = pure_and_no_initial_resources loc (WRT.consistent loc rt) in
+        let@ () =
+          PmapM.iterM
+            (fun _sym def ->
+              match def with
+              | Return _ -> return ()
+              | Label (loc, label_args_and_body, _annots, _parsed_spec, _loop_info) ->
+                pure_and_no_initial_resources
+                  loc
+                  (WLabel.consistent loc label_args_and_body))
+            labels
+        in
+        PmapM.iterM
+          (fun _sym def ->
+            match def with
+            | Return _ -> return ()
+            | Label (loc, label_args_and_body, _annots, _parsed_spec, _loop_info) ->
+              pure_and_no_initial_resources
+                loc
+                (WArgs.consistent
+                   (fun _loc _label_body -> return ())
+                   "label"
+                   loc
+                   label_args_and_body))
+          labels)
+      "function"
+      loc
+      at
+
+
   let welltyped : Loc.t -> _ Mu.args_and_body -> _ Mu.args_and_body m =
     fun (loc : Loc.t) (at : 'TY1 Mu.args_and_body) ->
-    Pp.(debug 6 (lazy !^__LOC__));
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
         let@ rt = pure_and_no_initial_resources loc (WRT.welltyped loc rt) in
@@ -2255,6 +2441,45 @@ module WProc = struct
 end
 
 module WRPD = struct
+  module Def = Definition
+  module LC = LogicalConstraints
+
+  let consistent Def.Predicate.{ loc; pointer; iargs; oarg_bt = _; clauses } =
+    let open Typing in
+    (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
+    pure
+      (let@ () = add_l pointer BT.(Loc ()) (loc, lazy (Pp.string "ptr-var")) in
+       let@ () =
+         ListM.iterM (fun (s, bt) -> add_l s bt (loc, lazy (Pp.string "input-var"))) iargs
+       in
+       match clauses with
+       | None -> return ()
+       | Some clauses ->
+         let@ _ =
+           ListM.fold_leftM
+             (fun acc Def.Clause.{ loc; guard; packing_ft } ->
+               let here = Locations.other __LOC__ in
+               let negated_guards =
+                 List.map (fun clause -> IT.not_ clause.Def.Clause.guard here) acc
+               in
+               pure
+                 (let@ () = add_c loc (LC.T guard) in
+                  let@ () = add_c loc (LC.T (IT.and_ negated_guards here)) in
+                  let@ () =
+                    WLAT.consistent
+                      (fun _loc _it -> return ())
+                      IT.pp
+                      "clause"
+                      loc
+                      packing_ft
+                  in
+                  return (acc @ [ Def.Clause.{ loc; guard; packing_ft } ])))
+             []
+             clauses
+         in
+         return ())
+
+
   let welltyped Def.Predicate.{ loc; pointer; iargs; oarg_bt; clauses } =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure
@@ -2276,14 +2501,8 @@ module WRPD = struct
              ListM.fold_leftM
                (fun acc Def.Clause.{ loc; guard; packing_ft } ->
                  let@ guard = WIT.check loc BT.Bool guard in
-                 let here = Locations.other __LOC__ in
-                 let negated_guards =
-                   List.map (fun clause -> IT.not_ clause.Def.Clause.guard here) acc
-                 in
                  pure
-                   (let@ () = add_c loc (LC.T guard) in
-                    let@ () = add_c loc (LC.T (IT.and_ negated_guards here)) in
-                    let@ packing_ft =
+                   (let@ packing_ft =
                       WLAT.welltyped
                         (fun loc it -> WIT.check loc oarg_bt it)
                         IT.pp
@@ -2329,17 +2548,26 @@ module WLFD = struct
 end
 
 module WLemma = struct
+  let consistent loc _lemma_s lemma_typ =
+    WAT.consistent
+      (fun loc lrt -> pure_and_no_initial_resources loc (WLRT.consistent loc lrt))
+      LogicalReturnTypes.pp
+      "lemma"
+      loc
+      lemma_typ
+
+
   let welltyped loc _lemma_s lemma_typ =
     WAT.welltyped
       (fun loc lrt -> pure_and_no_initial_resources loc (WLRT.welltyped loc lrt))
-      LRT.pp
+      LogicalReturnTypes.pp
       "lemma"
       loc
       lemma_typ
 end
 
 module WDT = struct
-  open Mu
+  open Mucore
 
   let welltyped (dt_name, { loc; cases }) =
     let@ _ =
@@ -2434,7 +2662,7 @@ module WDT = struct
                           ^/^ !^"Indirect recursion via map, set, record,"
                           ^^^ !^"or tuple types is not permitted."
                         in
-                        fail (fun _ -> { loc; msg = Generic err }))
+                        fail { loc; msg = Generic err })
                     args)
                 cases)
             scc)

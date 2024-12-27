@@ -72,9 +72,9 @@ let pause_to_result (pause : 'a pause) : 'a Or_TypeError.t = Result.map fst paus
 
 let pure (m : 'a t) : 'a t =
   fun s ->
-  Solver.push (Option.get s.solver);
+  Option.iter Solver.push s.solver;
   let outcome = match m s with Ok (a, _) -> Ok (a, s) | Error e -> Error e in
-  Solver.pop (Option.get s.solver) 1;
+  Option.iter (fun s -> Solver.pop s 1) s.solver;
   outcome
 
 
