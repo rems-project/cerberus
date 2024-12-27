@@ -322,9 +322,9 @@ let verify
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
-      let check (functions, lemmas) =
+      let check (functions, global_var_constraints, lemmas) =
         let open Typing in
-        let@ errors = Check.time_check_c_functions functions in
+        let@ errors = Check.time_check_c_functions (global_var_constraints, functions) in
         if not quiet then
           List.iter
             (fun (fn, err) ->

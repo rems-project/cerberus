@@ -1,5 +1,3 @@
-type solver
-
 type 'a t
 
 type 'a m = 'a t
