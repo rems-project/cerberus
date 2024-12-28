@@ -1,46 +1,50 @@
 module type NoSolver = sig
-  type 'a m = 'a Typing.t
+  type 'a t = 'a Typing.t
 
   type failure = Context.t * Explain.log -> TypeErrors.t
 
-  val pure : 'a m -> 'a m
+  val return : 'a -> 'a t
 
-  val fail : failure -> 'a m
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
 
-  val bound_a : Sym.t -> bool m
+  val pure : 'a t -> 'a t
 
-  val bound_l : Sym.t -> bool m
+  val fail : failure -> 'a t
 
-  val get_a : Sym.t -> Context.basetype_or_value m
+  val bound_a : Sym.t -> bool t
 
-  val get_l : Sym.t -> Context.basetype_or_value m
+  val bound_l : Sym.t -> bool t
 
-  val add_a : Sym.t -> BaseTypes.t -> Context.l_info -> unit m
+  val get_a : Sym.t -> Context.basetype_or_value t
 
-  val add_l : Sym.t -> BaseTypes.t -> Context.l_info -> unit m
+  val get_l : Sym.t -> Context.basetype_or_value t
 
-  val get_struct_decl : Locations.t -> Sym.t -> Memory.struct_layout m
+  val add_a : Sym.t -> BaseTypes.t -> Context.l_info -> unit t
 
-  val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> Sctypes.ctype m
+  val add_l : Sym.t -> BaseTypes.t -> Context.l_info -> unit t
 
-  val get_datatype : Locations.t -> Sym.t -> BaseTypes.dt_info m
+  val get_struct_decl : Locations.t -> Sym.t -> Memory.struct_layout t
 
-  val get_datatype_constr : Locations.t -> Sym.t -> BaseTypes.constr_info m
+  val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> Sctypes.ctype t
 
-  val get_resource_predicate_def : Locations.t -> Sym.t -> Definition.Predicate.t m
+  val get_datatype : Locations.t -> Sym.t -> BaseTypes.dt_info t
 
-  val get_logical_function_def : Locations.t -> Sym.t -> Definition.Function.t m
+  val get_datatype_constr : Locations.t -> Sym.t -> BaseTypes.constr_info t
 
-  val get_lemma : Locations.t -> Sym.t -> (Locations.t * ArgumentTypes.lemmat) m
+  val get_resource_predicate_def : Locations.t -> Sym.t -> Definition.Predicate.t t
+
+  val get_logical_function_def : Locations.t -> Sym.t -> Definition.Function.t t
+
+  val get_lemma : Locations.t -> Sym.t -> (Locations.t * ArgumentTypes.lemmat) t
 
   val get_fun_decl
     :  Locations.t ->
     Sym.t ->
-    (Locations.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig) m
+    (Locations.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig) t
 
-  val ensure_base_type : Locations.t -> expect:BaseTypes.t -> BaseTypes.t -> unit m
+  val ensure_base_type : Locations.t -> expect:BaseTypes.t -> BaseTypes.t -> unit t
 
-  val lift : 'a Or_TypeError.t -> 'a m
+  val lift : 'a Or_TypeError.t -> 'a t
 end
 
 val use_ity : bool ref
