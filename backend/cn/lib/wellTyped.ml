@@ -66,8 +66,6 @@ open Monad
 
 let fail typeErr = fail (fun _ -> typeErr)
 
-module EffTyping = Effectful.Make (Typing)
-
 open Effectful.Make (Monad)
 
 let use_ity = ref true
@@ -1173,40 +1171,7 @@ module WLC = struct
 end
 
 module WLRT = struct
-  module LC = LogicalConstraints
   module LRT = LogicalReturnTypes
-
-  let consistent loc lrt =
-    let open Typing in
-    let rec aux =
-      let here = Locations.other __LOC__ in
-      function
-      | LRT.Define ((s, it), ((loc, _) as info), lrt) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
-        aux lrt
-      | Resource ((s, (re, re_oa_spec)), (loc, _), lrt) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
-        aux lrt
-      | Constraint (lc, info, lrt) ->
-        (* TODO abort early if one of the constraints is the literal fase,
-           so that users are allowed to write such specs *)
-        let@ () = add_c (fst info) lc in
-        aux lrt
-      | I ->
-        let@ provable = provable loc in
-        let here = Locations.other __LOC__ in
-        (match provable (LC.T (IT.bool_ false here)) with
-         | `True ->
-           fail (fun ctxt_log ->
-             { loc; msg = Inconsistent_assumptions ("return type", ctxt_log) })
-         | `False -> return ())
-    in
-    pure (aux lrt)
-
 
   let welltyped _loc lrt =
     let rec aux = function
@@ -1234,16 +1199,6 @@ end
 module WRT = struct
   let pp = ReturnTypes.pp
 
-  let consistent loc rt =
-    let open Typing in
-    pure
-      (match rt with
-       | ReturnTypes.Computational ((name, bt), info, lrt) ->
-         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-         let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
-         WLRT.consistent loc lrt)
-
-
   let welltyped loc rt =
     pure
       (match rt with
@@ -1265,53 +1220,8 @@ end
 (*   let welltyped _ False.False = return False.False *)
 (* end *)
 
-let pure_and_no_initial_resources loc m =
-  let open Typing in
-  pure
-    (let@ (), _ = map_and_fold_resources loc (fun _re () -> (Deleted, ())) () in
-     m)
-
-
 module WLAT = struct
-  module LC = LogicalConstraints
   module LAT = LogicalArgumentTypes
-
-  let consistent i_welltyped i_pp kind loc (at : 'i LAT.t) : unit Typing.t =
-    let open Typing in
-    debug
-      12
-      (lazy
-        (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (LAT.pp i_pp at)));
-    let rec aux =
-      let here = Locations.other __LOC__ in
-      function
-      | LAT.Define ((s, it), info, at) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
-        aux at
-      | LAT.Resource ((s, (re, re_oa_spec)), (loc, _), at) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
-        aux at
-      | LAT.Constraint (lc, info, at) ->
-        let@ () = add_c (fst info) lc in
-        aux at
-      | LAT.I i ->
-        let@ provable = provable loc in
-        let here = Locations.other __LOC__ in
-        let@ () =
-          match provable (LC.T (IT.bool_ false here)) with
-          | `True ->
-            fail (fun ctxt_log ->
-              { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
-          | `False -> return ()
-        in
-        i_welltyped loc i
-    in
-    pure (aux at)
-
 
   let welltyped i_welltyped i_pp kind loc (at : 'i LAT.t) : 'i LAT.t m =
     debug
@@ -1345,22 +1255,6 @@ end
 module WAT = struct
   module AT = ArgumentTypes
 
-  let consistent i_welltyped i_pp kind loc (at : 'i AT.t) : unit Typing.t =
-    let open Typing in
-    debug
-      12
-      (lazy
-        (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (AT.pp i_pp at)));
-    let rec aux = function
-      | AT.Computational ((name, bt), info, at) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
-        aux at
-      | AT.L at -> WLAT.consistent i_welltyped i_pp kind loc at
-    in
-    pure (aux at)
-
-
   let welltyped i_welltyped i_pp kind loc (at : 'i AT.t) : 'i AT.t m =
     debug
       12
@@ -1381,12 +1275,6 @@ module WAT = struct
 end
 
 module WFT = struct
-  let consistent =
-    WAT.consistent
-      (fun loc rt -> pure_and_no_initial_resources loc (WRT.consistent loc rt))
-      WRT.pp
-
-
   let welltyped = WAT.welltyped (fun loc rt -> pure (WRT.welltyped loc rt)) WRT.pp
 end
 
@@ -1402,7 +1290,6 @@ end
    (pd.oargs)) *)
 
 module WLArgs = struct
-  module LC = LogicalConstraints
   module LAT = LogicalArgumentTypes
   module Mu = Mucore
 
@@ -1411,41 +1298,6 @@ module WLArgs = struct
     | Mu.Resource (bound, info, lat) -> LAT.Resource (bound, info, typ ityp lat)
     | Mu.Constraint (lc, info, lat) -> LAT.Constraint (lc, info, typ ityp lat)
     | Mu.I i -> LAT.I (ityp i)
-
-
-  let consistent (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.arguments_l)
-    : unit m
-    =
-    let open Typing in
-    let rec aux =
-      let here = Locations.other __LOC__ in
-      function
-      | Mu.Define ((s, it), ((loc, _) as info), at) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_l s (IT.get_bt it) (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_c (fst info) (LC.T (IT.def_ s it here)) in
-        aux at
-      | Mu.Resource ((s, (re, re_oa_spec)), (loc, _), at) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-        let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
-        aux at
-      | Mu.Constraint (lc, info, at) ->
-        let@ () = add_c (fst info) lc in
-        aux at
-      | Mu.I i ->
-        let@ provable = provable loc in
-        let here = Locations.other __LOC__ in
-        let@ () =
-          match provable (LC.T (IT.bool_ false here)) with
-          | `True ->
-            fail (fun ctxt_log ->
-              { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
-          | `False -> return ()
-        in
-        i_welltyped loc i
-    in
-    pure (aux at)
 
 
   let welltyped (i_welltyped : Loc.t -> 'i -> 'j m) _kind loc (at : 'i Mu.arguments_l)
@@ -1482,26 +1334,6 @@ module WArgs = struct
   let rec typ ityp = function
     | Mu.Computational (bound, info, at) -> AT.Computational (bound, info, typ ityp at)
     | Mu.L lat -> AT.L (WLArgs.typ ityp lat)
-
-
-  let consistent : (Loc.t -> 'i -> 'j m) -> string -> Loc.t -> 'i Mu.arguments -> unit m =
-    fun (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.arguments) ->
-    debug 6 (lazy !^__LOC__);
-    debug
-      12
-      (lazy
-        (item
-           ("checking consistency of " ^ kind ^ " at " ^ Loc.to_string loc)
-           (CF.Pp_ast.pp_doc_tree
-              (Mucore.dtree_of_arguments (fun _i -> Dleaf !^"...") at))));
-    let rec aux = function
-      | Mu.Computational ((name, bt), info, at) ->
-        (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-        let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
-        aux at
-      | Mu.L at -> WLArgs.consistent i_welltyped kind loc at
-    in
-    pure (aux at)
 
 
   let welltyped
@@ -2354,29 +2186,6 @@ module WProc = struct
 
   let typ p = WArgs.typ (fun (_body, _labels, rt) -> rt) p
 
-  let consistent : Loc.t -> _ Mu.args_and_body -> unit m =
-    fun (loc : Loc.t) (at : 'TY1 Mu.args_and_body) ->
-    WArgs.consistent
-      (fun loc (_body, labels, rt) ->
-        let@ () = pure_and_no_initial_resources loc (WRT.consistent loc rt) in
-        PmapM.iterM
-          (fun _sym def ->
-            match def with
-            | Return _ -> return ()
-            | Label (loc, label_args_and_body, _annots, _parsed_spec, _loop_info) ->
-              pure_and_no_initial_resources
-                loc
-                (WArgs.consistent
-                   (fun _loc _label_body -> return ())
-                   "label"
-                   loc
-                   label_args_and_body))
-          labels)
-      "function"
-      loc
-      at
-
-
   let welltyped : Loc.t -> _ Mu.args_and_body -> _ Mu.args_and_body m =
     fun (loc : Loc.t) (at : 'TY1 Mu.args_and_body) ->
     WArgs.welltyped
@@ -2411,44 +2220,6 @@ end
 
 module WRPD = struct
   module Def = Definition
-  module LC = LogicalConstraints
-
-  let consistent Def.Predicate.{ loc; pointer; iargs; oarg_bt = _; clauses } =
-    let open Typing in
-    let open EffTyping in
-    (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
-    pure
-      (let@ () = add_l pointer BT.(Loc ()) (loc, lazy (Pp.string "ptr-var")) in
-       let@ () =
-         ListM.iterM (fun (s, bt) -> add_l s bt (loc, lazy (Pp.string "input-var"))) iargs
-       in
-       match clauses with
-       | None -> return ()
-       | Some clauses ->
-         let@ _ =
-           ListM.fold_leftM
-             (fun acc Def.Clause.{ loc; guard; packing_ft } ->
-               let here = Locations.other __LOC__ in
-               let negated_guards =
-                 List.map (fun clause -> IT.not_ clause.Def.Clause.guard here) acc
-               in
-               pure
-                 (let@ () = add_c loc (LC.T guard) in
-                  let@ () = add_c loc (LC.T (IT.and_ negated_guards here)) in
-                  let@ () =
-                    WLAT.consistent
-                      (fun _loc _it -> return ())
-                      IT.pp
-                      "clause"
-                      loc
-                      packing_ft
-                  in
-                  return (acc @ [ Def.Clause.{ loc; guard; packing_ft } ])))
-             []
-             clauses
-         in
-         return ())
-
 
   let welltyped Def.Predicate.{ loc; pointer; iargs; oarg_bt; clauses } =
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -2518,15 +2289,6 @@ module WLFD = struct
 end
 
 module WLemma = struct
-  let consistent loc _lemma_s lemma_typ =
-    WAT.consistent
-      (fun loc lrt -> pure_and_no_initial_resources loc (WLRT.consistent loc lrt))
-      LogicalReturnTypes.pp
-      "lemma"
-      loc
-      lemma_typ
-
-
   let welltyped loc _lemma_s lemma_typ =
     WAT.welltyped
       (fun loc lrt -> pure (WLRT.welltyped loc lrt))
@@ -2646,21 +2408,15 @@ module Exposed = struct
 
   let datatype_recursion = WDT.check_recursion_ok
 
-  let lemma_consistent = WLemma.consistent
-
   let lemma = WLemma.welltyped
 
   let function_ = WLFD.welltyped
 
   let predicate = WRPD.welltyped
 
-  let predicate_consistent = WRPD.consistent
-
   let label_context = WProc.label_context
 
   let to_argument_type = WProc.typ
-
-  let procedure_consistent = WProc.consistent
 
   let procedure = WProc.welltyped
 
@@ -2671,8 +2427,6 @@ module Exposed = struct
   let check_expr = BaseTyping.check_expr
 
   let function_type = WFT.welltyped
-
-  let function_type_consistent = WFT.consistent
 
   let logical_constraint = WLC.welltyped
 

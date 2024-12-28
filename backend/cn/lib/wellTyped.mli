@@ -80,12 +80,6 @@ module Exposed : sig
     LogicalConstraints.t ->
     LogicalConstraints.t Typing.t
 
-  val function_type_consistent
-    :  string ->
-    Locations.t ->
-    ReturnTypes.t ArgumentTypes.t ->
-    unit Typing.t
-
   val function_type
     :  string ->
     Locations.t ->
@@ -119,19 +113,9 @@ module Exposed : sig
 
   val to_argument_type : ('a * 'b * 'c) Mucore.arguments -> 'c ArgumentTypes.t
 
-  val procedure_consistent : Locations.t -> 'TY1 Mucore.args_and_body -> unit Typing.t
-
-  val predicate_consistent : Definition.Predicate.t -> unit Typing.m
-
   val predicate : Definition.Predicate.t -> Definition.Predicate.t Typing.t
 
   val function_ : Definition.Function.t -> Definition.Function.t Typing.t
-
-  val lemma_consistent
-    :  Locations.t ->
-    'a ->
-    LogicalReturnTypes.t ArgumentTypes.t ->
-    unit Typing.t
 
   val lemma
     :  Locations.t ->
