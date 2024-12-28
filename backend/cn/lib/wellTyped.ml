@@ -266,11 +266,8 @@ module WCT = struct
 end
 
 module WIT = struct
-  module LC = LogicalConstraints
   open BaseTypes
   open IndexTerms
-
-  type t = IndexTerms.t
 
   (* let rec check_and_bind_pattern loc bt pat =  *)
   (*   match pat with *)
@@ -1225,8 +1222,6 @@ module WLRT = struct
 end
 
 module WRT = struct
-  let subst = ReturnTypes.subst
-
   let pp = ReturnTypes.pp
 
   let consistent loc rt =
@@ -1386,11 +1381,13 @@ module WFT = struct
       WRT.pp
 end
 
-module WLT = struct
-  open False
+(*
+   module WLT = struct
+   open False
 
-  let welltyped = WAT.welltyped (fun _loc False -> return False) False.pp
-end
+   let welltyped = WAT.welltyped (fun _loc False -> return False) False.pp
+   end
+*)
 
 (* module WPackingFT(struct let name_bts = pd.oargs end) = WLAT(WOutputDef.welltyped
    (pd.oargs)) *)
@@ -1528,7 +1525,6 @@ end
 module BaseTyping = struct
   open TypeErrors
   module BT = BaseTypes
-  module RT = ReturnTypes
   module AT = ArgumentTypes
   open BT
 
