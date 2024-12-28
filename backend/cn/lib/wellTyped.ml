@@ -11,56 +11,64 @@ let squotes, warn, dot, string, debug, item, colon, comma =
 
 module type NoSolver = sig
   (** TODO make this abstract, and one-way lifting functions? *)
-  type 'a m = 'a Typing.t
+  type 'a t = 'a Typing.t
 
   (* TODO: different error types for type errors, consistency errors, proof errors *)
   type failure = Context.t * Explain.log -> TypeErrors.t
 
-  val pure : 'a m -> 'a m
+  val return : 'a -> 'a t
 
-  val fail : failure -> 'a m
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
 
-  val bound_a : Sym.t -> bool m
+  val pure : 'a t -> 'a t
 
-  val bound_l : Sym.t -> bool m
+  val fail : failure -> 'a t
 
-  val get_a : Sym.t -> Context.basetype_or_value m
+  val bound_a : Sym.t -> bool t
 
-  val get_l : Sym.t -> Context.basetype_or_value m
+  val bound_l : Sym.t -> bool t
 
-  val add_a : Sym.t -> BT.t -> Context.l_info -> unit m
+  val get_a : Sym.t -> Context.basetype_or_value t
 
-  val add_l : Sym.t -> BT.t -> Context.l_info -> unit m
+  val get_l : Sym.t -> Context.basetype_or_value t
 
-  val get_struct_decl : Loc.t -> Sym.t -> Memory.struct_layout m
+  val add_a : Sym.t -> BT.t -> Context.l_info -> unit t
 
-  val get_struct_member_type : Loc.t -> Sym.t -> Id.t -> Sctypes.ctype m
+  val add_l : Sym.t -> BT.t -> Context.l_info -> unit t
 
-  val get_datatype : Loc.t -> Sym.t -> BT.dt_info m
+  val get_struct_decl : Loc.t -> Sym.t -> Memory.struct_layout t
 
-  val get_datatype_constr : Loc.t -> Sym.t -> BT.constr_info m
+  val get_struct_member_type : Loc.t -> Sym.t -> Id.t -> Sctypes.ctype t
 
-  val get_resource_predicate_def : Loc.t -> Sym.t -> Definition.Predicate.t m
+  val get_datatype : Loc.t -> Sym.t -> BT.dt_info t
 
-  val get_logical_function_def : Loc.t -> Sym.t -> Definition.Function.t m
+  val get_datatype_constr : Loc.t -> Sym.t -> BT.constr_info t
 
-  val get_lemma : Loc.t -> Sym.t -> (Cerb_location.t * ArgumentTypes.lemmat) m
+  val get_resource_predicate_def : Loc.t -> Sym.t -> Definition.Predicate.t t
+
+  val get_logical_function_def : Loc.t -> Sym.t -> Definition.Function.t t
+
+  val get_lemma : Loc.t -> Sym.t -> (Cerb_location.t * ArgumentTypes.lemmat) t
 
   val get_fun_decl
     :  Loc.t ->
     Sym.t ->
-    (Loc.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig) m
+    (Loc.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig) t
 
-  val ensure_base_type : Loc.t -> expect:BT.t -> BT.t -> unit m
+  val ensure_base_type : Loc.t -> expect:BT.t -> BT.t -> unit t
 
-  val lift : 'a Or_TypeError.t -> 'a m
+  val lift : 'a Or_TypeError.t -> 'a t
 end
 
-open (Typing : NoSolver)
+module Monad : NoSolver = Typing
+
+open Monad
 
 let fail typeErr = fail (fun _ -> typeErr)
 
-open Effectful.Make (Typing)
+module EffTyping = Effectful.Make (Typing)
+
+open Effectful.Make (Monad)
 
 let use_ity = ref true
 
@@ -264,6 +272,8 @@ module WCT = struct
     in
     fun ct -> aux ct
 end
+
+type 'a m = 'a t
 
 module WIT = struct
   open BaseTypes
@@ -1225,6 +1235,7 @@ module WRT = struct
   let pp = ReturnTypes.pp
 
   let consistent loc rt =
+    let open Typing in
     pure
       (match rt with
        | ReturnTypes.Computational ((name, bt), info, lrt) ->
@@ -1265,7 +1276,7 @@ module WLAT = struct
   module LC = LogicalConstraints
   module LAT = LogicalArgumentTypes
 
-  let consistent i_welltyped i_pp kind loc (at : 'i LAT.t) : unit m =
+  let consistent i_welltyped i_pp kind loc (at : 'i LAT.t) : unit Typing.t =
     let open Typing in
     debug
       12
@@ -1334,7 +1345,8 @@ end
 module WAT = struct
   module AT = ArgumentTypes
 
-  let consistent i_welltyped i_pp kind loc (at : 'i AT.t) : unit m =
+  let consistent i_welltyped i_pp kind loc (at : 'i AT.t) : unit Typing.t =
+    let open Typing in
     debug
       12
       (lazy
@@ -1375,10 +1387,7 @@ module WFT = struct
       WRT.pp
 
 
-  let welltyped =
-    WAT.welltyped
-      (fun loc rt -> pure_and_no_initial_resources loc (WRT.welltyped loc rt))
-      WRT.pp
+  let welltyped = WAT.welltyped (fun loc rt -> pure (WRT.welltyped loc rt)) WRT.pp
 end
 
 (*
@@ -2372,7 +2381,7 @@ module WProc = struct
     fun (loc : Loc.t) (at : 'TY1 Mu.args_and_body) ->
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
-        let@ rt = pure_and_no_initial_resources loc (WRT.welltyped loc rt) in
+        let@ rt = pure (WRT.welltyped loc rt) in
         let label_context = label_context rt labels in
         let@ labels =
           PmapM.mapM
@@ -2381,8 +2390,7 @@ module WProc = struct
               | Return loc -> return (Return loc)
               | Label (loc, label_args_and_body, annots, parsed_spec, loop_info) ->
                 let@ label_args_and_body =
-                  pure_and_no_initial_resources
-                    loc
+                  pure
                     (WArgs.welltyped
                        (fun _loc label_body ->
                          BaseTyping.check_expr label_context Unit label_body)
@@ -2407,6 +2415,7 @@ module WRPD = struct
 
   let consistent Def.Predicate.{ loc; pointer; iargs; oarg_bt = _; clauses } =
     let open Typing in
+    let open EffTyping in
     (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
     pure
       (let@ () = add_l pointer BT.(Loc ()) (loc, lazy (Pp.string "ptr-var")) in
@@ -2520,7 +2529,7 @@ module WLemma = struct
 
   let welltyped loc _lemma_s lemma_typ =
     WAT.welltyped
-      (fun loc lrt -> pure_and_no_initial_resources loc (WLRT.welltyped loc lrt))
+      (fun loc lrt -> pure (WLRT.welltyped loc lrt))
       LogicalReturnTypes.pp
       "lemma"
       loc
