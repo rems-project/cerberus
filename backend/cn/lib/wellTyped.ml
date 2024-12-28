@@ -2319,16 +2319,7 @@ module BaseTyping = struct
 end
 
 module WLabel = struct
-  open Mucore
-
   let typ l = WArgs.typ (fun _body -> False.False) l
-
-  let consistent (loc : Loc.t) (lt : _ expr arguments) : unit m =
-    WArgs.consistent (fun _loc _body -> return ()) "loop/label" loc lt
-
-
-  let welltyped (loc : Loc.t) (lt : _ expr arguments) : _ expr arguments m =
-    WArgs.welltyped (fun _loc body -> return body) "loop/label" loc lt
 end
 
 module WProc = struct
@@ -2363,17 +2354,6 @@ module WProc = struct
     WArgs.consistent
       (fun loc (_body, labels, rt) ->
         let@ () = pure_and_no_initial_resources loc (WRT.consistent loc rt) in
-        let@ () =
-          PmapM.iterM
-            (fun _sym def ->
-              match def with
-              | Return _ -> return ()
-              | Label (loc, label_args_and_body, _annots, _parsed_spec, _loop_info) ->
-                pure_and_no_initial_resources
-                  loc
-                  (WLabel.consistent loc label_args_and_body))
-            labels
-        in
         PmapM.iterM
           (fun _sym def ->
             match def with
@@ -2397,21 +2377,6 @@ module WProc = struct
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
         let@ rt = pure_and_no_initial_resources loc (WRT.welltyped loc rt) in
-        let@ labels =
-          PmapM.mapM
-            (fun _sym def ->
-              match def with
-              | Return loc -> return (Return loc)
-              | Label (loc, label_args_and_body, annots, parsed_spec, loop_info) ->
-                let@ label_args_and_body =
-                  pure_and_no_initial_resources
-                    loc
-                    (WLabel.welltyped loc label_args_and_body)
-                in
-                return (Label (loc, label_args_and_body, annots, parsed_spec, loop_info)))
-            labels
-            Sym.compare
-        in
         let label_context = label_context rt labels in
         let@ labels =
           PmapM.mapM

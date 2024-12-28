@@ -17,12 +17,6 @@ tests/cn/memcpy.c:17:16: warning: 'each' expects a 'u64', but 'j' with type 'i32
 tests/cn/memcpy.c:19:16: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
           take srcInv = each (i32 j; 0i32 <= j && j < n)
                ^
-tests/cn/memcpy.c:17:16: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
-  /*@ inv take dstInv = each (i32 j; 0i32 <= j && j < n)
-               ^
-tests/cn/memcpy.c:19:16: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
-          take srcInv = each (i32 j; 0i32 <= j && j < n)
-               ^
 tests/cn/memcpy.c:28:30: warning: 'extract' expects a 'u64', but '(i32)read_&i0' with type 'i32' was provided. This will become an error in the future.
     /*@ extract Owned<char>, (i32)i; @*/
                              ^~~~~~ 

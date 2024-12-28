@@ -2669,6 +2669,11 @@ let time_check_c_functions (global_var_constraints, (checked : c_function list))
       global.fun_decls
       (return ())
   in
+  let@ () =
+    ListM.iterM
+      (fun (_, (loc, args_and_body)) -> WellTyped.WProc.consistent loc args_and_body)
+      checked
+  in
   let@ errors = check_c_functions checked in
   Cerb_debug.end_csv_timing "type checking functions";
   return errors
