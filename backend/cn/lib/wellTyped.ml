@@ -2631,3 +2631,55 @@ module WDT = struct
     in
     return sccs
 end
+
+module Exposed = struct
+  let datatype = WDT.welltyped
+
+  let datatype_recursion = WDT.check_recursion_ok
+
+  let lemma_consistent = WLemma.consistent
+
+  let lemma = WLemma.welltyped
+
+  let function_ = WLFD.welltyped
+
+  let predicate = WRPD.welltyped
+
+  let predicate_consistent = WRPD.consistent
+
+  let label_context = WProc.label_context
+
+  let to_argument_type = WProc.typ
+
+  let procedure_consistent = WProc.consistent
+
+  let procedure = WProc.welltyped
+
+  let integer_annot = BaseTyping.integer_annot
+
+  let infer_expr = BaseTyping.infer_expr
+
+  let check_expr = BaseTyping.check_expr
+
+  let function_type = WFT.welltyped
+
+  let function_type_consistent = WFT.consistent
+
+  let logical_constraint = WLC.welltyped
+
+  let oarg_bt_of_pred = WRS.oarg_bt_of_pred
+
+  let default_quantifier_bt = quantifier_bt
+
+  let infer_term = WIT.infer
+
+  let check_term = WIT.check
+
+  let check_ct = WCT.is_ct
+
+  let compare_by_fst_id = compare_by_fst_id
+
+  let ensure_same_argument_number = ensure_same_argument_number
+
+  let ensure_bits_type = ensure_bits_type
+end

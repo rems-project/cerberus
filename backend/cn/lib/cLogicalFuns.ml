@@ -186,7 +186,7 @@ let eval_fun f args orig_pexpr =
   match Mu.evaluate_fun f args with
   | Some (`Result_IT it) -> return it
   | Some (`Result_Integer z) ->
-    let@ () = WellTyped.ensure_bits_type loc bt in
+    let@ () = WellTyped.Exposed.ensure_bits_type loc bt in
     let bits_info = Option.get (BT.is_bits_bt bt) in
     if BT.fits_range bits_info z then
       return (IT.num_lit_ z bt loc)
@@ -218,7 +218,7 @@ let eval_fun f args orig_pexpr =
 let rec symb_exec_pexpr ctxt var_map pexpr =
   let (Mu.Pexpr (loc, annots, _, pe)) = pexpr in
   let opt_bt =
-    WellTyped.BaseTyping.integer_annot annots
+    WellTyped.Exposed.integer_annot annots
     |> Option.map (fun ity -> Memory.bt_of_sct (Sctypes.Integer ity))
   in
   Pp.debug
@@ -412,7 +412,7 @@ let rec symb_exec_expr ctxt state_vars expr =
   let state, var_map = state_vars in
   let (Mu.Expr (loc, annots, _, e)) = expr in
   let opt_bt =
-    WellTyped.BaseTyping.integer_annot annots
+    WellTyped.Exposed.integer_annot annots
     |> Option.map (fun ity -> Memory.bt_of_sct (Sctypes.Integer ity))
   in
   Pp.debug
@@ -694,12 +694,12 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
             }
     in
     let ctxt = { glob_context with label_defs = labels } in
-    let label_context = WellTyped.WProc.label_context rt labels in
+    let label_context = WellTyped.Exposed.label_context rt labels in
     let@ body =
       pure
         (in_computational_ctxt
            args_and_body
-           (WellTyped.BaseTyping.infer_expr label_context body))
+           (WellTyped.Exposed.infer_expr label_context body))
     in
     let@ r = symb_exec_expr ctxt (init_state, arg_map) body in
     let@ it = get_ret_it loc body def.Definition.Function.return_bt r in
