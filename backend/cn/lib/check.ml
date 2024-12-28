@@ -2653,7 +2653,7 @@ let time_check_c_functions (global_var_constraints, (checked : c_function list))
     Sym.Map.fold
       (fun _ def acc ->
         (* I think this avoids a left-recursion in the monad bind *)
-        let@ () = WellTyped.Exposed.predicate_consistent def in
+        let@ () = Consistent.predicate def in
         acc)
       global.resource_predicates
       (return ())
@@ -2665,15 +2665,14 @@ let time_check_c_functions (global_var_constraints, (checked : c_function list))
         | None -> acc
         | Some def ->
           (* I think this avoids a left-recursion in the monad bind *)
-          let@ () = WellTyped.Exposed.function_type_consistent "proc/fun" loc def in
+          let@ () = Consistent.function_type "proc/fun" loc def in
           acc)
       global.fun_decls
       (return ())
   in
   let@ () =
     ListM.iterM
-      (fun (_, (loc, args_and_body)) ->
-        WellTyped.Exposed.procedure_consistent loc args_and_body)
+      (fun (_, (loc, args_and_body)) -> Consistent.procedure loc args_and_body)
       checked
   in
   let@ errors = check_c_functions checked in
@@ -2689,7 +2688,7 @@ let generate_lemmas lemmata o_lemma_mode =
       Sym.Map.fold
         (fun sym (loc, lemma_typ) acc ->
           (* I think this avoids a left-recursion in the monad bind *)
-          let@ () = WellTyped.Exposed.lemma_consistent loc sym lemma_typ in
+          let@ () = Consistent.lemma loc sym lemma_typ in
           acc)
         global.lemmata
         (return ())
