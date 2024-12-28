@@ -160,7 +160,7 @@ module General = struct
     =
     Pp.(debug 7 (lazy (item __LOC__ (Req.pp (P requested)))));
     let start_timing = Pp.time_log_start __LOC__ "" in
-    let@ oarg_bt = WellTyped.WRS.oarg_bt_of_pred loc requested.name in
+    let@ oarg_bt = WellTyped.Exposed.oarg_bt_of_pred loc requested.name in
     let@ provable = provable loc in
     let@ global = get_global () in
     let@ simp_ctxt = simp_ctxt () in
@@ -384,7 +384,7 @@ module General = struct
 
   and qpredicate_request loc uiinfo (requested : Req.QPredicate.t) =
     let@ o_oarg = qpredicate_request_aux loc uiinfo requested in
-    let@ oarg_item_bt = WellTyped.WRS.oarg_bt_of_pred loc requested.name in
+    let@ oarg_item_bt = WellTyped.Exposed.oarg_bt_of_pred loc requested.name in
     match o_oarg with
     | None -> return None
     | Some (oarg, rw_time) ->
