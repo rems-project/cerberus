@@ -3,14 +3,14 @@ module type S = sig
 
   val ensure_bits_type : Locations.t -> BaseTypes.t -> unit t
 
+  val ensure_base_type : Locations.t -> expect:BaseTypes.t -> BaseTypes.t -> unit t
+
   val ensure_same_argument_number
     :  Locations.t ->
-    [< `General | `Input | `Output ] ->
+    [ `Other | `Input | `Output ] ->
     int ->
     expect:int ->
     unit t
-
-  val compare_by_fst_id : Id.t * 'a -> Id.t * 'b -> int
 
   val check_ct : Locations.t -> Sctypes.ctype -> unit t
 

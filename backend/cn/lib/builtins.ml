@@ -2,24 +2,27 @@ module SBT = BaseTypes.Surface
 open Or_TypeError
 open IndexTerms
 
+let fail_number_args loc ~has ~expect =
+  fail { loc; msg = WellTyped (Number_arguments { type_ = `Other; has; expect }) }
+
+
 (* builtin function symbols *)
 let mk_arg0 mk args loc =
   match args with
   | [] -> return (mk loc)
-  | _ :: _ as xs ->
-    fail { loc; msg = Number_arguments { has = List.length xs; expect = 0 } }
+  | _ :: _ as xs -> fail_number_args loc ~has:(List.length xs) ~expect:0
 
 
 let mk_arg1 mk args loc =
   match args with
   | [ x ] -> return (mk x loc)
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 1 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:1
 
 
 let mk_arg2_err mk args loc =
   match args with
   | [ x; y ] -> mk (x, y) loc
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 2 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:2
 
 
 let mk_arg2 mk = mk_arg2_err (fun tup loc -> return (mk tup loc))
@@ -27,7 +30,7 @@ let mk_arg2 mk = mk_arg2_err (fun tup loc -> return (mk tup loc))
 let mk_arg3_err mk args loc =
   match args with
   | [ x; y; z ] -> mk (x, y, z) loc
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 3 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:3
 
 
 let mk_arg3 mk = mk_arg3_err (fun tup loc -> return (mk tup loc))
@@ -35,7 +38,7 @@ let mk_arg3 mk = mk_arg3_err (fun tup loc -> return (mk tup loc))
 let mk_arg5 mk args loc =
   match args with
   | [ a; b; c; d; e ] -> return (mk (a, b, c, d, e) loc)
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 5 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:5
 
 
 let min_bits_def (sign, n) =
@@ -124,7 +127,9 @@ let array_to_list_def =
         let expected = "map/array" in
         fail
           { loc;
-            msg = Illtyped_it { it = pp arr; has = SBT.pp (get_bt arr); expected; reason }
+            msg =
+              WellTyped
+                (Illtyped_it { it = pp arr; has = SBT.pp (get_bt arr); expected; reason })
           }
       | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt loc)) )
 

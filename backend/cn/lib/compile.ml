@@ -431,7 +431,8 @@ module EffectfulTranslation = struct
     let member_types = Memory.member_types def in
     match List.assoc_opt Id.equal member member_types with
     | Some ty -> return ty
-    | None -> fail { loc; msg = Unexpected_member (List.map fst member_types, member) }
+    | None ->
+      fail { loc; msg = Global (Unexpected_member (List.map fst member_types, member)) }
 
 
   let lookup_datatype loc sym env =
@@ -530,7 +531,9 @@ module EffectfulTranslation = struct
           let reason = "map/array index" in
           fail
             { loc;
-              msg = Illtyped_it { it = Terms.pp e1; has = SBT.pp has; expected; reason }
+              msg =
+                WellTyped
+                  (Illtyped_it { it = Terms.pp e1; has = SBT.pp has; expected; reason })
             }
       in
       return (IT (MapGet (e1, e2), rbt, loc))
@@ -547,7 +550,8 @@ module EffectfulTranslation = struct
       let@ member_bt =
         match List.assoc_opt Id.equal member members with
         | Some member_bt -> return member_bt
-        | None -> fail { loc; msg = Unexpected_member (List.map fst members, member) }
+        | None ->
+          fail { loc; msg = Global (Unexpected_member (List.map fst members, member)) }
       in
       return (IT.recordMember_ ~member_bt (t, member) loc)
     | Struct tag ->
@@ -572,8 +576,9 @@ module EffectfulTranslation = struct
       fail
         { loc;
           msg =
-            Illtyped_it
-              { it = Terms.pp t; has = BaseTypes.Surface.pp has; expected; reason }
+            WellTyped
+              (Illtyped_it
+                 { it = Terms.pp t; has = BaseTypes.Surface.pp has; expected; reason })
         }
 
 
@@ -591,7 +596,10 @@ module EffectfulTranslation = struct
           (fun (env, locally_bound, acc) (m, pat') ->
             match List.assoc_opt Id.equal m cons_info.params with
             | None ->
-              fail { loc; msg = Unexpected_member (List.map fst cons_info.params, m) }
+              fail
+                { loc;
+                  msg = Global (Unexpected_member (List.map fst cons_info.params, m))
+                }
             | Some mbt ->
               let@ env', locally_bound', pat' =
                 translate_cn_pat env locally_bound (pat', SBT.inj mbt)
@@ -650,7 +658,7 @@ module EffectfulTranslation = struct
                    (Pp.list
                       (fun (nm, _) -> Sym.pp nm)
                       (Sym.Map.bindings env.computationals))));
-            fail { loc; msg = Unknown_variable sym }
+            fail { loc; msg = WellTyped (Unknown_variable sym) }
           | Some (bt, None) -> return (sym, bt)
           | Some (bt, Some renamed_sym) -> return (renamed_sym, bt)
         in
@@ -708,14 +716,15 @@ module EffectfulTranslation = struct
            fail
              { loc = IT.get_loc e;
                msg =
-                 Illtyped_it
-                   { it = Terms.pp e;
-                     has = SBT.pp bt;
-                     expected = "struct";
-                     reason =
-                       (let head, pos = Locations.head_pos_of_location loc in
-                        head ^ "\n" ^ pos)
-                   }
+                 WellTyped
+                   (Illtyped_it
+                      { it = Terms.pp e;
+                        has = SBT.pp bt;
+                        expected = "struct";
+                        reason =
+                          (let head, pos = Locations.head_pos_of_location loc in
+                           head ^ "\n" ^ pos)
+                      })
              })
       | CNExpr_arrayindexupdates (e, updates) ->
         let@ e = self e in
@@ -791,8 +800,9 @@ module EffectfulTranslation = struct
               fail
                 { loc;
                   msg =
-                    Illtyped_it
-                      { it = Terms.pp index; has = SBT.pp has; expected; reason }
+                    WellTyped
+                      (Illtyped_it
+                         { it = Terms.pp index; has = SBT.pp has; expected; reason })
                 })
          | has ->
            let expected = "pointer" in
@@ -800,7 +810,8 @@ module EffectfulTranslation = struct
            fail
              { loc;
                msg =
-                 Illtyped_it { it = Terms.pp base; has = SBT.pp has; expected; reason }
+                 WellTyped
+                   (Illtyped_it { it = Terms.pp base; has = SBT.pp has; expected; reason })
              })
       | CNExpr_membershift (e, opt_tag, member) ->
         let@ e = self e in
@@ -824,8 +835,9 @@ module EffectfulTranslation = struct
              fail
                { loc;
                  msg =
-                   Illtyped_it
-                     { it = Terms.pp e; has = SBT.pp (Struct tag'); expected; reason }
+                   WellTyped
+                     (Illtyped_it
+                        { it = Terms.pp e; has = SBT.pp (Struct tag'); expected; reason })
                })
          | Some tag, Loc None | None, Loc (Some (Struct tag)) -> with_tag tag
          | None, Loc None -> cannot_tell_pointee_ctype loc e
@@ -834,7 +846,9 @@ module EffectfulTranslation = struct
            let reason = "struct member offset" in
            fail
              { loc;
-               msg = Illtyped_it { it = Terms.pp e; has = SBT.pp has; expected; reason }
+               msg =
+                 WellTyped
+                   (Illtyped_it { it = Terms.pp e; has = SBT.pp has; expected; reason })
              })
       | CNExpr_addr nm -> return (sym_ (nm, BT.Loc None, loc))
       | CNExpr_cast (bt, expr) ->
@@ -1053,8 +1067,9 @@ module EffectfulTranslation = struct
              fail
                { loc;
                  msg =
-                   Illtyped_it
-                     { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason }
+                   WellTyped
+                     (Illtyped_it
+                        { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason })
                })
       in
       match res with
@@ -1537,7 +1552,9 @@ module UsingLoads = struct
     | has ->
       let expected = "pointer" in
       let reason = "dereferencing" in
-      let msg = Illtyped_it { it = IT.pp it; has = SBT.pp has; expected; reason } in
+      let msg =
+        WellTyped (Illtyped_it { it = IT.pp it; has = SBT.pp has; expected; reason })
+      in
       fail { loc; msg }
 
 

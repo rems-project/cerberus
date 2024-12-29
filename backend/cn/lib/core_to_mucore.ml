@@ -927,8 +927,9 @@ let rec make_largs_with_accesses f_i env st (accesses, conditions) =
 
 let is_pass_by_pointer = function By_pointer -> true | By_value -> false
 
-let check_against_core_bt loc =
-  CoreTypeChecks.check_against_core_bt (fun msg -> fail { loc; msg = Generic msg })
+let check_against_core_bt loc cbt bt =
+  CoreTypeChecks.check_against_core_bt cbt bt
+  |> Result.map_error (fun msg -> TypeErrors.{ loc; msg = Generic msg })
 
 
 let make_label_args f_i loc env st args (accesses, inv) =

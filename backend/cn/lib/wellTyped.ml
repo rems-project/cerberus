@@ -9,7 +9,39 @@ let squotes, warn, dot, string, debug, item, colon, comma =
   Pp.(squotes, warn, dot, string, debug, item, colon, comma)
 
 
-type 'a t = Context.t -> ('a * Context.t) Or_TypeError.t
+type message =
+  | Global of Global.error
+  | Mismatch of
+      { has : Pp.document;
+        expect : Pp.document
+      }
+  | Generic of Pp.document (** TODO remove *)
+  | Illtyped_it of
+      { it : Pp.document; (** TODO replace with terms *)
+        has : Pp.document; (* 'expected' and 'has' as in Kayvan's Core type checker *)
+        expected : string;
+        reason : string
+      }
+  | Number_arguments of
+      { type_ : [ `Other | `Input | `Output ];
+        has : int;
+        expect : int
+      }
+  | Missing_member of Id.t
+  | NIA of
+      { it : IT.t;
+        hint : string
+      }
+  | Empty_pattern
+  | Redundant_pattern of Pp.document
+  | Unknown_variable of Sym.t
+
+type error =
+  { loc : Locations.t;
+    msg : message
+  }
+
+type 'a t = Context.t -> ('a * Context.t, error) Result.t
 
 module GlobalReader = struct
   type nonrec 'a t = 'a t
@@ -20,7 +52,7 @@ module GlobalReader = struct
 
   let get_global () s = Ok (s.Context.global, s)
 
-  let fail loc msg _ = Error TypeErrors.{ loc; msg = Global msg }
+  let fail loc msg _ = Error { loc; msg = Global msg }
 end
 
 module NoSolver = struct
@@ -30,13 +62,6 @@ module NoSolver = struct
   let fail err : 'a t = fun _ -> Error err
 
   let ( let@ ) = bind
-
-  let get_member_type loc member layout : Sctypes.t t =
-    let member_types = Memory.member_types layout in
-    match List.assoc_opt Id.equal member member_types with
-    | Some membertyp -> return membertyp
-    | None -> fail { loc; msg = Unexpected_member (List.map fst member_types, member) }
-
 
   let get_struct_member_type loc tag member =
     let@ decl = get_struct_decl loc tag in
@@ -62,13 +87,6 @@ module NoSolver = struct
 
   let add_l sym bt info = update (Context.add_l sym bt info)
 
-  let ensure_base_type loc ~expect has : unit t =
-    if BT.equal has expect then
-      return ()
-    else
-      fail { loc; msg = Mismatch { has = BT.pp has; expect = BT.pp expect } }
-
-
   let lift = function Ok x -> return x | Error x -> fail x
 
   let run ctxt x = x ctxt
@@ -80,6 +98,13 @@ open NoSolver
 
 open Effectful.Make (NoSolver)
 
+let ensure_base_type loc ~expect has : unit t =
+  if BT.equal has expect then
+    return ()
+  else
+    fail { loc; msg = Mismatch { has = BT.pp has; expect = BT.pp expect } }
+
+
 let illtyped_index_term (loc : Locations.t) it has ~expected ~reason =
   let reason =
     match reason with
@@ -88,8 +113,7 @@ let illtyped_index_term (loc : Locations.t) it has ~expected ~reason =
       head ^ "\n" ^ pos
     | Either.Right reason -> reason
   in
-  TypeErrors.
-    { loc; msg = Illtyped_it { it = IT.pp it; has = BT.pp has; expected; reason } }
+  { loc; msg = Illtyped_it { it = IT.pp it; has = BT.pp has; expected; reason } }
 
 
 let ensure_bits_type (loc : Loc.t) (has : BT.t) =
@@ -166,14 +190,11 @@ let ensure_map_type ~reason it =
          ~reason:(Either.Left reason))
 
 
-let ensure_same_argument_number loc input_output has ~expect =
+let ensure_same_argument_number loc type_ has ~expect =
   if has = expect then
     return ()
-  else (
-    match input_output with
-    | `General -> fail { loc; msg = Number_arguments { has; expect } }
-    | `Input -> fail { loc; msg = Number_input_arguments { has; expect } }
-    | `Output -> fail { loc; msg = Number_output_arguments { has; expect } })
+  else
+    fail { loc; msg = Number_arguments { type_; has; expect } }
 
 
 let compare_by_fst_id (x, _) (y, _) = Id.compare x y
@@ -186,7 +207,7 @@ let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
         if IdSet.mem id needed then
           return (IdSet.remove id needed)
         else
-          fail { loc; msg = Unexpected_member (List.map fst spec, id) })
+          fail { loc; msg = Global (Global.Unexpected_member (List.map fst spec, id)) })
       needed
       have
   in
@@ -443,7 +464,7 @@ module WIT = struct
           match () with
           | () when is_a -> get_a s
           | () when is_l -> get_l s
-          | () -> fail { loc; msg = TypeErrors.Unknown_variable s }
+          | () -> fail { loc; msg = Unknown_variable s }
         in
         (match binding with
          | BaseType bt -> return (IT (Sym s, bt, loc))
@@ -537,9 +558,7 @@ module WIT = struct
               in
               warn loc msg;
               return (IT (Binop (DivNoSMT, t, t'), IT.get_bt t, loc))
-            | _ ->
-              (* TODO: check for a zero divisor *)
-              return (IT (Binop (Div, t, t'), IT.get_bt t, loc)))
+            | _ -> return (IT (Binop (Div, t, t'), IT.get_bt t, loc)))
          | DivNoSMT ->
            let@ t = infer t in
            let@ () = ensure_arith_type ~reason:loc t in
@@ -942,7 +961,7 @@ module WIT = struct
       | Apply (name, args) ->
         let@ def = get_logical_function_def loc name in
         let has_args, expect_args = (List.length args, List.length def.args) in
-        let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
+        let@ () = ensure_same_argument_number loc `Other has_args ~expect:expect_args in
         let@ args =
           ListM.map2M
             (fun has_arg (_, def_arg_bt) ->
@@ -1374,7 +1393,6 @@ module WArgs = struct
 end
 
 module BaseTyping = struct
-  open TypeErrors
   module BT = BaseTypes
   module AT = ArgumentTypes
   open BT
@@ -1382,12 +1400,9 @@ module BaseTyping = struct
   type label_context = (AT.lt * Where.label * Locations.t) Sym.Map.t
 
   let check_against_core_bt loc msg2 cbt bt =
-    lift
-      (CoreTypeChecks.check_against_core_bt
-         (fun msg ->
-           Or_TypeError.fail { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
-         cbt
-         bt)
+    CoreTypeChecks.check_against_core_bt cbt bt
+    |> Result.map_error (fun msg -> { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
+    |> lift
 
 
   module Mu = Mucore
@@ -1425,14 +1440,18 @@ module BaseTyping = struct
           let@ _item_bt = get_item_bt bt in
           return (Mu.Cnil cbt, [])
         | Cnil _, _ ->
-          fail { loc; msg = Number_arguments { has = List.length pats; expect = 0 } }
+          let type_ = `Other in
+          let has = List.length pats in
+          fail { loc; msg = Number_arguments { type_; has; expect = 0 } }
         | Ccons, [ p1; p2 ] ->
           let@ item_bt = get_item_bt bt in
           let@ p1 = check_and_bind_pattern item_bt p1 in
           let@ p2 = check_and_bind_pattern bt p2 in
           return (Mu.Ccons, [ p1; p2 ])
         | Ccons, _ ->
-          fail { loc; msg = Number_arguments { has = List.length pats; expect = 2 } }
+          let type_ = `Other in
+          let has = List.length pats in
+          fail { loc; msg = Number_arguments { type_; has; expect = 2 } }
         | Ctuple, pats ->
           let@ bts =
             match BT.is_tuple_bt bt with
@@ -1703,8 +1722,9 @@ module BaseTyping = struct
                  let@ () = ensure_base_type loc ~expect:(List ibt) (bt_of_pexpr xs) in
                  return (bt_of_pexpr xs)
                | _ ->
-                 fail
-                   { loc; msg = Number_arguments { has = List.length pes; expect = 2 } })
+                 let type_ = `Other in
+                 let has = List.length pes in
+                 fail { loc; msg = Number_arguments { type_; has; expect = 2 } })
             | Ctuple -> return (BT.Tuple (List.map bt_of_pexpr pes))
             | Carray ->
               let ibt = bt_of_pexpr (List.hd pes) in
@@ -1871,7 +1891,7 @@ module BaseTyping = struct
       let@ () =
         ensure_same_argument_number
           loc
-          `General
+          `Other
           (List.length its)
           ~expect:(List.length def.args)
       in
@@ -1883,7 +1903,7 @@ module BaseTyping = struct
         let wrong_number_arguments () =
           let has = List.length its in
           let expect = AT.count_computational lemma_typ in
-          fail { loc; msg = Number_arguments { has; expect } }
+          fail { loc; msg = Number_arguments { type_ = `Other; has; expect } }
         in
         let rec check_args lemma_typ its =
           match (lemma_typ, its) with
@@ -2118,7 +2138,7 @@ module BaseTyping = struct
             let wrong_number_arguments () =
               let has = List.length pes in
               let expect = AT.count_computational lt in
-              fail { loc; msg = Number_arguments { has; expect } }
+              fail { loc; msg = Number_arguments { type_ = `Other; has; expect } }
             in
             let rec check_args lt pes =
               match (lt, pes) with
@@ -2449,8 +2469,6 @@ let check_term = WIT.check
 
 let check_ct = WCT.is_ct
 
-let compare_by_fst_id = compare_by_fst_id
-
 let ensure_same_argument_number = ensure_same_argument_number
 
 let ensure_bits_type = ensure_bits_type
@@ -2464,7 +2482,7 @@ module type ErrorReader = sig
 
   val get_context : unit -> Context.t t
 
-  val lift : 'a Or_TypeError.t -> 'a t
+  val lift : ('a, error) Result.t -> 'a t
 end
 
 module Lift (M : ErrorReader) : WellTyped_intf.S with type 'a t := 'a M.t = struct
@@ -2522,13 +2540,28 @@ module Lift (M : ErrorReader) : WellTyped_intf.S with type 'a t := 'a M.t = stru
 
   let check_ct = lift2 check_ct
 
-  let compare_by_fst_id = compare_by_fst_id
-
   let ensure_same_argument_number loc type_ n ~expect =
     let ( let@ ) = M.bind in
     let@ context = M.get_context () in
-    M.lift (Result.map fst (ensure_same_argument_number loc type_ n ~expect context))
+    M.lift
+      (Result.map fst (run context (ensure_same_argument_number loc type_ n ~expect)))
 
 
-  let ensure_bits_type = lift2 ensure_bits_type
+  (** TODO This should be removed, but there is a discrepancy between WellTyped
+      and Check for base typing for bounded_binops. *)
+  let ensure_base_type loc ~expect has =
+    (* if not (BT.equal expect has) then                                                     *)
+    (*   failwith ("has: " ^ Pp.plain (BT.pp has) ^ ", expect: " ^ Pp.plain (BT.pp expect)); *)
+    (* M.return ()                                                                           *)
+    let ( let@ ) = M.bind in
+    let@ context = M.get_context () in
+    M.lift (Result.map fst (run context (ensure_base_type loc has ~expect)))
+
+
+  (** TODO If this crashes, figure out why WellTyped did not catch it earlier.
+      If it doesn't, then just delete it *)
+  let ensure_bits_type =
+    (* assert (match bt with BT.Bits _ -> true | _ -> false); *)
+    (* M.return ()                                            *)
+    lift2 ensure_bits_type
 end

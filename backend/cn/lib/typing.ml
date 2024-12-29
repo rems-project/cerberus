@@ -195,14 +195,6 @@ let modify_where (f : Where.t -> Where.t) : unit t =
     { s with log; typing_context })
 
 
-let get_member_type loc member layout : Sctypes.t m =
-  let member_types = Memory.member_types layout in
-  match List.assoc_opt Id.equal member member_types with
-  | Some membertyp -> return membertyp
-  | None ->
-    fail (fun _ -> { loc; msg = Unexpected_member (List.map fst member_types, member) })
-
-
 module ErrorReader = struct
   type nonrec 'a t = 'a t
 
@@ -215,14 +207,16 @@ module ErrorReader = struct
     return s.typing_context.global
 
 
+  let lift = function
+    | Ok x -> return x
+    | Error WellTyped.{ loc; msg } -> fail (fun _ -> { loc; msg = WellTyped msg })
+
+
   let fail loc msg = fail (fun _ -> { loc; msg = Global msg })
 
   let get_context () =
     let@ s = get () in
     return s.typing_context
-
-
-  let lift = lift
 end
 
 module Global = struct
@@ -295,6 +289,8 @@ module Global = struct
 end
 
 (* end: convenient functions for global typing context *)
+
+module WellTyped = WellTyped.Lift (ErrorReader)
 
 let add_sym_eqs sym_eqs =
   modify (fun s ->
@@ -525,13 +521,6 @@ let model_with_internal loc prop =
 
 (* functions for binding return types and associated auxiliary functions *)
 
-let ensure_base_type (loc : Loc.t) ~(expect : BT.t) (has : BT.t) : unit m =
-  if BT.equal has expect then
-    return ()
-  else
-    fail (fun _ -> { loc; msg = Mismatch { has = BT.pp has; expect = BT.pp expect } })
-
-
 let make_return_record loc (record_name : string) record_members =
   let record_s = Sym.fresh_make_uniq record_name in
   (* let record_s = Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation) in *)
@@ -552,11 +541,13 @@ let bind_logical_return_internal loc =
   let rec aux members lrt =
     match (members, lrt) with
     | member :: members, LogicalReturnTypes.Define ((s, it), _, lrt) ->
-      let@ () = ensure_base_type loc ~expect:(IT.get_bt it) (IT.get_bt member) in
+      let@ () =
+        WellTyped.ensure_base_type loc ~expect:(IT.get_bt it) (IT.get_bt member)
+      in
       let@ () = add_c_internal (LC.T (IT.eq__ member it loc)) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | member :: members, Resource ((s, (re, bt)), _, lrt) ->
-      let@ () = ensure_base_type loc ~expect:bt (IT.get_bt member) in
+      let@ () = WellTyped.ensure_base_type loc ~expect:bt (IT.get_bt member) in
       let@ () = add_r_internal loc (re, Res.O member) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | members, Constraint (lc, _, lrt) ->
@@ -577,7 +568,7 @@ let bind_logical_return loc members lrt =
 let bind_return loc members (rt : ReturnTypes.t) =
   match (members, rt) with
   | member :: members, Computational ((s, bt), _, lrt) ->
-    let@ () = ensure_base_type loc ~expect:bt (IT.get_bt member) in
+    let@ () = WellTyped.ensure_base_type loc ~expect:bt (IT.get_bt member) in
     let@ () =
       bind_logical_return
         loc
@@ -783,10 +774,3 @@ let test_value_eqs loc guard x ys =
   let@ group = value_eq_group guard x in
   let@ ms = prev_models_with loc guard_it in
   loop group ms ys
-
-
-module WellTyped = struct
-  type nonrec 'a t = 'a t
-
-  include WellTyped.Lift (ErrorReader)
-end
