@@ -180,3 +180,9 @@ val modify_where : (Where.t -> Where.t) -> unit m
 (* val add_trace_item_to_trace : Context.trace_item * Locations.t -> unit m *)
 
 val init_solver : unit -> unit m
+
+module NoSolver : Sigs.NoSolver with type 'a t = 'a t
+
+module WellTyped : sig
+  module Exposed : Sigs.Exposed with type 'a t = 'a t
+end

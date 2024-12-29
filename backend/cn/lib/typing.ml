@@ -823,3 +823,60 @@ let test_value_eqs loc guard x ys =
   let@ group = value_eq_group guard x in
   let@ ms = prev_models_with loc guard_it in
   loop group ms ys
+
+
+module NoSolver = struct
+  type nonrec 'a t = 'a t
+
+  type nonrec failure = failure
+
+  let return = return
+
+  let bind = bind
+
+  let pure = pure
+
+  let fail = fail
+
+  let bound_a = bound_a
+
+  let bound_l = bound_l
+
+  let get_a = get_a
+
+  let get_l = get_l
+
+  let add_a = add_a
+
+  let add_l = add_l
+
+  let get_struct_decl = get_struct_decl
+
+  let get_struct_member_type = get_struct_member_type
+
+  let get_datatype = get_datatype
+
+  let get_datatype_constr = get_datatype_constr
+
+  let get_resource_predicate_def = get_resource_predicate_def
+
+  let get_logical_function_def = get_logical_function_def
+
+  let get_lemma = get_lemma
+
+  let get_fun_decl = get_fun_decl
+
+  let ensure_base_type = ensure_base_type
+
+  let lift = function Ok x -> return x | Error x -> fail (fun _ -> x)
+end
+
+module Made = WellTyped.Make (NoSolver)
+
+module WellTyped = struct
+  module Exposed = struct
+    type nonrec 'a t = 'a t
+
+    include Made.Exposed
+  end
+end

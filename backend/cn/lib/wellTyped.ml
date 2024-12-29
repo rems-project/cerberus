@@ -9,66 +9,14 @@ let squotes, warn, dot, string, debug, item, colon, comma =
   Pp.(squotes, warn, dot, string, debug, item, colon, comma)
 
 
-module type NoSolver = sig
-  (** TODO make this abstract, and one-way lifting functions? *)
-  type 'a t = 'a Typing.t
+let use_ity = ref true
 
-  (* TODO: different error types for type errors, consistency errors, proof errors *)
-  type failure = Context.t * Explain.log -> TypeErrors.t
-
-  val return : 'a -> 'a t
-
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
-
-  val pure : 'a t -> 'a t
-
-  val fail : failure -> 'a t
-
-  val bound_a : Sym.t -> bool t
-
-  val bound_l : Sym.t -> bool t
-
-  val get_a : Sym.t -> Context.basetype_or_value t
-
-  val get_l : Sym.t -> Context.basetype_or_value t
-
-  val add_a : Sym.t -> BT.t -> Context.l_info -> unit t
-
-  val add_l : Sym.t -> BT.t -> Context.l_info -> unit t
-
-  val get_struct_decl : Loc.t -> Sym.t -> Memory.struct_layout t
-
-  val get_struct_member_type : Loc.t -> Sym.t -> Id.t -> Sctypes.ctype t
-
-  val get_datatype : Loc.t -> Sym.t -> BT.dt_info t
-
-  val get_datatype_constr : Loc.t -> Sym.t -> BT.constr_info t
-
-  val get_resource_predicate_def : Loc.t -> Sym.t -> Definition.Predicate.t t
-
-  val get_logical_function_def : Loc.t -> Sym.t -> Definition.Function.t t
-
-  val get_lemma : Loc.t -> Sym.t -> (Cerb_location.t * ArgumentTypes.lemmat) t
-
-  val get_fun_decl
-    :  Loc.t ->
-    Sym.t ->
-    (Loc.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig) t
-
-  val ensure_base_type : Loc.t -> expect:BT.t -> BT.t -> unit t
-
-  val lift : 'a Or_TypeError.t -> 'a t
-end
-
-module Monad : NoSolver = Typing
-
+module Make (Monad : Sigs.NoSolver) = struct
 open Monad
 
 let fail typeErr = fail (fun _ -> typeErr)
 
 open Effectful.Make (Monad)
-
-let use_ity = ref true
 
 let illtyped_index_term (loc : Locations.t) it has ~expected ~reason =
   let reason =
@@ -2446,3 +2394,4 @@ module Exposed = struct
 
   let ensure_bits_type = ensure_bits_type
 end
+end[@@ocamlformat "disable"]
