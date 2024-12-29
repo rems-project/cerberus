@@ -189,4 +189,4 @@ val modify_where : (Where.t -> Where.t) -> unit m
 
 val init_solver : unit -> unit m
 
-module WellTyped : Sigs.Exposed with type 'a t = 'a t
+module WellTyped : WellTyped_intf.S with type 'a t = 'a t

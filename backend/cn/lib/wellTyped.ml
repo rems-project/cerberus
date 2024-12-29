@@ -9,8 +9,10 @@ let squotes, warn, dot, string, debug, item, colon, comma =
   Pp.(squotes, warn, dot, string, debug, item, colon, comma)
 
 
+type 'a t = Context.t -> ('a * Context.t) Or_TypeError.t
+
 module GlobalReader = struct
-  type 'a t = Context.t -> ('a * Context.t) Or_TypeError.t
+  type nonrec 'a t = 'a t
 
   let return x s = Ok (x, s)
 
@@ -127,13 +129,15 @@ module NoSolver = struct
 
 
   let lift = function Ok x -> return x | Error x -> fail x
+
+  let run ctxt x = x ctxt
 end
 
 let use_ity = ref true
 
 open NoSolver
 
-let fail typeErr = fail (NoSolver.liftFail typeErr)
+let fail typeErr = fail (liftFail typeErr)
 
 open Effectful.Make (NoSolver)
 
@@ -2470,49 +2474,47 @@ module WDT = struct
     return sccs
 end
 
-module Exposed = struct
-  let datatype = WDT.welltyped
+let datatype = WDT.welltyped
 
-  let datatype_recursion = WDT.check_recursion_ok
+let datatype_recursion = WDT.check_recursion_ok
 
-  let lemma = WLemma.welltyped
+let lemma = WLemma.welltyped
 
-  let function_ = WLFD.welltyped
+let function_ = WLFD.welltyped
 
-  let predicate = WRPD.welltyped
+let predicate = WRPD.welltyped
 
-  let label_context = WProc.label_context
+let label_context = WProc.label_context
 
-  let to_argument_type = WProc.typ
+let to_argument_type = WProc.typ
 
-  let procedure = WProc.welltyped
+let procedure = WProc.welltyped
 
-  let integer_annot = BaseTyping.integer_annot
+let integer_annot = BaseTyping.integer_annot
 
-  let infer_expr = BaseTyping.infer_expr
+let infer_expr = BaseTyping.infer_expr
 
-  let check_expr = BaseTyping.check_expr
+let check_expr = BaseTyping.check_expr
 
-  let function_type = WFT.welltyped
+let function_type = WFT.welltyped
 
-  let logical_constraint = WLC.welltyped
+let logical_constraint = WLC.welltyped
 
-  let oarg_bt_of_pred = WRS.oarg_bt_of_pred
+let oarg_bt_of_pred = WRS.oarg_bt_of_pred
 
-  let default_quantifier_bt = quantifier_bt
+let default_quantifier_bt = quantifier_bt
 
-  let infer_term = WIT.infer
+let infer_term = WIT.infer
 
-  let check_term = WIT.check
+let check_term = WIT.check
 
-  let check_ct = WCT.is_ct
+let check_ct = WCT.is_ct
 
-  let compare_by_fst_id = compare_by_fst_id
+let compare_by_fst_id = compare_by_fst_id
 
-  let ensure_same_argument_number = ensure_same_argument_number
+let ensure_same_argument_number = ensure_same_argument_number
 
-  let ensure_bits_type = ensure_bits_type
-end
+let ensure_bits_type = ensure_bits_type
 
 module type ErrorReader = sig
   type 'a t
@@ -2530,12 +2532,12 @@ module type ErrorReader = sig
   val lift : 'a Or_TypeError.t -> 'a t
 end
 
-module Lift (M : ErrorReader) : Sigs.Exposed with type 'a t := 'a M.t = struct
+module Lift (M : ErrorReader) : WellTyped_intf.S with type 'a t := 'a M.t = struct
   let lift1 f x =
     let ( let@ ) = M.bind in
     let@ state = M.get () in
     let context = M.to_context state in
-    M.lift (Result.map fst (f x context))
+    M.lift (Result.map fst (run context (f x)))
 
 
   let lift2 f x y =
@@ -2552,51 +2554,50 @@ module Lift (M : ErrorReader) : Sigs.Exposed with type 'a t := 'a M.t = struct
     M.lift (Result.map fst (f x y z context))
 
 
-  let datatype x = lift1 Exposed.datatype x
+  let datatype x = lift1 datatype x
 
-  let datatype_recursion = lift1 Exposed.datatype_recursion
+  let datatype_recursion = lift1 datatype_recursion
 
-  let lemma x y z = lift3 Exposed.lemma x y z
+  let lemma x y z = lift3 lemma x y z
 
-  let function_ = lift1 Exposed.function_
+  let function_ = lift1 function_
 
-  let predicate = lift1 Exposed.predicate
+  let predicate = lift1 predicate
 
-  let label_context = Exposed.label_context
+  let label_context = label_context
 
-  let to_argument_type = Exposed.to_argument_type
+  let to_argument_type = to_argument_type
 
-  let procedure x y = lift2 Exposed.procedure x y
+  let procedure x y = lift2 procedure x y
 
-  let integer_annot = Exposed.integer_annot
+  let integer_annot = integer_annot
 
-  let infer_expr x y = lift2 Exposed.infer_expr x y
+  let infer_expr x y = lift2 infer_expr x y
 
-  let check_expr x y z = lift3 Exposed.check_expr x y z
+  let check_expr x y z = lift3 check_expr x y z
 
-  let function_type = lift3 Exposed.function_type
+  let function_type = lift3 function_type
 
-  let logical_constraint = lift2 Exposed.logical_constraint
+  let logical_constraint = lift2 logical_constraint
 
-  let oarg_bt_of_pred = lift2 Exposed.oarg_bt_of_pred
+  let oarg_bt_of_pred = lift2 oarg_bt_of_pred
 
-  let default_quantifier_bt = Exposed.default_quantifier_bt
+  let default_quantifier_bt = default_quantifier_bt
 
-  let infer_term x = lift1 Exposed.infer_term x
+  let infer_term x = lift1 infer_term x
 
-  let check_term x y z = lift3 Exposed.check_term x y z
+  let check_term x y z = lift3 check_term x y z
 
-  let check_ct = lift2 Exposed.check_ct
+  let check_ct = lift2 check_ct
 
-  let compare_by_fst_id = Exposed.compare_by_fst_id
+  let compare_by_fst_id = compare_by_fst_id
 
   let ensure_same_argument_number loc type_ n ~expect =
     let ( let@ ) = M.bind in
     let@ state = M.get () in
     let context = M.to_context state in
-    M.lift
-      (Result.map fst (Exposed.ensure_same_argument_number loc type_ n ~expect context))
+    M.lift (Result.map fst (ensure_same_argument_number loc type_ n ~expect context))
 
 
-  let ensure_bits_type = lift2 Exposed.ensure_bits_type
+  let ensure_bits_type = lift2 ensure_bits_type
 end

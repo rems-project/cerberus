@@ -1,8 +1,6 @@
 val use_ity : bool ref
 
-module NoSolver : Sigs.NoSolver
-
-module Exposed : Sigs.Exposed with type 'a t := 'a NoSolver.t
+include WellTyped_intf.S
 
 module type ErrorReader = sig
   type 'a t
@@ -20,4 +18,4 @@ module type ErrorReader = sig
   val lift : 'a Or_TypeError.t -> 'a t
 end
 
-module Lift : functor (M : ErrorReader) -> Sigs.Exposed with type 'a t := 'a M.t
+module Lift : functor (M : ErrorReader) -> WellTyped_intf.S with type 'a t := 'a M.t
