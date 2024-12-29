@@ -424,7 +424,7 @@ module EffectfulTranslation = struct
   let lookup_struct loc tag env =
     match lookup_struct_opt tag env with
     | Some def -> return def
-    | None -> fail { loc; msg = Unknown_struct tag }
+    | None -> fail { loc; msg = Global (Unknown_struct tag) }
 
 
   let lookup_member loc (_tag, def) member =
@@ -437,13 +437,13 @@ module EffectfulTranslation = struct
   let lookup_datatype loc sym env =
     match Sym.Map.find_opt sym env.datatypes with
     | Some info -> return info
-    | None -> fail TypeErrors.{ loc; msg = TypeErrors.Unknown_datatype sym }
+    | None -> fail { loc; msg = Global (Unknown_datatype sym) }
 
 
   let lookup_constr loc sym env =
     match Sym.Map.find_opt sym env.datatype_constrs with
     | Some info -> return info
-    | None -> fail TypeErrors.{ loc; msg = TypeErrors.Unknown_datatype_constr sym }
+    | None -> fail { loc; msg = Global (Unknown_datatype_constr sym) }
 
 
   let cannot_tell_pointee_ctype loc e =
@@ -852,7 +852,9 @@ module EffectfulTranslation = struct
              | Some fsig -> return fsig.return_bty
              | None ->
                fail
-                 { loc; msg = Unknown_logical_function { id = fsym; resource = false } }
+                 { loc;
+                   msg = Global (Unknown_logical_function { id = fsym; resource = false })
+                 }
            in
            return (apply_ fsym args (BaseTypes.Surface.inj bt) loc))
       | CNExpr_cons (c_nm, exprs) ->
@@ -1070,7 +1072,10 @@ module EffectfulTranslation = struct
         let@ pred_sig =
           match lookup_predicate pred env with
           | None ->
-            fail { loc; msg = Unknown_resource_predicate { id = pred; logical = false } }
+            fail
+              { loc;
+                msg = Global (Unknown_resource_predicate { id = pred; logical = false })
+              }
           | Some pred_sig -> return pred_sig
         in
         let output_bt = pred_sig.pred_output in

@@ -112,21 +112,9 @@ module RequestChain = struct
 end
 
 type message =
-  | Unknown_variable of Sym.t
-  | Unknown_function of Sym.t
-  | Unknown_struct of Sym.t
-  | Unknown_datatype of Sym.t
-  | Unknown_datatype_constr of Sym.t
-  | Unknown_resource_predicate of
-      { id : Sym.t;
-        logical : bool
-      }
-  | Unknown_logical_function of
-      { id : Sym.t;
-        resource : bool
-      }
+  | Global of Global.error
   | Unexpected_member of Id.t list * Id.t
-  | Unknown_lemma of Sym.t
+  | Unknown_variable of Sym.t
   (* some from Kayvan's compilePredicates module *)
   | First_iarg_missing
   | First_iarg_not_pointer of
@@ -272,19 +260,19 @@ let pp_message te =
   | Unknown_variable s ->
     let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
     { short; descr = None; state = None }
-  | Unknown_function sym ->
+  | Global (Unknown_function sym) ->
     let short = !^"Unknown function" ^^^ squotes (Sym.pp sym) in
     { short; descr = None; state = None }
-  | Unknown_struct tag ->
+  | Global (Unknown_struct tag) ->
     let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
     { short; descr = None; state = None }
-  | Unknown_datatype tag ->
+  | Global (Unknown_datatype tag) ->
     let short = !^"Datatype" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
     { short; descr = None; state = None }
-  | Unknown_datatype_constr tag ->
+  | Global (Unknown_datatype_constr tag) ->
     let short = !^"Datatype constructor" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
     { short; descr = None; state = None }
-  | Unknown_resource_predicate { id; logical } ->
+  | Global (Unknown_resource_predicate { id; logical }) ->
     let short = !^"Unknown resource predicate" ^^^ squotes (Sym.pp id) in
     let descr =
       if logical then
@@ -293,7 +281,7 @@ let pp_message te =
         None
     in
     { short; descr; state = None }
-  | Unknown_logical_function { id; resource } ->
+  | Global (Unknown_logical_function { id; resource }) ->
     let short = !^"Unknown logical function" ^^^ squotes (Sym.pp id) in
     let descr =
       if resource then
@@ -302,13 +290,13 @@ let pp_message te =
         None
     in
     { short; descr; state = None }
+  | Global (Unknown_lemma sym) ->
+    let short = !^"Unknown lemma" ^^^ squotes (Sym.pp sym) in
+    { short; descr = None; state = None }
   | Unexpected_member (expected, member) ->
     let short = !^"Unexpected member" ^^^ Id.pp member in
     let descr = !^"the struct only has members" ^^^ list Id.pp expected in
     { short; descr = Some descr; state = None }
-  | Unknown_lemma sym ->
-    let short = !^"Unknown lemma" ^^^ squotes (Sym.pp sym) in
-    { short; descr = None; state = None }
   | First_iarg_missing ->
     let short = !^"Missing pointer input argument" in
     let descr = !^"a predicate definition must have at least one input argument" in

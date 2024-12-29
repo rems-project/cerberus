@@ -210,15 +210,17 @@ module ErrorReader = struct
 
   let bind = bind
 
-  type state = s
+  let get_global () =
+    let@ s = get () in
+    return s.typing_context.global
 
-  type global = Global.t
 
-  let get = get
+  let fail loc msg = fail (fun _ -> { loc; msg = Global msg })
 
-  let to_global (s : s) = s.typing_context.global
+  let get_context () =
+    let@ s = get () in
+    return s.typing_context
 
-  let to_context (s : s) = s.typing_context
 
   let lift = lift
 end
@@ -230,61 +232,10 @@ module Global = struct
 
   let is_fun_decl global id = Option.is_some @@ Global.get_fun_decl global id
 
-  let get_logical_function_def_opt id = get_logical_function_def id
-
-  let error_if_none opt loc msg =
-    let@ opt in
-    Option.fold
-      opt
-      ~some:return
-      ~none:
-        (let@ msg in
-         fail (fun _ -> { loc; msg }))
-
-
-  let get_logical_function_def loc id =
-    error_if_none
-      (get_logical_function_def id)
-      loc
-      (let@ res = get_resource_predicate_def id in
-       return (TypeErrors.Unknown_logical_function { id; resource = Option.is_some res }))
-
-
-  let get_struct_decl loc tag =
-    error_if_none (get_struct_decl tag) loc (return (TypeErrors.Unknown_struct tag))
-
-
-  let get_datatype loc tag =
-    error_if_none (get_datatype tag) loc (return (TypeErrors.Unknown_datatype tag))
-
-
-  let get_datatype_constr loc tag =
-    error_if_none
-      (get_datatype_constr tag)
-      loc
-      (return (TypeErrors.Unknown_datatype_constr tag))
-
-
   let get_struct_member_type loc tag member =
     let@ decl = get_struct_decl loc tag in
     let@ ty = get_member_type loc member decl in
     return ty
-
-
-  let get_fun_decl loc fsym =
-    error_if_none (get_fun_decl fsym) loc (return (TypeErrors.Unknown_function fsym))
-
-
-  let get_lemma loc lsym =
-    error_if_none (get_lemma lsym) loc (return (TypeErrors.Unknown_lemma lsym))
-
-
-  let get_resource_predicate_def loc id =
-    error_if_none
-      (get_resource_predicate_def id)
-      loc
-      (let@ log = get_logical_function_def_opt id in
-       return (TypeErrors.Unknown_resource_predicate { id; logical = Option.is_some log }))
 
 
   let get_fun_decls () =

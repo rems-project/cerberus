@@ -9,11 +9,7 @@ module type ErrorReader = sig
 
   val bind : 'a t -> ('a -> 'b t) -> 'b t
 
-  type state
-
-  val get : unit -> state t
-
-  val to_context : state -> Context.t
+  val get_context : unit -> Context.t t
 
   val lift : 'a Or_TypeError.t -> 'a t
 end

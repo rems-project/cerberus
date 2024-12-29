@@ -738,7 +738,7 @@ let add_logical_funs_from_c call_funinfo funs_to_convert funs =
         let@ fbody =
           match Pmap.lookup c_fun_sym funs with
           | Some fbody -> return fbody
-          | None -> fail_n { loc; msg = Unknown_function c_fun_sym }
+          | None -> fail_n { loc; msg = Global (Unknown_function c_fun_sym) }
         in
         let@ it = c_fun_to_it loc global_context l_fun_sym c_fun_sym def fbody in
         Pp.debug
