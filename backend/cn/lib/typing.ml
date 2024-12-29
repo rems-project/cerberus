@@ -179,19 +179,9 @@ let print_with_ctxt printer =
 
 let get_global () : Global.t t = inspect_typing_context (fun c -> c.global)
 
+(** TODO delete this, have Global.t be constructed by itself *)
 let set_global (g : Global.t) : unit t =
   modify_typing_context (fun s -> { s with global = g })
-
-
-(* later functions should be rewritten to use `inspect_global` and `modify_global` *)
-let _inspect_global (f : Global.t -> 'a) : 'a t =
-  let@ g = get_global () in
-  return (f g)
-
-
-let _modify_global (f : Global.t -> Global.t) : unit t =
-  let@ g = get_global () in
-  set_global (f g)
 
 
 let record_action ((a : Explain.action), (loc : Loc.t)) : unit t =
@@ -205,45 +195,8 @@ let modify_where (f : Where.t -> Where.t) : unit t =
     { s with log; typing_context })
 
 
-(* convenient functions for global typing context *)
-
-let get_logical_function_def loc id =
-  let@ global = get_global () in
-  match Global.get_logical_function_def global id with
-  | Some def -> return def
-  | None ->
-    fail (fun _ ->
-      { loc;
-        msg =
-          Unknown_logical_function
-            { id;
-              resource = Option.is_some (Global.get_resource_predicate_def global id)
-            }
-      })
-
-
-let get_struct_decl loc tag =
-  let@ global = get_global () in
-  match Sym.Map.find_opt tag global.struct_decls with
-  | Some decl -> return decl
-  | None -> fail (fun _ -> { loc; msg = Unknown_struct tag })
-
-
-let get_datatype loc tag =
-  let@ global = get_global () in
-  match Sym.Map.find_opt tag global.datatypes with
-  | Some dt -> return dt
-  | None -> fail (fun _ -> { loc; msg = Unknown_datatype tag })
-
-
-let get_datatype_constr loc tag =
-  let@ global = get_global () in
-  match Sym.Map.find_opt tag global.datatype_constrs with
-  | Some info -> return info
-  | None -> fail (fun _ -> { loc; msg = Unknown_datatype_constr tag })
-
-
-let get_member_type loc _tag member layout : Sctypes.t m =
+(** TODO move the option part of this to Memory *)
+let get_member_type loc member layout : Sctypes.t m =
   let member_types = Memory.member_types layout in
   match List.assoc_opt Id.equal member member_types with
   | Some membertyp -> return membertyp
@@ -251,88 +204,139 @@ let get_member_type loc _tag member layout : Sctypes.t m =
     fail (fun _ -> { loc; msg = Unexpected_member (List.map fst member_types, member) })
 
 
-let get_struct_member_type loc tag member =
-  let@ decl = get_struct_decl loc tag in
-  let@ ty = get_member_type loc tag member decl in
-  return ty
+module Global = struct
+  include Global.Lift (struct
+      type nonrec 'a t = 'a t
+
+      let return = return
+
+      let bind = bind
+
+      type state = s
+
+      type global = Global.t
+
+      let get = get
+
+      let to_global (s : s) = s.typing_context.global
+    end)
+
+  let empty = Global.empty
+
+  let is_fun_decl global id = Option.is_some @@ Global.get_fun_decl global id
+
+  let get_logical_function_def_opt id = get_logical_function_def id
+
+  let error_if_none opt loc msg =
+    let@ opt in
+    Option.fold
+      opt
+      ~some:return
+      ~none:
+        (let@ msg in
+         fail (fun _ -> { loc; msg }))
 
 
-let get_fun_decl loc fsym =
-  let@ global = get_global () in
-  match Global.get_fun_decl global fsym with
-  | Some t -> return t
-  | None -> fail (fun _ -> { loc; msg = Unknown_function fsym })
+  let get_logical_function_def loc id =
+    error_if_none
+      (get_logical_function_def id)
+      loc
+      (let@ res = get_resource_predicate_def id in
+       return (TypeErrors.Unknown_logical_function { id; resource = Option.is_some res }))
 
 
-let get_lemma loc lsym =
-  let@ global = get_global () in
-  match Global.get_lemma global lsym with
-  | Some t -> return t
-  | None -> fail (fun _ -> { loc; msg = Unknown_lemma lsym })
+  let get_struct_decl loc tag =
+    error_if_none (get_struct_decl tag) loc (return (TypeErrors.Unknown_struct tag))
 
 
-let get_resource_predicate_def loc id =
-  let@ global = get_global () in
-  match Global.get_resource_predicate_def global id with
-  | Some def -> return def
-  | None ->
-    fail (fun _ ->
-      { loc;
-        msg =
-          Unknown_resource_predicate
-            { id; logical = Option.is_some (Global.get_logical_function_def global id) }
-      })
+  let get_datatype loc tag =
+    error_if_none (get_datatype tag) loc (return (TypeErrors.Unknown_datatype tag))
 
 
-let add_struct_decl tag layout : unit m =
-  let@ global = get_global () in
-  set_global { global with struct_decls = Sym.Map.add tag layout global.struct_decls }
+  let get_datatype_constr loc tag =
+    error_if_none
+      (get_datatype_constr tag)
+      loc
+      (return (TypeErrors.Unknown_datatype_constr tag))
 
 
-let add_fun_decl fname entry =
-  let@ global = get_global () in
-  set_global { global with fun_decls = Sym.Map.add fname entry global.fun_decls }
+  let get_struct_member_type loc tag member =
+    let@ decl = get_struct_decl loc tag in
+    let@ ty = get_member_type loc member decl in
+    return ty
 
 
-let add_lemma lemma_s (loc, lemma_typ) =
-  let@ global = get_global () in
-  set_global { global with lemmata = Sym.Map.add lemma_s (loc, lemma_typ) global.lemmata }
+  let get_fun_decl loc fsym =
+    error_if_none (get_fun_decl fsym) loc (return (TypeErrors.Unknown_function fsym))
 
 
-let add_resource_predicate name entry =
-  let@ global = get_global () in
-  set_global
-    { global with
-      resource_predicates = Sym.Map.add name entry global.resource_predicates
-    }
+  let get_lemma loc lsym =
+    error_if_none (get_lemma lsym) loc (return (TypeErrors.Unknown_lemma lsym))
 
 
-let add_logical_function name entry =
-  let@ global = get_global () in
-  set_global
-    { global with logical_functions = Sym.Map.add name entry global.logical_functions }
+  let get_resource_predicate_def loc id =
+    error_if_none
+      (get_resource_predicate_def id)
+      loc
+      (let@ log = get_logical_function_def_opt id in
+       return (TypeErrors.Unknown_resource_predicate { id; logical = Option.is_some log }))
 
 
-let add_datatype name entry =
-  let@ global = get_global () in
-  set_global { global with datatypes = Sym.Map.add name entry global.datatypes }
+  let get_fun_decls () =
+    let@ global = get_global () in
+    return (Sym.Map.bindings global.fun_decls)
 
 
-let add_datatype_constr name entry =
-  let@ global = get_global () in
-  set_global
-    { global with datatype_constrs = Sym.Map.add name entry global.datatype_constrs }
+  let add_struct_decl tag layout : unit m =
+    let@ global = get_global () in
+    set_global { global with struct_decls = Sym.Map.add tag layout global.struct_decls }
 
 
-let set_datatype_order datatype_order =
-  let@ g = get_global () in
-  set_global { g with datatype_order }
+  let add_fun_decl fname entry =
+    let@ global = get_global () in
+    set_global { global with fun_decls = Sym.Map.add fname entry global.fun_decls }
 
 
-let get_datatype_order () =
-  let@ g = get_global () in
-  return g.datatype_order
+  let add_lemma lemma_s (loc, lemma_typ) =
+    let@ global = get_global () in
+    set_global
+      { global with lemmata = Sym.Map.add lemma_s (loc, lemma_typ) global.lemmata }
 
+
+  let add_resource_predicate name entry =
+    let@ global = get_global () in
+    set_global
+      { global with
+        resource_predicates = Sym.Map.add name entry global.resource_predicates
+      }
+
+
+  let add_logical_function name entry =
+    let@ global = get_global () in
+    set_global
+      { global with logical_functions = Sym.Map.add name entry global.logical_functions }
+
+
+  let add_datatype name entry =
+    let@ global = get_global () in
+    set_global { global with datatypes = Sym.Map.add name entry global.datatypes }
+
+
+  let add_datatype_constr name entry =
+    let@ global = get_global () in
+    set_global
+      { global with datatype_constrs = Sym.Map.add name entry global.datatype_constrs }
+
+
+  let set_datatype_order datatype_order =
+    let@ g = get_global () in
+    set_global { g with datatype_order }
+
+
+  let get_datatype_order () =
+    let@ g = get_global () in
+    return g.datatype_order
+end
 
 (* end: convenient functions for global typing context *)
 
@@ -852,21 +856,21 @@ module NoSolver = struct
 
   let add_l = add_l
 
-  let get_struct_decl = get_struct_decl
+  let get_struct_decl = Global.get_struct_decl
 
-  let get_struct_member_type = get_struct_member_type
+  let get_struct_member_type = Global.get_struct_member_type
 
-  let get_datatype = get_datatype
+  let get_datatype = Global.get_datatype
 
-  let get_datatype_constr = get_datatype_constr
+  let get_datatype_constr = Global.get_datatype_constr
 
-  let get_resource_predicate_def = get_resource_predicate_def
+  let get_resource_predicate_def = Global.get_resource_predicate_def
 
-  let get_logical_function_def = get_logical_function_def
+  let get_logical_function_def = Global.get_logical_function_def
 
-  let get_lemma = get_lemma
+  let get_lemma = Global.get_lemma
 
-  let get_fun_decl = get_fun_decl
+  let get_fun_decl = Global.get_fun_decl
 
   let ensure_base_type = ensure_base_type
 

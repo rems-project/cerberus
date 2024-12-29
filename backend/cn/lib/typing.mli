@@ -80,10 +80,6 @@ val add_r : Locations.t -> Resource.t -> unit m
 
 val add_rs : Locations.t -> Resource.t list -> unit m
 
-val set_datatype_order : Sym.t list list option -> unit m
-
-val get_datatype_order : unit -> Sym.t list list option m
-
 val res_history : Locations.t -> int -> Context.resource_history m
 
 type changed =
@@ -97,43 +93,55 @@ val map_and_fold_resources
   'acc ->
   ('acc * int list) m
 
-val get_struct_decl : Locations.t -> Sym.t -> Memory.struct_decl m
+module Global : sig
+  val empty : Global.t
 
-val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> Sctypes.t m
+  val get_struct_decl : Locations.t -> Sym.t -> Memory.struct_decl m
 
-val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> Sctypes.t m
+  val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> Sctypes.t m
 
-val get_datatype : Locations.t -> Sym.t -> BaseTypes.dt_info m
+  val get_datatype : Locations.t -> Sym.t -> BaseTypes.dt_info m
 
-val get_datatype_constr : Locations.t -> Sym.t -> BaseTypes.constr_info m
+  val get_datatype_constr : Locations.t -> Sym.t -> BaseTypes.constr_info m
 
-val get_fun_decl
-  :  Locations.t ->
-  Sym.t ->
-  (Locations.t * Global.AT.ft option * Sctypes.c_concrete_sig) m
+  val get_fun_decl
+    :  Locations.t ->
+    Sym.t ->
+    (Locations.t * Global.AT.ft option * Sctypes.c_concrete_sig) m
 
-val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat) m
+  val add_lemma : Sym.t -> Locations.t * ArgumentTypes.lemmat -> unit m
 
-val get_resource_predicate_def : Locations.t -> Sym.t -> Definition.Predicate.t m
+  val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat) m
 
-val get_logical_function_def : Locations.t -> Sym.t -> Definition.Function.t m
+  val get_resource_predicate_def : Locations.t -> Sym.t -> Definition.Predicate.t m
 
-val add_struct_decl : Sym.t -> Memory.struct_layout -> unit m
+  val get_logical_function_def : Locations.t -> Sym.t -> Definition.Function.t m
 
-val add_fun_decl
-  :  Sym.t ->
-  Locations.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig ->
-  unit m
+  val add_struct_decl : Sym.t -> Memory.struct_layout -> unit m
 
-val add_lemma : Sym.t -> Locations.t * ArgumentTypes.lemmat -> unit m
+  val add_fun_decl
+    :  Sym.t ->
+    Locations.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig ->
+    unit m
 
-val add_resource_predicate : Sym.t -> Definition.Predicate.t -> unit m
+  val set_datatype_order : Sym.t list list option -> unit m
 
-val add_logical_function : Sym.t -> Definition.Function.t -> unit m
+  val get_datatype_order : unit -> Sym.t list list option m
 
-val add_datatype : Sym.t -> BaseTypes.dt_info -> unit m
+  val add_resource_predicate : Sym.t -> Definition.Predicate.t -> unit m
 
-val add_datatype_constr : Sym.t -> BaseTypes.constr_info -> unit m
+  val add_logical_function : Sym.t -> Definition.Function.t -> unit m
+
+  val add_datatype : Sym.t -> BaseTypes.dt_info -> unit m
+
+  val add_datatype_constr : Sym.t -> BaseTypes.constr_info -> unit m
+
+  val is_fun_decl : Global.t -> Sym.t -> bool
+
+  val get_fun_decls
+    :  unit ->
+    (Sym.t * (Locations.t * Global.AT.ft option * Sctypes.c_concrete_sig)) list m
+end
 
 (* val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit) m *)
 
