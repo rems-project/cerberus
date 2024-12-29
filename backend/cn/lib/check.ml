@@ -2611,7 +2611,7 @@ let record_and_check_datatypes datatypes =
     datatypes
 
 
-(** Note: this does not check loop invariants and CN statements! *)
+(** NOTE: not clear if this checks loop invariants and CN statements! *)
 let check_decls_lemmata_fun_specs (file : unit Mu.file) =
   Cerb_debug.begin_csv_timing ();
   (* decl, lemmata, function specification checking *)

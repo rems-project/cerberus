@@ -18,32 +18,37 @@ module GlobalReader = struct
 
   let bind x f s = match x s with Ok (y, s') -> f y s' | Error err -> Error err
 
-  let get () s = Ok (s, s)
+  let get_global () s = Ok (s.Context.global, s)
 
-  let to_global ctxt = ctxt.Context.global
-
-  type global = Global.t
-
-  type state = Context.t
+  let fail loc msg _ = Error TypeErrors.{ loc; msg = Global msg }
 end
 
 module NoSolver = struct
   include GlobalReader
   include Global.Lift (GlobalReader)
 
-  type failure = TypeErrors.t
+  let fail err : 'a t = fun _ -> Error err
 
-  let liftFail typeErr = typeErr
+  let ( let@ ) = bind
+
+  let get_member_type loc member layout : Sctypes.t t =
+    let member_types = Memory.member_types layout in
+    match List.assoc_opt Id.equal member member_types with
+    | Some membertyp -> return membertyp
+    | None -> fail { loc; msg = Unexpected_member (List.map fst member_types, member) }
+
+
+  let get_struct_member_type loc tag member =
+    let@ decl = get_struct_decl loc tag in
+    let@ ty = get_member_type loc member decl in
+    return ty
+
 
   let pure x s = match x s with Ok (y, _) -> Ok (y, s) | Error err -> Error err
-
-  let fail (typeErr : failure) : 'a t = fun _ -> Error (liftFail typeErr)
 
   let update f s = Ok ((), f s)
 
   let lookup f : _ t = fun s -> Ok (f s, s)
-
-  let ( let@ ) = bind
 
   let bound_a sym = lookup (Context.bound_a sym)
 
@@ -64,70 +69,6 @@ module NoSolver = struct
       fail { loc; msg = Mismatch { has = BT.pp has; expect = BT.pp expect } }
 
 
-  let error_if_none opt loc msg =
-    let@ opt in
-    Option.fold
-      opt
-      ~some:return
-      ~none:
-        (let@ msg in
-         fail { loc; msg })
-
-
-  let get_logical_function_def_opt id = get_logical_function_def id
-
-  let get_logical_function_def loc id =
-    error_if_none
-      (get_logical_function_def id)
-      loc
-      (let@ res = get_resource_predicate_def id in
-       return (TypeErrors.Unknown_logical_function { id; resource = Option.is_some res }))
-
-
-  let get_struct_decl loc tag =
-    error_if_none (get_struct_decl tag) loc (return (TypeErrors.Unknown_struct tag))
-
-
-  let get_datatype loc tag =
-    error_if_none (get_datatype tag) loc (return (TypeErrors.Unknown_datatype tag))
-
-
-  let get_datatype_constr loc tag =
-    error_if_none
-      (get_datatype_constr tag)
-      loc
-      (return (TypeErrors.Unknown_datatype_constr tag))
-
-
-  let get_member_type loc member layout : Sctypes.t t =
-    let member_types = Memory.member_types layout in
-    match List.assoc_opt Id.equal member member_types with
-    | Some membertyp -> return membertyp
-    | None -> fail { loc; msg = Unexpected_member (List.map fst member_types, member) }
-
-
-  let get_struct_member_type loc tag member =
-    let@ decl = get_struct_decl loc tag in
-    let@ ty = get_member_type loc member decl in
-    return ty
-
-
-  let get_fun_decl loc fsym =
-    error_if_none (get_fun_decl fsym) loc (return (TypeErrors.Unknown_function fsym))
-
-
-  let get_lemma loc lsym =
-    error_if_none (get_lemma lsym) loc (return (TypeErrors.Unknown_lemma lsym))
-
-
-  let get_resource_predicate_def loc id =
-    error_if_none
-      (get_resource_predicate_def id)
-      loc
-      (let@ log = get_logical_function_def_opt id in
-       return (TypeErrors.Unknown_resource_predicate { id; logical = Option.is_some log }))
-
-
   let lift = function Ok x -> return x | Error x -> fail x
 
   let run ctxt x = x ctxt
@@ -136,8 +77,6 @@ end
 let use_ity = ref true
 
 open NoSolver
-
-let fail typeErr = fail (liftFail typeErr)
 
 open Effectful.Make (NoSolver)
 
@@ -2523,11 +2462,7 @@ module type ErrorReader = sig
 
   val bind : 'a t -> ('a -> 'b t) -> 'b t
 
-  type state
-
-  val get : unit -> state t
-
-  val to_context : state -> Context.t
+  val get_context : unit -> Context.t t
 
   val lift : 'a Or_TypeError.t -> 'a t
 end
@@ -2535,22 +2470,19 @@ end
 module Lift (M : ErrorReader) : WellTyped_intf.S with type 'a t := 'a M.t = struct
   let lift1 f x =
     let ( let@ ) = M.bind in
-    let@ state = M.get () in
-    let context = M.to_context state in
+    let@ context = M.get_context () in
     M.lift (Result.map fst (run context (f x)))
 
 
   let lift2 f x y =
     let ( let@ ) = M.bind in
-    let@ state = M.get () in
-    let context = M.to_context state in
+    let@ context = M.get_context () in
     M.lift (Result.map fst (f x y context))
 
 
   let lift3 f x y z =
     let ( let@ ) = M.bind in
-    let@ state = M.get () in
-    let context = M.to_context state in
+    let@ context = M.get_context () in
     M.lift (Result.map fst (f x y z context))
 
 
@@ -2594,8 +2526,7 @@ module Lift (M : ErrorReader) : WellTyped_intf.S with type 'a t := 'a M.t = stru
 
   let ensure_same_argument_number loc type_ n ~expect =
     let ( let@ ) = M.bind in
-    let@ state = M.get () in
-    let context = M.to_context state in
+    let@ context = M.get_context () in
     M.lift (Result.map fst (ensure_same_argument_number loc type_ n ~expect context))
 
 

@@ -8,8 +8,8 @@ tests/cn/tree16/as_mutual_dt/tree16.c:111:19: warning: 'each' expects a 'u64', b
 tests/cn/tree16/as_mutual_dt/tree16.c:121:18: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
             take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
                  ^
-other location (File "backend/cn/lib/compile.ml", line 1571, characters 38-45)  warning: 'extract' expects a 'u64', but 'read_&i1' with type 'i32' was provided. This will become an error in the future.
+other location (File "backend/cn/lib/compile.ml", line 1576, characters 38-45)  warning: 'extract' expects a 'u64', but 'read_&i1' with type 'i32' was provided. This will become an error in the future.
 
-other location (File "backend/cn/lib/compile.ml", line 1571, characters 38-45)  warning: 'extract' expects a 'u64', but 'read_&idx0' with type 'i32' was provided. This will become an error in the future.
+other location (File "backend/cn/lib/compile.ml", line 1576, characters 38-45)  warning: 'extract' expects a 'u64', but 'read_&idx0' with type 'i32' was provided. This will become an error in the future.
 
 [1/1]: lookup_rec -- pass

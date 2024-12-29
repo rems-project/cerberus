@@ -50,21 +50,9 @@ module RequestChain : sig
 end
 
 type message =
-  | Unknown_variable of Sym.t
-  | Unknown_function of Sym.t
-  | Unknown_struct of Sym.t
-  | Unknown_datatype of Sym.t
-  | Unknown_datatype_constr of Sym.t
-  | Unknown_resource_predicate of
-      { id : Sym.t;
-        logical : bool
-      }
-  | Unknown_logical_function of
-      { id : Sym.t;
-        resource : bool
-      }
+  | Global of Global.error
   | Unexpected_member of Id.t list * Id.t
-  | Unknown_lemma of Sym.t
+  | Unknown_variable of Sym.t
   | First_iarg_missing
   | First_iarg_not_pointer of
       { pname : Request.name;
