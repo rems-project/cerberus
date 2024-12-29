@@ -51,14 +51,12 @@ end
 
 type message =
   | Global of Global.error
-  | Unexpected_member of Id.t list * Id.t
-  | Unknown_variable of Sym.t
+  | WellTyped of WellTyped.message
   | First_iarg_missing
   | First_iarg_not_pointer of
       { pname : Request.name;
         found_bty : BaseTypes.t
       }
-  | Missing_member of Id.t
   | Missing_resource of
       { requests : RequestChain.t;
         situation : situation;
@@ -76,40 +74,10 @@ type message =
         ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
-  | Number_members of
-      { has : int;
-        expect : int
-      }
-  | Number_arguments of
-      { has : int;
-        expect : int
-      }
-  | Number_input_arguments of
-      { has : int;
-        expect : int
-      }
-  | Number_output_arguments of
-      { has : int;
-        expect : int
-      }
-  | Mismatch of
-      { has : Pp.document; (** TODO replace with an actual type *)
-        expect : Pp.document (** TODO replace with an acutal type *)
-      }
-  | Illtyped_it of
-      { it : Pp.document; (** TODO replace with an actual type *)
-        has : Pp.document; (* TODO replace with an actual type *)
-        expected : string; (** TODO replace with an actual type *)
-        reason : string (** TODO replace with an actual type *)
-      }
   | Illtyped_binary_it of
       { left : IndexTerms.Surface.t;
         right : IndexTerms.Surface.t;
         binop : Cerb_frontend.Cn.cn_binop
-      }
-  | NIA of
-      { it : IndexTerms.t;
-        hint : string (** TODO replace with an actual type *)
       }
   | TooBigExponent : { it : IndexTerms.t } -> message
   | NegativeExponent : { it : IndexTerms.t } -> message
@@ -172,10 +140,6 @@ type message =
       }
   | Unsupported of Pp.document (** TODO add source location *)
   | Parser of Cerb_frontend.Errors.cparser_cause
-  | Empty_pattern
-  | Missing_pattern of Pp.document (** TODO delete this *)
-  | Redundant_pattern of Pp.document (** TODO delete this *)
-  | Duplicate_pattern
   | Empty_provenance
   | Inconsistent_assumptions of string * (Context.t * Explain.log)
   (** TODO replace string with an actual type *)

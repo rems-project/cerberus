@@ -1,15 +1,14 @@
-open TypeErrors
-open Typing
-
-open Effectful.Make (Typing)
-
 module StringMap = Map.Make (String)
 module IntMap = Map.Make (Int)
 module CF = Cerb_frontend
 module BT = BaseTypes
-open Cerb_pp_prelude
 module Mu = Mucore
 module IT = IndexTerms
+open Cerb_pp_prelude
+open TypeErrors
+open Typing
+
+open Effectful.Make (Typing)
 
 let fail_n m = fail (fun _ctxt -> m)
 
@@ -245,7 +244,7 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
   | PEsym sym ->
     (match Sym.Map.find_opt sym var_map with
      | Some r -> return r
-     | _ -> fail_n { loc; msg = Unknown_variable sym })
+     | _ -> fail_n { loc; msg = WellTyped (Unknown_variable sym) })
   | PEval v ->
     (match val_to_it loc v with
      | Some r -> return r

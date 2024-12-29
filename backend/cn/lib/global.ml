@@ -58,6 +58,7 @@ type error =
         resource : bool
       }
   | Unknown_lemma of Sym.t
+  | Unexpected_member of Id.t list * Id.t (** TODO replace with actual terms *)
 
 type global_t_alias_do_not_use = t
 
@@ -88,6 +89,8 @@ module type Lifted = sig
   val get_lemma : Locations.t -> Sym.t -> (Cerb_location.t * AT.lemmat) t
 
   val get_struct_decl : Locations.t -> Sym.t -> Memory.struct_layout t
+
+  val get_member_type : Locations.t -> Id.t -> Memory.struct_piece list -> Sctypes.ctype t
 
   val get_datatype : Locations.t -> Sym.t -> BaseTypes.dt_info t
 
@@ -120,6 +123,13 @@ module Lift (M : ErrorReader) : Lifted with type 'a t := 'a M.t = struct
   let get_lemma loc lsym = lift get_lemma loc lsym (fun _ -> Unknown_lemma lsym)
 
   let get_struct_decl loc tag = lift get_struct_decl loc tag (fun _ -> Unknown_struct tag)
+
+  let get_member_type loc member layout =
+    let member_types = Memory.member_types layout in
+    match List.assoc_opt Id.equal member member_types with
+    | Some membertyp -> M.return membertyp
+    | None -> M.fail loc (Unexpected_member (List.map fst member_types, member))
+
 
   let get_datatype loc tag =
     lift get_datatype loc tag (fun _ -> Unknown_datatype_constr tag)

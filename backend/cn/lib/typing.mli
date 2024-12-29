@@ -156,8 +156,6 @@ val test_value_eqs
 
 val lift : 'a Or_TypeError.t -> 'a m
 
-val ensure_base_type : Locations.t -> expect:BaseTypes.t -> BaseTypes.t -> unit m
-
 val make_return_record
   :  Locations.t ->
   string ->
@@ -189,4 +187,4 @@ val modify_where : (Where.t -> Where.t) -> unit m
 
 val init_solver : unit -> unit m
 
-module WellTyped : WellTyped_intf.S with type 'a t = 'a t
+module WellTyped : WellTyped_intf.S with type 'a t := 'a t

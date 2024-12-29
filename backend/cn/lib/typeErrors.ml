@@ -113,15 +113,13 @@ end
 
 type message =
   | Global of Global.error
-  | Unexpected_member of Id.t list * Id.t
-  | Unknown_variable of Sym.t
+  | WellTyped of WellTyped.message
   (* some from Kayvan's compilePredicates module *)
   | First_iarg_missing
   | First_iarg_not_pointer of
       { pname : Request.name;
         found_bty : BaseTypes.t
       }
-  | Missing_member of Id.t
   | Missing_resource of
       { requests : RequestChain.t;
         situation : situation;
@@ -139,40 +137,10 @@ type message =
         ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
-  | Number_members of
-      { has : int;
-        expect : int
-      }
-  | Number_arguments of
-      { has : int;
-        expect : int
-      }
-  | Number_input_arguments of
-      { has : int;
-        expect : int
-      }
-  | Number_output_arguments of
-      { has : int;
-        expect : int
-      }
-  | Mismatch of
-      { has : document;
-        expect : document
-      }
-  | Illtyped_it of
-      { it : document;
-        has : document; (* 'expected' and 'has' as in Kayvan's Core type checker *)
-        expected : string;
-        reason : string
-      }
   | Illtyped_binary_it of
       { left : IT.Surface.t;
         right : IT.Surface.t;
         binop : CF.Cn.cn_binop
-      }
-  | NIA of
-      { it : IT.t;
-        hint : string
       }
   | TooBigExponent : { it : IT.t } -> message
   | NegativeExponent : { it : IT.t } -> message
@@ -228,7 +196,7 @@ type message =
         ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
-  | Generic of document
+  | Generic of Pp.document (** TODO delete this *)
   | Generic_with_model of
       { err : document;
         model : Solver.model_with_q;
@@ -236,10 +204,6 @@ type message =
       }
   | Unsupported of document
   | Parser of Cerb_frontend.Errors.cparser_cause
-  | Empty_pattern
-  | Missing_pattern of document
-  | Redundant_pattern of document
-  | Duplicate_pattern
   | Empty_provenance
   | Inconsistent_assumptions of string * (Context.t * Explain.log)
   | Byte_conv_needs_owned
@@ -255,24 +219,20 @@ type report =
     state : Report.report option
   }
 
-let pp_message te =
-  match te with
-  | Unknown_variable s ->
-    let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
-    { short; descr = None; state = None }
-  | Global (Unknown_function sym) ->
+let pp_global = function
+  | Global.Unknown_function sym ->
     let short = !^"Unknown function" ^^^ squotes (Sym.pp sym) in
     { short; descr = None; state = None }
-  | Global (Unknown_struct tag) ->
+  | Unknown_struct tag ->
     let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
     { short; descr = None; state = None }
-  | Global (Unknown_datatype tag) ->
+  | Unknown_datatype tag ->
     let short = !^"Datatype" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
     { short; descr = None; state = None }
-  | Global (Unknown_datatype_constr tag) ->
+  | Unknown_datatype_constr tag ->
     let short = !^"Datatype constructor" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
     { short; descr = None; state = None }
-  | Global (Unknown_resource_predicate { id; logical }) ->
+  | Unknown_resource_predicate { id; logical } ->
     let short = !^"Unknown resource predicate" ^^^ squotes (Sym.pp id) in
     let descr =
       if logical then
@@ -281,7 +241,7 @@ let pp_message te =
         None
     in
     { short; descr; state = None }
-  | Global (Unknown_logical_function { id; resource }) ->
+  | Unknown_logical_function { id; resource } ->
     let short = !^"Unknown logical function" ^^^ squotes (Sym.pp id) in
     let descr =
       if resource then
@@ -290,91 +250,25 @@ let pp_message te =
         None
     in
     { short; descr; state = None }
-  | Global (Unknown_lemma sym) ->
+  | Unknown_lemma sym ->
     let short = !^"Unknown lemma" ^^^ squotes (Sym.pp sym) in
     { short; descr = None; state = None }
   | Unexpected_member (expected, member) ->
     let short = !^"Unexpected member" ^^^ Id.pp member in
     let descr = !^"the struct only has members" ^^^ list Id.pp expected in
     { short; descr = Some descr; state = None }
-  | First_iarg_missing ->
-    let short = !^"Missing pointer input argument" in
-    let descr = !^"a predicate definition must have at least one input argument" in
-    { short; descr = Some descr; state = None }
-  | First_iarg_not_pointer { pname; found_bty } ->
-    let short = !^"Non-pointer first input argument" in
-    let descr =
-      !^"the first input argument of predicate"
-      ^^^ squotes (Request.pp_name pname)
-      ^^^ !^"must have type"
-      ^^^ squotes BaseTypes.(pp (Loc ()))
-      ^^^ !^"but was found with type"
-      ^^^ squotes BaseTypes.(pp found_bty)
-    in
-    { short; descr = Some descr; state = None }
-  | Missing_member m ->
-    let short = !^"Missing member" ^^^ Id.pp m in
+
+
+let pp_welltyped = function
+  | WellTyped.Global msg -> pp_global msg
+  | Unknown_variable s ->
+    let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
     { short; descr = None; state = None }
-  | Missing_resource { requests; situation; ctxt; model } ->
-    let short = !^"Missing resource" ^^^ for_situation situation in
-    let descr = RequestChain.pp requests in
-    let orequest =
-      Option.map
-        (fun (r : RequestChain.elem) -> r.RequestChain.resource)
-        (List.nth_opt (List.rev requests) 0)
+  | Number_arguments { type_; has; expect } ->
+    let type_ =
+      match type_ with `Other -> "" | `Input -> "input" | `Output -> "output"
     in
-    let state = Explain.trace ctxt model Explain.{ no_ex with request = orequest } in
-    { short; descr; state = Some state }
-  | Merging_multiple_arrays { requests; situation; ctxt; model } ->
-    let short =
-      !^"Cannot satisfy request for resource"
-      ^^^ for_situation situation
-      ^^ dot
-      ^^^ !^"It requires merging multiple arrays."
-    in
-    let descr = RequestChain.pp requests in
-    let orequest =
-      Option.map (fun r -> r.RequestChain.resource) (List.nth_opt (List.rev requests) 0)
-    in
-    let state = Explain.trace ctxt model Explain.{ no_ex with request = orequest } in
-    { short; descr; state = Some state }
-  | Unused_resource { resource; ctxt; model } ->
-    let resource = Res.pp resource in
-    let short = !^"Left-over unused resource" ^^^ squotes resource in
-    let state = Explain.trace ctxt model Explain.no_ex in
-    { short; descr = None; state = Some state }
-  | Number_members { has; expect } ->
-    let short = !^"Wrong number of struct members" in
-    let descr =
-      !^"Expected"
-      ^^^ !^(string_of_int expect)
-      ^^ comma
-      ^^^ !^"has"
-      ^^^ !^(string_of_int has)
-    in
-    { short; descr = Some descr; state = None }
-  | Number_arguments { has; expect } ->
-    let short = !^"Wrong number of arguments" in
-    let descr =
-      !^"Expected"
-      ^^^ !^(string_of_int expect)
-      ^^ comma
-      ^^^ !^"has"
-      ^^^ !^(string_of_int has)
-    in
-    { short; descr = Some descr; state = None }
-  | Number_input_arguments { has; expect } ->
-    let short = !^"Wrong number of input arguments" in
-    let descr =
-      !^"Expected"
-      ^^^ !^(string_of_int expect)
-      ^^ comma
-      ^^^ !^"has"
-      ^^^ !^(string_of_int has)
-    in
-    { short; descr = Some descr; state = None }
-  | Number_output_arguments { has; expect } ->
-    let short = !^"Wrong number of output arguments" in
+    let short = !^"Wrong number" ^^^ !^type_ ^^^ !^"of arguments" in
     let descr =
       !^"Expected"
       ^^^ !^(string_of_int expect)
@@ -419,6 +313,66 @@ let pp_message te =
       ^^^ !^hint
     in
     { short; descr = Some descr; state = None }
+  | Empty_pattern ->
+    let short = !^"Empty match expression." in
+    { short; descr = None; state = None }
+  | Generic err ->
+    let short = err in
+    { short; descr = None; state = None }
+  | Redundant_pattern p' ->
+    let short = !^"Redundant pattern" in
+    { short; descr = Some p'; state = None }
+  | Missing_member m ->
+    let short = !^"Missing member" ^^^ Id.pp m in
+    { short; descr = None; state = None }
+
+
+let pp_message = function
+  | Global msg -> pp_global msg
+  | WellTyped msg -> pp_welltyped msg
+  | First_iarg_missing ->
+    let short = !^"Missing pointer input argument" in
+    let descr = !^"a predicate definition must have at least one input argument" in
+    { short; descr = Some descr; state = None }
+  | First_iarg_not_pointer { pname; found_bty } ->
+    let short = !^"Non-pointer first input argument" in
+    let descr =
+      !^"the first input argument of predicate"
+      ^^^ squotes (Request.pp_name pname)
+      ^^^ !^"must have type"
+      ^^^ squotes BaseTypes.(pp (Loc ()))
+      ^^^ !^"but was found with type"
+      ^^^ squotes BaseTypes.(pp found_bty)
+    in
+    { short; descr = Some descr; state = None }
+  | Missing_resource { requests; situation; ctxt; model } ->
+    let short = !^"Missing resource" ^^^ for_situation situation in
+    let descr = RequestChain.pp requests in
+    let orequest =
+      Option.map
+        (fun (r : RequestChain.elem) -> r.RequestChain.resource)
+        (List.nth_opt (List.rev requests) 0)
+    in
+    let state = Explain.trace ctxt model Explain.{ no_ex with request = orequest } in
+    { short; descr; state = Some state }
+  | Merging_multiple_arrays { requests; situation; ctxt; model } ->
+    let short =
+      !^"Cannot satisfy request for resource"
+      ^^^ for_situation situation
+      ^^ dot
+      ^^^ !^"It requires merging multiple arrays."
+    in
+    let descr = RequestChain.pp requests in
+    let orequest =
+      Option.map (fun r -> r.RequestChain.resource) (List.nth_opt (List.rev requests) 0)
+    in
+    let state = Explain.trace ctxt model Explain.{ no_ex with request = orequest } in
+    { short; descr; state = Some state }
+  | Unused_resource { resource; ctxt; model } ->
+    let resource = Res.pp resource in
+    let short = !^"Left-over unused resource" ^^^ squotes resource in
+    let state = Explain.trace ctxt model Explain.no_ex in
+    { short; descr = None; state = Some state }
   | TooBigExponent { it } ->
     let it = IT.pp it in
     let short = !^"Exponent too big" in
@@ -563,18 +517,6 @@ let pp_message te =
     { short; descr = None; state = None }
   | Parser err ->
     let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
-    { short; descr = None; state = None }
-  | Empty_pattern ->
-    let short = !^"Empty match expression." in
-    { short; descr = None; state = None }
-  | Missing_pattern p' ->
-    let short = !^"Missing pattern" ^^^ squotes p' ^^ dot in
-    { short; descr = None; state = None }
-  | Redundant_pattern p' ->
-    let short = !^"Redundant pattern" in
-    { short; descr = Some p'; state = None }
-  | Duplicate_pattern ->
-    let short = !^"Duplicate pattern" in
     { short; descr = None; state = None }
   | Empty_provenance ->
     let short = !^"Empty provenance" in
