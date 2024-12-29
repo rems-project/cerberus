@@ -541,7 +541,7 @@ let rec symb_exec_expr ctxt state_vars expr =
     in
     if Sym.Map.mem nm ctxt.c_fun_pred_map then (
       let loc, l_sym = Sym.Map.find nm ctxt.c_fun_pred_map in
-      let@ def = get_logical_function_def loc l_sym in
+      let@ def = Global.get_logical_function_def loc l_sym in
       rcval (IT.apply_ l_sym args_its def.Definition.Function.return_bt loc) state)
     else (
       let bail = fail_fun_it "not a function with a pure/logical interpretation" in
@@ -710,9 +710,9 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
 
 let upd_def (loc, sym, def_tm) =
   let open Definition.Function in
-  let@ def = get_logical_function_def loc sym in
+  let@ def = Global.get_logical_function_def loc sym in
   match def.body with
-  | Uninterp -> add_logical_function sym { def with body = Def def_tm }
+  | Uninterp -> Global.add_logical_function sym { def with body = Def def_tm }
   | _ ->
     fail_n
       { loc;
@@ -734,7 +734,7 @@ let add_logical_funs_from_c call_funinfo funs_to_convert funs =
   let@ conv_defs =
     ListM.mapM
       (fun Mu.{ c_fun_sym; loc; l_fun_sym } ->
-        let@ def = get_logical_function_def loc l_fun_sym in
+        let@ def = Global.get_logical_function_def loc l_fun_sym in
         let@ fbody =
           match Pmap.lookup c_fun_sym funs with
           | Some fbody -> return fbody

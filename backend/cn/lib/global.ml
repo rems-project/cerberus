@@ -34,9 +34,74 @@ let get_fun_decl global sym = Sym.Map.find_opt sym global.fun_decls
 
 let get_lemma global sym = Sym.Map.find_opt sym global.lemmata
 
+let get_struct_decl global sym = Sym.Map.find_opt sym global.struct_decls
+
+let get_datatype global sym = Sym.Map.find_opt sym global.datatypes
+
+let get_datatype_constr global sym = Sym.Map.find_opt sym global.datatype_constrs
+
 let sym_map_from_bindings xs =
   List.fold_left (fun m (nm, x) -> Sym.Map.add nm x m) Sym.Map.empty xs
 
+
+module type Reader = sig
+  type global = t
+
+  type 'a t
+
+  val return : 'a -> 'a t
+
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+
+  type state
+
+  val get : unit -> state t
+
+  val to_global : state -> global
+end
+
+module type Lifted = sig
+  type 'a t
+
+  val get_resource_predicate_def : Sym.t -> Definition.Predicate.t option t
+
+  val get_logical_function_def : Sym.t -> Definition.Function.t option t
+
+  val get_fun_decl
+    :  Sym.t ->
+    (Cerb_location.t * AT.ft option * Sctypes.c_concrete_sig) option t
+
+  val get_lemma : Sym.t -> (Cerb_location.t * AT.lemmat) option t
+
+  val get_struct_decl : Sym.t -> Memory.struct_layout option t
+
+  val get_datatype : Sym.t -> BaseTypes.dt_info option t
+
+  val get_datatype_constr : Sym.t -> BaseTypes.constr_info option t
+end
+
+module Lift (M : Reader) : Lifted with type 'a t := 'a M.t = struct
+  let lift f sym =
+    let ( let@ ) = M.bind in
+    let@ state = M.get () in
+    let global = M.to_global state in
+    M.return (f global sym)
+
+
+  let get_resource_predicate_def = lift get_resource_predicate_def
+
+  let get_logical_function_def = lift get_logical_function_def
+
+  let get_fun_decl = lift get_fun_decl
+
+  let get_lemma = lift get_lemma
+
+  let get_struct_decl = lift get_struct_decl
+
+  let get_datatype = lift get_datatype
+
+  let get_datatype_constr = lift get_datatype_constr
+end
 
 let pp_struct_layout (tag, layout) =
   item

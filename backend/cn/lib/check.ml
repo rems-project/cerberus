@@ -99,7 +99,7 @@ let check_ptrval (loc : Locations.t) ~(expect : BT.t) (ptrval : pointer_value) :
         unsupported loc !^"invalid function pointer"
       | Some sym ->
         (* just to make sure it exists *)
-        let@ _fun_loc, _, _ = get_fun_decl loc sym in
+        let@ _fun_loc, _, _ = Global.get_fun_decl loc sym in
         (* the symbol of a function is the same as the symbol of its address *)
         let here = Locations.other __LOC__ in
         return (sym_ (sym, BT.(Loc ()), here)))
@@ -158,7 +158,7 @@ and check_struct
   (member_values : (Id.t * Sctypes.t * mem_value) list)
   : IT.t m
   =
-  let@ layout = get_struct_decl loc tag in
+  let@ layout = Global.get_struct_decl loc tag in
   let member_types = Memory.member_types layout in
   assert (
     List.for_all2
@@ -248,7 +248,7 @@ let rec check_value (loc : Locations.t) (Mu.V (expect, v)) : IT.t m =
   | Vfunction_addr sym ->
     let@ () = ensure_base_type loc ~expect (Loc ()) in
     (* check it is a valid function address *)
-    let@ _ = get_fun_decl loc sym in
+    let@ _ = Global.get_fun_decl loc sym in
     return (IT.sym_ (sym, BT.(Loc ()), loc))
   | Vlist (_item_cbt, vals) ->
     let item_bt = Mu.bt_of_value (List.hd vals) in
@@ -337,7 +337,7 @@ let check_single_ct loc expr =
 let is_fun_addr global t =
   match IT.is_sym t with
   | Some (s, _) ->
-    if Sym.Map.mem s global.Global.fun_decls then
+    if Global.is_fun_decl global s then
       Some s
     else
       None
@@ -351,7 +351,7 @@ let known_function_pointer loc p =
     match already_known with
     | Some _ -> (* no need to find more eqs *) return ()
     | None ->
-      let global_funs = Sym.Map.bindings global.Global.fun_decls in
+      let@ global_funs = Global.get_fun_decls () in
       let fun_addrs =
         List.map (fun (sym, (loc, _, _)) -> IT.sym_ (sym, BT.(Loc ()), loc)) global_funs
       in
@@ -611,7 +611,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
        let@ () = ensure_base_type loc ~expect (Loc ()) in
        let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe) in
        check_pexpr pe (fun vt ->
-         let@ ct = get_struct_member_type loc tag member in
+         let@ ct = Global.get_struct_member_type loc tag member in
          let result = memberShift_ (vt, tag, member) loc in
          (* This should only be called after a PtrValidForDeref, so if we
             were willing to optimise, we could skip to [k result]. *)
@@ -759,7 +759,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
      | PEstruct (tag, xs) ->
        let@ () = WellTyped.check_ct loc (Struct tag) in
        let@ () = ensure_base_type loc ~expect (Struct tag) in
-       let@ layout = get_struct_decl loc tag in
+       let@ layout = Global.get_struct_decl loc tag in
        let member_types = Memory.member_types layout in
        let@ _ =
          ListM.map2M
@@ -781,7 +781,7 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
          (* function vals are just symbols the same as the names of functions *)
          let@ sym = known_function_pointer loc ptr in
          (* need to conjure up the characterising 4-tuple *)
-         let@ _, _, c_sig = get_fun_decl loc sym in
+         let@ _, _, c_sig = Global.get_fun_decl loc sym in
          match IT.const_of_c_sig c_sig loc with
          | Some it -> k it
          | None ->
@@ -1712,7 +1712,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        check_pexpr f_pe (fun f_it ->
          let@ _global = get_global () in
          let@ fsym = known_function_pointer loc f_it in
-         let@ _loc, opt_ft, _ = get_fun_decl loc fsym in
+         let@ _loc, opt_ft, _ = Global.get_fun_decl loc fsym in
          let@ ft =
            match opt_ft with
            | Some ft -> return ft
@@ -1876,7 +1876,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              match to_instantiate with
              | I_Everything -> return (fun _ -> true)
              | I_Function f ->
-               let@ _ = get_logical_function_def loc f in
+               let@ _ = Global.get_logical_function_def loc f in
                return (IT.mentions_call f)
              | I_Good ct ->
                let@ () = WellTyped.check_ct loc ct in
@@ -1904,7 +1904,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                let@ () = WellTyped.check_ct loc ct in
                return (Request.Owned (ct, Uninit))
              | E_Pred (CN_named pn) ->
-               let@ _ = get_resource_predicate_def loc pn in
+               let@ _ = Global.get_resource_predicate_def loc pn in
                return (Request.PName pn)
            in
            let@ it = WellTyped.infer_term it in
@@ -1922,7 +1922,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              ();
            return ()
          | Unfold (f, args) ->
-           let@ def = get_logical_function_def loc f in
+           let@ def = Global.get_logical_function_def loc f in
            let has_args, expect_args = (List.length args, List.length def.args) in
            let@ () =
              WellTyped.ensure_same_argument_number
@@ -1947,7 +1947,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
             | Some body ->
               add_c loc (LC.T (eq_ (apply_ f args def.return_bt loc, body) loc)))
          | Apply (lemma, args) ->
-           let@ _loc, lemma_typ = get_lemma loc lemma in
+           let@ _loc, lemma_typ = Global.get_lemma loc lemma in
            let args = List.map (fun arg -> (loc, arg)) args in
            Spine.calltype_lemma loc ~lemma args lemma_typ (fun lrt ->
              let@ _, members =
@@ -2171,7 +2171,7 @@ let record_tagdefs tagDefs =
     (fun tag def ->
       match def with
       | Mu.UnionDef -> unsupported (Loc.other __LOC__) !^"todo: union types"
-      | StructDef layout -> add_struct_decl tag layout)
+      | StructDef layout -> Global.add_struct_decl tag layout)
     tagDefs
 
 
@@ -2211,7 +2211,7 @@ let record_and_check_logical_functions funs =
     ListM.iterM
       (fun (name, def) ->
         let@ simple_def = WellTyped.function_ { def with body = Uninterp } in
-        add_logical_function name simple_def)
+        Global.add_logical_function name simple_def)
       recursive
   in
   (* Now check all functions in order. *)
@@ -2226,7 +2226,7 @@ let record_and_check_logical_functions funs =
               ^ ": "
               ^ Sym.pp_string name)));
       let@ def = WellTyped.function_ def in
-      add_logical_function name def)
+      Global.add_logical_function name def)
     funs
 
 
@@ -2236,7 +2236,7 @@ let record_and_check_resource_predicates preds =
     ListM.iterM
       (fun (name, def) ->
         let@ simple_def = WellTyped.predicate { def with clauses = None } in
-        add_resource_predicate name simple_def)
+        Global.add_resource_predicate name simple_def)
       preds
   in
   ListM.iteriM
@@ -2251,7 +2251,7 @@ let record_and_check_resource_predicates preds =
               ^ Sym.pp_string name)));
       let@ def = WellTyped.predicate def in
       (* add simplified def to the context *)
-      add_resource_predicate name def)
+      Global.add_resource_predicate name def)
     preds
 
 
@@ -2331,7 +2331,7 @@ let wf_check_and_record_functions funs call_sigs =
         let ft = WellTyped.to_argument_type args_and_body in
         debug 6 (lazy (!^"function type" ^^^ Sym.pp fsym));
         debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
-        let@ () = add_fun_decl fsym (loc, Some ft, Pmap.find fsym call_sigs) in
+        let@ () = Global.add_fun_decl fsym (loc, Some ft, Pmap.find fsym call_sigs) in
         (match tr with
          | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)
          | Checked -> return (trusted, (fsym, (loc, args_and_body)) :: checked))
@@ -2344,7 +2344,7 @@ let wf_check_and_record_functions funs call_sigs =
             let@ ft = WellTyped.function_type "function" loc ft in
             return (Some ft)
         in
-        let@ () = add_fun_decl fsym (loc, oft, Pmap.find fsym call_sigs) in
+        let@ () = Global.add_fun_decl fsym (loc, oft, Pmap.find fsym call_sigs) in
         return (trusted, checked))
     funs
     ([], [])
@@ -2456,7 +2456,7 @@ let check_c_functions (funs : c_function list) : (string * TypeErrors.t) list m 
 
 let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
   let@ lemma_typ = WellTyped.lemma loc lemma_s lemma_typ in
-  let@ () = add_lemma lemma_s (loc, lemma_typ) in
+  let@ () = Global.add_lemma lemma_s (loc, lemma_typ) in
   return (lemma_s, (loc, lemma_typ))
 
 
@@ -2566,7 +2566,7 @@ let add_stdlib_spec =
     Pp.debug
       2
       (lazy (Pp.headline ("adding builtin spec for procedure " ^ Sym.pp_string fsym)));
-    add_fun_decl fsym (Locations.other __LOC__, Some ft, ct)
+    Global.add_fun_decl fsym (Locations.other __LOC__, Some ft, ct)
   in
   fun call_sigs fsym ->
     match
@@ -2590,23 +2590,23 @@ let record_and_check_datatypes datatypes =
   let@ () =
     ListM.iterM
       (fun (s, Mu.{ loc = _; cases = _ }) ->
-        add_datatype s { constrs = []; all_params = [] })
+        Global.add_datatype s { constrs = []; all_params = [] })
       datatypes
   in
   (* check and normalise datatypes *)
   let@ datatypes = ListM.mapM WellTyped.datatype datatypes in
   let@ sccs = WellTyped.datatype_recursion datatypes in
-  let@ () = set_datatype_order (Some sccs) in
+  let@ () = Global.set_datatype_order (Some sccs) in
   (* properly add datatypes *)
   ListM.iterM
     (fun (s, Mu.{ loc = _; cases }) ->
       let@ () =
-        add_datatype
+        Global.add_datatype
           s
           { constrs = List.map fst cases; all_params = List.concat_map snd cases }
       in
       ListM.iterM
-        (fun (c, params) -> add_datatype_constr c { params; datatype_tag = s })
+        (fun (c, params) -> Global.add_datatype_constr c { params; datatype_tag = s })
         cases)
     datatypes
 
