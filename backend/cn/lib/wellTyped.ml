@@ -14,7 +14,7 @@ let use_ity = ref true
 module Make (Monad : Sigs.NoSolver) = struct
 open Monad
 
-let fail typeErr = fail (fun _ -> typeErr)
+let fail typeErr = fail (Monad.liftFail typeErr)
 
 open Effectful.Make (Monad)
 

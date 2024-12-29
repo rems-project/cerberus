@@ -1,13 +1,15 @@
 module type NoSolver = sig
   type 'a t
 
-  type failure = Context.t * Explain.log -> TypeErrors.t
+  type failure
 
   val return : 'a -> 'a t
 
   val bind : 'a t -> ('a -> 'b t) -> 'b t
 
   val pure : 'a t -> 'a t
+
+  val liftFail : TypeErrors.t -> failure
 
   val fail : failure -> 'a t
 

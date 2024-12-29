@@ -830,6 +830,8 @@ module NoSolver = struct
 
   type nonrec failure = failure
 
+  let liftFail typeErr _ = typeErr
+
   let return = return
 
   let bind = bind
@@ -873,6 +875,7 @@ end
 
 module WellTyped = struct
   type nonrec 'a t = 'a t
-  include WellTyped.Make(NoSolver)
+
+  include WellTyped.Make (NoSolver)
   include Exposed
 end
