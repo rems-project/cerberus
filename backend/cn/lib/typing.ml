@@ -871,12 +871,8 @@ module NoSolver = struct
   let lift = function Ok x -> return x | Error x -> fail (fun _ -> x)
 end
 
-module Made = WellTyped.Make (NoSolver)
-
 module WellTyped = struct
-  module Exposed = struct
-    type nonrec 'a t = 'a t
-
-    include Made.Exposed
-  end
+  type nonrec 'a t = 'a t
+  include WellTyped.Make(NoSolver)
+  include Exposed
 end
