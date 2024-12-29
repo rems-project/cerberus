@@ -195,7 +195,6 @@ let modify_where (f : Where.t -> Where.t) : unit t =
     { s with log; typing_context })
 
 
-(** TODO move the option part of this to Memory *)
 let get_member_type loc member layout : Sctypes.t m =
   let member_types = Memory.member_types layout in
   match List.assoc_opt Id.equal member member_types with
@@ -204,22 +203,28 @@ let get_member_type loc member layout : Sctypes.t m =
     fail (fun _ -> { loc; msg = Unexpected_member (List.map fst member_types, member) })
 
 
+module ErrorReader = struct
+  type nonrec 'a t = 'a t
+
+  let return = return
+
+  let bind = bind
+
+  type state = s
+
+  type global = Global.t
+
+  let get = get
+
+  let to_global (s : s) = s.typing_context.global
+
+  let to_context (s : s) = s.typing_context
+
+  let lift = lift
+end
+
 module Global = struct
-  include Global.Lift (struct
-      type nonrec 'a t = 'a t
-
-      let return = return
-
-      let bind = bind
-
-      type state = s
-
-      type global = Global.t
-
-      let get = get
-
-      let to_global (s : s) = s.typing_context.global
-    end)
+  include Global.Lift (ErrorReader)
 
   let empty = Global.empty
 
@@ -829,57 +834,8 @@ let test_value_eqs loc guard x ys =
   loop group ms ys
 
 
-module NoSolver = struct
-  type nonrec 'a t = 'a t
-
-  type nonrec failure = failure
-
-  let liftFail typeErr _ = typeErr
-
-  let return = return
-
-  let bind = bind
-
-  let pure = pure
-
-  let fail = fail
-
-  let bound_a = bound_a
-
-  let bound_l = bound_l
-
-  let get_a = get_a
-
-  let get_l = get_l
-
-  let add_a = add_a
-
-  let add_l = add_l
-
-  let get_struct_decl = Global.get_struct_decl
-
-  let get_struct_member_type = Global.get_struct_member_type
-
-  let get_datatype = Global.get_datatype
-
-  let get_datatype_constr = Global.get_datatype_constr
-
-  let get_resource_predicate_def = Global.get_resource_predicate_def
-
-  let get_logical_function_def = Global.get_logical_function_def
-
-  let get_lemma = Global.get_lemma
-
-  let get_fun_decl = Global.get_fun_decl
-
-  let ensure_base_type = ensure_base_type
-
-  let lift = function Ok x -> return x | Error x -> fail (fun _ -> x)
-end
-
 module WellTyped = struct
   type nonrec 'a t = 'a t
 
-  include WellTyped.Make (NoSolver)
-  include Exposed
+  include WellTyped.Lift (ErrorReader)
 end
