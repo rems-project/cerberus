@@ -12,6 +12,7 @@ Inductive t_gen : Type :=
   | Bits : sign -> nat -> t_gen
   | Real : t_gen
   | Alloc_id : t_gen
+  (* | Loc : t_gen -> t_gen  TODO *)
   | CType : t_gen
   | Struct : sym -> t_gen
   | Datatype : sym -> t_gen

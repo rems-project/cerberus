@@ -56,8 +56,6 @@ let pp_location = function
 
 let pp_type ty = !^"dummy_type"  (* TODO: proper type printing *)
 
-let pp_basetype bt = !^"dummy_basetype"  (* TODO: proper basetype printing *)
-
 let pp_list pp_elem xs = 
   !^"[" ^^^ 
   (List.fold_left (fun acc x -> 
@@ -102,13 +100,58 @@ and pp_symbol_prefix = function
   | CF.Symbol.PrefMalloc -> !^"PrefMalloc"
   | CF.Symbol.PrefOther(s) -> !^"(PrefOther" ^^^ !^s ^^ !^")"
 
-  
+
+  let rec pp_basetype = function
+  | BaseTypes.Unit -> !^"Unit"
+  | BaseTypes.Bool -> !^"Bool"
+  | BaseTypes.Integer -> !^"Integer"
+  | BaseTypes.MemByte -> !^"MemByte"
+  | BaseTypes.Bits (sign, n) -> 
+      !^"(Bits" ^^^ 
+      (match sign with 
+       | BaseTypes.Signed -> !^"Signed"
+       | BaseTypes.Unsigned -> !^"Unsigned") ^^^
+      !^(string_of_int n) ^^ !^")"
+  | BaseTypes.Real -> !^"Real"
+  | BaseTypes.Alloc_id -> !^"Alloc_id"
+  | BaseTypes.CType -> !^"CType"
+  | BaseTypes.Struct sym -> !^"(Struct" ^^^ pp_symbol sym ^^ !^")"
+  | BaseTypes.Datatype sym -> !^"(Datatype" ^^^ pp_symbol sym ^^ !^")"
+  | BaseTypes.Record fields -> 
+      !^"(Record" ^^^ P.separate_map (!^";" ^^ P.break 1)
+        (fun (id, ty) -> !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_basetype ty ^^ !^")") 
+        fields ^^ !^")"
+  | BaseTypes.Map (t1, t2) -> !^"(Map" ^^^ pp_basetype t1 ^^^ pp_basetype t2 ^^ !^")"
+  | BaseTypes.List t -> !^"(List" ^^^ pp_basetype t ^^ !^")"
+  | BaseTypes.Tuple ts -> !^"(Tuple" ^^^ P.separate_map (!^";" ^^ P.break 1) pp_basetype ts ^^ !^")"
+  | BaseTypes.Set t -> !^"(TSet" ^^^ pp_basetype t ^^ !^")"
+  | BaseTypes.Loc t -> !^"Loc_TODO"
+
+
 (* Constructor printers *)
-let pp_ctor = function
-  | Cnil bt -> !^"(Cnil" ^^^ pp_basetype bt ^^ !^")"
-  | Ccons -> !^"Ccons"
-  | Ctuple -> !^"Ctuple" 
-  | Carray -> !^"Carray"
+let rec pp_core_base_type = function
+  | Core.BTy_unit -> !^"BTy_unit"
+  | Core.BTy_boolean -> !^"BTy_boolean"
+  | Core.BTy_ctype -> !^"BTy_ctype"
+  | Core.BTy_list t -> !^"(BTy_list" ^^^ pp_core_base_type t ^^ !^")"
+  | Core.BTy_tuple ts -> !^"(BTy_tuple" ^^^ P.separate_map (!^";" ^^ P.break 1) pp_core_base_type ts ^^ !^")"
+  | Core.BTy_object ot -> !^"(BTy_object" ^^^ pp_core_object_type ot ^^ !^")"
+  | Core.BTy_loaded ot -> !^"(BTy_loaded" ^^^ pp_core_object_type ot ^^ !^")"
+  | Core.BTy_storable -> !^"BTy_storable"
+
+and pp_core_object_type = function
+  | Core.OTy_integer -> !^"OTy_integer"
+  | Core.OTy_floating -> !^"OTy_floating"
+  | Core.OTy_pointer -> !^"OTy_pointer"
+  | Core.OTy_array t -> !^"(OTy_array" ^^^ pp_core_object_type t ^^ !^")"
+  | Core.OTy_struct sym -> !^"(OTy_struct" ^^^ pp_symbol sym ^^ !^")"
+  | Core.OTy_union sym -> !^"(OTy_union" ^^^ pp_symbol sym ^^ !^")"
+
+  let pp_ctor = function
+  | Mucore.Cnil bt -> !^"(Cnil" ^^^ pp_core_base_type bt ^^ !^")"
+  | Mucore.Ccons -> !^"Ccons"
+  | Mucore.Ctuple -> !^"Ctuple" 
+  | Mucore.Carray -> !^"Carray"
 
 (* Operator printers *)
 let pp_binop = function
@@ -217,7 +260,7 @@ and pp_value (V (ty, v)) =
    | Vtrue -> !^"Vtrue"
    | Vfalse -> !^"Vfalse"
    | Vlist (bt, vs) -> 
-       !^"(Vlist" ^^^ pp_basetype bt ^^^ pp_list pp_value vs ^^ !^")"
+       !^"(Vlist" ^^^ pp_core_base_type bt ^^^ pp_list pp_value vs ^^ !^")"
    | Vtuple vs ->
        !^"(Vtuple" ^^^ pp_list pp_value vs ^^ !^")")
 and pp_object_value (OV (ty, ov)) =
