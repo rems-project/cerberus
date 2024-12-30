@@ -121,7 +121,7 @@ let add_records_to_map_from_instrumentation (i : Executable_spec_extract.instrum
     aux_rt rt;
     List.iter add_records_to_map_from_cnprogs stmts;
     List.iter
-      (fun (_loc1, _loc2, loop_at) ->
+      (fun (_, (_loc1, _loc2, loop_at)) ->
         let loop_stmts = aux_at loop_at in
         List.iter add_records_to_map_from_cnprogs loop_stmts)
       loops
