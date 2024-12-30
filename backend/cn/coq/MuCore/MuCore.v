@@ -25,8 +25,8 @@ Parameter cn_condition : Type. (* placeholder *)
 Parameter Memory_struct_layout : Type. (* placeholder *)
 
 Parameter memory_order : Type. (* placeholder *)
-Parameter linux_memory_order : Type.
-Parameter polarity : Type.
+Parameter linux_memory_order : Type. (* placeholder *)
+Parameter polarity : Type. (* placeholder *)
 
 Inductive integer_value : Type. (* placeholder *)
 Inductive floating_value : Type. (* placeholder *)

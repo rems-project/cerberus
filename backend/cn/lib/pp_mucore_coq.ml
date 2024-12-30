@@ -1,4 +1,7 @@
+[@@@warning "-32"]  (* Temporary disable unused value warnings *)
+
 open Cerb_pp_prelude
+open Printf
 module CF = Cerb_frontend
 open CF
 module P = PPrint
@@ -21,7 +24,35 @@ let pp_linux_memory_order _ = !^"linux_memory_order_placeholder"
 let pp_polarity _ = !^"polarity_placeholder"
 
 (* Basic type printers *)
-let pp_location loc = !^"dummy_location"  (* TODO: proper location printing *)
+let pp_lexing_position {Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum} =
+  !^"{"
+  ^^ !^"pos_fname :=" ^^ !^(sprintf "%S" pos_fname) ^^ !^";"
+  ^^ !^"pos_lnum :=" ^^ !^(string_of_int pos_lnum) ^^ !^";"
+  ^^ !^"pos_bol :=" ^^ !^(string_of_int pos_bol) ^^ !^";"
+  ^^ !^"pos_cnum :=" ^^ !^(string_of_int pos_cnum)
+  ^^ !^"}"
+
+let pp_location_cursor = function
+  | Cerb_location.NoCursor -> !^"NoCursor"
+  | Cerb_location.PointCursor pos -> !^"(PointCursor" ^^^ pp_lexing_position pos ^^ !^")"
+  | Cerb_location.RegionCursor (start_pos, end_pos) -> 
+      !^"(RegionCursor" ^^^ pp_lexing_position start_pos ^^^
+      pp_lexing_position end_pos ^^ !^")"
+
+let pp_location = function
+  | Cerb_location.Loc_unknown -> !^"Loc_unknown"
+  | Cerb_location.Loc_other s -> !^"(Loc_other" ^^^ !^(sprintf "%S" s) ^^ !^")"
+  | Cerb_location.Loc_point pos -> !^"(Loc_point" ^^^ pp_lexing_position pos ^^ !^")"
+  | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
+      !^"(Loc_region" ^^^ pp_lexing_position start_pos ^^^
+      pp_lexing_position end_pos ^^^ pp_location_cursor cursor ^^ !^")"
+  | Cerb_location.Loc_regions (pos_list, cursor) ->
+      let pp_pos_pair (start_pos, end_pos) =
+        !^"(" ^^ pp_lexing_position start_pos ^^ !^"," ^^^
+        pp_lexing_position end_pos ^^ !^")" in
+      !^"(Loc_regions" ^^^ !^"[" ^^
+      P.separate_map (!^";" ^^ P.break 1) pp_pos_pair pos_list ^^
+      !^"]" ^^^ pp_location_cursor cursor ^^ !^")"
 
 let pp_type ty = !^"dummy_type"  (* TODO: proper type printing *)
 
