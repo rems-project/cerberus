@@ -175,39 +175,48 @@ module Fusion = struct
           let gt_rest, constraints =
             collect_constraints (Sym.Set.add x vars) x its_bounds gt_rest
           in
-          let gt_inner =
-            let stmts, gt_last = GS.stmts_of_gt (aux (Sym.Set.add i vars) gt_inner) in
-            let sym_bt, stmts', gt_last =
-              match gt_last with
-              | GT (Return (IT (Sym x, x_bt, _)), _, _) -> ((x, x_bt), [], gt_last)
-              | GT (Return it, ret_bt, loc_ret) ->
-                let here = Locations.other __LOC__ in
-                let y = Sym.fresh () in
-                ( (y, ret_bt),
-                  [ GS.Let (0, (y, GT.return_ it loc_ret)) ],
-                  GT.return_ (IT.sym_ (y, ret_bt, here)) loc_ret )
-              | _ -> failwith (Pp.plain (GT.pp gt_last) ^ " @ " ^ __LOC__)
+          if List.is_empty constraints then
+            gt
+          else (
+            let gt_inner =
+              let stmts, gt_last = GS.stmts_of_gt (aux (Sym.Set.add i vars) gt_inner) in
+              let sym_bt, stmts', gt_last =
+                match gt_last with
+                | GT (Return (IT (Sym x, x_bt, _)), _, _) -> ((x, x_bt), [], gt_last)
+                | GT (Return it, ret_bt, loc_ret) ->
+                  let here = Locations.other __LOC__ in
+                  let y = Sym.fresh () in
+                  ( (y, ret_bt),
+                    [ GS.Let (0, (y, GT.return_ it loc_ret)) ],
+                    GT.return_ (IT.sym_ (y, ret_bt, here)) loc_ret )
+                | gt' ->
+                  let ret_bt = GT.bt gt' in
+                  let here = Locations.other __LOC__ in
+                  let y = Sym.fresh () in
+                  ( (y, ret_bt),
+                    [ GS.Let (0, (y, gt')) ],
+                    GT.return_ (IT.sym_ (y, ret_bt, here)) (GT.loc gt') )
+              in
+              let here = Locations.other __LOC__ in
+              let stmts'' =
+                List.map
+                  (fun (j, lc) : GS.t ->
+                    Assert
+                      (LC.T
+                         (replace_index
+                            x
+                            sym_bt
+                            i
+                            (IT.subst (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ]) lc))))
+                  constraints
+              in
+              GS.gt_of_stmts (stmts @ stmts' @ stmts'') gt_last
             in
-            let here = Locations.other __LOC__ in
-            let stmts'' =
-              List.map
-                (fun (j, lc) : GS.t ->
-                  Assert
-                    (LC.T
-                       (replace_index
-                          x
-                          sym_bt
-                          i
-                          (IT.subst (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ]) lc))))
-                constraints
-            in
-            GS.gt_of_stmts (stmts @ stmts' @ stmts'') gt_last
-          in
-          GT.let_
-            ( backtracks,
-              (x, GT.map_ ((i, i_bt, it_perm), gt_inner) loc_map),
-              aux (Sym.Set.add x vars) gt_rest )
-            loc
+            GT.let_
+              ( backtracks,
+                (x, GT.map_ ((i, i_bt, it_perm), gt_inner) loc_map),
+                aux (Sym.Set.add x vars) gt_rest )
+              loc)
         | Let (backtracks, (x, gt_inner), gt_rest) ->
           GT.let_
             (backtracks, (x, aux vars gt_inner), aux (Sym.Set.add x vars) gt_rest)
