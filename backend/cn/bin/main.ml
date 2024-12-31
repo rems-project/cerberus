@@ -168,7 +168,7 @@ let with_well_formedness_check
           prog
       in
       print_log_file ("mucore", MUCORE prog5);
-      print_log_file ("mucore_coq", MUCORE_COQ prog5);
+      print_log_file ("mucore_coq", MUCORE_COQ  prog5);
       let paused =
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
