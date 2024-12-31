@@ -1410,6 +1410,12 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
           (* STD §6.3.1.8#1, bullet 4 *)
           match (AilTypesAux.promotion (Implementation.integerImpl ()) ty1, AilTypesAux.promotion (Implementation.integerImpl ()) ty2) with
             | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
+                let (ity1', ity2') =
+                  if Global.has_switch Global.SW_elaboration_normalises_types then
+                    ( Implementation.normalise_integerType ity1'
+                    , Implementation.normalise_integerType ity2' )
+                  else
+                    (ity1', ity2') in
                 (* "If both operants have the same type, then no further conversion is needed." *)
                 if ty1' = ty2' then
                   (mk_conv_int ity1' e1, mk_conv_int ity2' e2)

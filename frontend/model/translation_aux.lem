@@ -207,8 +207,16 @@ let ctype_of a_expr =
   match ErrorMonad.runErrorMonad
       (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) (Implementation.integerImpl ())
         (GenTypes.genTypeCategoryOf a_expr)) with
-    | Right (GenTypes.LValueType _ ty _) -> ty
-    | Right (GenTypes.RValueType   ty) -> ty
+    | Right (GenTypes.LValueType _ ty _) ->
+        if Global.has_switch Global.SW_elaboration_normalises_types then
+          Implementation.normalise_ctype ty
+        else
+          ty
+    | Right (GenTypes.RValueType   ty) ->
+        if Global.has_switch Global.SW_elaboration_normalises_types then
+          Implementation.normalise_ctype ty
+        else
+          ty
     | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
         error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"

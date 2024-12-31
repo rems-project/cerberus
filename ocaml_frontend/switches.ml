@@ -40,6 +40,9 @@ type cerb_switch =
   (* set magic comment syntax to "/*$ ... $*/" *)
   | SW_magic_comment_char_dollar
 
+  (* type aliases (e.g. size_t) are normalised during the elaboration to Core.
+     As a result the generated Core has fixed their implementation. *)
+  | SW_elaboration_normalises_types
 
 let internal_ref =
   ref []
@@ -94,6 +97,8 @@ let set strs =
         Some SW_at_magic_comments
     | "magic_comment_char_dollar" ->
         Some (SW_magic_comment_char_dollar)
+    | "elaboration_normalises_types" ->
+        Some SW_elaboration_normalises_types
     | _ ->
         None in
   let pred x = function
@@ -122,7 +127,8 @@ let set strs =
     | SW_permissive_printf
     | SW_zero_initialised
     | SW_at_magic_comments
-    | SW_magic_comment_char_dollar as y ->
+    | SW_magic_comment_char_dollar
+    | SW_elaboration_normalises_types as y ->
         x = y in
   List.iter (fun str ->
     match read_switch str with
