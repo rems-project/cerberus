@@ -25,6 +25,7 @@ let pp_polarity _ = !^"polarity_placeholder"
 let pp_cn_condition _ = !^"cn_condition_placeholder"
 let pp_return_type _ = !^"return_type_placeholder" 
 let pp_label_map _ = !^"label_map_placeholder"
+let pp_type _ = !^"type_placeholder"  (* TODO: proper type handling *)
 
 (* TODO see if this is needed *)
 let pp_basetype_loc () = !^"pointer"
@@ -67,8 +68,6 @@ let pp_location = function
       !^"(Loc_regions" ^^^ !^"[" ^^
       P.separate_map (!^";" ^^ P.break 1) pp_pos_pair pos_list ^^
       !^"]" ^^^ pp_location_cursor cursor ^^ !^")"
-
-let pp_type ty = !^"dummy_type"  (* TODO: proper type printing *)
 
 let pp_list pp_elem xs = 
   !^"[" ^^^ 
