@@ -15,8 +15,8 @@
 #include <cn-testing/size.h>
 
 struct cn_test_case {
-    char* suite;
-    char* name;
+    const char* suite;
+    const char* name;
     cn_test_case_fn* func;
 };
 
@@ -25,7 +25,7 @@ struct cn_test_case {
 static struct cn_test_case test_cases[CN_TEST_MAX_TEST_CASES];
 static uint16_t num_test_cases = 0;
 
-void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func) {
+void cn_register_test_case(const char* suite, const char* name, cn_test_case_fn* func) {
     if (num_test_cases == CN_TEST_MAX_TEST_CASES) {
         printf("Tried to register too many tests.");
         exit(1);
@@ -38,7 +38,7 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func) {
     };
 }
 
-void print_test_info(char* suite, char* name, int tests, int discards) {
+void print_test_info(const char* suite, const char* name, int tests, int discards) {
     if (tests == 0 && discards == 0) {
         printf("Testing %s::%s:", suite, name);
     }
@@ -62,7 +62,7 @@ int cn_test_main(int argc, char* argv[]) {
     int interactive = 0;
     enum cn_logging_level logging_level = CN_LOGGING_ERROR;
     int timeout = 0;
-    int input_timeout = 0;
+    int input_timeout = 5000;
     int exit_fast = 0;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
