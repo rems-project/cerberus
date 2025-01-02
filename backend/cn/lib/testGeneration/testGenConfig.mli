@@ -4,6 +4,7 @@ type t =
     max_backtracks : int;
     max_unfolds : int option;
     max_array_length : int;
+    with_static_hack : bool;
     (* Run time *)
     input_timeout : int option;
     null_in_every : int option;
@@ -34,6 +35,8 @@ val get_max_backtracks : unit -> int
 val get_max_unfolds : unit -> int option
 
 val get_max_array_length : unit -> int
+
+val with_static_hack : unit -> bool
 
 val has_input_timeout : unit -> int option
 

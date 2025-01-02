@@ -73,7 +73,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
       idents = [ Alloc.History.(str, sym, None) ]
     }
   in
-  let@ _, ail_prog_opt, prog0 =
+  let@ cabs_tunit_opt, ail_prog_opt, prog0 =
     c_frontend_and_elaboration ~cn_init_scope (conf, io) (stdlib, impl) ~filename
   in
   let@ () =
@@ -83,6 +83,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
     else
       return ()
   in
+  let cabs_tunit = Option.get cabs_tunit_opt in
   let markers_env, ail_prog = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
@@ -91,7 +92,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
   let statement_locs = CStatements.search (snd ail_prog) in
   print_log_file ("original", CORE prog0);
   print_log_file ("without_unspec", CORE prog1);
-  return (prog3, (markers_env, ail_prog), statement_locs)
+  return (cabs_tunit, prog3, (markers_env, ail_prog), statement_locs)
 
 
 let handle_frontend_error = function
@@ -132,6 +133,7 @@ let with_well_formedness_check
   ~(* Callbacks *)
    handle_error
   ~(f :
+     cabs_tunit:CF.Cabs.translation_unit ->
      prog5:unit Mucore.file ->
      ail_prog:CF.GenTypes.genTypeCategory A.ail_program ->
      statement_locs:Cerb_location.t CStatements.LocMap.t ->
@@ -139,7 +141,7 @@ let with_well_formedness_check
      unit Or_TypeError.t)
   =
   check_input_file filename;
-  let prog, (markers_env, ail_prog), statement_locs =
+  let cabs_tunit, prog, (markers_env, ail_prog), statement_locs =
     handle_frontend_error
       (frontend
          ~macros
@@ -169,7 +171,7 @@ let with_well_formedness_check
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
-      f ~prog5 ~ail_prog ~statement_locs ~paused
+      f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused
     in
     Pp.maybe_close_times_channel ();
     Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
@@ -250,7 +252,8 @@ let well_formed
     ~no_inherit_loc
     ~magic_comment_char_dollar
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
-    ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Or_TypeError.return ())
+    ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ ->
+      Or_TypeError.return ())
 
 
 let verify
@@ -321,7 +324,7 @@ let verify
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
-    ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
+    ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
       let check (functions, global_var_constraints, lemmas) =
         let open Typing in
         let@ errors = Check.time_check_c_functions (global_var_constraints, functions) in
@@ -413,7 +416,7 @@ let generate_executable_specs
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
-    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
           (try
@@ -457,6 +460,7 @@ let run_tests
   max_backtracks
   max_unfolds
   max_array_length
+  with_static_hack
   input_timeout
   null_in_every
   seed
@@ -495,25 +499,45 @@ let run_tests
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+      let config : TestGeneration.config =
+        { num_samples;
+          max_backtracks;
+          max_unfolds;
+          max_array_length;
+          with_static_hack;
+          input_timeout;
+          null_in_every;
+          seed;
+          logging_level;
+          progress_level;
+          interactive;
+          until_timeout;
+          exit_fast;
+          max_stack_depth;
+          allowed_depth_failures;
+          max_generator_size;
+          random_size_splits;
+          allowed_size_split_backtracks;
+          sized_null;
+          coverage;
+          disable_passes
+        }
+      in
+      TestGeneration.set_config config;
+      let _, sigma = ail_prog in
+      if
+        List.is_empty
+          (TestGeneration.functions_under_test ~with_warning:true cabs_tunit sigma prog5)
+      then (
+        print_endline "No testable functions, trivially passing";
+        exit 0);
+      if not (Sys.file_exists output_dir) then (
+        print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
+        Sys.mkdir output_dir 0o777;
+        print_endline ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
       Cerb_colour.without_colour
         (fun () ->
-          if
-            prog5
-            |> Executable_spec_extract.collect_instrumentation
-            |> fst
-            |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
-              Option.is_some inst.internal)
-            |> List.is_empty
-          then (
-            print_endline "No testable functions, trivially passing";
-            exit 0);
-          if not (Sys.file_exists output_dir) then (
-            print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
-            Sys.mkdir output_dir 0o777;
-            print_endline
-              ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
-          let _, sigma = ail_prog in
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           (try
              Executable_spec.main
@@ -528,35 +552,12 @@ let run_tests
                statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
-          let config : TestGeneration.config =
-            { num_samples;
-              max_backtracks;
-              max_unfolds;
-              max_array_length;
-              input_timeout;
-              null_in_every;
-              seed;
-              logging_level;
-              progress_level;
-              interactive;
-              until_timeout;
-              exit_fast;
-              max_stack_depth;
-              allowed_depth_failures;
-              max_generator_size;
-              random_size_splits;
-              allowed_size_split_backtracks;
-              sized_null;
-              coverage;
-              disable_passes
-            }
-          in
           (try
              TestGeneration.run
                ~output_dir
                ~filename
                ~without_ownership_checking
-               config
+               cabs_tunit
                sigma
                prog5
            with
@@ -949,6 +950,14 @@ module Testing_flags = struct
       & info [ "max-array-length" ] ~doc)
 
 
+  let with_static_hack =
+    let doc =
+      "(HACK) Use an `#include` instead of linking to build testing. Necessary until \
+       https://github.com/rems-project/cerberus/issues/784 or equivalent."
+    in
+    Arg.(value & flag & info [ "with-static-hack" ] ~doc)
+
+
   let input_timeout =
     let doc = "Timeout for discarding a generation attempt (ms)" in
     Arg.(
@@ -1104,6 +1113,7 @@ let testing_cmd =
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.max_array_length
+    $ Testing_flags.with_static_hack
     $ Testing_flags.input_timeout
     $ Testing_flags.null_in_every
     $ Testing_flags.seed

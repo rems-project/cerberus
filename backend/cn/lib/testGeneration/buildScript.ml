@@ -41,7 +41,7 @@ let attempt cmd success failure =
   ^^ string "fi"
 
 
-let compile ~test_file =
+let compile ~filename_base =
   string "# Compile"
   ^^ hardline
   ^^ attempt
@@ -52,22 +52,65 @@ let compile ~test_file =
              "-c";
              "\"-I${RUNTIME_PREFIX}/include/\"";
              "-o";
-             "\"./" ^ Filename.chop_extension test_file ^ ".o\"";
-             "\"./" ^ test_file ^ "\""
+             "\"./" ^ filename_base ^ "_test.o\"";
+             "\"./" ^ filename_base ^ "_test.c\""
            ]
            @
            if Config.is_coverage () then
              [ "--coverage" ]
            else
              []))
-       "Compiled C files."
-       "Failed to compile C files in ${TEST_DIR}."
+       ("Compiled '" ^ filename_base ^ "_test.c'.")
+       ("Failed to compile '" ^ filename_base ^ "_test.c' in ${TEST_DIR}.")
+  ^^ (if Config.with_static_hack () then
+        empty
+      else
+        twice hardline
+        ^^ attempt
+             (String.concat
+                " "
+                ([ "cc";
+                   "-g";
+                   "-c";
+                   "\"-I${RUNTIME_PREFIX}/include/\"";
+                   "-o";
+                   "\"./" ^ filename_base ^ "-exec.o\"";
+                   "\"./" ^ filename_base ^ "-exec.c\""
+                 ]
+                 @
+                 if Config.is_coverage () then
+                   [ "--coverage" ]
+                 else
+                   []))
+             ("Compiled '" ^ filename_base ^ "-exec.c'.")
+             ("Failed to compile '" ^ filename_base ^ "-exec.c' in ${TEST_DIR}.")
+        ^^ twice hardline
+        ^^ attempt
+             (String.concat
+                " "
+                ([ "cc";
+                   "-g";
+                   "-c";
+                   "\"-I${RUNTIME_PREFIX}/include/\"";
+                   "-o";
+                   "\"./cn.o\"";
+                   "\"./cn.c\""
+                 ]
+                 @
+                 if Config.is_coverage () then
+                   [ "--coverage" ]
+                 else
+                   []))
+             "Compiled 'cn.c'."
+             "Failed to compile 'cn.c' in ${TEST_DIR}.")
   ^^ hardline
 
 
-let link ~test_file =
+let link ~filename_base =
   string "# Link"
   ^^ hardline
+  ^^ string "echo"
+  ^^ twice hardline
   ^^ attempt
        (String.concat
           " "
@@ -76,7 +119,13 @@ let link ~test_file =
              "\"-I${RUNTIME_PREFIX}/include\"";
              "-o";
              "\"./tests.out\"";
-             Filename.chop_extension test_file ^ ".o";
+             (filename_base
+              ^ "_test.o"
+              ^
+              if Config.with_static_hack () then
+                ""
+              else
+                " " ^ filename_base ^ "-exec.o cn.o");
              "\"${RUNTIME_PREFIX}/libcn.a\""
            ]
            @
@@ -157,17 +206,19 @@ let run () =
   in
   string "# Run"
   ^^ hardline
+  ^^ string "echo"
+  ^^ twice hardline
   ^^ cmd
   ^^ hardline
   ^^ string "test_exit_code=$? # Save tests exit code for later"
   ^^ hardline
 
 
-let coverage ~test_file =
+let coverage ~filename_base =
   string "# Coverage"
   ^^ hardline
   ^^ attempt
-       ("gcov \"" ^ test_file ^ "\"")
+       ("gcov \"" ^ filename_base ^ "_test.c\"")
        "Recorded coverage via gcov."
        "Failed to record coverage."
   ^^ twice hardline
@@ -178,22 +229,22 @@ let coverage ~test_file =
   ^^ twice hardline
   ^^ attempt
        "genhtml --output-directory html \"coverage.info\""
-       "Generated HTML report at \\\"${TEST_DIR}/html/\\\"."
+       "Generated HTML report at '${TEST_DIR}/html/'."
        "Failed to generate HTML report."
   ^^ hardline
 
 
-let generate ~(output_dir : string) ~(test_file : string) : Pp.document =
+let generate ~(output_dir : string) ~(filename_base : string) : Pp.document =
   setup ~output_dir
   ^^ hardline
-  ^^ compile ~test_file
+  ^^ compile ~filename_base
   ^^ hardline
-  ^^ link ~test_file
+  ^^ link ~filename_base
   ^^ hardline
   ^^ run ()
   ^^ hardline
   ^^ (if Config.is_coverage () then
-        coverage ~test_file ^^ hardline
+        coverage ~filename_base ^^ hardline
       else
         empty)
   ^^ string "popd > /dev/null"

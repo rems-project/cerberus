@@ -1,1 +1,1 @@
-val generate : output_dir:string -> test_file:string -> Pp.document
+val generate : output_dir:string -> filename_base:string -> Pp.document
