@@ -220,17 +220,54 @@ let pp_binop = function
   | Terms.Subset -> !^"Subset"
 
 (* Action printers *)
-let rec pp_paction (Paction (pol, act)) =
-  !^"{|" ^^^
-  !^"paction_polarity :=" ^^^ pp_polarity pol ^^ !^";" ^^^
-  !^"paction_action :=" ^^^ pp_action act ^^^
-  !^"|}"
+ 
+let pp_bw_binop = function
+  | BW_OR -> !^"BW_OR"
+  | BW_AND -> !^"BW_AND" 
+  | BW_XOR -> !^"BW_XOR"
 
-and pp_action (Action (loc, act)) =
-  !^"{|" ^^^
-  !^"action_location :=" ^^^ pp_location loc ^^ !^";" ^^^
-  !^"action_content :=" ^^^ pp_action_content act ^^^
-  !^"|}"
+let pp_bw_unop = function
+  | BW_COMPL -> !^"BW_COMPL"
+  | BW_CTZ -> !^"BW_CTZ"
+  | BW_FFS -> !^"BW_FFS"
+
+let pp_iop = function
+  | Core.IOpAdd -> !^"IOpAdd"
+  | Core.IOpSub -> !^"IOpSub"
+  | Core.IOpMul -> !^"IOpMul"
+  | Core.IOpShl -> !^"IOpShl"
+  | Core.IOpShr -> !^"IOpShr"
+
+let rec pp_pattern_ = function
+  | CaseBase (sym_opt, bt) ->
+      !^"(CaseBase" ^^^ 
+      pp_option pp_symbol sym_opt ^^^
+      pp_core_base_type bt ^^ 
+      !^")"
+  | CaseCtor (ctor, pats) ->
+      !^"(CaseCtor" ^^^ 
+      pp_ctor ctor ^^^
+      pp_list pp_pattern pats ^^
+      !^")"
+
+and pp_pattern (Pattern (loc, annots, ty, pat)) =
+  !^"(Pattern" ^^^
+  pp_location loc ^^^
+  pp_list pp_annot_t annots ^^^
+  pp_type ty ^^^
+  pp_pattern_ pat ^^
+  !^")"
+
+
+let rec pp_mem_constraint = function
+    Mem_common.MC_empty -> !^"MC_empty"
+  | Mem_common.MC_eq (x, y) -> !^"(MC_eq" ^^^ pp_integer_value x ^^^ pp_integer_value y ^^ !^")"
+  | Mem_common.MC_le (x, y) -> !^"(MC_le" ^^^ pp_integer_value x ^^^ pp_integer_value y ^^ !^")"
+  | Mem_common.MC_lt (x, y) -> !^"(MC_lt" ^^^ pp_integer_value x ^^^ pp_integer_value y ^^ !^")"
+  | Mem_common.MC_in_device x -> !^"(MC_in_device" ^^^ pp_integer_value x ^^ !^")"
+  | Mem_common.MC_or (x, y) -> !^"(MC_or" ^^^ pp_mem_constraint x ^^^ pp_mem_constraint y ^^ !^")"
+  | Mem_common.MC_conj xs -> !^"(MC_conj" ^^^ pp_list pp_mem_constraint xs ^^ !^")"
+  | Mem_common.MC_not x -> !^"(MC_not" ^^^ pp_mem_constraint x ^^ !^")"
 
 (* Action content remains inductive since it's defined as an inductive type *)
 and pp_pexpr (Pexpr (loc, annots, ty, pe)) =
@@ -243,9 +280,60 @@ and pp_pexpr (Pexpr (loc, annots, ty, pe)) =
        !^"(PEctor" ^^^ pp_ctor c ^^^ pp_list pp_pexpr es ^^ !^")"
    | PEop (op, e1, e2) ->
        !^"(PEop" ^^^ pp_core_binop op ^^^ pp_pexpr e1 ^^^ pp_pexpr e2 ^^ !^")"
-   | _ -> !^"(* TODO: other pexpr cases *)")
+   | PEconstrained cs ->
+       !^"(PEconstrained" ^^^ pp_list (fun (c, e) -> !^"(" ^^ pp_mem_constraint c ^^ !^"," ^^^ pp_pexpr e ^^ !^")") cs ^^ !^")"
+   | PEbitwise_unop (op, e) ->
+       !^"(PEbitwise_unop" ^^^ pp_bw_unop op ^^^ pp_pexpr e ^^ !^")"
+   | PEbitwise_binop (op, e1, e2) ->
+       !^"(PEbitwise_binop" ^^^ pp_bw_binop op ^^^ pp_pexpr e1 ^^^ pp_pexpr e2 ^^ !^")"
+   | Cfvfromint e -> !^"(Cfvfromint" ^^^ pp_pexpr e ^^ !^")"
+   | Civfromfloat (act, e) -> !^"(Civfromfloat" ^^^ pp_act act ^^^ pp_pexpr e ^^ !^")"
+   | PEarray_shift (base, ct, idx) ->
+       !^"(PEarray_shift" ^^^ pp_pexpr base ^^^ pp_sctypes_t ct ^^^ pp_pexpr idx ^^ !^")"
+   | PEmember_shift (e, sym, id) ->
+       !^"(PEmember_shift" ^^^ pp_pexpr e ^^^ pp_symbol sym ^^^ pp_identifier id ^^ !^")"
+   | PEnot e -> !^"(PEnot" ^^^ pp_pexpr e ^^ !^")"
+   | PEapply_fun (f, args) ->
+       !^"(PEapply_fun" ^^^ pp_function f ^^^ pp_list pp_pexpr args ^^ !^")"
+   | PEstruct (sym, fields) ->
+       !^"(PEstruct" ^^^ pp_symbol sym ^^^
+       pp_list (fun (id, e) -> !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_pexpr e ^^ !^")") fields ^^ !^")"
+   | PEunion (sym, id, e) ->
+       !^"(PEunion" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ pp_pexpr e ^^ !^")"
+   | PEcfunction e -> !^"(PEcfunction" ^^^ pp_pexpr e ^^ !^")"
+   | PEmemberof (sym, id, e) ->
+       !^"(PEmemberof" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ pp_pexpr e ^^ !^")"
+   | PEbool_to_integer e -> !^"(PEbool_to_integer" ^^^ pp_pexpr e ^^ !^")"
+   | PEconv_int (e1, e2) -> !^"(PEconv_int" ^^^ pp_pexpr e1 ^^^ pp_pexpr e2 ^^ !^")"
+   | PEconv_loaded_int (e1, e2) -> !^"(PEconv_loaded_int" ^^^ pp_pexpr e1 ^^^ pp_pexpr e2 ^^ !^")"
+   | PEwrapI (act, e) -> !^"(PEwrapI" ^^^ pp_act act ^^^ pp_pexpr e ^^ !^")"
+   | PEcatch_exceptional_condition (act, e) ->
+       !^"(PEcatch_exceptional_condition" ^^^ pp_act act ^^^ pp_pexpr e ^^ !^")"
+   | PEbounded_binop (kind, op, e1, e2) ->
+       !^"(PEbounded_binop" ^^^ pp_bound_kind kind ^^^ pp_iop op ^^^ pp_pexpr e1 ^^^ pp_pexpr e2 ^^ !^")"
+   | PEis_representable_integer (e, act) ->
+       !^"(PEis_representable_integer" ^^^ pp_pexpr e ^^^ pp_act act ^^ !^")"
+   | PEundef (loc, ub) -> !^"(PEundef" ^^^ pp_location loc ^^^ pp_undefined_behaviour ub ^^ !^")"
+   | PEerror (msg, e) -> !^"(PEerror" ^^^ !^msg ^^^ pp_pexpr e ^^ !^")"
+   | PElet (pat, e1, e2) -> !^"(PElet" ^^^ pp_pattern pat ^^^ pp_pexpr e1 ^^^ pp_pexpr e2 ^^ !^")"
+   | PEif (c, t, e) -> !^"(PEif" ^^^ pp_pexpr c ^^^ pp_pexpr t ^^^ pp_pexpr e ^^ !^")"
+  )
+  and pp_bound_kind = function
+  | Bound_Wrap act -> !^"(Bound_Wrap" ^^^ pp_act act ^^ !^")"
+  | Bound_Except act -> !^"(Bound_Except" ^^^ pp_act act ^^ !^")"
 
-and pp_action_content = function
+  and pp_action (Action (loc, act)) =
+    !^"{|" ^^^
+    !^"action_location :=" ^^^ pp_location loc ^^ !^";" ^^^
+    !^"action_content :=" ^^^ pp_action_content act ^^^
+    !^"|}"
+  
+  and pp_paction (Paction (pol, act)) =
+      !^"{|" ^^^
+      !^"paction_polarity :=" ^^^ pp_polarity pol ^^ !^";" ^^^
+      !^"paction_action :=" ^^^ pp_action act ^^^
+      !^"|}"  
+  and pp_action_content = function
   | Create (e, act, sym) -> 
       !^"(Create" ^^^ pp_pexpr e ^^^ pp_act act ^^^ pp_symbol_prefix sym ^^ !^")"
   | CreateReadOnly (e1, act, e2, sym) ->
@@ -369,26 +457,6 @@ and pp_terms_pattern_ = function
       !^"(PConstructor" ^^^ pp_symbol sym ^^^
       pp_list (fun (id, pat) -> !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_terms_pattern pat ^^ !^")") args ^^ !^")"
 
-
-let rec pp_pattern_ = function
-  | CaseBase (sym_opt, bt) ->
-      !^"(CaseBase" ^^^ 
-      pp_option pp_symbol sym_opt ^^^
-      pp_core_base_type bt ^^ 
-      !^")"
-  | CaseCtor (ctor, pats) ->
-      !^"(CaseCtor" ^^^ 
-      pp_ctor ctor ^^^
-      pp_list pp_pattern pats ^^
-      !^")"
-
-and pp_pattern (Pattern (loc, annots, ty, pat)) =
-  !^"(Pattern" ^^^
-  pp_location loc ^^^
-  pp_list pp_annot_t annots ^^^
-  pp_type ty ^^^
-  pp_pattern_ pat ^^
-  !^")"
 
 let pp_const = function
   | Terms.Z z -> !^"(Z" ^^^ !^(Z.to_string z) ^^ !^")"
@@ -598,7 +666,6 @@ let pp_logical_constraint = function
           pp_logical_args rest ^^ !^")"
       | Resource ((sym, (req, bt)), info, rest) ->
           !^"(Resource" ^^^
-          !^"(" ^^^ pp_symbol sym ^^ !^"," ^^^
           !^"(" ^^^ pp_request req ^^ !^"," ^^^ pp_basetype pp_basetype_loc bt ^^ !^"))" ^^^
           pp_location_info info ^^^
           pp_logical_args rest ^^ !^")"
@@ -663,5 +730,6 @@ let pp_file file =
 
 let pp_file_string file =
   Pp_utils.to_plain_string (pp_file file) 
+
 
 
