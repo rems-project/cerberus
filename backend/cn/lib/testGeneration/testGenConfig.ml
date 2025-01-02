@@ -4,8 +4,9 @@ type t =
     max_backtracks : int;
     max_unfolds : int option;
     max_array_length : int;
-    input_timeout : int option;
+    with_static_hack : bool;
     (* Run time *)
+    input_timeout : int option;
     null_in_every : int option;
     seed : string option;
     logging_level : int option;
@@ -28,6 +29,7 @@ let default =
     max_backtracks = 25;
     max_unfolds = None;
     max_array_length = 50;
+    with_static_hack = false;
     input_timeout = None;
     null_in_every = None;
     seed = None;
@@ -58,6 +60,8 @@ let get_max_backtracks () = !instance.max_backtracks
 let get_max_unfolds () = !instance.max_unfolds
 
 let get_max_array_length () = !instance.max_array_length
+
+let with_static_hack () = !instance.with_static_hack
 
 let has_input_timeout () = !instance.input_timeout
 

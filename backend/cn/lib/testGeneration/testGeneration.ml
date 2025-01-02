@@ -11,6 +11,8 @@ type config = Config.t
 
 let default_cfg : config = Config.default
 
+let set_config = Config.initialize
+
 let is_constant_function
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (inst : Executable_spec_extract.instrumentation)
@@ -92,6 +94,28 @@ let pp_label ?(width : int = 30) (label : string) (doc : Pp.document) : Pp.docum
     ^^ doc
 
 
+let compile_includes ~filename_base =
+  let open Pp in
+  string "#include "
+  ^^ dquotes (string (filename_base ^ "_gen.h"))
+  ^^ hardline
+  ^^
+  if Config.with_static_hack () then
+    string "#include "
+    ^^ dquotes (string (filename_base ^ "-exec.c"))
+    ^^ hardline
+    ^^ string "#include "
+    ^^ dquotes (string "cn.c")
+  else
+    string "#include " ^^ dquotes (string "cn.h")
+
+
+let compile_test test =
+  let open Pp in
+  let macro = Test.registration_macro test in
+  string macro ^^ parens (string test.suite ^^ comma ^^ space ^^ string test.test) ^^ semi
+
+
 let compile_test_file
   ~(without_ownership_checking : bool)
   (filename_base : string)
@@ -101,21 +125,14 @@ let compile_test_file
   =
   let for_constant, for_generator = List.partition (is_constant_function sigma) insts in
   let constant_tests, constant_tests_defs =
-    SpecTests.compile_constant_tests for_constant
+    SpecTests.compile_constant_tests sigma for_constant
   in
   let generator_tests, generator_tests_defs =
     SpecTests.compile_generator_tests sigma prog5 for_generator
   in
   let tests = [ constant_tests; generator_tests ] in
   let open Pp in
-  string "#include "
-  ^^ dquotes (string (filename_base ^ "_gen.h"))
-  ^^ hardline
-  ^^ string "#include "
-  ^^ dquotes (string (filename_base ^ "-exec.c"))
-  ^^ hardline
-  ^^ string "#include "
-  ^^ dquotes (string "cn.c")
+  compile_includes ~filename_base
   ^^ twice hardline
   ^^ pp_label
        "Assume Ownership Functions"
@@ -133,12 +150,7 @@ let compile_test_file
                 (hardline
                  ^^ separate_map
                       (twice hardline)
-                      (separate_map hardline (fun test ->
-                         let macro = Test.registration_macro test in
-                         string macro
-                         ^^ parens
-                              (string test.suite ^^ comma ^^ space ^^ string test.test)
-                         ^^ semi))
+                      (separate_map hardline compile_test)
                       tests
                  ^^ twice hardline
                  ^^ string "return cn_test_main(argc, argv);")
@@ -184,32 +196,110 @@ let save_tests
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   (insts : Executable_spec_extract.instrumentation list)
-  : string
+  : unit
   =
   let tests_doc =
     compile_test_file ~without_ownership_checking filename_base sigma prog5 insts
   in
-  let test_file = filename_base ^ "_test.c" in
-  save output_dir test_file tests_doc;
-  test_file
+  save output_dir (filename_base ^ "_test.c") tests_doc
 
 
-let save_build_script ~output_dir ~test_file =
-  let script_doc = BuildScript.generate ~output_dir ~test_file in
+let save_build_script ~output_dir ~filename_base =
+  let script_doc = BuildScript.generate ~output_dir ~filename_base in
   save ~perm:0o777 output_dir "run_tests.sh" script_doc
 
 
-let run
-  ~output_dir
-  ~filename
-  ~without_ownership_checking
-  (cfg : config)
+let needs_static_hack
+  ~(with_warning : bool)
+  (cabs_tunit : CF.Cabs.translation_unit)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (inst : Executable_spec_extract.instrumentation)
+  =
+  let (TUnit decls) = cabs_tunit in
+  let is_static_func () =
+    List.exists
+      (fun decl ->
+        match decl with
+        | CF.Cabs.EDecl_func
+            (FunDef
+              ( loc,
+                _,
+                { storage_classes; _ },
+                Declarator
+                  (_, DDecl_function (DDecl_identifier (_, Identifier (_, fn')), _)),
+                _ ))
+          when String.equal (Sym.pp_string inst.fn) fn'
+               && List.exists
+                    (fun scs -> match scs with CF.Cabs.SC_static -> true | _ -> false)
+                    storage_classes ->
+          if with_warning then
+            Cerb_colour.with_colour
+              (fun () ->
+                Pp.(
+                  warn
+                    loc
+                    (string "Static function"
+                     ^^^ squotes (Sym.pp inst.fn)
+                     ^^^ string "could not be tested."
+                     ^/^ string "You can try again with '--with-static-hack'")))
+              ();
+          true
+        | _ -> false)
+      decls
+  in
+  let _, _, _, args, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
+  let depends_on_static_glob () =
+    let global_syms =
+      inst.internal
+      |> Option.get
+      |> AT.get_lat
+      |> LAT.free_vars (fun _ -> Sym.Set.empty)
+      |> Sym.Set.to_seq
+      |> List.of_seq
+      |> List.filter (fun x ->
+        not
+          (List.mem (fun x y -> String.equal (Sym.pp_string x) (Sym.pp_string y)) x args))
+    in
+    let static_globs =
+      List.filter_map
+        (fun sym ->
+          match List.assoc Sym.equal sym sigma.declarations with
+          | loc, _, Decl_object ((Static, _), _, _, _) -> Some (sym, loc)
+          | _ -> None)
+        global_syms
+    in
+    if List.is_empty static_globs then
+      false
+    else (
+      if with_warning then
+        Cerb_colour.with_colour
+          (fun () ->
+            List.iter
+              (fun (sym, loc) ->
+                Pp.(
+                  warn
+                    loc
+                    (string "Function"
+                     ^^^ squotes (Sym.pp inst.fn)
+                     ^^^ string "relies on static global"
+                     ^^^ squotes (Sym.pp sym)
+                     ^^ comma
+                     ^^^ string "so could not be tested."
+                     ^^^ string "You can try again with '--with-static-hack'.")))
+              static_globs)
+          ();
+      true)
+  in
+  is_static_func () || depends_on_static_glob ()
+
+
+let functions_under_test
+  ~(with_warning : bool)
+  (cabs_tunit : CF.Cabs.translation_unit)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  : unit
+  : Executable_spec_extract.instrumentation list
   =
-  Config.initialize cfg;
-  Cerb_debug.begin_csv_timing ();
   let insts = prog5 |> Executable_spec_extract.collect_instrumentation |> fst in
   let selected_fsyms =
     Check.select_functions
@@ -218,15 +308,27 @@ let run
             (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn)
             insts))
   in
-  let insts =
-    insts
-    |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
-      Option.is_some inst.internal && Sym.Set.mem inst.fn selected_fsyms)
-  in
+  insts
+  |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
+    Option.is_some inst.internal
+    && Sym.Set.mem inst.fn selected_fsyms
+    && (Config.with_static_hack ()
+        || not (needs_static_hack ~with_warning cabs_tunit sigma inst)))
+
+
+let run
+  ~output_dir
+  ~filename
+  ~without_ownership_checking
+  (cabs_tunit : CF.Cabs.translation_unit)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
+  : unit
+  =
+  Cerb_debug.begin_csv_timing ();
+  let insts = functions_under_test ~with_warning:false cabs_tunit sigma prog5 in
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in
   save_generators ~output_dir ~filename_base sigma prog5 insts;
-  let test_file =
-    save_tests ~output_dir ~filename_base ~without_ownership_checking sigma prog5 insts
-  in
-  save_build_script ~output_dir ~test_file;
+  save_tests ~output_dir ~filename_base ~without_ownership_checking sigma prog5 insts;
+  save_build_script ~output_dir ~filename_base;
   Cerb_debug.end_csv_timing "specification test generation"

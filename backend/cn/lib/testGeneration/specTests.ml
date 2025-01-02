@@ -31,7 +31,9 @@ let debug_stage (stage : string) (str : string) : unit =
   debug_log (str ^ "\n\n")
 
 
-let compile_constant_tests (insts : Executable_spec_extract.instrumentation list)
+let compile_constant_tests
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (insts : Executable_spec_extract.instrumentation list)
   : Test.t list * Pp.document
   =
   let test_names, docs =
@@ -48,18 +50,29 @@ let compile_constant_tests (insts : Executable_spec_extract.instrumentation list
                 |> List.hd;
               test = Sym.pp_string inst.fn
             },
-          CF.Pp_ail.pp_statement
-            A.(
-              Utils.mk_stmt
-                (AilSexpr
-                   (Utils.mk_expr
-                      (AilEcall
-                         ( Utils.mk_expr (AilEident (Sym.fresh_named "CN_UNIT_TEST_CASE")),
-                           [ Utils.mk_expr (AilEident inst.fn) ] ))))) ))
+          let open Pp in
+          (if not (Config.with_static_hack ()) then
+             CF.Pp_ail.pp_function_prototype
+               ~executable_spec:true
+               inst.fn
+               (let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
+                decl)
+             ^^ hardline
+           else
+             empty)
+          ^^ CF.Pp_ail.pp_statement
+               A.(
+                 Utils.mk_stmt
+                   (AilSexpr
+                      (Utils.mk_expr
+                         (AilEcall
+                            ( Utils.mk_expr
+                                (AilEident (Sym.fresh_named "CN_UNIT_TEST_CASE")),
+                              [ Utils.mk_expr (AilEident inst.fn) ] ))))) ))
       insts
   in
   let open Pp in
-  (test_names, separate (semi ^^ twice hardline) docs ^^ twice hardline)
+  (test_names, separate (twice hardline) docs ^^ twice hardline)
 
 
 let compile_generators
@@ -84,6 +97,7 @@ let compile_generators
 
 
 let compile_random_test_case
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   (args_map : (Sym.t * (Sym.t * C.ctype) list) list)
   (convert_from : Sym.t * C.ctype -> Pp.document)
@@ -112,59 +126,68 @@ let compile_random_test_case
         | GlobalDef (sct, _) -> (sym, sct))
       global_syms
   in
-  (if List.is_empty globals then
-     string "CN_RANDOM_TEST_CASE"
-   else (
-     let init_name = string "cn_test_gen_" ^^ Sym.pp inst.fn ^^ string "_init" in
-     string "void"
-     ^^ space
-     ^^ init_name
-     ^^ parens
-          (string "struct"
-           ^^ space
-           ^^ string (String.concat "_" [ "cn_gen"; Sym.pp_string inst.fn; "record" ])
-           ^^ star
-           ^^ space
-           ^^ string "res")
-     ^^ space
-     ^^ braces
-          (nest
-             2
-             (hardline
-              ^^ separate_map
-                   hardline
-                   (fun (sym, sct) ->
-                     let ty =
-                       CF.Pp_ail.pp_ctype
-                         ~executable_spec:true
-                         ~is_human:false
-                         C.no_qualifiers
-                         (Sctypes.to_ctype sct)
-                     in
-                     Sym.pp sym
-                     ^^ space
-                     ^^ equals
-                     ^^ space
-                     ^^ star
-                     ^^ parens (ty ^^ star)
-                     ^^ string "convert_from_cn_pointer"
-                     ^^ parens
-                          (string "res->" ^^ Sym.pp (GenUtils.get_mangled_name [ sym ]))
-                     ^^ semi
-                     ^^ hardline
-                     ^^ string "cn_assume_ownership"
-                     ^^ parens
-                          (separate
-                             (comma ^^ space)
-                             [ ampersand ^^ Sym.pp sym;
-                               string "sizeof" ^^ parens ty;
-                               string "(char*)" ^^ dquotes init_name
-                             ])
-                     ^^ semi)
-                   globals)
-           ^^ hardline)
-     ^^ twice hardline
-     ^^ string "CN_RANDOM_TEST_CASE_WITH_INIT"))
+  (if not (Config.with_static_hack ()) then
+     CF.Pp_ail.pp_function_prototype
+       ~executable_spec:true
+       inst.fn
+       (let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
+        decl)
+     ^^ hardline
+   else
+     empty)
+  ^^ (if List.is_empty globals then
+        string "CN_RANDOM_TEST_CASE"
+      else (
+        let init_name = string "cn_test_gen_" ^^ Sym.pp inst.fn ^^ string "_init" in
+        string "void"
+        ^^ space
+        ^^ init_name
+        ^^ parens
+             (string "struct"
+              ^^ space
+              ^^ string (String.concat "_" [ "cn_gen"; Sym.pp_string inst.fn; "record" ])
+              ^^ star
+              ^^ space
+              ^^ string "res")
+        ^^ space
+        ^^ braces
+             (nest
+                2
+                (hardline
+                 ^^ separate_map
+                      hardline
+                      (fun (sym, sct) ->
+                        let ty =
+                          CF.Pp_ail.pp_ctype
+                            ~executable_spec:true
+                            ~is_human:false
+                            C.no_qualifiers
+                            (Sctypes.to_ctype sct)
+                        in
+                        Sym.pp sym
+                        ^^ space
+                        ^^ equals
+                        ^^ space
+                        ^^ star
+                        ^^ parens (ty ^^ star)
+                        ^^ string "convert_from_cn_pointer"
+                        ^^ parens
+                             (string "res->" ^^ Sym.pp (GenUtils.get_mangled_name [ sym ]))
+                        ^^ semi
+                        ^^ hardline
+                        ^^ string "cn_assume_ownership"
+                        ^^ parens
+                             (separate
+                                (comma ^^ space)
+                                [ ampersand ^^ Sym.pp sym;
+                                  string "sizeof" ^^ parens ty;
+                                  string "(char*)" ^^ dquotes init_name
+                                ])
+                        ^^ semi)
+                      globals)
+              ^^ hardline)
+        ^^ twice hardline
+        ^^ string "CN_RANDOM_TEST_CASE_WITH_INIT"))
   ^^ parens
        (separate
           (comma ^^ space)
@@ -173,6 +196,7 @@ let compile_random_test_case
             int (Config.get_num_samples ());
             separate_map (comma ^^ space) convert_from args
           ])
+  ^^ semi
   ^^ twice hardline
 
 
@@ -237,5 +261,5 @@ let compile_generator_tests
   let open Pp in
   ( tests,
     concat_map
-      (compile_random_test_case prog5 args_map convert_from)
+      (compile_random_test_case sigma prog5 args_map convert_from)
       (List.combine tests insts) )
