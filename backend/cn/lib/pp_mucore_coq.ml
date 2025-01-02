@@ -107,8 +107,10 @@ and pp_symbol (CF.Symbol.Symbol(d, n, sd)) =
     !^")"
 and pp_symbol_prefix = function
   | CF.Symbol.PrefSource(loc, syms) -> !^"(PrefSource" ^^^ pp_location loc ^^^ pp_list pp_symbol syms ^^ !^")"
-  | CF.Symbol.PrefFunArg(loc, d, z) -> !^"(PrefFunArg" ^^^ pp_location loc ^^^ !^d ^^^ !^(Z.to_string (Z.of_int z)) ^^ !^")"
-  | CF.Symbol.PrefStringLiteral(loc, d) -> !^"(PrefStringLiteral" ^^^ pp_location loc ^^^ !^d ^^ !^")"
+  | CF.Symbol.PrefFunArg(loc, d, z) -> 
+    let d = "arg" in (* TODO: it looks like `d` contains some garbage*)
+      !^"(PrefFunArg" ^^^ pp_location loc ^^^ !^("\"" ^ d ^ "\"") ^^^ !^(Z.to_string (Z.of_int z)) ^^ !^")"
+  | CF.Symbol.PrefStringLiteral(loc, d) -> !^"(PrefStringLiteral" ^^^ pp_location loc ^^^ !^("\"" ^ d ^ "\"") ^^ !^")"
   | CF.Symbol.PrefTemporaryLifetime(loc, d) -> !^"(PrefTemporaryLifetime" ^^^ pp_location loc ^^^ !^d ^^ !^")"
   | CF.Symbol.PrefCompoundLiteral(loc, d) -> !^"(PrefCompoundLiteral" ^^^ pp_location loc ^^^ !^d ^^ !^")"
   | CF.Symbol.PrefMalloc -> !^"PrefMalloc"
