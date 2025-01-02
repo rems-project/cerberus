@@ -326,7 +326,7 @@ let compile_spec
   : unit m
   =
   (* Necessary to avoid triggering special-cased logic in [CtA] w.r.t globals *)
-  let rename x = Sym.fresh_named ("cn_gen_" ^ Sym.pp_string x) in
+  let rename x = GenUtils.get_mangled_name [ x ] in
   let lat =
     let lat = AT.get_lat at in
     let subst =
