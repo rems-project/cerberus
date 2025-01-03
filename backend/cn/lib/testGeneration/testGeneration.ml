@@ -209,6 +209,7 @@ let save_build_script ~output_dir ~filename_base =
   save ~perm:0o777 output_dir "run_tests.sh" script_doc
 
 
+(** Workaround for https://github.com/rems-project/cerberus/issues/784 *)
 let needs_static_hack
   ~(with_warning : bool)
   (cabs_tunit : CF.Cabs.translation_unit)
@@ -241,7 +242,7 @@ let needs_static_hack
                     (string "Static function"
                      ^^^ squotes (Sym.pp inst.fn)
                      ^^^ string "could not be tested."
-                     ^/^ string "You can try again with '--with-static-hack'")))
+                     ^/^ string "Try again with '--with-static-hack'")))
               ();
           true
         | _ -> false)
@@ -285,12 +286,57 @@ let needs_static_hack
                      ^^^ squotes (Sym.pp sym)
                      ^^ comma
                      ^^^ string "so could not be tested."
-                     ^^^ string "You can try again with '--with-static-hack'.")))
+                     ^^^ string "Try again with '--with-static-hack'.")))
               static_globs)
           ();
       true)
   in
   is_static_func () || depends_on_static_glob ()
+
+
+(** Workaround for https://github.com/rems-project/cerberus/issues/765 *)
+let needs_enum_hack
+  ~(with_warning : bool)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (inst : Executable_spec_extract.instrumentation)
+  =
+  match List.assoc Sym.equal inst.fn sigma.declarations with
+  | loc, _, Decl_function (_, (_, ret_ct), cts, _, _, _) ->
+    if
+      List.exists
+        (fun (_, ct, _) ->
+          match ct with C.Ctype (_, Basic (Integer (Enum _))) -> true | _ -> false)
+        cts
+    then (
+      if with_warning then
+        Cerb_colour.with_colour
+          (fun () ->
+            Pp.(
+              warn
+                loc
+                (string "Function"
+                 ^^^ squotes (Sym.pp inst.fn)
+                 ^^^ string "has enum arguments and so could not be tested."
+                 ^/^ string "Try again with '--with-static-hack'")))
+          ();
+      true)
+    else if match ret_ct with C.Ctype (_, Basic (Integer (Enum _))) -> true | _ -> false
+    then (
+      if with_warning then
+        Cerb_colour.with_colour
+          (fun () ->
+            Pp.(
+              warn
+                loc
+                (string "Function"
+                 ^^^ squotes (Sym.pp inst.fn)
+                 ^^^ string "has an enum return type and so could not be tested."
+                 ^/^ string "Try again with '--with-static-hack'")))
+          ();
+      true)
+    else
+      false
+  | _ -> false
 
 
 let functions_under_test
@@ -313,7 +359,9 @@ let functions_under_test
     Option.is_some inst.internal
     && Sym.Set.mem inst.fn selected_fsyms
     && (Config.with_static_hack ()
-        || not (needs_static_hack ~with_warning cabs_tunit sigma inst)))
+        || not
+             (needs_static_hack ~with_warning cabs_tunit sigma inst
+              || needs_enum_hack ~with_warning sigma inst)))
 
 
 let run
