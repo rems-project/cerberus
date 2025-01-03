@@ -89,17 +89,8 @@ let generate_c_pres_and_posts_internal
         Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm
       in
       match fn_ownership_stats_opt with
-      | Some ((entry_ownership_stats, exit_ownership_stats), params) ->
-        let cn_addr_bs_and_ss =
-          List.map
-            (fun (sym, _) -> Cn_internal_to_ail.generate_cn_addr_var_bs_and_ss sym)
-            params
-        in
-        let cn_addr_bs, cn_addr_decls = List.split cn_addr_bs_and_ss in
-        let entry_ownership_str =
-          generate_ail_stat_strs
-            (List.concat cn_addr_bs, entry_ownership_stats @ List.concat cn_addr_decls)
-        in
+      | Some (entry_ownership_stats, exit_ownership_stats) ->
+        let entry_ownership_str = generate_ail_stat_strs ([], entry_ownership_stats) in
         let exit_ownership_str = generate_ail_stat_strs ([], exit_ownership_stats) in
         let pre_post_pair =
           ( pre_str @ ("\n\t/* C OWNERSHIP */\n\n" :: entry_ownership_str),
@@ -128,17 +119,16 @@ let generate_c_pres_and_posts_internal
   in
   let return_injs =
     List.filter_map
-      (fun ((loc, e_opt, bs, ss), _) ->
+      (fun (loc, e_opt, bs, ss) ->
         match e_opt with Some e_opt' -> Some (loc, e_opt', bs, ss) | None -> None)
       block_ownership_injs
   in
   let non_return_injs =
-    List.filter (fun ((_, e_opt, _, _), _) -> Option.is_none e_opt) block_ownership_injs
+    List.filter (fun (_, e_opt, _, _) -> Option.is_none e_opt) block_ownership_injs
   in
   let block_ownership_stmts =
     List.map
-      (fun ((loc, _, bs, ss), _) ->
-        (loc, generate_ail_stat_strs ~with_newline:true (bs, ss)))
+      (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss)))
       non_return_injs
   in
   let block_ownership_stmts =
