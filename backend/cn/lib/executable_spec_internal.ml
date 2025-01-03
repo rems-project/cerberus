@@ -70,7 +70,7 @@ let generate_c_pres_and_posts_internal
   in
   let globals = extract_global_variables prog5.globs in
   let ail_executable_spec =
-    Cn_internal_to_ail.cn_to_ail_executable_spec
+    Cn_internal_to_ail.cn_to_ail_pre_post_internal
       ~without_ownership_checking
       dts
       preds
@@ -145,8 +145,8 @@ let generate_c_pres_and_posts_internal
       (fun (loc, e_opt, strs) -> (loc, e_opt, [ String.concat "\n" strs ]))
       return_ownership_stmts
   in
-  let ail_cond_stats, ail_loop_decls = ail_executable_spec.loops in
-  (* let ail_cond_stats, ail_loop_decls = List.split ail_loop_invariants in *)
+  let ail_loop_invariants = ail_executable_spec.loops in
+  let ail_cond_stats, ail_loop_decls = List.split ail_loop_invariants in
   (* A bit of a hack *)
   let rec remove_last = function
     | [] -> []

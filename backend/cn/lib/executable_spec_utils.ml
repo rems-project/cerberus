@@ -167,7 +167,7 @@ let get_start_loc ?(offset = 0) = function
        Cerb_location.point new_start_pos
      | None ->
        failwith
-         (__FUNCTION__ ^ ": Loc_regions has empty list of positions (should be non-empty)"))
+         "get_start_loc: Loc_regions has empty list of positions (should be non-empty)")
   | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
   | Loc_unknown | Loc_other _ ->
     failwith "get_start_loc: Location should be Loc_region, Loc_regions or Loc_point"
@@ -184,7 +184,7 @@ let get_end_loc ?(offset = 0) = function
        Cerb_location.point new_end_pos
      | None ->
        failwith
-         (__FUNCTION__ ^ ": Loc_regions has empty list of positions (should be non-empty)"))
+         "get_end_loc: Loc_regions has empty list of positions (should be non-empty)")
   | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
   | Loc_unknown | Loc_other _ ->
     failwith "get_end_loc: Location should be Loc_region, Loc_regions or Loc_point"

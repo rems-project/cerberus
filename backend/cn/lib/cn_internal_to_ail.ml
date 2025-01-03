@@ -615,12 +615,13 @@ type ail_executable_spec =
     post : ail_bindings_and_statements;
     in_stmt : (Locations.t * ail_bindings_and_statements) list;
     loops :
-      (Locations.t * ail_bindings_and_statements) list
-      * (Locations.t * ail_bindings_and_statements) list
+      ((Locations.t * ail_bindings_and_statements)
+      * (Locations.t * ail_bindings_and_statements))
+        list
   }
 
 let empty_ail_executable_spec =
-  { pre = ([], []); post = ([], []); in_stmt = []; loops = ([], []) }
+  { pre = ([], []); post = ([], []); in_stmt = []; loops = [] }
 
 
 type 'a dest =
@@ -3313,32 +3314,26 @@ let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = fu
     (List.concat bs, List.concat ss)
 
 
-let rec cn_to_ail_loop_inv_aux dts globals preds decl_syms (cond_loc, loop_loc, at) =
+let rec cn_to_ail_loop_inv_aux dts globals preds (cond_loc, loop_loc, at) =
   match at with
   | AT.Computational ((sym, bt), _, at') ->
     let cn_sym = generate_sym_with_suffix ~suffix:"_addr_cn" sym in
-    let subst_loop =
-      ESE.loop_subst (ESE.sym_subst (sym, bt, cn_sym)) (cond_loc, loop_loc, at')
-    in
-    let (_, (cond_bs, cond_ss)), (_, (loop_bs, loop_ss)), _ =
-      cn_to_ail_loop_inv_aux dts globals preds (sym :: decl_syms) subst_loop
-    in
-    let ret_loop_bs, ret_loop_ss =
-      if List.mem Sym.equal sym decl_syms then
-        (loop_bs, loop_ss)
-      else (
-        let cn_ctype = bt_to_ail_ctype (BT.Loc ()) in
-        let binding = create_binding cn_sym cn_ctype in
-        let decl = A.(AilSdeclaration [ (cn_sym, None) ]) in
-        (binding :: loop_bs, decl :: loop_ss))
-    in
+    let cn_ctype = bt_to_ail_ctype (BT.Loc ()) in
+    let binding = create_binding cn_sym cn_ctype in
+    (* TODO: Check this should always translate to the address of the given sym in the loop invariant case *)
     let rhs = wrap_with_convert_to A.(AilEunary (Address, mk_expr (AilEident sym))) bt in
+    let decl = A.(AilSdeclaration [ (cn_sym, None) ]) in
     let assign =
       A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_sym), mk_expr rhs))))
     in
+    let subst_loop =
+      ESE.loop_subst (ESE.sym_subst (sym, bt, cn_sym)) (cond_loc, loop_loc, at')
+    in
+    let (_, (cond_bs, cond_ss)), (_, (loop_bs, loop_ss)) =
+      cn_to_ail_loop_inv_aux dts globals preds subst_loop
+    in
     ( (cond_loc, (cond_bs, assign :: cond_ss)),
-      (loop_loc, (ret_loop_bs, ret_loop_ss)),
-      sym :: decl_syms )
+      (loop_loc, (binding :: loop_bs, decl :: loop_ss)) )
   | L lat ->
     let rec modify_decls_for_loop decls modified_stats =
       let rec collect_initialised_syms_and_exprs = function
@@ -3376,12 +3371,12 @@ let rec cn_to_ail_loop_inv_aux dts globals preds decl_syms (cond_loc, loop_loc, 
     in
     let bs, ss = cn_to_ail_lat_internal_loop dts globals preds lat in
     let decls, modified_stats = modify_decls_for_loop [] [] ss in
-    ((cond_loc, (bs, modified_stats)), (loop_loc, (bs, decls)), decl_syms)
+    ((cond_loc, (bs, modified_stats)), (loop_loc, (bs, decls)))
 
 
-let cn_to_ail_loop_inv dts globals preds decl_syms ((cond_loc, loop_loc, _) as loop) =
-  let (_, (cond_bs, cond_ss)), (_, loop_bs_and_ss), new_decl_syms =
-    cn_to_ail_loop_inv_aux dts globals preds decl_syms loop
+let cn_to_ail_loop_inv dts globals preds ((cond_loc, loop_loc, _) as loop) =
+  let (_, (cond_bs, cond_ss)), (_, loop_bs_and_ss) =
+    cn_to_ail_loop_inv_aux dts globals preds loop
   in
   let cn_stack_depth_incr_call =
     A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_incr_sym), [])))
@@ -3404,9 +3399,7 @@ let cn_to_ail_loop_inv dts globals preds decl_syms ((cond_loc, loop_loc, _) as l
   in
   let ail_gcc_stat_as_expr = A.(AilEgcc_statement ([], List.map mk_stmt stats)) in
   let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
-  ( (cond_loc, (cond_bs, [ ail_stat_as_expr_stat ])),
-    (loop_loc, loop_bs_and_ss),
-    new_decl_syms )
+  ((cond_loc, (cond_bs, [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss))
 
 
 let prepend_to_precondition ail_executable_spec (b1, s1) =
@@ -3473,8 +3466,8 @@ let rec cn_to_ail_lat_internal_2
         lat
     in
     prepend_to_precondition ail_executable_spec (b1, ss)
-  (* Postcondition, statements and loop invariants *)
-  | LAT.I (post, (stats, loops)) ->
+  (* Postcondition *)
+  | LAT.I (post, (stats, loop)) ->
     let rec remove_duplicates locs stats =
       match stats with
       | [] -> []
@@ -3519,32 +3512,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_statements =
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
-    let rec _get_ail_loop_invariants dts globals preds decl_syms = function
-      | [] -> ([], [])
-      | l :: ls ->
-        let cond_ail, loop_decl_ail, new_decl_syms =
-          cn_to_ail_loop_inv dts globals preds decl_syms l
-        in
-        let cond_ails, loop_decl_ails =
-          _get_ail_loop_invariants dts globals preds new_decl_syms ls
-        in
-        (cond_ail :: cond_ails, loop_decl_ail :: loop_decl_ails)
-    in
-    (* let ail_loop_invariants = get_ail_loop_invariants dts globals preds [] loops in *)
-    let ail_loop_invariants = List.map (cn_to_ail_loop_inv dts globals preds []) loops in
-    let cond_stats, loop_decls, _ =
-      Executable_spec_utils.list_split_three ail_loop_invariants
-    in
-    (* let (cond_stats, loop_decls) = List.split ail_loop_invariants in *)
-    (* let rec shift_loop_decls = function
-       | [] -> []
-       | [(_, (bs, ss))] -> [(Cerb_location.unknown, (bs, ss))]
-       | (loc, (decl_bs, decl_ss)) :: ds ->
-       let ds_bs_and_ss = shift_loop_decls ds in
-       let (ds_bs, ds_ss) = List.split (List.map snd ds_bs_and_ss) in
-       [loc, (decl_bs @ (List.concat ds_bs), decl_ss @ (List.concat ds_ss))]
-       in *)
-    (* let modified_ail_loop_invariants = (cond_stats, (loop_decls)) in *)
+    let ail_loop_invariants = List.map (cn_to_ail_loop_inv dts globals preds) loop in
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stats_ =
       if without_ownership_checking then
@@ -3563,11 +3531,11 @@ let rec cn_to_ail_lat_internal_2
     { pre = ([], []);
       post = ([], [ block ]);
       in_stmt = ail_statements;
-      loops = (cond_stats, loop_decls)
+      loops = ail_loop_invariants
     }
 
 
-let rec cn_to_ail_executable_spec_aux
+let rec cn_to_ail_pre_post_aux_internal
   without_ownership_checking
   dts
   preds
@@ -3582,7 +3550,7 @@ let rec cn_to_ail_executable_spec_aux
     let decl = A.(AilSdeclaration [ (cn_sym, Some (mk_expr rhs)) ]) in
     let subst_at = ESE.fn_args_and_body_subst (ESE.sym_subst (sym, bt, cn_sym)) at in
     let ail_executable_spec =
-      cn_to_ail_executable_spec_aux
+      cn_to_ail_pre_post_aux_internal
         without_ownership_checking
         dts
         preds
@@ -3601,11 +3569,16 @@ let rec cn_to_ail_executable_spec_aux
       lat
 
 
-let cn_to_ail_executable_spec ~without_ownership_checking dts preds globals c_return_type
+let cn_to_ail_pre_post_internal
+  ~without_ownership_checking
+  dts
+  preds
+  globals
+  c_return_type
   = function
   | Some internal ->
     let ail_executable_spec =
-      cn_to_ail_executable_spec_aux
+      cn_to_ail_pre_post_aux_internal
         without_ownership_checking
         dts
         preds
