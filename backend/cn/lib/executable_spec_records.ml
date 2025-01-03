@@ -11,7 +11,11 @@ module AT = ArgumentTypes
 let rec add_records_to_map_from_it it =
   match IT.get_term it with
   | IT.Sym _s -> ()
-  | Const _c -> ()
+  | Const c -> begin
+    match c with
+    | Default bt -> Cn_internal_to_ail.augment_record_map bt
+    | _ -> ()
+  end
   | Unop (_uop, t1) -> add_records_to_map_from_it t1
   | Binop (_bop, t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | ITE (t1, t2, t3) -> List.iter add_records_to_map_from_it [ t1; t2; t3 ]
