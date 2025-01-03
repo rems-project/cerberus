@@ -97,7 +97,7 @@ let rec gen_loop_ownership_entry_decls bindings = function
 let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
   if dest_is_loop then (
     let new_bindings, new_decls = gen_loop_ownership_entry_decls bindings decls in
-    [ ((loc, new_bindings, [ A.AilSdeclaration new_decls ]), List.map fst new_decls) ])
+    [ (loc, new_bindings, [ A.AilSdeclaration new_decls ]) ])
   else (
     let stats_ =
       List.map
@@ -107,7 +107,7 @@ let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
           A.(AilSexpr entry_fcall))
         decls
     in
-    [ ((get_end_loc loc, [], stats_), List.map fst decls) ])
+    [ (get_end_loc loc, [], stats_) ])
 
 
 (* c_remove_local_footprint((uintptr_t) &xs, cn_ownership_global_ghost_state,
@@ -248,7 +248,7 @@ let rec get_c_block_entry_exit_injs_aux bindings A.(AnnotatedStatement (loc, _, 
             [ generate_c_local_ownership_exit (b_sym, b_ctype) ] ))
         bs
     in
-    let exit_injs' = List.map (fun (loc, stats) -> ((loc, [], stats), [])) exit_injs in
+    let exit_injs' = List.map (fun (loc, stats) -> (loc, [], stats)) exit_injs in
     let stat_injs = List.map (fun s -> get_c_block_entry_exit_injs_aux bs s) ss in
     List.concat stat_injs @ exit_injs'
   | AilSif (_, s1, s2) ->
@@ -270,19 +270,19 @@ let rec get_c_block_entry_exit_injs_aux bindings A.(AnnotatedStatement (loc, _, 
 
 let get_c_block_entry_exit_injs stat =
   let injs = get_c_block_entry_exit_injs_aux [] stat in
-  List.map (fun ((loc, bs, ss), syms) -> ((loc, None, bs, ss), syms)) injs
+  List.map (fun (loc, bs, ss) -> (loc, None, bs, ss)) injs
 
 
 let rec combine_injs_over_location loc = function
   | [] -> []
-  | ((loc', expr_opt, bs, inj_stmt), syms) :: injs' ->
+  | (loc', expr_opt, bs, inj_stmt) :: injs' ->
     let stmt =
       if
         String.equal
           (Cerb_location.location_to_string loc)
           (Cerb_location.location_to_string loc')
       then
-        [ ((expr_opt, bs, inj_stmt), syms) ]
+        [ (expr_opt, bs, inj_stmt) ]
       else
         []
     in
@@ -317,21 +317,18 @@ let get_c_block_local_ownership_checking_injs
   | A.(AilSblock _) ->
     let injs = get_c_block_entry_exit_injs statement in
     let injs' = get_c_control_flow_block_unmaps statement in
-    let injs' = List.map (fun (l, r, s, b) -> ((l, r, s, b), [])) injs' in
     let injs = injs @ injs' in
-    let locs = List.map (fun ((l, _, _, _), _) -> l) injs in
+    let locs = List.map (fun (l, _, _, _) -> l) injs in
     let locs = remove_duplicates [] locs in
     let combined_injs =
       List.map
         (fun l ->
           let injs' = combine_injs_over_location l injs in
-          let injs', syms = List.split injs' in
           let expr_opt_list, bs_list, stats_list =
             Executable_spec_utils.list_split_three injs'
           in
           let return_expr_opt = get_return_expr_opt expr_opt_list in
-          ( (l, return_expr_opt, List.concat bs_list, List.concat stats_list),
-            List.concat syms ))
+          (l, return_expr_opt, List.concat bs_list, List.concat stats_list))
         locs
     in
     combined_injs
@@ -356,5 +353,5 @@ let get_c_fn_local_ownership_checking_injs
     let ownership_stats_pair = get_c_local_ownership_checking params in
     (* TODO: Separate return injections here since they are now done differently *)
     let block_ownership_injs = get_c_block_local_ownership_checking_injs fn_body in
-    (Some (ownership_stats_pair, params), block_ownership_injs)
+    (Some ownership_stats_pair, block_ownership_injs)
   | _, _ -> (None, [])

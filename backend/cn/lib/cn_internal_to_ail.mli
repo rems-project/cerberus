@@ -60,8 +60,6 @@ type ail_executable_spec =
       * (Locations.t * ail_bindings_and_statements) list
   }
 
-val generate_cn_addr_var_bs_and_ss : Sym.t -> ail_bindings_and_statements
-
 val generate_get_or_put_ownership_function
   :  without_ownership_checking:bool ->
   C.ctype ->
