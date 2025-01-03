@@ -572,24 +572,31 @@ let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt = None) (bs, 
   ([ b_binding ], [ b_decl; block ], mk_expr b_ident)
 
 
-let rec cn_to_ail_const_internal const =
+let cn_to_ail_default bt =
+  let do_call f = A.AilEcall (mk_expr (A.AilEident (Sym.fresh_pretty f)), []) in
+  match get_underscored_typedef_string_from_bt bt with
+  | Some f -> do_call ("default_" ^ f)
+  | None   -> failwith ("[UNSUPPORTED] default<" ^ Pp.plain (BT.pp bt) ^ ">")
+
+let cn_to_ail_const_internal const basetype =
+  let wrap x = wrap_with_convert_to x basetype in
   let ail_const =
     match const with
-    | IT.Z z -> A.AilEconst (ConstantInteger (IConstant (z, Decimal, None)))
+    | IT.Z z -> wrap (A.AilEconst (ConstantInteger (IConstant (z, Decimal, None))))
     | MemByte { alloc_id = _; value = i } | Bits (_, i) ->
-      A.AilEconst (ConstantInteger (IConstant (i, Decimal, None)))
-    | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
+      wrap (A.AilEconst (ConstantInteger (IConstant (i, Decimal, None))))
+    | Q q -> wrap (A.AilEconst (ConstantFloating (Q.to_string q, None)))
     | Pointer z ->
       (* Printf.printf "In Pointer case; const\n"; *)
-      let ail_const', _ = cn_to_ail_const_internal (IT.Z z.addr) in
-      A.AilEunary (Address, mk_expr ail_const')
+      let ail_const' = A.AilEconst (ConstantInteger (IConstant (z.addr, Decimal, None))) in
+      wrap (A.AilEunary (Address, mk_expr ail_const'))
     | Alloc_id _ -> failwith "TODO Alloc_id"
     | Bool b ->
-      A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse))
-    | Unit -> A.AilEconst ConstantNull (* Gets overridden by dest_with_unit_check *)
-    | Null -> A.AilEconst ConstantNull
+      wrap (A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse)))
+    | Unit -> wrap (A.AilEconst ConstantNull) (* Gets overridden by dest_with_unit_check *)
+    | Null -> wrap (A.AilEconst ConstantNull)
     | CType_const _ -> failwith "TODO CType_const"
-    | Default _bt -> failwith "TODO Default"
+    | Default bt -> cn_to_ail_default bt
   in
   let is_unit = const == Unit in
   (ail_const, is_unit)
@@ -802,10 +809,10 @@ let rec cn_to_ail_expr_aux_internal
   fun const_prop pred_name dts globals (IT (term_, basetype, _loc)) d ->
   match term_ with
   | Const const ->
-    let ail_expr_, is_unit = cn_to_ail_const_internal const in
+    let ail_expr, is_unit = cn_to_ail_const_internal const basetype in
     dest_with_unit_check
       d
-      ([], [], mk_expr (wrap_with_convert_to ail_expr_ basetype), is_unit)
+      ([], [], mk_expr ail_expr, is_unit)
   | Sym sym ->
     let sym =
       if String.equal (Sym.pp_string sym) "return" then
@@ -817,7 +824,7 @@ let rec cn_to_ail_expr_aux_internal
       match const_prop with
       | Some (sym2, cn_const) ->
         if CF.Symbol.equal_sym sym sym2 then (
-          let ail_const, _ = cn_to_ail_const_internal cn_const in
+          let ail_const, _ = cn_to_ail_const_internal cn_const basetype in
           ail_const)
         else
           A.(AilEident sym)
