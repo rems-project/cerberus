@@ -16,9 +16,10 @@ Require Import LogicalConstraints.
 Require Import Request.
 Require Import ReturnTypes.
 Require Import ArgumentTypes.
+Require Import Ctype.
+Require Import Annot.
 
 (* We'll need to declare some types that are imported from other modules *)
-Parameter Annot_t : Type. (* placeholder *)
 Parameter Sctypes_t : Type. (* placeholder *)
 Parameter undefined_behaviour : Type. (* placeholder *)
 Parameter cn_condition : Type. (* placeholder *)
@@ -73,7 +74,7 @@ Inductive iop : Type :=
 (* Annotated C type *)
 Record act := {
   loc : Location_t;
-  annot : list Annot_t;
+  annot : list Annot.annot;
   ct : Sctypes_t
 }.
 
@@ -90,7 +91,7 @@ with object_value (TY : Type) : Type :=
 
 Inductive value_ (TY : Type) : Type :=
   | Vobject : object_value TY -> value_ TY
-  | Vctype : Type -> value_ TY  (* simplified from ctype *)
+  | Vctype : Ctype.ctype -> value_ TY
   | Vfunction_addr : Sym.t -> value_ TY
   | Vunit : value_ TY
   | Vtrue : value_ TY
@@ -114,7 +115,7 @@ Inductive pattern_ (TY : Type) : Type :=
   | CaseCtor : ctor -> list (pattern TY) -> pattern_ TY
 
 with pattern (TY : Type) : Type :=
-  | Pattern : Location_t -> list Annot_t -> TY -> pattern_ TY -> pattern TY.
+  | Pattern : Location_t -> list Annot.annot -> TY -> pattern_ TY -> pattern TY.
 
 (* Function types *)
 Inductive mu_function : Type :=
@@ -180,7 +181,7 @@ Inductive pexpr_ (TY: Type) : Type :=
   | PEif : pexpr TY -> pexpr TY -> pexpr TY -> pexpr_ TY
 
 with pexpr (TY: Type) : Type :=
-  | Pexpr : Location_t -> list Annot_t -> TY -> pexpr_ TY -> pexpr TY.
+  | Pexpr : Location_t -> list Annot.annot -> TY -> pexpr_ TY -> pexpr TY.
 
 (* Action types *)
 Inductive action_ (TY : Type) : Type :=
@@ -255,7 +256,7 @@ Inductive expr_ (TY : Type) : Type :=
   (* Note: CN_progs constructor omitted as it requires additional types *)
 
 with expr (TY : Type) : Type :=
-  | Expr : Location_t -> list Annot_t -> TY -> expr_ TY -> expr TY.
+  | Expr : Location_t -> list Annot.annot -> TY -> expr_ TY -> expr TY.
 
 (* Global declarations and definitions *)
 Inductive globs (TY : Type) : Type :=
@@ -279,7 +280,7 @@ Inductive label_def (TY : Type) : Type :=
   | Return : Location_t -> label_def TY
   | Label : Location_t -> 
            arguments (expr TY) ->
-           list Annot_t ->
+           list Annot.annot ->
            parse_ast_label_spec ->
            (Location_t * Location_t) -> (* Loop locations *)
            label_def TY.
@@ -291,7 +292,7 @@ Inductive trusted : Type :=
 
 (* Desugared specification *)
 Record desugared_spec := {
-  accesses : list (Sym.t * Type); (* simplified from ctype *)
+  accesses : list (Sym.t * Ctype.ctype);
   requires : list cn_condition;
   ensures : list cn_condition
 }.

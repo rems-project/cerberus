@@ -25,7 +25,8 @@ let pp_polarity _ = !^"polarity_placeholder"
 let pp_cn_condition _ = !^"cn_condition_placeholder"
 let pp_return_type _ = !^"return_type_placeholder" 
 let pp_label_map _ = !^"label_map_placeholder"
-let pp_type _ = !^"type_placeholder"  (* TODO: proper type handling *)
+let pp_type _ = !^"type_placeholder"
+let pp_ctype _ = !^"ctype_placeholder"
 
 (* TODO see if this is needed *)
 let pp_basetype_loc () = !^"pointer"
@@ -390,7 +391,7 @@ and pp_value (V (ty, v)) =
   !^"V" ^^^ pp_type ty ^^^
   (match v with
    | Vobject ov -> !^"(Vobject" ^^^ pp_object_value ov ^^ !^")"
-   | Vctype t -> !^"(Vctype" ^^^ pp_type t ^^ !^")"
+   | Vctype t -> !^"(Vctype" ^^^ pp_ctype t ^^ !^")"
    | Vfunction_addr s -> !^"(Vfunction_addr" ^^^ pp_symbol s ^^ !^")"
    | Vunit -> !^"Vunit"
    | Vtrue -> !^"Vtrue"
@@ -467,7 +468,7 @@ let pp_const = function
   | Bool b -> !^"(Bool" ^^^ pp_bool b ^^ !^")"
   | Unit -> !^"Unit"
   | Null -> !^"Null"
-  | CType_const t -> !^"(CType_const" ^^^ pp_type t ^^ !^")"
+  | CType_const t -> !^"(CType_const" ^^^ pp_sctypes_t t ^^ !^")"
   | Default bt -> !^"(Default" ^^^ pp_basetype pp_basetype_loc bt ^^ !^")"
 
    let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
@@ -685,7 +686,7 @@ let pp_logical_constraint = function
 
 let pp_desugared_spec {accesses; requires; ensures} =
   !^"{|" ^^^
-  !^"accesses :=" ^^^ pp_list (fun (sym, ty) -> !^"(" ^^ pp_symbol sym ^^ !^"," ^^^ pp_type ty ^^ !^")") accesses ^^ !^";" ^^^
+  !^"accesses :=" ^^^ pp_list (fun (sym, ty) -> !^"(" ^^ pp_symbol sym ^^ !^"," ^^^ pp_ctype ty ^^ !^")") accesses ^^ !^";" ^^^
   !^"requires :=" ^^^ pp_list pp_cn_condition requires ^^ !^";" ^^^
   !^"ensures :=" ^^^ pp_list pp_cn_condition ensures ^^^
   !^"|}"
