@@ -8,6 +8,19 @@ module P = PPrint
 
 open Mucore
 
+let pp_list pp_elem xs = 
+    !^"[" ^^^ 
+    (List.fold_left (fun acc x -> 
+      if acc == P.empty then pp_elem x
+      else acc ^^ !^";" ^^^ pp_elem x
+    ) P.empty xs) ^^^ 
+    !^"]"
+  
+
+let pp_option pp_elem = function
+  | None -> !^"None"
+  | Some x -> !^"(Some" ^^^ pp_elem x ^^ !^")"
+
 (* Helper to print Coq definitions *)
 let coq_def name args body =
   !^"Definition" ^^^ !^name ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
@@ -27,21 +40,6 @@ let pp_label_map _ = !^"label_map_placeholder"
 let pp_type _ = !^"type_placeholder"
 (* TODO see if this is needed *)
 let pp_basetype_loc () = !^"pointer"
-
-let pp_ctype (ct : Ctype.ctype) = !^"ctype_placeholder"
-
-let pp_list pp_elem xs = 
-    !^"[" ^^^ 
-    (List.fold_left (fun acc x -> 
-      if acc == P.empty then pp_elem x
-      else acc ^^ !^";" ^^^ pp_elem x
-    ) P.empty xs) ^^^ 
-    !^"]"
-  
-
-let pp_option pp_elem = function
-  | None -> !^"None"
-  | Some x -> !^"(Some" ^^^ pp_elem x ^^ !^")"
 
 (* Basic type printers *)
 let pp_lexing_position {Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum} =
@@ -143,6 +141,75 @@ and pp_symbol_prefix = function
   | BaseTypes.Set t -> !^"(TSet" ^^^ pp_basetype pp_loc t ^^ !^")"
   | BaseTypes.Loc x -> pp_loc x
 
+  let pp_integer_base_type = function
+  | Sctypes.IntegerBaseTypes.Ichar -> !^"Ichar"
+  | Sctypes.IntegerBaseTypes.Short -> !^"Short"
+  | Sctypes.IntegerBaseTypes.Int_ -> !^"Int_"
+  | Sctypes.IntegerBaseTypes.Long -> !^"Long"
+  | Sctypes.IntegerBaseTypes.LongLong -> !^"LongLong"
+  | Sctypes.IntegerBaseTypes.IntN_t n -> !^"(IntN_t" ^^^ !^(string_of_int n) ^^ !^")"
+  | Sctypes.IntegerBaseTypes.Int_leastN_t n -> !^"(Int_leastN_t" ^^^ !^(string_of_int n) ^^ !^")"
+  | Sctypes.IntegerBaseTypes.Int_fastN_t n -> !^"(Int_fastN_t" ^^^ !^(string_of_int n) ^^ !^")"
+  | Sctypes.IntegerBaseTypes.Intmax_t -> !^"Intmax_t"
+  | Sctypes.IntegerBaseTypes.Intptr_t -> !^"Intptr_t"
+
+let pp_integer_type = function
+  | Sctypes.IntegerTypes.Char -> !^"Char"
+  | Sctypes.IntegerTypes.Bool -> !^"Bool"
+  | Sctypes.IntegerTypes.Signed ibt -> !^"(Signed" ^^^ pp_integer_base_type ibt ^^ !^")"
+  | Sctypes.IntegerTypes.Unsigned ibt -> !^"(Unsigned" ^^^ pp_integer_base_type ibt ^^ !^")"
+  | Sctypes.IntegerTypes.Enum sym -> !^"(Enum" ^^^ pp_symbol sym ^^ !^")"
+  | Sctypes.IntegerTypes.Wchar_t -> !^"Wchar_t"
+  | Sctypes.IntegerTypes.Wint_t -> !^"Wint_t"
+  | Sctypes.IntegerTypes.Size_t -> !^"Size_t"
+  | Sctypes.IntegerTypes.Ptrdiff_t -> !^"Ptrdiff_t"
+  | Sctypes.IntegerTypes.Ptraddr_t -> !^"Ptraddr_t"
+
+
+  let rec pp_ctype (Ctype.Ctype (annots, ct)) =
+    !^"(Ctype" ^^^
+    pp_list pp_annot_t annots ^^^
+    (match ct with
+    | Ctype.Void -> !^"Void"
+    | Ctype.Basic bt -> !^"(Basic" ^^^ pp_basic_type bt ^^ !^")"
+    | Ctype.Array (ct, None) -> !^"(Array" ^^^ pp_ctype ct ^^^ !^"None" ^^ !^")"
+    | Ctype.Array (ct, Some n) -> !^"(Array" ^^^ pp_ctype ct ^^^ !^"(Some" ^^^ !^(Z.to_string n) ^^ !^"))" ^^ !^")"
+    | Ctype.Function ((quals, ret), args, variadic) ->
+        !^"(Function" ^^^
+        !^"(" ^^^ pp_qualifiers quals ^^ !^"," ^^^ pp_ctype ret ^^ !^")" ^^^
+        pp_list (fun (q, ct, is_reg) -> 
+          !^"(" ^^ pp_qualifiers q ^^ !^"," ^^^ pp_ctype ct ^^ !^"," ^^^ !^(string_of_bool is_reg) ^^ !^")") args ^^^
+        !^(string_of_bool variadic) ^^ !^")"
+    | Ctype.FunctionNoParams (quals, ret) ->
+        !^"(FunctionNoParams" ^^^
+        !^"(" ^^^ pp_qualifiers quals ^^ !^"," ^^^ pp_ctype ret ^^ !^"))"
+    | Ctype.Pointer (quals, ct) ->
+        !^"(Pointer" ^^^ pp_qualifiers quals ^^^ pp_ctype ct ^^ !^")"
+    | Ctype.Atomic ct -> !^"(Atomic" ^^^ pp_ctype ct ^^ !^")"
+    | Ctype.Struct sym -> !^"(Struct" ^^^ pp_symbol sym ^^ !^")"
+    | Ctype.Union sym -> !^"(Union" ^^^ pp_symbol sym ^^ !^")") ^^
+    !^")"
+  
+  and pp_basic_type = function
+    | Ctype.Integer it -> !^"(Integer" ^^^ pp_integer_type it ^^ !^")"
+    | Ctype.Floating ft -> !^"(Floating" ^^^ pp_floating_type ft ^^ !^")"
+  
+  and pp_floating_type = function
+    | Ctype.RealFloating rft -> !^"(RealFloating" ^^^ pp_real_floating_type rft ^^ !^")"
+  
+  and pp_real_floating_type = function
+    | Ctype.Float -> !^"Float"
+    | Ctype.Double -> !^"Double" 
+    | Ctype.LongDouble -> !^"LongDouble"
+  
+  and pp_qualifiers quals =
+    !^"{|" ^^^
+    !^"const :=" ^^^ !^(string_of_bool quals.Ctype.const) ^^ !^";" ^^^
+    !^"restrict :=" ^^^ !^(string_of_bool quals.Ctype.restrict) ^^ !^";" ^^^
+    !^"volatile :=" ^^^ !^(string_of_bool quals.Ctype.volatile) ^^^
+    !^"|}"
+  
+  
   let rec pp_sctype = function
   | Sctypes.Void -> !^"Void"
   | Sctypes.Integer it -> !^"(Integer" ^^^ pp_integer_type it ^^ !^")"
@@ -162,30 +229,6 @@ and pp_symbol_prefix = function
     !^"restrict :=" ^^^ !^(string_of_bool quals.Ctype.restrict) ^^ !^";" ^^^
     !^"volatile :=" ^^^ !^(string_of_bool quals.Ctype.volatile) ^^^
     !^"|}"
-
-  and pp_integer_type = function
-    | Sctypes.IntegerTypes.Char -> !^"Char"
-    | Sctypes.IntegerTypes.Bool -> !^"Bool"
-    | Sctypes.IntegerTypes.Signed ibt -> !^"(Signed" ^^^ pp_integer_base_type ibt ^^ !^")"
-    | Sctypes.IntegerTypes.Unsigned ibt -> !^"(Unsigned" ^^^ pp_integer_base_type ibt ^^ !^")"
-    | Sctypes.IntegerTypes.Enum sym -> !^"(Enum" ^^^ pp_symbol sym ^^ !^")"
-    | Sctypes.IntegerTypes.Wchar_t -> !^"Wchar_t"
-    | Sctypes.IntegerTypes.Wint_t -> !^"Wint_t"
-    | Sctypes.IntegerTypes.Size_t -> !^"Size_t"
-    | Sctypes.IntegerTypes.Ptrdiff_t -> !^"Ptrdiff_t"
-    | Sctypes.IntegerTypes.Ptraddr_t -> !^"Ptraddr_t"
-
-  and pp_integer_base_type = function
-    | Sctypes.IntegerBaseTypes.Ichar -> !^"Ichar"
-    | Sctypes.IntegerBaseTypes.Short -> !^"Short"
-    | Sctypes.IntegerBaseTypes.Int_ -> !^"Int_"
-    | Sctypes.IntegerBaseTypes.Long -> !^"Long"
-    | Sctypes.IntegerBaseTypes.LongLong -> !^"LongLong"
-    | Sctypes.IntegerBaseTypes.IntN_t n -> !^"(IntN_t" ^^^ !^(string_of_int n) ^^ !^")"
-    | Sctypes.IntegerBaseTypes.Int_leastN_t n -> !^"(Int_leastN_t" ^^^ !^(string_of_int n) ^^ !^")"
-    | Sctypes.IntegerBaseTypes.Int_fastN_t n -> !^"(Int_fastN_t" ^^^ !^(string_of_int n) ^^ !^")"
-    | Sctypes.IntegerBaseTypes.Intmax_t -> !^"Intmax_t"
-    | Sctypes.IntegerBaseTypes.Intptr_t -> !^"Intptr_t"
 
 (* Constructor printers *)
 let rec pp_core_base_type = function
