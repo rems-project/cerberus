@@ -7,6 +7,9 @@ open CF
 module P = PPrint
 open Mucore
 
+(* temporary debug option to supress printing of noisy locations *)
+let debug_print_locations = false (* Set to true to print actual locations *)
+
 let pp_list pp_elem xs =
   !^"["
   ^^^ List.fold_left
@@ -45,26 +48,25 @@ let pp_polarity _ = !^"polarity_placeholder"
 
 let pp_cn_condition _ = !^"cn_condition_placeholder"
 
-let pp_return_type _ = !^"return_type_placeholder"
-
 let pp_label_map _ = !^"label_map_placeholder"
 
-let pp_type _ = !^"type_placeholder"
 (* TODO see if this is needed *)
+let pp_type _ = !^"type_placeholder"
 
-let pp_integer_value i = !^"dummy_integer" (* TODO *)
+let pp_ft ft = !^"ft_placeholder" (* TODO *)
 
-let pp_floating_value f = !^"dummy_float" (* TODO *)
+let pp_integer_value i = !^"integer_value placeholder" (* TODO *)
 
-let pp_pointer_value p = !^"dummy_pointer" (* TODO *)
+let pp_floating_value f = !^"floating_value placeholder" (* TODO *)
 
-let pp_mem_value m = !^"dummy_memval" (* TODO *)
+let pp_pointer_value p = !^"pointer_value placeholder" (* TODO *)
 
-let pp_identifier id = !^"dummy_id" (* TODO *)
+let pp_mem_value m = !^"mem_value placeholder" (* TODO *)
+
+let pp_identifier id = !^"identifier placeholder" (* TODO *)
 
 let pp_unit (_ : unit) = !^"tt"
 
-(* Basic type printers *)
 let pp_lexing_position { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
   !^"{"
   ^^ !^"pos_fname :="
@@ -90,9 +92,6 @@ let pp_location_cursor = function
     ^^^ pp_lexing_position end_pos
     ^^ !^")"
 
-
-(* temporary debug option to disable noisy locations *)
-let debug_print_locations = false (* Set to true to print actual locations *)
 
 let pp_location = function
   | Cerb_location.Loc_unknown -> !^"Loc_unknown"
@@ -120,8 +119,6 @@ let pp_location = function
     ^^^ pp_location_cursor cursor
     ^^ !^")"
 
-
-(* Value printers *)
 
 let rec pp_symbol_description = function
   | CF.Symbol.SD_None -> !^"SD_None"
@@ -411,7 +408,6 @@ and pp_qualifiers quals =
   ^^^ !^"|}"
 
 
-(* Constructor printers *)
 let rec pp_core_base_type = function
   | Core.BTy_unit -> !^"BTy_unit"
   | Core.BTy_boolean -> !^"BTy_boolean"
@@ -440,7 +436,6 @@ let pp_ctor = function
   | Mucore.Carray -> !^"Carray"
 
 
-(* Operator printers *)
 let pp_core_binop = function
   | Core.OpAdd -> !^"Add"
   | Core.OpSub -> !^"Sub"
@@ -493,8 +488,6 @@ let pp_binop = function
   | Terms.Subset -> !^"Subset"
 
 
-(* Action printers *)
-
 let pp_bw_binop = function
   | BW_OR -> !^"BW_OR"
   | BW_AND -> !^"BW_AND"
@@ -546,7 +539,6 @@ let rec pp_mem_constraint = function
   | Mem_common.MC_not x -> !^"(MC_not" ^^^ pp_mem_constraint x ^^ !^")"
 
 
-(* Action content remains inductive since it's defined as an inductive type *)
 and pp_pexpr (Pexpr (loc, annots, ty, pe)) =
   !^"Pexpr"
   ^^^ pp_location loc
@@ -770,9 +762,6 @@ and pp_object_value (OV (ty, ov)) =
   | OVunion (sym, id, v) ->
     !^"(OVunion" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ pp_mem_value v ^^ !^")"
 
-
-(* Function specification printers *)
-let pp_ft ft = !^"dummy_ft" (* TODO *)
 
 let pp_location_info (loc, _) = pp_location loc
 
@@ -1115,7 +1104,53 @@ let pp_logical_constraint = function
     ^^ !^")"
 
 
-let pp_args_and_body args =
+let rec pp_return_type = function
+  | ReturnTypes.Computational ((sym, bt), info, lrt) ->
+    !^"(Computational"
+    ^^^ !^"("
+    ^^^ pp_symbol sym
+    ^^ !^","
+    ^^^ pp_basetype pp_unit bt
+    ^^ !^")"
+    ^^^ pp_location_info info
+    ^^^ pp_logical_return_type lrt
+    ^^^ !^")"
+
+
+and pp_logical_return_type = function
+  | LogicalReturnTypes.Define ((sym, term), info, lrt) ->
+    !^"(Define"
+    ^^^ !^"("
+    ^^^ pp_symbol sym
+    ^^ !^","
+    ^^^ pp_index_term term
+    ^^ !^")"
+    ^^^ pp_location_info info
+    ^^^ pp_logical_return_type lrt
+    ^^^ !^")"
+  | LogicalReturnTypes.Resource ((sym, (req, bt)), info, lrt) ->
+    !^"(Resource"
+    ^^^ !^"("
+    ^^^ pp_symbol sym
+    ^^ !^","
+    ^^^ !^"("
+    ^^^ pp_request req
+    ^^ !^","
+    ^^^ pp_basetype pp_unit bt
+    ^^ !^"))"
+    ^^^ pp_location_info info
+    ^^^ pp_logical_return_type lrt
+    ^^^ !^")"
+  | LogicalReturnTypes.Constraint (lc, info, lrt) ->
+    !^"(Constraint"
+    ^^^ pp_logical_constraint lc
+    ^^^ pp_location_info info
+    ^^^ pp_logical_return_type lrt
+    ^^^ !^")"
+  | LogicalReturnTypes.I -> !^"I"
+
+
+let pp_args_and_body (args : 'a args_and_body) =
   (* args is of type arguments (expr * label_map * return_type) *)
   let rec pp_args = function
     | Computational ((sym, bt), loc, rest) ->
@@ -1156,7 +1191,7 @@ let pp_args_and_body args =
       ^^^ pp_location_info info
       ^^^ pp_logical_args rest
       ^^ !^")"
-    | I (body, labels, rt) ->
+    | I (body, labels, (rt : ReturnTypes.t)) ->
       !^"(I"
       ^^^ !^"("
       ^^^ pp_expr body
