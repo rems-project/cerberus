@@ -17,7 +17,6 @@ let coq_notation name args body =
 
 (* Placeholder printers for opaque types *)
 let pp_annot_t _ = !^"annot_placeholder"
-let pp_sctypes_t _ = !^"sctypes_placeholder" 
 let pp_undefined_behaviour _ = !^"undefined_behaviour_placeholder"
 let pp_memory_order _ = !^"memory_order_placeholder"
 let pp_linux_memory_order _ = !^"linux_memory_order_placeholder"
@@ -26,10 +25,19 @@ let pp_cn_condition _ = !^"cn_condition_placeholder"
 let pp_return_type _ = !^"return_type_placeholder" 
 let pp_label_map _ = !^"label_map_placeholder"
 let pp_type _ = !^"type_placeholder"
-let pp_ctype _ = !^"ctype_placeholder"
-
 (* TODO see if this is needed *)
 let pp_basetype_loc () = !^"pointer"
+
+let pp_ctype (ct : Ctype.ctype) = !^"ctype_placeholder"
+
+let pp_list pp_elem xs = 
+    !^"[" ^^^ 
+    (List.fold_left (fun acc x -> 
+      if acc == P.empty then pp_elem x
+      else acc ^^ !^";" ^^^ pp_elem x
+    ) P.empty xs) ^^^ 
+    !^"]"
+  
 
 let pp_option pp_elem = function
   | None -> !^"None"
@@ -69,14 +77,6 @@ let pp_location = function
       !^"(Loc_regions" ^^^ !^"[" ^^
       P.separate_map (!^";" ^^ P.break 1) pp_pos_pair pos_list ^^
       !^"]" ^^^ pp_location_cursor cursor ^^ !^")"
-
-let pp_list pp_elem xs = 
-  !^"[" ^^^ 
-  (List.fold_left (fun acc x -> 
-    if acc == P.empty then pp_elem x
-    else acc ^^ !^";" ^^^ pp_elem x
-  ) P.empty xs) ^^^ 
-  !^"]"
 
 (* Value printers *)
 let pp_integer_value i = !^"dummy_integer"  (* TODO *)
@@ -142,6 +142,50 @@ and pp_symbol_prefix = function
   | BaseTypes.Tuple ts -> !^"(Tuple" ^^^ P.separate_map (!^";" ^^ P.break 1) (pp_basetype pp_loc) ts ^^ !^")"
   | BaseTypes.Set t -> !^"(TSet" ^^^ pp_basetype pp_loc t ^^ !^")"
   | BaseTypes.Loc x -> pp_loc x
+
+  let rec pp_sctype = function
+  | Sctypes.Void -> !^"Void"
+  | Sctypes.Integer it -> !^"(Integer" ^^^ pp_integer_type it ^^ !^")"
+  | Sctypes.Array (ct, None) -> !^"(Array" ^^^ pp_sctype ct ^^^ !^"None" ^^ !^")"
+  | Sctypes.Array (ct, Some n) -> !^"(Array" ^^^ pp_sctype ct ^^^ !^"(Some" ^^^ !^(string_of_int n) ^^ !^"))" ^^ !^")"
+  | Sctypes.Pointer ct -> !^"(Pointer" ^^^ pp_sctype ct ^^ !^")"
+  | Sctypes.Struct sym -> !^"(Struct" ^^^ pp_symbol sym ^^ !^")"
+  | Sctypes.Function ((quals, ret), args, variadic) ->
+      !^"(SCFunction" ^^^
+      !^"(" ^^^ pp_qualifiers quals ^^ !^"," ^^^ pp_sctype ret ^^ !^")" ^^^
+      pp_list (fun (ct, is_reg) -> !^"(" ^^ pp_sctype ct ^^ !^"," ^^^ !^(string_of_bool is_reg) ^^ !^")") args ^^^
+      !^(string_of_bool variadic) ^^ !^")"
+
+  and pp_qualifiers quals =
+    !^"{|" ^^^
+    !^"const :=" ^^^ !^(string_of_bool quals.Ctype.const) ^^ !^";" ^^^
+    !^"restrict :=" ^^^ !^(string_of_bool quals.Ctype.restrict) ^^ !^";" ^^^
+    !^"volatile :=" ^^^ !^(string_of_bool quals.Ctype.volatile) ^^^
+    !^"|}"
+
+  and pp_integer_type = function
+    | Sctypes.IntegerTypes.Char -> !^"Char"
+    | Sctypes.IntegerTypes.Bool -> !^"Bool"
+    | Sctypes.IntegerTypes.Signed ibt -> !^"(Signed" ^^^ pp_integer_base_type ibt ^^ !^")"
+    | Sctypes.IntegerTypes.Unsigned ibt -> !^"(Unsigned" ^^^ pp_integer_base_type ibt ^^ !^")"
+    | Sctypes.IntegerTypes.Enum sym -> !^"(Enum" ^^^ pp_symbol sym ^^ !^")"
+    | Sctypes.IntegerTypes.Wchar_t -> !^"Wchar_t"
+    | Sctypes.IntegerTypes.Wint_t -> !^"Wint_t"
+    | Sctypes.IntegerTypes.Size_t -> !^"Size_t"
+    | Sctypes.IntegerTypes.Ptrdiff_t -> !^"Ptrdiff_t"
+    | Sctypes.IntegerTypes.Ptraddr_t -> !^"Ptraddr_t"
+
+  and pp_integer_base_type = function
+    | Sctypes.IntegerBaseTypes.Ichar -> !^"Ichar"
+    | Sctypes.IntegerBaseTypes.Short -> !^"Short"
+    | Sctypes.IntegerBaseTypes.Int_ -> !^"Int_"
+    | Sctypes.IntegerBaseTypes.Long -> !^"Long"
+    | Sctypes.IntegerBaseTypes.LongLong -> !^"LongLong"
+    | Sctypes.IntegerBaseTypes.IntN_t n -> !^"(IntN_t" ^^^ !^(string_of_int n) ^^ !^")"
+    | Sctypes.IntegerBaseTypes.Int_leastN_t n -> !^"(Int_leastN_t" ^^^ !^(string_of_int n) ^^ !^")"
+    | Sctypes.IntegerBaseTypes.Int_fastN_t n -> !^"(Int_fastN_t" ^^^ !^(string_of_int n) ^^ !^")"
+    | Sctypes.IntegerBaseTypes.Intmax_t -> !^"Intmax_t"
+    | Sctypes.IntegerBaseTypes.Intptr_t -> !^"Intptr_t"
 
 (* Constructor printers *)
 let rec pp_core_base_type = function
@@ -289,7 +333,7 @@ and pp_pexpr (Pexpr (loc, annots, ty, pe)) =
    | Cfvfromint e -> !^"(Cfvfromint" ^^^ pp_pexpr e ^^ !^")"
    | Civfromfloat (act, e) -> !^"(Civfromfloat" ^^^ pp_act act ^^^ pp_pexpr e ^^ !^")"
    | PEarray_shift (base, ct, idx) ->
-       !^"(PEarray_shift" ^^^ pp_pexpr base ^^^ pp_sctypes_t ct ^^^ pp_pexpr idx ^^ !^")"
+       !^"(PEarray_shift" ^^^ pp_pexpr base ^^^ pp_sctype ct ^^^ pp_pexpr idx ^^ !^")"
    | PEmember_shift (e, sym, id) ->
        !^"(PEmember_shift" ^^^ pp_pexpr e ^^^ pp_symbol sym ^^^ pp_identifier id ^^ !^")"
    | PEnot e -> !^"(PEnot" ^^^ pp_pexpr e ^^ !^")"
@@ -377,14 +421,14 @@ and pp_act {loc; annot; ct} =
   !^"{|" ^^^ 
   !^"loc :=" ^^^ pp_location loc ^^ !^";" ^^^
   !^"annot :=" ^^^ pp_list pp_annot_t annot ^^ !^";" ^^^
-  !^"ct :=" ^^^ pp_sctypes_t ct ^^^
+  !^"ct :=" ^^^ pp_sctype ct ^^^
   !^"|}"
 
 and pp_kill_kind = function
   | Dynamic ->
       !^"Dynamic"  (* constructor with no arguments *)
   | Static ct ->
-      !^"(Static" ^^^ pp_sctypes_t ct ^^ !^")"
+      !^"(Static" ^^^ pp_sctype ct ^^ !^")"
 
 and pp_bool b = if b then !^"true" else !^"false"
 and pp_value (V (ty, v)) =
@@ -412,7 +456,7 @@ and pp_object_value (OV (ty, ov)) =
        !^"(OVstruct" ^^^ pp_symbol sym ^^^
        pp_list (fun (id, ty, v) -> 
          !^"(" ^^ pp_identifier id ^^ !^"," ^^^ 
-         pp_sctypes_t ty ^^ !^"," ^^^
+         pp_sctype ty ^^ !^"," ^^^
          pp_mem_value v ^^ !^")") fields ^^ !^")"
    | OVunion (sym, id, v) ->
        !^"(OVunion" ^^^ pp_symbol sym ^^^
@@ -468,7 +512,7 @@ let pp_const = function
   | Bool b -> !^"(Bool" ^^^ pp_bool b ^^ !^")"
   | Unit -> !^"Unit"
   | Null -> !^"Null"
-  | CType_const t -> !^"(CType_const" ^^^ pp_sctypes_t t ^^ !^")"
+  | CType_const t -> !^"(CType_const" ^^^ pp_sctype t ^^ !^")"
   | Default bt -> !^"(Default" ^^^ pp_basetype pp_basetype_loc bt ^^ !^")"
 
    let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
@@ -516,11 +560,11 @@ let pp_const = function
     | MemberShift (t, tag, id) ->
         !^"(MemberShift" ^^^ pp_index_term t ^^^ pp_symbol tag ^^^ pp_identifier id ^^ !^")"
     | ArrayShift {base; ct; index} ->
-        !^"(ArrayShift" ^^^ pp_index_term base ^^^ pp_sctypes_t ct ^^^ pp_index_term index ^^ !^")"
+        !^"(ArrayShift" ^^^ pp_index_term base ^^^ pp_sctype ct ^^^ pp_index_term index ^^ !^")"
     | CopyAllocId {addr; loc} ->
         !^"(CopyAllocId" ^^^ pp_index_term addr ^^^ pp_index_term loc ^^ !^")"
     | HasAllocId t -> !^"(HasAllocId" ^^^ pp_index_term t ^^ !^")"
-    | SizeOf ct -> !^"(SizeOf" ^^^ pp_sctypes_t ct ^^ !^")"
+    | SizeOf ct -> !^"(SizeOf" ^^^ pp_sctype ct ^^ !^")"
     | OffsetOf (tag, member) ->
         !^"(OffsetOf" ^^^ pp_symbol tag ^^^ pp_identifier member ^^ !^")"
     | Nil bt -> !^"(Nil" ^^^ pp_basetype pp_basetype_loc bt ^^ !^")"
@@ -532,11 +576,11 @@ let pp_const = function
     | ArrayToList (arr, i, len) ->
         !^"(ArrayToList" ^^^ pp_index_term arr ^^^ pp_index_term i ^^^ pp_index_term len ^^ !^")"
     | Representable (ct, t) ->
-        !^"(Representable" ^^^ pp_sctypes_t ct ^^^ pp_index_term t ^^ !^")"
-    | Good (ct, t) -> !^"(Good" ^^^ pp_sctypes_t ct ^^^ pp_index_term t ^^ !^")"
+        !^"(Representable" ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
+    | Good (ct, t) -> !^"(Good" ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
     | Aligned {t; align} ->
         !^"(Aligned" ^^^ pp_index_term t ^^^ pp_index_term align ^^ !^")"
-    | WrapI (ct, t) -> !^"(WrapI" ^^^ pp_sctypes_t ct ^^^ pp_index_term t ^^ !^")"
+    | WrapI (ct, t) -> !^"(WrapI" ^^^ pp_integer_type ct ^^^ pp_index_term t ^^ !^")"
     | MapConst (bt, t) -> !^"(MapConst" ^^^ pp_basetype pp_basetype_loc bt ^^^ pp_index_term t ^^ !^")"
     | MapSet (m, k, v) ->
         !^"(MapSet" ^^^ pp_index_term m ^^^ pp_index_term k ^^^ pp_index_term v ^^ !^")"
@@ -583,7 +627,7 @@ let pp_const = function
     | Request.PName sym -> !^"(PName" ^^^ pp_symbol sym ^^ !^")"
     | Request.Owned (ct, init) -> 
       (* TODO
-        !^"(Owned" ^^^ pp_sctypes_t ct ^^^ pp_request_init init ^^ !^")"
+        !^"(Owned" ^^^ pp_sctype ct ^^^ pp_request_init init ^^ !^")"
         *)  
         P.empty
   
@@ -703,10 +747,10 @@ let pp_file file =
     match glob with
     | GlobalDef (ct, e) ->
         coq_def (Pp_symbol.to_string sym) P.empty
-          (!^"GlobalDef" ^^^ pp_sctypes_t ct ^^^ pp_expr e) ^^ P.hardline
+          (!^"GlobalDef" ^^^ pp_sctype ct ^^^ pp_expr e) ^^ P.hardline
     | GlobalDecl ct ->
         coq_def (Pp_symbol.to_string sym) P.empty
-          (!^"GlobalDecl" ^^^ pp_sctypes_t ct) ^^ P.hardline
+          (!^"GlobalDecl" ^^^ pp_sctype ct) ^^ P.hardline
   ) P.empty file.globs ^^
 
   (* Print functions *)
