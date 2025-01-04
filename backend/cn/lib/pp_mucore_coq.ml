@@ -39,7 +39,8 @@ let pp_return_type _ = !^"return_type_placeholder"
 let pp_label_map _ = !^"label_map_placeholder"
 let pp_type _ = !^"type_placeholder"
 (* TODO see if this is needed *)
-let pp_basetype_loc () = !^"pointer"
+
+let pp_unit (_:unit) = !^"tt"
 
 (* Basic type printers *)
 let pp_lexing_position {Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum} =
@@ -534,7 +535,7 @@ let pp_sign = function
 let rec pp_terms_pattern (Terms.Pat (pat, bt, loc)) =
   !^"(Pat" ^^^
   pp_terms_pattern_ pat ^^^
-  pp_basetype pp_basetype_loc bt ^^^
+  pp_basetype pp_unit bt ^^^
   pp_location loc ^^
   !^")"
 and pp_terms_pattern_ = function
@@ -556,12 +557,12 @@ let pp_const = function
   | Unit -> !^"Unit"
   | Null -> !^"Null"
   | CType_const t -> !^"(CType_const" ^^^ pp_sctype t ^^ !^")"
-  | Default bt -> !^"(Default" ^^^ pp_basetype pp_basetype_loc bt ^^ !^")"
+  | Default bt -> !^"(Default" ^^^ pp_basetype pp_unit bt ^^ !^")"
 
    let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
     !^"(IT" ^^^
     pp_index_term_content term ^^^
-    pp_basetype pp_basetype_loc bt ^^^
+    pp_basetype pp_unit bt ^^^
     pp_location loc ^^
     !^")"
   
@@ -576,7 +577,7 @@ let pp_const = function
     | EachI ((n1, (sym, bt), n2), t) ->
         !^"(EachI" ^^^ !^"(" ^^^
         !^(string_of_int n1) ^^ !^"," ^^^
-        !^"(" ^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_basetype_loc bt ^^ !^")" ^^ !^"," ^^^
+        !^"(" ^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_unit bt ^^ !^")" ^^ !^"," ^^^
         !^(string_of_int n2) ^^ !^")" ^^^
         pp_index_term t ^^ !^")"
     | Tuple ts -> !^"(Tuple" ^^^ pp_list pp_index_term ts ^^ !^")"
@@ -610,7 +611,7 @@ let pp_const = function
     | SizeOf ct -> !^"(SizeOf" ^^^ pp_sctype ct ^^ !^")"
     | OffsetOf (tag, member) ->
         !^"(OffsetOf" ^^^ pp_symbol tag ^^^ pp_identifier member ^^ !^")"
-    | Nil bt -> !^"(Nil" ^^^ pp_basetype pp_basetype_loc bt ^^ !^")"
+    | Nil bt -> !^"(Nil" ^^^ pp_basetype pp_unit bt ^^ !^")"
     | Cons (t1, t2) -> !^"(Cons" ^^^ pp_index_term t1 ^^^ pp_index_term t2 ^^ !^")"
     | Head t -> !^"(Head" ^^^ pp_index_term t ^^ !^")"
     | Tail t -> !^"(Tail" ^^^ pp_index_term t ^^ !^")"
@@ -624,12 +625,12 @@ let pp_const = function
     | Aligned {t; align} ->
         !^"(Aligned" ^^^ pp_index_term t ^^^ pp_index_term align ^^ !^")"
     | WrapI (ct, t) -> !^"(WrapI" ^^^ pp_integer_type ct ^^^ pp_index_term t ^^ !^")"
-    | MapConst (bt, t) -> !^"(MapConst" ^^^ pp_basetype pp_basetype_loc bt ^^^ pp_index_term t ^^ !^")"
+    | MapConst (bt, t) -> !^"(MapConst" ^^^ pp_basetype pp_unit bt ^^^ pp_index_term t ^^ !^")"
     | MapSet (m, k, v) ->
         !^"(MapSet" ^^^ pp_index_term m ^^^ pp_index_term k ^^^ pp_index_term v ^^ !^")"
     | MapGet (m, k) -> !^"(MapGet" ^^^ pp_index_term m ^^^ pp_index_term k ^^ !^")"
     | MapDef ((sym, bt), t) ->
-        !^"(MapDef" ^^^ !^"(" ^^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_basetype_loc bt ^^ !^")" ^^^
+        !^"(MapDef" ^^^ !^"(" ^^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_unit bt ^^ !^")" ^^^
         pp_index_term t ^^ !^")"
     | Apply (sym, args) ->
         !^"(Apply" ^^^ pp_symbol sym ^^^ pp_list pp_index_term args ^^ !^")"
@@ -639,7 +640,7 @@ let pp_const = function
     | Match (t, cases) ->
         !^"(Match" ^^^ pp_index_term t ^^^
         pp_list (fun (pat, body) -> !^"(" ^^ pp_terms_pattern pat ^^ !^"," ^^^ pp_index_term body ^^ !^")") cases ^^ !^")"
-    | Cast (bt, t) -> !^"(Cast" ^^^ pp_basetype pp_basetype_loc bt ^^^ pp_index_term t ^^ !^")"
+    | Cast (bt, t) -> !^"(Cast" ^^^ pp_basetype pp_unit bt ^^^ pp_index_term t ^^ !^")"
 
 
     let pp_request_init = function
@@ -659,7 +660,7 @@ let pp_const = function
         !^"{|" ^^^
         !^"name :=" ^^^ pp_request_name qpred.Request.QPredicate.name ^^ !^";" ^^^
         !^"pointer :=" ^^^ pp_index_term qpred.pointer ^^ !^";" ^^^
-        !^"q :=" ^^^ !^"(" ^^ pp_symbol (fst qpred.q) ^^ !^"," ^^^ pp_basetype pp_basetype_loc (snd qpred.q) ^^ !^")" ^^ !^";" ^^^
+        !^"q :=" ^^^ !^"(" ^^ pp_symbol (fst qpred.q) ^^ !^"," ^^^ pp_basetype pp_unit (snd qpred.q) ^^ !^")" ^^ !^";" ^^^
         !^"q_loc :=" ^^^ pp_location qpred.q_loc ^^ !^";" ^^^
         !^"step :=" ^^^ pp_index_term qpred.step ^^ !^";" ^^^
         !^"permission :=" ^^^ pp_index_term qpred.permission ^^ !^";" ^^^
@@ -732,7 +733,7 @@ let pp_logical_constraint = function
         | LogicalConstraints.T term -> 
             !^"(T" ^^^ pp_index_term term ^^ !^")"
         | LogicalConstraints.Forall ((sym, bt), term) ->
-            !^"(Forall" ^^^ !^"(" ^^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_basetype_loc bt ^^ !^")" ^^^
+            !^"(Forall" ^^^ !^"(" ^^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_unit bt ^^ !^")" ^^^
             pp_index_term term ^^ !^")"
       
    let pp_args_and_body args =
@@ -740,7 +741,7 @@ let pp_logical_constraint = function
     let rec pp_args = function
       | Computational ((sym, bt), loc, rest) ->
           !^"(Computational" ^^^
-          !^"(" ^^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_basetype_loc bt ^^ !^")" ^^^
+          !^"(" ^^^ pp_symbol sym ^^ !^"," ^^^ pp_basetype pp_unit bt ^^ !^")" ^^^
           pp_location_info loc ^^^
           pp_args rest ^^ !^")"
       | L logical_args -> pp_logical_args logical_args
@@ -753,7 +754,7 @@ let pp_logical_constraint = function
           pp_logical_args rest ^^ !^")"
       | Resource ((sym, (req, bt)), info, rest) ->
           !^"(Resource" ^^^
-          !^"(" ^^^ pp_request req ^^ !^"," ^^^ pp_basetype pp_basetype_loc bt ^^ !^"))" ^^^
+          !^"(" ^^^ pp_request req ^^ !^"," ^^^ pp_basetype pp_unit bt ^^ !^"))" ^^^
           pp_location_info info ^^^
           pp_logical_args rest ^^ !^")"
       | Constraint (lc, info, rest) ->
