@@ -58,7 +58,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
     ~ignore_bitfields:false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
   Switches.set
-    ([ "inner_arg_temps"; "at_magic_comments" ]
+    ([ "inner_arg_temps"; "at_magic_comments"; "elaboration_normalises_types" ]
      (* TODO (DCM, VIP) figure out how to support liveness checks for read-only
         resources and then switch on "strict_pointer_arith" to elaborate array
         shift to the effectful version. "strict_pointer_relationals" is also
