@@ -29,7 +29,6 @@ let coq_notation name args body =
   !^"Notation" ^^^ !^("\"" ^ name ^ "\"") ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
 
 (* Placeholder printers for opaque types *)
-let pp_annot_t _ = !^"annot_placeholder"
 let pp_undefined_behaviour _ = !^"undefined_behaviour_placeholder"
 let pp_memory_order _ = !^"memory_order_placeholder"
 let pp_linux_memory_order _ = !^"linux_memory_order_placeholder"
@@ -40,6 +39,17 @@ let pp_label_map _ = !^"label_map_placeholder"
 let pp_type _ = !^"type_placeholder"
 (* TODO see if this is needed *)
 
+let pp_integer_value i = !^"dummy_integer"  (* TODO *)
+
+let pp_floating_value f = !^"dummy_float"  (* TODO *)
+    
+let pp_pointer_value p = !^"dummy_pointer"  (* TODO *)
+    
+let pp_mem_value m = !^"dummy_memval"  (* TODO *)
+    
+let pp_identifier id = !^"dummy_id"  (* TODO *)
+
+    
 let pp_unit (_:unit) = !^"tt"
 
 (* Basic type printers *)
@@ -77,17 +87,8 @@ let pp_location = function
       P.separate_map (!^";" ^^ P.break 1) pp_pos_pair pos_list ^^
       !^"]" ^^^ pp_location_cursor cursor ^^ !^")"
 
+
 (* Value printers *)
-let pp_integer_value i = !^"dummy_integer"  (* TODO *)
-
-let pp_floating_value f = !^"dummy_float"  (* TODO *)
-
-let pp_pointer_value p = !^"dummy_pointer"  (* TODO *)
-
-let pp_mem_value m = !^"dummy_memval"  (* TODO *)
-
-let pp_identifier id = !^"dummy_id"  (* TODO *)
-
 
 let rec pp_symbol_description = function
   | CF.Symbol.SD_None -> !^"SD_None"
@@ -166,7 +167,60 @@ let pp_integer_type = function
   | Sctypes.IntegerTypes.Ptrdiff_t -> !^"Ptrdiff_t"
   | Sctypes.IntegerTypes.Ptraddr_t -> !^"Ptraddr_t"
 
+  let rec pp_annot_t = function
+  | Annot.Astd s -> !^"(Astd" ^^^ !^(sprintf "%S" s) ^^ !^")"
+  | Annot.Aloc loc -> !^"(Aloc" ^^^ pp_location loc ^^ !^")"
+  | Annot.Auid s -> !^"(Auid" ^^^ !^(sprintf "%S" s) ^^ !^")"
+  | Annot.Amarker n -> !^"(Amarker" ^^^ !^(string_of_int n) ^^ !^")"
+  | Annot.Amarker_object_types n -> !^"(Amarker_object_types" ^^^ !^(string_of_int n) ^^ !^")"
+  | Annot.Abmc bmc -> !^"(Abmc" ^^^ pp_bmc_annot bmc ^^ !^")"
+  | Annot.Aattrs attrs -> !^"(Aattrs" ^^^ pp_attributes attrs ^^ !^")"
+  | Annot.Atypedef sym -> !^"(Atypedef" ^^^ pp_symbol sym ^^ !^")"
+  | Annot.Anot_explode -> !^"Anot_explode"
+  | Annot.Alabel la -> !^"(Alabel" ^^^ pp_label_annot la ^^ !^")"
+  | Annot.Acerb ca -> !^"(Acerb" ^^^ pp_cerb_attribute ca ^^ !^")"
+  | Annot.Avalue va -> !^"(Avalue" ^^^ pp_value_annot va ^^ !^")"
+  | Annot.Ainlined_label (loc, sym, la) -> 
+      !^"(Ainlined_label" ^^^ pp_location loc ^^^ pp_symbol sym ^^^ pp_label_annot la ^^ !^")"
+  | Annot.Astmt -> !^"Astmt"
+  | Annot.Aexpr -> !^"Aexpr"
 
+ and pp_bmc_annot = function
+   | Annot.Abmc_id n -> !^"(Abmc_id" ^^^ !^(string_of_int n) ^^ !^")"
+
+ and pp_attributes (Annot.Attrs attrs) =
+   !^"(Attrs" ^^^ pp_list pp_attribute attrs ^^ !^")"
+
+ and pp_attribute attr =
+   !^"{|" ^^^
+   !^"attr_ns :=" ^^^ pp_option pp_identifier attr.Annot.attr_ns ^^ !^";" ^^^
+   !^"attr_id :=" ^^^ pp_identifier attr.attr_id ^^ !^";" ^^^
+   !^"attr_args :=" ^^^ pp_list pp_attr_arg attr.attr_args ^^^
+   !^"|}"
+
+ and pp_attr_arg (loc, s, args) =
+   !^"(" ^^^ pp_location loc ^^ !^"," ^^^
+   !^(sprintf "%S" s) ^^ !^"," ^^^
+   pp_list (fun (loc, s) -> !^"(" ^^ pp_location loc ^^ !^"," ^^^ !^(sprintf "%S" s) ^^ !^")") args ^^ !^")"
+
+ and pp_label_annot = function
+   | Annot.LAloop n -> !^"(LAloop" ^^^ !^(string_of_int n) ^^ !^")"
+   | Annot.LAloop_continue n -> !^"(LAloop_continue" ^^^ !^(string_of_int n) ^^ !^")"
+   | Annot.LAloop_break n -> !^"(LAloop_break" ^^^ !^(string_of_int n) ^^ !^")"
+   | Annot.LAreturn -> !^"LAreturn"
+   | Annot.LAswitch -> !^"LAswitch"
+   | Annot.LAcase -> !^"LAcase"
+   | Annot.LAdefault -> !^"LAdefault"
+   | Annot.LAactual_label -> !^"LAactual_label"
+
+ and pp_cerb_attribute = function
+   | Annot.ACerb_with_address n -> !^"(ACerb_with_address" ^^^ !^(Nat_big_num.to_string n) ^^ !^")"
+   | Annot.ACerb_hidden -> !^"ACerb_hidden"
+
+ and pp_value_annot = function
+   | Annot.Ainteger it -> !^"(Ainteger" ^^^ pp_integer_type it ^^ !^")"
+
+ 
   let rec pp_ctype (Ctype.Ctype (annots, ct)) =
     !^"(Ctype" ^^^
     pp_list pp_annot_t annots ^^^
