@@ -71,12 +71,29 @@ let generate_c_local_ownership_entry_fcall (local_sym, local_ctype) =
        (mk_expr (AilEident c_add_ownership_fn_sym), List.map mk_expr [ arg1; arg2; arg3 ]))
 
 
+let generate_c_local_cn_addr_var sym =
+  (* Hardcoding parts of cn_to_ail_base_type to prevent circular dependency between
+     this module and Cn_internal_to_ail, which includes Ownership_exec already. *)
+  let cn_addr_sym = generate_sym_with_suffix ~suffix:"_addr_cn" sym in
+  let annots = [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer") ] in
+  (* Ctype_ doesn't matter to pretty-printer when typedef annotations are present *)
+  let inner_ctype = mk_ctype ~annots C.Void in
+  let cn_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, inner_ctype)) in
+  let binding = create_binding cn_addr_sym cn_ptr_ctype in
+  let addr_of_sym = mk_expr A.(AilEunary (Address, mk_expr (AilEident sym))) in
+  let fcall_sym = Sym.fresh_pretty "convert_to_cn_pointer" in
+  let conversion_fcall = A.(AilEcall (mk_expr (AilEident fcall_sym), [ addr_of_sym ])) in
+  let decl = A.(AilSdeclaration [ (cn_addr_sym, Some (mk_expr conversion_fcall)) ]) in
+  (binding, decl)
+
+
 (* int x = 0, y = 5;
 
    ->
 
    int x = 0, _dummy = (c_map_local(&x), 0), y = 5, _dummy2 = (c_map_local(&y), 0); *)
 
+(* TODO: Include binding + declaration of <sym>_addr_cn via generate_c_local_cn_addr_var function *)
 let rec gen_loop_ownership_entry_decls bindings = function
   | [] -> ([], [])
   | (sym, expr_opt) :: xs ->
@@ -99,15 +116,18 @@ let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
     let new_bindings, new_decls = gen_loop_ownership_entry_decls bindings decls in
     [ (loc, new_bindings, [ A.AilSdeclaration new_decls ]) ])
   else (
-    let stats_ =
+    let ownership_bs_and_ss =
       List.map
         (fun (sym, _) ->
           let ctype = find_ctype_from_bindings bindings sym in
           let entry_fcall = generate_c_local_ownership_entry_fcall (sym, ctype) in
-          A.(AilSexpr entry_fcall))
+          let entry_fcall_stat = A.(AilSexpr entry_fcall) in
+          let addr_cn_binding, addr_cn_decl = generate_c_local_cn_addr_var sym in
+          ([ addr_cn_binding ], [ entry_fcall_stat; addr_cn_decl ]))
         decls
     in
-    [ (get_end_loc loc, [], stats_) ])
+    let bs, ss = List.split ownership_bs_and_ss in
+    [ (get_end_loc loc, List.concat bs, List.concat ss) ])
 
 
 (* c_remove_local_footprint((uintptr_t) &xs, cn_ownership_global_ghost_state,
