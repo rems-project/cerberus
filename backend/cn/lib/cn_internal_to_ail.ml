@@ -576,7 +576,8 @@ let cn_to_ail_default bt =
   let do_call f = A.AilEcall (mk_expr (A.AilEident (Sym.fresh_pretty f)), []) in
   match get_underscored_typedef_string_from_bt bt with
   | Some f -> do_call ("default_" ^ f)
-  | None   -> failwith ("[UNSUPPORTED] default<" ^ Pp.plain (BT.pp bt) ^ ">")
+  | None -> failwith ("[UNSUPPORTED] default<" ^ Pp.plain (BT.pp bt) ^ ">")
+
 
 let cn_to_ail_const_internal const basetype =
   let wrap x = wrap_with_convert_to x basetype in
@@ -588,12 +589,16 @@ let cn_to_ail_const_internal const basetype =
     | Q q -> wrap (A.AilEconst (ConstantFloating (Q.to_string q, None)))
     | Pointer z ->
       (* Printf.printf "In Pointer case; const\n"; *)
-      let ail_const' = A.AilEconst (ConstantInteger (IConstant (z.addr, Decimal, None))) in
+      let ail_const' =
+        A.AilEconst (ConstantInteger (IConstant (z.addr, Decimal, None)))
+      in
       wrap (A.AilEunary (Address, mk_expr ail_const'))
     | Alloc_id _ -> failwith "TODO Alloc_id"
     | Bool b ->
-      wrap (A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse)))
-    | Unit -> wrap (A.AilEconst ConstantNull) (* Gets overridden by dest_with_unit_check *)
+      wrap
+        (A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse)))
+    | Unit ->
+      wrap (A.AilEconst ConstantNull) (* Gets overridden by dest_with_unit_check *)
     | Null -> wrap (A.AilEconst ConstantNull)
     | CType_const _ -> failwith "TODO CType_const"
     | Default bt -> cn_to_ail_default bt
@@ -810,9 +815,7 @@ let rec cn_to_ail_expr_aux_internal
   match term_ with
   | Const const ->
     let ail_expr, is_unit = cn_to_ail_const_internal const basetype in
-    dest_with_unit_check
-      d
-      ([], [], mk_expr ail_expr, is_unit)
+    dest_with_unit_check d ([], [], mk_expr ail_expr, is_unit)
   | Sym sym ->
     let sym =
       if String.equal (Sym.pp_string sym) "return" then
