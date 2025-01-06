@@ -110,6 +110,7 @@ let rec gen_loop_ownership_entry_decls bindings = function
     let bindings', decls' = gen_loop_ownership_entry_decls bindings xs in
     (new_bindings @ bindings', (sym, expr_opt) :: (dummy_sym, Some dummy_rhs) :: decls')
 
+    
 
 let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
   if dest_is_loop then (
