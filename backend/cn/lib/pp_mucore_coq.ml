@@ -40,8 +40,6 @@ let coq_notation name args body =
 (* Placeholder printers for opaque types *)
 let pp_undefined_behaviour _ = !^"undefined_behaviour_placeholder"
 
-let pp_memory_order _ = !^"memory_order_placeholder"
-
 let pp_linux_memory_order _ = !^"linux_memory_order_placeholder"
 
 let pp_cn_condition _ = !^"cn_condition_placeholder"
@@ -62,6 +60,15 @@ let pp_identifier id = !^"identifier placeholder" (* TODO *)
 
 let pp_unit (_ : unit) = !^"tt"
 let pp_unit_type _ = !^"unit"
+
+let pp_memory_order = function
+  | Cerb_frontend.Cmm_csem.NA -> !^"NA"
+  | Seq_cst -> !^"Seq_cst"
+  | Relaxed -> !^"Relaxed"
+  | Release -> !^"Release"
+  | Acquire -> !^"Acquire"
+  | Consume -> !^"Consume"
+  | Acq_rel -> !^"Acq_rel"
 
 let pp_polarity = function
   | Core.Pos -> !^"Pos"

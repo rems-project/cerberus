@@ -24,8 +24,16 @@ Parameter Sctypes_t : Type. (* placeholder *)
 Parameter undefined_behaviour : Type. (* placeholder *)
 Parameter cn_condition : Type. (* placeholder *)
 Parameter Memory_struct_layout : Type. (* placeholder *)
-Parameter memory_order : Type. (* placeholder *)
 Parameter linux_memory_order : Type. (* placeholder *)
+
+Inductive memory_order : Type :=
+  | NA : memory_order        (* Non-atomic *)
+  | Seq_cst : memory_order   (* Sequentially consistent *)
+  | Relaxed : memory_order   (* Relaxed ordering *)
+  | Release : memory_order   (* Release ordering *)
+  | Acquire : memory_order   (* Acquire ordering *)
+  | Consume : memory_order   (* Consume ordering *)
+  | Acq_rel : memory_order.  (* Acquire-Release ordering *)
 
 Inductive integer_value : Type. (* placeholder *)
 Inductive floating_value : Type. (* placeholder *)
