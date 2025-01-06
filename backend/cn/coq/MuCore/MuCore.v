@@ -18,10 +18,10 @@ Require Import ReturnTypes.
 Require Import ArgumentTypes.
 Require Import Ctype.
 Require Import Annot.
+Require Import Undefined.
 
 (* We'll need to declare some types that are imported from other modules *)
 Parameter Sctypes_t : Type. (* placeholder *)
-Parameter undefined_behaviour : Type. (* placeholder *)
 Parameter cn_condition : Type. (* placeholder *)
 Parameter Memory_struct_layout : Type. (* placeholder *)
 Parameter linux_memory_order : Type. (* placeholder *)
