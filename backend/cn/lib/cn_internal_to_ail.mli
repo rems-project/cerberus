@@ -41,13 +41,6 @@ val wrap_with_convert_from_cn_bool
   :  CF.GenTypes.genTypeCategory A.expression ->
   CF.GenTypes.genTypeCategory A.expression
 
-val generate_sym_with_suffix
-  :  ?suffix:string ->
-  ?uppercase:bool ->
-  ?lowercase:bool ->
-  Sym.t ->
-  Sym.t
-
 type ail_bindings_and_statements =
   A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
 

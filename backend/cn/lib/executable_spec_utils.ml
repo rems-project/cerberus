@@ -55,6 +55,18 @@ let is_empty_ail_stmt = function
   | _ -> false
 
 
+let generate_sym_with_suffix
+  ?(suffix = "_tag")
+  ?(uppercase = false)
+  ?(lowercase = false)
+  constructor
+  =
+  let str = Sym.pp_string constructor ^ suffix in
+  let str = if uppercase then String.uppercase_ascii str else str in
+  let str = if lowercase then String.lowercase_ascii str else str in
+  Sym.fresh_pretty str
+
+
 let rec list_split_three = function
   | [] -> ([], [], [])
   | (x, y, z) :: rest ->

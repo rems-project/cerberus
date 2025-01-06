@@ -78,18 +78,6 @@ let create_id_from_sym ?(lowercase = false) sym =
 
 let create_sym_from_id id = Sym.fresh_pretty (Id.get_string id)
 
-let generate_sym_with_suffix
-  ?(suffix = "_tag")
-  ?(uppercase = false)
-  ?(lowercase = false)
-  constructor
-  =
-  let str = Sym.pp_string constructor ^ suffix in
-  let str = if uppercase then String.uppercase_ascii str else str in
-  let str = if lowercase then String.lowercase_ascii str else str in
-  Sym.fresh_pretty str
-
-
 let generate_error_msg_info_update_stats ?(cn_source_loc_opt = None) () =
   let cn_source_loc_arg =
     match cn_source_loc_opt with
