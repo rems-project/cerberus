@@ -10,6 +10,8 @@ open Mucore
 (* temporary debug option to supress printing of noisy locations *)
 let debug_print_locations = false (* Set to true to print actual locations *)
 
+let pp_pair p1 p2 (a, b) = P.parens (p1 a ^^ !^"," ^^ p2 b)
+
 let pp_list pp_elem xs =
   !^"["
   ^^^ List.fold_left
@@ -22,12 +24,16 @@ let pp_list pp_elem xs =
         xs
   ^^^ !^"]"
 
-
 let pp_option pp_elem = function
   | None -> !^"None"
   | Some x -> !^"(Some" ^^^ pp_elem x ^^ !^")"
 
-
+let pp_pmap fromlist_fun (pp_key:'a -> P.document) (pp_value:'b -> P.document) (m: ('a, 'b) Pmap.map) = 
+  P.parens (
+    !^fromlist_fun ^^^
+    pp_list (pp_pair pp_key pp_value) (Pmap.bindings_list m)
+  )
+    
 (* Helper to print Coq definitions *)
 let coq_def name args body =
   !^"Definition" ^^^ !^name ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
@@ -41,24 +47,27 @@ let coq_notation name args body =
 let pp_undefined_behaviour = function
   | Undefined.DUMMY str -> !^"(DUMMY" ^^^ !^(sprintf "%S" str) ^^ !^")"
   | Undefined.UB_unspecified_lvalue -> !^"UB_unspecified_lvalue"
-  | Undefined.UB_std_omission om -> 
-    !^"(UB_std_omission" ^^^ 
-    (match om with
-      | UB_OMIT_memcpy_non_object -> !^"UB_OMIT_memcpy_non_object"
-      | UB_OMIT_memcpy_out_of_bound -> !^"UB_OMIT_memcpy_out_of_bound") ^^ !^")"
+  | Undefined.UB_std_omission om ->
+    !^"(UB_std_omission"
+    ^^^ (match om with
+         | UB_OMIT_memcpy_non_object -> !^"UB_OMIT_memcpy_non_object"
+         | UB_OMIT_memcpy_out_of_bound -> !^"UB_OMIT_memcpy_out_of_bound")
+    ^^ !^")"
   | Undefined.Invalid_format str -> !^"(Invalid_format" ^^^ !^(sprintf "%S" str) ^^ !^")"
   | Undefined.UB_CERB004_unspecified ctx ->
-    !^"(UB_CERB004_unspecified" ^^^ 
-    (match ctx with
-      | UB_unspec_equality_ptr_vs_NULL -> !^"UB_unspec_equality_ptr_vs_NULL"
-      | UB_unspec_equality_both_arith_or_ptr -> !^"UB_unspec_equality_both_arith_or_ptr"
-      | UB_unspec_pointer_add -> !^"UB_unspec_pointer_add"
-      | UB_unspec_pointer_sub -> !^"UB_unspec_pointer_sub"
-      | UB_unspec_conditional -> !^"UB_unspec_conditional"
-      | UB_unspec_copy_alloc_id -> !^"UB_unspec_copy_alloc_id"
-      | UB_unspec_rvalue_memberof -> !^"UB_unspec_rvalue_memberof"
-      | UB_unspec_memberofptr -> !^"UB_unspec_memberofptr"
-      | UB_unspec_do -> !^"UB_unspec_do") ^^ !^")"
+    !^"(UB_CERB004_unspecified"
+    ^^^ (match ctx with
+         | UB_unspec_equality_ptr_vs_NULL -> !^"UB_unspec_equality_ptr_vs_NULL"
+         | UB_unspec_equality_both_arith_or_ptr ->
+           !^"UB_unspec_equality_both_arith_or_ptr"
+         | UB_unspec_pointer_add -> !^"UB_unspec_pointer_add"
+         | UB_unspec_pointer_sub -> !^"UB_unspec_pointer_sub"
+         | UB_unspec_conditional -> !^"UB_unspec_conditional"
+         | UB_unspec_copy_alloc_id -> !^"UB_unspec_copy_alloc_id"
+         | UB_unspec_rvalue_memberof -> !^"UB_unspec_rvalue_memberof"
+         | UB_unspec_memberofptr -> !^"UB_unspec_memberofptr"
+         | UB_unspec_do -> !^"UB_unspec_do")
+    ^^ !^")"
   | Undefined.UB_CERB005_free_nullptr -> !^"UB_CERB005_free_nullptr"
   | UB001 -> !^"UB001"
   | UB002 -> !^"UB002"
@@ -73,21 +82,26 @@ let pp_undefined_behaviour = function
   | UB008_multiple_linkage -> !^"UB008_multiple_linkage"
   | UB009_outside_lifetime -> !^"UB009_outside_lifetime"
   | UB010_pointer_to_dead_object -> !^"UB010_pointer_to_dead_object"
-  | UB011_use_indeterminate_automatic_object -> !^"UB011_use_indeterminate_automatic_object"
+  | UB011_use_indeterminate_automatic_object ->
+    !^"UB011_use_indeterminate_automatic_object"
   | UB_modifying_temporary_lifetime -> !^"UB_modifying_temporary_lifetime"
   | UB012_lvalue_read_trap_representation -> !^"UB012_lvalue_read_trap_representation"
-  | UB013_lvalue_side_effect_trap_representation -> !^"UB013_lvalue_side_effect_trap_representation"
+  | UB013_lvalue_side_effect_trap_representation ->
+    !^"UB013_lvalue_side_effect_trap_representation"
   | UB014_unsupported_negative_zero -> !^"UB014_unsupported_negative_zero"
   | UB015_incompatible_redeclaration -> !^"UB015_incompatible_redeclaration"
   | UB016 -> !^"UB016"
-  | UB017_out_of_range_floating_integer_conversion -> !^"UB017_out_of_range_floating_integer_conversion"
+  | UB017_out_of_range_floating_integer_conversion ->
+    !^"UB017_out_of_range_floating_integer_conversion"
   | UB018 -> !^"UB018"
   | UB019_lvalue_not_an_object -> !^"UB019_lvalue_not_an_object"
-  | UB020_nonarray_incomplete_lvalue_conversion -> !^"UB020_nonarray_incomplete_lvalue_conversion"
+  | UB020_nonarray_incomplete_lvalue_conversion ->
+    !^"UB020_nonarray_incomplete_lvalue_conversion"
   | UB021 -> !^"UB021"
   | UB022_register_array_decay -> !^"UB022_register_array_decay"
   | UB023 -> !^"UB023"
-  | UB024_out_of_range_pointer_to_integer_conversion -> !^"UB024_out_of_range_pointer_to_integer_conversion"
+  | UB024_out_of_range_pointer_to_integer_conversion ->
+    !^"UB024_out_of_range_pointer_to_integer_conversion"
   | UB025_misaligned_pointer_conversion -> !^"UB025_misaligned_pointer_conversion"
   | UB026 -> !^"UB026"
   | UB027 -> !^"UB027"
@@ -112,24 +126,32 @@ let pp_undefined_behaviour = function
   | UB045b_modulo_by_zero -> !^"UB045b_modulo_by_zero"
   | UB045c_quotient_not_representable -> !^"UB045c_quotient_not_representable"
   | UB046_array_pointer_outside -> !^"UB046_array_pointer_outside"
-  | UB047a_array_pointer_addition_beyond_indirection -> !^"UB047a_array_pointer_addition_beyond_indirection"
-  | UB047b_array_pointer_subtraction_beyond_indirection -> !^"UB047b_array_pointer_subtraction_beyond_indirection"
-  | UB048_disjoint_array_pointers_subtraction -> !^"UB048_disjoint_array_pointers_subtraction"
+  | UB047a_array_pointer_addition_beyond_indirection ->
+    !^"UB047a_array_pointer_addition_beyond_indirection"
+  | UB047b_array_pointer_subtraction_beyond_indirection ->
+    !^"UB047b_array_pointer_subtraction_beyond_indirection"
+  | UB048_disjoint_array_pointers_subtraction ->
+    !^"UB048_disjoint_array_pointers_subtraction"
   | UB049 -> !^"UB049"
-  | UB050_pointers_subtraction_not_representable -> !^"UB050_pointers_subtraction_not_representable"
+  | UB050_pointers_subtraction_not_representable ->
+    !^"UB050_pointers_subtraction_not_representable"
   | UB051a_negative_shift -> !^"UB051a_negative_shift"
   | UB51b_shift_too_large -> !^"UB51b_shift_too_large"
   | UB052a_negative_left_shift -> !^"UB052a_negative_left_shift"
   | UB052b_non_representable_left_shift -> !^"UB052b_non_representable_left_shift"
-  | UB053_distinct_aggregate_union_pointer_comparison -> !^"UB053_distinct_aggregate_union_pointer_comparison"
+  | UB053_distinct_aggregate_union_pointer_comparison ->
+    !^"UB053_distinct_aggregate_union_pointer_comparison"
   | UB054a_inexactly_overlapping_assignment -> !^"UB054a_inexactly_overlapping_assignment"
-  | UB054b_incompatible_overlapping_assignment -> !^"UB054b_incompatible_overlapping_assignment"
-  | UB055_invalid_integer_constant_expression -> !^"UB055_invalid_integer_constant_expression"
+  | UB054b_incompatible_overlapping_assignment ->
+    !^"UB054b_incompatible_overlapping_assignment"
+  | UB055_invalid_integer_constant_expression ->
+    !^"UB055_invalid_integer_constant_expression"
   | UB056 -> !^"UB056"
   | UB057 -> !^"UB057"
   | UB058 -> !^"UB058"
   | UB059_incomplete_no_linkage_identifier -> !^"UB059_incomplete_no_linkage_identifier"
-  | UB060_block_scope_function_with_storage_class -> !^"UB060_block_scope_function_with_storage_class"
+  | UB060_block_scope_function_with_storage_class ->
+    !^"UB060_block_scope_function_with_storage_class"
   | UB061_no_named_members -> !^"UB061_no_named_members"
   | UB062 -> !^"UB062"
   | UB063 -> !^"UB063"
@@ -150,7 +172,8 @@ let pp_undefined_behaviour = function
   | UB078_modified_void_parameter -> !^"UB078_modified_void_parameter"
   | UB079 -> !^"UB079"
   | UB080 -> !^"UB080"
-  | UB081_scalar_initializer_not_single_expression -> !^"UB081_scalar_initializer_not_single_expression"
+  | UB081_scalar_initializer_not_single_expression ->
+    !^"UB081_scalar_initializer_not_single_expression"
   | UB082 -> !^"UB082"
   | UB083 -> !^"UB083"
   | UB084 -> !^"UB084"
@@ -158,7 +181,8 @@ let pp_undefined_behaviour = function
   | UB086_incomplete_adjusted_parameter -> !^"UB086_incomplete_adjusted_parameter"
   | UB087 -> !^"UB087"
   | UB088_reached_end_of_function -> !^"UB088_reached_end_of_function"
-  | UB089_tentative_definition_internal_linkage -> !^"UB089_tentative_definition_internal_linkage"
+  | UB089_tentative_definition_internal_linkage ->
+    !^"UB089_tentative_definition_internal_linkage"
   | UB090 -> !^"UB090"
   | UB091 -> !^"UB091"
   | UB092 -> !^"UB092"
@@ -222,7 +246,8 @@ let pp_undefined_behaviour = function
   | UB150 -> !^"UB150"
   | UB151 -> !^"UB151"
   | UB152 -> !^"UB152"
-  | UB153a_insufficient_arguments_for_format -> !^"UB153a_insufficient_arguments_for_format"
+  | UB153a_insufficient_arguments_for_format ->
+    !^"UB153a_insufficient_arguments_for_format"
   | UB153b_illtyped_argument_for_format -> !^"UB153b_illtyped_argument_for_format"
   | UB154 -> !^"UB154"
   | UB155 -> !^"UB155"
@@ -298,8 +323,6 @@ let pp_linux_memory_order _ = !^"linux_memory_order_placeholder"
 
 let pp_cn_condition _ = !^"cn_condition_placeholder"
 
-let pp_label_map _ = !^"label_map_placeholder"
-
 let pp_ft ft = !^"ft_placeholder" (* TODO *)
 
 let pp_integer_value i = !^"integer_value placeholder" (* TODO *)
@@ -313,6 +336,7 @@ let pp_mem_value m = !^"mem_value placeholder" (* TODO *)
 let pp_identifier id = !^"identifier placeholder" (* TODO *)
 
 let pp_unit (_ : unit) = !^"tt"
+
 let pp_unit_type _ = !^"unit"
 
 let pp_memory_order = function
@@ -324,9 +348,8 @@ let pp_memory_order = function
   | Consume -> !^"Consume"
   | Acq_rel -> !^"Acq_rel"
 
-let pp_polarity = function
-  | Core.Pos -> !^"Pos"
-  | Core.Neg -> !^"Neg"
+
+let pp_polarity = function Core.Pos -> !^"Pos" | Core.Neg -> !^"Neg"
 
 let pp_lexing_position { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
   !^"{"
@@ -811,23 +834,41 @@ and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
   | PEval v -> !^"(PEval" ^^^ pp_value pp_type v ^^ !^")"
   | PEctor (c, es) -> !^"(PEctor" ^^^ pp_ctor c ^^^ pp_list (pp_pexpr pp_type) es ^^ !^")"
   | PEop (op, e1, e2) ->
-    !^"(PEop" ^^^ pp_core_binop op ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+    !^"(PEop"
+    ^^^ pp_core_binop op
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_pexpr pp_type e2
+    ^^ !^")"
   | PEconstrained cs ->
     !^"(PEconstrained"
     ^^^ pp_list
-          (fun (c, e) -> !^"(" ^^ pp_mem_constraint c ^^ !^"," ^^^ pp_pexpr pp_type e ^^ !^")")
+          (fun (c, e) ->
+            !^"(" ^^ pp_mem_constraint c ^^ !^"," ^^^ pp_pexpr pp_type e ^^ !^")")
           cs
     ^^ !^")"
   | PEbitwise_unop (op, e) ->
     !^"(PEbitwise_unop" ^^^ pp_bw_unop op ^^^ pp_pexpr pp_type e ^^ !^")"
   | PEbitwise_binop (op, e1, e2) ->
-    !^"(PEbitwise_binop" ^^^ pp_bw_binop op ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+    !^"(PEbitwise_binop"
+    ^^^ pp_bw_binop op
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_pexpr pp_type e2
+    ^^ !^")"
   | Cfvfromint e -> !^"(Cfvfromint" ^^^ pp_pexpr pp_type e ^^ !^")"
-  | Civfromfloat (act, e) -> !^"(Civfromfloat" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
+  | Civfromfloat (act, e) ->
+    !^"(Civfromfloat" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
   | PEarray_shift (base, ct, idx) ->
-    !^"(PEarray_shift" ^^^ pp_pexpr pp_type base ^^^ pp_sctype ct ^^^ pp_pexpr pp_type idx ^^ !^")"
+    !^"(PEarray_shift"
+    ^^^ pp_pexpr pp_type base
+    ^^^ pp_sctype ct
+    ^^^ pp_pexpr pp_type idx
+    ^^ !^")"
   | PEmember_shift (e, sym, id) ->
-    !^"(PEmember_shift" ^^^ pp_pexpr pp_type e ^^^ pp_symbol sym ^^^ pp_identifier id ^^ !^")"
+    !^"(PEmember_shift"
+    ^^^ pp_pexpr pp_type e
+    ^^^ pp_symbol sym
+    ^^^ pp_identifier id
+    ^^ !^")"
   | PEnot e -> !^"(PEnot" ^^^ pp_pexpr pp_type e ^^ !^")"
   | PEapply_fun (f, args) ->
     !^"(PEapply_fun" ^^^ pp_function f ^^^ pp_list (pp_pexpr pp_type) args ^^ !^")"
@@ -835,7 +876,8 @@ and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
     !^"(PEstruct"
     ^^^ pp_symbol sym
     ^^^ pp_list
-          (fun (id, e) -> !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_pexpr pp_type e ^^ !^")")
+          (fun (id, e) ->
+            !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_pexpr pp_type e ^^ !^")")
           fields
     ^^ !^")"
   | PEunion (sym, id, e) ->
@@ -844,7 +886,8 @@ and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
   | PEmemberof (sym, id, e) ->
     !^"(PEmemberof" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ pp_pexpr pp_type e ^^ !^")"
   | PEbool_to_integer e -> !^"(PEbool_to_integer" ^^^ pp_pexpr pp_type e ^^ !^")"
-  | PEconv_int (e1, e2) -> !^"(PEconv_int" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+  | PEconv_int (e1, e2) ->
+    !^"(PEconv_int" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
   | PEconv_loaded_int (e1, e2) ->
     !^"(PEconv_loaded_int" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
   | PEwrapI (act, e) -> !^"(PEwrapI" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
@@ -863,8 +906,17 @@ and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
     !^"(PEundef" ^^^ pp_location loc ^^^ pp_undefined_behaviour ub ^^ !^")"
   | PEerror (msg, e) -> !^"(PEerror" ^^^ !^msg ^^^ pp_pexpr pp_type e ^^ !^")"
   | PElet (pat, e1, e2) ->
-    !^"(PElet" ^^^ pp_pattern pp_type pat ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
-  | PEif (c, t, e) -> !^"(PEif" ^^^ pp_pexpr pp_type c ^^^ pp_pexpr pp_type t ^^^ pp_pexpr pp_type e ^^ !^")"
+    !^"(PElet"
+    ^^^ pp_pattern pp_type pat
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_pexpr pp_type e2
+    ^^ !^")"
+  | PEif (c, t, e) ->
+    !^"(PEif"
+    ^^^ pp_pexpr pp_type c
+    ^^^ pp_pexpr pp_type t
+    ^^^ pp_pexpr pp_type e
+    ^^ !^")"
 
 
 and pp_bound_kind = function
@@ -892,7 +944,7 @@ and pp_paction pp_type (Paction (pol, act)) =
   ^^^ !^"|}"
 
 
-and pp_action_content pp_type act = 
+and pp_action_content pp_type act =
   match act with
   | Create (e, act, sym) ->
     !^"(Create" ^^^ pp_pexpr pp_type e ^^^ pp_act act ^^^ pp_symbol_prefix sym ^^ !^")"
@@ -904,7 +956,11 @@ and pp_action_content pp_type act =
     ^^^ pp_symbol_prefix sym
     ^^ !^")"
   | Alloc (e1, e2, sym) ->
-    !^"(Alloc" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^^ pp_symbol_prefix sym ^^ !^")"
+    !^"(Alloc"
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_pexpr pp_type e2
+    ^^^ pp_symbol_prefix sym
+    ^^ !^")"
   | Kill (kind, e) -> !^"(Kill" ^^^ pp_kill_kind kind ^^^ pp_pexpr pp_type e ^^ !^")"
   | Store (b, act, e1, e2, mo) ->
     !^"(Store"
@@ -946,7 +1002,11 @@ and pp_action_content pp_type act =
     ^^ !^")"
   | LinuxFence lmo -> !^"(LinuxFence" ^^^ pp_linux_memory_order lmo ^^ !^")"
   | LinuxLoad (act, e, lmo) ->
-    !^"(LinuxLoad" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^^ pp_linux_memory_order lmo ^^ !^")"
+    !^"(LinuxLoad"
+    ^^^ pp_act act
+    ^^^ pp_pexpr pp_type e
+    ^^^ pp_linux_memory_order lmo
+    ^^ !^")"
   | LinuxStore (act, e1, e2, lmo) ->
     !^"(LinuxStore"
     ^^^ pp_act act
@@ -994,7 +1054,8 @@ and pp_value pp_type (V (ty, v)) =
   | Vunit -> !^"Vunit"
   | Vtrue -> !^"Vtrue"
   | Vfalse -> !^"Vfalse"
-  | Vlist (bt, vs) -> !^"(Vlist" ^^^ pp_core_base_type bt ^^^ pp_list (pp_value pp_type) vs ^^ !^")"
+  | Vlist (bt, vs) ->
+    !^"(Vlist" ^^^ pp_core_base_type bt ^^^ pp_list (pp_value pp_type) vs ^^ !^")"
   | Vtuple vs -> !^"(Vtuple" ^^^ pp_list (pp_value pp_type) vs ^^ !^")"
 
 
@@ -1291,7 +1352,7 @@ and pp_request_name = function
     P.empty
 
 
-let pp_memop pp_type op = 
+let pp_memop pp_type op =
   match op with
   | PtrEq (e1, e2) -> !^"(PtrEq" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
   | PtrNe (e1, e2) -> !^"(PtrNe" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
@@ -1307,22 +1368,45 @@ let pp_memop pp_type op =
     !^"(PtrFromInt" ^^^ pp_act act1 ^^^ pp_act act2 ^^^ pp_pexpr pp_type e ^^ !^")"
   | PtrValidForDeref (act, e) ->
     !^"(PtrValidForDeref" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
-  | PtrWellAligned (act, e) -> !^"(PtrWellAligned" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
+  | PtrWellAligned (act, e) ->
+    !^"(PtrWellAligned" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
   | PtrArrayShift (e1, act, e2) ->
-    !^"(PtrArrayShift" ^^^ pp_pexpr pp_type e1 ^^^ pp_act act ^^^ pp_pexpr pp_type e2 ^^ !^")"
+    !^"(PtrArrayShift"
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_act act
+    ^^^ pp_pexpr pp_type e2
+    ^^ !^")"
   | PtrMemberShift (sym, id, e) ->
-    !^"(PtrMemberShift" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ pp_pexpr pp_type e ^^ !^")"
+    !^"(PtrMemberShift"
+    ^^^ pp_symbol sym
+    ^^^ pp_identifier id
+    ^^^ pp_pexpr pp_type e
+    ^^ !^")"
   | Memcpy (e1, e2, e3) ->
-    !^"(Memcpy" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^^ pp_pexpr pp_type e3 ^^ !^")"
+    !^"(Memcpy"
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_pexpr pp_type e2
+    ^^^ pp_pexpr pp_type e3
+    ^^ !^")"
   | Memcmp (e1, e2, e3) ->
-    !^"(Memcmp" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^^ pp_pexpr pp_type e3 ^^ !^")"
+    !^"(Memcmp"
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_pexpr pp_type e2
+    ^^^ pp_pexpr pp_type e3
+    ^^ !^")"
   | Realloc (e1, e2, e3) ->
-    !^"(Realloc" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^^ pp_pexpr pp_type e3 ^^ !^")"
-  | Va_start (e1, e2) -> !^"(Va_start" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+    !^"(Realloc"
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_pexpr pp_type e2
+    ^^^ pp_pexpr pp_type e3
+    ^^ !^")"
+  | Va_start (e1, e2) ->
+    !^"(Va_start" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
   | Va_copy e -> !^"(Va_copy" ^^^ pp_pexpr pp_type e ^^ !^")"
   | Va_arg (e, act) -> !^"(Va_arg" ^^^ pp_pexpr pp_type e ^^^ pp_act act ^^ !^")"
   | Va_end e -> !^"(Va_end" ^^^ pp_pexpr pp_type e ^^ !^")"
-  | CopyAllocId (e1, e2) -> !^"(CopyAllocId" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+  | CopyAllocId (e1, e2) ->
+    !^"(CopyAllocId" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
 
 
 let rec pp_expr pp_type (Expr (loc, annots, ty, e)) =
@@ -1337,18 +1421,36 @@ let rec pp_expr pp_type (Expr (loc, annots, ty, e)) =
   | Eaction pa -> !^"(Eaction" ^^^ pp_paction pp_type pa ^^ !^")"
   | Eskip -> !^"Eskip"
   | Eccall (act, f, args) ->
-    !^"(Eccall" ^^^ pp_act act ^^^ pp_pexpr pp_type f ^^^ pp_list (pp_pexpr pp_type) args ^^ !^")"
+    !^"(Eccall"
+    ^^^ pp_act act
+    ^^^ pp_pexpr pp_type f
+    ^^^ pp_list (pp_pexpr pp_type) args
+    ^^ !^")"
   | Elet (pat, e1, e2) ->
-    !^"(Elet" ^^^ pp_pattern pp_type pat ^^^ pp_pexpr pp_type e1 ^^^ pp_expr pp_type e2 ^^ !^")"
+    !^"(Elet"
+    ^^^ pp_pattern pp_type pat
+    ^^^ pp_pexpr pp_type e1
+    ^^^ pp_expr pp_type e2
+    ^^ !^")"
   | Eunseq exprs -> !^"(Eunseq" ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
   | Ewseq (pat, e1, e2) ->
-    !^"(Ewseq" ^^^ pp_pattern pp_type pat ^^^ pp_expr pp_type e1 ^^^ pp_expr pp_type e2 ^^ !^")"
+    !^"(Ewseq"
+    ^^^ pp_pattern pp_type pat
+    ^^^ pp_expr pp_type e1
+    ^^^ pp_expr pp_type e2
+    ^^ !^")"
   | Esseq (pat, e1, e2) ->
-    !^"(Esseq" ^^^ pp_pattern pp_type pat ^^^ pp_expr pp_type e1 ^^^ pp_expr pp_type e2 ^^ !^")"
-  | Eif (c, t, e) -> !^"(Eif" ^^^ pp_pexpr pp_type c ^^^ pp_expr pp_type t ^^^ pp_expr pp_type e ^^ !^")"
-  | Ebound e -> !^"(Ebound" ^^^ pp_expr pp_type   e ^^ !^")"
+    !^"(Esseq"
+    ^^^ pp_pattern pp_type pat
+    ^^^ pp_expr pp_type e1
+    ^^^ pp_expr pp_type e2
+    ^^ !^")"
+  | Eif (c, t, e) ->
+    !^"(Eif" ^^^ pp_pexpr pp_type c ^^^ pp_expr pp_type t ^^^ pp_expr pp_type e ^^ !^")"
+  | Ebound e -> !^"(Ebound" ^^^ pp_expr pp_type e ^^ !^")"
   | End exprs -> !^"(End" ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
-  | Erun (sym, args) -> !^"(Erun" ^^^ pp_symbol sym ^^^ pp_list (pp_pexpr pp_type) args ^^ !^")"
+  | Erun (sym, args) ->
+    !^"(Erun" ^^^ pp_symbol sym ^^^ pp_list (pp_pexpr pp_type) args ^^ !^")"
   | CN_progs (stmts, progs) ->
     (* TODO: this constructor was omitted from the original code *)
     P.empty
@@ -1413,59 +1515,76 @@ and pp_logical_return_type = function
   | LogicalReturnTypes.I -> !^"I"
 
 
+let rec pp_logical_args ppf = function
+  | Define ((sym, term), info, rest) ->
+    !^"(Define"
+    ^^^ !^"("
+    ^^^ pp_symbol sym
+    ^^ !^","
+    ^^^ pp_index_term term
+    ^^ !^")"
+    ^^^ pp_location_info info
+    ^^^ pp_logical_args ppf rest
+    ^^ !^")"
+  | Resource ((sym, (req, bt)), info, rest) ->
+    !^"(Resource"
+    ^^^ !^"("
+    ^^^ pp_request req
+    ^^ !^","
+    ^^^ pp_basetype pp_unit bt
+    ^^ !^"))"
+    ^^^ pp_location_info info
+    ^^^ pp_logical_args ppf rest
+    ^^ !^")"
+  | Constraint (lc, info, rest) ->
+    !^"(Constraint"
+    ^^^ pp_logical_constraint lc
+    ^^^ pp_location_info info
+    ^^^ pp_logical_args ppf rest
+    ^^ !^")"
+  | I i -> !^"(I" ^^^ ppf i ^^ !^")"
+
+
+let rec pp_arguments ppf = function
+  | Computational ((sym, bt), loc, rest) ->
+    !^"(Computational"
+    ^^^ !^"("
+    ^^^ pp_symbol sym
+    ^^ !^","
+    ^^^ pp_basetype pp_unit bt
+    ^^ !^")"
+    ^^^ pp_location_info loc
+    ^^^ pp_arguments ppf rest
+    ^^ !^")"
+  | L logical_args -> pp_logical_args ppf logical_args
+
+
+let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
+  (* TODO double check this: *)
+  !^"{|" ^^^ !^"label_spec :=" ^^^ pp_list pp_cn_condition s.label_spec ^^^ !^"|}"
+
+let pp_label_def pp_type = function
+  | Return loc -> !^"(Return" ^^^ pp_location loc ^^ !^")"
+  | Label (loc, args, annots, spec, `Loop loop_locs) ->
+    !^"(Label"
+    ^^^ pp_location loc
+    ^^^ pp_arguments (pp_expr pp_type) args
+    ^^^ pp_list pp_annot_t annots
+    ^^^ pp_parse_ast_label_spec spec
+    ^^^ pp_pair pp_location pp_location loop_locs
+    ^^ !^")"
+
 let pp_args_and_body pp_type (args : 'a args_and_body) =
-  (* args is of type arguments (expr * label_map * return_type) *)
-  let rec pp_args = function
-    | Computational ((sym, bt), loc, rest) ->
-      !^"(Computational"
-      ^^^ !^"("
-      ^^^ pp_symbol sym
-      ^^ !^","
-      ^^^ pp_basetype pp_unit bt
-      ^^ !^")"
-      ^^^ pp_location_info loc
-      ^^^ pp_args rest
-      ^^ !^")"
-    | L logical_args -> pp_logical_args logical_args
-  and pp_logical_args = function
-    | Define ((sym, term), info, rest) ->
-      !^"(Define"
-      ^^^ !^"("
-      ^^^ pp_symbol sym
-      ^^ !^","
-      ^^^ pp_index_term term
-      ^^ !^")"
-      ^^^ pp_location_info info
-      ^^^ pp_logical_args rest
-      ^^ !^")"
-    | Resource ((sym, (req, bt)), info, rest) ->
-      !^"(Resource"
-      ^^^ !^"("
-      ^^^ pp_request req
-      ^^ !^","
-      ^^^ pp_basetype pp_unit bt
-      ^^ !^"))"
-      ^^^ pp_location_info info
-      ^^^ pp_logical_args rest
-      ^^ !^")"
-    | Constraint (lc, info, rest) ->
-      !^"(Constraint"
-      ^^^ pp_logical_constraint lc
-      ^^^ pp_location_info info
-      ^^^ pp_logical_args rest
-      ^^ !^")"
-    | I (body, labels, (rt : ReturnTypes.t)) ->
-      !^"(I"
-      ^^^ !^"("
+  pp_arguments
+    (fun (body, (labels : (Symbol.sym, 'a label_def) Pmap.map), (rt : ReturnTypes.t)) ->
+      !^"("
       ^^^ pp_expr pp_type body
       ^^ !^","
-      ^^^ pp_label_map labels
+      ^^^ pp_pmap "SymMap.from_list" pp_symbol (pp_label_def pp_type) labels
       ^^ !^","
       ^^^ pp_return_type rt
-      ^^ !^"))"
-  in
-  pp_args args
-
+      ^^ !^"))")
+    args
 
 let pp_desugared_spec { accesses; requires; ensures } =
   !^"{|"
@@ -1539,6 +1658,4 @@ let pp_file pp_type pp_type_name file =
 
 (* let pp_file_string file = Pp_utils.to_plain_string (pp_file file) *)
 
-let pp_unit_file (f:unit file) = pp_file pp_unit pp_unit_type f
-
-
+let pp_unit_file (f : unit file) = pp_file pp_unit pp_unit_type f
