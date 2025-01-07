@@ -325,7 +325,7 @@ cn-coq-install: cn-coq
 
 .PHONY: cn-with-coq
 cn-with-coq:
-	@echo "[DUNE] cn,cn-coq"
+	@echo "[DUNE] cerberus-lib,cn,cn-coq"
 	$(Q)dune build -p cerberus-lib,cn,cn-coq
 
 # Developement target to watch for changes in cn/lib and rebuild
