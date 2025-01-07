@@ -24,16 +24,21 @@ let pp_list pp_elem xs =
         xs
   ^^^ !^"]"
 
+
 let pp_option pp_elem = function
   | None -> !^"None"
   | Some x -> !^"(Some" ^^^ pp_elem x ^^ !^")"
 
-let pp_pmap fromlist_fun (pp_key:'a -> P.document) (pp_value:'b -> P.document) (m: ('a, 'b) Pmap.map) = 
-  P.parens (
-    !^fromlist_fun ^^^
-    pp_list (pp_pair pp_key pp_value) (Pmap.bindings_list m)
-  )
-    
+
+let pp_pmap
+  fromlist_fun
+  (pp_key : 'a -> P.document)
+  (pp_value : 'b -> P.document)
+  (m : ('a, 'b) Pmap.map)
+  =
+  P.parens (!^fromlist_fun ^^^ pp_list (pp_pair pp_key pp_value) (Pmap.bindings_list m))
+
+
 (* Helper to print Coq definitions *)
 let coq_def name args body =
   !^"Definition" ^^^ !^name ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
@@ -43,7 +48,6 @@ let coq_notation name args body =
   !^"Notation" ^^^ !^("\"" ^ name ^ "\"") ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
 
 
-(* Placeholder printers for opaque types *)
 let pp_undefined_behaviour = function
   | Undefined.DUMMY str -> !^"(DUMMY" ^^^ !^(sprintf "%S" str) ^^ !^")"
   | Undefined.UB_unspecified_lvalue -> !^"UB_unspecified_lvalue"
@@ -1563,6 +1567,7 @@ let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
   (* TODO double check this: *)
   !^"{|" ^^^ !^"label_spec :=" ^^^ pp_list pp_cn_condition s.label_spec ^^^ !^"|}"
 
+
 let pp_label_def pp_type = function
   | Return loc -> !^"(Return" ^^^ pp_location loc ^^ !^")"
   | Label (loc, args, annots, spec, `Loop loop_locs) ->
@@ -1573,6 +1578,7 @@ let pp_label_def pp_type = function
     ^^^ pp_parse_ast_label_spec spec
     ^^^ pp_pair pp_location pp_location loop_locs
     ^^ !^")"
+
 
 let pp_args_and_body pp_type (args : 'a args_and_body) =
   pp_arguments
@@ -1585,6 +1591,7 @@ let pp_args_and_body pp_type (args : 'a args_and_body) =
       ^^^ pp_return_type rt
       ^^ !^"))")
     args
+
 
 let pp_desugared_spec { accesses; requires; ensures } =
   !^"{|"
