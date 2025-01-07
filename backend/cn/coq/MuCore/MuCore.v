@@ -19,10 +19,10 @@ Require Import ArgumentTypes.
 Require Import Ctype.
 Require Import Annot.
 Require Import Undefined.
+Require Import CN.
 
 (* We'll need to declare some types that are imported from other modules *)
 Parameter Sctypes_t : Type. (* placeholder *)
-Parameter cn_condition : Type. (* placeholder *)
 Parameter Memory_struct_layout : Type. (* placeholder *)
 Parameter linux_memory_order : Type. (* placeholder *)
 
@@ -281,8 +281,8 @@ Inductive arguments (i : Type) : Type :=
   | I : i -> arguments i.
 
 (* Label specification *)
-Record parse_ast_label_spec := {
-  label_spec : list cn_condition  (* Note: cn_condition needs to be defined *)
+Record parse_ast_label_spec := mk_parse_ast_label_spec {
+  label_spec : list (cn_condition Symbol.t Ctype.ctype)
 }.
 
 (* Label definition *)
@@ -303,8 +303,8 @@ Inductive trusted : Type :=
 (* Desugared specification *)
 Record desugared_spec := {
   accesses : list (Sym.t * Ctype.ctype);
-  requires : list cn_condition;
-  ensures : list cn_condition
+  requires : list (cn_condition Symbol.t Ctype.ctype);
+  ensures : list (cn_condition Symbol.t Ctype.ctype)  
 }.
 
 (* Arguments and body *)

@@ -10,7 +10,13 @@ open Mucore
 (* temporary debug option to supress printing of noisy locations *)
 let debug_print_locations = false (* Set to true to print actual locations *)
 
+let pp_nat n = !^(string_of_int n)
+
+let pp_Z z = !^(Z.to_string z)
+
 let pp_pair p1 p2 (a, b) = P.parens (p1 a ^^ !^"," ^^ p2 b)
+
+let pp_string s = !^("\"" ^ String.escaped s ^ "\"")
 
 let pp_list pp_elem xs =
   !^"["
@@ -325,8 +331,6 @@ let pp_undefined_behaviour = function
 
 let pp_linux_memory_order _ = !^"linux_memory_order_placeholder"
 
-let pp_cn_condition _ = !^"cn_condition_placeholder"
-
 let pp_ft ft = !^"ft_placeholder" (* TODO *)
 
 let pp_integer_value i = !^"integer_value placeholder" (* TODO *)
@@ -422,8 +426,8 @@ let rec pp_symbol_description = function
 
 and pp_symbol (CF.Symbol.Symbol (d, n, sd)) =
   !^"(Symbol"
-  ^^^ !^("\"" ^ Digest.to_hex d ^ "\"")
-  ^^^ !^(string_of_int n)
+  ^^^ pp_string d
+  ^^^ pp_nat n
   ^^^ pp_symbol_description sd
   ^^ !^")"
 
@@ -1563,9 +1567,261 @@ let rec pp_arguments ppf = function
   | L logical_args -> pp_logical_args ppf logical_args
 
 
+let pp_cn_c_kind = function
+  | CF.Cn.C_kind_var -> !^"C_kind_var"
+  | C_kind_enum -> !^"C_kind_enum"
+
+
+let pp_cn_sign = function
+  | CF.Cn.CN_unsigned -> !^"CN_unsigned"
+  | CN_signed -> !^"CN_signed"
+
+
+let rec pp_cn_basetype ppfa = function
+  | CF.Cn.CN_unit -> !^"CN_unit"
+  | CN_bool -> !^"CN_bool"
+  | CN_integer -> !^"CN_integer"
+  | CN_bits (sign, sz) -> !^"(CN_bits" ^^^ pp_pair pp_cn_sign pp_nat (sign, sz) ^^ !^")"
+  | CN_real -> !^"CN_real"
+  | CN_loc -> !^"CN_loc"
+  | CN_alloc_id -> !^"CN_alloc_id"
+  | CN_struct a -> !^"(CN_struct" ^^^ ppfa a ^^ !^")"
+  | CN_record fields ->
+    !^"(CN_record"
+    ^^^ pp_list (pp_pair pp_identifier (pp_cn_basetype ppfa)) fields
+    ^^ !^")"
+  | CN_datatype a -> !^"(CN_datatype" ^^^ ppfa a ^^ !^")"
+  | CN_map (k, v) ->
+    !^"(CN_map" ^^^ pp_pair (pp_cn_basetype ppfa) (pp_cn_basetype ppfa) (k, v) ^^ !^")"
+  | CN_list t -> !^"(CN_list" ^^^ pp_cn_basetype ppfa t ^^ !^")"
+  | CN_tuple ts -> !^"(CN_tuple" ^^^ pp_list (pp_cn_basetype ppfa) ts ^^ !^")"
+  | CN_set t -> !^"(CN_set" ^^^ pp_cn_basetype ppfa t ^^ !^")"
+  | CN_user_type_name a -> !^"(CN_user_type_name" ^^^ ppfa a ^^ !^")"
+  | CN_c_typedef_name a -> !^"(CN_c_typedef_name" ^^^ ppfa a ^^ !^")"
+
+
+let pp_cn_const = function
+  | CF.Cn.CNConst_NULL -> !^"CNConst_NULL"
+  | CNConst_integer n -> !^"(CNConst_integer" ^^^ !^(Z.to_string n) ^^ !^")"
+  | CNConst_bits (sign_sz, n) ->
+    !^"(CNConst_bits" ^^^ pp_pair (pp_pair pp_cn_sign pp_nat) pp_Z (sign_sz, n) ^^ !^")"
+  | CNConst_bool b -> !^"(CNConst_bool" ^^^ !^(string_of_bool b) ^^ !^")"
+  | CNConst_unit -> !^"CNConst_unit"
+
+
+let pp_cn_binop = function
+  | CF.Cn.CN_add -> !^"CN_add"
+  | CN_sub -> !^"CN_sub"
+  | CN_mul -> !^"CN_mul"
+  | CN_div -> !^"CN_div"
+  | CN_mod -> !^"CN_mod"
+  | CN_equal -> !^"CN_equal"
+  | CN_inequal -> !^"CN_inequal"
+  | CN_lt -> !^"CN_lt"
+  | CN_le -> !^"CN_le"
+  | CN_gt -> !^"CN_gt"
+  | CN_ge -> !^"CN_ge"
+  | CN_or -> !^"CN_or"
+  | CN_and -> !^"CN_and"
+  | CN_implies -> !^"CN_implies"
+  | CN_map_get -> !^"CN_map_get"
+  | CN_band -> !^"CN_band"
+  | CN_bor -> !^"CN_bor"
+  | CN_bxor -> !^"CN_bxor"
+
+
+let rec pp_cn_pat ppfa = function
+  | CF.Cn.CNPat (loc, pat) ->
+    !^"(CNPat"
+    ^^^ pp_location loc
+    ^^^ (match pat with
+         | CNPat_sym s -> !^"(CNPat_sym" ^^^ ppfa s ^^ !^")"
+         | CNPat_wild -> !^"CNPat_wild"
+         | CNPat_constructor (s, args) ->
+           !^"(CNPat_constructor"
+           ^^^ ppfa s
+           ^^^ pp_list (pp_pair pp_identifier (pp_cn_pat ppfa)) args
+           ^^ !^")")
+    ^^ !^")"
+
+
+let rec pp_cn_expr ppfa ppfty = function
+  | CF.Cn.CNExpr (loc, e) ->
+    !^"(CNExpr"
+    ^^^ pp_location loc
+    ^^^ (match e with
+         | CNExpr_const c -> !^"(CNExpr_const" ^^^ pp_cn_const c ^^ !^")"
+         | CNExpr_var v -> !^"(CNExpr_var" ^^^ ppfa v ^^ !^")"
+         | CNExpr_list es ->
+           !^"(CNExpr_list" ^^^ pp_list (pp_cn_expr ppfa ppfty) es ^^ !^")"
+         | CNExpr_memberof (e, id) ->
+           !^"(CNExpr_memberof"
+           ^^^ pp_pair (pp_cn_expr ppfa ppfty) pp_identifier (e, id)
+           ^^ !^")"
+         | CNExpr_arrow (e, id) ->
+           !^"(CNExpr_arrow"
+           ^^^ pp_pair (pp_cn_expr ppfa ppfty) pp_identifier (e, id)
+           ^^ !^")"
+         | CNExpr_record fs ->
+           !^"(CNExpr_record"
+           ^^^ pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) fs
+           ^^ !^")"
+         | CNExpr_struct (a, fs) ->
+           !^"(CNExpr_struct"
+           ^^^ pp_pair
+                 ppfa
+                 (pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)))
+                 (a, fs)
+           ^^ !^")"
+         | CNExpr_memberupdates (e, us) ->
+           !^"(CNExpr_memberupdates"
+           ^^^ pp_pair
+                 (pp_cn_expr ppfa ppfty)
+                 (pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)))
+                 (e, us)
+           ^^ !^")"
+         | CNExpr_arrayindexupdates (e, us) ->
+           !^"(CNExpr_arrayindexupdates"
+           ^^^ pp_pair
+                 (pp_cn_expr ppfa ppfty)
+                 (pp_list (pp_pair (pp_cn_expr ppfa ppfty) (pp_cn_expr ppfa ppfty)))
+                 (e, us)
+           ^^ !^")"
+         | CNExpr_binop (op, e1, e2) ->
+           !^"(CNExpr_binop"
+           ^^^ pp_cn_binop op
+           ^^^ pp_cn_expr ppfa ppfty e1
+           ^^^ pp_cn_expr ppfa ppfty e2
+           ^^ !^")"
+         | CNExpr_sizeof ty -> !^"(CNExpr_sizeof" ^^^ ppfty ty ^^ !^")"
+         | CNExpr_offsetof (a, id) ->
+           !^"(CNExpr_offsetof" ^^^ pp_pair ppfa pp_identifier (a, id) ^^ !^")"
+         | CNExpr_membershift (e, oa, id) ->
+           !^"(CNExpr_membershift"
+           ^^^ pp_cn_expr ppfa ppfty e
+           ^^^ pp_option ppfa oa
+           ^^^ pp_identifier id
+           ^^ !^")"
+         | CNExpr_addr a -> !^"(CNExpr_addr" ^^^ ppfa a ^^ !^")"
+         | CNExpr_cast (bt, e) ->
+           !^"(CNExpr_cast"
+           ^^^ pp_pair (pp_cn_basetype ppfa) (pp_cn_expr ppfa ppfty) (bt, e)
+           ^^ !^")"
+         | CNExpr_array_shift (e, oty, idx) ->
+           !^"(CNExpr_array_shift"
+           ^^^ pp_cn_expr ppfa ppfty e
+           ^^^ pp_option ppfty oty
+           ^^^ pp_cn_expr ppfa ppfty idx
+           ^^ !^")"
+         | CNExpr_call (a, args) ->
+           !^"(CNExpr_call"
+           ^^^ pp_pair ppfa (pp_list (pp_cn_expr ppfa ppfty)) (a, args)
+           ^^ !^")"
+         | CNExpr_cons (a, args) ->
+           !^"(CNExpr_cons"
+           ^^^ pp_pair
+                 ppfa
+                 (pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)))
+                 (a, args)
+           ^^ !^")"
+         | CNExpr_each (a, bt, rng, e) ->
+           !^"(CNExpr_each"
+           ^^^ ppfa a
+           ^^^ pp_cn_basetype ppfa bt
+           ^^^ pp_pair pp_Z pp_Z rng
+           ^^^ pp_cn_expr ppfa ppfty e
+           ^^ !^")"
+         | CNExpr_let (a, e1, e2) ->
+           !^"(CNExpr_let"
+           ^^^ ppfa a
+           ^^^ pp_cn_expr ppfa ppfty e1
+           ^^^ pp_cn_expr ppfa ppfty e2
+           ^^ !^")"
+         | CNExpr_match (e, cases) ->
+           !^"(CNExpr_match"
+           ^^^ pp_cn_expr ppfa ppfty e
+           ^^^ pp_list (pp_pair (pp_cn_pat ppfa) (pp_cn_expr ppfa ppfty)) cases
+           ^^ !^")"
+         | CNExpr_ite (c, t, e) ->
+           !^"(CNExpr_ite"
+           ^^^ pp_cn_expr ppfa ppfty c
+           ^^^ pp_cn_expr ppfa ppfty t
+           ^^^ pp_cn_expr ppfa ppfty e
+           ^^ !^")"
+         | CNExpr_good (ty, e) ->
+           !^"(CNExpr_good" ^^^ pp_pair ppfty (pp_cn_expr ppfa ppfty) (ty, e) ^^ !^")"
+         | CNExpr_deref e -> !^"(CNExpr_deref" ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_value_of_c_atom (a, k) ->
+           !^"(CNExpr_value_of_c_atom" ^^^ pp_pair ppfa pp_cn_c_kind (a, k) ^^ !^")"
+         | CNExpr_unchanged e ->
+           !^"(CNExpr_unchanged" ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_at_env (e, s) ->
+           !^"(CNExpr_at_env"
+           ^^^ pp_pair (pp_cn_expr ppfa ppfty) pp_string (e, s)
+           ^^ !^")"
+         | CNExpr_not e -> !^"(CNExpr_not" ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_negate e -> !^"(CNExpr_negate" ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_default bt -> !^"(CNExpr_default" ^^^ pp_cn_basetype ppfa bt ^^ !^")"
+         | CNExpr_bnot e -> !^"(CNExpr_bnot" ^^^ pp_cn_expr ppfa ppfty e ^^ !^")")
+    ^^ !^")"
+
+
+let rec pp_cn_resource ppfa ppfty = function
+  | CF.Cn.CN_pred (loc, pred, args) ->
+    !^"(CN_pred"
+    ^^^ pp_location loc
+    ^^^ pp_cn_pred ppfa ppfty pred
+    ^^^ pp_list (pp_cn_expr ppfa ppfty) args
+    ^^ !^")"
+  | CN_each (a, bt, e, loc, pred, args) ->
+    !^"(CN_each"
+    ^^^ ppfa a
+    ^^^ pp_cn_basetype ppfa bt
+    ^^^ pp_cn_expr ppfa ppfty e
+    ^^^ pp_location loc
+    ^^^ pp_cn_pred ppfa ppfty pred
+    ^^^ pp_list (pp_cn_expr ppfa ppfty) args
+    ^^ !^")"
+
+
+and pp_cn_pred ppfa ppfty = function
+  | CF.Cn.CN_owned ty -> !^"(CN_owned" ^^^ pp_option ppfty ty ^^ !^")"
+  | CN_block ty -> !^"(CN_block" ^^^ pp_option ppfty ty ^^ !^")"
+  | CN_named a -> !^"(CN_named" ^^^ ppfa a ^^ !^")"
+
+
+let pp_cn_assertion ppfa ppfty = function
+  | CF.Cn.CN_assert_exp ex -> !^"(CN_assert_exp" ^^^ pp_cn_expr ppfa ppfty ex ^^ !^")"
+  | CN_assert_qexp (sym, bt, it1, it2) ->
+    !^"(CN_assert_qexp"
+    ^^^ ppfa sym
+    ^^^ pp_cn_basetype ppfa bt
+    ^^^ pp_cn_expr ppfa ppfty it1
+    ^^^ pp_cn_expr ppfa ppfty it2
+    ^^ !^")"
+
+let pp_cn_condition ppfa ppfty = function
+  | CF.Cn.CN_cletResource (loc, sym, res) ->
+    !^"(CN_cletResource"
+    ^^^ pp_location loc
+    ^^^ ppfa sym
+    ^^^ pp_cn_resource ppfa ppfty res
+    ^^ !^")"
+  | CN_cletExpr (loc, sym, ex) ->
+    !^"(CN_cletExpr"
+    ^^^ pp_location loc
+    ^^^ ppfa sym
+    ^^^ pp_cn_expr ppfa ppfty ex
+    ^^ !^")"
+  | CN_cconstr (loc, assertion) ->
+    !^"(CN_cconstr" ^^^ pp_location loc ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
+
 let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
   (* TODO double check this: *)
-  !^"{|" ^^^ !^"label_spec :=" ^^^ pp_list pp_cn_condition s.label_spec ^^^ !^"|}"
+  !^"{|"
+  ^^^ !^"label_spec :="
+  ^^^ pp_list (pp_cn_condition pp_symbol pp_ctype) s.label_spec
+  ^^^ !^"|}"
 
 
 let pp_label_def pp_type = function
@@ -1601,10 +1857,10 @@ let pp_desugared_spec { accesses; requires; ensures } =
         accesses
   ^^ !^";"
   ^^^ !^"requires :="
-  ^^^ pp_list pp_cn_condition requires
+  ^^^ pp_list (pp_cn_condition pp_symbol pp_ctype) requires
   ^^ !^";"
   ^^^ !^"ensures :="
-  ^^^ pp_list pp_cn_condition ensures
+  ^^^ pp_list (pp_cn_condition pp_symbol pp_ctype) ensures
   ^^^ !^"|}"
 
 
