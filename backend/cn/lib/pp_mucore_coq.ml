@@ -329,7 +329,18 @@ let pp_undefined_behaviour = function
   | UB_CHERI_ZeroLength -> !^"UB_CHERI_ZeroLength"
 
 
-let pp_linux_memory_order _ = !^"linux_memory_order_placeholder"
+let pp_linux_memory_order = function
+  | CF.Linux.Once -> !^"Once"
+  | LAcquire -> !^"LAcquire"
+  | LRelease -> !^"LRelease" 
+  | Rmb -> !^"Rmb"
+  | Wmb -> !^"Wmb"
+  | Mb -> !^"Mb"
+  | RbDep -> !^"RbDep"
+  | RcuLock -> !^"RcuLock"
+  | RcuUnlock -> !^"RcuUnlock"
+  | SyncRcu -> !^"SyncRcu"
+
 
 let pp_ft ft = !^"ft_placeholder" (* TODO *)
 

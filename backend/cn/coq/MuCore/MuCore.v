@@ -23,8 +23,17 @@ Require Import CN.
 Require Import SCtypes.
 Require Import Id.
 
-(* We'll need to declare some types that are imported from other modules *)
-Parameter linux_memory_order : Type. (* placeholder *)
+Inductive linux_memory_order : Type :=
+  | Once : linux_memory_order
+  | LAcquire : linux_memory_order
+  | LRelease : linux_memory_order
+  | Rmb : linux_memory_order
+  | Wmb : linux_memory_order
+  | Mb : linux_memory_order
+  | RbDep : linux_memory_order
+  | RcuLock : linux_memory_order
+  | RcuUnlock : linux_memory_order
+  | SyncRcu : linux_memory_order.
 
 (* Structure definitions *)
 Record struct_piece : Type := mk_struct_piece {
