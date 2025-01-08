@@ -21,4 +21,4 @@ Record c_concrete_sig := mk_c_concrete_sig {
   sig_arg_tys : list Ctype.ctype;
   sig_variadic : bool;
   sig_has_proto : bool
-}. 
+}.

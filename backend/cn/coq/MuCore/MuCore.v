@@ -20,9 +20,9 @@ Require Import Ctype.
 Require Import Annot.
 Require Import Undefined.
 Require Import CN.
+Require Import SCtypes.
 
 (* We'll need to declare some types that are imported from other modules *)
-Parameter Sctypes_t : Type. (* placeholder *)
 Parameter Memory_struct_layout : Type. (* placeholder *)
 Parameter linux_memory_order : Type. (* placeholder *)
 
@@ -85,7 +85,7 @@ Inductive iop : Type :=
 Record act := {
   loc : Location_t;
   annot : list Annot.annot;
-  ct : Sctypes_t
+  ct : SCtypes.t
 }.
 
 Inductive object_value_ (TY : Type) : Type :=
@@ -93,7 +93,7 @@ Inductive object_value_ (TY : Type) : Type :=
   | OVfloating : floating_value -> object_value_ TY
   | OVpointer : pointer_value -> object_value_ TY
   | OVarray : list (object_value TY) -> object_value_ TY
-  | OVstruct : Sym.t -> list (Symbol.identifier * Sctypes_t * mem_value) -> object_value_ TY
+  | OVstruct : Sym.t -> list (Symbol.identifier * SCtypes.t * mem_value) -> object_value_ TY
   | OVunion : Sym.t -> Symbol.identifier -> mem_value -> object_value_ TY
 
 with object_value (TY : Type) : Type :=
@@ -157,7 +157,7 @@ Inductive bound_kind : Type :=
 (* Memory operations *)
 Inductive m_kill_kind : Type :=
   | Dynamic : m_kill_kind
-  | Static : Sctypes_t -> m_kill_kind.
+  | Static : SCtypes.t -> m_kill_kind.
 
 (* Pure expressions *)
 Inductive pexpr_ (TY: Type) : Type :=
@@ -169,7 +169,7 @@ Inductive pexpr_ (TY: Type) : Type :=
   | PEbitwise_binop : bw_binop -> pexpr TY -> pexpr TY -> pexpr_ TY
   | Cfvfromint : pexpr TY -> pexpr_ TY
   | Civfromfloat : act -> pexpr TY -> pexpr_ TY
-  | PEarray_shift : pexpr TY -> Sctypes_t -> pexpr TY -> pexpr_ TY
+  | PEarray_shift : pexpr TY -> SCtypes.t -> pexpr TY -> pexpr_ TY
   | PEmember_shift : pexpr TY -> Sym.t -> Symbol.identifier -> pexpr_ TY
   | PEnot : pexpr TY -> pexpr_ TY
   | PEop : binop -> pexpr TY -> pexpr TY -> pexpr_ TY
@@ -270,8 +270,8 @@ with expr (TY : Type) : Type :=
 
 (* Global declarations and definitions *)
 Inductive globs (TY : Type) : Type :=
-  | GlobalDef : Sctypes_t -> expr TY -> globs TY
-  | GlobalDecl : Sctypes_t -> globs TY.
+  | GlobalDef : SCtypes.t -> expr TY -> globs TY
+  | GlobalDecl : SCtypes.t -> globs TY.
 
 (* Arguments list with logical constraints *)
 Inductive arguments (i : Type) : Type :=
