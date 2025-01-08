@@ -70,4 +70,9 @@ module type S = sig
   val datatype : 'a * Mucore.datatype -> ('a * Mucore.datatype) t
 
   val datatype_recursion : (Sym.t * Mucore.datatype) list -> Sym.t list list t
+
+  val logical_function_order : Definition.Function.t Sym.Map.t -> Sym.t list list
+
+  val resource_predicate_order : Definition.Predicate.t Sym.Map.t -> Sym.t list list
+
 end

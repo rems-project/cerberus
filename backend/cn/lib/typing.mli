@@ -128,6 +128,14 @@ module Global : sig
 
   val get_datatype_order : unit -> Sym.t list list option m
 
+  val set_resource_predicate_order : Sym.t list list option -> unit m
+
+  val get_resource_predicate_order : unit -> Sym.t list list option m
+
+  val set_logical_function_order : Sym.t list list option -> unit m
+
+  val get_logical_function_order : unit -> Sym.t list list option m
+
   val add_resource_predicate : Sym.t -> Definition.Predicate.t -> unit m
 
   val add_logical_function : Sym.t -> Definition.Function.t -> unit m

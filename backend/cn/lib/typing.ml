@@ -286,6 +286,27 @@ module Global = struct
   let get_datatype_order () =
     let@ g = get_global () in
     return g.datatype_order
+
+
+  let set_resource_predicate_order resource_predicate_order =
+    let@ g = get_global () in
+    set_global { g with resource_predicate_order }
+
+
+  let get_resource_predicate_order () =
+    let@ g = get_global () in
+    return g.resource_predicate_order
+
+
+  let set_logical_function_order logical_function_order =
+    let@ g = get_global () in
+    set_global { g with logical_function_order }
+
+
+  let get_logical_function_order () =
+    let@ g = get_global () in
+    return g.logical_function_order
+
 end
 
 (* end: convenient functions for global typing context *)
