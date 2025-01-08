@@ -22,6 +22,9 @@ Require Import Undefined.
 Require Import CN.
 Require Import SCtypes.
 Require Import Id.
+Require Import ImplMem.
+
+Module Mem := CNMem.
 
 Inductive linux_memory_order : Type :=
   | Once : linux_memory_order
@@ -59,11 +62,6 @@ Inductive memory_order : Type :=
   | Consume : memory_order   (* Consume ordering *)
   | Acq_rel : memory_order.  (* Acquire-Release ordering *)
 
-Inductive integer_value : Type. (* placeholder *)
-Inductive floating_value : Type. (* placeholder *)
-Inductive pointer_value : Type. (* placeholder *)
-Inductive mem_value : Type. (* placeholder *)
-
 Inductive polarity : Type :=
   | Pos : polarity  (* Positive polarity *)
   | Neg : polarity. (* Negative polarity *)
@@ -78,7 +76,7 @@ Inductive mem_constraint (A : Type) : Type :=
   | MC_conj : list (mem_constraint A) -> mem_constraint A
   | MC_not : mem_constraint A -> mem_constraint A.
 
-Definition mem_iv_constraint := mem_constraint integer_value.
+Definition mem_iv_constraint := mem_constraint Mem.integer_value.
 
 (* Binary operators *)
 Inductive binop : Type :=
@@ -113,12 +111,12 @@ Record act := {
 }.
 
 Inductive object_value_ (TY : Type) : Type :=
-  | OVinteger : integer_value -> object_value_ TY
-  | OVfloating : floating_value -> object_value_ TY
-  | OVpointer : pointer_value -> object_value_ TY
+  | OVinteger : Mem.integer_value -> object_value_ TY
+  | OVfloating : Mem.floating_value -> object_value_ TY
+  | OVpointer : Mem.pointer_value -> object_value_ TY
   | OVarray : list (object_value TY) -> object_value_ TY
-  | OVstruct : Sym.t -> list (Symbol.identifier * SCtypes.t * mem_value) -> object_value_ TY
-  | OVunion : Sym.t -> Symbol.identifier -> mem_value -> object_value_ TY
+  | OVstruct : Sym.t -> list (Symbol.identifier * SCtypes.t * Mem.mem_value) -> object_value_ TY
+  | OVunion : Sym.t -> Symbol.identifier -> Mem.mem_value -> object_value_ TY
 
 with object_value (TY : Type) : Type :=
   | OV : TY -> object_value_ TY -> object_value TY.
