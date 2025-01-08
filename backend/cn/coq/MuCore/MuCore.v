@@ -21,10 +21,25 @@ Require Import Annot.
 Require Import Undefined.
 Require Import CN.
 Require Import SCtypes.
+Require Import Id.
 
 (* We'll need to declare some types that are imported from other modules *)
-Parameter Memory_struct_layout : Type. (* placeholder *)
 Parameter linux_memory_order : Type. (* placeholder *)
+
+(* Structure definitions *)
+Record struct_piece : Type := mk_struct_piece {
+  offset : Z;
+  size : Z;
+  member_or_padding : option (Id.t * SCtypes.t)
+}.
+
+Record struct_member : Type := mk_struct_member {
+  member_offset : Z;
+  member_size : Z;
+  member : Id.t * SCtypes.t
+}.
+
+Definition struct_layout := list struct_piece.
 
 Inductive memory_order : Type :=
   | NA : memory_order        (* Non-atomic *)
@@ -322,7 +337,7 @@ Inductive fun_map_decl (TY : Type) : Type :=
 
 (* Tag definition *)
 Inductive tag_definition : Type :=
-  | StructDef : Memory_struct_layout -> tag_definition
+  | StructDef : struct_layout -> tag_definition
   | UnionDef : tag_definition.
 
 (* Function to convert *)

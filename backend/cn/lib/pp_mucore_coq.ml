@@ -1868,8 +1868,6 @@ let pp_desugared_spec { accesses; requires; ensures } =
 let pp_file pp_type pp_type_name file =
   !^"Require Import MuCore."
   ^^ P.hardline
-  ^^ !^"Import MuCore."
-  ^^ P.hardline
   ^^ P.hardline
   (* Print globals *)
   ^^ !^"(* Global definitions *)"
