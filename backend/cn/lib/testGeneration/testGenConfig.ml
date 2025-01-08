@@ -5,6 +5,7 @@ type t =
     max_unfolds : int option;
     max_array_length : int;
     with_static_hack : bool;
+    sanitizers : string option * string option;
     (* Run time *)
     input_timeout : int option;
     null_in_every : int option;
@@ -30,6 +31,7 @@ let default =
     max_unfolds = None;
     max_array_length = 50;
     with_static_hack = false;
+    sanitizers = (None, None);
     input_timeout = None;
     null_in_every = None;
     seed = None;
@@ -62,6 +64,8 @@ let get_max_unfolds () = !instance.max_unfolds
 let get_max_array_length () = !instance.max_array_length
 
 let with_static_hack () = !instance.with_static_hack
+
+let has_sanitizers () = !instance.sanitizers
 
 let has_input_timeout () = !instance.input_timeout
 

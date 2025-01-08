@@ -461,6 +461,7 @@ let run_tests
   max_unfolds
   max_array_length
   with_static_hack
+  sanitizers
   input_timeout
   null_in_every
   seed
@@ -506,6 +507,7 @@ let run_tests
           max_unfolds;
           max_array_length;
           with_static_hack;
+          sanitizers;
           input_timeout;
           null_in_every;
           seed;
@@ -958,6 +960,22 @@ module Testing_flags = struct
     Arg.(value & flag & info [ "with-static-hack" ] ~doc)
 
 
+  let sanitize =
+    let doc = "Forwarded to the '-fsanitize' argument of the C compiler" in
+    Arg.(
+      value
+      & opt (some string) (fst TestGeneration.default_cfg.sanitizers)
+      & info [ "sanitize" ] ~doc)
+
+
+  let no_sanitize =
+    let doc = "Forwarded to the '-fno-sanitize' argument of the C compiler" in
+    Arg.(
+      value
+      & opt (some string) (snd TestGeneration.default_cfg.sanitizers)
+      & info [ "no-sanitize" ] ~doc)
+
+
   let input_timeout =
     let doc = "Timeout for discarding a generation attempt (ms)" in
     Arg.(
@@ -1114,6 +1132,7 @@ let testing_cmd =
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.max_array_length
     $ Testing_flags.with_static_hack
+    $ Term.product Testing_flags.sanitize Testing_flags.no_sanitize
     $ Testing_flags.input_timeout
     $ Testing_flags.null_in_every
     $ Testing_flags.seed
