@@ -41,6 +41,21 @@ let attempt cmd success failure =
   ^^ string "fi"
 
 
+let cc_flags () =
+  [ "-g"; "\"-I${RUNTIME_PREFIX}/include/\"" ]
+  @ (let sanitize, no_sanitize = Config.has_sanitizers () in
+     (match sanitize with Some sanitize -> [ "-fsanitize=" ^ sanitize ] | None -> [])
+     @
+     match no_sanitize with
+     | Some no_sanitize -> [ "-fno-sanitize=" ^ no_sanitize ]
+     | None -> [])
+  @
+  if Config.is_coverage () then
+    [ "--coverage" ]
+  else
+    []
+
+
 let compile ~filename_base =
   string "# Compile"
   ^^ hardline
@@ -48,18 +63,12 @@ let compile ~filename_base =
        (String.concat
           " "
           ([ "cc";
-             "-g";
              "-c";
-             "\"-I${RUNTIME_PREFIX}/include/\"";
              "-o";
              "\"./" ^ filename_base ^ "_test.o\"";
              "\"./" ^ filename_base ^ "_test.c\""
            ]
-           @
-           if Config.is_coverage () then
-             [ "--coverage" ]
-           else
-             []))
+           @ cc_flags ()))
        ("Compiled '" ^ filename_base ^ "_test.c'.")
        ("Failed to compile '" ^ filename_base ^ "_test.c' in ${TEST_DIR}.")
   ^^ (if Config.with_static_hack () then
@@ -70,37 +79,19 @@ let compile ~filename_base =
              (String.concat
                 " "
                 ([ "cc";
-                   "-g";
                    "-c";
-                   "\"-I${RUNTIME_PREFIX}/include/\"";
                    "-o";
                    "\"./" ^ filename_base ^ "-exec.o\"";
                    "\"./" ^ filename_base ^ "-exec.c\""
                  ]
-                 @
-                 if Config.is_coverage () then
-                   [ "--coverage" ]
-                 else
-                   []))
+                 @ cc_flags ()))
              ("Compiled '" ^ filename_base ^ "-exec.c'.")
              ("Failed to compile '" ^ filename_base ^ "-exec.c' in ${TEST_DIR}.")
         ^^ twice hardline
         ^^ attempt
              (String.concat
                 " "
-                ([ "cc";
-                   "-g";
-                   "-c";
-                   "\"-I${RUNTIME_PREFIX}/include/\"";
-                   "-o";
-                   "\"./cn.o\"";
-                   "\"./cn.c\""
-                 ]
-                 @
-                 if Config.is_coverage () then
-                   [ "--coverage" ]
-                 else
-                   []))
+                ([ "cc"; "-c"; "-o"; "\"./cn.o\""; "\"./cn.c\"" ] @ cc_flags ()))
              "Compiled 'cn.c'."
              "Failed to compile 'cn.c' in ${TEST_DIR}.")
   ^^ hardline
@@ -115,8 +106,6 @@ let link ~filename_base =
        (String.concat
           " "
           ([ "cc";
-             "-g";
-             "\"-I${RUNTIME_PREFIX}/include\"";
              "-o";
              "\"./tests.out\"";
              (filename_base
@@ -128,11 +117,7 @@ let link ~filename_base =
                 " " ^ filename_base ^ "-exec.o cn.o");
              "\"${RUNTIME_PREFIX}/libcn.a\""
            ]
-           @
-           if Config.is_coverage () then
-             [ "--coverage" ]
-           else
-             []))
+           @ cc_flags ()))
        "Linked C *.o files."
        "Failed to link *.o files in ${TEST_DIR}."
   ^^ hardline
