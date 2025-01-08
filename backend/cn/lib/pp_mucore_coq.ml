@@ -332,7 +332,7 @@ let pp_undefined_behaviour = function
 let pp_linux_memory_order = function
   | CF.Linux.Once -> !^"Once"
   | LAcquire -> !^"LAcquire"
-  | LRelease -> !^"LRelease" 
+  | LRelease -> !^"LRelease"
   | Rmb -> !^"Rmb"
   | Wmb -> !^"Wmb"
   | Mb -> !^"Mb"
@@ -351,8 +351,6 @@ let pp_floating_value f = !^"floating_value placeholder" (* TODO *)
 let pp_pointer_value p = !^"pointer_value placeholder" (* TODO *)
 
 let pp_mem_value m = !^"mem_value placeholder" (* TODO *)
-
-let pp_identifier id = !^"identifier placeholder" (* TODO *)
 
 let pp_unit (_ : unit) = !^"tt"
 
@@ -423,6 +421,9 @@ let pp_location = function
     ^^ !^")"
 
 
+let pp_identifier (CF.Symbol.Identifier (loc, s)) =
+  !^"(Identifier" ^^^ pp_location loc ^^^ pp_string s ^^ !^")"
+
 let rec pp_symbol_description = function
   | CF.Symbol.SD_None -> !^"SD_None"
   | CF.Symbol.SD_unnamed_tag loc -> !^"(SD_unnamed_tag" ^^^ pp_location loc ^^ !^")"
@@ -436,11 +437,7 @@ let rec pp_symbol_description = function
 
 
 and pp_symbol (CF.Symbol.Symbol (d, n, sd)) =
-  !^"(Symbol"
-  ^^^ pp_string d
-  ^^^ pp_nat n
-  ^^^ pp_symbol_description sd
-  ^^ !^")"
+  !^"(Symbol" ^^^ pp_string d ^^^ pp_nat n ^^^ pp_symbol_description sd ^^ !^")"
 
 
 and pp_symbol_prefix = function
@@ -1811,6 +1808,7 @@ let pp_cn_assertion ppfa ppfty = function
     ^^^ pp_cn_expr ppfa ppfty it2
     ^^ !^")"
 
+
 let pp_cn_condition ppfa ppfty = function
   | CF.Cn.CN_cletResource (loc, sym, res) ->
     !^"(CN_cletResource"
@@ -1826,6 +1824,7 @@ let pp_cn_condition ppfa ppfty = function
     ^^ !^")"
   | CN_cconstr (loc, assertion) ->
     !^"(CN_cconstr" ^^^ pp_location loc ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
+
 
 let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
   (* TODO double check this: *)
