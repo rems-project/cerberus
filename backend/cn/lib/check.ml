@@ -2285,7 +2285,7 @@ let record_and_check_logical_functions funs =
       recursive
   in
   (* Now check all functions in order. *)
-  let@ () = 
+  let@ () =
     ListM.iteriM
       (fun i (name, def) ->
         debug
@@ -2300,11 +2300,11 @@ let record_and_check_logical_functions funs =
         Global.add_logical_function name def)
       funs
   in
-
   let@ global = get_global () in
-
-  let@ () = Global.set_logical_function_order (Some (WellTyped.logical_function_order global.logical_functions)) in
-
+  let@ () =
+    Global.set_logical_function_order
+      (Some (WellTyped.logical_function_order global.logical_functions))
+  in
   return ()
 
 
@@ -2317,8 +2317,7 @@ let record_and_check_resource_predicates preds =
         Global.add_resource_predicate name simple_def)
       preds
   in
-
-  let@ () = 
+  let@ () =
     ListM.iteriM
       (fun i (name, def) ->
         debug
@@ -2334,13 +2333,12 @@ let record_and_check_resource_predicates preds =
         Global.add_resource_predicate name def)
       preds
   in
-
   let@ global = get_global () in
-
-  let@ () = Global.set_resource_predicate_order (Some (WellTyped.resource_predicate_order global.resource_predicates)) in
-
+  let@ () =
+    Global.set_resource_predicate_order
+      (Some (WellTyped.resource_predicate_order global.resource_predicates))
+  in
   return ()
-
 
 
 let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> LC.t list m =

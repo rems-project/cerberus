@@ -74,5 +74,4 @@ module type S = sig
   val logical_function_order : Definition.Function.t Sym.Map.t -> Sym.t list list
 
   val resource_predicate_order : Definition.Predicate.t Sym.Map.t -> Sym.t list list
-
 end

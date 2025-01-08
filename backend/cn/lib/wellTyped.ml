@@ -2289,45 +2289,44 @@ module WRPD = struct
        in
        return Def.Predicate.{ loc; pointer; iargs; oarg_bt; clauses })
 
+
   module G = Graph.Persistent.Digraph.Concrete (Sym)
   module Components = Graph.Components.Make (G)
 
-  let resource_predicate_order predicates = 
+  let resource_predicate_order predicates =
     let graph = G.empty in
     let graph = Sym.Map.fold (fun p _ graph -> G.add_vertex graph p) predicates graph in
-    let graph = 
+    let graph =
       Sym.Map.fold
         (fun p pdef graph ->
           match pdef.Definition.Predicate.clauses with
           | None -> graph
           | Some clauses ->
-              List.fold_left (fun graph clause ->
-                let rec aux graph packing_ft = 
+            List.fold_left
+              (fun graph clause ->
+                let rec aux graph packing_ft =
                   let open LogicalArgumentTypes in
                   match packing_ft with
                   | Define (_, _, packing_ft) -> aux graph packing_ft
                   | Resource ((_, (req, _)), _, packing_ft) ->
-                      let graph = match req with
-                        | P {name = Owned _; _}
-                        | Q {name = Owned _; _}
-                            -> graph
-                        | P {name = PName p'; _}
-                        | Q {name = PName p'; _}
-                            -> G.add_edge graph p p'
-                      in
-                      aux graph packing_ft
+                    let graph =
+                      match req with
+                      | P { name = Owned _; _ } | Q { name = Owned _; _ } -> graph
+                      | P { name = PName p'; _ } | Q { name = PName p'; _ } ->
+                        G.add_edge graph p p'
+                    in
+                    aux graph packing_ft
                   | Constraint (_, _, packing_ft) -> aux graph packing_ft
                   | I _return_value -> graph
                 in
-                aux graph clause.Definition.Clause.packing_ft
-                ) graph clauses
-        )
+                aux graph clause.Definition.Clause.packing_ft)
+              graph
+              clauses)
         predicates
         graph
     in
     let sccs = Components.scc_list graph in
     sccs
-
 end
 
 module WLFD = struct
@@ -2357,28 +2356,30 @@ module WLFD = struct
        in
        return { loc; args; return_bt; emit_coq; body })
 
+
   module G = Graph.Persistent.Digraph.Concrete (Sym)
   module Components = Graph.Components.Make (G)
 
-  let logical_function_order functions = 
+  let logical_function_order functions =
     let graph = G.empty in
-    let graph = Sym.Map.fold (fun fname _ graph -> G.add_vertex graph fname) functions graph in
-    let graph = 
+    let graph =
+      Sym.Map.fold (fun fname _ graph -> G.add_vertex graph fname) functions graph
+    in
+    let graph =
       Sym.Map.fold
         (fun fname fdef graph ->
-          let calls = match fdef.body with
+          let calls =
+            match fdef.body with
             | Def body -> IT.preds_of body
             | Rec_Def body -> IT.preds_of body
             | Uninterp -> Sym.Set.empty
           in
-          Sym.Set.fold (fun fname' graph -> G.add_edge graph fname fname') calls graph
-        )
+          Sym.Set.fold (fun fname' graph -> G.add_edge graph fname fname') calls graph)
         functions
         graph
     in
     let sccs = Components.scc_list graph in
     sccs
-
 end
 
 module WLemma = struct

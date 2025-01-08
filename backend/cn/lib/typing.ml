@@ -306,7 +306,6 @@ module Global = struct
   let get_logical_function_order () =
     let@ g = get_global () in
     return g.logical_function_order
-
 end
 
 (* end: convenient functions for global typing context *)
