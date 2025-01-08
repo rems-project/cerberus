@@ -2285,19 +2285,27 @@ let record_and_check_logical_functions funs =
       recursive
   in
   (* Now check all functions in order. *)
-  ListM.iteriM
-    (fun i (name, def) ->
-      debug
-        2
-        (lazy
-          (headline
-             ("checking welltypedness of function"
-              ^ Pp.of_total i n_funs
-              ^ ": "
-              ^ Sym.pp_string name)));
-      let@ def = WellTyped.function_ def in
-      Global.add_logical_function name def)
-    funs
+  let@ () =
+    ListM.iteriM
+      (fun i (name, def) ->
+        debug
+          2
+          (lazy
+            (headline
+               ("checking welltypedness of function"
+                ^ Pp.of_total i n_funs
+                ^ ": "
+                ^ Sym.pp_string name)));
+        let@ def = WellTyped.function_ def in
+        Global.add_logical_function name def)
+      funs
+  in
+  let@ global = get_global () in
+  let@ () =
+    Global.set_logical_function_order
+      (Some (WellTyped.logical_function_order global.logical_functions))
+  in
+  return ()
 
 
 let record_and_check_resource_predicates preds =
@@ -2309,20 +2317,28 @@ let record_and_check_resource_predicates preds =
         Global.add_resource_predicate name simple_def)
       preds
   in
-  ListM.iteriM
-    (fun i (name, def) ->
-      debug
-        2
-        (lazy
-          (headline
-             ("checking welltypedness of resource pred"
-              ^ Pp.of_total i (List.length preds)
-              ^ ": "
-              ^ Sym.pp_string name)));
-      let@ def = WellTyped.predicate def in
-      (* add simplified def to the context *)
-      Global.add_resource_predicate name def)
-    preds
+  let@ () =
+    ListM.iteriM
+      (fun i (name, def) ->
+        debug
+          2
+          (lazy
+            (headline
+               ("checking welltypedness of resource pred"
+                ^ Pp.of_total i (List.length preds)
+                ^ ": "
+                ^ Sym.pp_string name)));
+        let@ def = WellTyped.predicate def in
+        (* add simplified def to the context *)
+        Global.add_resource_predicate name def)
+      preds
+  in
+  let@ global = get_global () in
+  let@ () =
+    Global.set_resource_predicate_order
+      (Some (WellTyped.resource_predicate_order global.resource_predicates))
+  in
+  return ()
 
 
 let record_globals : 'bty. (Sym.t * 'bty Mu.globs) list -> LC.t list m =
