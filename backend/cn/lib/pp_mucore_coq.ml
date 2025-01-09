@@ -421,6 +421,15 @@ let pp_identifier (CF.Symbol.Identifier (loc, s)) =
   !^"(Identifier" ^^^ pp_location loc ^^^ pp_string s ^^ !^")"
 
 
+let pp_digest (d : Digest.t) =
+  let string_to_hex s =
+    let hex_of_char c = Printf.sprintf "%02x" (Char.code c) in
+    String.concat "" (List.map hex_of_char (String.to_seq s |> List.of_seq))
+  in
+  (* We are not using Digest.to_hex as it is gives error on invalid digest values *)
+  pp_string (string_to_hex d)
+
+
 let rec pp_symbol_description = function
   | CF.Symbol.SD_None -> !^"SD_None"
   | CF.Symbol.SD_unnamed_tag loc -> !^"(SD_unnamed_tag" ^^^ pp_location loc ^^ !^")"
@@ -434,26 +443,24 @@ let rec pp_symbol_description = function
 
 
 and pp_symbol (CF.Symbol.Symbol (d, n, sd)) =
-  !^"(Symbol" ^^^ pp_string d ^^^ pp_nat n ^^^ pp_symbol_description sd ^^ !^")"
+  !^"(Symbol" ^^^ pp_digest d ^^^ pp_nat n ^^^ pp_symbol_description sd ^^ !^")"
 
 
 and pp_symbol_prefix = function
   | CF.Symbol.PrefSource (loc, syms) ->
     !^"(PrefSource" ^^^ pp_location loc ^^^ pp_list pp_symbol syms ^^ !^")"
   | CF.Symbol.PrefFunArg (loc, d, z) ->
-    let d = "arg" in
-    (* TODO: it looks like `d` contains some garbage*)
     !^"(PrefFunArg"
     ^^^ pp_location loc
-    ^^^ !^("\"" ^ d ^ "\"")
+    ^^^ pp_digest d
     ^^^ !^(Z.to_string (Z.of_int z))
     ^^ !^")"
   | CF.Symbol.PrefStringLiteral (loc, d) ->
-    !^"(PrefStringLiteral" ^^^ pp_location loc ^^^ !^("\"" ^ d ^ "\"") ^^ !^")"
+    !^"(PrefStringLiteral" ^^^ pp_location loc ^^^ pp_digest d ^^ !^")"
   | CF.Symbol.PrefTemporaryLifetime (loc, d) ->
-    !^"(PrefTemporaryLifetime" ^^^ pp_location loc ^^^ !^d ^^ !^")"
+    !^"(PrefTemporaryLifetime" ^^^ pp_location loc ^^^ pp_digest d ^^ !^")"
   | CF.Symbol.PrefCompoundLiteral (loc, d) ->
-    !^"(PrefCompoundLiteral" ^^^ pp_location loc ^^^ !^d ^^ !^")"
+    !^"(PrefCompoundLiteral" ^^^ pp_location loc ^^^ pp_digest d ^^ !^")"
   | CF.Symbol.PrefMalloc -> !^"PrefMalloc"
   | CF.Symbol.PrefOther s -> !^"(PrefOther" ^^^ !^s ^^ !^")"
 
