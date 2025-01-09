@@ -820,7 +820,16 @@ and pp_pattern pp_type (Pattern (loc, annots, ty, pat)) =
   ^^^ pp_pattern_ pp_type pat
   ^^ !^")"
 
-let pp_mem_value v = Impl_mem.pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier v
+
+let pp_mem_value v =
+  Impl_mem.pp_mem_value_for_coq
+    pp_symbol
+    pp_integer_type
+    pp_floating_type
+    pp_ctype
+    pp_identifier
+    v
+
 
 let rec pp_mem_constraint = function
   | Mem_common.MC_empty -> !^"MC_empty"
@@ -1360,10 +1369,7 @@ let rec pp_request = function
 and pp_request_name = function
   | Request.PName sym -> !^"(PName" ^^^ pp_symbol sym ^^ !^")"
   | Request.Owned (ct, init) ->
-    (* TODO
-       !^"(Owned" ^^^ pp_sctype ct ^^^ pp_request_init init ^^ !^")"
-    *)
-    P.empty
+    !^"(Owned" ^^^ pp_sctype ct ^^^ pp_request_init init ^^ !^")"
 
 
 let pp_memop pp_type op =
