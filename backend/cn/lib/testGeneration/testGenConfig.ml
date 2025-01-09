@@ -5,7 +5,7 @@ type t =
     max_unfolds : int option;
     max_array_length : int;
     with_static_hack : bool;
-    sanitizers : string option * string option;
+    sanitizers : (string option * string option) * string option;
     (* Run time *)
     input_timeout : int option;
     null_in_every : int option;
@@ -31,7 +31,7 @@ let default =
     max_unfolds = None;
     max_array_length = 50;
     with_static_hack = false;
-    sanitizers = (None, None);
+    sanitizers = ((None, None), None);
     input_timeout = None;
     null_in_every = None;
     seed = None;

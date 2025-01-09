@@ -43,11 +43,14 @@ let attempt cmd success failure =
 
 let cc_flags () =
   [ "-g"; "\"-I${RUNTIME_PREFIX}/include/\"" ]
-  @ (let sanitize, no_sanitize = Config.has_sanitizers () in
+  @ (let (sanitize, no_sanitize), sanitize_trap = Config.has_sanitizers () in
      (match sanitize with Some sanitize -> [ "-fsanitize=" ^ sanitize ] | None -> [])
+     @ (match no_sanitize with
+        | Some no_sanitize -> [ "-fno-sanitize=" ^ no_sanitize ]
+        | None -> [])
      @
-     match no_sanitize with
-     | Some no_sanitize -> [ "-fno-sanitize=" ^ no_sanitize ]
+     match sanitize_trap with
+     | Some sanitize_trap -> [ "-fsanitize-trap=" ^ sanitize_trap ]
      | None -> [])
   @
   if Config.is_coverage () then

@@ -27,7 +27,7 @@ function separator() {
   printf '\n\n'
 }
 
-CONFIGS=("--coverage" "--with-static-hack --coverage --sanitize=undefined --no-sanitize=alignment" "--sized-null" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
+CONFIGS=("--coverage" "--with-static-hack --coverage --sanitize=undefined --no-sanitize=alignment --sanitize-trap=all" "--sized-null" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
 
 # For each configuration
 for CONFIG in "${CONFIGS[@]}"; do

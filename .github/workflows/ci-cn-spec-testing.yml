@@ -31,7 +31,7 @@ jobs:
 
     - name: System dependencies (ubuntu)
       run: |
-        sudo apt-get install build-essential libgmp-dev z3 opam cmake lcov
+        sudo apt-get install build-essential libgmp-dev z3 opam cmake lcov gcc-13
 
     - name: Restore cached opam
       id: cache-opam-restore

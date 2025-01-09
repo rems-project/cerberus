@@ -964,7 +964,7 @@ module Testing_flags = struct
     let doc = "Forwarded to the '-fsanitize' argument of the C compiler" in
     Arg.(
       value
-      & opt (some string) (fst TestGeneration.default_cfg.sanitizers)
+      & opt (some string) (fst (fst TestGeneration.default_cfg.sanitizers))
       & info [ "sanitize" ] ~doc)
 
 
@@ -972,8 +972,16 @@ module Testing_flags = struct
     let doc = "Forwarded to the '-fno-sanitize' argument of the C compiler" in
     Arg.(
       value
-      & opt (some string) (snd TestGeneration.default_cfg.sanitizers)
+      & opt (some string) (snd (fst TestGeneration.default_cfg.sanitizers))
       & info [ "no-sanitize" ] ~doc)
+
+
+  let sanitize_trap =
+    let doc = "Forwarded to the '-fsanitize-trap' argument of the C compiler" in
+    Arg.(
+      value
+      & opt (some string) (snd TestGeneration.default_cfg.sanitizers)
+      & info [ "sanitize-trap" ] ~doc)
 
 
   let input_timeout =
@@ -1132,7 +1140,9 @@ let testing_cmd =
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.max_array_length
     $ Testing_flags.with_static_hack
-    $ Term.product Testing_flags.sanitize Testing_flags.no_sanitize
+    $ Term.product
+        (Term.product Testing_flags.sanitize Testing_flags.no_sanitize)
+        Testing_flags.sanitize_trap
     $ Testing_flags.input_timeout
     $ Testing_flags.null_in_every
     $ Testing_flags.seed
