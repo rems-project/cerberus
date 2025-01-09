@@ -496,7 +496,7 @@ let rec pp_basetype pp_loc = function
   | BaseTypes.Tuple ts ->
     !^"(Tuple" ^^^ P.separate_map (!^";" ^^ P.break 1) (pp_basetype pp_loc) ts ^^ !^")"
   | BaseTypes.Set t -> !^"(TSet" ^^^ pp_basetype pp_loc t ^^ !^")"
-  | BaseTypes.Loc x -> pp_loc x
+  | BaseTypes.Loc x -> !^"(Loc" ^^^ pp_loc x ^^ !^")"
 
 
 let pp_integer_base_type = function
