@@ -342,9 +342,28 @@ let pp_linux_memory_order = function
   | SyncRcu -> !^"SyncRcu"
 
 
-let pp_ft ft = !^"ft_placeholder" (* TODO *)
+(*
+let pp_address n = !^(N.to_string n)
 
-let pp_integer_value i = !^"integer_value placeholder" (* TODO *)
+let pp_provenance = function
+  | Prov_empty -> !^"Prov_empty"
+  | Prov_some n -> !^"(Prov_some" ^^^ !^(N.to_string n) ^^ !^")"
+
+let pp_integer_value = function
+  | CF.Impl_mem.IVloc (prov, addr) ->
+    !^"(IVloc" ^^^ pp_pair pp_provenance pp_address (prov, addr) ^^ !^")"
+  | IVint n -> !^"(IVint" ^^^ !^(N.to_string n) ^^ !^")"
+*)
+
+let pp_integer_value _ = !^"integer_value placeholder" (* TODO *)
+
+let pp_floating_value _ = !^"floating_value placeholder" (* TODO *)
+
+let pp_pointer_value _ = !^"pointer_value placeholder" (* TODO *)
+
+let pp_mem_value _ = !^"mem_value placeholder" (* TODO *)
+
+let pp_unit (_ : unit) = !^"tt"
 
 let pp_floating_value f = !^"floating_value placeholder" (* TODO *)
 
@@ -423,6 +442,7 @@ let pp_location = function
 
 let pp_identifier (CF.Symbol.Identifier (loc, s)) =
   !^"(Identifier" ^^^ pp_location loc ^^^ pp_string s ^^ !^")"
+
 
 let rec pp_symbol_description = function
   | CF.Symbol.SD_None -> !^"SD_None"
