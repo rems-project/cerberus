@@ -12,6 +12,9 @@ cd "$DIRNAME"/cn-test-gen || exit
 rm -rf build decorated test
 mkdir build decorated test
 
+# For UBSan
+export UBSAN_OPTIONS=halt_on_error=1
+
 # Get `*.c` files
 FILES=$(find "$DIRNAME"/src -name '*.c')
 
