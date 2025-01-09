@@ -4,13 +4,14 @@ Require Import BaseTypes.
 Require Import IndexTerms.
 Require Import Symbol.
 Require Import Locations.
+Require Import SCtypes.
 
 Inductive init : Type :=
   | Init
   | Uninit.
 
 Inductive name : Type :=
-(*   | Owned : Sctypes.t -> init -> name *) (* TODO: Add Owned *)
+  | Owned : SCtypes.t -> init -> name 
   | PName : sym -> name.
 
 Module Predicate.
