@@ -47,7 +47,7 @@ let pp_pmap
 
 (* Helper to print Coq definitions *)
 let coq_def name args body =
-  !^"Definition" ^^^ !^name ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
+  !^"Definition" ^^^ !^name ^^^ args ^^^ !^":=" ^^^ body ^^ !^"." ^^ P.hardline ^^ P.hardline
 
 
 let coq_notation name args body =
@@ -1979,6 +1979,47 @@ let pp_desugared_spec { accesses; requires; ensures } =
   ^^^ !^"|}"
 
 
+let rec pp_logical_argument_types pp_type = function
+  | LogicalArgumentTypes.I i -> !^"(I" ^^^ pp_type i ^^ !^")"
+  | Resource ((sym, (req, bt)), info, at) ->
+    !^"(Resource"
+    ^^^ pp_symbol sym
+    ^^ !^","
+    ^^^ pp_request req
+    ^^ !^","
+    ^^^ pp_basetype pp_unit bt
+    ^^ !^")"
+    ^^^ pp_location_info info
+    ^^^ pp_logical_argument_types pp_type at
+    ^^ !^")"
+  | Constraint (lc, info, at) ->
+    !^"(Constraint"
+    ^^^ pp_logical_constraint lc
+    ^^^ pp_location_info info
+    ^^^ pp_logical_argument_types pp_type at
+    ^^ !^")"
+  | LogicalArgumentTypes.Define (si, info, at) ->
+    !^"(Define"
+    ^^^ (pp_pair pp_symbol pp_index_term) si
+    ^^^ pp_location_info info
+    ^^^ pp_logical_argument_types pp_type at
+    ^^ !^")"
+
+
+let rec pp_argument_types pp_type = function
+  | ArgumentTypes.Computational ((sym, bt), info, at) ->
+    !^"(Computational"
+    ^^^ !^"("
+    ^^^ pp_symbol sym
+    ^^ !^","
+    ^^^ pp_basetype pp_unit bt
+    ^^ !^")"
+    ^^^ pp_location_info info
+    ^^^ pp_argument_types pp_type at
+    ^^^ !^")"
+  | L at -> !^"(L" ^^^ pp_logical_argument_types pp_type at ^^ !^")"
+
+
 (* Top-level file printer *)
 let pp_file pp_type pp_type_name file =
   !^"Require Import MuCore."
@@ -2011,14 +2052,13 @@ let pp_file pp_type pp_type_name file =
          acc
          ^^
          match decl with
-         (* TODO: handle ProcDecl? *)
          | ProcDecl (loc, ft) ->
-           (*
-              coq_def (Pp_symbol.to_string_pretty_cn sym) P.empty
-              (!^"ProcDecl" ^^^ pp_location loc ^^^
-              match ft with None -> !^"None" | Some ft -> !^"(Some" ^^^ pp_ft ft ^^ !^")")
-           *)
-           P.empty
+           coq_def
+             (Pp_symbol.to_string_pretty_cn sym)
+             P.empty
+             (!^"ProcDecl"
+              ^^^ pp_location loc
+              ^^^ pp_option (pp_argument_types pp_return_type) ft)
          | Proc { loc; args_and_body; trusted; desugared_spec } ->
            coq_def
              (Pp_symbol.to_string_pretty_cn sym)
