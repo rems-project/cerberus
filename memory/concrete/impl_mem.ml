@@ -564,6 +564,8 @@ module Concrete : Memory = struct
           (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
           P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string n))))
   
+  let pp_floating_value_for_coq (f:floating_value) = !^ (string_of_float f)
+  
   let pp_integer_value (IV (prov, n)) =
     if !Cerb_debug.debug_level >= 3 then
       !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
@@ -572,6 +574,8 @@ module Concrete : Memory = struct
   
   let pp_integer_value_for_core = pp_integer_value
   
+  let pp_integer_value_for_coq = pp_integer_value (* placeholder *)
+    
   let rec pp_mem_value = function
     | MVunspecified _ ->
         PPrint.string "UNSPEC"
@@ -597,6 +601,7 @@ module Concrete : Memory = struct
           pp_mem_value mval
         )
   
+  let pp_mem_value_for_coq _ _ _ _ _ v = pp_mem_value v
   
   (* TODO: this is stupid, we need to allow the outside world to specify
      what memory ranges are in device memory *)
@@ -2566,6 +2571,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
 
 
   let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
+  let pp_pointer_value_for_coq _ v = pp_pointer_value ~is_verbose:false v
   let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
   let pp_pretty_mem_value ?basis ~use_upper = pp_mem_value
   

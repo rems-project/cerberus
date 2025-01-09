@@ -207,15 +207,27 @@ module type Memory = sig
 
 
   (* pretty printing *)
-  val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document
   val pp_integer_value: integer_value -> PPrint.document
-  val pp_integer_value_for_core: integer_value -> PPrint.document
-  val pp_mem_value: mem_value -> PPrint.document
-  val pp_pretty_pointer_value: pointer_value -> PPrint.document
-
   val pp_pretty_integer_value: ?basis:basis -> use_upper:bool -> integer_value -> PPrint.document
+  val pp_integer_value_for_core: integer_value -> PPrint.document
+  val pp_integer_value_for_coq: integer_value -> PPrint.document
+    
+  val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document
+  val pp_pretty_pointer_value: pointer_value -> PPrint.document
+  val pp_pointer_value_for_coq: (Symbol.sym -> PPrint.document) -> pointer_value -> PPrint.document
+
+  val pp_mem_value: mem_value -> PPrint.document
   val pp_pretty_mem_value: ?basis:basis -> use_upper:bool -> mem_value -> PPrint.document
-  
+  (* This is a bit ugly as we need to pass all the pretty printers for the different types *)
+  val pp_mem_value_for_coq: 
+    (Symbol.sym -> PPrint.document) ->
+    (Ctype.integerType -> PPrint.document) ->
+    (Ctype.floatingType -> PPrint.document) ->
+    (Ctype.ctype -> PPrint.document) ->
+    (Symbol.identifier -> PPrint.document) ->
+    mem_value -> PPrint.document
+    
+  val pp_floating_value_for_coq: floating_value -> PPrint.document
 (*
   val string_of_pointer_value: pointer_value -> string
   val string_of_integer_value: integer_value -> string

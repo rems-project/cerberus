@@ -342,34 +342,11 @@ let pp_linux_memory_order = function
   | SyncRcu -> !^"SyncRcu"
 
 
-(*
-let pp_address n = !^(N.to_string n)
+let pp_integer_value v = Impl_mem.pp_integer_value_for_coq v
 
-let pp_provenance = function
-  | Prov_empty -> !^"Prov_empty"
-  | Prov_some n -> !^"(Prov_some" ^^^ !^(N.to_string n) ^^ !^")"
+let pp_floating_value v = Impl_mem.pp_floating_value_for_coq v
 
-let pp_integer_value = function
-  | CF.Impl_mem.IVloc (prov, addr) ->
-    !^"(IVloc" ^^^ pp_pair pp_provenance pp_address (prov, addr) ^^ !^")"
-  | IVint n -> !^"(IVint" ^^^ !^(N.to_string n) ^^ !^")"
-*)
-
-let pp_integer_value _ = !^"integer_value placeholder" (* TODO *)
-
-let pp_floating_value _ = !^"floating_value placeholder" (* TODO *)
-
-let pp_pointer_value _ = !^"pointer_value placeholder" (* TODO *)
-
-let pp_mem_value _ = !^"mem_value placeholder" (* TODO *)
-
-let pp_unit (_ : unit) = !^"tt"
-
-let pp_floating_value f = !^"floating_value placeholder" (* TODO *)
-
-let pp_pointer_value p = !^"pointer_value placeholder" (* TODO *)
-
-let pp_mem_value m = !^"mem_value placeholder" (* TODO *)
+let pp_pointer_value v = Impl_mem.pp_pointer_value_for_coq v
 
 let pp_unit (_ : unit) = !^"tt"
 
@@ -843,6 +820,7 @@ and pp_pattern pp_type (Pattern (loc, annots, ty, pat)) =
   ^^^ pp_pattern_ pp_type pat
   ^^ !^")"
 
+let pp_mem_value v = Impl_mem.pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier v
 
 let rec pp_mem_constraint = function
   | Mem_common.MC_empty -> !^"MC_empty"
@@ -1102,7 +1080,7 @@ and pp_object_value pp_type (OV (ty, ov)) =
   match ov with
   | OVinteger i -> !^"(OVinteger" ^^^ pp_integer_value i ^^ !^")"
   | OVfloating f -> !^"(OVfloating" ^^^ pp_floating_value f ^^ !^")"
-  | OVpointer p -> !^"(OVpointer" ^^^ pp_pointer_value p ^^ !^")"
+  | OVpointer p -> !^"(OVpointer" ^^^ pp_pointer_value pp_symbol p ^^ !^")"
   | OVarray vs -> !^"(OVarray" ^^^ pp_list (pp_object_value pp_type) vs ^^ !^")"
   | OVstruct (sym, fields) ->
     !^"(OVstruct"
@@ -1926,7 +1904,7 @@ let pp_file pp_type pp_type_name file =
          acc
          ^^
          match decl with
-         (* TODO: handle ProcDecl *)
+         (* TODO: handle ProcDecl? *)
          | ProcDecl (loc, ft) ->
            (*
               coq_def (Pp_symbol.to_string_pretty_cn sym) P.empty
