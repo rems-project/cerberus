@@ -20,6 +20,7 @@ Require Import Ctype.
 Require Import Annot.
 Require Import Undefined.
 Require Import CN.
+Require Import CNProgs.
 Require Import SCtypes.
 Require Import Id.
 Require Import ImplMem.
@@ -285,7 +286,10 @@ Inductive expr_ (TY : Type) : Type :=
   | Ebound : expr TY -> expr_ TY
   | End : list (expr TY) -> expr_ TY
   | Erun : Sym.t * list (pexpr TY) -> expr_ TY
-  (* Note: CN_progs constructor omitted as it requires additional types *)
+  | ECN_progs : 
+      list (cn_statement Symbol.t Ctype.ctype) * 
+      list CNProgs.t -> 
+      expr_ TY
 
 with expr (TY : Type) : Type :=
   | Expr : Location_t -> list Annot.annot -> TY -> expr_ TY -> expr TY.

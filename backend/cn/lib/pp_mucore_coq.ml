@@ -1436,6 +1436,37 @@ let pp_memop pp_type op =
     !^"(CopyAllocId" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
 
 
+
+let pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) = !^"CN_statementplaceholder"
+let pp_cn_prog _ = !^"CN_progplaceholder"  
+  (*
+  !^"(CN_statement" ^^^ pp_location loc ^^^
+  match stmt with
+  | CN_pack_unpack (pu, pred, exprs) ->
+    !^"(CN_pack_unpack" ^^^ pp_pack_unpack pu ^^^ pp_cn_pred ppfa ppfty pred ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
+  | CN_to_from_bytes (tf, pred, exprs) ->
+    !^"(CN_to_from_bytes" ^^^ pp_to_from tf ^^^ pp_cn_pred ppfa ppfty pred ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
+  | CN_have assertion ->
+    !^"(CN_have" ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
+  | CN_instantiate (inst, expr) ->
+    !^"(CN_instantiate" ^^^ pp_cn_to_instantiate ppfa ppfty inst ^^^ pp_cn_expr ppfa ppfty expr ^^ !^")"
+  | CN_split_case assertion ->
+    !^"(CN_split_case" ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
+  | CN_extract (ids, extract, expr) ->
+    !^"(CN_extract" ^^^ pp_list pp_identifier ids ^^^ pp_cn_to_extract ppfa ppfty extract ^^^ pp_cn_expr ppfa ppfty expr ^^ !^")"
+  | CN_unfold (sym, exprs) ->
+    !^"(CN_unfold" ^^^ ppfa sym ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
+  | CN_assert_stmt assertion ->
+    !^"(CN_assert_stmt" ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
+  | CN_apply (sym, exprs) ->
+    !^"(CN_apply" ^^^ ppfa sym ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
+  | CN_inline syms ->
+    !^"(CN_inline" ^^^ pp_list ppfa syms ^^ !^")"
+  | CN_print expr ->
+    !^"(CN_print" ^^^ pp_cn_expr ppfa ppfty expr ^^ !^")"
+  ^^ !^")"
+*)
+
 let rec pp_expr pp_type (Expr (loc, annots, ty, e)) =
   !^"Expr"
   ^^^ pp_location loc
@@ -1479,8 +1510,10 @@ let rec pp_expr pp_type (Expr (loc, annots, ty, e)) =
   | Erun (sym, args) ->
     !^"(Erun" ^^^ pp_symbol sym ^^^ pp_list (pp_pexpr pp_type) args ^^ !^")"
   | CN_progs (stmts, progs) ->
-    (* TODO: this constructor was omitted from the original code *)
-    P.empty
+    !^"(CN_progs"
+    ^^^ pp_list (pp_cn_statement pp_symbol pp_ctype) stmts
+    ^^^ pp_list pp_cn_prog progs
+    ^^ !^")"
 
 
 let pp_logical_constraint = function
@@ -1838,7 +1871,6 @@ let pp_cn_condition ppfa ppfty = function
 
 
 let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
-  (* TODO double check this: *)
   !^"{|"
   ^^^ !^"label_spec :="
   ^^^ pp_list (pp_cn_condition pp_symbol pp_ctype) s.label_spec
