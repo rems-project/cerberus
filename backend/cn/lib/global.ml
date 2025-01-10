@@ -10,7 +10,9 @@ type t =
     datatype_order : Sym.t list list option;
     fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) Sym.Map.t;
     resource_predicates : Definition.Predicate.t Sym.Map.t;
+    resource_predicate_order : Sym.t list list option;
     logical_functions : Definition.Function.t Sym.Map.t;
+    logical_function_order : Sym.t list list option;
     lemmata : (Locations.t * AT.lemmat) Sym.Map.t
   }
 
@@ -21,7 +23,9 @@ let empty =
     datatype_order = None;
     fun_decls = Sym.Map.empty;
     resource_predicates = Sym.Map.(empty |> add Alloc.Predicate.sym Definition.alloc);
+    resource_predicate_order = None;
     logical_functions = Sym.Map.empty;
+    logical_function_order = None;
     lemmata = Sym.Map.empty
   }
 
