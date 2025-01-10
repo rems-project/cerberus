@@ -992,9 +992,18 @@ let rec translate_term s iterm =
     translate_term s (divisible_ (addr, t.align) loc)
   (* Maps *)
   | MapConst (bt, e1) ->
+    begin match IT.get_term e1 with
+    (* This is a work-around for the fact the CVC5 only supports `const` on
+       value, not vairables (see #11485 in the CVC5 repo).  Until this is
+       fixed, with translate `MapConst Default` as just `Default`.  Hopefully,
+       this is OK, as we are getting a weaker term (i.e., we can't assume that
+       all elements of the array are the same, but they might be). *)
+    | Const (Default t) -> default (BT.make_map_bt bt t)
+    | _ ->
     let kt = translate_base_type bt in
     let vt = translate_base_type (IT.get_bt e1) in
     SMT.arr_const kt vt (translate_term s e1)
+    end
   | MapSet (mp, k, v) ->
     SMT.arr_store (translate_term s mp) (translate_term s k) (translate_term s v)
   | MapGet (mp, k) -> SMT.arr_select (translate_term s mp) (translate_term s k)
