@@ -349,7 +349,9 @@ let return_injs xs =
            | None ->
              Ok
                ({ footprint = { start_pos; end_pos };
-                  kind = InStmt (1, String.concat "" inj_strs ^ "goto __cn_epilogue;\n")
+                  kind =
+                    InStmt
+                      (1, String.concat "" ("{ " :: inj_strs) ^ "goto __cn_epilogue; }\n")
                 }
                 :: acc)
            | Some e ->
