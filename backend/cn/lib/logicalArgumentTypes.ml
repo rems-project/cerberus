@@ -263,6 +263,10 @@ type def_line =
   | DefineL of (Sym.t * IT.t) * info
   | ResourceL of (Sym.t * (RET.t * BT.t)) * info
 
+let def_line_pp dl = match dl with
+  | DefineL ((s, t), _) -> group (!^"let" ^^^ Sym.pp s ^^^ equals ^^^ IT.pp t ^^ semi)
+  | ResourceL ((s, (re, _)), _) -> group (!^"take" ^^^ Sym.pp s ^^^ equals ^^^ RET.pp re ^^ semi)
+
 (* Optionally zip two lists, returning None if the lists have different lengths *)
 let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
 | [], [] -> Some []
@@ -301,9 +305,9 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t SymMap.t, Pp.docum
     List.map snd ( List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l) in
   let sort_by_id = sort_by_discard_fst Id.compare in
   let sort_by_pattern = sort_by_discard_fst (Terms.compare_pattern BT.compare) in
-  let map_with_guard_unknown g l1 l1' = if g then map_from_IT_lists l1 l1' else (Unknown (Pp.bool g ^/^ !^" not satisfied")) in
-  let map_with_guard_no g l1 l1' = if g then map_from_IT_lists l1 l1' else (No (Pp.bool g ^/^ !^" not satisfied") ) in
-  let default = Unknown (!^"Different CN constructors for " ^/^ IT.pp exp ^/^ !^" and " ^/^ IT.pp candidate) in
+  let map_with_guard_unknown g l1 l1' = if g then map_from_IT_lists l1 l1' else (Unknown (Pp.bool g ^^^ !^" not satisfied")) in
+  let map_with_guard_no g l1 l1' = if g then map_from_IT_lists l1 l1' else (No (Pp.bool g ^^^ !^" not satisfied") ) in
+  let default = Unknown (!^"Different CN constructors for " ^^^ IT.pp exp ^^^ !^" and " ^^^ IT.pp candidate) in
   match IT.term exp, IT.term candidate with
   | Const c, Const c' -> map_with_guard_no (IT.equal_const c c') [] []
   | Sym v, _' -> Yes (SymMap.add v candidate SymMap.empty)
@@ -423,6 +427,7 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t SymMap.t, Pp.docum
 (* Get the free variables from an expression *)
 let get_fvs (exp : IT.t) : Sym.t list = SymSet.to_list (IT.free_vars exp)
 
+(*TODO: what if lcs mention vars not examined in the algorithm*)
 let rec organize_lines_aux (lines : packing_ft) (defs : def_line SymMap.t) (lcs : LC.t list): IT.t * def_line IT.SymMap.t * (LC.t list) =
   match lines with
   | Define ((v, it), i, next) ->

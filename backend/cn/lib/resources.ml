@@ -77,3 +77,7 @@ let derived_lc2 (resource, _) (resource', _) =
 
 let pointer_facts ~new_resource ~old_resources =
   derived_lc1 new_resource @ List.concat_map (derived_lc2 new_resource) old_resources
+
+let name r = match r with
+| P p -> p.name
+| Q q -> q.name
