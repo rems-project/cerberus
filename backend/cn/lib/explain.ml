@@ -39,8 +39,6 @@ type log = log_entry list (* most recent first *)
 (** Infrastructure for checking if a countermodel satisfies a predicate **)
 open ResultWithData
 
-let debug_level = 0
-
 (* ask the solver if the given set of constraints is satisfiable *)
 let ask_solver g lcs = match (Solver.ask_solver g lcs) with
 | Unsat -> No !^"Solver returned No."
@@ -67,7 +65,6 @@ let rec check_pred (name : Sym.t) (def : ResourcePredicates.definition) (candida
     | None -> Unknown (!^"Predicate" ^^^ Sym.pp name ^^^ !^"is uninterpreted. ")
     | Some clauses ->
         let clauses_with_guards = REP.explicit_negative_guards clauses in
-        let () = Pp.debug debug_level (lazy (!^"Number of clauses in" ^^^ Sym.pp name ^^^ !^":" ^^^ Pp.int (List.length clauses))) in
         (* for each clause, check if candidate could have been its output *)
         let checked = List.map (fun c -> check_clause c candidate  ctxt def.iargs) clauses_with_guards
         in
@@ -79,11 +76,9 @@ and check_clause (c : ResourcePredicates.clause) (candidate : IT.t) (ctxt : C.t)
   let exp, var_def_locs, lcs = LAT.organize_lines c.packing_ft in
   (* get constraints on whether candidate could have come from this clause *)
   let@ (cs, vs) = get_body_constraints exp var_def_locs candidate ctxt iargs in
-  let () = Pp.debug debug_level (lazy (!^"Guard:" ^^^ IT.pp c.guard)) in
   (* add guard and variable assignments to constraints list *)
   let cs' = List.concat [lcs; cs; convert_symmap_to_lc vs; [LC.t_ c.guard]] in
   (* query solver *)
-  let () = Pp.debug debug_level (lazy (!^"Asking solver with" ^^^ Pp.list LC.pp cs')) in
   ask_solver ctxt.global cs'
 
 (* get a list of constraints that are satisfiable iff candidate could have come from this clause body *)
@@ -111,7 +106,6 @@ and get_var_constraints (v : Sym.t) (v_cand : IT.t) (var_cands : IT.t SymMap.t) 
       then Yes ([], var_cands)
       else Unknown (!^"Could not find variable definition line for" ^^^ (Sym.pp v))))
   | Some line ->
-    (* let () = Pp.debug debug_level (lazy (!^"Checking line" ^^^ LAT.def_line_pp line)) in *)
     match line with
       (* recurse with x's definition *)
     | DefineL ((_, t), _) -> get_body_constraints t var_def_locs v_cand ctxt iargs (*TODO: variable conflicts?*)
