@@ -3306,22 +3306,22 @@ let rec cn_to_ail_loop_inv_aux dts globals preds (cond_loc, loop_loc, at) =
   match at with
   | AT.Computational ((sym, bt), _, at') ->
     let cn_sym = generate_sym_with_suffix ~suffix:"_addr_cn" sym in
-    let cn_ctype = bt_to_ail_ctype (BT.Loc ()) in
+    (* let cn_ctype = bt_to_ail_ctype (BT.Loc ()) in
     let binding = create_binding cn_sym cn_ctype in
     (* TODO: Check this should always translate to the address of the given sym in the loop invariant case *)
     let rhs = wrap_with_convert_to A.(AilEunary (Address, mk_expr (AilEident sym))) bt in
     let decl = A.(AilSdeclaration [ (cn_sym, None) ]) in
     let assign =
       A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_sym), mk_expr rhs))))
-    in
+    in *)
     let subst_loop =
       ESE.loop_subst (ESE.sym_subst (sym, bt, cn_sym)) (cond_loc, loop_loc, at')
     in
     let (_, (cond_bs, cond_ss)), (_, (loop_bs, loop_ss)) =
       cn_to_ail_loop_inv_aux dts globals preds subst_loop
     in
-    ( (cond_loc, (cond_bs, assign :: cond_ss)),
-      (loop_loc, (binding :: loop_bs, decl :: loop_ss)) )
+    ( (cond_loc, (cond_bs, (* assign :: *) cond_ss)),
+      (loop_loc, ((* binding :: *) loop_bs, (* decl :: *) loop_ss)) )
   | L lat ->
     let rec modify_decls_for_loop decls modified_stats =
       let rec collect_initialised_syms_and_exprs = function
