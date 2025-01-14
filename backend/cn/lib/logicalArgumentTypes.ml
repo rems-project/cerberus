@@ -306,6 +306,7 @@ let map_from_lists f eq exps exps' =
   | Some zipped -> List.fold_left merge_r_maps (Yes Sym.Map.empty) zipped
   | None -> Error !^"Could not zip lists of expressions." (* should never happen *)
 
+
 (* Match an expression with free variables against a candidate returned by the solver to
    get candidates for each of those free variables *)
 (* TODO: this is very naive right now;
@@ -362,10 +363,10 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     map_with_guard_no (Sym.equal name name') (sort_by_id args) (sort_by_id args')
   | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
     map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [ exp1 ] [ exp1' ]
-  | ArrayShift { base; ct; index }, ArrayShift { base=base'; ct=ct'; index=index' }
+  | ArrayShift { base; ct; index }, ArrayShift { base = base'; ct = ct'; index = index' }
     ->
     map_with_guard_unknown (Sctypes.equal ct ct') [base; index ] [base'; index' ]
-  | CopyAllocId { addr=exp1; loc=exp2 }, CopyAllocId { addr=exp1'; loc=exp2' } ->
+  | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc=exp2' } ->
     map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | HasAllocId exp1, HasAllocId exp1' -> get_var_cands exp1 exp1'
   | SizeOf cty, SizeOf cty' -> map_with_guard_unknown (Sctypes.equal cty cty') [] []
@@ -383,7 +384,7 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     map_with_guard_unknown (Sctypes.equal cty cty') [ exp1 ] [ exp1' ]
   | Good (cty, exp1), Good (cty', exp1') ->
     map_with_guard_unknown (Sctypes.equal cty cty') [ exp1 ] [ exp1' ]
-  | Aligned { t=exp1; align=exp2 }, Aligned { t=exp1'; align=exp2' } ->
+  | Aligned { t = exp1; align = exp2 }, Aligned { t = exp1'; align = exp2' } ->
     map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | WrapI (ity, exp1), WrapI (ity', exp1') ->
     map_with_guard_unknown
@@ -455,7 +456,7 @@ let rec organize_lines_aux
   (lines : packing_ft)
   (defs : def_line Sym.Map.t)
   (lcs : LC.t list)
-  : IT.t * def_line Sym.Map.t * (LC.t list)
+  : IT.t * def_line Sym.Map.t * LC.t list
   =
   match lines with
   | Define ((v, it), i, next) ->
@@ -471,6 +472,8 @@ let rec organize_lines_aux
 
 
 (* Sort lines into the returned expression, a map of variables to their defining lines, and a list of constraints *)
-let organize_lines (lines : packing_ft) : IT.t * def_line Sym.Map.t * LC.t list = organize_lines_aux lines Sym.Map.empty []
+let organize_lines (lines : packing_ft) : IT.t * def_line Sym.Map.t * LC.t list =
+  organize_lines_aux lines Sym.Map.empty []
+
 
 (** End infrastructure for checking if a countermodel satisfies a predicate **)

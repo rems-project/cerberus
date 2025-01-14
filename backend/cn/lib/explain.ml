@@ -50,9 +50,9 @@ let rec check_pred (name : Sym.t) (def : Def.Predicate.t) (candidate : IT.t) (ct
   : LAT.check_result
   =
   (* ensure candidate type matches output type of predicate *)
-  if not (BT.equal (IT.get_bt candidate) (def.oarg_bt)) then
+  if not (BT.equal (IT.get_bt candidate) def.oarg_bt) then
     No
-       (!^"Candidate"
+      (!^"Candidate"
        ^^^ IT.pp candidate
        ^^^ !^"has different type from predicate output:"
        ^^^ BT.pp (IT.get_bt candidate)
@@ -127,10 +127,10 @@ and get_var_constraints
      (* TODO: BaseType case? *)
      | _ ->
        let f (s, _) = Sym.equal s v in
-       if (Base.List.exists iargs ~f) then
+       if Base.List.exists iargs ~f then
          Yes ([], var_cands)
        else
-         Unknown (!^"Could not find variable definition line for" ^^^ (Sym.pp v)))
+         Unknown (!^"Could not find variable definition line for" ^^^ Sym.pp v))
   | Some line ->
     (match line with
      (* recurse with x's definition *)
@@ -143,26 +143,26 @@ and get_var_constraints
            | Owned (_, _) ->
              (* if the predicate is Owned, its pointer argument should not be null *)
              let neq = IT.ne__ psig.pointer (IT.null_ loc) loc in
-           Yes ([LC.T neq], var_cands)
-        | PName name ->
-          (* search for predicate definition *)
-          (match Sym.Map.find_opt name ctxt.global.resource_predicates with
-           | Some pdef ->
-             (* TODO: this doesn't account for looking up args of the predicate further up in the graph.
-                Adding that will require dealing with scoping issues, e.g. if
-                a candidate or line definition for one of the arguments includes a variable with a
-                different usage within the predicate *)
-             (match check_pred name pdef v_cand ctxt with
-              | Yes cs -> Yes (cs, var_cands)
-              | No e -> No e
-              | Unknown e -> Unknown e
-              | Error e -> Error e)
-           | None ->
-             Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name))
-          )
-      | Q qsig ->
-        let _ = qsig in
-        Unknown (!^"Quantified predicates are out of scope for now.")))
+             Yes ([LC.T neq], var_cands)
+            | PName name ->
+              (* search for predicate definition *)
+              (match Sym.Map.find_opt name ctxt.global.resource_predicates with
+               | Some pdef ->
+                 (* TODO: this doesn't account for looking up args of the predicate further up in the graph.
+                    Adding that will require dealing with scoping issues, e.g. if
+                    a candidate or line definition for one of the arguments includes a variable with a
+                    different usage within the predicate *)
+                 (match check_pred name pdef v_cand ctxt with
+                  | Yes cs -> Yes (cs, var_cands)
+                  | No e -> No e
+                  | Unknown e -> Unknown e
+                  | Error e -> Error e)
+              | None ->
+                Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name)))
+        | Q qsig ->
+          let _ = qsig in
+          Unknown (!^"Quantified predicates are out of scope for now.")))
+
 
 (** End section: Infrastructure for checking if a countermodel satisfies a predicate **)
 
@@ -339,7 +339,7 @@ let state (ctxt : C.t) log model_with_q extras =
           (*TODO: original =  LAT.pp_check_result (snd p) ;*)
           simplified = [ rslt ]
         }
-      in
+    in
     Rp.add_labeled
       Rp.lab_invalid
       (List.map pp_checked_res nos)
