@@ -242,6 +242,7 @@ let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
     []
     l
 
+
 (* Gives a single canonical result *)
 let combine_results (results : check_result list) : check_result =
   match results with
@@ -272,23 +273,24 @@ let def_line_pp dl =
   | ResourceL ((s, (re, _)), _) ->
     group (!^"take" ^^^ Sym.pp s ^^^ equals ^^^ Req.pp re ^^ semi)
 
+
 (* Optionally zip two lists, returning None if the lists have different lengths *)
 let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option =
-  match l1, l2 with
+  match (l1, l2) with
   | [], [] -> Some []
   | h1 :: tl1, h2 :: tl2 ->
     (match zip tl1 tl2 with Some zs -> Some ((h1, h2) :: zs) | None -> None)
   | _, _ -> None
+
 
 (* Take the union of two symbol maps,
    removing any key that is in both maps but has a different value in each *)
 let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a Sym.Map.t) (m2 : 'a Sym.Map.t)
   : 'a Sym.Map.t
   =
-  let merge _ v1 v2 =
-    if eq v1 v2 then Some v1 else None
-  in
+  let merge _ v1 v2 = if eq v1 v2 then Some v1 else None in
   Sym.Map.union merge m1 m2
+
 
 (* Build a map by using f to develop a map for each
    pair of elements in the two lists, failing
@@ -313,15 +315,15 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   =
   let map_from_IT_lists = map_from_lists get_var_cands IT.equal in
   let sort_by_discard_fst compare l =
-    List.map snd ( List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l)
+    List.map snd (List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l)
   in
   let sort_by_id = sort_by_discard_fst Id.compare in
   let sort_by_pattern = sort_by_discard_fst (Terms.compare_pattern BT.compare) in
   let map_with_guard_unknown g l1 l1' =
-    if g then map_from_IT_lists l1 l1' else (Unknown (Pp.bool g ^^^ !^" not satisfied"))
+    if g then map_from_IT_lists l1 l1' else Unknown (Pp.bool g ^^^ !^" not satisfied")
   in
   let map_with_guard_no g l1 l1' =
-    if g then map_from_IT_lists l1 l1' else (No (Pp.bool g ^^^ !^" not satisfied") )
+    if g then map_from_IT_lists l1 l1' else No (Pp.bool g ^^^ !^" not satisfied")
   in
   let default =
     Unknown
@@ -337,7 +339,10 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   | ITE (exp1, exp2, exp3), ITE (exp1', exp2', exp3') ->
     map_from_IT_lists [ exp1; exp2; exp3 ] [ exp1'; exp2'; exp3' ]
   | EachI ((z1, (v, bty), z2), exp1), EachI ((z1', (v', bty'), z2'), exp1') ->
-    map_with_guard_unknown (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') [ exp1 ] [ exp1' ]
+    map_with_guard_unknown
+      (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2')
+      [ exp1 ]
+      [ exp1' ]
   | Tuple exps, Tuple exps' -> map_from_IT_lists exps exps'
   | NthTuple (n, exp1), NthTuple (n', exp1') ->
     map_with_guard_unknown (n = n') [ exp1 ] [ exp1' ]
@@ -357,25 +362,20 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     map_with_guard_no (Sym.equal name name') (sort_by_id args) (sort_by_id args')
   | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
     map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [ exp1 ] [ exp1' ]
-  | ArrayShift {base; ct; index}, ArrayShift {base=base'; ct=ct'; index=index'} ->
+  | ArrayShift { base; ct; index }, ArrayShift { base=base'; ct=ct'; index=index' }
+    ->
     map_with_guard_unknown (Sctypes.equal ct ct') [base; index ] [base'; index' ]
-  | CopyAllocId {addr=exp1; loc=exp2}, CopyAllocId {addr=exp1'; loc=exp2'} ->
+  | CopyAllocId { addr=exp1; loc=exp2 }, CopyAllocId { addr=exp1'; loc=exp2' } ->
     map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
-  | HasAllocId exp1, HasAllocId exp1' ->
-    get_var_cands exp1 exp1'
-  | SizeOf cty, SizeOf cty' ->
-    map_with_guard_unknown (Sctypes.equal cty cty') [] []
+  | HasAllocId exp1, HasAllocId exp1' -> get_var_cands exp1 exp1'
+  | SizeOf cty, SizeOf cty' -> map_with_guard_unknown (Sctypes.equal cty cty') [] []
   | OffsetOf (v, id), OffsetOf (v', id') ->
     map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [] []
-  | Nil bty, Nil bty' ->
-    map_with_guard_no (BT.equal bty bty') [] []
-  | Cons (h, tl), Cons (h', tl') ->
-    map_from_IT_lists [ h; tl ] [ h'; tl' ]
-  | Head l, Head l' ->
-    get_var_cands l l'
-  | Tail l, Tail l' ->
-    get_var_cands l l'
-  | NthList (exp1, exp2, exp3),  NthList (exp1', exp2', exp3') ->
+  | Nil bty, Nil bty' -> map_with_guard_no (BT.equal bty bty') [] []
+  | Cons (h, tl), Cons (h', tl') -> map_from_IT_lists [ h; tl ] [ h'; tl' ]
+  | Head l, Head l' -> get_var_cands l l'
+  | Tail l, Tail l' -> get_var_cands l l'
+  | NthList (exp1, exp2, exp3), NthList (exp1', exp2', exp3') ->
     map_from_IT_lists [ exp1; exp2; exp3 ] [ exp1'; exp2'; exp3' ]
   | ArrayToList (exp1, exp2, exp3), ArrayToList (exp1', exp2', exp3') ->
     map_from_IT_lists [ exp1; exp2; exp3 ] [ exp1'; exp2'; exp3' ]
@@ -383,10 +383,13 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     map_with_guard_unknown (Sctypes.equal cty cty') [ exp1 ] [ exp1' ]
   | Good (cty, exp1), Good (cty', exp1') ->
     map_with_guard_unknown (Sctypes.equal cty cty') [ exp1 ] [ exp1' ]
-  | Aligned { t=exp1; align=exp2}, Aligned { t=exp1'; align=exp2'} ->
+  | Aligned { t=exp1; align=exp2 }, Aligned { t=exp1'; align=exp2' } ->
     map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | WrapI (ity, exp1), WrapI (ity', exp1') ->
-    map_with_guard_unknown (Cerb_frontend.IntegerType.integerTypeEqual ity ity') [ exp1 ] [ exp1' ]
+    map_with_guard_unknown
+      (Cerb_frontend.IntegerType.integerTypeEqual ity ity')
+      [ exp1 ]
+      [ exp1' ]
   | MapConst (bty, exp1), MapConst (bty', exp1') ->
     map_with_guard_unknown (BT.equal bty bty') [ exp1 ] [ exp1' ]
   | MapSet (exp1, exp2, exp3), MapSet (exp1', exp2', exp3') ->
@@ -406,7 +409,7 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   (* included so the compiler will catch any missing new constructors *)
   | Const _, _ -> default
   | Unop _, _ -> default
-  | Binop _, _-> default
+  | Binop _, _ -> default
   | ITE _, _ -> default
   | EachI _, _ -> default
   | Tuple _, _ -> default
@@ -443,11 +446,17 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   | Match _, _ -> default
   | Cast _, _ -> default
 
+
 (* Get the free variables from an expression *)
 let get_fvs (exp : IT.t) : Sym.t list = Sym.Set.elements (IT.free_vars exp)
 
 (*TODO: what if lcs mention vars not examined in the algorithm*)
-let rec organize_lines_aux (lines : packing_ft) (defs : def_line Sym.Map.t) (lcs : LC.t list): IT.t * def_line Sym.Map.t * (LC.t list) =
+let rec organize_lines_aux
+  (lines : packing_ft)
+  (defs : def_line Sym.Map.t)
+  (lcs : LC.t list)
+  : IT.t * def_line Sym.Map.t * (LC.t list)
+  =
   match lines with
   | Define ((v, it), i, next) ->
     let ln = DefineL ((v, it), i) in
@@ -460,7 +469,8 @@ let rec organize_lines_aux (lines : packing_ft) (defs : def_line Sym.Map.t) (lcs
   | Constraint (lc, _, next) -> organize_lines_aux next defs (lc :: lcs)
   | I it -> (it, defs, lcs)
 
+
 (* Sort lines into the returned expression, a map of variables to their defining lines, and a list of constraints *)
-let organize_lines (lines : packing_ft) : IT.t * def_line Sym.Map.t * (LC.t list) = organize_lines_aux lines Sym.Map.empty []
+let organize_lines (lines : packing_ft) : IT.t * def_line Sym.Map.t * LC.t list = organize_lines_aux lines Sym.Map.empty []
 
 (** End infrastructure for checking if a countermodel satisfies a predicate **)

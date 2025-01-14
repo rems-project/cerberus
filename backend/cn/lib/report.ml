@@ -241,7 +241,7 @@ let simp_view s =
 
 let table_by_label mk_table render data main_lab labs =
   let get_table lab =
-    match (StrMap.find_opt lab data) with
+    match StrMap.find_opt lab data with
     | None -> (lab, "(none)")
     | Some t -> (lab, mk_table (List.map render t))
   in
@@ -249,16 +249,17 @@ let table_by_label mk_table render data main_lab labs =
   let combine_tables acc (new_lab, new_table) = acc ^ details new_lab new_table in
   List.fold_left combine_tables (snd (get_table main_lab)) tables
 
+
 let make_invalid_resources rs =
   h
     1
     lab_invalid
     (table_by_label
-      table_without_head
-      simp_view
-      rs
-      lab_invalid
-      [lab_unknown; lab_valid])
+       table_without_head
+       simp_view
+       rs
+       lab_invalid
+       [ lab_unknown; lab_valid ])
 
 
 let make_not_given_to_solver ds =

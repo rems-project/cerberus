@@ -117,15 +117,15 @@ module Clause = struct
     aux clause_packing_ft
 
 
-    let rec explicit_negative_guards_aux (cs : t list) (prev_negated : IT.t) : t list =
+  let rec explicit_negative_guards_aux (cs : t list) (prev_negated : IT.t) : t list =
     let cerb_loc = Cerb_location.unknown in
     match cs with
     | [] -> []
-    | {loc; guard=cur_guard; packing_ft} :: cs' ->
+    | { loc; guard=cur_guard; packing_ft } :: cs' ->
       let cur =
-        {loc; guard=IT.and_ [prev_negated; cur_guard] cerb_loc; packing_ft}
+        { loc; guard=IT.and_ [ prev_negated; cur_guard ] cerb_loc; packing_ft }
       in
-      let so_far_ng = IT.and_ [IT.not_ cur_guard cerb_loc; prev_negated] cerb_loc in
+      let so_far_ng = IT.and_ [ IT.not_ cur_guard cerb_loc; prev_negated ] cerb_loc in
       cur :: explicit_negative_guards_aux cs' so_far_ng
 
 
