@@ -273,23 +273,27 @@ let def_line_pp dl =
     group (!^"take" ^^^ Sym.pp s ^^^ equals ^^^ Req.pp re ^^ semi)
 
 (* Optionally zip two lists, returning None if the lists have different lengths *)
-let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
-| [], [] -> Some []
-| h1 :: tl1, h2 :: tl2 -> (match zip tl1 tl2 with
-  | Some zs -> Some ((h1, h2) :: zs)
-  | None -> None)
-| _, _ -> None
+let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option =
+  match l1, l2 with
+  | [], [] -> Some []
+  | h1 :: tl1, h2 :: tl2 ->
+    (match zip tl1 tl2 with Some zs -> Some ((h1, h2) :: zs) | None -> None)
+  | _, _ -> None
 
 (* Take the union of two symbol maps,
-    removing any key that is in both maps but has a different value in each *)
-let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a Sym.Map.t) (m2 : 'a Sym.Map.t) : 'a Sym.Map.t =
-  let merge = (fun k v1 v2 -> let _ = k in if eq v1 v2 then Some v1 else None) in
+   removing any key that is in both maps but has a different value in each *)
+let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a Sym.Map.t) (m2 : 'a Sym.Map.t)
+  : 'a Sym.Map.t
+  =
+  let merge _ v1 v2 =
+    if eq v1 v2 then Some v1 else None
+  in
   Sym.Map.union merge m1 m2
 
 (* Build a map by using f to develop a map for each
-    pair of elements in the two lists, failing
-    if they produce different results for any symbol or if
-    the lists have different lengths *)
+   pair of elements in the two lists, failing
+   if they produce different results for any symbol or if
+   the lists have different lengths *)
 let map_from_lists f eq exps exps' =
   let merge_r_maps r_acc (exp1, exp1') =
     let@ acc = r_acc in
@@ -301,52 +305,62 @@ let map_from_lists f eq exps exps' =
   | None -> Error !^"Could not zip lists of expressions." (* should never happen *)
 
 (* Match an expression with free variables against a candidate returned by the solver to
-  get candidates for each of those free variables *)
+   get candidates for each of those free variables *)
 (* TODO: this is very naive right now;
-  it assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
-let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t Sym.Map.t, Pp.document) result_with_data =
+   it assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
+let rec get_var_cands (exp : IT.t) (candidate : IT.t)
+  : (IT.t Sym.Map.t, Pp.document) result_with_data
+  =
   let map_from_IT_lists = map_from_lists get_var_cands IT.equal in
   let sort_by_discard_fst compare l =
-    List.map snd ( List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l) in
+    List.map snd ( List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l)
+  in
   let sort_by_id = sort_by_discard_fst Id.compare in
   let sort_by_pattern = sort_by_discard_fst (Terms.compare_pattern BT.compare) in
-  let map_with_guard_unknown g l1 l1' = if g then map_from_IT_lists l1 l1' else (Unknown (Pp.bool g ^^^ !^" not satisfied")) in
-  let map_with_guard_no g l1 l1' = if g then map_from_IT_lists l1 l1' else (No (Pp.bool g ^^^ !^" not satisfied") ) in
-  let default = Unknown (!^"Different CN constructors for " ^^^ IT.pp exp ^^^ !^" and " ^^^ IT.pp candidate) in
-  match IT.get_term exp, IT.get_term candidate with
+  let map_with_guard_unknown g l1 l1' =
+    if g then map_from_IT_lists l1 l1' else (Unknown (Pp.bool g ^^^ !^" not satisfied"))
+  in
+  let map_with_guard_no g l1 l1' =
+    if g then map_from_IT_lists l1 l1' else (No (Pp.bool g ^^^ !^" not satisfied") )
+  in
+  let default =
+    Unknown
+      (!^"Different CN constructors for " ^^^ IT.pp exp ^^^ !^" and " ^^^ IT.pp candidate)
+  in
+  match (IT.get_term exp, IT.get_term candidate) with
   | Const c, Const c' -> map_with_guard_no (IT.equal_const c c') [] []
   | Sym v, _' -> Yes (Sym.Map.add v candidate Sym.Map.empty)
   | Unop (op, exp1), Unop (op', exp1') ->
-    map_with_guard_unknown (IT.equal_unop op op') [exp1] [exp1']
+    map_with_guard_unknown (IT.equal_unop op op') [ exp1 ] [ exp1' ]
   | Binop (op, exp1, exp2), Binop (op', exp1', exp2') ->
-    map_with_guard_unknown (IT.equal_binop op op') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (IT.equal_binop op op') [ exp1; exp2 ] [ exp1'; exp2' ]
   | ITE (exp1, exp2, exp3), ITE (exp1', exp2', exp3') ->
-    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [ exp1; exp2; exp3 ] [ exp1'; exp2'; exp3' ]
   | EachI ((z1, (v, bty), z2), exp1), EachI ((z1', (v', bty'), z2'), exp1') ->
-    map_with_guard_unknown (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') [exp1] [exp1']
+    map_with_guard_unknown (z1 = z1' && Sym.equal v v' && BT.equal bty bty' && z2 = z2') [ exp1 ] [ exp1' ]
   | Tuple exps, Tuple exps' -> map_from_IT_lists exps exps'
   | NthTuple (n, exp1), NthTuple (n', exp1') ->
-    map_with_guard_unknown (n = n') [exp1] [exp1']
+    map_with_guard_unknown (n = n') [ exp1 ] [ exp1' ]
   | Struct (name, fields), Struct (name', fields') ->
     map_with_guard_no (Sym.equal name name') (sort_by_id fields) (sort_by_id fields')
   | StructMember (exp1, id), StructMember (exp1', id') ->
-    map_with_guard_unknown (Id.equal id id') [exp1] [exp1']
+    map_with_guard_unknown (Id.equal id id') [ exp1 ] [ exp1' ]
   | StructUpdate ((exp1, id), exp2), StructUpdate ((exp1', id'), exp2') ->
-    map_with_guard_unknown (Id.equal id id') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (Id.equal id id') [ exp1; exp2 ] [ exp1'; exp2' ]
   | Record fields, Record fields' ->
     map_from_IT_lists (sort_by_id fields) (sort_by_id fields')
   | RecordMember (exp1, id), RecordMember (exp1', id') ->
-    map_with_guard_unknown (Id.equal id id') [exp1] [exp1']
+    map_with_guard_unknown (Id.equal id id') [ exp1 ] [ exp1' ]
   | RecordUpdate ((exp1, id), exp2), RecordUpdate ((exp1', id'), exp2') ->
-    map_with_guard_unknown (Id.equal id id') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (Id.equal id id') [ exp1; exp2 ] [ exp1'; exp2' ]
   | Constructor (name, args), Constructor (name', args') ->
     map_with_guard_no (Sym.equal name name') (sort_by_id args) (sort_by_id args')
   | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
-    map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [exp1] [exp1']
+    map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [ exp1 ] [ exp1' ]
   | ArrayShift {base; ct; index}, ArrayShift {base=base'; ct=ct'; index=index'} ->
-    map_with_guard_unknown (Sctypes.equal ct ct') [base; index] [base'; index']
+    map_with_guard_unknown (Sctypes.equal ct ct') [base; index ] [base'; index' ]
   | CopyAllocId {addr=exp1; loc=exp2}, CopyAllocId {addr=exp1'; loc=exp2'} ->
-    map_from_IT_lists [exp1; exp2] [exp1'; exp2']
+    map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | HasAllocId exp1, HasAllocId exp1' ->
     get_var_cands exp1 exp1'
   | SizeOf cty, SizeOf cty' ->
@@ -356,39 +370,39 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t Sym.Map.t, Pp.docu
   | Nil bty, Nil bty' ->
     map_with_guard_no (BT.equal bty bty') [] []
   | Cons (h, tl), Cons (h', tl') ->
-    map_from_IT_lists [h; tl] [h'; tl']
+    map_from_IT_lists [ h; tl ] [ h'; tl' ]
   | Head l, Head l' ->
     get_var_cands l l'
   | Tail l, Tail l' ->
     get_var_cands l l'
   | NthList (exp1, exp2, exp3),  NthList (exp1', exp2', exp3') ->
-    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [ exp1; exp2; exp3 ] [ exp1'; exp2'; exp3' ]
   | ArrayToList (exp1, exp2, exp3), ArrayToList (exp1', exp2', exp3') ->
-    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [ exp1; exp2; exp3 ] [ exp1'; exp2'; exp3' ]
   | Representable (cty, exp1), Representable (cty', exp1') ->
-    map_with_guard_unknown (Sctypes.equal cty cty') [exp1] [exp1']
+    map_with_guard_unknown (Sctypes.equal cty cty') [ exp1 ] [ exp1' ]
   | Good (cty, exp1), Good (cty', exp1') ->
-    map_with_guard_unknown (Sctypes.equal cty cty') [exp1] [exp1']
+    map_with_guard_unknown (Sctypes.equal cty cty') [ exp1 ] [ exp1' ]
   | Aligned { t=exp1; align=exp2}, Aligned { t=exp1'; align=exp2'} ->
-    map_from_IT_lists [exp1; exp2] [exp1'; exp2']
+    map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | WrapI (ity, exp1), WrapI (ity', exp1') ->
-    map_with_guard_unknown (Cerb_frontend.IntegerType.integerTypeEqual ity ity') [exp1] [exp1']
+    map_with_guard_unknown (Cerb_frontend.IntegerType.integerTypeEqual ity ity') [ exp1 ] [ exp1' ]
   | MapConst (bty, exp1), MapConst (bty', exp1') ->
-    map_with_guard_unknown (BT.equal bty bty') [exp1] [exp1']
+    map_with_guard_unknown (BT.equal bty bty') [ exp1 ] [ exp1' ]
   | MapSet (exp1, exp2, exp3), MapSet (exp1', exp2', exp3') ->
-    map_from_IT_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+    map_from_IT_lists [ exp1; exp2; exp3 ] [ exp1'; exp2'; exp3' ]
   | MapGet (exp1, exp2), MapGet (exp1', exp2') ->
-    map_from_IT_lists [exp1; exp2] [exp1'; exp2']
+    map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | MapDef ((v, bty), exp1), MapDef ((v', bty'), exp1') ->
-    map_with_guard_unknown (Sym.equal v v' && BT.equal bty bty') [exp1] [exp1']
+    map_with_guard_unknown (Sym.equal v v' && BT.equal bty bty') [ exp1 ] [ exp1' ]
   | Apply (v, exps), Apply (v', exps') ->
     map_with_guard_unknown (Sym.equal v v') exps exps'
   | Let ((v, exp1), exp2), Let ((v', exp1'), exp2') ->
-    map_with_guard_unknown (Sym.equal v v') [exp1; exp2] [exp1'; exp2']
+    map_with_guard_unknown (Sym.equal v v') [ exp1; exp2 ] [ exp1'; exp2' ]
   | Match (exp1, pats), Match (exp1', pats') ->
     map_from_IT_lists (exp1 :: sort_by_pattern pats) (exp1' :: sort_by_pattern pats')
   | Cast (bt, exp1), Cast (bt', exp1') ->
-    map_with_guard_unknown (BT.equal bt bt') [exp1] [exp1']
+    map_with_guard_unknown (BT.equal bt bt') [ exp1 ] [ exp1' ]
   (* included so the compiler will catch any missing new constructors *)
   | Const _, _ -> default
   | Unop _, _ -> default

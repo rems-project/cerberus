@@ -1439,6 +1439,7 @@ let and_bool_constraints (constraints : LC.t list) : BaseTypes.t annot =
   let it_and acc lc = IT (Binop (And, acc, lc), BT.Bool, Cerb_location.unknown) in
   List.fold_left it_and it_true no_foralls
 
+
 let ask_solver (g : Global.t) (lcs : LC.t list) : Simple_smt.result =
   let solver = make g in
   let smt_term = translate_term solver (and_bool_constraints lcs) in

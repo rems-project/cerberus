@@ -36,7 +36,6 @@ let lab_interesting : label = "interesting"
 
 let lab_uninteresting : label = "uninteresting"
 
-
 let lab_invalid : label = "Resources that do not satisfy predicate definitions"
 
 let lab_unknown : label = "Resources that may not satisfy predicate definitions"
@@ -239,8 +238,10 @@ let simp_view s =
   else
     [ div [ btn; div [ val_simp ]; div [ val_orig ] ] ]
 
+
 let table_by_label mk_table render data main_lab labs =
-  let get_table lab = match (StrMap.find_opt lab data) with
+  let get_table lab =
+    match (StrMap.find_opt lab data) with
     | None -> (lab, "(none)")
     | Some t -> (lab, mk_table (List.map render t))
   in
@@ -250,9 +251,15 @@ let table_by_label mk_table render data main_lab labs =
 
 let make_invalid_resources rs =
   h
-  1
-  lab_invalid
-  (table_by_label table_without_head simp_view rs lab_invalid [lab_unknown; lab_valid] )
+    1
+    lab_invalid
+    (table_by_label
+      table_without_head
+      simp_view
+      rs
+      lab_invalid
+      [lab_unknown; lab_valid])
+
 
 let make_not_given_to_solver ds =
   h
