@@ -1430,12 +1430,10 @@ let eval mo t =
   let model_fn = Hashtbl.find models_tbl mo in
   model_fn t
 
+
 let and_bool_constraints (constraints : LC.t list) : BaseTypes.t annot =
   (* assumes all constraints are bools*)
-  let not_forall acc lc = match lc with
-  | LC.T it -> it :: acc
-  | _ -> acc
-  in
+  let not_forall acc lc = match lc with LC.T it -> it :: acc | _ -> acc in
   let no_foralls = List.fold_left not_forall [] constraints in
   let it_true = IT (Const (Bool true), BT.Bool, Cerb_location.unknown) in
   let it_and acc lc = IT (Binop (And, acc, lc), BT.Bool, Cerb_location.unknown) in

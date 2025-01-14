@@ -228,22 +228,27 @@ let dtree dtree_i =
   in
   aux
 
+
 (** Infrastructure for checking if a countermodel satisfies a predicate **)
 open ResultWithData
 
 type check_result = (LC.t list, Pp.document) result_with_data
+
 let pp_check_result = pp_result_with_data (Pp.list LC.pp) (fun d -> d)
 
 let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
-  List.fold_left (fun acc elem -> match f elem with None -> acc | Some x -> x :: acc) [] l
+  List.fold_left
+    (fun acc elem -> match f elem with None -> acc | Some x -> x :: acc)
+    []
+    l
 
 (* Gives a single canonical result *)
-let combine_results (results : check_result list)
-  : check_result =
+let combine_results (results : check_result list) : check_result =
   match results with
   | [] -> Error !^"Empty result list"
   | h :: t ->
-    let combine = fun acc res -> match acc, res with
+    let combine acc res =
+      match (acc, res) with
       | Yes l, _ -> Yes l
       | _, Yes l -> Yes l
       | Error s, _ -> Error s
@@ -256,14 +261,16 @@ let combine_results (results : check_result list)
 
 
 (* Type of nonterminal lines in a predicate clause.
-  Corresponds to packing_ft *)
+   Corresponds to packing_ft *)
 type def_line =
   | DefineL of (Sym.t * IT.t) * info
   | ResourceL of (Sym.t * (Req.t * BT.t)) * info
 
-let def_line_pp dl = match dl with
+let def_line_pp dl =
+  match dl with
   | DefineL ((s, t), _) -> group (!^"let" ^^^ Sym.pp s ^^^ equals ^^^ IT.pp t ^^ semi)
-  | ResourceL ((s, (re, _)), _) -> group (!^"take" ^^^ Sym.pp s ^^^ equals ^^^ Req.pp re ^^ semi)
+  | ResourceL ((s, (re, _)), _) ->
+    group (!^"take" ^^^ Sym.pp s ^^^ equals ^^^ Req.pp re ^^ semi)
 
 (* Optionally zip two lists, returning None if the lists have different lengths *)
 let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
