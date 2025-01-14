@@ -143,25 +143,25 @@ and get_var_constraints
            | Owned (_, _) ->
              (* if the predicate is Owned, its pointer argument should not be null *)
              let neq = IT.ne__ psig.pointer (IT.null_ loc) loc in
-             Yes ([LC.T neq], var_cands)
-            | PName name ->
-              (* search for predicate definition *)
-              (match Sym.Map.find_opt name ctxt.global.resource_predicates with
-               | Some pdef ->
-                 (* TODO: this doesn't account for looking up args of the predicate further up in the graph.
-                    Adding that will require dealing with scoping issues, e.g. if
-                    a candidate or line definition for one of the arguments includes a variable with a
-                    different usage within the predicate *)
-                 (match check_pred name pdef v_cand ctxt with
-                  | Yes cs -> Yes (cs, var_cands)
-                  | No e -> No e
-                  | Unknown e -> Unknown e
-                  | Error e -> Error e)
+             Yes ([ LC.T neq ], var_cands)
+           | PName name ->
+             (* search for predicate definition *)
+             (match Sym.Map.find_opt name ctxt.global.resource_predicates with
+              | Some pdef ->
+                (* TODO: this doesn't account for looking up args of the predicate further up in the graph.
+                   Adding that will require dealing with scoping issues, e.g. if
+                   a candidate or line definition for one of the arguments includes a variable with a
+                   different usage within the predicate *)
+                (match check_pred name pdef v_cand ctxt with
+                 | Yes cs -> Yes (cs, var_cands)
+                 | No e -> No e
+                 | Unknown e -> Unknown e
+                 | Error e -> Error e)
               | None ->
                 Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name)))
         | Q qsig ->
           let _ = qsig in
-          Unknown (!^"Quantified predicates are out of scope for now.")))
+          Unknown !^"Quantified predicates are out of scope for now."))
 
 
 (** End section: Infrastructure for checking if a countermodel satisfies a predicate **)

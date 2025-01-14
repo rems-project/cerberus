@@ -365,8 +365,8 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [ exp1 ] [ exp1' ]
   | ArrayShift { base; ct; index }, ArrayShift { base = base'; ct = ct'; index = index' }
     ->
-    map_with_guard_unknown (Sctypes.equal ct ct') [base; index ] [base'; index' ]
-  | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc=exp2' } ->
+    map_with_guard_unknown (Sctypes.equal ct ct') [ base; index ] [ base'; index' ]
+  | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc = exp2' } ->
     map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | HasAllocId exp1, HasAllocId exp1' -> get_var_cands exp1 exp1'
   | SizeOf cty, SizeOf cty' -> map_with_guard_unknown (Sctypes.equal cty cty') [] []
