@@ -57,10 +57,28 @@ static void update_ownership(void* ptr, size_t sz) {
     ownership_curr = (char*)ownership_curr + sizeof(struct pointer_data);
 }
 
-static uint8_t null_in_every = 4;
+static uint8_t null_in_every = 5;
+
+uint8_t get_null_in_every(void) {
+    return null_in_every;
+}
 
 void set_null_in_every(uint8_t n) {
     null_in_every = n;
+}
+
+static int sized_null = 0;
+
+int is_sized_null(void) {
+    return sized_null;
+}
+
+void set_sized_null(void) {
+    sized_null = 1;
+}
+
+void unset_sized_null(void) {
+    sized_null = 0;
 }
 
 cn_pointer* cn_gen_alloc(cn_bits_u64* sz) {
@@ -69,18 +87,18 @@ cn_pointer* cn_gen_alloc(cn_bits_u64* sz) {
         bytes = cn_gen_backtrack_alloc_get();
         cn_gen_backtrack_reset();
     }
-
-    if (bytes == 0) {
-        void* p;
+    else if (bytes == 0) {
         uint64_t rnd = convert_from_cn_bits_u8(cn_gen_uniform_cn_bits_u8(null_in_every));
         if (rnd == 0) {
-            p = NULL;
+            bytes = 0;
         }
         else {
-            p = alloc(1);
-            update_alloc(p, 1);
+            bytes = 8;
         }
-        return convert_to_cn_pointer(p);
+    }
+
+    if (bytes == 0) {
+        return convert_to_cn_pointer(NULL);
     }
     else {
         void* p = alloc(bytes);
@@ -154,7 +172,7 @@ void cn_gen_ownership_update(void* p, size_t sz) {
     update_ownership(p, sz);
 }
 
-int cn_gen_ownership_check(cn_pointer* p, size_t sz) {
+int cn_gen_ownership_check(void* p, size_t sz) {
     if (ownership_curr == ownership_buf) {
         return 1;
     }

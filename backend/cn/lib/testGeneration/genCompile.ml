@@ -3,15 +3,12 @@ module BT = BaseTypes
 module AT = ArgumentTypes
 module LC = LogicalConstraints
 module LAT = LogicalArgumentTypes
-module RP = ResourcePredicates
-module RET = ResourceTypes
+module Def = Definition
+module Req = Request
 module GBT = GenBaseTypes
 module GT = GenTerms
 module GD = GenDefinitions
 module Config = TestGenConfig
-module CtA = Cn_internal_to_ail
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 
 type s = GD.context
 
@@ -34,15 +31,15 @@ let compile_oargs (ret_bt : BT.t) (iargs : (Sym.t * BT.t) list) : (Sym.t * BT.t)
 
 
 let add_request
-  (recursive : SymSet.t)
-  (preds : (SymMap.key * RP.definition) list)
+  (recursive : Sym.Set.t)
+  (preds : (Sym.Map.key * Def.Predicate.t) list)
   (fsym : Sym.t)
   : unit m
   =
   let pred = List.assoc Sym.equal fsym preds in
   let gd : GD.t =
     { filename = Option.get (Cerb_location.get_filename pred.loc);
-      recursive = SymSet.mem fsym recursive;
+      recursive = Sym.Set.mem fsym recursive;
       spec = false;
       name = fsym;
       iargs =
@@ -55,8 +52,8 @@ let add_request
   fun s -> ((), GD.add_context gd s)
 
 
-let compile_vars (generated : SymSet.t) (oargs : (Sym.t * GBT.t) list) (lat : IT.t LAT.t)
-  : SymSet.t * (GT.t -> GT.t)
+let compile_vars (generated : Sym.Set.t) (oargs : (Sym.t * GBT.t) list) (lat : IT.t LAT.t)
+  : Sym.Set.t * (GT.t -> GT.t)
   =
   let backtrack_num = Config.get_max_backtracks () in
   let rec aux (xbts : (Sym.t * BT.t) list) : GT.t -> GT.t =
@@ -71,14 +68,14 @@ let compile_vars (generated : SymSet.t) (oargs : (Sym.t * GBT.t) list) (lat : IT
   in
   let xs, xbts =
     match lat with
-    | Define ((x, it), _info, _) -> (SymSet.singleton x, IT.free_vars_bts it)
+    | Define ((x, it), _info, _) -> (Sym.Set.singleton x, IT.free_vars_bts it)
     | Resource ((x, ((P { name = Owned _; _ } as ret), bt)), _, _) ->
-      (SymSet.singleton x, SymMap.add x bt (RET.free_vars_bts ret))
-    | Resource ((x, (ret, _)), _, _) -> (SymSet.singleton x, RET.free_vars_bts ret)
-    | Constraint (lc, _, _) -> (SymSet.empty, LC.free_vars_bts lc)
+      (Sym.Set.singleton x, Sym.Map.add x bt (Req.free_vars_bts ret))
+    | Resource ((x, (ret, _)), _, _) -> (Sym.Set.singleton x, Req.free_vars_bts ret)
+    | Constraint (lc, _, _) -> (Sym.Set.empty, LC.free_vars_bts lc)
     | I it ->
-      ( SymSet.empty,
-        SymMap.union
+      ( Sym.Set.empty,
+        Sym.Map.union
           (fun _ bt1 bt2 ->
             assert (BT.equal bt1 bt2);
             Some bt1)
@@ -87,23 +84,23 @@ let compile_vars (generated : SymSet.t) (oargs : (Sym.t * GBT.t) list) (lat : IT
            |> List.filter (fun (x, _) -> not (Sym.equal x cn_return))
            |> List.map_snd GBT.bt
            |> List.to_seq
-           |> SymMap.of_seq) )
+           |> Sym.Map.of_seq) )
   in
   let xbts =
-    xbts |> SymMap.filter (fun x _ -> not (SymSet.mem x generated)) |> SymMap.bindings
+    xbts |> Sym.Map.filter (fun x _ -> not (Sym.Set.mem x generated)) |> Sym.Map.bindings
   in
   let generated =
-    xbts |> List.map fst |> SymSet.of_list |> SymSet.union generated |> SymSet.union xs
+    xbts |> List.map fst |> Sym.Set.of_list |> Sym.Set.union generated |> Sym.Set.union xs
   in
   (generated, aux xbts)
 
 
 let rec compile_it_lat
   (filename : string)
-  (recursive : SymSet.t)
-  (preds : (Sym.t * RP.definition) list)
+  (recursive : Sym.Set.t)
+  (preds : (Sym.t * Def.Predicate.t) list)
   (name : Sym.t)
-  (generated : SymSet.t)
+  (generated : Sym.Set.t)
   (oargs : (Sym.t * GBT.t) list)
   (lat : IT.t LAT.t)
   : GT.t m
@@ -116,13 +113,13 @@ let rec compile_it_lat
     match lat with
     | Define ((x, it), (loc, _), lat') ->
       let@ gt' = compile_it_lat filename recursive preds name generated oargs lat' in
-      return (GT.let_ (backtrack_num, (x, GT.return_ it (IT.loc it)), gt') loc)
+      return (GT.let_ (backtrack_num, (x, GT.return_ it (IT.get_loc it)), gt') loc)
     | Resource ((x, (P { name = Owned (ct, _); pointer; iargs = _ }, bt)), (loc, _), lat')
       ->
       let@ gt' = compile_it_lat filename recursive preds name generated oargs lat' in
       let gt_asgn = GT.asgn_ ((pointer, ct), IT.sym_ (x, bt, loc), gt') loc in
       let gt_val =
-        if SymSet.mem x generated then
+        if Sym.Set.mem x generated then
           gt_asgn
         else
           GT.let_ (backtrack_num, (x, GT.arbitrary_ bt loc), gt_asgn) loc
@@ -133,7 +130,8 @@ let rec compile_it_lat
       ->
       let here = Locations.other __LOC__ in
       let ret_bt =
-        BT.Record (compile_oargs bt [] |> List.map_fst (fun x -> Id.id (Sym.pp_string x)))
+        BT.Record
+          (compile_oargs bt [] |> List.map_fst (fun x -> Id.make here (Sym.pp_string x)))
       in
       (* Recurse *)
       let@ gt' =
@@ -185,7 +183,7 @@ let rec compile_it_lat
       let gt_body =
         let sym_val = Sym.fresh () in
         let it_q = IT.sym_ (q_sym, k_bt, q_loc) in
-        let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.loc step)) loc in
+        let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.get_loc step)) loc in
         let gt_asgn =
           GT.asgn_
             ( (it_p, ct),
@@ -220,15 +218,17 @@ let rec compile_it_lat
       let pred = List.assoc Sym.equal fsym preds in
       let arg_syms = pred.pointer :: fst (List.split pred.iargs) in
       let it_q = IT.sym_ (q_sym, q_bt, q_loc) in
-      let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.loc step)) loc in
+      let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.get_loc step)) loc in
       let arg_its = it_p :: iargs in
       let args = List.combine arg_syms arg_its in
       (* Build [GT.t] *)
       let _, v_bt = BT.map_bt bt in
       let gt_body =
+        let here = Locations.other __LOC__ in
         let ret_bt =
           BT.Record
-            (compile_oargs v_bt [] |> List.map_fst (fun x -> Id.id (Sym.pp_string x)))
+            (compile_oargs v_bt []
+             |> List.map_fst (fun x -> Id.make here (Sym.pp_string x)))
         in
         let y = Sym.fresh () in
         if BT.equal (BT.Record []) ret_bt then
@@ -241,7 +241,7 @@ let rec compile_it_lat
           let it_ret =
             IT.recordMember_
               ~member_bt:v_bt
-              (IT.sym_ (y, ret_bt, loc), Id.id "cn_return")
+              (IT.sym_ (y, ret_bt, loc), Id.make here "cn_return")
               loc
           in
           GT.let_ (0, (y, GT.call_ (fsym, args) ret_bt loc), GT.return_ it_ret loc) loc)
@@ -262,21 +262,23 @@ let rec compile_it_lat
         | _ -> conv_fn oargs
       in
       let it_ret =
-        IT.record_ (List.map_fst (fun sym -> Id.id (Sym.pp_string sym)) it_oargs) here
+        IT.record_
+          (List.map_fst (fun sym -> Id.make here (Sym.pp_string sym)) it_oargs)
+          here
       in
-      return (GT.return_ it_ret (IT.loc it))
+      return (GT.return_ it_ret (IT.get_loc it))
   in
   return (f_gt_init gt)
 
 
 let rec compile_clauses
   (filename : string)
-  (recursive : SymSet.t)
-  (preds : (Sym.t * RP.definition) list)
+  (recursive : Sym.Set.t)
+  (preds : (Sym.t * Def.Predicate.t) list)
   (name : Sym.t)
-  (iargs : SymSet.t)
+  (iargs : Sym.Set.t)
   (oargs : (Sym.t * GBT.t) list)
-  (cls : RP.clause list)
+  (cls : Def.Clause.t list)
   : GT.t m
   =
   match cls with
@@ -294,8 +296,8 @@ let rec compile_clauses
 
 
 let compile_pred
-  (recursive_preds : SymSet.t)
-  (preds : (Sym.t * RP.definition) list)
+  (recursive_preds : Sym.Set.t)
+  (preds : (Sym.t * Def.Predicate.t) list)
   ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
   : unit m
   =
@@ -307,7 +309,7 @@ let compile_pred
       recursive_preds
       preds
       name
-      (SymSet.of_list (List.map fst iargs))
+      (Sym.Set.of_list (List.map fst iargs))
       oargs
       (Option.get pred.clauses)
   in
@@ -317,21 +319,21 @@ let compile_pred
 
 let compile_spec
   (filename : string)
-  (recursive : SymSet.t)
-  (preds : (Sym.t * RP.definition) list)
+  (recursive : Sym.Set.t)
+  (preds : (Sym.t * Def.Predicate.t) list)
   (name : Sym.t)
   (at : 'a AT.t)
   : unit m
   =
   (* Necessary to avoid triggering special-cased logic in [CtA] w.r.t globals *)
-  let rename x = Sym.fresh_named ("cn_gen_" ^ Sym.pp_string x) in
+  let rename x = GenUtils.get_mangled_name [ x ] in
   let lat =
     let lat = AT.get_lat at in
     let subst =
       let loc = Locations.other __LOC__ in
       lat
-      |> LAT.free_vars_bts (fun _ -> SymMap.empty)
-      |> SymMap.bindings
+      |> LAT.free_vars_bts (fun _ -> Sym.Map.empty)
+      |> Sym.Map.bindings
       |> List.map (fun (x, bt) -> (x, IT.sym_ (rename x, bt, loc)))
       |> IT.make_subst
       |> LAT.subst (fun _ x -> x)
@@ -342,8 +344,8 @@ let compile_spec
   let oargs =
     let oargs' =
       lat
-      |> LAT.free_vars_bts (fun _ -> SymMap.empty)
-      |> SymMap.bindings
+      |> LAT.free_vars_bts (fun _ -> Sym.Map.empty)
+      |> Sym.Map.bindings
       |> List.map_snd GBT.of_bt
     in
     oargs'
@@ -364,7 +366,7 @@ let compile_spec
       recursive
       preds
       name
-      SymSet.empty
+      Sym.Set.empty
       oargs
       (LAT.map (fun _ -> IT.unit_ here) lat)
   in
@@ -376,14 +378,14 @@ let compile_spec
 
 let compile
   ?(ctx : GD.context option)
-  (preds : (Sym.t * RP.definition) list)
-  (insts : Core_to_mucore.instrumentation list)
+  (preds : (Sym.t * Def.Predicate.t) list)
+  (insts : Executable_spec_extract.instrumentation list)
   : GD.context
   =
   let recursive_preds = GenAnalysis.get_recursive_preds preds in
   let context_specs =
     insts
-    |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
+    |> List.map (fun (inst : Executable_spec_extract.instrumentation) ->
       compile_spec
         (Option.get (Cerb_location.get_filename inst.fn_loc))
         recursive_preds

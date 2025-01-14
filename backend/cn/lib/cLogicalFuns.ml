@@ -1,17 +1,14 @@
-open TypeErrors
-open Typing
-
-open Effectful.Make (Typing)
-
-module SymMap = Map.Make (Sym)
-module SymSet = Set.Make (Sym)
 module StringMap = Map.Make (String)
 module IntMap = Map.Make (Int)
 module CF = Cerb_frontend
 module BT = BaseTypes
-open Cerb_pp_prelude
 module Mu = Mucore
 module IT = IndexTerms
+open Cerb_pp_prelude
+open TypeErrors
+open Typing
+
+open Effectful.Make (Typing)
 
 let fail_n m = fail (fun _ctxt -> m)
 
@@ -47,7 +44,7 @@ type state =
 type context =
   { label_defs : (Sym.t, unit Mu.label_def) Pmap.map;
     (* map from c functions to logical functions which we are building *)
-    c_fun_pred_map : (Locations.t * Sym.t) SymMap.t;
+    c_fun_pred_map : (Locations.t * Sym.t) Sym.Map.t;
     call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
   }
 
@@ -55,7 +52,7 @@ let init_state = { loc_map = IntMap.empty; next_loc = 1 }
 
 let mk_local_ptr state src_loc =
   let loc_ix = state.next_loc in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let ptr = IT.apply_ local_sym_ptr [ IT.int_ loc_ix here ] BT.(Loc ()) src_loc in
   let loc_map = IntMap.add loc_ix None state.loc_map in
   let state = { loc_map; next_loc = loc_ix + 1 } in
@@ -83,7 +80,7 @@ let triv_simp_ctxt = Simplify.default Global.empty
 
 let simp_const loc lpp it =
   let it2 = Simplify.IndexTerms.simp triv_simp_ctxt it in
-  match (IT.is_z it2, IT.bt it2) with
+  match (IT.is_z it2, IT.get_bt it2) with
   | Some _z, _ -> return it2
   | _, BT.Integer ->
     fail_n
@@ -101,7 +98,7 @@ let do_wrapI loc ct it =
   match Sctypes.is_integer_type ct with
   | Some ity ->
     let ity_bt = Memory.bt_of_sct ct in
-    if BT.equal ity_bt (IT.bt it) then
+    if BT.equal ity_bt (IT.get_bt it) then
       return it
     else
       return (IT.wrapI_ (ity, it) loc)
@@ -131,7 +128,7 @@ let rec is_const_num = function
 let rec add_pattern p v var_map =
   let (Mu.Pattern (loc, _, _, pattern)) = p in
   match pattern with
-  | CaseBase (Some s, _) -> return (SymMap.add s v var_map)
+  | CaseBase (Some s, _) -> return (Sym.Map.add s v var_map)
   | CaseBase (None, _) -> return var_map
   | CaseCtor (Ctuple, ps) ->
     let@ vs =
@@ -168,13 +165,13 @@ let signed_int_ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_)
 let signed_int_ty = Memory.bt_of_sct (Sctypes.Integer signed_int_ity)
 
 let is_two_pow it =
-  match IT.term it with
+  match IT.get_term it with
   | Terms.Binop (Terms.ExpNoSMT, x, y)
     when Option.equal Z.equal (IT.get_num_z x) (Some (Z.of_int 2)) ->
-    Some (`Two_loc (IT.loc x), `Exp y)
+    Some (`Two_loc (IT.get_loc x), `Exp y)
   | Terms.Binop (Terms.Exp, x, y)
     when Option.equal Z.equal (IT.get_num_z x) (Some (Z.of_int 2)) ->
-    Some (`Two_loc (IT.loc x), `Exp y)
+    Some (`Two_loc (IT.get_loc x), `Exp y)
   | _ -> None
 
 
@@ -220,7 +217,7 @@ let eval_fun f args orig_pexpr =
 let rec symb_exec_pexpr ctxt var_map pexpr =
   let (Mu.Pexpr (loc, annots, _, pe)) = pexpr in
   let opt_bt =
-    WellTyped.BaseTyping.integer_annot annots
+    WellTyped.integer_annot annots
     |> Option.map (fun ity -> Memory.bt_of_sct (Sctypes.Integer ity))
   in
   Pp.debug
@@ -245,9 +242,9 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
   in
   match pe with
   | PEsym sym ->
-    (match SymMap.find_opt sym var_map with
+    (match Sym.Map.find_opt sym var_map with
      | Some r -> return r
-     | _ -> fail_n { loc; msg = Unknown_variable sym })
+     | _ -> fail_n { loc; msg = WellTyped (Unknown_variable sym) })
   | PEval v ->
     (match val_to_it loc v with
      | Some r -> return r
@@ -309,13 +306,13 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
     in
     (match (op, x_v, is_two_pow y_v) with
      | OpMul, _, Some (`Two_loc two_loc, `Exp exp) ->
-       let exp_loc = IT.loc y_v in
+       let exp_loc = IT.get_loc y_v in
        return
-         (IT.mul_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.bt x_v) two_loc, exp) exp_loc) loc)
+         (IT.mul_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.get_bt x_v) two_loc, exp) exp_loc) loc)
      | OpDiv, _, Some (`Two_loc two_loc, `Exp exp) ->
-       let exp_loc = IT.loc y_v in
+       let exp_loc = IT.get_loc y_v in
        return
-         (IT.div_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.bt x_v) two_loc, exp) exp_loc) loc)
+         (IT.div_ (x_v, IT.exp_ (IT.int_lit_ 2 (IT.get_bt x_v) two_loc, exp) exp_loc) loc)
      | _, _, _ ->
        let@ res = simp_const_pe (f x_v y_v) in
        return res)
@@ -362,11 +359,11 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
     in
     (match ct with
      | Sctypes.Integer Sctypes.IntegerTypes.Bool ->
-       let here = Locations.other __FUNCTION__ in
+       let here = Locations.other __LOC__ in
        simp_const_pe
          (bool_ite_1_0
             bool_rep_ty
-            (IT.not_ (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x) here) here) here)
+            (IT.not_ (IT.eq_ (x, IT.int_lit_ 0 (IT.get_bt x) here) here) here)
             loc)
      | _ -> do_wrapI loc ct x)
   | PEwrapI (act, pe) ->
@@ -378,14 +375,14 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
   | PEbounded_binop (bk, op, pe_x, pe_y) ->
     let@ x = self var_map pe_x in
     let@ y = self var_map pe_y in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let it =
       match op with
       | IOpAdd -> IT.add_ (x, y) loc
       | IOpSub -> IT.sub_ (x, y) loc
       | IOpMul -> IT.mul_ (x, y) loc
-      | IOpShl -> IT.arith_binop Terms.ShiftLeft (x, IT.cast_ (IT.bt x) y here) loc
-      | IOpShr -> IT.arith_binop Terms.ShiftRight (x, IT.cast_ (IT.bt x) y here) loc
+      | IOpShl -> IT.arith_binop Terms.ShiftLeft (x, IT.cast_ (IT.get_bt x) y here) loc
+      | IOpShr -> IT.arith_binop Terms.ShiftRight (x, IT.cast_ (IT.get_bt x) y here) loc
     in
     do_wrapI loc (Mu.bound_kind_act bk).ct it
   | PEcfunction pe ->
@@ -414,7 +411,7 @@ let rec symb_exec_expr ctxt state_vars expr =
   let state, var_map = state_vars in
   let (Mu.Expr (loc, annots, _, e)) = expr in
   let opt_bt =
-    WellTyped.BaseTyping.integer_annot annots
+    WellTyped.integer_annot annots
     |> Option.map (fun ity -> Memory.bt_of_sct (Sctypes.Integer ity))
   in
   Pp.debug
@@ -541,26 +538,27 @@ let rec symb_exec_expr ctxt state_vars expr =
       | None -> fail_fun_it "not a constant function address"
       | Some (nm, _) -> return nm
     in
-    if SymMap.mem nm ctxt.c_fun_pred_map then (
-      let loc, l_sym = SymMap.find nm ctxt.c_fun_pred_map in
-      let@ def = get_logical_function_def loc l_sym in
-      rcval (IT.apply_ l_sym args_its def.LogicalFunctions.return_bt loc) state)
-    else if Sym.has_id_with Setup.unfold_stdlib_name nm then (
-      let s = Option.get (Sym.has_id nm) in
-      let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
-      if String.equal s "ctz_proxy" then
-        rcval
-          (wrap_int (IT.arith_unop Terms.BW_CTZ_NoSMT (List.hd args_its) loc) loc)
-          state
-      else if List.exists (String.equal s) [ "ffs_proxy"; "ffsl_proxy"; "ffsll_proxy" ]
-      then
-        rcval
-          (wrap_int (IT.arith_unop Terms.BW_FFS_NoSMT (List.hd args_its) loc) loc)
-          state
-      else
-        failwith ("unknown stdlib function: " ^ s))
-    else
-      fail_fun_it "not a function with a pure/logical interpretation"
+    if Sym.Map.mem nm ctxt.c_fun_pred_map then (
+      let loc, l_sym = Sym.Map.find nm ctxt.c_fun_pred_map in
+      let@ def = Global.get_logical_function_def loc l_sym in
+      rcval (IT.apply_ l_sym args_its def.Definition.Function.return_bt loc) state)
+    else (
+      let bail = fail_fun_it "not a function with a pure/logical interpretation" in
+      match Sym.has_id nm with
+      | None -> bail
+      | Some s ->
+        let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
+        if String.equal s "ctz_proxy" then
+          rcval
+            (wrap_int (IT.arith_unop Terms.BW_CTZ_NoSMT (List.hd args_its) loc) loc)
+            state
+        else if List.exists (String.equal s) [ "ffs_proxy"; "ffsl_proxy"; "ffsll_proxy" ]
+        then
+          rcval
+            (wrap_int (IT.arith_unop Terms.BW_FFS_NoSMT (List.hd args_its) loc) loc)
+            state
+        else
+          bail)
   | CN_progs _ -> rcval (IT.unit_ loc) state
   | _ ->
     fail_n
@@ -577,7 +575,7 @@ let rec filter_syms ss p =
   let (Mu.Pattern (a, b, c, pat)) = p in
   let mk pat = Mu.Pattern (a, b, c, pat) in
   match pat with
-  | CaseBase (Some s, bt) -> if SymSet.mem s ss then p else mk (CaseBase (None, bt))
+  | CaseBase (Some s, bt) -> if Sym.Set.mem s ss then p else mk (CaseBase (None, bt))
   | CaseBase (None, _) -> p
   | CaseCtor (Ctuple, ps) ->
     let ps = List.map (filter_syms ss) ps in
@@ -591,7 +589,7 @@ let rec filter_syms ss p =
 let rec get_ret_it loc body bt = function
   | Call_Ret v ->
     let@ () =
-      if BT.equal (IT.bt v) bt then
+      if BT.equal (IT.get_bt v) bt then
         return ()
       else
         fail_n
@@ -620,9 +618,9 @@ let rec get_ret_it loc body bt = function
 
 
 let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_decl) =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let def_args =
-    def.LogicalFunctions.args
+    def.Definition.Function.args
     (* TODO - add location information to binders *)
     |> List.map (fun (s, bt) -> IndexTerms.sym_ (s, bt, here))
   in
@@ -643,8 +641,8 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
     let rec mk_var_map acc args_and_body def_args =
       match (args_and_body, def_args) with
       | Mu.Computational ((s, bt), _, args_and_body), v :: def_args ->
-        if BT.equal bt (IT.bt v) then
-          mk_var_map (SymMap.add s v acc) args_and_body def_args
+        if BT.equal bt (IT.get_bt v) then
+          mk_var_map (Sym.Map.add s v acc) args_and_body def_args
         else
           fail_n
             { loc;
@@ -652,7 +650,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
                 Generic
                   Pp.(
                     !^"mismatched arguments:"
-                    ^^^ parens (BT.pp (IT.bt v) ^^^ IT.pp v)
+                    ^^^ parens (BT.pp (IT.get_bt v) ^^^ IT.pp v)
                     ^^^ !^"and"
                     ^^^ parens (BT.pp bt ^^^ Sym.pp s))
             }
@@ -675,11 +673,11 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
           (fun () -> in_computational_ctxt args_and_body m)
       | L _ -> m
     in
-    let@ arg_map, (body, labels, rt) = mk_var_map SymMap.empty args_and_body def_args in
+    let@ arg_map, (body, labels, rt) = mk_var_map Sym.Map.empty args_and_body def_args in
     let@ () =
       match rt with
       | ReturnTypes.Computational ((_, bt), _, _) ->
-        let l_ret_bt = def.LogicalFunctions.return_bt in
+        let l_ret_bt = def.Definition.Function.return_bt in
         if BT.equal bt l_ret_bt then
           return ()
         else
@@ -695,15 +693,12 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
             }
     in
     let ctxt = { glob_context with label_defs = labels } in
-    let label_context = WellTyped.WProc.label_context rt labels in
+    let label_context = WellTyped.label_context rt labels in
     let@ body =
-      pure
-        (in_computational_ctxt
-           args_and_body
-           (WellTyped.BaseTyping.infer_expr label_context body))
+      pure (in_computational_ctxt args_and_body (WellTyped.infer_expr label_context body))
     in
     let@ r = symb_exec_expr ctxt (init_state, arg_map) body in
-    let@ it = get_ret_it loc body def.LogicalFunctions.return_bt r in
+    let@ it = get_ret_it loc body def.Definition.Function.return_bt r in
     simp_const loc (lazy (Pp_mucore.pp_expr body)) it
   | _ ->
     fail_n
@@ -713,10 +708,10 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
 
 
 let upd_def (loc, sym, def_tm) =
-  let open LogicalFunctions in
-  let@ def = get_logical_function_def loc sym in
-  match def.definition with
-  | Uninterp -> add_logical_function sym { def with definition = Def def_tm }
+  let open Definition.Function in
+  let@ def = Global.get_logical_function_def loc sym in
+  match def.body with
+  | Uninterp -> Global.add_logical_function sym { def with body = Def def_tm }
   | _ ->
     fail_n
       { loc;
@@ -728,8 +723,8 @@ let upd_def (loc, sym, def_tm) =
 let add_logical_funs_from_c call_funinfo funs_to_convert funs =
   let c_fun_pred_map =
     List.fold_left
-      (fun m Mu.{ c_fun_sym; loc; l_fun_sym } -> SymMap.add c_fun_sym (loc, l_fun_sym) m)
-      SymMap.empty
+      (fun m Mu.{ c_fun_sym; loc; l_fun_sym } -> Sym.Map.add c_fun_sym (loc, l_fun_sym) m)
+      Sym.Map.empty
       funs_to_convert
   in
   let global_context =
@@ -738,11 +733,11 @@ let add_logical_funs_from_c call_funinfo funs_to_convert funs =
   let@ conv_defs =
     ListM.mapM
       (fun Mu.{ c_fun_sym; loc; l_fun_sym } ->
-        let@ def = get_logical_function_def loc l_fun_sym in
+        let@ def = Global.get_logical_function_def loc l_fun_sym in
         let@ fbody =
           match Pmap.lookup c_fun_sym funs with
           | Some fbody -> return fbody
-          | None -> fail_n { loc; msg = Unknown_function c_fun_sym }
+          | None -> fail_n { loc; msg = Global (Unknown_function c_fun_sym) }
         in
         let@ it = c_fun_to_it loc global_context l_fun_sym c_fun_sym def fbody in
         Pp.debug

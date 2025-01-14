@@ -1,0 +1,6 @@
+{
+    "name": "verify",
+    "args": ["verify"],
+    "filter": "^(.*\\.c)$",
+    "timeout": 60
+}

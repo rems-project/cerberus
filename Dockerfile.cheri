@@ -12,7 +12,7 @@ RUN opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/rel
     && opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git \
     && opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git \
     && opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad \
-    && opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git \
+    && opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git#2f02c44ad061d4da30136dc9dbc06c142c94fdaf \
     && opam pin add -n --yes cerberus-lib https://github.com/rems-project/cerberus.git \
     && opam pin add -n --yes cerberus https://github.com/rems-project/cerberus.git \
     && opam pin add -n --yes cerberus-cheri https://github.com/rems-project/cerberus.git

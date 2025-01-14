@@ -1,0 +1,8 @@
+return code: 1
+tests/cn/struct_updates.error.c:9:11: error: Type error
+    { x : 0 , y: 0 , ..bar }
+          ^
+Expression '0' has type 'integer'.
+I expected it to have type 'i32' because of tests/cn/struct_updates.error.c:9:24:
+    { x : 0 , y: 0 , ..bar }
+                       ^

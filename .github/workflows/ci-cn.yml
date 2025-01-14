@@ -1,0 +1,98 @@
+name: CN Proof
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+env:
+  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
+
+# cancel in-progress job when a new push is performed
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        # version: [4.12.0, 4.14.1]
+        version: [4.14.1]
+
+
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: System dependencies (ubuntu)
+      run: |
+        sudo apt-get install build-essential libgmp-dev z3 opam
+
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: ${{ matrix.version }}
+        fail-on-cache-miss: true
+
+    - name: Install Cerberus
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        opam pin --yes --no-action add cerberus-lib .
+        opam pin --yes --no-action add cerberus .
+        opam install --yes cerberus
+
+    - name: Download cvc5 release
+      uses: robinraju/release-downloader@v1
+      with:
+        repository: cvc5/cvc5
+        tag: cvc5-1.2.0
+        fileName: cvc5-Linux-x86_64-static.zip
+
+    - name: Unzip and install cvc5
+      run: |
+        unzip cvc5-Linux-x86_64-static.zip
+        chmod +x cvc5-Linux-x86_64-static/bin/cvc5
+        sudo cp cvc5-Linux-x86_64-static/bin/cvc5 /usr/local/bin/
+
+    - name: Install CN
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        opam pin --yes --no-action add cn .
+        opam install --yes cn ocamlformat.0.26.2
+
+    - name: Check CN code formatting
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd backend/cn && dune build @fmt
+
+    - name: Checkout cn-tutorial
+      uses: actions/checkout@v4
+      with:
+        repository: rems-project/cn-tutorial
+        path: cn-tutorial
+
+    - name: Run CN tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        ./tests/diff-prog.py cn tests/cn/verify.json 2> diff.patch || (cat diff.patch; exit 1)
+
+    - name: Run CN Tutorial tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        tests/run-cn-tutorial-ci.sh cn-tutorial
+
+    - name: Run CN VIP tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        tests/run-cn-vip.sh

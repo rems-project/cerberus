@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail -o noclobber
 
-USAGE="USAGE: $0 -h\n       $0 [-ovq] FILE.c"
+USAGE="USAGE: $0 -h\n       $0 [-nqu] FILE.c"
 
 function echo_and_err() {
     printf "$1\n"
@@ -9,19 +9,25 @@ function echo_and_err() {
 }
 
 QUIET=""
-CHECK_OWNERSHIP=""
+UBSAN=""
+NO_CHECK_OWNERSHIP=""
 
-while getopts "hoq" flag; do
+while getopts "hnqu" flag; do
  case "$flag" in
    h)
    printf "${USAGE}"
    exit 0
    ;;
-   o)
-   CHECK_OWNERSHIP="--with-ownership-checking"
+   n)
+   NO_CHECK_OWNERSHIP="--without-ownership-checking"
    ;;
    q)
    QUIET=1
+   ;;
+   u)
+   export UBSAN_OPTIONS=halt_on_error=1
+   # FIXME: https://github.com/rems-project/cerberus/issues/821
+   UBSAN="-fsanitize=undefined -fno-sanitize=alignment"
    ;;
    \?)
    echo_and_err "${USAGE}"
@@ -57,7 +63,7 @@ EXEC_DIR=$(mktemp -d -t 'cn-exec.XXXX')
 if cn instrument "${INPUT_FN}" \
     --output-decorated="${INPUT_BASENAME}-exec.c" \
     --output-decorated-dir="${EXEC_DIR}" \
-    ${CHECK_OWNERSHIP}; then
+    ${NO_CHECK_OWNERSHIP}; then
   [ "${QUIET}" ] || echo "Generating C files from CN-annotated source."
 else
   echo_and_err "Failed to generate C files from CN-annotatated source."
@@ -65,14 +71,14 @@ fi
 
 # Compile
 cd "${EXEC_DIR}"
-if cc -g -c "-I${RUNTIME_PREFIX}"/include/ ./"${INPUT_BASENAME}-exec.c" cn.c; then
+if cc -g -c ${UBSAN} "-I${RUNTIME_PREFIX}"/include/ ./"${INPUT_BASENAME}-exec.c" cn.c; then
     [ "${QUIET}" ] || echo "Compiled C files."
 else
     echo_and_err "Failed to compile C files in ${EXEC_DIR}."
 fi
 
 # Link
-if cc "-I${RUNTIME_PREFIX}/include" -o "${INPUT_BASENAME}-exec-output.bin" ./*.o "${RUNTIME_PREFIX}/libcn.a"; then
+if cc ${UBSAN} "-I${RUNTIME_PREFIX}/include" -o "${INPUT_BASENAME}-exec-output.bin" ./*.o "${RUNTIME_PREFIX}/libcn.a"; then
     [ "${QUIET}" ] || echo "Linked C .o files." 
 else
     echo_and_err "Failed to link .o files in ${EXEC_DIR}."

@@ -55,8 +55,8 @@ let rec extract_global_variables = function
 
 
 let generate_c_pres_and_posts_internal
-  with_ownership_checking
-  (instrumentation : Core_to_mucore.instrumentation)
+  without_ownership_checking
+  (instrumentation : Executable_spec_extract.instrumentation)
   _
   (sigm : _ CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
@@ -71,7 +71,7 @@ let generate_c_pres_and_posts_internal
   let globals = extract_global_variables prog5.globs in
   let ail_executable_spec =
     Cn_internal_to_ail.cn_to_ail_pre_post_internal
-      ~with_ownership_checking
+      ~without_ownership_checking
       dts
       preds
       globals
@@ -82,7 +82,9 @@ let generate_c_pres_and_posts_internal
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
   (* C ownership checking *)
   let (pre_str, post_str), block_ownership_injs =
-    if with_ownership_checking then (
+    if without_ownership_checking then
+      ((pre_str, post_str), [])
+    else (
       let fn_ownership_stats_opt, block_ownership_injs =
         Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm
       in
@@ -97,8 +99,6 @@ let generate_c_pres_and_posts_internal
         in
         (pre_post_pair, block_ownership_injs)
       | None -> ((pre_str, post_str), []))
-    else
-      ((pre_str, post_str), [])
   in
   (* Needed for extracting correct location for CN statement injection *)
   let modify_magic_comment_loc loc =
@@ -151,11 +151,11 @@ let generate_c_pres_and_posts_internal
 
 
 let generate_c_assume_pres_internal
-  (instrumentation_list : Core_to_mucore.instrumentation list)
+  (instrumentation_list : Executable_spec_extract.instrumentation list)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   =
-  let aux (inst : Core_to_mucore.instrumentation) =
+  let aux (inst : Executable_spec_extract.instrumentation) =
     let dts = sigma.cn_datatypes in
     let preds = prog5.resource_predicates in
     let args =
@@ -176,23 +176,23 @@ let generate_c_assume_pres_internal
       (AT.get_lat (Option.get inst.internal))
   in
   instrumentation_list
-  |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+  |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
     Option.is_some inst.internal)
   |> List.map aux
 
 
-(* Core_to_mucore.instrumentation list -> executable_spec *)
+(* Executable_spec_extract.instrumentation list -> executable_spec *)
 let generate_c_specs_internal
-  with_ownership_checking
+  without_ownership_checking
   instrumentation_list
   type_map
   (_ : Cerb_location.t CStatements.LocMap.t)
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
   =
-  let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
+  let generate_c_spec (instrumentation : Executable_spec_extract.instrumentation) =
     generate_c_pres_and_posts_internal
-      with_ownership_checking
+      without_ownership_checking
       instrumentation
       type_map
       sigm
@@ -233,13 +233,6 @@ let generate_record_strs
   =
   let record_def_strs, record_decl_strs = generate_c_records ail_records in
   (record_def_strs, record_decl_strs)
-
-
-let generate_all_record_strs sigm =
-  generate_record_strs
-    sigm
-    (Cn_internal_to_ail.cn_to_ail_pred_records
-       (Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records))
 
 
 let generate_str_from_ail_struct ail_struct =
@@ -360,89 +353,22 @@ let bt_is_record_or_tuple = function BT.Record _ | BT.Tuple _ -> true | _ -> fal
 let fns_and_preds_with_record_rt (funs, preds) =
   let funs' =
     List.filter
-      (fun (_, (def : LogicalFunctions.definition)) ->
-        bt_is_record_or_tuple def.return_bt)
+      (fun (_, (def : Definition.Function.t)) -> bt_is_record_or_tuple def.return_bt)
       funs
   in
   let fun_syms = List.map (fun (fn_sym, _) -> fn_sym) funs' in
   let preds' =
     List.filter
-      (fun (_, (def : ResourcePredicates.definition)) ->
-        bt_is_record_or_tuple def.oarg_bt)
+      (fun (_, (def : Definition.Predicate.t)) -> bt_is_record_or_tuple def.oarg_bt)
       preds
   in
   let pred_syms = List.map (fun (pred_sym, _) -> pred_sym) preds' in
   (fun_syms, pred_syms)
 
 
-let generate_c_record_funs
-  (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (logical_predicates : (Sym.t * LogicalFunctions.definition) list)
-  (resource_predicates : (Sym.t * ResourcePredicates.definition) list)
-  =
-  let cn_record_info =
-    List.map
-      (fun (sym, (def : LogicalFunctions.definition)) ->
-        match def.return_bt with
-        | BT.Record ms ->
-          [ (Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym, ms) ]
-        | _ -> [])
-      logical_predicates
-  in
-  let cn_record_info' =
-    List.map
-      (fun (sym, (def : ResourcePredicates.definition)) ->
-        match def.oarg_bt with
-        | BT.Record ms ->
-          [ (Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym, ms) ]
-        | _ -> [])
-      resource_predicates
-  in
-  let cn_record_info = List.concat (cn_record_info @ cn_record_info') in
-  let record_equality_functions =
-    List.concat
-      (List.map
-         (Cn_internal_to_ail.generate_record_equality_function sigm.cn_datatypes)
-         cn_record_info)
-  in
-  let record_default_functions =
-    List.concat
-      (List.map
-         (Cn_internal_to_ail.generate_record_default_function sigm.cn_datatypes)
-         cn_record_info)
-  in
-  let record_map_get_functions =
-    List.concat (List.map Cn_internal_to_ail.generate_record_map_get cn_record_info)
-  in
-  let eq_decls, eq_defs = List.split record_equality_functions in
-  let default_decls, default_defs = List.split record_default_functions in
-  let mapget_decls, mapget_defs = List.split record_map_get_functions in
-  let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma =
-    { sigm with
-      declarations = eq_decls @ default_decls @ mapget_decls;
-      function_definitions = eq_defs @ default_defs @ mapget_defs
-    }
-  in
-  let fun_doc =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1)
-  in
-  let fun_strs = CF.Pp_utils.to_plain_pretty_string fun_doc in
-  let decl_docs =
-    List.map
-      (fun (sym, (_, _, decl)) ->
-        CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
-      (eq_decls @ default_decls @ mapget_decls)
-  in
-  let fun_prot_strs =
-    List.map (fun doc -> [ CF.Pp_utils.to_plain_pretty_string doc ]) decl_docs
-  in
-  let fun_prot_strs = String.concat "\n" (List.concat fun_prot_strs) in
-  (fun_strs, fun_prot_strs)
-
-
 let generate_c_functions_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (logical_predicates : (Sym.t * LogicalFunctions.definition) list)
+  (logical_predicates : (Sym.t * Definition.Function.t) list)
   =
   let ail_funs_and_records =
     List.map
@@ -512,7 +438,7 @@ let rec remove_duplicates eq_fun = function
 
 let generate_c_predicates_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (resource_predicates : (Sym.t * ResourcePredicates.definition) list)
+  (resource_predicates : (Sym.t * Definition.Predicate.t) list)
   =
   (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal
      cn_f sigm.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates
@@ -554,7 +480,7 @@ let generate_c_predicates_internal
 
 
 let generate_ownership_functions
-  with_ownership_checking
+  without_ownership_checking
   ownership_ctypes
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   =
@@ -572,8 +498,8 @@ let generate_ownership_functions
   let ail_funs =
     List.map
       (fun ctype ->
-        Cn_internal_to_ail.generate_check_ownership_function
-          ~with_ownership_checking
+        Cn_internal_to_ail.generate_get_or_put_ownership_function
+          ~without_ownership_checking
           ctype)
       ctypes
   in

@@ -1,10 +1,8 @@
 open Locations
 module BT = BaseTypes
 module IT = IndexTerms
-module LS = LogicalSorts
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
-module SymSet = Set.Make (Sym)
 module LAT = LogicalArgumentTypes
 
 type 'i t =
@@ -29,7 +27,7 @@ and alpha_rename i_subst s t =
 
 
 and suitably_alpha_rename i_subst syms s t =
-  if SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename i_subst s t
   else
     (s, t)
@@ -82,7 +80,7 @@ let alpha_unique ss =
     match at with
     | Computational ((name, bt), info, t) ->
       let name, t = rename_if ss name t in
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       Computational ((name, bt), info, t)
     | L t -> L (LAT.alpha_unique ss t)
   in
@@ -93,7 +91,8 @@ let binders i_binders i_subst =
   let rec aux = function
     | Computational ((s, bt), _, t) ->
       let s, t = alpha_rename i_subst s t in
-      (Id.id (Sym.pp_string s), bt) :: aux t
+      let here = Locations.other __LOC__ in
+      (Id.make here (Sym.pp_string s), bt) :: aux t
     | L t -> LAT.binders i_binders i_subst t
   in
   aux

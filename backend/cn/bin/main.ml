@@ -43,14 +43,7 @@ end
 
 open Log
 
-let frontend
-  ~macros
-  ~incl_dirs
-  ~incl_files
-  astprints
-  ~do_peval
-  ~filename
-  ~magic_comment_char_dollar
+let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_char_dollar
   =
   let open CF in
   Cerb_global.set_cerb_conf
@@ -66,18 +59,21 @@ let frontend
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
   Switches.set
     ([ "inner_arg_temps"; "at_magic_comments" ]
+     (* TODO (DCM, VIP) figure out how to support liveness checks for read-only
+        resources and then switch on "strict_pointer_arith" to elaborate array
+        shift to the effectful version. "strict_pointer_relationals" is also
+        assumed, but this does not affect elaboration. *)
      @ if magic_comment_char_dollar then [ "magic_comment_char_dollar" ] else []);
-  Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
   let conf = Setup.conf macros incl_dirs incl_files astprints in
   let cn_init_scope : Cn_desugaring.init_scope =
     { predicates = [ Alloc.Predicate.(str, sym, Some loc) ];
       functions = List.map (fun (str, sym) -> (str, sym, None)) cn_builtin_fun_names;
-      idents = [ Alloc.History.(str, sym, Some loc) ]
+      idents = [ Alloc.History.(str, sym, None) ]
     }
   in
-  let@ _, ail_prog_opt, prog0 =
+  let@ cabs_tunit_opt, ail_prog_opt, prog0 =
     c_frontend_and_elaboration ~cn_init_scope (conf, io) (stdlib, impl) ~filename
   in
   let@ () =
@@ -87,17 +83,16 @@ let frontend
     else
       return ()
   in
+  let cabs_tunit = Option.get cabs_tunit_opt in
   let markers_env, ail_prog = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
-  let prog2 = if do_peval then Core_peval.rewrite_file prog1 else prog1 in
-  let prog3 = Milicore.core_to_micore__file Locations.update prog2 in
-  let prog4 = Milicore_label_inline.rewrite_file prog3 in
+  let prog2 = Milicore.core_to_micore__file Locations.update prog1 in
+  let prog3 = Milicore_label_inline.rewrite_file prog2 in
   let statement_locs = CStatements.search (snd ail_prog) in
   print_log_file ("original", CORE prog0);
   print_log_file ("without_unspec", CORE prog1);
-  print_log_file ("after_peval", CORE prog2);
-  return (prog4, (markers_env, ail_prog), statement_locs)
+  return (cabs_tunit, prog3, (markers_env, ail_prog), statement_locs)
 
 
 let handle_frontend_error = function
@@ -133,27 +128,26 @@ let with_well_formedness_check
   ~csv_times
   ~log_times
   ~astprints
-  ~use_peval
   ~no_inherit_loc
   ~magic_comment_char_dollar
   ~(* Callbacks *)
    handle_error
   ~(f :
+     cabs_tunit:CF.Cabs.translation_unit ->
      prog5:unit Mucore.file ->
      ail_prog:CF.GenTypes.genTypeCategory A.ail_program ->
      statement_locs:Cerb_location.t CStatements.LocMap.t ->
      paused:_ Typing.pause ->
-     unit Resultat.t)
+     unit Or_TypeError.t)
   =
   check_input_file filename;
-  let prog4, (markers_env, ail_prog), statement_locs =
+  let cabs_tunit, prog, (markers_env, ail_prog), statement_locs =
     handle_frontend_error
       (frontend
          ~macros
          ~incl_dirs
          ~incl_files
          astprints
-         ~do_peval:use_peval
          ~filename
          ~magic_comment_char_dollar)
   in
@@ -165,19 +159,19 @@ let with_well_formedness_check
      | _ -> None);
   try
     let result =
-      let open Resultat in
+      let open Or_TypeError in
       let@ prog5 =
         Core_to_mucore.normalise_file
           ~inherit_loc:(not no_inherit_loc)
           (markers_env, snd ail_prog)
-          prog4
+          prog
       in
       print_log_file ("mucore", MUCORE prog5);
       let paused =
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
-      f ~prog5 ~ail_prog ~statement_locs ~paused
+      f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused
     in
     Pp.maybe_close_times_channel ();
     Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
@@ -194,13 +188,14 @@ let report_type_error
   ~(json : bool)
   ?(output_dir : string option)
   ?(fn_name : string option)
+  ?(serialize_json : bool = false)
   (error : TypeErrors.t)
   : unit
   =
   if json then
-    TypeErrors.report_json ?output_dir ?fn_name error
+    TypeErrors.report_json ?output_dir ?fn_name ~serialize_json error
   else
-    TypeErrors.report_pretty ?output_dir ?fn_name error
+    TypeErrors.report_pretty ?output_dir ?fn_name ~serialize_json error
 
 
 (** Generate an appropriate exit code for the provided error. *)
@@ -222,8 +217,13 @@ let exit_code_of_errors (errors : TypeErrors.t list) : int option =
 
 
 (** Report the provided error, then exit. *)
-let handle_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t) =
-  report_type_error ~json ?output_dir error;
+let handle_type_error
+  ~(json : bool)
+  ?(output_dir : string option)
+  ?(serialize_json : bool = false)
+  (error : TypeErrors.t)
+  =
+  report_type_error ~json ?output_dir ~serialize_json error;
   exit (exit_code_of_error error)
 
 
@@ -233,11 +233,11 @@ let well_formed
   incl_dirs
   incl_files
   json
+  json_trace
   output_dir
   csv_times
   log_times
   astprints
-  use_peval
   no_inherit_loc
   magic_comment_char_dollar
   =
@@ -249,11 +249,11 @@ let well_formed
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar
-    ~handle_error:(handle_type_error ~json ?output_dir)
-    ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Resultat.return ())
+    ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
+    ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ ->
+      Or_TypeError.return ())
 
 
 let verify
@@ -265,10 +265,9 @@ let verify
   debug_level
   print_level
   print_sym_nums
-  slow_smt_threshold
-  slow_smt_dir
   no_timestamps
   json
+  json_trace
   output_dir
   diag
   lemmata
@@ -276,7 +275,6 @@ let verify
   skip
   csv_times
   log_times
-  random_seed
   solver_logging
   solver_flags
   solver_path
@@ -284,11 +282,11 @@ let verify
   astprints
   dont_use_vip
   no_use_ity
-  use_peval
   fail_fast
   quiet
   no_inherit_loc
   magic_comment_char_dollar
+  disable_resource_derived_constraints
   =
   if json then (
     if debug_level > 0 then
@@ -301,8 +299,6 @@ let verify
   Pp.print_level := print_level;
   CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
-  Solver.set_slow_smt_settings slow_smt_threshold slow_smt_dir;
-  Solver.random_seed := random_seed;
   (match solver_logging with
    | Some d ->
      Solver.Logger.to_file := true;
@@ -316,6 +312,7 @@ let verify
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
+  Resource.disable_resource_derived_constraints := disable_resource_derived_constraints;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -324,22 +321,40 @@ let verify
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
-    ~handle_error:(handle_type_error ~json ?output_dir)
-    ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
-      let check (functions, lemmas) =
+    ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
+    ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
+      let check (functions, global_var_constraints, lemmas) =
         let open Typing in
-        let@ errors = Check.time_check_c_functions functions in
+        let@ errors = Check.time_check_c_functions (global_var_constraints, functions) in
         if not quiet then
           List.iter
-            (fun (fn, err) -> report_type_error ~json ?output_dir ~fn_name:fn err)
+            (fun (fn, err) ->
+              report_type_error
+                ~json
+                ?output_dir
+                ~fn_name:fn
+                ~serialize_json:json_trace
+                err)
             errors;
         Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
         Check.generate_lemmas lemmas lemmata
       in
       Typing.run_from_pause check paused)
+
+
+let handle_error_with_user_guidance ~(label : string) (e : exn) : unit =
+  let msg = Printexc.to_string e in
+  let stack = Printexc.get_backtrace () in
+  Printf.eprintf "cn: internal error, uncaught exception:\n    %s\n" msg;
+  let lines = String.split_on_char '\n' stack in
+  List.iter (fun line -> Printf.eprintf "    %s\n" line) lines;
+  Printf.eprintf
+    "Issues can be made at https://github.com/rems-project/cerberus/issues.\n";
+  Printf.eprintf "Prefix your issue with \"[%s]\". " label;
+  Printf.eprintf "Check that there isn't already one for this error.\n";
+  exit 1
 
 
 let generate_executable_specs
@@ -353,6 +368,7 @@ let generate_executable_specs
   print_sym_nums
   no_timestamps
   json
+  json_trace
   output_dir
   diag
   only
@@ -362,14 +378,13 @@ let generate_executable_specs
   astprints
   dont_use_vip
   no_use_ity
-  use_peval
   fail_fast
   no_inherit_loc
   magic_comment_char_dollar
   (* Executable spec *)
     output_decorated
   output_decorated_dir
-  with_ownership_checking
+  without_ownership_checking
   with_test_gen
   copy_source_dir
   =
@@ -398,24 +413,26 @@ let generate_executable_specs
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
-    ~handle_error:(handle_type_error ~json ?output_dir)
-    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
+    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
-          Executable_spec.main
-            ~with_ownership_checking
-            ~with_test_gen
-            ~copy_source_dir
-            filename
-            ail_prog
-            output_decorated
-            output_decorated_dir
-            prog5
-            statement_locs;
-          Resultat.return ())
+          (try
+             Executable_spec.main
+               ~without_ownership_checking
+               ~with_test_gen
+               ~copy_source_dir
+               filename
+               ail_prog
+               output_decorated
+               output_decorated_dir
+               prog5
+               statement_locs
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
+          Or_TypeError.return ())
         ())
 
 
@@ -430,27 +447,44 @@ let run_tests
   csv_times
   log_times
   astprints
-  use_peval
   no_inherit_loc
   magic_comment_char_dollar
   (* Executable spec *)
-    with_ownership_checking
+    without_ownership_checking
   (* Test Generation *)
     output_dir
+  only
+  skip
   dont_run
+  num_samples
   max_backtracks
   max_unfolds
   max_array_length
+  with_static_hack
+  sanitizers
+  input_timeout
   null_in_every
   seed
   logging_level
+  progress_level
   interactive
+  until_timeout
+  exit_fast
+  max_stack_depth
+  allowed_depth_failures
+  max_generator_size
+  random_size_splits
+  allowed_size_split_backtracks
+  sized_null
+  coverage
+  disable_passes
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
   Pp.print_level := print_level;
+  Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   Sym.executable_spec_enabled := true;
-  let handle_error (e : TypeErrors.type_error) =
+  let handle_error (e : TypeErrors.t) =
     let report = TypeErrors.pp_message e.msg in
     Pp.error e.loc report.short (Option.to_list report.descr);
     match e.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
@@ -463,50 +497,77 @@ let run_tests
     ~csv_times
     ~log_times
     ~astprints
-    ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+      let config : TestGeneration.config =
+        { num_samples;
+          max_backtracks;
+          max_unfolds;
+          max_array_length;
+          with_static_hack;
+          sanitizers;
+          input_timeout;
+          null_in_every;
+          seed;
+          logging_level;
+          progress_level;
+          interactive;
+          until_timeout;
+          exit_fast;
+          max_stack_depth;
+          allowed_depth_failures;
+          max_generator_size;
+          random_size_splits;
+          allowed_size_split_backtracks;
+          sized_null;
+          coverage;
+          disable_passes
+        }
+      in
+      TestGeneration.set_config config;
+      let _, sigma = ail_prog in
+      if
+        List.is_empty
+          (TestGeneration.functions_under_test ~with_warning:true cabs_tunit sigma prog5)
+      then (
+        print_endline "No testable functions, trivially passing";
+        exit 0);
+      if not (Sys.file_exists output_dir) then (
+        print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
+        Sys.mkdir output_dir 0o777;
+        print_endline ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
       Cerb_colour.without_colour
         (fun () ->
-          if not (Sys.file_exists output_dir) then (
-            print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
-            Sys.mkdir output_dir 0o777;
-            print_endline
-              ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
-          let _, sigma = ail_prog in
-          Executable_spec.main
-            ~with_ownership_checking
-            ~with_test_gen:true
-            ~copy_source_dir:false
-            filename
-            ail_prog
-            None
-            (Some output_dir)
-            prog5
-            statement_locs;
-          let config : TestGeneration.config =
-            { max_backtracks;
-              max_unfolds;
-              max_array_length;
-              null_in_every;
-              seed;
-              logging_level;
-              interactive
-            }
-          in
-          TestGeneration.run
-            ~output_dir
-            ~filename
-            ~with_ownership_checking
-            config
-            sigma
-            prog5;
+          Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
+          (try
+             Executable_spec.main
+               ~without_ownership_checking
+               ~with_test_gen:true
+               ~copy_source_dir:false
+               filename
+               ail_prog
+               None
+               (Some output_dir)
+               prog5
+               statement_locs
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
+          (try
+             TestGeneration.run
+               ~output_dir
+               ~filename
+               ~without_ownership_checking
+               cabs_tunit
+               sigma
+               prog5
+           with
+           | e -> handle_error_with_user_guidance ~label:"CN-Test-Gen" e);
           if not dont_run then
             Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
-      Resultat.return ())
+      Or_TypeError.return ())
 
 
 open Cmdliner
@@ -619,11 +680,6 @@ module Common_flags = struct
     Arg.(value & flag & info [ "no-use-ity" ] ~doc)
 
 
-  let use_peval =
-    let doc = "(this switch should go away) run the Core partial evaluation phase" in
-    Arg.(value & flag & info [ "use-peval" ] ~doc)
-
-
   let no_inherit_loc =
     let doc =
       "debugging: stop mucore terms inheriting location information from parents"
@@ -655,27 +711,9 @@ module Verify_flags = struct
     Arg.(value & flag & info [ "quiet" ] ~doc)
 
 
-  let slow_smt_threshold =
-    let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
-    Arg.(value & opt (some float) None & info [ "slow-smt" ] ~docv:"TIMEOUT" ~doc)
-
-
-  let slow_smt_dir =
-    let doc =
-      "Set the destination dir for logging slow smt queries (default is in system \
-       temp-dir)."
-    in
-    Arg.(value & opt (some string) None & info [ "slow-smt-dir" ] ~docv:"FILE" ~doc)
-
-
   let diag =
     let doc = "explore branching diagnostics with key string" in
     Arg.(value & opt (some string) None & info [ "diag" ] ~doc)
-
-
-  let random_seed =
-    let doc = "Set the SMT solver random seed (default 1)." in
-    Arg.(value & opt int 0 & info [ "r"; "random-seed" ] ~docv:"I" ~doc)
 
 
   let solver_logging =
@@ -722,13 +760,23 @@ module Verify_flags = struct
 
 
   let json =
-    let doc = "output in json format" in
+    let doc = "output summary in JSON format" in
     Arg.(value & flag & info [ "json" ] ~doc)
+
+
+  let json_trace =
+    let doc = "output state trace files as JSON, in addition to HTML" in
+    Arg.(value & flag & info [ "json-trace" ] ~doc)
 
 
   let output_dir =
     let doc = "directory in which to output state files" in
     Arg.(value & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
+
+
+  let disable_resource_derived_constraints =
+    let doc = "disable resource-derived constraints" in
+    Arg.(value & flag & info [ "disable-resource-derived-constraints" ] ~doc)
 end
 
 module Executable_spec_flags = struct
@@ -749,9 +797,9 @@ module Executable_spec_flags = struct
     Arg.(value & opt (some string) None & info [ "output-decorated" ] ~docv:"FILE" ~doc)
 
 
-  let with_ownership_checking =
-    let doc = "Enable ownership checking within CN runtime testing" in
-    Arg.(value & flag & info [ "with-ownership-checking" ] ~doc)
+  let without_ownership_checking =
+    let doc = "Disable ownership checking within CN runtime testing" in
+    Arg.(value & flag & info [ "without-ownership-checking" ] ~doc)
 
 
   let with_test_gen =
@@ -784,11 +832,11 @@ let wf_cmd =
     $ Common_flags.incl_dirs
     $ Common_flags.incl_files
     $ Verify_flags.json
+    $ Verify_flags.json_trace
     $ Verify_flags.output_dir
     $ Common_flags.csv_times
     $ Common_flags.log_times
     $ Common_flags.astprints
-    $ Common_flags.use_peval
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
   in
@@ -816,10 +864,9 @@ let verify_t : unit Term.t =
   $ Common_flags.debug_level
   $ Common_flags.print_level
   $ Common_flags.print_sym_nums
-  $ Verify_flags.slow_smt_threshold
-  $ Verify_flags.slow_smt_dir
   $ Common_flags.no_timestamps
   $ Verify_flags.json
+  $ Verify_flags.json_trace
   $ Verify_flags.output_dir
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
@@ -827,7 +874,6 @@ let verify_t : unit Term.t =
   $ Verify_flags.skip
   $ Common_flags.csv_times
   $ Common_flags.log_times
-  $ Verify_flags.random_seed
   $ Verify_flags.solver_logging
   $ Verify_flags.solver_flags
   $ Verify_flags.solver_path
@@ -835,11 +881,11 @@ let verify_t : unit Term.t =
   $ Common_flags.astprints
   $ Verify_flags.dont_use_vip
   $ Common_flags.no_use_ity
-  $ Common_flags.use_peval
   $ Verify_flags.fail_fast
   $ Verify_flags.quiet
   $ Common_flags.no_inherit_loc
   $ Common_flags.magic_comment_char_dollar
+  $ Verify_flags.disable_resource_derived_constraints
 
 
 let verify_cmd =
@@ -858,9 +904,25 @@ module Testing_flags = struct
     Arg.(required & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
 
 
-  let dont_run_tests =
+  let only =
+    let doc = "Only test this function (or comma-separated names)" in
+    Arg.(value & opt (some string) None & info [ "only" ] ~doc)
+
+
+  let skip =
+    let doc = "Skip testing of this function (or comma-separated names)" in
+    Arg.(value & opt (some string) None & info [ "skip" ] ~doc)
+
+
+  let dont_run =
     let doc = "Do not run tests, only generate them" in
     Arg.(value & flag & info [ "no-run" ] ~doc)
+
+
+  let gen_num_samples =
+    let doc = "Set the number of samples to test" in
+    Arg.(
+      value & opt int TestGeneration.default_cfg.num_samples & info [ "num-samples" ] ~doc)
 
 
   let gen_backtrack_attempts =
@@ -877,10 +939,12 @@ module Testing_flags = struct
   let gen_max_unfolds =
     let doc = "Set the maximum number of unfolds for recursive generators" in
     Arg.(
-      value & opt int TestGeneration.default_cfg.max_unfolds & info [ "max-unfolds" ] ~doc)
+      value
+      & opt (some int) TestGeneration.default_cfg.max_unfolds
+      & info [ "max-unfolds" ] ~doc)
 
 
-  let test_max_array_length =
+  let max_array_length =
     let doc = "Set the maximum length for an array generated" in
     Arg.(
       value
@@ -888,7 +952,39 @@ module Testing_flags = struct
       & info [ "max-array-length" ] ~doc)
 
 
-  let test_null_in_every =
+  let with_static_hack =
+    let doc =
+      "(HACK) Use an `#include` instead of linking to build testing. Necessary until \
+       https://github.com/rems-project/cerberus/issues/784 or equivalent."
+    in
+    Arg.(value & flag & info [ "with-static-hack" ] ~doc)
+
+
+  let sanitize =
+    let doc = "Forwarded to the '-fsanitize' argument of the C compiler" in
+    Arg.(
+      value
+      & opt (some string) (fst TestGeneration.default_cfg.sanitizers)
+      & info [ "sanitize" ] ~doc)
+
+
+  let no_sanitize =
+    let doc = "Forwarded to the '-fno-sanitize' argument of the C compiler" in
+    Arg.(
+      value
+      & opt (some string) (snd TestGeneration.default_cfg.sanitizers)
+      & info [ "no-sanitize" ] ~doc)
+
+
+  let input_timeout =
+    let doc = "Timeout for discarding a generation attempt (ms)" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.input_timeout
+      & info [ "input-timeout" ] ~doc)
+
+
+  let null_in_every =
     let doc = "Set the likelihood of NULL being generated as 1 in every <n>" in
     Arg.(
       value
@@ -896,12 +992,12 @@ module Testing_flags = struct
       & info [ "null-in-every" ] ~doc)
 
 
-  let test_seed =
+  let seed =
     let doc = "Set the seed for random testing" in
     Arg.(value & opt (some string) TestGeneration.default_cfg.seed & info [ "seed" ] ~doc)
 
 
-  let test_logging_level =
+  let logging_level =
     let doc = "Set the logging level for failing inputs from tests" in
     Arg.(
       value
@@ -909,11 +1005,106 @@ module Testing_flags = struct
       & info [ "logging-level" ] ~doc)
 
 
-  let interactive_testing =
+  let progress_level =
+    let doc =
+      "Set the level of detail for progress updates (0 = Quiet, 1 = Per function, 2 = \
+       Per test case)"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.progress_level
+      & info [ "progress-level" ] ~doc)
+
+
+  let interactive =
     let doc =
       "Enable interactive features for testing, such as requesting more detailed logs"
     in
     Arg.(value & flag & info [ "interactive" ] ~doc)
+
+
+  let until_timeout =
+    let doc =
+      "Keep rerunning tests until the given timeout (in seconds) has been reached"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.until_timeout
+      & info [ "until-timeout" ] ~doc)
+
+
+  let exit_fast =
+    let doc = "Stop testing upon finding the first failure" in
+    Arg.(value & flag & info [ "exit-fast" ] ~doc)
+
+
+  let max_stack_depth =
+    let doc = "Maximum stack depth for generators" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.max_stack_depth
+      & info [ "max-stack-depth" ] ~doc)
+
+
+  let allowed_depth_failures =
+    let doc = "Maximum stack depth failures before discarding an attempt" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.allowed_depth_failures
+      & info [ "allowed-depth-failures" ] ~doc)
+
+
+  let max_generator_size =
+    let doc = "Maximum size for generated values" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.max_generator_size
+      & info [ "max-generator-size" ] ~doc)
+
+
+  let random_size_splits =
+    let doc = "Randomly split sizes between recursive generator calls" in
+    Arg.(value & flag & info [ "random-size-splits" ] ~doc)
+
+
+  let allowed_size_split_backtracks =
+    let doc =
+      "Set the maximum attempts to split up a generator's size (between recursive calls) \
+       before backtracking further, during input generation"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.allowed_size_split_backtracks
+      & info [ "allowed-size-split-backtracks" ] ~doc)
+
+
+  let sized_null =
+    let doc =
+      "Scale the likelihood of [NULL] proportionally for a desired size (1/n for size n)"
+    in
+    Arg.(value & flag & info [ "sized-null" ] ~doc)
+
+
+  let coverage =
+    let doc = "(Experimental) Record coverage of tests via [lcov]" in
+    Arg.(value & flag & info [ "coverage" ] ~doc)
+
+
+  let disable_passes =
+    let doc = "skip this optimization pass (or comma-separated names)" in
+    Arg.(
+      value
+      & opt
+          (list
+             (enum
+                [ ("reorder", "reorder");
+                  ("picks", "picks");
+                  ("flatten", "flatten");
+                  ("consistency", "consistency");
+                  ("lift_constraints", "lift_constraints")
+                ]))
+          []
+      & info [ "disable" ] ~doc)
 end
 
 let testing_cmd =
@@ -929,25 +1120,42 @@ let testing_cmd =
     $ Common_flags.csv_times
     $ Common_flags.log_times
     $ Common_flags.astprints
-    $ Common_flags.use_peval
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
-    $ Executable_spec_flags.with_ownership_checking
+    $ Executable_spec_flags.without_ownership_checking
     $ Testing_flags.output_test_dir
-    $ Testing_flags.dont_run_tests
+    $ Testing_flags.only
+    $ Testing_flags.skip
+    $ Testing_flags.dont_run
+    $ Testing_flags.gen_num_samples
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
-    $ Testing_flags.test_max_array_length
-    $ Testing_flags.test_null_in_every
-    $ Testing_flags.test_seed
-    $ Testing_flags.test_logging_level
-    $ Testing_flags.interactive_testing
+    $ Testing_flags.max_array_length
+    $ Testing_flags.with_static_hack
+    $ Term.product Testing_flags.sanitize Testing_flags.no_sanitize
+    $ Testing_flags.input_timeout
+    $ Testing_flags.null_in_every
+    $ Testing_flags.seed
+    $ Testing_flags.logging_level
+    $ Testing_flags.progress_level
+    $ Testing_flags.interactive
+    $ Testing_flags.until_timeout
+    $ Testing_flags.exit_fast
+    $ Testing_flags.max_stack_depth
+    $ Testing_flags.allowed_depth_failures
+    $ Testing_flags.max_generator_size
+    $ Testing_flags.random_size_splits
+    $ Testing_flags.allowed_size_split_backtracks
+    $ Testing_flags.sized_null
+    $ Testing_flags.coverage
+    $ Testing_flags.disable_passes
   in
   let doc =
-    "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\
+    "Generates tests for all functions in [FILE] with CN specifications.\n\
     \    The tests use randomized inputs, which are guaranteed to satisfy the CN \
      precondition.\n\
-    \    A [.cpp] file containing the test harnesses will be placed in [output-dir]."
+    \    A script [run_tests.sh] for building and running the tests will be placed in \
+     [output-dir]."
   in
   let info = Cmd.info "test" ~doc in
   Cmd.v info test_t
@@ -967,6 +1175,7 @@ let instrument_cmd =
     $ Common_flags.print_sym_nums
     $ Common_flags.no_timestamps
     $ Verify_flags.json
+    $ Verify_flags.json_trace
     $ Verify_flags.output_dir
     $ Verify_flags.diag
     $ Verify_flags.only
@@ -976,13 +1185,12 @@ let instrument_cmd =
     $ Common_flags.astprints
     $ Verify_flags.dont_use_vip
     $ Common_flags.no_use_ity
-    $ Common_flags.use_peval
     $ Verify_flags.fail_fast
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.output_decorated
     $ Executable_spec_flags.output_decorated_dir
-    $ Executable_spec_flags.with_ownership_checking
+    $ Executable_spec_flags.without_ownership_checking
     $ Executable_spec_flags.with_test_gen
     $ Executable_spec_flags.copy_source_dir
   in

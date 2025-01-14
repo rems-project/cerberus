@@ -3,9 +3,6 @@ module IT = IndexTerms
 module LC = LogicalConstraints
 module GT = GenTerms
 module GD = GenDefinitions
-module GA = GenAnalysis
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 module Config = TestGenConfig
 
 let generated_size (bt : BT.t) : int =
@@ -43,18 +40,19 @@ let apply_array_max_length (gt : GT.t) : GT.t =
     | Assert (lc, gt') -> GT.assert_ (lc, aux gt') here
     | ITE (it_if, gt_then, gt_else) -> GT.ite_ (it_if, aux gt_then, aux gt_else) here
     | Map ((i, i_bt, it_perm), gt') ->
-      let _it_min, it_max = GenAnalysis.get_bounds (i, i_bt) it_perm in
+      let _it_min, it_max = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
       let loc = Locations.other __LOC__ in
       let it_max_min =
         IT.le_
-          ( IT.num_lit_ (Z.of_int 0) (IT.bt it_max) loc,
-            IT.add_ (it_max, IT.num_lit_ Z.one (IT.bt it_max) loc) loc )
+          ( IT.num_lit_ (Z.of_int 0) (IT.get_bt it_max) loc,
+            IT.add_ (it_max, IT.num_lit_ Z.one (IT.get_bt it_max) loc) loc )
           loc
       in
       let it_max_max =
         IT.lt_
           ( it_max,
-            IT.num_lit_ (Z.of_int (Config.get_max_array_length ())) (IT.bt it_max) loc )
+            IT.num_lit_ (Z.of_int (Config.get_max_array_length ())) (IT.get_bt it_max) loc
+          )
           loc
       in
       GT.assert_

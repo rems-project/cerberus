@@ -1,0 +1,58 @@
+name: CHERI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - cheri-tests
+
+env:
+  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
+
+# cancel in-progress job when a new push is performed
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        # version: [4.12.0, 4.14.1]
+        version: [4.14.1]
+
+
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: System dependencies (ubuntu)
+      run: |
+        sudo apt-get install build-essential libgmp-dev opam
+
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: ${{ matrix.version }}
+        fail-on-cache-miss: true
+
+    - name: Install Cerberus-CHERI
+      if: ${{ matrix.version == '4.14.1' }}
+      run: |
+        opam switch with_coq
+        eval $(opam env --switch=with_coq)
+        opam pin --yes --no-action add cerberus-lib .
+        opam pin --yes --no-action add cerberus-cheri .
+        opam install --yes cerberus-cheri
+
+    - name: Run Cerberus-CHERI CI tests
+      if: ${{ matrix.version == '4.14.1' }}
+      run: |
+        opam switch with_coq
+        eval $(opam env --switch=with_coq)
+        cd tests; USE_OPAM='' ./run-cheri.sh
+        cd ..

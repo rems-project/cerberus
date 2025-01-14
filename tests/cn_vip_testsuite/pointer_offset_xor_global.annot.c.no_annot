@@ -1,0 +1,7 @@
+return code: 1
+[1/1]: main -- fail
+tests/cn_vip_testsuite/pointer_offset_xor_global.annot.c:22:3: error: Missing resource for writing
+  *r = 11;     // CN VIP UB (no annot)
+  ~~~^~~~ 
+Resource needed: Block<signed int>(intToPtr)
+State file: file:///tmp/state__pointer_offset_xor_global.annot.c__main.html

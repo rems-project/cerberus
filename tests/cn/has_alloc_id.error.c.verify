@@ -1,0 +1,8 @@
+return code: 1
+tests/cn/has_alloc_id.error.c:9:30: error: Type error
+    /*@ assert (has_alloc_id(0u64)); @*/
+                             ^
+Expression '0'u64' has type 'u64'.
+I expected it to have type 'pointer' because of tests/cn/has_alloc_id.error.c:9:17:
+    /*@ assert (has_alloc_id(0u64)); @*/
+                ~~~~~~~~~~~~^~~~~~ 

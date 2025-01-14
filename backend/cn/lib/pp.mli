@@ -347,3 +347,7 @@ val print_json : Yojson.Safe.t Lazy.t -> unit
 val progress_simple : string -> string -> unit
 
 val of_total : int -> int -> string
+
+val document_to_yojson : document -> Yojson.Safe.t
+
+val document_of_yojson : Yojson.Safe.t -> (document, string) Result.t

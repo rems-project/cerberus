@@ -1,11 +1,17 @@
 name: docker
 
 on:
+  # Run this action every day
   schedule:
     - cron: '30 18 * * *'
+  # Run this action any time any dockerfile changes
+  pull_request:
+    paths:
+      - 'Dockerfile.**'
+      - '**docker.yml'
 
 env:
-  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
+  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn
 
 # Cancelling an in-progress job when a new push is performed causes the CI to
 # show up as failed: https://github.com/orgs/community/discussions/8336
@@ -15,12 +21,10 @@ concurrency:
   group: docker-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+# Instructions from https://depot.dev/blog/multi-platform-docker-images-in-github-actions
 jobs:
-  deploy-docker:
+  docker-release-ubuntu:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platform: [linux/amd64, linux/arm64]
     permissions:
       packages: write
       contents: read
@@ -40,11 +44,61 @@ jobs:
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    - name: Build the Docker image
-      run: |
-        echo "Building ${{env.CERBERUS_IMAGE_ID}}"
-        PLATFORM=${{ matrix.platform }} make -f Makefile_docker release_cn
-        docker tag cn:release ${{env.CERBERUS_IMAGE_ID}}
 
-    - name: Push the Docker image
-      run: docker push ${{env.CERBERUS_IMAGE_ID}}
+    - name: Build multi-platform image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{env.CERBERUS_IMAGE_ID}}:release
+        file: Dockerfile.ubuntu
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-release-redhat:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build multi-platform image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{env.CERBERUS_IMAGE_ID}}:release-redhat
+        file: Dockerfile.redhat
+        attests: type=sbom
+        provenance: mode=max
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  test-docker-images:
+    runs-on: ubuntu-latest
+    needs: [docker-release-redhat, docker-release-ubuntu]
+    strategy:
+      matrix:
+        tag: [release, release-redhat]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run CN CI tests
+      run: |
+        docker pull ${{env.CERBERUS_IMAGE_ID}}:${{ matrix.tag }}
+        docker run -v $PWD:/work -w /work ${{env.CERBERUS_IMAGE_ID}}:${{ matrix.tag }} bash tests/run-cn.sh

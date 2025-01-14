@@ -7,26 +7,26 @@
 extern "C" {
 #endif
 
-    struct int_tree {
+    struct cn_gen_int_tree {
         uint64_t weight;
         uint64_t value;
 
-        struct int_tree* left;
-        struct int_tree* right;
+        struct cn_gen_int_tree* left;
+        struct cn_gen_int_tree* right;
     };
 
-    struct int_urn {
+    struct cn_gen_int_urn {
         uint8_t size;
-        struct int_tree* tree;
+        struct cn_gen_int_tree* tree;
     };
 
-    struct int_urn* urn_from_array(uint64_t elems[], uint8_t len);
+    struct cn_gen_int_urn* urn_from_array(uint64_t elems[], uint8_t len);
 
-    void urn_insert(struct int_urn* urn, uint64_t weight, uint64_t value);
+    void urn_insert(struct cn_gen_int_urn* urn, uint64_t weight, uint64_t value);
 
-    uint64_t urn_remove(struct int_urn* urn);
+    uint64_t urn_remove(struct cn_gen_int_urn* urn);
 
-    void urn_free(struct int_urn* urn);
+    void urn_free(struct cn_gen_int_urn* urn);
 
 #ifdef __cplusplus
 }

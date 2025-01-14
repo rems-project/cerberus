@@ -1,0 +1,13 @@
+return code: 1
+tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_global_xy.annot.c:23:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+                ^~~~~~~~ 
+tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_global_xy.annot.c:26:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+                ^~~~~~~~~~ 
+[1/1]: main -- fail
+tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_global_xy.annot.c:35:5: error: Missing resource for writing
+    *p = 11; // CN VIP UB (no annot)
+    ~~~^~~~ 
+Resource needed: Block<signed int>(value)
+State file: file:///tmp/state__pointer_offset_from_int_subtraction_global_xy.annot.c__main.html

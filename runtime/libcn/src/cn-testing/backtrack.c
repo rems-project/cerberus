@@ -19,12 +19,21 @@ static size_t more_alloc_needed = 0;
 
 void cn_gen_backtrack_reset(void) {
     type = CN_GEN_BACKTRACK_NONE;
-    to_retry = NULL;
     more_alloc_needed = 0;
+
+    while (to_retry != NULL) {
+        void* tmp = to_retry->next;
+        free(to_retry);
+        to_retry = tmp;
+    }
 }
 
 void cn_gen_backtrack_assert_failure(void) {
     type = CN_GEN_BACKTRACK_ASSERT;
+}
+
+void cn_gen_backtrack_depth_exceeded() {
+    type = CN_GEN_BACKTRACK_DEPTH;
 }
 
 void cn_gen_backtrack_relevant_add(char* varname) {

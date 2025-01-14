@@ -1,0 +1,6 @@
+{
+    "name": "non_det_false",
+    "args": ["verify", "-DVIP", "-DNO_ROUND_TRIP", "-DNON_DET_FALSE", "--solver-type=cvc5" ],
+    "filter": "^(.*\\.nondet.c)$",
+    "timeout": 35
+}

@@ -1,0 +1,13 @@
+return code: 1
+tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:14:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&r); @*/
+                ^~~~~~~~ 
+tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:17:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&r); @*/
+                ^~~~~~~~~~ 
+[1/1]: main -- fail
+tests/cn_vip_testsuite/pointer_offset_from_ptr_subtraction_global_xy.error.c:12:22: error: Undefined behaviour
+  ptrdiff_t offset = q - p; // CN VIP UB
+                     ~~^~~ 
+the subtraction of two pointers must be between pointers that points into, or just beyond, the same array object (§6.5.6#9, sentence 1)
+State file: file:///tmp/state__pointer_offset_from_ptr_subtraction_global_xy.error.c__main.html

@@ -1,7 +1,6 @@
 open Locations
-module SymSet = Set.Make (Sym)
 module BT = BaseTypes
-module RT = ResourceTypes
+module RT = Request
 module IT = IndexTerms
 module LC = LogicalConstraints
 
@@ -55,27 +54,27 @@ and alpha_rename from t =
 
 
 and suitably_alpha_rename syms s t =
-  if SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename s t
   else
     (s, t)
 
 
 let rec bound = function
-  | Define ((s, _), _, lrt) -> SymSet.add s (bound lrt)
-  | Resource ((s, _), _, lrt) -> SymSet.add s (bound lrt)
+  | Define ((s, _), _, lrt) -> Sym.Set.add s (bound lrt)
+  | Resource ((s, _), _, lrt) -> Sym.Set.add s (bound lrt)
   | Constraint (_, _, lrt) -> bound lrt
-  | I -> SymSet.empty
+  | I -> Sym.Set.empty
 
 
 let alpha_unique ss =
   let rec f ss = function
     | Resource ((name, (re, bt)), info, t) ->
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       let name, t = suitably_alpha_rename ss name t in
       Resource ((name, (re, bt)), info, t)
     | Define ((name, it), info, t) ->
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       let name, t = suitably_alpha_rename ss name t in
       Define ((name, it), info, t)
     | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
@@ -85,13 +84,14 @@ let alpha_unique ss =
 
 
 let binders =
+  let here = Locations.other __LOC__ in
   let rec aux = function
     | Define ((s, it), _, t) ->
       let s, t = alpha_rename s t in
-      (Id.id (Sym.pp_string s), IT.bt it) :: aux t
+      (Id.make here (Sym.pp_string s), IT.get_bt it) :: aux t
     | Resource ((s, (_, bt)), _, t) ->
       let s, t = alpha_rename s t in
-      (Id.id (Sym.pp_string s), bt) :: aux t
+      (Id.make here (Sym.pp_string s), bt) :: aux t
     | Constraint (_, _, t) -> aux t
     | I -> []
   in
@@ -100,11 +100,11 @@ let binders =
 
 let free_vars lrt =
   let rec f = function
-    | Define ((nm, it), _, t) -> SymSet.union (IT.free_vars it) (SymSet.remove nm (f t))
+    | Define ((nm, it), _, t) -> Sym.Set.union (IT.free_vars it) (Sym.Set.remove nm (f t))
     | Resource ((nm, (re, _)), _, t) ->
-      SymSet.union (RT.free_vars re) (SymSet.remove nm (f t))
-    | Constraint (lc, _, t) -> SymSet.union (LogicalConstraints.free_vars lc) (f t)
-    | I -> SymSet.empty
+      Sym.Set.union (RT.free_vars re) (Sym.Set.remove nm (f t))
+    | Constraint (lc, _, t) -> Sym.Set.union (LogicalConstraints.free_vars lc) (f t)
+    | I -> Sym.Set.empty
   in
   f lrt
 

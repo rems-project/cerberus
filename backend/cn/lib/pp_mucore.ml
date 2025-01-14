@@ -656,7 +656,7 @@ module Make (Config : CONFIG) = struct
       Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ IndexTerms.pp it)
       ^^^ pp_arguments_l ppf l
     | Resource ((s, (re, _bt)), _info, l) ->
-      Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ ResourceTypes.pp re)
+      Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ Request.pp re)
       ^^^ pp_arguments_l ppf l
     | Constraint (lc, _info, l) ->
       Pp.parens (LogicalConstraints.pp lc) ^^^ pp_arguments_l ppf l
@@ -699,7 +699,12 @@ module Make (Config : CONFIG) = struct
                                 ^^ (match def with
                                     | Return _ ->
                                       P.break 1 ^^ !^"return label" ^^^ pp_symbol sym
-                                    | Label (_loc, label_args_and_body, _annots, _) ->
+                                    | Label
+                                        ( _loc,
+                                          label_args_and_body,
+                                          _annots,
+                                          _,
+                                          _loop_condition_loc ) ->
                                       P.break 1
                                       ^^ !^"label"
                                       ^^^ pp_symbol sym

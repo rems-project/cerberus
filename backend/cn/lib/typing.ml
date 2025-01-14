@@ -1,20 +1,20 @@
-open Context
+module BT = BaseTypes
+module Res = Resource
+module Req = Request
+module LC = LogicalConstraints
+module Loc = Locations
 module IT = IndexTerms
 module ITSet = Set.Make (IT)
-module SymMap = Map.Make (Sym)
-module RET = ResourceTypes
-module RE = Resources
-open TypeErrors
 
 type solver = Solver.solver
 
 type s =
   { typing_context : Context.t;
     solver : solver option;
-    sym_eqs : IT.t SymMap.t;
+    sym_eqs : IT.t Sym.Map.t;
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
-    movable_indices : (RET.predicate_name * IT.t) list;
+    movable_indices : (Req.name * IT.t) list;
     unfold_resources_required : bool;
     log : Explain.log
   }
@@ -22,7 +22,7 @@ type s =
 let empty_s (c : Context.t) =
   { typing_context = c;
     solver = None;
-    sym_eqs = SymMap.empty;
+    sym_eqs = Sym.Map.empty;
     past_models = [];
     found_equalities = EqTable.empty;
     movable_indices = [];
@@ -56,7 +56,7 @@ let get () : s t = fun s -> Ok (s, s)
 (* due to solver interaction, this has to be used carefully *)
 let set (s' : s) : unit t = fun _s -> Ok ((), s')
 
-let run (c : Context.t) (m : 'a t) : 'a Resultat.t =
+let run (c : Context.t) (m : 'a t) : 'a Or_TypeError.t =
   match m (empty_s c) with Ok (a, _) -> Ok a | Error e -> Error e
 
 
@@ -68,17 +68,17 @@ let run_from_pause (f : 'a -> 'b t) (pause : 'a pause) =
   match pause with Ok (a, s) -> Result.map fst @@ f a s | Error e -> Error e
 
 
-let pause_to_result (pause : 'a pause) : 'a Resultat.t = Result.map fst pause
+let pause_to_result (pause : 'a pause) : 'a Or_TypeError.t = Result.map fst pause
 
 let pure (m : 'a t) : 'a t =
   fun s ->
-  Solver.push (Option.get s.solver);
+  Option.iter Solver.push s.solver;
   let outcome = match m s with Ok (a, _) -> Ok (a, s) | Error e -> Error e in
-  Solver.pop (Option.get s.solver) 1;
+  Option.iter (fun s -> Solver.pop s 1) s.solver;
   outcome
 
 
-let sandbox (m : 'a t) : 'a Resultat.t t =
+let sandbox (m : 'a t) : 'a Or_TypeError.t t =
   fun s ->
   let n = Solver.num_scopes (Option.get s.solver) in
   Solver.push (Option.get s.solver);
@@ -97,14 +97,14 @@ let sandbox (m : 'a t) : 'a Resultat.t t =
   Ok (outcome, s)
 
 
-let embed_resultat (m : 'a Resultat.t) : 'a m =
+let lift (m : 'a Or_TypeError.t) : 'a m =
   fun s -> match m with Ok r -> Ok (r, s) | Error e -> Error e
 
 
 (* end basic functions *)
 
 module Eff = Effectful.Make (struct
-    type 'a m = 'a t
+    type nonrec 'a t = 'a t
 
     let bind = bind
 
@@ -179,19 +179,9 @@ let print_with_ctxt printer =
 
 let get_global () : Global.t t = inspect_typing_context (fun c -> c.global)
 
+(** TODO delete this, have Global.t be constructed by itself *)
 let set_global (g : Global.t) : unit t =
   modify_typing_context (fun s -> { s with global = g })
-
-
-(* later functions should be rewritten to use `inspect_global` and `modify_global` *)
-let _inspect_global (f : Global.t -> 'a) : 'a t =
-  let@ g = get_global () in
-  return (f g)
-
-
-let _modify_global (f : Global.t -> Global.t) : unit t =
-  let@ g = get_global () in
-  set_global (f g)
 
 
 let record_action ((a : Explain.action), (loc : Loc.t)) : unit t =
@@ -205,143 +195,127 @@ let modify_where (f : Where.t -> Where.t) : unit t =
     { s with log; typing_context })
 
 
-(* convenient functions for global typing context *)
+module ErrorReader = struct
+  type nonrec 'a t = 'a t
 
-let get_logical_function_def loc id =
-  let@ global = get_global () in
-  match Global.get_logical_function_def global id with
-  | Some def -> return def
-  | None ->
-    fail (fun _ ->
-      { loc;
-        msg =
-          Unknown_logical_function
-            { id;
-              resource = Option.is_some (Global.get_resource_predicate_def global id)
-            }
-      })
+  let return = return
+
+  let bind = bind
+
+  let get_global () =
+    let@ s = get () in
+    return s.typing_context.global
 
 
-let get_struct_decl loc tag =
-  let@ global = get_global () in
-  match SymMap.find_opt tag global.struct_decls with
-  | Some decl -> return decl
-  | None -> fail (fun _ -> { loc; msg = Unknown_struct tag })
+  let lift = function
+    | Ok x -> return x
+    | Error WellTyped.{ loc; msg } -> fail (fun _ -> { loc; msg = WellTyped msg })
 
 
-let get_datatype loc tag =
-  let@ global = get_global () in
-  match SymMap.find_opt tag global.datatypes with
-  | Some dt -> return dt
-  | None -> fail (fun _ -> { loc; msg = Unknown_datatype tag })
+  let fail loc msg = fail (fun _ -> { loc; msg = Global msg })
+
+  let get_context () =
+    let@ s = get () in
+    return s.typing_context
+end
+
+module Global = struct
+  include Global.Lift (ErrorReader)
+
+  let empty = Global.empty
+
+  let is_fun_decl global id = Option.is_some @@ Global.get_fun_decl global id
+
+  let get_struct_member_type loc tag member =
+    let@ decl = get_struct_decl loc tag in
+    let@ ty = get_member_type loc member decl in
+    return ty
 
 
-let get_datatype_constr loc tag =
-  let@ global = get_global () in
-  match SymMap.find_opt tag global.datatype_constrs with
-  | Some info -> return info
-  | None -> fail (fun _ -> { loc; msg = Unknown_datatype_constr tag })
+  let get_fun_decls () =
+    let@ global = get_global () in
+    return (Sym.Map.bindings global.fun_decls)
 
 
-let get_member_type loc _tag member layout : Sctypes.t m =
-  let member_types = Memory.member_types layout in
-  match List.assoc_opt Id.equal member member_types with
-  | Some membertyp -> return membertyp
-  | None ->
-    fail (fun _ -> { loc; msg = Unexpected_member (List.map fst member_types, member) })
+  let add_struct_decl tag layout : unit m =
+    let@ global = get_global () in
+    set_global { global with struct_decls = Sym.Map.add tag layout global.struct_decls }
 
 
-let get_struct_member_type loc tag member =
-  let@ decl = get_struct_decl loc tag in
-  let@ ty = get_member_type loc tag member decl in
-  return ty
+  let add_fun_decl fname entry =
+    let@ global = get_global () in
+    set_global { global with fun_decls = Sym.Map.add fname entry global.fun_decls }
 
 
-let get_fun_decl loc fsym =
-  let@ global = get_global () in
-  match Global.get_fun_decl global fsym with
-  | Some t -> return t
-  | None -> fail (fun _ -> { loc; msg = Unknown_function fsym })
+  let add_lemma lemma_s (loc, lemma_typ) =
+    let@ global = get_global () in
+    set_global
+      { global with lemmata = Sym.Map.add lemma_s (loc, lemma_typ) global.lemmata }
 
 
-let get_lemma loc lsym =
-  let@ global = get_global () in
-  match Global.get_lemma global lsym with
-  | Some t -> return t
-  | None -> fail (fun _ -> { loc; msg = Unknown_lemma lsym })
+  let add_resource_predicate name entry =
+    let@ global = get_global () in
+    set_global
+      { global with
+        resource_predicates = Sym.Map.add name entry global.resource_predicates
+      }
 
 
-let get_resource_predicate_def loc id =
-  let@ global = get_global () in
-  match Global.get_resource_predicate_def global id with
-  | Some def -> return def
-  | None ->
-    fail (fun _ ->
-      { loc;
-        msg =
-          Unknown_resource_predicate
-            { id; logical = Option.is_some (Global.get_logical_function_def global id) }
-      })
+  let add_logical_function name entry =
+    let@ global = get_global () in
+    set_global
+      { global with logical_functions = Sym.Map.add name entry global.logical_functions }
 
 
-let add_struct_decl tag layout : unit m =
-  let@ global = get_global () in
-  set_global { global with struct_decls = SymMap.add tag layout global.struct_decls }
+  let add_datatype name entry =
+    let@ global = get_global () in
+    set_global { global with datatypes = Sym.Map.add name entry global.datatypes }
 
 
-let add_fun_decl fname entry =
-  let@ global = get_global () in
-  set_global { global with fun_decls = SymMap.add fname entry global.fun_decls }
+  let add_datatype_constr name entry =
+    let@ global = get_global () in
+    set_global
+      { global with datatype_constrs = Sym.Map.add name entry global.datatype_constrs }
 
 
-let add_lemma lemma_s (loc, lemma_typ) =
-  let@ global = get_global () in
-  set_global { global with lemmata = SymMap.add lemma_s (loc, lemma_typ) global.lemmata }
+  let set_datatype_order datatype_order =
+    let@ g = get_global () in
+    set_global { g with datatype_order }
 
 
-let add_resource_predicate name entry =
-  let@ global = get_global () in
-  set_global
-    { global with
-      resource_predicates = Global.SymMap.add name entry global.resource_predicates
-    }
+  let get_datatype_order () =
+    let@ g = get_global () in
+    return g.datatype_order
 
 
-let add_logical_function name entry =
-  let@ global = get_global () in
-  set_global
-    { global with
-      logical_functions = Global.SymMap.add name entry global.logical_functions
-    }
+  let set_resource_predicate_order resource_predicate_order =
+    let@ g = get_global () in
+    set_global { g with resource_predicate_order }
 
 
-let add_datatype name entry =
-  let@ global = get_global () in
-  set_global { global with datatypes = SymMap.add name entry global.datatypes }
+  let get_resource_predicate_order () =
+    let@ g = get_global () in
+    return g.resource_predicate_order
 
 
-let add_datatype_constr name entry =
-  let@ global = get_global () in
-  set_global
-    { global with datatype_constrs = SymMap.add name entry global.datatype_constrs }
+  let set_logical_function_order logical_function_order =
+    let@ g = get_global () in
+    set_global { g with logical_function_order }
 
 
-let set_datatype_order datatype_order =
-  let@ g = get_global () in
-  set_global { g with datatype_order }
-
-
-let get_datatype_order () =
-  let@ g = get_global () in
-  return g.datatype_order
-
+  let get_logical_function_order () =
+    let@ g = get_global () in
+    return g.logical_function_order
+end
 
 (* end: convenient functions for global typing context *)
+
+module WellTyped = WellTyped.Lift (ErrorReader)
 
 let add_sym_eqs sym_eqs =
   modify (fun s ->
     let sym_eqs =
-      List.fold_left (fun acc (s, v) -> SymMap.add s v acc) s.sym_eqs sym_eqs
+      List.fold_left (fun acc (s, v) -> Sym.Map.add s v acc) s.sym_eqs sym_eqs
     in
     { s with sym_eqs })
 
@@ -418,7 +392,7 @@ let init_solver () =
   modify (fun s ->
     let c = s.typing_context in
     let solver = Solver.make c.global in
-    LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
+    LC.Set.iter (Solver.add_assumption solver c.global) c.constraints;
     { s with solver = Some solver })
 
 
@@ -440,16 +414,14 @@ let add_c_internal lc =
   return ()
 
 
-let add_r_internal ?(derive_constraints = true) loc (r, RE.O oargs) =
+let add_r_internal ?(derive_constraints = true) loc (r, Res.O oargs) =
   let@ s = get_typing_context () in
   let@ simp_ctxt = simp_ctxt () in
-  let r = Simplify.ResourceTypes.simp simp_ctxt r in
+  let r = Simplify.Request.simp simp_ctxt r in
   let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
   let pointer_facts =
     if derive_constraints then
-      Resources.pointer_facts
-        ~new_resource:(r, RE.O oargs)
-        ~old_resources:(Context.get_rs s)
+      Res.pointer_facts ~new_resource:(r, Res.O oargs) ~old_resources:(Context.get_rs s)
     else
       []
   in
@@ -501,15 +473,14 @@ let get_just_models () =
 
 
 let model_has_prop () =
-  let@ global = get_global () in
   let is_some_true t = Option.is_some t && IT.is_true (Option.get t) in
-  return (fun prop m -> is_some_true (Solver.eval global (fst m) prop))
+  return (fun prop m -> is_some_true (Solver.eval (fst m) prop))
 
 
 let prove_or_model_with_past_model loc m =
   let@ has_prop = model_has_prop () in
   let@ p_f = provable_internal loc in
-  let loc = Locations.other __FUNCTION__ in
+  let loc = Locations.other __LOC__ in
   let res lc =
     match lc with
     | LC.T t when has_prop (IT.not_ t loc) m -> `Counterex (lazy m)
@@ -523,18 +494,17 @@ let prove_or_model_with_past_model loc m =
 let do_check_model loc m prop =
   Pp.warn loc (Pp.string "doing model consistency check");
   let@ ctxt = get_typing_context () in
-  let@ global = get_global () in
   let vs =
     Context.(
-      SymMap.bindings ctxt.computational @ SymMap.bindings ctxt.logical
+      Sym.Map.bindings ctxt.computational @ Sym.Map.bindings ctxt.logical
       |> List.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
       |> List.map (fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc)))
   in
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let eqs =
     List.filter_map
       (fun v ->
-        match Solver.eval global (fst m) v with
+        match Solver.eval (fst m) v with
         | None -> None
         | Some x -> Some (IT.eq_ (v, x) here))
       vs
@@ -560,8 +530,8 @@ let model_with_internal loc prop =
   | Some m -> return (Some m)
   | None ->
     let@ prover = provable_internal loc in
-    let here = Locations.other __FUNCTION__ in
-    (match prover (LC.t_ (IT.not_ prop here)) with
+    let here = Locations.other __LOC__ in
+    (match prover (LC.T (IT.not_ prop here)) with
      | `True -> return None
      | `False ->
        let@ m = model () in
@@ -570,17 +540,6 @@ let model_with_internal loc prop =
 
 
 (* functions for binding return types and associated auxiliary functions *)
-
-let ensure_logical_sort (loc : Loc.t) ~(expect : LS.t) (has : LS.t) : unit m =
-  if LS.equal has expect then
-    return ()
-  else
-    fail (fun _ -> { loc; msg = Mismatch { has = BT.pp has; expect = BT.pp expect } })
-
-
-let ensure_base_type (loc : Loc.t) ~(expect : BT.t) (has : BT.t) : unit m =
-  ensure_logical_sort loc ~expect has
-
 
 let make_return_record loc (record_name : string) record_members =
   let record_s = Sym.fresh_make_uniq record_name in
@@ -602,12 +561,14 @@ let bind_logical_return_internal loc =
   let rec aux members lrt =
     match (members, lrt) with
     | member :: members, LogicalReturnTypes.Define ((s, it), _, lrt) ->
-      let@ () = ensure_base_type loc ~expect:(IT.bt it) (IT.bt member) in
-      let@ () = add_c_internal (LC.t_ (IT.eq__ member it loc)) in
+      let@ () =
+        WellTyped.ensure_base_type loc ~expect:(IT.get_bt it) (IT.get_bt member)
+      in
+      let@ () = add_c_internal (LC.T (IT.eq__ member it loc)) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | member :: members, Resource ((s, (re, bt)), _, lrt) ->
-      let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
-      let@ () = add_r_internal loc (re, RE.O member) in
+      let@ () = WellTyped.ensure_base_type loc ~expect:bt (IT.get_bt member) in
+      let@ () = add_r_internal loc (re, Res.O member) in
       aux members (LogicalReturnTypes.subst (IT.make_subst [ (s, member) ]) lrt)
     | members, Constraint (lc, _, lrt) ->
       let@ () = add_c_internal lc in
@@ -627,7 +588,7 @@ let bind_logical_return loc members lrt =
 let bind_return loc members (rt : ReturnTypes.t) =
   match (members, rt) with
   | member :: members, Computational ((s, bt), _, lrt) ->
-    let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
+    let@ () = WellTyped.ensure_base_type loc ~expect:bt (IT.get_bt member) in
     let@ () =
       bind_logical_return
         loc
@@ -643,9 +604,10 @@ let bind_return loc members (rt : ReturnTypes.t) =
 type changed =
   | Deleted
   | Unchanged
-  | Changed of RE.t
+  | Changed of Res.t
 
-let map_and_fold_resources_internal loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) =
+let map_and_fold_resources_internal loc (f : Res.t -> 'acc -> changed * 'acc) (acc : 'acc)
+  =
   let@ s = get_typing_context () in
   let@ provable_f = provable_internal loc in
   let resources, orig_ix = s.resources in
@@ -663,7 +625,7 @@ let map_and_fold_resources_internal loc (f : RE.t -> 'acc -> changed * 'acc) (ac
           let ix, hist = Context.res_written loc i "changed" (ix, hist) in
           (match re with
            | Q { q; permission; _ }, _ ->
-             let here = Locations.other __FUNCTION__ in
+             let here = Locations.other __LOC__ in
              (match provable_f (LC.forall_ q (IT.not_ permission here)) with
               | `True -> (resources, ix, hist, i :: changed_or_deleted, acc)
               | `False ->
@@ -689,11 +651,11 @@ let do_unfold_resources loc =
   let rec aux () =
     let@ s = get_typing_context () in
     let@ movable_indices = get_movable_indices () in
-    let@ _provable_f = provable_internal (Locations.other __FUNCTION__) in
+    let@ _provable_f = provable_internal (Locations.other __LOC__) in
     let resources, orig_ix = s.resources in
     let _orig_hist = s.resource_history in
     Pp.debug 8 (lazy (Pp.string "-- checking resource unfolds now --"));
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ true_m = model_with_internal loc (IT.bool_ true here) in
     match true_m with
     | None -> return () (* contradictory state *)
@@ -704,7 +666,7 @@ let do_unfold_resources loc =
           (fun (re, i) (keep, unpack, extract) ->
             match Pack.unpack loc s.global provable_f2 re with
             | Some unpackable ->
-              let pname = RET.predicate_name (fst re) in
+              let pname = Req.get_name (fst re) in
               (keep, (i, pname, unpackable) :: unpack, extract)
             | None ->
               let re_reduced, extracted =
@@ -728,7 +690,7 @@ let do_unfold_resources loc =
           let@ _, members =
             make_return_record
               loc
-              ("unpack_" ^ Pp.plain (RET.pp_predicate_name pname))
+              ("unpack_" ^ Pp.plain (Req.pp_name pname))
               (LogicalReturnTypes.binders lrt)
           in
           bind_logical_return_internal loc members lrt
@@ -803,11 +765,11 @@ let value_eq_group guard x =
 
 
 let test_value_eqs loc guard x ys =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let prop y =
     match guard with
-    | None -> LC.t_ (IT.eq_ (x, y) here)
-    | Some t -> LC.t_ (IT.impl_ (t, IT.eq_ (x, y) here) here)
+    | None -> LC.T (IT.eq_ (x, y) here)
+    | Some t -> LC.T (IT.impl_ (t, IT.eq_ (x, y) here) here)
   in
   let@ prover = provable loc in
   let guard_it = Option.value guard ~default:(IT.bool_ true here) in

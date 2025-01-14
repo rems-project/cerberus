@@ -1,0 +1,12 @@
+return code: 1
+tests/cn/unconstrained_ptr_eq.error.c:7:12: warning: Cannot rule out ambiguous pointer equality case (addresses equal, but provenances differ)
+    return p == q;
+           ~~^~~~ 
+[1/1]: f -- fail
+tests/cn/unconstrained_ptr_eq.error.c:7:5: error: Unprovable constraint
+    return p == q;
+    ^~~~~~~~~~~~~~ 
+Constraint from tests/cn/unconstrained_ptr_eq.error.c:4:5:
+    return == 0i32;
+    ^~~~~~~~~~~~~~~ 
+State file: file:///tmp/state__unconstrained_ptr_eq.error.c__f.html

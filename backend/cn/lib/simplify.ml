@@ -15,15 +15,14 @@ end
 
 module ITPairMap = Map.Make (ITPair)
 module ITSet = Set.Make (IT)
-module LCSet = Set.Make (LC)
 
 type simp_ctxt =
   { global : Global.t;
-    values : IT.t SymMap.t;
+    values : IT.t Sym.Map.t;
     simp_hook : IT.t -> IT.t option
   }
 
-let default global = { global; values = SymMap.empty; simp_hook = (fun _ -> None) }
+let default global = { global; values = Sym.Map.empty; simp_hook = (fun _ -> None) }
 
 let do_ctz_z z =
   let rec loop z found =
@@ -37,13 +36,13 @@ let do_ctz_z z =
 
 
 module IndexTerms = struct
-  let z1 = z_ Z.one (Cerb_location.other __FUNCTION__)
+  let z1 = z_ Z.one (Cerb_location.other __LOC__)
 
-  let z0 = z_ Z.zero (Cerb_location.other __FUNCTION__)
+  let z0 = z_ Z.zero (Cerb_location.other __LOC__)
 
   let rec dest_int_addition ts it =
-    let loc = IT.loc it in
-    match IT.term it with
+    let loc = IT.get_loc it in
+    match IT.get_term it with
     | Const (Z i1) ->
       if fst ts || ITSet.mem z1 (snd ts) then ([ (z1, i1) ], z0) else ([], it)
     | Binop (Add, a, b) ->
@@ -123,15 +122,15 @@ module IndexTerms = struct
 
 
   let simp_comp_if_int a b loc =
-    if BaseTypes.equal (IT.basetype a) BaseTypes.Integer then
+    if BaseTypes.equal (IT.get_bt a) BaseTypes.Integer then
       simp_int_comp a b loc
     else
       (a, b)
 
 
   let rec record_member_reduce it member =
-    let loc = IT.loc it in
-    match IT.term it with
+    let loc = IT.get_loc it in
+    match IT.get_term it with
     | Record members -> List.assoc Id.equal member members
     | RecordUpdate ((t, m), v) ->
       if Id.equal m member then
@@ -141,15 +140,15 @@ module IndexTerms = struct
     | ITE (cond, it1, it2) ->
       ite_ (cond, record_member_reduce it1 member, record_member_reduce it2 member) loc
     | _ ->
-      let member_tys = BT.record_bt (IT.bt it) in
+      let member_tys = BT.record_bt (IT.get_bt it) in
       let member_bt = List.assoc Id.equal member member_tys in
       IT.recordMember_ ~member_bt (it, member) loc
 
 
   (* let rec datatype_member_reduce it member member_bt = *)
-  (*   match IT.term it with *)
+  (*   match IT.get_term it with *)
   (*     | DatatypeCons (nm, members_rec) -> *)
-  (*       let members = BT.record_bt (IT.bt members_rec) in *)
+  (*       let members = BT.record_bt (IT.get_bt members_rec) in *)
   (*       if List.exists (Id.equal member) (List.map fst members) *)
   (*       then record_member_reduce members_rec member *)
   (*       else IT.IT (DatatypeMember (it, member), member_bt) *)
@@ -159,8 +158,8 @@ module IndexTerms = struct
   (*     | _ -> IT.IT (DatatypeMember (it, member), member_bt) *)
 
   let rec tuple_nth_reduce it n item_bt =
-    let loc = IT.loc it in
-    match IT.term it with
+    let loc = IT.get_loc it in
+    match IT.get_term it with
     | Tuple items -> List.nth items n
     | ITE (cond, it1, it2) ->
       ite_ (cond, tuple_nth_reduce it1 n item_bt, tuple_nth_reduce it2 n item_bt) loc
@@ -168,9 +167,9 @@ module IndexTerms = struct
 
 
   let rec accessor_reduce (f : IT.t -> IT.t option) it =
-    let bt = IT.bt it in
+    let bt = IT.get_bt it in
     let step, it2 =
-      match IT.term it with
+      match IT.get_term it with
       | RecordMember (t, m) -> (true, record_member_reduce (accessor_reduce f t) m)
       (* | DatatypeMember (t, m) -> *)
       (*     (true, datatype_member_reduce (accessor_reduce f t) m bt) *)
@@ -184,9 +183,9 @@ module IndexTerms = struct
 
 
   let cast_reduce bt it =
-    let loc = IT.loc it in
+    let loc = IT.get_loc it in
     match (bt, IT.is_const it) with
-    | _, _ when BT.equal (IT.bt it) bt -> it
+    | _, _ when BT.equal (IT.get_bt it) bt -> it
     | BT.Bits (sign, sz), Some (Terms.Bits ((sign2, sz2), z), _) ->
       let z = BT.normalise_to_range (sign, sz) (BT.normalise_to_range (sign2, sz2) z) in
       num_lit_ z bt loc
@@ -207,7 +206,7 @@ module IndexTerms = struct
       match the_term_ with
       | Sym _ when BT.equal the_bt BT.Unit -> unit_ the_loc
       | Sym sym ->
-        (match SymMap.find_opt sym simp_ctxt.values with
+        (match Sym.Map.find_opt sym simp_ctxt.values with
          | Some (IT ((Const _ | Sym _), _, _) as v) -> v
          | _ -> the_term)
       | Const _ -> the_term
@@ -377,7 +376,7 @@ module IndexTerms = struct
           | _ -> IT (Binop (Implies, a, b), the_bt, the_loc))
       | Unop (op, a) ->
         let a = aux a in
-        (match (op, IT.term a) with
+        (match (op, IT.get_term a) with
          | Not, Const (Bool b) -> bool_ (not b) the_loc
          | Not, Unop (Not, x) -> x
          | Negate, Unop (Negate, x) -> x
@@ -464,7 +463,7 @@ module IndexTerms = struct
       | Struct (tag, members) ->
         (match members with
          | (_, IT (StructMember (str, _), _, _)) :: _
-           when BT.equal (Struct tag) (IT.bt str)
+           when BT.equal (Struct tag) (IT.get_bt str)
                 && List.for_all
                      (function
                        | mem, IT (StructMember (str', mem'), _, _) ->
@@ -506,7 +505,7 @@ module IndexTerms = struct
         let a = aux a in
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
-          let loc = Cerb_location.other __FUNCTION__ in
+          let loc = Cerb_location.other __LOC__ in
           aux (lt_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ false the_loc
@@ -516,7 +515,7 @@ module IndexTerms = struct
         let a = aux a in
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
-          let loc = Cerb_location.other __FUNCTION__ in
+          let loc = Cerb_location.other __LOC__ in
           aux (le_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ true the_loc
@@ -569,7 +568,7 @@ module IndexTerms = struct
         let rec make map index =
           match map with
           | IT (MapDef ((s, abt), body), _, _) ->
-            assert (BT.equal abt (IT.bt index));
+            assert (BT.equal abt (IT.get_bt index));
             aux (IT.subst (IT.make_subst [ (s, index) ]) body)
           | IT (MapSet (map', index', value'), _, _) ->
             (match (index, index') with
@@ -597,8 +596,8 @@ module IndexTerms = struct
         if not inline_functions then
           t
         else (
-          let def = SymMap.find name simp_ctxt.global.logical_functions in
-          match LogicalFunctions.try_open_fun def args with
+          let def = Sym.Map.find name simp_ctxt.global.logical_functions in
+          match Definition.Function.try_open def args with
           | Some inlined -> aux inlined
           | None -> t)
       | _ ->
@@ -626,35 +625,39 @@ module LogicalConstraints = struct
       let q, body = IT.alpha_rename q body in
       let body = simp ~inline_functions simp_ctxt body in
       (match body with
-       | IT (Const (Bool true), _, _) -> LC.T (bool_ true (IT.loc body))
+       | IT (Const (Bool true), _, _) -> LC.T (bool_ true (IT.get_loc body))
        | _ -> LC.Forall ((q, qbt), body))
 end
 
-module ResourceTypes = struct
-  open IndexTerms
-  open ResourceTypes
+module Request = struct
+  module Predicate = struct
+    open Request.Predicate
 
-  let simp_predicate_type simp_ctxt (p : predicate_type) =
-    { name = p.name;
-      pointer = simp simp_ctxt p.pointer;
-      iargs = List.map (simp simp_ctxt) p.iargs
-    }
+    let simp simp_ctxt (p : t) =
+      { name = p.name;
+        pointer = IndexTerms.simp simp_ctxt p.pointer;
+        iargs = List.map (IndexTerms.simp simp_ctxt) p.iargs
+      }
+  end
 
+  module QPredicate = struct
+    open Request.QPredicate
 
-  let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
-    let qp = alpha_rename_qpredicate_type qp in
-    let permission = simp_flatten simp_ctxt qp.permission in
-    { name = qp.name;
-      pointer = simp simp_ctxt qp.pointer;
-      q = qp.q;
-      q_loc = qp.q_loc;
-      step = simp simp_ctxt qp.step;
-      permission = and_ permission (IT.loc qp.permission);
-      iargs = List.map (simp simp_ctxt) qp.iargs
-    }
+    let simp simp_ctxt (qp : t) =
+      let qp = alpha_rename qp in
+      let permission = IndexTerms.simp_flatten simp_ctxt qp.permission in
+      Request.QPredicate.
+        { name = qp.name;
+          pointer = IndexTerms.simp simp_ctxt qp.pointer;
+          q = qp.q;
+          q_loc = qp.q_loc;
+          step = IndexTerms.simp simp_ctxt qp.step;
+          permission = and_ permission (IT.get_loc qp.permission);
+          iargs = List.map (IndexTerms.simp simp_ctxt) qp.iargs
+        }
+  end
 
-
-  let simp simp_ctxt = function
-    | P p -> P (simp_predicate_type simp_ctxt p)
-    | Q qp -> Q (simp_qpredicate_type simp_ctxt qp)
+  let simp simp_ctxt : Request.t -> Request.t = function
+    | P p -> P (Predicate.simp simp_ctxt p)
+    | Q qp -> Q (QPredicate.simp simp_ctxt qp)
 end

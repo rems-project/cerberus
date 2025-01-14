@@ -232,8 +232,7 @@ type 'TY globs =
 
 type 'i arguments_l =
   | Define of (Sym.t * IndexTerms.t) * Locations.info * 'i arguments_l
-  | Resource of
-      (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info * 'i arguments_l
+  | Resource of (Sym.t * (Request.t * BaseTypes.t)) * Locations.info * 'i arguments_l
   | Constraint of LogicalConstraints.t * Locations.info * 'i arguments_l
   | I of 'i
 
@@ -250,12 +249,12 @@ val mConstraints
   'a arguments_l
 
 val mResource
-  :  (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info ->
+  :  (Sym.t * (Request.t * BaseTypes.t)) * Locations.info ->
   'a arguments_l ->
   'a arguments_l
 
 val mResources
-  :  ((Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info) list ->
+  :  ((Sym.t * (Request.t * BaseTypes.t)) * Locations.info) list ->
   'a arguments_l ->
   'a arguments_l
 
@@ -283,6 +282,9 @@ type 'TY label_def =
       * 'TY expr arguments
       * Cerb_frontend.Annot.annot list
       * parse_ast_label_spec
+      * [ `Loop of Locations.t * Locations.t ]
+(*first loc is condition, second is whole loop*)
+(*loop condition location, for executable checking *)
 
 type trusted =
   | Trusted of Locations.t
@@ -327,10 +329,10 @@ type 'TY file =
     globs : (Sym.t * 'TY globs) list;
     funs : (Sym.t, 'TY fun_map_decl) Pmap.map;
     extern : Cerb_frontend.Core.extern_map;
-    stdlib_syms : Set.Make(Sym).t;
+    stdlib_syms : Sym.Set.t;
     mk_functions : function_to_convert list;
-    resource_predicates : (Sym.t * ResourcePredicates.definition) list;
-    logical_predicates : (Sym.t * LogicalFunctions.definition) list;
+    resource_predicates : (Sym.t * Definition.Predicate.t) list;
+    logical_predicates : (Sym.t * Definition.Function.t) list;
     datatypes : (Sym.t * datatype) list;
     lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
     call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map

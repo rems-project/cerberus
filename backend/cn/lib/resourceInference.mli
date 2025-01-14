@@ -1,13 +1,12 @@
 val debug_constraint_failure_diagnostics
   :  int ->
   Solver.model_with_q ->
-  Global.t ->
   Simplify.simp_ctxt ->
-  LogicalConstraints.logical_constraint ->
+  LogicalConstraints.t ->
   unit
 
 module General : sig
-  type uiinfo = TypeErrors.situation * TypeErrors.request_chain
+  type uiinfo = TypeErrors.situation * TypeErrors.RequestChain.t
 
   val ftyp_args_request_step
     :  ([ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> 'a -> 'a) ->
@@ -19,21 +18,27 @@ module General : sig
 end
 
 module Special : sig
-  val get_live_alloc
-    :  [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift ] ->
+  val check_live_alloc
+    :  [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift | `ISO_member_shift ] ->
     Locations.t ->
     IndexTerms.t ->
-    IndexTerms.t Typing.m
+    unit Typing.m
 
   val predicate_request
     :  Locations.t ->
     TypeErrors.situation ->
-    ResourceTypes.predicate_type * (Locations.t * string) option ->
-    ((ResourceTypes.predicate_type * Resources.oargs) * int list) Typing.m
+    Request.Predicate.t * (Locations.t * string) option ->
+    (Resource.predicate * int list) Typing.m
+
+  val has_predicate
+    :  Locations.t ->
+    TypeErrors.situation ->
+    Request.Predicate.t * (Locations.t * string) option ->
+    bool Typing.m
 
   val qpredicate_request
     :  Locations.t ->
     TypeErrors.situation ->
-    ResourceTypes.qpredicate_type * (Locations.t * string) option ->
-    ((ResourceTypes.qpredicate_type * Resources.oargs) * int list) Typing.m
+    Request.QPredicate.t * (Locations.t * string) option ->
+    (Resource.qpredicate * int list) Typing.m
 end

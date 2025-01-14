@@ -1,15 +1,12 @@
 open Locations
 module BT = BaseTypes
 module IT = IndexTerms
-module LS = LogicalSorts
-module RET = ResourceTypes
+module Req = Request
 module LC = LogicalConstraints
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
 
 type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
-  | Resource of (Sym.t * (RET.t * BT.t)) * info * 'i t
+  | Resource of (Sym.t * (Req.t * BT.t)) * info * 'i t
   | Constraint of LC.t * info * 'i t
   | I of 'i
 
@@ -33,7 +30,7 @@ let rec subst i_subst =
       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
       Define ((name, it), info, aux substitution t)
     | Resource ((name, (re, bt)), info, t) ->
-      let re = RET.subst substitution re in
+      let re = Req.subst substitution re in
       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
       let t = aux substitution t in
       Resource ((name, (re, bt)), info, t)
@@ -54,7 +51,7 @@ and alpha_rename i_subst s t =
 
 
 and suitably_alpha_rename i_subst syms s t =
-  if SymSet.mem s syms then
+  if Sym.Set.mem s syms then
     alpha_rename i_subst s t
   else
     (s, t)
@@ -62,18 +59,18 @@ and suitably_alpha_rename i_subst syms s t =
 
 let free_vars_bts i_free_vars_bts =
   let union =
-    SymMap.union (fun _ bt1 bt2 ->
+    Sym.Map.union (fun _ bt1 bt2 ->
       assert (BT.equal bt1 bt2);
       Some bt1)
   in
   let rec aux = function
     | Define ((s, it), _info, t) ->
       let it_vars = IT.free_vars_bts it in
-      let t_vars = SymMap.remove s (aux t) in
+      let t_vars = Sym.Map.remove s (aux t) in
       union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
-      let re_vars = RET.free_vars_bts re in
-      let t_vars = SymMap.remove s (aux t) in
+      let re_vars = Req.free_vars_bts re in
+      let t_vars = Sym.Map.remove s (aux t) in
       union re_vars t_vars
     | Constraint (lc, _info, t) ->
       let lc_vars = LC.free_vars_bts lc in
@@ -88,16 +85,16 @@ let free_vars i_free_vars =
   let rec aux = function
     | Define ((s, it), _info, t) ->
       let it_vars = IT.free_vars it in
-      let t_vars = SymSet.remove s (aux t) in
-      SymSet.union it_vars t_vars
+      let t_vars = Sym.Set.remove s (aux t) in
+      Sym.Set.union it_vars t_vars
     | Resource ((s, (re, _bt)), _info, t) ->
-      let re_vars = RET.free_vars re in
-      let t_vars = SymSet.remove s (aux t) in
-      SymSet.union re_vars t_vars
+      let re_vars = Req.free_vars re in
+      let t_vars = Sym.Set.remove s (aux t) in
+      Sym.Set.union re_vars t_vars
     | Constraint (lc, _info, t) ->
       let lc_vars = LC.free_vars lc in
       let t_vars = aux t in
-      SymSet.union lc_vars t_vars
+      Sym.Set.union lc_vars t_vars
     | I i -> i_free_vars i
   in
   aux
@@ -129,7 +126,7 @@ let rec pp_aux i_pp = function
   | Define ((name, it), _info, t) ->
     group (!^"let" ^^^ Sym.pp name ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux i_pp t
   | Resource ((name, (re, _bt)), _info, t) ->
-    group (!^"take" ^^^ Sym.pp name ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
+    group (!^"take" ^^^ Sym.pp name ^^^ equals ^^^ Req.pp re ^^ semi) :: pp_aux i_pp t
   | Constraint (lc, _info, t) ->
     let op = equals ^^ rangle () in
     group (LC.pp lc ^^^ op) :: pp_aux i_pp t
@@ -154,11 +151,11 @@ let alpha_unique ss =
     match at with
     | Define ((name, it), info, t) ->
       let name, t = rename_if ss name t in
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       Define ((name, it), info, t)
     | Resource ((name, (re, bt)), info, t) ->
       let name, t = rename_if ss name t in
-      let t = f (SymSet.add name ss) t in
+      let t = f (Sym.Set.add name ss) t in
       Resource ((name, (re, bt)), info, f ss t)
     | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
     | I i -> I (RT.alpha_unique ss i)
@@ -167,13 +164,14 @@ let alpha_unique ss =
 
 
 let binders i_binders i_subst =
+  let here = Locations.other __LOC__ in
   let rec aux = function
     | Define ((s, it), _, t) ->
       let s, t = alpha_rename i_subst s t in
-      (Id.id (Sym.pp_string s), IT.bt it) :: aux t
+      (Id.make here (Sym.pp_string s), IT.get_bt it) :: aux t
     | Resource ((s, (_, bt)), _, t) ->
       let s, t = alpha_rename i_subst s t in
-      (Id.id (Sym.pp_string s), bt) :: aux t
+      (Id.make here (Sym.pp_string s), bt) :: aux t
     | Constraint (_, _, t) -> aux t
     | I i -> i_binders i
   in
@@ -224,7 +222,7 @@ let dtree dtree_i =
       Dnode (pp_ctor "Define", [ Dleaf (Sym.pp s); IT.dtree it; aux t ])
     | Resource ((s, (rt, bt)), _, t) ->
       Dnode
-        (pp_ctor "Resource", [ Dleaf (Sym.pp s); RET.dtree rt; Dleaf (BT.pp bt); aux t ])
+        (pp_ctor "Resource", [ Dleaf (Sym.pp s); Req.dtree rt; Dleaf (BT.pp bt); aux t ])
     | Constraint (lc, _, t) -> Dnode (pp_ctor "Constraint", [ LC.dtree lc; aux t ])
     | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
   in
@@ -233,7 +231,7 @@ let dtree dtree_i =
 (** Infrastructure for checking if a countermodel satisfies a predicate **)
 open ResultWithData
 
-type check_result = (LC.logical_constraint list, Pp.document) result_with_data
+type check_result = (LC.t list, Pp.document) result_with_data
 let pp_check_result = pp_result_with_data (Pp.list LC.pp) (fun d -> d)
 
 let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
@@ -261,11 +259,11 @@ let combine_results (results : check_result list)
   Corresponds to packing_ft *)
 type def_line =
   | DefineL of (Sym.t * IT.t) * info
-  | ResourceL of (Sym.t * (RET.t * BT.t)) * info
+  | ResourceL of (Sym.t * (Req.t * BT.t)) * info
 
 let def_line_pp dl = match dl with
   | DefineL ((s, t), _) -> group (!^"let" ^^^ Sym.pp s ^^^ equals ^^^ IT.pp t ^^ semi)
-  | ResourceL ((s, (re, _)), _) -> group (!^"take" ^^^ Sym.pp s ^^^ equals ^^^ RET.pp re ^^ semi)
+  | ResourceL ((s, (re, _)), _) -> group (!^"take" ^^^ Sym.pp s ^^^ equals ^^^ Req.pp re ^^ semi)
 
 (* Optionally zip two lists, returning None if the lists have different lengths *)
 let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
@@ -277,9 +275,9 @@ let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2
 
 (* Take the union of two symbol maps,
     removing any key that is in both maps but has a different value in each *)
-let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a SymMap.t) (m2 : 'a SymMap.t) : 'a SymMap.t =
+let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a Sym.Map.t) (m2 : 'a Sym.Map.t) : 'a Sym.Map.t =
   let merge = (fun k v1 v2 -> let _ = k in if eq v1 v2 then Some v1 else None) in
-  SymMap.union merge m1 m2
+  Sym.Map.union merge m1 m2
 
 (* Build a map by using f to develop a map for each
     pair of elements in the two lists, failing
@@ -292,14 +290,14 @@ let map_from_lists f eq exps exps' =
     Yes (merge_eq eq acc combined)
   in
   match zip exps exps' with
-  | Some zipped -> List.fold_left merge_r_maps (Yes SymMap.empty) zipped
+  | Some zipped -> List.fold_left merge_r_maps (Yes Sym.Map.empty) zipped
   | None -> Error !^"Could not zip lists of expressions." (* should never happen *)
 
 (* Match an expression with free variables against a candidate returned by the solver to
   get candidates for each of those free variables *)
 (* TODO: this is very naive right now;
   it assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
-let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t SymMap.t, Pp.document) result_with_data =
+let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t Sym.Map.t, Pp.document) result_with_data =
   let map_from_IT_lists = map_from_lists get_var_cands IT.equal in
   let sort_by_discard_fst compare l =
     List.map snd ( List.sort (fun p1 p2 -> compare (fst p1) (fst p2)) l) in
@@ -308,9 +306,9 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t SymMap.t, Pp.docum
   let map_with_guard_unknown g l1 l1' = if g then map_from_IT_lists l1 l1' else (Unknown (Pp.bool g ^^^ !^" not satisfied")) in
   let map_with_guard_no g l1 l1' = if g then map_from_IT_lists l1 l1' else (No (Pp.bool g ^^^ !^" not satisfied") ) in
   let default = Unknown (!^"Different CN constructors for " ^^^ IT.pp exp ^^^ !^" and " ^^^ IT.pp candidate) in
-  match IT.term exp, IT.term candidate with
+  match IT.get_term exp, IT.get_term candidate with
   | Const c, Const c' -> map_with_guard_no (IT.equal_const c c') [] []
-  | Sym v, _' -> Yes (SymMap.add v candidate SymMap.empty)
+  | Sym v, _' -> Yes (Sym.Map.add v candidate Sym.Map.empty)
   | Unop (op, exp1), Unop (op', exp1') ->
     map_with_guard_unknown (IT.equal_unop op op') [exp1] [exp1']
   | Binop (op, exp1, exp2), Binop (op', exp1', exp2') ->
@@ -425,23 +423,23 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t SymMap.t, Pp.docum
   | Cast _, _ -> default
 
 (* Get the free variables from an expression *)
-let get_fvs (exp : IT.t) : Sym.t list = SymSet.to_list (IT.free_vars exp)
+let get_fvs (exp : IT.t) : Sym.t list = Sym.Set.to_list (IT.free_vars exp)
 
 (*TODO: what if lcs mention vars not examined in the algorithm*)
-let rec organize_lines_aux (lines : packing_ft) (defs : def_line SymMap.t) (lcs : LC.t list): IT.t * def_line IT.SymMap.t * (LC.t list) =
+let rec organize_lines_aux (lines : packing_ft) (defs : def_line Sym.Map.t) (lcs : LC.t list): IT.t * def_line Sym.Map.t * (LC.t list) =
   match lines with
   | Define ((v, it), i, next) ->
     let ln = DefineL ((v, it), i) in
-    let new_defs = SymMap.add v ln defs in
+    let new_defs = Sym.Map.add v ln defs in
     organize_lines_aux next new_defs lcs
   | Resource ((v, (rt, bt)), i, next) ->
     let ln = ResourceL ((v, (rt, bt)), i) in
-    let new_defs = SymMap.add v ln defs in
+    let new_defs = Sym.Map.add v ln defs in
     organize_lines_aux next new_defs lcs
   | Constraint (lc, _, next) -> organize_lines_aux next defs (lc :: lcs)
   | I it -> (it, defs, lcs)
 
 (* Sort lines into the returned expression, a map of variables to their defining lines, and a list of constraints *)
-let organize_lines (lines : packing_ft) : IT.t * def_line IT.SymMap.t * (LC.t list) = organize_lines_aux lines SymMap.empty []
+let organize_lines (lines : packing_ft) : IT.t * def_line Sym.Map.t * (LC.t list) = organize_lines_aux lines Sym.Map.empty []
 
 (** End infrastructure for checking if a countermodel satisfies a predicate **)

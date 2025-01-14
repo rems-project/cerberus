@@ -45,28 +45,7 @@ jobs:
       with:
         path: ~/.opam
         key: ${{ matrix.version }}
-
-    - name: Setup opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-      run: |
-        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-        opam install --deps-only --yes ./cerberus-lib.opam
-        opam switch create with_coq ${{ matrix.version }}
-        eval $(opam env --switch=with_coq)
-        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
-        opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
-        opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
-        opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
-        opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
-        opam install --deps-only --yes ./cerberus-lib.opam ./cerberus-cheri.opam
-
-    - name: Save cached opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-      id: cache-opam-save
-      uses: actions/cache/save@v4
-      with:
-        path: ~/.opam
-        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+        fail-on-cache-miss: true
 
     - name: Install python dependencies
       run: pip install tabulate
@@ -83,14 +62,14 @@ jobs:
       uses: robinraju/release-downloader@v1
       with:
         repository: cvc5/cvc5
-        tag: cvc5-1.1.2
-        fileName: cvc5-Linux-static.zip
+        tag: cvc5-1.2.0
+        fileName: cvc5-Linux-x86_64-static.zip
 
     - name: Unzip and install cvc5
       run: |
-        unzip cvc5-Linux-static.zip
-        chmod +x cvc5-Linux-static/bin/cvc5
-        sudo cp cvc5-Linux-static/bin/cvc5 /usr/local/bin/
+        unzip cvc5-Linux-x86_64-static.zip
+        chmod +x cvc5-Linux-x86_64-static/bin/cvc5
+        sudo cp cvc5-Linux-x86_64-static/bin/cvc5 /usr/local/bin/
 
     - name: Install CN
       run: |
@@ -111,7 +90,7 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh
+        cd tests; ./run-ci-benchmarks.sh
         mv benchmark-data.json ${{ env.PR_DATA }}
         cd ..
 
@@ -138,7 +117,7 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh; mv benchmark-data.json ${{ env.BASE_DATA }}
+        cd tests; ./run-ci-benchmarks.sh; mv benchmark-data.json ${{ env.BASE_DATA }}
         cd ..
 
     - name: Compare results

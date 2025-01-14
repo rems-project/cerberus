@@ -489,6 +489,8 @@ type solver_log =
 type solver_config =
   { exe : string;
     opts : string list;
+    params : (string * string) list;
+    (* (parameter name * setting) list, the name without leading colon *)
     exts : solver_extensions;
     log : solver_log
   }
@@ -811,6 +813,9 @@ let new_solver (cfg : solver_config) : solver =
   in
   ack_command s (set_option ":print-success" "true");
   ack_command s (set_option ":produce-models" "true");
+  List.iter
+    (fun (name, setting) -> ack_command s (set_option (":" ^ name) setting))
+    cfg.params;
   Gc.finalise (fun me -> me.stop ()) s;
   s
 
@@ -885,8 +890,16 @@ let printf_log =
 
 
 let cvc5 : solver_config =
-  { exe = "cvc5"; opts = [ "--incremental"; "--sets-ext" ]; exts = CVC5; log = quiet_log }
+  { exe = "cvc5";
+    (* opts = [ "--incremental"; "--sets-ext"; "--force-logic=QF_AUFBVDTLIA" ]; *)
+    opts = [ "--incremental"; "--sets-ext"; "--force-logic=QF_ALL" ];
+    params = [];
+    exts = CVC5;
+    log = quiet_log
+  }
 
 
 let z3 : solver_config =
-  { exe = "z3"; opts = [ "-in"; "-smt2" ]; exts = Z3; log = quiet_log }
+  (* let params = [ ("sat.smt", "true") ] in *)
+  let params = [ ("smt.relevancy", "0") ] in
+  { exe = "z3"; opts = [ "-in"; "-smt2" ]; params; exts = Z3; log = quiet_log }

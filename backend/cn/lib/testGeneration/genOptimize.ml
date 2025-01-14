@@ -6,8 +6,7 @@ module GT = GenTerms
 module GS = GenStatements
 module GD = GenDefinitions
 module GA = GenAnalysis
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
+module Config = TestGenConfig
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
 
@@ -19,7 +18,7 @@ type opt_pass =
 module FlipIfs = struct
   (* TODO: Improve performance on runway example *)
   let transform (gd : GD.t) : GD.t =
-    let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
+    let iargs = gd.iargs |> List.map fst |> Sym.Set.of_list in
     let rec aux (gt : GT.t) : GT.t =
       let (GT (gt_, _, loc)) = gt in
       match gt_ with
@@ -27,7 +26,7 @@ module FlipIfs = struct
       | Pick wgts -> GT.pick_ (List.map_snd aux wgts) loc
       | ITE (it_if, gt_then, gt_else) ->
         let gt_then, gt_else = (aux gt_then, aux gt_else) in
-        if not (SymSet.subset (IT.free_vars it_if) iargs) then (
+        if not (Sym.Set.subset (IT.free_vars it_if) iargs) then (
           let wgts1 =
             match gt_then with
             | GT (Pick wgts, _, _) ->
@@ -104,7 +103,7 @@ module Fusion = struct
 
 
     let collect_constraints
-      (vars : SymSet.t)
+      (vars : Sym.Set.t)
       (x : Sym.t)
       ((it_min, it_max) : IT.t * IT.t)
       (gt : GT.t)
@@ -126,14 +125,14 @@ module Fusion = struct
             ( Forall
                 ((i, i_bt), (IT (Binop (Implies, it_perm, it_body), _, loc_implies) as it)),
               gt' )
-          when SymSet.mem x (IT.free_vars it) && check_index_ok x i it ->
-          let it_min', it_max' = GA.get_bounds (i, i_bt) it_perm in
+          when Sym.Set.mem x (IT.free_vars it) && check_index_ok x i it ->
+          let it_min', it_max' = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
           let gt', res = aux gt' in
           if
             IT.equal it_min it_min'
             && IT.equal it_max it_max'
-            && SymSet.subset
-                 (SymSet.remove i (IT.free_vars_list [ it_perm; it_body ]))
+            && Sym.Set.subset
+                 (Sym.Set.remove i (IT.free_vars_list [ it_perm; it_body ]))
                  vars
           then
             (gt', (i, IT.arith_binop Implies (it_perm, it_body) loc_implies) :: res)
@@ -162,7 +161,7 @@ module Fusion = struct
 
 
     let transform (gd : GD.t) : GD.t =
-      let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t =
+      let rec aux (vars : Sym.Set.t) (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
         | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
@@ -172,57 +171,252 @@ module Fusion = struct
         | Let
             (backtracks, (x, GT (Map ((i, i_bt, it_perm), gt_inner), _, loc_map)), gt_rest)
           ->
-          let its_bounds = GA.get_bounds (i, i_bt) it_perm in
+          let its_bounds = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
           let gt_rest, constraints =
-            collect_constraints (SymSet.add x vars) x its_bounds gt_rest
+            collect_constraints (Sym.Set.add x vars) x its_bounds gt_rest
           in
-          let gt_inner =
-            let stmts, gt_last = GS.stmts_of_gt (aux (SymSet.add i vars) gt_inner) in
-            let sym_bt, stmts', gt_last =
-              match gt_last with
-              | GT (Return (IT (Sym x, x_bt, _)), _, _) -> ((x, x_bt), [], gt_last)
-              | GT (Return it, ret_bt, loc_ret) ->
-                let here = Locations.other __LOC__ in
-                let y = Sym.fresh () in
-                ( (y, ret_bt),
-                  [ GS.Let (0, (y, GT.return_ it loc_ret)) ],
-                  GT.return_ (IT.sym_ (y, ret_bt, here)) loc_ret )
-              | _ -> failwith (Pp.plain (GT.pp gt_last) ^ " @ " ^ __LOC__)
+          if List.is_empty constraints then
+            gt
+          else (
+            let gt_inner =
+              let stmts, gt_last = GS.stmts_of_gt (aux (Sym.Set.add i vars) gt_inner) in
+              let sym_bt, stmts', gt_last =
+                match gt_last with
+                | GT (Return (IT (Sym x, x_bt, _)), _, _) -> ((x, x_bt), [], gt_last)
+                | GT (Return it, ret_bt, loc_ret) ->
+                  let here = Locations.other __LOC__ in
+                  let y = Sym.fresh () in
+                  ( (y, ret_bt),
+                    [ GS.Let (0, (y, GT.return_ it loc_ret)) ],
+                    GT.return_ (IT.sym_ (y, ret_bt, here)) loc_ret )
+                | gt' ->
+                  let ret_bt = GT.bt gt' in
+                  let here = Locations.other __LOC__ in
+                  let y = Sym.fresh () in
+                  ( (y, ret_bt),
+                    [ GS.Let (0, (y, gt')) ],
+                    GT.return_ (IT.sym_ (y, ret_bt, here)) (GT.loc gt') )
+              in
+              let here = Locations.other __LOC__ in
+              let stmts'' =
+                List.map
+                  (fun (j, lc) : GS.t ->
+                    Assert
+                      (LC.T
+                         (replace_index
+                            x
+                            sym_bt
+                            i
+                            (IT.subst (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ]) lc))))
+                  constraints
+              in
+              GS.gt_of_stmts (stmts @ stmts' @ stmts'') gt_last
             in
-            let here = Locations.other __LOC__ in
-            let stmts'' =
-              List.map
-                (fun (j, lc) : GS.t ->
-                  Assert
-                    (LC.T
-                       (replace_index
-                          x
-                          sym_bt
-                          i
-                          (IT.subst (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ]) lc))))
-                constraints
-            in
-            GS.gt_of_stmts (stmts @ stmts' @ stmts'') gt_last
-          in
-          GT.let_
-            ( backtracks,
-              (x, GT.map_ ((i, i_bt, it_perm), gt_inner) loc_map),
-              aux (SymSet.add x vars) gt_rest )
-            loc
+            GT.let_
+              ( backtracks,
+                (x, GT.map_ ((i, i_bt, it_perm), gt_inner) loc_map),
+                aux (Sym.Set.add x vars) gt_rest )
+              loc)
         | Let (backtracks, (x, gt_inner), gt_rest) ->
           GT.let_
-            (backtracks, (x, aux vars gt_inner), aux (SymSet.add x vars) gt_rest)
+            (backtracks, (x, aux vars gt_inner), aux (Sym.Set.add x vars) gt_rest)
             loc
         | Assert (lc, gt') -> GT.assert_ (lc, aux vars gt') loc
         | ITE (it_if, gt_then, gt_else) ->
           GT.ite_ (it_if, aux vars gt_then, aux vars gt_else) loc
         | Map ((i, i_bt, it_perm), gt_inner) ->
-          GT.map_ ((i, i_bt, it_perm), aux (SymSet.add i vars) gt_inner) loc
+          GT.map_ ((i, i_bt, it_perm), aux (Sym.Set.add i vars) gt_inner) loc
       in
       let body =
-        Some (aux (gd.iargs |> List.map fst |> SymSet.of_list) (Option.get gd.body))
+        Some (aux (gd.iargs |> List.map fst |> Sym.Set.of_list) (Option.get gd.body))
       in
       { gd with body }
+  end
+
+  module Recursive = struct
+    let collect_constraints (vars : Sym.Set.t) (x : Sym.t) (gt : GT.t) : GT.t * LC.t list =
+      let rec aux (gt : GT.t) : GT.t * LC.t list =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ | Pick _ | ITE _ | Map _ ->
+          (gt, [])
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.asgn_ ((it_addr, sct), it_val, gt_rest) loc, lcs)
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let gt_inner, lcs = aux gt_inner in
+          let gt_rest, lcs' = aux gt_rest in
+          (GT.let_ (backtracks, (x, gt_inner), gt_rest) loc, lcs @ lcs')
+        | Assert ((T (IT (Binop (EQ, IT (Sym y, _, _), _), _, _)) as lc), gt_rest)
+          when not (Sym.equal x y) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, lcs)
+        | Assert ((T (IT (Binop (EQ, _, IT (Sym y, _, _)), _, _)) as lc), gt_rest)
+          when not (Sym.equal x y) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, lcs)
+        | Assert (lc, gt_rest)
+          when let free_vars = LC.free_vars lc in
+               Sym.Set.mem x free_vars && Sym.Set.subset free_vars vars ->
+          let gt_rest, lcs = aux gt_rest in
+          (gt_rest, lc :: lcs)
+        | Assert (lc, gt_rest) ->
+          let gt_rest, lcs = aux gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, lcs)
+      in
+      aux gt
+
+
+    type inline_request =
+      { old_name : Sym.t;
+        old_args : (Sym.t * BT.t) list;
+        ret_sym : Sym.t;
+        new_name : Sym.t;
+        new_args : (Sym.t * BT.t) list;
+        constraints : LC.t list
+      }
+
+    let request_gt (vars : Sym.Set.t) (gt : GT.t) : GT.t * inline_request list =
+      let rec aux (vars : Sym.Set.t) (gt : GT.t) : GT.t * inline_request list =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> (gt, [])
+        | Pick wgts ->
+          let wgts, reqs =
+            wgts
+            |> List.map (fun (w, gt') ->
+              let gt'', reqs = aux vars gt' in
+              ((w, gt''), reqs))
+            |> List.split
+          in
+          (GT.pick_ wgts loc, List.flatten reqs)
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          let gt_rest, reqs = aux vars gt_rest in
+          (GT.asgn_ ((it_addr, sct), it_val, gt_rest) loc, reqs)
+        | Let (backtracks, (x, GT (Call (fsym, xits), bt_call, loc_call)), gt_rest) ->
+          let gt_rest, lcs = collect_constraints (Sym.Set.add x vars) x gt_rest in
+          let gt_rest, reqs = aux (Sym.Set.add x vars) gt_rest in
+          if List.is_empty lcs then
+            ( GT.let_
+                (backtracks, (x, GT.call_ (fsym, xits) bt_call loc_call), gt_rest)
+                loc,
+              reqs )
+          else (
+            let old_args = List.map_snd IT.get_bt xits in
+            let ret_sym = Sym.fresh_make_uniq (Sym.pp_string x) in
+            let xits' =
+              lcs
+              |> List.map LC.free_vars_bts
+              |> List.fold_left
+                   (Sym.Map.union (fun _ bt1 bt2 ->
+                      assert (BT.equal bt1 bt2);
+                      Some bt1))
+                   Sym.Map.empty
+              |> Sym.Map.remove x
+              |> Sym.Map.to_seq
+              |> List.of_seq
+              |> List.map (fun (y, y_bt) ->
+                (Sym.fresh (), IT.sym_ (y, y_bt, Locations.other __LOC__)))
+            in
+            let subst =
+              (x, IT.sym_ (ret_sym, bt_call, Locations.other __LOC__))
+              :: (xits'
+                  |> List.map (fun (y, it) ->
+                    ( fst (Option.get (IT.is_sym it)),
+                      IT.sym_ (y, IT.get_bt it, Locations.other __LOC__) )))
+            in
+            let lcs = List.map (LC.subst (IT.make_subst subst)) lcs in
+            let new_name = Sym.fresh_make_uniq (Sym.pp_string fsym) in
+            let new_args = xits' |> List.map (fun (y, it) -> (y, IT.get_bt it)) in
+            ( GT.let_
+                ( backtracks,
+                  (x, GT.call_ (new_name, xits @ xits') bt_call loc_call),
+                  gt_rest )
+                loc,
+              { old_name = fsym;
+                old_args;
+                ret_sym;
+                new_name;
+                new_args;
+                constraints = lcs
+              }
+              :: reqs ))
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let gt_inner, reqs = aux vars gt_inner in
+          let gt_rest, reqs' = aux (Sym.Set.add x vars) gt_rest in
+          (GT.let_ (backtracks, (x, gt_inner), gt_rest) loc, reqs @ reqs')
+        | Assert (lc, gt_rest) ->
+          let gt_rest, reqs = aux vars gt_rest in
+          (GT.assert_ (lc, gt_rest) loc, reqs)
+        | ITE (it_if, gt_then, gt_else) ->
+          let gt_then, reqs = aux vars gt_then in
+          let gt_else, reqs' = aux vars gt_else in
+          (GT.ite_ (it_if, gt_then, gt_else) loc, reqs @ reqs')
+        | Map ((i, i_bt, it_perm), gt_inner) ->
+          let gt_inner, reqs = aux (Sym.Set.add i vars) gt_inner in
+          (GT.map_ ((i, i_bt, it_perm), gt_inner) loc, reqs)
+      in
+      aux vars gt
+
+
+    let request_gd (gd : GD.t) : GD.t * inline_request list =
+      let gt, reqs =
+        request_gt (gd.iargs |> List.map fst |> Sym.Set.of_list) (Option.get gd.body)
+      in
+      ({ gd with body = Some gt }, reqs)
+
+
+    let request (ctx : GD.context) : GD.context * inline_request list =
+      ctx
+      |> List.map snd
+      |> List.flatten
+      |> List.map snd
+      |> List.map request_gd
+      |> List.fold_left
+           (fun (ctx', reqs') (gd, reqs) -> (GD.add_context gd ctx', reqs @ reqs'))
+           ([], [])
+
+
+    let fuse ((ctx, reqs) : GD.context * inline_request list) : GD.context =
+      let rec inject (ret_sym : Sym.t) (lcs : LC.t list) (gt : GT.t) : GT.t =
+        let (GT (gt_, bt, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ | Map _ ->
+          GT.let_
+            ( 0,
+              (ret_sym, gt),
+              List.fold_left
+                (fun gt_rest lc -> GT.assert_ (lc, gt_rest) loc)
+                (GT.return_ (IT.sym_ (ret_sym, bt, loc)) loc)
+                lcs )
+            loc
+        | Pick wgts -> GT.pick_ (List.map_snd (inject ret_sym lcs) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, inject ret_sym lcs gt_rest) loc
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          GT.let_ (backtracks, (x, gt_inner), inject ret_sym lcs gt_rest) loc
+        | Assert (lc, gt_rest) -> GT.assert_ (lc, inject ret_sym lcs gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, inject ret_sym lcs gt_then, inject ret_sym lcs gt_else) loc
+      in
+      let rec aux (reqs : inline_request list) : GD.context =
+        match reqs with
+        | { old_name; old_args; ret_sym; new_name; new_args; constraints } :: reqs' ->
+          let gd =
+            ctx
+            |> List.assoc Sym.equal old_name
+            |> List.assoc (List.equal Sym.equal) (List.map fst old_args)
+          in
+          let body = Some (inject ret_sym constraints (Option.get gd.body)) in
+          let iargs = List.map_snd GenBaseTypes.of_bt (old_args @ new_args) in
+          (new_name, [ (List.map fst iargs, { gd with name = new_name; iargs; body }) ])
+          :: aux reqs'
+        | [] -> []
+      in
+      aux reqs @ ctx
+
+
+    let transform ctx = fuse (request ctx)
   end
 end
 
@@ -553,33 +747,37 @@ module PartialEvaluation = struct
         let struct_decls =
           Pmap.fold
             (fun tag def decls ->
-              match def with Mucore.StructDef st -> SymMap.add tag st decls | _ -> decls)
+              match def with
+              | Mucore.StructDef st -> Sym.Map.add tag st decls
+              | _ -> decls)
             prog5.tagDefs
-            SymMap.empty
+            Sym.Map.empty
         in
         eval_aux (representable struct_decls ty it' here)
       | Good (ty, it') ->
         let struct_decls =
           Pmap.fold
             (fun tag def decls ->
-              match def with Mucore.StructDef st -> SymMap.add tag st decls | _ -> decls)
+              match def with
+              | Mucore.StructDef st -> Sym.Map.add tag st decls
+              | _ -> decls)
             prog5.tagDefs
-            SymMap.empty
+            Sym.Map.empty
         in
         eval_aux (good_value struct_decls ty it' here)
       | Aligned { t; align } ->
         let addr = addr_ t here in
-        if not (BT.equal (IT.bt addr) (IT.bt align)) then
+        if not (BT.equal (IT.get_bt addr) (IT.get_bt align)) then
           Error "Mismatched types"
         else
           eval_aux (divisible_ (addr, align) here)
       | Apply (fsym, its) ->
         (match List.assoc_opt Sym.equal fsym prog5.logical_predicates with
-         | Some { args; definition = Def it_body; _ }
-         | Some { args; definition = Rec_Def it_body; _ } ->
+         | Some { args; body = Def it_body; _ } | Some { args; body = Rec_Def it_body; _ }
+           ->
            return
            @@ IT.subst (IT.make_subst (List.combine (List.map fst args) its)) it_body
-         | Some { definition = Uninterp; _ } ->
+         | Some { body = Uninterp; _ } ->
            Error ("Function " ^ Sym.pp_string fsym ^ " is uninterpreted")
          | None -> Error ("Function " ^ Sym.pp_string fsym ^ " was not found"))
       | Let ((x, it_v), it_rest) ->
@@ -829,9 +1027,9 @@ module PartialEvaluation = struct
            * substitution, diverging. As such, we force strict evaluation of recursive calls
            *)
           (match List.assoc_opt Sym.equal fsym prog5.logical_predicates with
-           | Some { definition = Def _; _ } -> f it
-           | Some { definition = Rec_Def _; _ } -> f ~mode:Strict it
-           | Some { definition = Uninterp; _ } | None -> it)
+           | Some { body = Def _; _ } -> f it
+           | Some { body = Rec_Def _; _ } -> f ~mode:Strict it
+           | Some { body = Uninterp; _ } | None -> it)
         | _ -> f it
       in
       IT.map_term_post aux it
@@ -986,7 +1184,8 @@ module BranchPruning = struct
       let aux (gt : GT.t) : GT.t =
         match gt with
         | GT (Pick [ (_, gt') ], _, _) -> gt'
-        | GT (Pick wgts, _, loc_pick) ->
+        (* TODO: Understand why this is so bad *)
+        (* | GT (Pick wgts, _, loc_pick) ->
           let rec aux'' (wgts : (Z.t * GT.t) list) : (Z.t * GT.t) list =
             match List.find_index (fun (_, gt') -> GT.is_pick gt') wgts with
             | Some i ->
@@ -1011,7 +1210,7 @@ module BranchPruning = struct
                | _ -> failwith ("unreachable @ " ^ __LOC__))
             | None -> wgts
           in
-          GT.pick_ (aux'' wgts) loc_pick
+          GT.pick_ (aux'' wgts) loc_pick *)
         | GT (ITE (it_cond, gt_then, gt_else), _, _) ->
           if IT.is_true it_cond then
             gt_then
@@ -1064,7 +1263,7 @@ module BranchPruning = struct
           if contains_false_assertion gt_else then
             GT.assert_ (T it_if, gt_then) loc_ite
           else if contains_false_assertion gt_then then
-            GT.assert_ (T (IT.not_ it_if (IT.loc it_if)), gt_else) loc_ite
+            GT.assert_ (T (IT.not_ it_if (IT.get_loc it_if)), gt_else) loc_ite
           else
             gt
         | _ -> gt
@@ -1076,195 +1275,6 @@ module BranchPruning = struct
   end
 
   let passes = [ Unused.pass; Inconsistent.pass ]
-end
-
-module MemberIndirection = struct
-  type kind =
-    | Struct
-    | Record
-
-  let rec replace_memberof_it
-    (k : kind)
-    (sym : Sym.t)
-    (dict : (Id.t * Sym.t) list)
-    (it : IT.t)
-    : IT.t
-    =
-    let repl = replace_memberof_it k sym dict in
-    let (IT (it_, bt, loc)) = it in
-    let it_ =
-      match it_ with
-      | Const _ | Sym _ | SizeOf _ | OffsetOf _ | Nil _ -> it_
-      | Unop (op, it') -> IT.Unop (op, repl it')
-      | Binop (op, it1, it2) -> IT.Binop (op, repl it1, repl it2)
-      | ITE (it1, it2, it3) -> IT.ITE (repl it1, repl it2, repl it3)
-      | EachI ((min, (i_sym, i_bt), max), it') ->
-        IT.EachI ((min, (i_sym, i_bt), max), repl it')
-      | Tuple its -> IT.Tuple (List.map repl its)
-      | NthTuple (n, it') -> IT.NthTuple (n, repl it')
-      | Struct (tag, xits) -> IT.Struct (tag, List.map_snd repl xits)
-      | StructMember (it', x) ->
-        (match (k, IT.is_sym it') with
-         | Struct, Some (y, _y_bt) when Sym.equal y sym ->
-           IT.Sym (List.assoc Id.equal x dict)
-         | _ -> IT.StructMember (repl it', x))
-      | StructUpdate ((it_struct, x), it_val) ->
-        IT.StructUpdate ((repl it_struct, x), repl it_val)
-      | Record xits -> IT.Record (List.map_snd repl xits)
-      | RecordMember (it', x) ->
-        (match (k, IT.is_sym it') with
-         | Record, Some (y, _y_bt) when Sym.equal y sym ->
-           IT.Sym (List.assoc Id.equal x dict)
-         | _ -> IT.RecordMember (repl it', x))
-      | RecordUpdate ((it_record, x), it_val) ->
-        IT.RecordUpdate ((repl it_record, x), repl it_val)
-      | Constructor (tag, xits) -> IT.Constructor (tag, List.map_snd repl xits)
-      | MemberShift (it', tag, member) -> IT.MemberShift (it', tag, member)
-      | ArrayShift { base; ct; index } ->
-        IT.ArrayShift { base = repl base; ct; index = repl index }
-      | CopyAllocId { addr; loc } -> IT.CopyAllocId { addr = repl addr; loc = repl loc }
-      | HasAllocId it' -> IT.HasAllocId (repl it')
-      | Cons (it1, it2) -> IT.Cons (repl it1, repl it2)
-      | Head it' -> IT.Head (repl it')
-      | Tail it' -> IT.Tail (repl it')
-      | NthList (it1, it2, it3) -> IT.NthList (repl it1, repl it2, repl it3)
-      | ArrayToList (it1, it2, it3) -> IT.ArrayToList (repl it1, repl it2, repl it3)
-      | Representable (sct, it') -> IT.Representable (sct, repl it')
-      | Good (sct, it') -> IT.Good (sct, repl it')
-      | Aligned { t; align } -> IT.Aligned { t = repl t; align = repl align }
-      | WrapI (sct, it') -> IT.WrapI (sct, repl it')
-      | MapConst (bt, it') -> IT.MapConst (bt, repl it')
-      | MapSet (it1, it2, it3) -> IT.MapSet (repl it1, repl it2, repl it3)
-      | MapGet (it1, it2) -> IT.MapGet (repl it1, repl it2)
-      | MapDef ((x, bt), it') -> IT.MapDef ((x, bt), repl it')
-      | Apply (fsym, its) -> IT.Apply (fsym, List.map repl its)
-      | Let ((x, it1), it2) -> IT.Let ((x, repl it1), it2)
-      | Match (it', pits) -> IT.Match (repl it', List.map_snd repl pits)
-      | Cast (bt, it') -> IT.Cast (bt, repl it')
-    in
-    IT (it_, bt, loc)
-
-
-  let replace_memberof_gt
-    (k : kind)
-    (sym : Sym.t)
-    (dict : (Id.t * Sym.t) list)
-    (gt : GT.t)
-    : GT.t
-    =
-    let repl = replace_memberof_it k sym dict in
-    let aux (gt : GT.t) : GT.t =
-      let (GT (gt_, bt, loc)) = gt in
-      let gt_ =
-        match gt_ with
-        | Alloc it -> GT.Alloc (repl it)
-        | Call (fsym, xits) -> GT.Call (fsym, List.map_snd repl xits)
-        | Asgn ((it_addr, sct), it_val, gt') ->
-          GT.Asgn ((repl it_addr, sct), repl it_val, gt')
-        | Return it -> GT.Return (repl it)
-        | Assert (T it, gt') -> GT.Assert (LC.T (repl it), gt')
-        | Assert (Forall ((i_sym, i_bt), it), gt') ->
-          GT.Assert (LC.Forall ((i_sym, i_bt), repl it), gt')
-        | ITE (it_if, gt_then, gt_else) -> GT.ITE (repl it_if, gt_then, gt_else)
-        | Map ((i_sym, i_bt, it_perm), gt_inner) ->
-          GT.Map ((i_sym, i_bt, repl it_perm), gt_inner)
-        | _ -> gt_
-      in
-      GT (gt_, bt, loc)
-    in
-    GT.map_gen_pre aux gt
-
-
-  let transform (gt : GT.t) : GT.t =
-    let aux (gt : GT.t) : GT.t =
-      match gt with
-      | GT
-          ( Let
-              ( backtracks,
-                (x, (GT (Return (IT (Struct (_, xits), bt, _)), _, _) as gt_inner)),
-                gt' ),
-            _,
-            loc )
-      | GT
-          ( Let
-              ( backtracks,
-                (x, (GT (Return (IT (Record xits, bt, _)), _, _) as gt_inner)),
-                gt' ),
-            _,
-            loc ) ->
-        let k =
-          match bt with Struct _ -> Struct | Record _ -> Record | _ -> failwith __LOC__
-        in
-        let open Either in
-        let members =
-          xits
-          |> List.map_snd (fun it ->
-            match IT.is_sym it with
-            | Some (x, _) -> (Left (), x)
-            | None -> (Right it, Sym.fresh ()))
-        in
-        let gt_main =
-          GT.let_
-            ( backtracks,
-              (x, gt_inner),
-              replace_memberof_gt k x (List.map_snd snd members) gt' )
-            loc
-        in
-        let here = Locations.other __LOC__ in
-        members
-        |> List.map snd
-        |> List.filter_map (fun (info, x) ->
-          match info with Right it -> Some (x, it) | Left () -> None)
-        |> List.fold_left
-             (fun gt'' (x, it) -> GT.let_ (0, (x, GT.return_ it here), gt'') here)
-             gt_main
-      | _ -> gt
-    in
-    GT.map_gen_post aux gt
-
-
-  let pass = { name = "member_indirection"; transform }
-end
-
-(** This pass performs makes pointer offsets consistent *)
-module PointerOffsets = struct
-  let transform (gt : GT.t) : GT.t =
-    let aux (gt : GT.t) : GT.t =
-      match gt with
-      | GT (Asgn ((it_addr, sct), it_val, gt'), _, loc) ->
-        let it_addr =
-          match it_addr with
-          | IT
-              ( Binop (Add, IT (ArrayShift { base; ct; index }, _, loc_shift), it_offset),
-                _,
-                loc_add ) ->
-            let index =
-              if BT.equal (IT.bt index) Memory.size_bt then
-                index
-              else
-                IT.cast_ Memory.size_bt index (Locations.other __LOC__)
-            in
-            IT.add_
-              ( base,
-                IT.add_
-                  (IT.mul_ (index, IT.sizeOf_ ct loc_shift) loc_shift, it_offset)
-                  loc_add )
-              loc_shift
-          | IT
-              ( Binop
-                  (Add, IT (Binop (Add, it_base, it_offset_1), _, loc_shift), it_offset_2),
-                _,
-                loc_add ) ->
-            IT.add_ (it_base, IT.add_ (it_offset_1, it_offset_2) loc_add) loc_shift
-          | _ -> it_addr
-        in
-        GT.asgn_ ((it_addr, sct), it_val, gt') loc
-      | _ -> gt
-    in
-    GT.map_gen_post aux gt
-
-
-  let pass = { name = "rewrite"; transform }
 end
 
 (** This pass performs various inlinings *)
@@ -1302,16 +1312,16 @@ module Inline = struct
         GT.map_gen_post aux gt
 
 
-      let of_symset (s : SymSet.t) : bool SymMap.t =
-        s |> SymSet.to_seq |> Seq.map (fun x -> (x, false)) |> SymMap.of_seq
+      let of_symset (s : Sym.Set.t) : bool Sym.Map.t =
+        s |> Sym.Set.to_seq |> Seq.map (fun x -> (x, false)) |> Sym.Map.of_seq
 
 
-      let union = SymMap.union (fun _ a b -> Some (not (a || b)))
+      let union = Sym.Map.union (fun _ a b -> Some (not (a || b)))
 
-      let rec transform_aux (gt : GT.t) : GT.t * bool SymMap.t =
+      let rec transform_aux (gt : GT.t) : GT.t * bool Sym.Map.t =
         let (GT (gt_, _, loc)) = gt in
         match gt_ with
-        | Arbitrary | Uniform _ -> (gt, SymMap.empty)
+        | Arbitrary | Uniform _ -> (gt, Sym.Map.empty)
         | Pick wgts ->
           let wgts, only_ret =
             wgts
@@ -1319,7 +1329,7 @@ module Inline = struct
             |> List.map (fun (a, (b, c)) -> ((a, b), c))
             |> List.split
           in
-          (GT.pick_ wgts loc, List.fold_left union SymMap.empty only_ret)
+          (GT.pick_ wgts loc, List.fold_left union Sym.Map.empty only_ret)
         | Alloc it -> (gt, it |> IT.free_vars |> of_symset)
         | Call (_fsym, xits) ->
           ( gt,
@@ -1327,20 +1337,20 @@ module Inline = struct
             |> List.map snd
             |> List.map IT.free_vars
             |> List.map of_symset
-            |> List.fold_left union SymMap.empty )
+            |> List.fold_left union Sym.Map.empty )
         | Asgn ((it_addr, sct), it_val, gt') ->
           let only_ret =
             [ it_addr; it_val ]
             |> List.map IT.free_vars
             |> List.map of_symset
-            |> List.fold_left union SymMap.empty
+            |> List.fold_left union Sym.Map.empty
           in
           let gt', only_ret' = transform_aux gt' in
           (GT.asgn_ ((it_addr, sct), it_val, gt') loc, union only_ret only_ret')
         | Let (backtracks, (x, gt_inner), gt') ->
           let gt', only_ret = transform_aux gt' in
-          let only_ret = SymMap.remove x only_ret in
-          if Option.equal Bool.equal (SymMap.find_opt x only_ret) (Some true) then
+          let only_ret = Sym.Map.remove x only_ret in
+          if Option.equal Bool.equal (Sym.Map.find_opt x only_ret) (Some true) then
             (subst x gt_inner gt', only_ret)
           else (
             let gt_inner, only_ret' = transform_aux gt_inner in
@@ -1348,7 +1358,7 @@ module Inline = struct
         | Return it ->
           ( gt,
             (match IT.is_sym it with
-             | Some (x, _bt) -> SymMap.singleton x true
+             | Some (x, _bt) -> Sym.Map.singleton x true
              | None -> it |> IT.free_vars |> of_symset) )
         | Assert (lc, gt') ->
           let only_ret = lc |> LC.free_vars |> of_symset in
@@ -1359,11 +1369,11 @@ module Inline = struct
           let gt_then, only_ret' = transform_aux gt_then in
           let gt_else, only_ret'' = transform_aux gt_else in
           ( GT.ite_ (it_if, gt_then, gt_else) loc,
-            [ only_ret; only_ret'; only_ret'' ] |> List.fold_left union SymMap.empty )
+            [ only_ret; only_ret'; only_ret'' ] |> List.fold_left union Sym.Map.empty )
         | Map ((i, i_bt, it_perm), gt_inner) ->
-          let only_ret = it_perm |> IT.free_vars |> SymSet.remove i |> of_symset in
+          let only_ret = it_perm |> IT.free_vars |> Sym.Set.remove i |> of_symset in
           let gt_inner, only_ret' = transform_aux gt_inner in
-          let only_ret' = only_ret' |> SymMap.remove i |> SymMap.map (fun _ -> false) in
+          let only_ret' = only_ret' |> Sym.Map.remove i |> Sym.Map.map (fun _ -> false) in
           (GT.map_ ((i, i_bt, it_perm), gt_inner) loc, union only_ret only_ret')
 
 
@@ -1445,7 +1455,7 @@ module SplitConstraints = struct
             it
             |> cnf
             |> listify_constraints
-            |> List.partition (fun it' -> SymSet.mem i_sym (IT.free_vars it'))
+            |> List.partition (fun it' -> Sym.Set.mem i_sym (IT.free_vars it'))
           in
           let gt_forall =
             GT.assert_ (LC.Forall ((i_sym, i_bt), IT.and_ its_in loc), gt') loc
@@ -1472,7 +1482,7 @@ module SplitConstraints = struct
         | Assert (T (IT (Let ((x, it_inner), it_rest), _, loc_let)), gt') ->
           GT.let_
             ( 0,
-              (x, GT.return_ it_inner (IT.loc it_inner)),
+              (x, GT.return_ it_inner (IT.get_loc it_inner)),
               GT.assert_ (LC.T it_rest, gt') loc )
             loc_let
         | Assert (Forall ((_i_sym, _i_bt), IT (Let _, _, _)), _) ->
@@ -1504,6 +1514,19 @@ module SplitConstraints = struct
 
     let pass = { name; transform }
   end
+
+  let rec is_external (gt : GT.t) : bool =
+    let (GT (gt_, _, _)) = gt in
+    match gt_ with
+    | Arbitrary | Uniform _ | Alloc _ | Return _ -> false
+    | Call _ -> true
+    | Pick wgts -> wgts |> List.map snd |> List.exists is_external
+    | Asgn (_, _, gt_rest) -> is_external gt_rest
+    | Let (_, (_, gt_inner), gt_rest) -> is_external gt_inner || is_external gt_rest
+    | Assert (_, gt_rest) -> is_external gt_rest
+    | ITE (_, gt_then, gt_else) -> is_external gt_then || is_external gt_else
+    | Map (_, gt_inner) -> is_external gt_inner
+
 
   module Disjunction = struct
     let name = "split_disjunction"
@@ -1556,23 +1579,59 @@ module SplitConstraints = struct
 
 
     let transform (gt : GT.t) : GT.t =
-      let aux (gt : GT.t) : GT.t =
+      let rec aux (ext : Sym.Set.t) (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+        | Pick wgts -> GT.pick_ (List.map_snd (aux ext) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, aux ext gt_rest) loc
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let gt_inner = aux ext gt_inner in
+          let ext = if is_external gt_inner then Sym.Set.add x ext else ext in
+          GT.let_ (backtracks, (x, gt_inner), aux ext gt_rest) loc
         | Assert (T it, gt') ->
           let it = dnf it in
+          let gt' = aux ext gt' in
           (match it with
            | IT (Binop (Or, _, _), _, _) ->
-             let cases =
+             let its_split, its_left =
                it
                |> listify_constraints
-               |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
+               |> List.partition (fun it' ->
+                 match it with
+                 | IT (Binop (EQ, IT (Sym x, _, _), _), _, _) when not (Sym.Set.mem x ext)
+                   ->
+                   true
+                 | IT (Binop (EQ, _, IT (Sym x, _, _)), _, _) when not (Sym.Set.mem x ext)
+                   ->
+                   true
+                 | _ -> Sym.Set.disjoint ext (IT.free_vars it'))
+             in
+             let gt' =
+               if List.is_empty its_left then
+                 gt'
+               else (
+                 let it' =
+                   List.fold_left
+                     (fun it1 it2 -> IT.or2_ (it1, it2) loc)
+                     (List.hd its_left)
+                     (List.tl its_left)
+                 in
+                 GT.assert_ (T it', gt') loc)
+             in
+             let cases =
+               its_split |> List.map (fun it' -> (Z.one, GT.assert_ (T it', gt') loc))
              in
              GT.pick_ cases loc
-           | _ -> gt)
-        | _ -> gt
+           | _ -> GT.assert_ (T it, gt') loc)
+        | Assert ((Forall _ as lc), gt_rest) -> GT.assert_ (lc, aux ext gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, aux ext gt_then, aux ext gt_else) loc
+        | Map ((i, i_bt, it_perm), gt_inner) ->
+          GT.map_ ((i, i_bt, it_perm), aux ext gt_inner) loc
       in
-      GT.map_gen_pre aux gt
+      aux Sym.Set.empty gt
 
 
     let pass = { name; transform }
@@ -1586,11 +1645,7 @@ module SplitConstraints = struct
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
         | Assert (T (IT (Binop (Implies, it_if, it_then), _, loc_implies)), gt') ->
-          GT.pick_
-            [ (Z.one, GT.assert_ (T (IT.not_ it_if loc_implies), gt') loc);
-              (Z.one, GT.assert_ (T it_then, gt') loc)
-            ]
-            loc_implies
+          GT.ite_ (it_if, GT.assert_ (T it_then, gt') loc, gt') loc_implies
         | _ -> gt
       in
       GT.map_gen_pre aux gt
@@ -1606,10 +1661,10 @@ end
 (** This pass infers how much allocation is needed
     for each pointer given the current intraprocedural
     context *)
-module InferAllocationSize = struct
+(* module InferAllocationSize = struct
   let name = "infer_alloc_size"
 
-  let infer_size (vars : SymSet.t) (x : Sym.t) (gt : GT.t) : IT.t option =
+  let infer_size (vars : Sym.Set.t) (x : Sym.t) (gt : GT.t) : IT.t option =
     let merge loc oa ob =
       match (oa, ob) with
       | Some a, Some b -> Some (IT.max_ (a, b) loc)
@@ -1630,7 +1685,7 @@ module InferAllocationSize = struct
           let (IT (_, _, loc)) = it_addr in
           let open Option in
           let@ psym, it_offset = GA.get_addr_offset_opt it_addr in
-          if Sym.equal x psym && SymSet.subset (IT.free_vars it_offset) vars then
+          if Sym.equal x psym && Sym.Set.subset (IT.free_vars it_offset) vars then
             return (IT.add_ (it_offset, IT.sizeOf_ sct loc) loc)
           else
             None
@@ -1649,7 +1704,7 @@ module InferAllocationSize = struct
         in
         let open Option in
         let@ it = aux gt_inner in
-        if SymSet.mem j_sym (IT.free_vars it) then (
+        if Sym.Set.mem j_sym (IT.free_vars it) then (
           let _, it_max = GA.get_bounds (i_sym, i_bt) it_perm in
           return (IT.subst (IT.make_subst [ (j_sym, it_max) ]) it))
         else
@@ -1659,7 +1714,7 @@ module InferAllocationSize = struct
 
 
   let transform (gd : GD.t) : GD.t =
-    let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t =
+    let rec aux (vars : Sym.Set.t) (gt : GT.t) : GT.t =
       let (GT (gt_, _bt, loc)) = gt in
       match gt_ with
       | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
@@ -1668,7 +1723,7 @@ module InferAllocationSize = struct
         GT.asgn_ ((it_addr, sct), it_val, aux vars gt_rest) loc
       | Let (backtracks, (x, (GT (Alloc it_size, _bt, loc_alloc) as gt_inner)), gt_rest)
         ->
-        let gt_rest = aux (SymSet.add x vars) gt_rest in
+        let gt_rest = aux (Sym.Set.add x vars) gt_rest in
         (match infer_size vars x gt_rest with
          | Some it_size' ->
            let here = Locations.other __LOC__ in
@@ -1679,21 +1734,21 @@ module InferAllocationSize = struct
              loc
          | None ->
            GT.let_
-             (backtracks, (x, aux vars gt_inner), aux (SymSet.add x vars) gt_rest)
+             (backtracks, (x, aux vars gt_inner), aux (Sym.Set.add x vars) gt_rest)
              loc)
       | Let (backtracks, (x, gt_inner), gt_rest) ->
-        GT.let_ (backtracks, (x, aux vars gt_inner), aux (SymSet.add x vars) gt_rest) loc
+        GT.let_ (backtracks, (x, aux vars gt_inner), aux (Sym.Set.add x vars) gt_rest) loc
       | Assert (lc, gt_rest) -> GT.assert_ (lc, aux vars gt_rest) loc
       | ITE (it_if, gt_then, gt_else) ->
         GT.ite_ (it_if, aux vars gt_then, aux vars gt_else) loc
       | Map ((i_sym, i_bt, it_perm), gt_inner) ->
-        GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym vars) gt_inner) loc
+        GT.map_ ((i_sym, i_bt, it_perm), aux (Sym.Set.add i_sym vars) gt_inner) loc
     in
     let body =
-      Some (aux (gd.iargs |> List.map fst |> SymSet.of_list) (Option.get gd.body))
+      Some (aux (gd.iargs |> List.map fst |> Sym.Set.of_list) (Option.get gd.body))
     in
     { gd with body }
-end
+end *)
 
 (** This pass uses [Simplify] to rewrite [IndexTerms.t] *)
 module TermSimplification = struct
@@ -1702,7 +1757,7 @@ module TermSimplification = struct
   let transform (prog5 : unit Mucore.file) (gt : GT.t) : GT.t =
     let globals =
       { Global.empty with
-        logical_functions = SymMap.of_seq (List.to_seq prog5.logical_predicates)
+        logical_functions = Sym.Map.of_seq (List.to_seq prog5.logical_predicates)
       }
     in
     let simp_it (it : IT.t) : IT.t =
@@ -1896,9 +1951,10 @@ module RemoveUnused = struct
     let aux (gt : GT.t) : GT.t =
       let (GT (gt_, _, _)) = gt in
       match gt_ with
-      | Let (_, (x, gt1), gt2)
-        when GA.is_pure gt1 && not (SymSet.mem x (GT.free_vars gt2)) ->
-        gt2
+      | Let (_, (x, gt_inner), gt_rest)
+        when GA.is_pure gt_inner && not (Sym.Set.mem x (GT.free_vars gt_rest)) ->
+        gt_rest
+      | Assert (T it, gt_rest) when IT.is_true it -> gt_rest
       | _ -> gt
     in
     GT.map_gen_post aux gt
@@ -1914,43 +1970,74 @@ module Reordering = struct
 
   module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
 
-  let get_variable_ordering (iargs : SymSet.t) (stmts : GS.t list) : Sym.t list =
+  let get_variable_ordering
+    (_rec_fsyms : Sym.Set.t)
+    (iargs : Sym.Set.t)
+    (stmts : GS.t list)
+    : Sym.t list
+    =
     let module Oper = Graph.Oper.P (SymGraph) in
-    (* Describes logical dependencies where [x <- y] means that [x] depends on [y] *)
-    let collect_constraints (stmts : GS.t list) : SymGraph.t =
-      let rec aux (stmts : GS.t list) : SymGraph.t =
-        match stmts with
-        | Let (_, (x, _)) :: stmts' -> SymGraph.add_vertex (aux stmts') x
-        | Assert (T (IT (Binop (EQ, IT (Sym x, _, _), it), _, _))) :: stmts' ->
-          let g = aux stmts' in
-          let g' =
-            List.fold_left
-              (fun g' y ->
-                if SymSet.mem y iargs || Sym.equal x y then
-                  g'
-                else
-                  SymGraph.add_edge_e g' (y, x))
-              g
-              (it |> IT.free_vars |> SymSet.to_seq |> List.of_seq)
-          in
-          g'
-        | Assert (T (IT (Binop (EQ, it, IT (Sym x, _, _)), _, _))) :: stmts' ->
-          let g = aux stmts' in
-          Seq.fold_left
+    (* Insert edges x <- y_1, ..., y_n when x = f(y_1, ..., y_n) *)
+    let rec consider_equalities (stmts : GS.t list) : SymGraph.t =
+      match stmts with
+      | Let (_, (x, _)) :: stmts' -> SymGraph.add_vertex (consider_equalities stmts') x
+      | Assert (T (IT (Binop (EQ, IT (Sym x, _, _), it), _, _))) :: stmts' ->
+        let g = consider_equalities stmts' in
+        let g' =
+          List.fold_left
             (fun g' y ->
-              if SymSet.mem y iargs || Sym.equal x y then
+              if Sym.Set.mem y iargs || Sym.equal x y then
                 g'
               else
                 SymGraph.add_edge_e g' (y, x))
             g
-            (it |> IT.free_vars |> SymSet.to_seq)
-        | _ :: stmts' -> aux stmts'
-        | [] -> SymGraph.empty
-      in
-      let g = aux stmts in
+            (it |> IT.free_vars |> Sym.Set.to_seq |> List.of_seq)
+        in
+        g'
+      | Assert (T (IT (Binop (EQ, it, IT (Sym x, _, _)), _, _))) :: stmts' ->
+        let g = consider_equalities stmts' in
+        Seq.fold_left
+          (fun g' y ->
+            if Sym.Set.mem y iargs || Sym.equal x y then
+              g'
+            else
+              SymGraph.add_edge_e g' (y, x))
+          g
+          (it |> IT.free_vars |> Sym.Set.to_seq)
+      | _ :: stmts' -> consider_equalities stmts'
+      | [] -> SymGraph.empty
+    in
+    (* Put calls before local variables they constrain *)
+    let rec consider_constrained_calls
+      (from_calls : Sym.Set.t)
+      (g : SymGraph.t)
+      (stmts : GS.t list)
+      : SymGraph.t
+      =
+      match stmts with
+      | Let (_, (x, gt)) :: stmts' when GT.contains_call gt ->
+        consider_constrained_calls (Sym.Set.add x from_calls) g stmts'
+      | Asgn _ :: stmts' | Let _ :: stmts' ->
+        consider_constrained_calls from_calls g stmts'
+      | Assert lc :: stmts' ->
+        let g = consider_constrained_calls from_calls g stmts' in
+        let free_vars = LC.free_vars lc in
+        let call_vars = Sym.Set.inter free_vars from_calls in
+        let non_call_vars = Sym.Set.diff free_vars from_calls in
+        let add_from_call (x : Sym.t) (g : SymGraph.t) : SymGraph.t =
+          Sym.Set.fold (fun y g' -> SymGraph.add_edge g' y x) call_vars g
+        in
+        Sym.Set.fold add_from_call non_call_vars g
+      | [] -> g
+    in
+    (* Describes logical dependencies where [x <- y] means that [x] depends on [y] *)
+    let collect_constraints (stmts : GS.t list) : SymGraph.t =
+      let g = consider_equalities stmts in
       let g' = Oper.transitive_closure g in
-      assert (not (SymGraph.fold_edges (fun x y acc -> Sym.equal x y || acc) g' false));
-      g
+      let g'' = consider_constrained_calls Sym.Set.empty g' stmts in
+      let g''' = Oper.transitive_closure g'' in
+      assert (not (SymGraph.fold_edges (fun x y acc -> Sym.equal x y || acc) g''' false));
+      g'''
     in
     (* Describes data dependencies where [x <- y] means that [x] depends on [y] *)
     let collect_dependencies (stmts : GS.t list) : SymGraph.t =
@@ -1958,9 +2045,9 @@ module Reordering = struct
         match stmts with
         | Let (_, (x, gt)) :: stmts' ->
           let g = SymGraph.add_vertex (aux stmts') x in
-          SymSet.fold
+          Sym.Set.fold
             (fun y g' ->
-              if SymSet.mem y iargs then
+              if Sym.Set.mem y iargs then
                 g'
               else
                 SymGraph.add_edge g' y x)
@@ -1980,26 +2067,26 @@ module Reordering = struct
     let get_needs (x : Sym.t) (ys : Sym.t list) : Sym.t list =
       let syms_c =
         SymGraph.fold_pred
-          (fun y syms -> if List.mem Sym.equal y ys then syms else SymSet.add y syms)
+          (fun y syms -> if List.mem Sym.equal y ys then syms else Sym.Set.add y syms)
           g_c
           x
-          SymSet.empty
+          Sym.Set.empty
       in
       let syms =
-        SymSet.fold
+        Sym.Set.fold
           (fun z acc ->
-            SymSet.union
+            Sym.Set.union
               acc
               (SymGraph.fold_pred
                  (fun y syms' ->
-                   if List.mem Sym.equal y ys then syms' else SymSet.add y syms')
+                   if List.mem Sym.equal y ys then syms' else Sym.Set.add y syms')
                  g_d
                  z
-                 SymSet.empty))
+                 Sym.Set.empty))
           syms_c
           syms_c
       in
-      orig_order |> List.filter (fun x -> SymSet.mem x syms)
+      orig_order |> List.filter (fun x -> Sym.Set.mem x syms)
     in
     let new_order : Sym.t list -> Sym.t list =
       List.fold_left
@@ -2022,15 +2109,20 @@ module Reordering = struct
     loop orig_order
 
 
-  let get_statement_ordering (iargs : SymSet.t) (stmts : GS.t list) : GS.t list =
-    let rec loop (vars : SymSet.t) (syms : Sym.t list) (stmts : GS.t list) : GS.t list =
+  let get_statement_ordering
+    (rec_fsyms : Sym.Set.t)
+    (iargs : Sym.Set.t)
+    (stmts : GS.t list)
+    : GS.t list
+    =
+    let rec loop (vars : Sym.Set.t) (syms : Sym.t list) (stmts : GS.t list) : GS.t list =
       let res, stmts' =
         List.partition
           (fun (stmt : GS.t) ->
             match stmt with
             | Asgn ((it_addr, _sct), it_val) ->
-              SymSet.subset (IT.free_vars_list [ it_addr; it_val ]) vars
-            | Assert lc -> SymSet.subset (LC.free_vars lc) vars
+              Sym.Set.subset (IT.free_vars_list [ it_addr; it_val ]) vars
+            | Assert lc -> Sym.Set.subset (LC.free_vars lc) vars
             | _ -> false)
           stmts
       in
@@ -2042,24 +2134,43 @@ module Reordering = struct
               match stmt with Let (_, (x, _)) -> Sym.equal x sym | _ -> false)
             stmts'
         in
-        res @ res' @ loop (SymSet.add sym vars) syms' stmts''
+        res @ res' @ loop (Sym.Set.add sym vars) syms' stmts''
       | [] ->
-        assert (List.is_empty stmts');
+        if List.non_empty stmts' then
+          print_endline
+            (match stmts' with
+             | [ Assert lc ] ->
+               Pp.(
+                 LC.free_vars lc
+                 |> Sym.Set.to_seq
+                 |> List.of_seq
+                 |> separate_map (comma ^^ space) Sym.pp
+                 |> plain)
+             | _ -> "ss");
         res
     in
-    let syms = get_variable_ordering iargs stmts in
+    let syms = get_variable_ordering rec_fsyms iargs stmts in
     loop iargs syms stmts
 
 
-  let reorder (iargs : SymSet.t) (gt : GT.t) : GT.t =
+  let reorder (rec_fsyms : Sym.Set.t) (iargs : Sym.Set.t) (gt : GT.t) : GT.t =
     let stmts, gt_last = GS.stmts_of_gt gt in
-    let stmts = get_statement_ordering iargs stmts in
+    let stmts = get_statement_ordering rec_fsyms iargs stmts in
     GS.gt_of_stmts stmts gt_last
 
 
-  let transform (gd : GD.t) : GD.t =
-    let rec aux (iargs : SymSet.t) (gt : GT.t) : GT.t =
-      let rec loop (iargs : SymSet.t) (gt : GT.t) : GT.t =
+  let transform (gtx : GD.context) (gd : GD.t) : GD.t =
+    let rec_fsyms =
+      gtx
+      |> List.map snd
+      |> List.flatten
+      |> List.map snd
+      |> List.filter_map (fun (gd' : GD.t) ->
+        if gd'.recursive then Some gd'.name else None)
+      |> Sym.Set.of_list
+    in
+    let rec aux (iargs : Sym.Set.t) (gt : GT.t) : GT.t =
+      let rec loop (iargs : Sym.Set.t) (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
         | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
@@ -2067,17 +2178,17 @@ module Reordering = struct
         | Asgn ((it_addr, sct), it_val, gt_rest) ->
           GT.asgn_ ((it_addr, sct), it_val, loop iargs gt_rest) loc
         | Let (backtracks, (x, gt'), gt_rest) ->
-          let iargs = SymSet.add x iargs in
+          let iargs = Sym.Set.add x iargs in
           GT.let_ (backtracks, (x, (aux iargs) gt'), loop iargs gt_rest) loc
         | Assert (lc, gt_rest) -> GT.assert_ (lc, loop iargs gt_rest) loc
         | ITE (it_if, gt_then, gt_else) ->
           GT.ite_ (it_if, aux iargs gt_then, aux iargs gt_else) loc
         | Map ((i_sym, i_bt, it_perm), gt_inner) ->
-          GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym iargs) gt_inner) loc
+          GT.map_ ((i_sym, i_bt, it_perm), aux (Sym.Set.add i_sym iargs) gt_inner) loc
       in
-      gt |> reorder iargs |> loop iargs
+      gt |> reorder rec_fsyms iargs |> loop iargs
     in
-    let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
+    let iargs = gd.iargs |> List.map fst |> Sym.Set.of_list in
     { gd with body = Some (aux iargs (Option.get gd.body)) }
 end
 
@@ -2433,7 +2544,37 @@ module ConstraintPropagation = struct
           ( EQ,
             IT (Const (Bits (_, m)), _, _),
             IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _) )
-        when Z.equal m Z.zero ->
+      | Binop
+          ( EQ,
+            IT
+              ( Binop
+                  ( Mod,
+                    IT (Cast (_, IT (Sym x, x_bt, _)), _, _),
+                    IT (Const (Bits (_, n)), _, _) ),
+                _,
+                _ ),
+            IT (Const (Bits (_, m)), _, _) )
+      | Binop
+          ( EQ,
+            IT (Const (Bits (_, m)), _, _),
+            IT
+              ( Binop
+                  ( Mod,
+                    IT (Cast (_, IT (Sym x, x_bt, _)), _, _),
+                    IT (Const (Bits (_, n)), _, _) ),
+                _,
+                _ ) )
+        when Z.equal m Z.zero
+             &&
+             let sgn, sz =
+               Option.get
+                 (BT.is_bits_bt
+                    (if BT.equal x_bt (Loc ()) then
+                       Memory.uintptr_bt
+                     else
+                       x_bt))
+             in
+             BT.fits_range (sgn, sz) n ->
         let@ bt_rep = IntRep.of_bt x_bt in
         Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.of_mult n))))
       | _ -> None
@@ -2444,8 +2585,17 @@ module ConstraintPropagation = struct
     let is_const (Int r) = IntRep.is_const r
 
     let to_stmts (x : Sym.t) (bt : BT.t) (Int r : t) : GS.t list =
+      let loc = Locations.other __LOC__ in
+      let lit n =
+        if BT.equal bt (Loc ()) then
+          IT.pointer_ ~alloc_id:Z.zero ~addr:n loc
+        else
+          IT.num_lit_ n bt loc
+      in
+      let le (n, m) =
+        if BT.equal bt (Loc ()) then IT.lePointer_ (n, m) loc else IT.le_ (n, m) loc
+      in
       let aux (sgn : BT.sign) (sz : int) : GS.t list =
-        let loc = Locations.other __LOC__ in
         let min_bt, max_bt = BT.bits_range (sgn, sz) in
         if IntRep.is_empty r then
           [ GS.Assert (T (IT.bool_ false loc)) ]
@@ -2453,22 +2603,17 @@ module ConstraintPropagation = struct
           let min, max = (Option.get (IntRep.minimum r), Option.get (IntRep.maximum r)) in
           let stmts_range =
             if Z.equal min max then
-              [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), IT.num_lit_ min bt loc) loc))
-              ]
+              [ GS.Assert (T (IT.eq_ (IT.sym_ (x, bt, loc), lit min) loc)) ]
             else (
               let stmt_min =
                 if Z.lt min_bt min then
-                  [ GS.Assert
-                      (LC.T (IT.le_ (IT.num_lit_ min bt loc, IT.sym_ (x, bt, loc)) loc))
-                  ]
+                  [ GS.Assert (LC.T (le (lit min, IT.sym_ (x, bt, loc)))) ]
                 else
                   []
               in
               let stmt_max =
                 if Z.lt max max_bt then
-                  [ GS.Assert
-                      (LC.T (IT.le_ (IT.sym_ (x, bt, loc), IT.num_lit_ max bt loc) loc))
-                  ]
+                  [ GS.Assert (LC.T (le (IT.sym_ (x, bt, loc), lit max))) ]
                 else
                   []
               in
@@ -2481,8 +2626,17 @@ module ConstraintPropagation = struct
               [ GS.Assert
                   (LC.T
                      (IT.eq_
-                        ( IT.mod_ (IT.sym_ (x, bt, loc), IT.num_lit_ r.mult bt loc) loc,
-                          IT.num_lit_ Z.zero bt loc )
+                        ( IT.mod_
+                            (if BT.equal bt (Loc ()) then
+                               ( IT.cast_ Memory.uintptr_bt (IT.sym_ (x, bt, loc)) loc,
+                                 IT.num_lit_ r.mult Memory.uintptr_bt loc )
+                             else
+                               (IT.sym_ (x, bt, loc), lit r.mult))
+                            loc,
+                          IT.num_lit_
+                            Z.zero
+                            (if BT.equal bt (Loc ()) then Memory.uintptr_bt else bt)
+                            loc )
                         loc))
               ]
           in
@@ -2553,18 +2707,18 @@ module ConstraintPropagation = struct
       module G = Graph.Persistent.Digraph.ConcreteLabeled (Sym) (Constraint)
     end
 
-    type t = Domain.t SymMap.t * G.t
+    type t = Domain.t Sym.Map.t * G.t
 
-    let empty = (SymMap.empty, G.empty)
+    let empty = (Sym.Map.empty, G.empty)
 
-    let variables ((ds, _) : t) : Domain.t SymMap.t = ds
+    let variables ((ds, _) : t) : Domain.t Sym.Map.t = ds
 
     let constraints ((_, g) : t) : (Sym.t * Constraint.t * Sym.t) list =
       G.fold_edges_e (fun edge edges -> edge :: edges) g []
 
 
     let add_variable (x : Sym.t) (d : Domain.t) ((ds, g) : t) : t =
-      ( SymMap.update
+      ( Sym.Map.update
           x
           (fun od ->
             match od with Some d' -> Some (Domain.intersect d d') | None -> Some d)
@@ -2583,9 +2737,9 @@ module ConstraintPropagation = struct
       (ds, g)
 
 
-    let domain (x : Sym.t) ((ds, _) : t) : Domain.t = SymMap.find x ds
+    let domain (x : Sym.t) ((ds, _) : t) : Domain.t = Sym.Map.find x ds
 
-    let domain_opt (x : Sym.t) ((ds, _) : t) : Domain.t option = SymMap.find_opt x ds
+    let domain_opt (x : Sym.t) ((ds, _) : t) : Domain.t option = Sym.Map.find_opt x ds
 
     let related_constraints ((_, g) : t) (x : Sym.t) : (Sym.t * Constraint.t * Sym.t) list
       =
@@ -2618,13 +2772,13 @@ module ConstraintPropagation = struct
            let network =
              ConstraintNetwork.add_variable
                x
-               (Int (Option.get (IntRep.of_bt (SymMap.find x xbts))))
+               (Int (Option.get (IntRep.of_bt (Sym.Map.find x xbts))))
                network
            in
            let network =
              ConstraintNetwork.add_variable
                y
-               (Int (Option.get (IntRep.of_bt (SymMap.find y xbts))))
+               (Int (Option.get (IntRep.of_bt (Sym.Map.find y xbts))))
                network
            in
            (stmt :: stmts', ConstraintNetwork.add_constraint c x y network)
@@ -2742,15 +2896,15 @@ module ConstraintPropagation = struct
 
   (** Adds new asserts encoding the domain information *)
   let add_refined_asserts
-    (iargs : BT.t SymMap.t)
+    (iargs : BT.t Sym.Map.t)
     (network : ConstraintNetwork.t)
     (stmts : GS.t list)
     : GS.t list
     =
-    let rec aux (ds : Domain.t SymMap.t) (stmts : GS.t list) : GS.t list =
+    let rec aux (ds : Domain.t Sym.Map.t) (stmts : GS.t list) : GS.t list =
       match stmts with
-      | (Let (_, (x, gt)) as stmt) :: stmts' when SymMap.mem x ds ->
-        (stmt :: Domain.to_stmts x (GT.bt gt) (SymMap.find x ds)) @ aux ds stmts'
+      | (Let (_, (x, gt)) as stmt) :: stmts' when Sym.Map.mem x ds ->
+        (stmt :: Domain.to_stmts x (GT.bt gt) (Sym.Map.find x ds)) @ aux ds stmts'
       | (Asgn _ as stmt) :: stmts'
       | (Let _ as stmt) :: stmts'
       | (Assert _ as stmt) :: stmts' ->
@@ -2758,17 +2912,17 @@ module ConstraintPropagation = struct
       | [] -> []
     in
     let ds = ConstraintNetwork.variables network in
-    let ds_iargs, ds_rest = SymMap.partition (fun x _ -> SymMap.mem x iargs) ds in
+    let ds_iargs, ds_rest = Sym.Map.partition (fun x _ -> Sym.Map.mem x iargs) ds in
     let stmts_iargs =
-      SymMap.fold
-        (fun x d acc -> Domain.to_stmts x (SymMap.find x iargs) d @ acc)
+      Sym.Map.fold
+        (fun x d acc -> Domain.to_stmts x (Sym.Map.find x iargs) d @ acc)
         ds_iargs
         []
     in
     stmts_iargs @ aux ds_rest stmts
 
 
-  let propagate_constraints (iargs : BT.t SymMap.t) (gt : GT.t) : GT.t =
+  let propagate_constraints (iargs : BT.t Sym.Map.t) (gt : GT.t) : GT.t =
     let stmts, gt_last = GS.stmts_of_gt gt in
     let stmts, network = construct_network stmts in
     let network = ac3 network in
@@ -2777,8 +2931,8 @@ module ConstraintPropagation = struct
 
 
   let transform (gd : GD.t) : GD.t =
-    let rec aux (iargs : BT.t SymMap.t) (gt : GT.t) : GT.t =
-      let rec loop (iargs : BT.t SymMap.t) (gt : GT.t) : GT.t =
+    let rec aux (iargs : BT.t Sym.Map.t) (gt : GT.t) : GT.t =
+      let rec loop (iargs : BT.t Sym.Map.t) (gt : GT.t) : GT.t =
         let (GT (gt_, _bt, loc)) = gt in
         match gt_ with
         | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
@@ -2789,13 +2943,15 @@ module ConstraintPropagation = struct
           GT.let_
             ( backtracks,
               (x, (aux iargs) gt'),
-              loop (SymMap.add x (GT.bt gt') iargs) gt_rest )
+              loop (Sym.Map.add x (GT.bt gt') iargs) gt_rest )
             loc
         | Assert (lc, gt_rest) -> GT.assert_ (lc, loop iargs gt_rest) loc
         | ITE (it_if, gt_then, gt_else) ->
           GT.ite_ (it_if, aux iargs gt_then, aux iargs gt_else) loc
         | Map ((i_sym, i_bt, it_perm), gt_inner) ->
-          GT.map_ ((i_sym, i_bt, it_perm), aux (SymMap.add i_sym i_bt iargs) gt_inner) loc
+          GT.map_
+            ((i_sym, i_bt, it_perm), aux (Sym.Map.add i_sym i_bt iargs) gt_inner)
+            loc
       in
       gt |> propagate_constraints iargs |> loop iargs
     in
@@ -2803,24 +2959,24 @@ module ConstraintPropagation = struct
       gd.iargs
       |> List.map (fun (x, gbt) -> (x, GenBaseTypes.bt gbt))
       |> List.to_seq
-      |> SymMap.of_seq
+      |> Sym.Map.of_seq
     in
     { gd with body = Some (aux iargs (Option.get gd.body)) }
 end
 
 module Specialization = struct
   module Equality = struct
-    let find_constraint (vars : SymSet.t) (x : Sym.t) (stmts : GS.t list)
+    let find_constraint (vars : Sym.Set.t) (x : Sym.t) (stmts : GS.t list)
       : (GS.t list * IT.t) option
       =
       let rec aux (stmts : GS.t list) : (GS.t list * IT.t) option =
         let open Option in
         match stmts with
         | Assert (T (IT (Binop (EQ, IT (Sym x', _, _), it), _, _))) :: stmts'
-          when Sym.equal x x' && SymSet.subset (IT.free_vars it) vars ->
+          when Sym.equal x x' && Sym.Set.subset (IT.free_vars it) vars ->
           return (stmts', it)
         | Assert (T (IT (Binop (EQ, it, IT (Sym x', _, _)), _, _))) :: stmts'
-          when Sym.equal x x' && SymSet.subset (IT.free_vars it) vars ->
+          when Sym.equal x x' && Sym.Set.subset (IT.free_vars it) vars ->
           return (stmts', it)
         | stmt :: stmts' ->
           let@ stmts', it = aux stmts' in
@@ -2830,8 +2986,8 @@ module Specialization = struct
       aux stmts
 
 
-    let specialize_stmts (vars : SymSet.t) (stmts : GS.t list) : GS.t list =
-      let rec aux (vars : SymSet.t) (stmts : GS.t list) : GS.t list =
+    let specialize_stmts (vars : Sym.Set.t) (stmts : GS.t list) : GS.t list =
+      let rec aux (vars : Sym.Set.t) (stmts : GS.t list) : GS.t list =
         match stmts with
         | Let (backtracks, (x, (GT (Arbitrary, _, loc) as gt))) :: stmts'
         | Let (backtracks, (x, (GT (Uniform _, _, loc) as gt))) :: stmts'
@@ -2841,25 +2997,25 @@ module Specialization = struct
             | Some (stmts', it) -> (stmts', GT.return_ it loc)
             | None -> (stmts', gt)
           in
-          let vars = SymSet.add x vars in
+          let vars = Sym.Set.add x vars in
           GS.Let (backtracks, (x, gt)) :: aux vars stmts'
-        | (Let (_, (x, _)) as stmt) :: stmts' -> stmt :: aux (SymSet.add x vars) stmts'
+        | (Let (_, (x, _)) as stmt) :: stmts' -> stmt :: aux (Sym.Set.add x vars) stmts'
         | stmt :: stmts' -> stmt :: aux vars stmts'
         | [] -> []
       in
       aux vars stmts
 
 
-    let specialize (vars : SymSet.t) (gt : GT.t) : GT.t =
+    let specialize (vars : Sym.Set.t) (gt : GT.t) : GT.t =
       let stmts, gt_last = GS.stmts_of_gt gt in
       let stmts = specialize_stmts vars stmts in
       GS.gt_of_stmts stmts gt_last
 
 
     let transform (gd : GD.t) : GD.t =
-      let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
-      let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t =
-        let rec loop (vars : SymSet.t) (gt : GT.t) : GT.t =
+      let iargs = gd.iargs |> List.map fst |> Sym.Set.of_list in
+      let rec aux (vars : Sym.Set.t) (gt : GT.t) : GT.t =
+        let rec loop (vars : Sym.Set.t) (gt : GT.t) : GT.t =
           let (GT (gt_, _bt, loc)) = gt in
           match gt_ with
           | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
@@ -2868,13 +3024,13 @@ module Specialization = struct
             GT.asgn_ ((it_addr, sct), it_val, loop vars gt_rest) loc
           | Let (backtracks, (x, gt'), gt_rest) ->
             GT.let_
-              (backtracks, (x, (aux vars) gt'), loop (SymSet.add x vars) gt_rest)
+              (backtracks, (x, (aux vars) gt'), loop (Sym.Set.add x vars) gt_rest)
               loc
           | Assert (lc, gt_rest) -> GT.assert_ (lc, loop vars gt_rest) loc
           | ITE (it_if, gt_then, gt_else) ->
             GT.ite_ (it_if, aux vars gt_then, aux vars gt_else) loc
           | Map ((i_sym, i_bt, it_perm), gt_inner) ->
-            GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym vars) gt_inner) loc
+            GT.map_ ((i_sym, i_bt, it_perm), aux (Sym.Set.add i_sym vars) gt_inner) loc
         in
         gt |> specialize vars |> loop vars
       in
@@ -2898,14 +3054,20 @@ module Specialization = struct
       let of_it (x : Sym.t) (it : IT.t) : t option =
         let (IT (it_, _, _)) = it in
         match it_ with
-        | Binop (LT, IT (Sym x', _, _), it') when Sym.equal x x' -> Some (of_max it')
-        | Binop (LE, IT (Sym x', x_bt, _), it') when Sym.equal x x' ->
+        | Binop (LT, IT (Sym x', _, _), it')
+          when Sym.equal x x' && not (Sym.Set.mem x (IT.free_vars it')) ->
+          Some (of_max it')
+        | Binop (LE, IT (Sym x', x_bt, _), it')
+          when Sym.equal x x' && not (Sym.Set.mem x (IT.free_vars it')) ->
           let loc = Locations.other __LOC__ in
           Some (of_max (IT.add_ (it', IT.num_lit_ Z.one x_bt loc) loc))
-        | Binop (LT, it', IT (Sym x', x_bt, _)) when Sym.equal x x' ->
+        | Binop (LT, it', IT (Sym x', x_bt, _))
+          when Sym.equal x x' && not (Sym.Set.mem x (IT.free_vars it')) ->
           let loc = Locations.other __LOC__ in
           Some (of_min (IT.sub_ (it', IT.num_lit_ Z.one x_bt loc) loc))
-        | Binop (LE, it', IT (Sym x', _, _)) when Sym.equal x x' -> Some (of_min it')
+        | Binop (LE, it', IT (Sym x', _, _))
+          when Sym.equal x x' && not (Sym.Set.mem x (IT.free_vars it')) ->
+          Some (of_min it')
         | _ -> None
 
 
@@ -2945,12 +3107,12 @@ module Specialization = struct
         { mult; min; max }
     end
 
-    let collect_constraints (vars : SymSet.t) (x : Sym.t) (bt : BT.t) (stmts : GS.t list)
+    let collect_constraints (vars : Sym.Set.t) (x : Sym.t) (bt : BT.t) (stmts : GS.t list)
       : GS.t list * Rep.t
       =
       let rec aux (stmts : GS.t list) : GS.t list * Rep.t =
         match stmts with
-        | (Assert (T it) as stmt) :: stmts' when SymSet.subset (IT.free_vars it) vars ->
+        | (Assert (T it) as stmt) :: stmts' when Sym.Set.subset (IT.free_vars it) vars ->
           let stmts', r = aux stmts' in
           (match Rep.of_it x it with
            | Some r' -> (stmts', Rep.intersect r r')
@@ -2960,7 +3122,7 @@ module Specialization = struct
           (stmt :: stmts', v)
         | [] ->
           (match bt with
-           | Bits _ -> ([], { mult = None; min = None; max = None })
+           | Bits _ | Loc _ -> ([], { mult = None; min = None; max = None })
            | _ -> failwith __LOC__)
       in
       aux stmts
@@ -3021,13 +3183,15 @@ module Specialization = struct
       | _ -> (gt, mult_to_stmt v.mult @ min_to_stmt v.min @ max_to_stmt v.max)
 
 
-    let specialize_stmts (vars : SymSet.t) (stmts : GS.t list) : GS.t list =
-      let rec aux (vars : SymSet.t) (stmts : GS.t list) : GS.t list =
+    let specialize_stmts (vars : Sym.Set.t) (stmts : GS.t list) : GS.t list =
+      let rec aux (vars : Sym.Set.t) (stmts : GS.t list) : GS.t list =
         match stmts with
         | Let (backtracks, (x, gt)) :: stmts' ->
-          let vars = SymSet.add x vars in
+          let vars = Sym.Set.add x vars in
           let stmts', (gt, stmts'') =
-            if Option.is_some (BT.is_bits_bt (GT.bt gt)) then (
+            if
+              BT.equal (GT.bt gt) (BT.Loc ()) || Option.is_some (BT.is_bits_bt (GT.bt gt))
+            then (
               let stmts', v = collect_constraints vars x (GT.bt gt) stmts' in
               (stmts', compile_constraints x v gt))
             else
@@ -3040,15 +3204,15 @@ module Specialization = struct
       aux vars stmts
 
 
-    let specialize (vars : SymSet.t) (gt : GT.t) : GT.t =
+    let specialize (vars : Sym.Set.t) (gt : GT.t) : GT.t =
       let stmts, gt_last = GS.stmts_of_gt gt in
       let stmts = specialize_stmts vars stmts in
       GS.gt_of_stmts stmts gt_last
 
 
     let transform (gd : GD.t) : GD.t =
-      let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t =
-        let rec loop (vars : SymSet.t) (gt : GT.t) : GT.t =
+      let rec aux (vars : Sym.Set.t) (gt : GT.t) : GT.t =
+        let rec loop (vars : Sym.Set.t) (gt : GT.t) : GT.t =
           let (GT (gt_, _bt, loc)) = gt in
           match gt_ with
           | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
@@ -3057,39 +3221,130 @@ module Specialization = struct
             GT.asgn_ ((it_addr, sct), it_val, loop vars gt_rest) loc
           | Let (backtracks, (x, gt'), gt_rest) ->
             GT.let_
-              (backtracks, (x, (aux vars) gt'), loop (SymSet.add x vars) gt_rest)
+              (backtracks, (x, (aux vars) gt'), loop (Sym.Set.add x vars) gt_rest)
               loc
           | Assert (lc, gt_rest) -> GT.assert_ (lc, loop vars gt_rest) loc
           | ITE (it_if, gt_then, gt_else) ->
             GT.ite_ (it_if, aux vars gt_then, aux vars gt_else) loc
           | Map ((i_sym, i_bt, it_perm), gt_inner) ->
-            GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym vars) gt_inner) loc
+            GT.map_ ((i_sym, i_bt, it_perm), aux (Sym.Set.add i_sym vars) gt_inner) loc
         in
         gt |> specialize vars |> loop vars
       in
-      let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
+      let iargs = gd.iargs |> List.map fst |> Sym.Set.of_list in
       { gd with body = Some (aux iargs (Option.get gd.body)) }
+  end
+
+  module Pointer = struct
+    let is_not_null (x : Sym.t) (gt : GT.t) : bool * GT.t =
+      let rec aux (gt : GT.t) : bool * GT.t =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> (false, gt)
+        | Pick wgts ->
+          let bools, wgts' =
+            wgts
+            |> List.map_snd aux
+            |> List.map (fun (w, (b, gt)) -> (b, (w, gt)))
+            |> List.split
+          in
+          (List.fold_left ( && ) true bools, GT.pick_ wgts' loc)
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          let b, gt_rest' = aux gt_rest in
+          (b, GT.asgn_ ((it_addr, sct), it_val, gt_rest') loc)
+        | Let (backtracks, (x, gt_inner), gt_rest) ->
+          let b, gt_inner' = aux gt_inner in
+          let b', gt_rest' = aux gt_rest in
+          (b || b', GT.let_ (backtracks, (x, gt_inner'), gt_rest') loc)
+        | Assert
+            ( T
+                (IT
+                  ( Unop
+                      (Not, IT (Binop (EQ, IT (Sym y, _, _), IT (Const Null, _, _)), _, _)),
+                    _,
+                    _ )),
+              gt_rest )
+        | Assert
+            ( T
+                (IT
+                  ( Unop
+                      (Not, IT (Binop (EQ, IT (Const Null, _, _), IT (Sym y, _, _)), _, _)),
+                    _,
+                    _ )),
+              gt_rest )
+          when Sym.equal x y ->
+          (true, snd (aux gt_rest))
+        | Assert (lc, gt_rest) ->
+          let b, gt_rest' = aux gt_rest in
+          (b, GT.assert_ (lc, gt_rest') loc)
+        | ITE (it_if, gt_then, gt_else) ->
+          let b, gt_then' = aux gt_then in
+          let b', gt_else' = aux gt_else in
+          (b || b', GT.ite_ (it_if, gt_then', gt_else') loc)
+        | Map ((i, i_bt, it_perm), gt_inner) ->
+          let b, gt_inner' = aux gt_inner in
+          (b, GT.map_ ((i, i_bt, it_perm), gt_inner') loc)
+      in
+      aux gt
+
+
+    let transform_gt (gt : GT.t) : GT.t =
+      let aux (gt : GT.t) : GT.t =
+        let (GT (gt_, _, loc)) = gt in
+        match gt_ with
+        | Let
+            ( backtracks,
+              (x, GT (Alloc (IT (Const (Bits (_, n)), _, _)), _, loc_size)),
+              gt_rest )
+          when Z.equal n Z.zero ->
+          let not_null, gt_rest' = is_not_null x gt_rest in
+          if not_null then
+            GT.let_
+              ( backtracks,
+                (x, GT.alloc_ (IT.num_lit_ (Z.of_int 8) Memory.size_bt loc_size) loc),
+                gt_rest' )
+              loc
+          else
+            gt
+        | _ -> gt
+      in
+      GT.map_gen_pre aux gt
+
+
+    let transform (gd : GD.t) : GD.t =
+      { gd with body = Some (transform_gt (Option.get gd.body)) }
   end
 end
 
+let debug msg = Cerb_debug.print_debug 2 [] (fun _ -> msg)
+
 let all_passes (prog5 : unit Mucore.file) =
-  (PartialEvaluation.pass prog5
-   :: PushPull.pass
-   :: MemberIndirection.pass
-   :: Inline.passes)
+  [ PartialEvaluation.pass prog5 ]
+  @ (if Config.has_pass "flatten" then [ PushPull.pass ] else [])
+  @ Inline.passes
   @ RemoveUnused.passes
-  @ [ TermSimplification.pass prog5; TermSimplification'.pass; PointerOffsets.pass ]
+  @ [ TermSimplification.pass prog5; TermSimplification'.pass ]
   @ BranchPruning.passes
-  @ SplitConstraints.passes
+  @ if Config.has_pass "lift_constraints" then SplitConstraints.passes else []
 
 
 let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) : GT.t =
   let passes =
     all_passes prog5
     |> List.filter_map (fun { name; transform } ->
-      if StringSet.mem name passes then Some transform else None)
+      if StringSet.mem name passes then
+        Some
+          (fun gt ->
+            debug name;
+            transform gt)
+      else
+        None)
   in
-  let opt (gt : GT.t) : GT.t = List.fold_left (fun gt pass -> pass gt) gt passes in
+  let opt (gt : GT.t) : GT.t =
+    gt
+    |> List.fold_right (fun pass gt -> pass gt) passes
+    |> GenNormalize.MemberIndirection.transform
+  in
   let rec loop (fuel : int) (gt : GT.t) : GT.t =
     if fuel <= 0 then
       gt
@@ -3114,15 +3369,35 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
   in
   gd
   |> aux
-  |> Fusion.Each.transform
+  |> (debug "fusion_each";
+      Fusion.Each.transform)
   |> aux
-  |> FlipIfs.transform
+  |> (if Config.has_pass "picks" then (
+        debug "flip_ifs";
+        FlipIfs.transform)
+      else
+        fun gd' -> gd')
   |> aux
-  |> Reordering.transform
-  |> ConstraintPropagation.transform
-  |> Specialization.Equality.transform
-  |> Specialization.Integer.transform
-  |> InferAllocationSize.transform
+  |> (if Config.has_pass "reorder" then (
+        debug "reorder";
+        Reordering.transform [])
+      else
+        fun gd' -> gd')
+  |> (if Config.has_pass "consistency" then
+        fun gd' ->
+      gd'
+      |> (debug "constraint_propagation";
+          ConstraintPropagation.transform)
+      |> (debug "specialization_equality";
+          Specialization.Equality.transform)
+      |> (debug "specialization_integer";
+          Specialization.Integer.transform)
+      |>
+      (debug "specialization_pointer";
+       Specialization.Pointer.transform)
+      else
+        fun gd' -> gd')
+  (* |> InferAllocationSize.transform *)
   |> aux
 
 
@@ -3134,4 +3409,17 @@ let optimize
   =
   let default = all_passes prog5 |> List.map (fun p -> p.name) |> StringSet.of_list in
   let passes = Option.value ~default passes in
-  List.map_snd (List.map_snd (optimize_gen_def prog5 passes)) ctx
+  ctx
+  (* |> List.map_snd
+       (List.map_snd
+          (fun ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t) : GD.t ->
+             { filename;
+               recursive;
+               name;
+               spec;
+               iargs;
+               oargs;
+               body = Option.map (optimize_gen prog5 passes) body
+             }))
+  |> Fusion.Recursive.transform *)
+  |> List.map_snd (List.map_snd (optimize_gen_def prog5 passes))

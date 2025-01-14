@@ -3,8 +3,6 @@ module History : sig
 
   val sym : Sym.t
 
-  val loc : Locations.t
-
   val base_id : Id.t
 
   val base_bt : BaseTypes.t
@@ -19,11 +17,16 @@ module History : sig
 
   val bt : BaseTypes.t
 
-  val it : IndexTerms.t
+  val it : Cerb_location.t -> IndexTerms.t
 
   val lookup_ptr : IndexTerms.t -> Locations.t -> IndexTerms.t
 
-  val get_base_size : IndexTerms.t -> Cerb_location.t -> IndexTerms.t * IndexTerms.t
+  type value =
+    { base : IndexTerms.t;
+      size : IndexTerms.t
+    }
+
+  val split : IndexTerms.t -> Cerb_location.t -> value
 
   val sbt : BaseTypes.Surface.t
 end

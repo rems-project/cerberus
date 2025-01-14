@@ -9,9 +9,10 @@ module LAT = LogicalArgumentTypes
 module AT = ArgumentTypes
 
 let rec add_records_to_map_from_it it =
-  match IT.term it with
+  match IT.get_term it with
   | IT.Sym _s -> ()
-  | Const _c -> ()
+  | Const c ->
+    (match c with Default bt -> Cn_internal_to_ail.augment_record_map bt | _ -> ())
   | Unop (_uop, t1) -> add_records_to_map_from_it t1
   | Binop (_bop, t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | ITE (t1, t2, t3) -> List.iter add_records_to_map_from_it [ t1; t2; t3 ]
@@ -24,7 +25,7 @@ let rec add_records_to_map_from_it it =
   | StructUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | Record members ->
     (* Anonymous record instantiation -> add to records map *)
-    Cn_internal_to_ail.augment_record_map (IT.bt it);
+    Cn_internal_to_ail.augment_record_map (IT.get_bt it);
     List.iter (fun (_, it') -> add_records_to_map_from_it it') members
   | RecordMember (t, _member) -> add_records_to_map_from_it t
   | RecordUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
@@ -56,7 +57,7 @@ let rec add_records_to_map_from_it it =
 
 
 let add_records_to_map_from_resource = function
-  | ResourceTypes.P p -> List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
+  | Request.P p -> List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
   | Q q ->
     List.iter add_records_to_map_from_it (q.pointer :: q.step :: q.permission :: q.iargs)
 
@@ -83,7 +84,7 @@ let add_records_to_map_from_cnprogs (_, cn_progs) =
   List.iter aux cn_progs
 
 
-let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation) =
+let add_records_to_map_from_instrumentation (i : Executable_spec_extract.instrumentation) =
   let rec aux_lrt = function
     | LRT.Define ((_, it), _, t) ->
       add_records_to_map_from_it it;
@@ -96,6 +97,7 @@ let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation)
       aux_lrt t
     | I -> ()
   in
+  let aux_rt = function ReturnTypes.Computational (_, _, t) -> aux_lrt t in
   let rec aux_lat = function
     | LAT.Define ((_, it), _, lat) ->
       add_records_to_map_from_it it;
@@ -107,33 +109,133 @@ let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation)
       add_records_to_map_from_lc lc;
       aux_lat lat
     (* Postcondition *)
-    | I (ReturnTypes.Computational (_, _, t), stats) ->
-      List.iter add_records_to_map_from_cnprogs stats;
-      aux_lrt t
+    | I i -> i
   in
   let rec aux_at = function
     | AT.Computational ((_, _), _, at) -> aux_at at
     | L lat -> aux_lat lat
   in
-  match i.internal with Some instr -> aux_at instr | None -> ()
+  match i.internal with
+  | None -> ()
+  | Some instr ->
+    let rt, (stmts, loops) = aux_at instr in
+    aux_rt rt;
+    List.iter add_records_to_map_from_cnprogs stmts;
+    List.iter
+      (fun (_loc, loop_at) ->
+        let loop_stmts = aux_at loop_at in
+        List.iter add_records_to_map_from_cnprogs loop_stmts)
+      loops
+
+
+let rec populate ?cn_sym bt =
+  match bt with
+  | BT.Record members ->
+    (match cn_sym with
+     (* Naming convention only needed for top-level records returned from CN functions and predicates *)
+     | Some cn_sym' -> Cn_internal_to_ail.augment_record_map ~cn_sym:cn_sym' bt
+     | None -> Cn_internal_to_ail.augment_record_map bt);
+    List.iter (fun bt' -> populate bt') (List.map snd members)
+  | _ -> ()
+
+
+let add_records_to_map_from_fns_and_preds cn_funs cn_preds =
+  let fun_syms_and_ret_types =
+    List.map (fun (sym, (def : Definition.Function.t)) -> (sym, def.return_bt)) cn_funs
+  in
+  let pred_syms_and_ret_types =
+    List.map (fun (sym, (def : Definition.Predicate.t)) -> (sym, def.oarg_bt)) cn_preds
+  in
+  List.iter
+    (fun (cn_sym, bt) -> populate ~cn_sym bt)
+    (fun_syms_and_ret_types @ pred_syms_and_ret_types)
+
+
+let add_records_to_map_from_datatype (dt : Mucore.datatype) =
+  let bts = List.map (fun (_, ms) -> List.map snd ms) dt.cases in
+  let bts = List.concat bts in
+  List.iter populate bts
+
+
+let add_records_to_map_from_struct (tag_def : Mucore.tag_definition) =
+  match tag_def with
+  | Mucore.StructDef sl ->
+    List.iter
+      (fun (sp : Memory.struct_piece) ->
+        match sp.member_or_padding with
+        | Some (_, sct) ->
+          populate
+            (BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct)
+        | None -> ())
+      sl
+  | UnionDef -> ()
 
 
 (* Populate record table *)
 let populate_record_map
-  (instrumentation : Core_to_mucore.instrumentation list)
+  (instrumentation : Executable_spec_extract.instrumentation list)
   (prog5 : unit Mucore.file)
   =
-  let fun_syms_and_ret_types =
-    List.map
-      (fun (sym, (def : LogicalFunctions.definition)) -> (sym, def.return_bt))
-      prog5.logical_predicates
-  in
-  let pred_syms_and_ret_types =
-    List.map
-      (fun (sym, (def : ResourcePredicates.definition)) -> (sym, def.oarg_bt))
-      prog5.resource_predicates
-  in
+  add_records_to_map_from_fns_and_preds prog5.logical_predicates prog5.resource_predicates;
+  List.iter add_records_to_map_from_datatype (List.map snd prog5.datatypes);
   List.iter
-    (fun (cn_sym, bt) -> Cn_internal_to_ail.augment_record_map ~cn_sym bt)
-    (fun_syms_and_ret_types @ pred_syms_and_ret_types);
+    add_records_to_map_from_struct
+    (List.map snd (Pmap.bindings_list prog5.tagDefs));
   List.iter add_records_to_map_from_instrumentation instrumentation
+
+
+let generate_all_record_strs () =
+  let ail_records =
+    Cn_internal_to_ail.cn_to_ail_records
+      (Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records)
+  in
+  let record_def_strs, record_decl_strs =
+    Executable_spec_internal.generate_c_records ail_records
+  in
+  (record_def_strs, record_decl_strs)
+
+
+let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
+  let cn_record_info =
+    Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records
+  in
+  let cn_record_info = List.map (fun (ms, sym) -> (sym, ms)) cn_record_info in
+  let record_equality_functions =
+    List.concat
+      (List.map
+         (Cn_internal_to_ail.generate_record_equality_function sigm.cn_datatypes)
+         cn_record_info)
+  in
+  let record_default_functions =
+    List.concat
+      (List.map
+         (Cn_internal_to_ail.generate_record_default_function sigm.cn_datatypes)
+         cn_record_info)
+  in
+  let record_map_get_functions =
+    List.concat (List.map Cn_internal_to_ail.generate_record_map_get cn_record_info)
+  in
+  let eq_decls, eq_defs = List.split record_equality_functions in
+  let default_decls, default_defs = List.split record_default_functions in
+  let mapget_decls, mapget_defs = List.split record_map_get_functions in
+  let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma =
+    { sigm with
+      declarations = eq_decls @ default_decls @ mapget_decls;
+      function_definitions = eq_defs @ default_defs @ mapget_defs
+    }
+  in
+  let fun_doc =
+    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1)
+  in
+  let fun_strs = CF.Pp_utils.to_plain_pretty_string fun_doc in
+  let decl_docs =
+    List.map
+      (fun (sym, (_, _, decl)) ->
+        CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+      (eq_decls @ default_decls @ mapget_decls)
+  in
+  let fun_prot_strs =
+    List.map (fun doc -> [ CF.Pp_utils.to_plain_pretty_string doc ]) decl_docs
+  in
+  let fun_prot_strs = String.concat "\n" (List.concat fun_prot_strs) in
+  (fun_strs, fun_prot_strs)

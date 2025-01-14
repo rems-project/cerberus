@@ -1,10 +1,19 @@
 module CF = Cerb_frontend
 module A = CF.AilSyntax
 
-val generate
-  :  output_dir:string ->
-  filename:string ->
-  with_ownership_checking:bool ->
-  CF.GenTypes.genTypeCategory A.sigma ->
+val compile_constant_tests
+  :  CF.GenTypes.genTypeCategory A.sigma ->
+  Executable_spec_extract.instrumentation list ->
+  Test.t list * Pp.document
+
+val compile_generators
+  :  CF.GenTypes.genTypeCategory A.sigma ->
   unit Mucore.file ->
-  unit
+  Executable_spec_extract.instrumentation list ->
+  Pp.document
+
+val compile_generator_tests
+  :  CF.GenTypes.genTypeCategory A.sigma ->
+  unit Mucore.file ->
+  Executable_spec_extract.instrumentation list ->
+  Test.t list * Pp.document

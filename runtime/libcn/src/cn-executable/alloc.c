@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <cn-executable/alloc.h>
+#include <cn-executable/utils.h>
 
 // #define foo(x)\
 //     [ x ] = #x
@@ -44,8 +45,8 @@ void *alloc_(long nbytes, const char *str, int line) {
     // printf("Alloc called: %s:%d\n", str, line);
     void *res = curr;
     if ((char *) curr + nbytes - buf > MEM_SIZE) {
-        printf("Out of memory! %lu\n", count);
-        exit(1);
+        cn_failure(CN_FAILURE_ALLOC);
+        return NULL;
     }
     count++;
     curr += nbytes;

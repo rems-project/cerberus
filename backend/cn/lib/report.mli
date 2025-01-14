@@ -53,8 +53,11 @@ type 'a labeled_view
 (** Empty collection of labeled things *)
 val labeled_empty : 'a labeled_view
 
-(** Set the entities assocaited with a lable *)
+(** Set the entities associated with a label *)
 val add_labeled : label -> 'a list -> 'a labeled_view -> 'a labeled_view
+
+(** Get any entities associated with a label *)
+val get_labeled : 'a labeled_view -> label -> 'a list option
 
 (** Information about a specific state of the computation.
     The resources, constraints, and terms are pairs because they classify
@@ -87,3 +90,7 @@ type report =
 
     The third argument is information about the various things that need to be saved. *)
 val make : string -> string Option.m -> report -> string
+
+val report_of_yojson : Yojson.Safe.t -> (report, string) Result.t
+
+val report_to_yojson : report -> Yojson.Safe.t

@@ -1,0 +1,13 @@
+return code: 1
+tests/cn_vip_testsuite/provenance_basic_global_yx.error.c:12:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
+  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+                ^~~~~~~~ 
+tests/cn_vip_testsuite/provenance_basic_global_yx.error.c:15:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
+  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+                ^~~~~~~~~~ 
+[1/1]: main -- fail
+tests/cn_vip_testsuite/provenance_basic_global_yx.error.c:21:5: error: Missing resource for writing
+    *p = 11;  // CN_VIP UB
+    ~~~^~~~ 
+Resource needed: Block<signed int>(copy_alloc_id((u64)value, &x))
+State file: file:///tmp/state__provenance_basic_global_yx.error.c__main.html

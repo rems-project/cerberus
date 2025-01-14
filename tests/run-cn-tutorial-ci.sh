@@ -10,9 +10,6 @@ else
     exit 1
 fi
 
-# copying from run-ci.sh
-export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
 CN=$OPAM_SWITCH_PREFIX/bin/cn
 
 HERE=$(pwd)

@@ -7,6 +7,4 @@ val subst : 'a -> t -> t
 
 val pp : t -> Pp.document
 
-module SymSet : Set.S with type elt = Sym.t
-
-val free_vars : t -> SymSet.t
+val free_vars : t -> Sym.Set.t

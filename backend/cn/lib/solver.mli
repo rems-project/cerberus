@@ -3,15 +3,10 @@ type solver
 
 type model
 
-(* (TODO: BCP: The "with quantifiers" part will be the instantiations that the solver
-   found -- is that right?) *)
-type model_with_q = model * (Sym.t * LogicalSorts.t) list
+(** Model with quantifier instantiations *)
+type model_with_q = model * (Sym.t * BaseTypes.t) list
 
 val empty_model : model
-
-(* Global flags to pass to the solver (TODO: BCP: Could use a bit more documentation,
-   maybe) *)
-val random_seed : int ref
 
 module Logger : sig
   val to_file : bool ref
@@ -36,7 +31,8 @@ val push : solver -> unit
 
 val pop : solver -> int -> unit
 
-(* TODO: BCP: What is this? *)
+(** Number of scopes in the solver. Currently only used by [Typing.sandbox],
+    but may be unnecessary https://github.com/rems-project/cerberus/issues/752 *)
 val num_scopes : solver -> int
 
 (* Run the solver. Note that we pass the assumptions explicitly even though they are also
@@ -45,7 +41,7 @@ val provable
   :  loc:Locations.t ->
   solver:solver ->
   global:Global.t ->
-  assumptions:Context.LCSet.t ->
+  assumptions:LogicalConstraints.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
   [> `True | `False ]
@@ -53,31 +49,10 @@ val provable
 (* Ask the solver for the model that it found in a call to [provable] *)
 val model : unit -> model_with_q
 
-(* Ask the solver to evaluate a CN term in the context of a model. (Might return None in
-   case we ask for the value of a "don't care" value in the (minimal) model.) *)
-(* TODO: BCP: I don't understand how this could ever be called -- how do we get a model to
-   pass it??? *)
-val eval
-  :  Global.t ->
-  (* TODO: BCP: IIUC Christopher thinks this is not needed? *)
-  model ->
-  IndexTerms.t ->
-  IndexTerms.t option
-
-(* TODO: BCP: What is this? *)
-val set_slow_smt_settings : float option -> string option -> unit
-
-(* Debugging *)
-(* TODO: BCP: This one seems misnamed -- it doesn't return a string...? *)
-val debug_solver_to_string : solver -> unit
-
-val debug_solver_query
-  :  solver ->
-  Global.t ->
-  Context.LCSet.t ->
-  IndexTerms.t list ->
-  LogicalConstraints.t ->
-  unit
+(** Ask the solver to evaluate a CN term in the context of an already obtained
+    counter-example model (e.g. for evaluating sub-terms). Might return None in
+    case we ask for the value of a "don't care" value in the (minimal) model. *)
+val eval : model -> IndexTerms.t -> IndexTerms.t option
 
 (* CHT *)
-val ask_solver : Global.t -> LogicalConstraints.logical_constraint list -> Simple_smt.result
+val ask_solver : Global.t -> LogicalConstraints.t list -> Simple_smt.result

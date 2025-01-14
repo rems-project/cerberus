@@ -12,6 +12,9 @@ cd "$DIRNAME"/cn-test-gen || exit
 rm -rf build decorated test
 mkdir build decorated test
 
+# For UBSan
+export UBSAN_OPTIONS=halt_on_error=1
+
 # Get `*.c` files
 FILES=$(find "$DIRNAME"/src -name '*.c')
 
@@ -27,45 +30,56 @@ function separator() {
   printf '\n\n'
 }
 
-# Test each `*.c` file
-for TEST in $FILES; do
-  CLEANUP="rm -rf test/* run_tests.sh;separator"
+CONFIGS=("--coverage" "--with-static-hack --coverage --sanitize=undefined --no-sanitize=alignment" "--sized-null" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
 
-  # Run passing tests
-  if [[ $TEST == *.pass.c ]]; then
-    $CN test "$TEST" --output-dir="test" --with-ownership-checking
-    RET=$?
-    if [[ "$RET" != 0 ]]; then
-      echo
-      echo "$TEST -- Tests failed unexpectedly"
-      NUM_FAILED=$(($NUM_FAILED + 1))
-      FAILED="$FAILED $TEST"
-      eval "$CLEANUP"
-      continue
-    else
-      echo
-      echo "$TEST -- Tests passed successfully"
+# For each configuration
+for CONFIG in "${CONFIGS[@]}"; do
+  separator
+  echo "Running CI with CLI config \"$CONFIG\""
+  separator
+
+  FULL_CONFIG="$CONFIG --input-timeout=1000 --progress-level=1"
+
+  # Test each `*.c` file
+  for TEST in $FILES; do
+    CLEANUP="rm -rf test/* run_tests.sh;separator"
+
+    # Run passing tests
+    if [[ $TEST == *.pass.c ]]; then
+      $CN test "$TEST" --output-dir="test" $FULL_CONFIG
+      RET=$?
+      if [[ "$RET" != 0 ]]; then
+        echo
+        echo "$TEST -- Tests failed unexpectedly"
+        NUM_FAILED=$(($NUM_FAILED + 1))
+        FAILED="$FAILED $TEST($CONFIG)"
+        eval "$CLEANUP"
+        continue
+      else
+        echo
+        echo "$TEST -- Tests passed successfully"
+      fi
     fi
-  fi
 
-  # Run failing tests
-  if [[ $TEST == *.fail.c ]]; then
-    $CN test "$TEST" --output-dir="test" --with-ownership-checking
-    RET=$?
-    if [[ "$RET" = 0 ]]; then
-      echo
-      echo "$TEST -- Tests passed unexpectedly"
-      NUM_FAILED=$(($NUM_FAILED + 1))
-      FAILED="$FAILED $TEST"
-      eval "$CLEANUP"
-      continue
-    else
-      echo
-      echo "$TEST -- Tests failed successfully"
+    # Run failing tests
+    if [[ $TEST == *.fail.c ]]; then
+      $CN test "$TEST" --output-dir="test" $FULL_CONFIG
+      RET=$?
+      if [[ "$RET" = 0 ]]; then
+        echo
+        echo "$TEST -- Tests passed unexpectedly"
+        NUM_FAILED=$(($NUM_FAILED + 1))
+        FAILED="$FAILED $TEST($CONFIG)"
+        eval "$CLEANUP"
+        continue
+      else
+        echo
+        echo "$TEST -- Tests failed successfully"
+      fi
     fi
-  fi
 
-  eval "$CLEANUP"
+    eval "$CLEANUP"
+  done
 done
 
 echo 'Done running tests.'

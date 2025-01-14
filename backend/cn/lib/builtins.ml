@@ -1,29 +1,28 @@
 module SBT = BaseTypes.Surface
-open Resultat
-
-open Effectful.Make (Resultat)
-
-open TypeErrors
+open Or_TypeError
 open IndexTerms
+
+let fail_number_args loc ~has ~expect =
+  fail { loc; msg = WellTyped (Number_arguments { type_ = `Other; has; expect }) }
+
 
 (* builtin function symbols *)
 let mk_arg0 mk args loc =
   match args with
   | [] -> return (mk loc)
-  | _ :: _ as xs ->
-    fail { loc; msg = Number_arguments { has = List.length xs; expect = 0 } }
+  | _ :: _ as xs -> fail_number_args loc ~has:(List.length xs) ~expect:0
 
 
 let mk_arg1 mk args loc =
   match args with
   | [ x ] -> return (mk x loc)
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 1 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:1
 
 
 let mk_arg2_err mk args loc =
   match args with
   | [ x; y ] -> mk (x, y) loc
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 2 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:2
 
 
 let mk_arg2 mk = mk_arg2_err (fun tup loc -> return (mk tup loc))
@@ -31,7 +30,7 @@ let mk_arg2 mk = mk_arg2_err (fun tup loc -> return (mk tup loc))
 let mk_arg3_err mk args loc =
   match args with
   | [ x; y; z ] -> mk (x, y, z) loc
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 3 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:3
 
 
 let mk_arg3 mk = mk_arg3_err (fun tup loc -> return (mk tup loc))
@@ -39,7 +38,7 @@ let mk_arg3 mk = mk_arg3_err (fun tup loc -> return (mk tup loc))
 let mk_arg5 mk args loc =
   match args with
   | [ a; b; c; d; e ] -> return (mk (a, b, c, d, e) loc)
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 5 } }
+  | xs -> fail_number_args loc ~has:(List.length xs) ~expect:5
 
 
 let min_bits_def (sign, n) =
@@ -51,7 +50,7 @@ let min_bits_def (sign, n) =
   let name = "MIN" ^ letter ^ Int.to_string n in
   ( name,
     Sym.fresh_named name,
-    mk_arg0 (fun loc -> IT.Surface.inj @@ num_lit_ num (BT.Bits (sign, n)) loc) )
+    mk_arg0 (fun loc -> Surface.inj @@ num_lit_ num (BT.Bits (sign, n)) loc) )
 
 
 let max_bits_def (sign, n) =
@@ -63,7 +62,7 @@ let max_bits_def (sign, n) =
   let name = "MAX" ^ letter ^ Int.to_string n in
   ( name,
     Sym.fresh_named name,
-    mk_arg0 (fun loc -> IT.Surface.inj @@ num_lit_ num (BT.Bits (sign, n)) loc) )
+    mk_arg0 (fun loc -> Surface.inj @@ num_lit_ num (BT.Bits (sign, n)) loc) )
 
 
 let mul_uf_def = ("mul_uf", Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
@@ -122,14 +121,15 @@ let array_to_list_def =
   ( "array_to_list",
     Sym.fresh_named "array_to_list",
     mk_arg3_err (fun (arr, i, len) loc ->
-      match SBT.is_map_bt (IT.bt arr) with
+      match SBT.is_map_bt (get_bt arr) with
       | None ->
         let reason = "map/array operation" in
         let expected = "map/array" in
         fail
           { loc;
             msg =
-              Illtyped_it { it = IT.pp arr; has = SBT.pp (IT.bt arr); expected; reason }
+              WellTyped
+                (Illtyped_it { it = pp arr; has = SBT.pp (get_bt arr); expected; reason })
           }
       | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt loc)) )
 
@@ -137,40 +137,36 @@ let array_to_list_def =
 let is_null_def =
   ( "is_null",
     Sym.fresh_named "is_null",
-    mk_arg1 (fun p loc' -> IT.Surface.inj IT.(eq_ (IT.Surface.proj p, null_ loc') loc'))
-  )
+    mk_arg1 (fun p loc -> Surface.inj (eq_ (Surface.proj p, null_ loc) loc)) )
 
 
 let has_alloc_id_def =
   ( "has_alloc_id",
     Sym.fresh_named "has_alloc_id",
-    mk_arg1 (fun p loc' -> IT.Surface.inj @@ IT.hasAllocId_ (IT.Surface.proj p) loc') )
+    mk_arg1 (fun p loc -> Surface.inj @@ hasAllocId_ (Surface.proj p) loc) )
 
 
 let ptr_eq_def =
   ( "ptr_eq",
     Sym.fresh_named "ptr_eq",
-    mk_arg2 (fun (p1, p2) loc' ->
-      IT.(Surface.inj @@ eq_ (Surface.proj p1, Surface.proj p2) loc')) )
+    mk_arg2 (fun (p1, p2) loc ->
+      Surface.inj @@ eq_ (Surface.proj p1, Surface.proj p2) loc) )
 
 
 let prov_eq_def =
   ( "prov_eq",
     Sym.fresh_named "prov_eq",
-    mk_arg2 (fun (p1, p2) loc' ->
-      IT.(
-        Surface.inj
-        @@ eq_ (allocId_ (Surface.proj p1) loc', allocId_ (Surface.proj p2) loc') loc'))
-  )
+    mk_arg2 (fun (p1, p2) loc ->
+      Surface.inj
+      @@ eq_ (allocId_ (Surface.proj p1) loc, allocId_ (Surface.proj p2) loc) loc) )
 
 
 let addr_eq_def =
   ( "addr_eq",
     Sym.fresh_named "addr_eq",
-    mk_arg2 (fun (p1, p2) loc' ->
-      IT.(
-        Surface.inj
-        @@ eq_ (addr_ (Surface.proj p1) loc', addr_ (Surface.proj p2) loc') loc')) )
+    mk_arg2 (fun (p1, p2) loc ->
+      Surface.inj @@ eq_ (addr_ (Surface.proj p1) loc, addr_ (Surface.proj p2) loc) loc)
+  )
 
 
 let max_min_bits =

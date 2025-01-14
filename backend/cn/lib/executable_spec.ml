@@ -194,7 +194,7 @@ let output_to_oc oc str_list = List.iter (Stdlib.output_string oc) str_list
 open Executable_spec_internal
 
 let main
-  ?(with_ownership_checking = false)
+  ?(without_ownership_checking = false)
   ?(with_test_gen = false)
   ?(copy_source_dir = false)
   filename
@@ -213,11 +213,13 @@ let main
   let oc = Stdlib.open_out (Filename.concat prefix output_filename) in
   let cn_oc = Stdlib.open_out (Filename.concat prefix "cn.c") in
   let cn_header_oc = Stdlib.open_out (Filename.concat prefix "cn.h") in
-  let instrumentation, symbol_table = Core_to_mucore.collect_instrumentation prog5 in
+  let instrumentation, symbol_table =
+    Executable_spec_extract.collect_instrumentation prog5
+  in
   Executable_spec_records.populate_record_map instrumentation prog5;
   let executable_spec =
     generate_c_specs_internal
-      with_ownership_checking
+      without_ownership_checking
       instrumentation
       symbol_table
       statement_locs
@@ -227,10 +229,10 @@ let main
   let c_datatype_defs, _c_datatype_decls, c_datatype_equality_fun_decls =
     generate_c_datatypes sigm
   in
-  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records =
+  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, _c_records =
     generate_c_functions_internal sigm prog5.logical_predicates
   in
-  let c_predicate_defs, locs_and_c_predicate_decls, c_records' =
+  let c_predicate_defs, locs_and_c_predicate_decls, _c_records' =
     generate_c_predicates_internal sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
@@ -244,7 +246,7 @@ let main
   in
   let ownership_function_defs, ownership_function_decls =
     generate_ownership_functions
-      with_ownership_checking
+      without_ownership_checking
       Cn_internal_to_ail.ownership_ctypes
       sigm
   in
@@ -252,31 +254,22 @@ let main
   let cn_converted_struct_defs, _cn_converted_struct_decls =
     generate_cn_versions_of_structs sigm.tag_definitions
   in
-  (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) =
-     generate_all_record_strs sigm in *)
-  let record_defs_str, _record_decls_str = c_records in
-  let record_defs_str', _record_decls_str = c_records' in
   let record_fun_defs, record_fun_decls =
-    Executable_spec_internal.generate_c_record_funs
-      sigm
-      prog5.logical_predicates
-      prog5.resource_predicates
+    Executable_spec_records.generate_c_record_funs sigm
   in
-  (* let extern_ownership_globals = if with_ownership_checking then "\n" ^
-     generate_ownership_globals ~is_extern:true () else "" in *)
   let datatype_strs = String.concat "\n" (List.map snd c_datatype_defs) in
   let predicate_decls =
     String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls))
   in
+  let record_defs, _record_decls = Executable_spec_records.generate_all_record_strs () in
   let cn_header_decls_list =
     [ cn_utils_header;
       "\n";
+      (if not (String.equal record_defs "") then "\n/* CN RECORDS */\n\n" else "");
+      record_defs;
       c_struct_defs;
       cn_converted_struct_defs;
-      (if String.equal record_defs_str "" then "\n/* CN RECORDS */\n\n" else "");
-      record_defs_str;
-      record_defs_str';
-      (if String.equal datatype_strs "" then "\n/* CN DATATYPES */\n\n" else "");
+      (if not (String.equal datatype_strs "") then "\n/* CN DATATYPES */\n\n" else "");
       datatype_strs;
       "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
       ownership_function_decls;
@@ -335,7 +328,7 @@ let main
     List.map (fun (loc, _) -> (loc, [ "" ])) toplevel_locs_and_defs
   in
   let accesses_stmt_injs =
-    if with_ownership_checking then memory_accesses_injections ail_prog else []
+    if without_ownership_checking then [] else memory_accesses_injections ail_prog
   in
   let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
   let struct_injs_with_filenames =
@@ -381,12 +374,12 @@ let main
         failwith
           "Input file cannot have predefined main function when passing to CN test-gen \
            tooling"
-    else if with_ownership_checking then (
+    else if without_ownership_checking then
+      executable_spec.pre_post
+    else (
       (* Inject ownership init function calls and mapping and unmapping of globals into provided main function *)
       let global_ownership_init_pair = generate_ownership_global_assignments sigm prog5 in
       global_ownership_init_pair @ executable_spec.pre_post)
-    else
-      executable_spec.pre_post
   in
   (match
      Source_injection.(
