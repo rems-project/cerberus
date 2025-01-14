@@ -282,21 +282,17 @@ let state (ctxt : C.t) log model_with_q extras =
       | Owned _, _ -> None
       | PName s, Resource.O it ->
         match (Sym.Map.find_opt s defs), evaluate it with
-        | Some def, Some cand -> Some (check_pred s def cand ctxt)
-        | Some _, None -> Some (Error (!^"Could not locate definition of variable" ^^^ IT.pp it))
-        | None, _ -> Some (Error (!^"Could not locate definition of predicate" ^^^ Sym.pp s))
+        | Some def, Some cand -> Some (check_pred s def cand ctxt, rt, it)
+        | Some _, None -> Some (Error (!^"Could not locate definition of variable" ^^^ IT.pp it), rt, it)
+        | None, _ -> Some (Error (!^"Could not locate definition of predicate" ^^^ Sym.pp s), rt, it)
         in
-    let checked =
-      let f r = match check r with
-      | None -> None
-      | Some res -> Some (r, res) in
-      LAT.filter_map_some f (C.get_rs ctxt) in
-    let (nos, rest) = List.partition (fun p -> is_no (snd p)) checked in
-    let (yeses, unknown) = List.partition (fun p -> is_yes (snd p)) rest in
-    let pp_checked_res (p : Resource.t * (LC.t list, document) result_with_data) =
-      Rp.{ original =  LAT.pp_check_result (snd p) ;
-        simplified = [Res.pp (fst p)] } in
-      (* {original = LAT.pp_check_result (snd r); simplified= [LAT.pp_check_result (snd r)]} in *)
+    let checked =  LAT.filter_map_some check (C.get_rs ctxt) in
+    let (nos, rest) = List.partition (fun (r, _, _) -> is_no r) checked in
+    let (yeses, unknown) = List.partition (fun (r, _, _) -> is_yes r) rest in
+    let pp_checked_res (_, req, cand) =
+      let rslt = Req.pp req ^^^ !^(", output: ") ^^^ IT.pp cand in
+      Rp.{ original = rslt ; (*TODO: original =  LAT.pp_check_result (snd p) ;*)
+        simplified = [rslt] } in
     Rp.add_labeled
       Rp.lab_invalid
       (List.map pp_checked_res nos)
