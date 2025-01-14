@@ -423,7 +423,7 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t) : (IT.t Sym.Map.t, Pp.docu
   | Cast _, _ -> default
 
 (* Get the free variables from an expression *)
-let get_fvs (exp : IT.t) : Sym.t list = Sym.Set.to_list (IT.free_vars exp)
+let get_fvs (exp : IT.t) : Sym.t list = Sym.Set.elements (IT.free_vars exp)
 
 (*TODO: what if lcs mention vars not examined in the algorithm*)
 let rec organize_lines_aux (lines : packing_ft) (defs : def_line Sym.Map.t) (lcs : LC.t list): IT.t * def_line Sym.Map.t * (LC.t list) =
