@@ -1430,7 +1430,6 @@ let eval mo t =
   let model_fn = Hashtbl.find models_tbl mo in
   model_fn t
 
-(*CHT*)
 let and_bool_constraints (constraints : LC.t list) : BaseTypes.t annot =
   (* assumes all constraints are bools*)
   let not_forall acc lc = match lc with
