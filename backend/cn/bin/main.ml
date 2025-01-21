@@ -15,13 +15,11 @@ type core_file = (unit, unit) CF.Core.generic_file
 type file =
   | CORE of core_file
   | MUCORE of unit Mucore.file
-  | MUCORE_COQ of unit Mucore.file
 
 let print_file filename file =
   match file with
   | CORE file -> Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file)
   | MUCORE file -> Pp.print_file (filename ^ ".mucore") (Pp_mucore.pp_file file)
-  | MUCORE_COQ file -> Pp.print_file (filename ^ ".v") (Pp_mucore_coq.pp_unit_file file)
 
 module Log : sig
   val print_log_file : string * file -> unit
@@ -126,6 +124,7 @@ let with_well_formedness_check
   ~macros
   ~incl_dirs
   ~incl_files
+  ~coq_export_file
   ~csv_times
   ~log_times
   ~astprints
@@ -168,7 +167,7 @@ let with_well_formedness_check
           prog
       in
       print_log_file ("mucore", MUCORE prog5);
-      print_log_file ("mucore_coq", MUCORE_COQ  prog5);
+      (Option.iter (fun path -> Pp.print_file path (Pp_mucore_coq.pp_unit_file prog5)) coq_export_file);
       let paused =
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
@@ -248,6 +247,7 @@ let well_formed
     ~macros
     ~incl_dirs
     ~incl_files
+    ~coq_export_file:None
     ~csv_times
     ~log_times
     ~astprints
@@ -273,6 +273,7 @@ let verify
   output_dir
   diag
   lemmata
+  coq_export_file
   only
   skip
   csv_times
@@ -320,6 +321,7 @@ let verify
     ~macros
     ~incl_dirs
     ~incl_files
+    ~coq_export_file
     ~csv_times
     ~log_times
     ~astprints
@@ -412,6 +414,7 @@ let generate_executable_specs
     ~macros
     ~incl_dirs
     ~incl_files
+    ~coq_export_file:None
     ~csv_times
     ~log_times
     ~astprints
@@ -497,6 +500,7 @@ let run_tests
     ~incl_dirs
     ~incl_files
     ~csv_times
+    ~coq_export_file:None
     ~log_times
     ~astprints
     ~no_inherit_loc
@@ -825,6 +829,12 @@ module Lemma_flags = struct
     Arg.(value & opt (some string) None & info [ "lemmata" ] ~docv:"FILE" ~doc)
 end
 
+module CoqExport_flags = struct
+  let coq_export =
+    let doc = "export to coq" in
+    Arg.(value & opt (some string) None & info ["coq-export-file"] ~docv:"FILE" ~doc)
+end
+
 let wf_cmd =
   let open Term in
   let wf_t =
@@ -872,6 +882,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.output_dir
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
+  $ CoqExport_flags.coq_export
   $ Verify_flags.only
   $ Verify_flags.skip
   $ Common_flags.csv_times
