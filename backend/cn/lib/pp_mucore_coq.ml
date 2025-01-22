@@ -12,7 +12,7 @@ let debug_print_locations = false (* Set to true to print actual locations *)
 
 let pp_nat n = !^(string_of_int n)
 
-let pp_Z z = !^(Z.to_string z)
+let pp_Z z = !^"Z.of_string" ^^^ !^"%Z"
 
 let pp_pair p1 p2 (a, b) = P.parens (p1 a ^^ !^"," ^^ p2 b)
 
@@ -1055,13 +1055,13 @@ and pp_action_content pp_type act =
 
 and pp_act { loc; annot; ct } =
   !^"{|"
-  ^^^ !^"loc :="
+  ^^^ !^"MuCore.loc :="
   ^^^ pp_location loc
   ^^ !^";"
-  ^^^ !^"annot :="
+  ^^^ !^"MuCore.annot :="
   ^^^ pp_list pp_annot_t annot
   ^^ !^";"
-  ^^^ !^"ct :="
+  ^^^ !^"MuCore.ct :="
   ^^^ pp_sctype ct
   ^^^ !^"|}"
 
@@ -1955,7 +1955,7 @@ let pp_args_and_body pp_type (args : 'a args_and_body) =
       !^"("
       ^^^ pp_expr pp_type body
       ^^ !^","
-      ^^^ pp_pmap "SymMap.from_list" pp_symbol (pp_label_def pp_type) labels
+      ^^^ pp_pmap "Sym.map_from_list" pp_symbol (pp_label_def pp_type) labels
       ^^ !^","
       ^^^ pp_return_type rt
       ^^ !^")")
@@ -2029,6 +2029,8 @@ let coq_prologue =
   ^^ !^"Require Import Coq.Strings.String."
   ^^ P.hardline 
   ^^ !^"Open Scope string_scope."
+  ^^ P.hardline
+  ^^ !^"Require Import ZArith."
   ^^ P.hardline
 
   let pp_file pp_type pp_type_name file =

@@ -427,4 +427,5 @@ End Symbol_sym_as_OT.
 
 Module SymMap := FMapAVL.Make(Symbol_sym_as_OT).
 
-
+Definition map_from_list {T:Type}: (list (sym*T)) -> SymMap.t T.
+Admitted. (* TODO *)
