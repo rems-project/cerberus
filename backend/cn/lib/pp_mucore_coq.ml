@@ -1522,6 +1522,8 @@ let rec pp_logical_args ppf = function
   | Resource ((sym, (req, bt)), info, rest) ->
     !^"(Resource"
     ^^^ !^"("
+    ^^^ pp_symbol sym
+    ^^^ !^"("
     ^^^ pp_request req
     ^^ !^","
     ^^^ pp_basetype pp_unit bt
@@ -1960,7 +1962,7 @@ let pp_args_and_body pp_type (args : 'a args_and_body) =
       ^^^ pp_pmap "SymMap.from_list" pp_symbol (pp_label_def pp_type) labels
       ^^ !^","
       ^^^ pp_return_type rt
-      ^^ !^"))")
+      ^^ !^")")
     args
 
 
