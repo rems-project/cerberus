@@ -1331,49 +1331,44 @@ let pp_request_init = function Request.Init -> !^"Init" | Request.Uninit -> !^"U
 let rec pp_request = function
   | Request.P pred -> pp_request_predicate pred
   | Request.Q qpred ->
-    !^"(Q"
-    ^^^ !^"{|"
-    ^^^ !^"name :="
+  !^"{|"
+    ^^^ !^"QPredicate.name :="
     ^^^ pp_request_name qpred.Request.QPredicate.name
     ^^ !^";"
-    ^^^ !^"pointer :="
+    ^^^ !^"QPredicate.pointer :="
     ^^^ pp_index_term qpred.pointer
     ^^ !^";"
-    ^^^ !^"q :="
+    ^^^ !^"QPredicate. q :="
     ^^^ !^"("
     ^^ pp_symbol (fst qpred.q)
     ^^ !^","
     ^^^ pp_basetype pp_unit (snd qpred.q)
     ^^ !^")"
     ^^ !^";"
-    ^^^ !^"q_loc :="
+    ^^^ !^"QPredicate.q_loc :="
     ^^^ pp_location qpred.q_loc
     ^^ !^";"
-    ^^^ !^"step :="
+    ^^^ !^"QPredicate.step :="
     ^^^ pp_index_term qpred.step
     ^^ !^";"
-    ^^^ !^"permission :="
+    ^^^ !^"QPredicate.permission :="
     ^^^ pp_index_term qpred.permission
     ^^ !^";"
-    ^^^ !^"iargs :="
+    ^^^ !^"QPredicate.iargs :="
     ^^^ pp_list pp_index_term qpred.iargs
     ^^^ !^"|}"
-    ^^ !^")"
-
 
 and pp_request_predicate (pred : Request.Predicate.t) =
-  !^"(P"
-  ^^^ !^"{|"
-  ^^^ !^"name :="
+  !^"{|"
+  ^^^ !^"Predicate.name :="
   ^^^ pp_request_name pred.Request.Predicate.name
   ^^ !^";"
-  ^^^ !^"pointer :="
+  ^^^ !^"Predicate.pointer :="
   ^^^ pp_index_term pred.pointer
   ^^ !^";"
-  ^^^ !^"iargs :="
+  ^^^ !^"Predicate.iargs :="
   ^^^ pp_list pp_index_term pred.iargs
   ^^^ !^"|}"
-  ^^ !^")"
 
 
 and pp_request_name = function
@@ -1523,6 +1518,7 @@ let rec pp_logical_args ppf = function
     !^"(Resource"
     ^^^ !^"("
     ^^^ pp_symbol sym
+    ^^^ !^","
     ^^^ !^"("
     ^^^ pp_request req
     ^^ !^","
