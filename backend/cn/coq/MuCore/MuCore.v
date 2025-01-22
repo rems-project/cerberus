@@ -10,6 +10,7 @@ Require Import Coq.Structures.OrderedTypeEx.
 
 Require Import Sym.
 Require Import Location.
+Require Import Core.
 Require Import BaseTypes.
 Require Import IndexTerms.
 Require Import LogicalConstraints.
@@ -129,7 +130,7 @@ Inductive value_ (TY : Type) : Type :=
   | Vunit : value_ TY
   | Vtrue : value_ TY
   | Vfalse : value_ TY
-  | Vlist : BaseTypes.t -> list (value TY) -> value_ TY
+  | Vlist : core_base_type -> list (value TY) -> value_ TY
   | Vtuple : list (value TY) -> value_ TY
 
 with value (TY : Type) : Type :=
@@ -137,14 +138,14 @@ with value (TY : Type) : Type :=
 
 (* Constructor types *)
 Inductive ctor : Type :=
-  | Cnil : BaseTypes.t -> ctor
+  | Cnil : core_base_type -> ctor
   | Ccons : ctor
   | Ctuple : ctor
   | Carray : ctor.
 
 (* Pattern types *)
 Inductive pattern_ (TY : Type) : Type :=
-  | CaseBase : option Sym.t * BaseTypes.t -> pattern_ TY
+  | CaseBase : option Sym.t * core_base_type -> pattern_ TY
   | CaseCtor : ctor -> list (pattern TY) -> pattern_ TY
 
 with pattern (TY : Type) : Type :=

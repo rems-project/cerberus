@@ -665,13 +665,13 @@ and pp_real_floating_type = function
 
 and pp_qualifiers quals =
   !^"{|"
-  ^^^ !^"const :="
+  ^^^ !^"Ctype.const :="
   ^^^ !^(string_of_bool quals.Ctype.const)
   ^^ !^";"
-  ^^^ !^"restrict :="
+  ^^^ !^"Ctype.restrict :="
   ^^^ !^(string_of_bool quals.Ctype.restrict)
   ^^ !^";"
-  ^^^ !^"volatile :="
+  ^^^ !^"Ctype.volatile :="
   ^^^ !^(string_of_bool quals.Ctype.volatile)
   ^^^ !^"|}"
 
@@ -956,7 +956,7 @@ and pp_bound_kind = function
 
 and pp_action pp_type (Action (loc, act)) =
   !^"{|"
-  ^^^ !^"action_location :="
+  ^^^ !^"action_loc :="
   ^^^ pp_location loc
   ^^ !^";"
   ^^^ !^"action_content :="
@@ -2020,7 +2020,7 @@ let rec pp_argument_types pp_type = function
 
   
 let coq_prologue = 
-  !^"From MuCore Require Import Annot ArgumentTypes BaseTypes CN CNProgs Ctype False Id ImplMem IndexTerms IntegerType Location Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes Memory MuCore Request ReturnTypes SCtypes Sym Symbol Terms Undefined Utils."
+  !^"From MuCore Require Import Annot ArgumentTypes Core BaseTypes CN CNProgs Ctype False Id ImplMem IndexTerms IntegerType Location Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes Memory MuCore Request ReturnTypes SCtypes Sym Symbol Terms Undefined Utils."
   ^^ P.hardline
   ^^ !^"Require Import Coq.Lists.List."
   ^^ P.hardline

@@ -60,15 +60,14 @@ type mu_function =
 let pp_function =
   let open Pp.Infix in
   function
-  | F_params_length -> !^"params_length"
-  | F_params_nth -> !^"params_nth"
-  | F_are_compatible -> !^"are_compatible"
-  | F_align_of -> !^"align_of"
-  | F_size_of -> !^"size_of"
-  | F_max_int -> !^"max_int"
-  | F_min_int -> !^"min_int"
-  | F_ctype_width -> !^"ctype_width"
-
+  | F_params_length -> !^"F_params_length"
+  | F_params_nth -> !^"F_params_nth"
+  | F_are_compatible -> !^"F_are_compatible"
+  | F_align_of -> !^"F_align_of"
+  | F_size_of -> !^"F_size_of"
+  | F_max_int -> !^"F_max_int"
+  | F_min_int -> !^"F_min_int"
+  | F_ctype_width -> !^"F_ctype_width"
 
 let fun_param_types mu_fun =
   let open BaseTypes in
