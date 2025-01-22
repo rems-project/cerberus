@@ -12,7 +12,7 @@ let debug_print_locations = false (* Set to true to print actual locations *)
 
 let pp_nat n = !^(string_of_int n)
 
-let pp_Z z = !^"Z.of_string" ^^^ !^"%Z"
+let pp_Z z = !^(Z.to_string z ^ "%Z")
 
 let pp_pair p1 p2 (a, b) = P.parens (p1 a ^^ !^"," ^^ p2 b)
 
@@ -496,7 +496,7 @@ let rec pp_basetype pp_loc = function
   | BaseTypes.Tuple ts ->
     !^"(Tuple" ^^^ P.separate_map (!^";" ^^ P.break 1) (pp_basetype pp_loc) ts ^^ !^")"
   | BaseTypes.Set t -> !^"(TSet" ^^^ pp_basetype pp_loc t ^^ !^")"
-  | BaseTypes.Loc x -> !^"(Loc" ^^^ pp_loc x ^^ !^")"
+  | BaseTypes.Loc x -> !^"(Loc" ^^^ !^"unit" ^^^ pp_unit x ^^ !^")" (* NOTE hardcoded unit *)
 
 
 let pp_integer_base_type = function
@@ -1116,7 +1116,8 @@ and pp_object_value pp_type (OV (ty, ov)) =
     !^"(OVunion" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ pp_mem_value v ^^ !^")"
 
 
-let pp_location_info (loc, _) = pp_location loc
+(* TODO: hardcoded None. pass `pp_type` *)
+let pp_location_info (x,_) = !^"(" ^^^ pp_location x ^^^ !^"," ^^^ !^"None" ^^^ !^")" 
 
 let pp_trusted = function
   | Trusted loc -> !^"(Trusted" ^^^ pp_location loc ^^ !^")"
@@ -1459,7 +1460,7 @@ let pp_logical_constraint = function
 
 let rec pp_return_type = function
   | ReturnTypes.Computational ((sym, bt), info, lrt) ->
-    !^"(Computational"
+    !^"(ReturnTypes.Computational"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -1538,7 +1539,8 @@ let rec pp_logical_args ppf = function
 
 let rec pp_arguments ppf = function
   | Computational ((sym, bt), loc, rest) ->
-    !^"(Computational"
+    !^"(ArgumentTypes.Computational"
+    ^^^ !^"_"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -2006,7 +2008,7 @@ let rec pp_logical_argument_types pp_type = function
 
 let rec pp_argument_types pp_type = function
   | ArgumentTypes.Computational ((sym, bt), info, at) ->
-    !^"(Computational"
+    !^"(ArgumentTypes.Computational"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
