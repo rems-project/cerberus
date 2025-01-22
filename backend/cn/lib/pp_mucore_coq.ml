@@ -2023,13 +2023,15 @@ let rec pp_argument_types pp_type = function
   
 let coq_prologue = 
   !^"From MuCore Require Import Annot ArgumentTypes BaseTypes CN CNProgs Ctype False Id ImplMem IndexTerms IntegerType Location Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes Memory MuCore Request ReturnTypes SCtypes Sym Symbol Terms Undefined Utils."
-  ^^^ P.hardline
-  ^^^ !^"Require Import List."
-  ^^^ P.hardline
-  ^^^ !^"Import ListNotations."
-  ^^^ P.hardline
-  ^^^ !^"Require Import String."
-  ^^^ P.hardline 
+  ^^ P.hardline
+  ^^ !^"Require Import Coq.Lists.List."
+  ^^ P.hardline
+  ^^ !^"Import ListNotations."
+  ^^ P.hardline
+  ^^ !^"Require Import Coq.Strings.String."
+  ^^ P.hardline 
+  ^^ !^"Open Scope string_scope."
+  ^^ P.hardline
 
   let pp_file pp_type pp_type_name file =
   coq_prologue
