@@ -1325,17 +1325,22 @@ let model_state = ref No_model
 let model () = match !model_state with No_model -> assert false | Model mo -> mo
 
 (** Evaluate terms in the context of a model computed by the solver. *)
-let model_evaluator =
-  let model_evaluator_solver = ref None in
+let model_evaluator, reset_model_evaluator_state =
+  (* internal state for the model evaluator, reuses the solver across consecutive calls for efficiency *)
+  let model_evaluator_solver : Simple_smt.solver option ref = ref None in
   let currently_loaded_model = ref 0 in
-  let new_model_id =
-    let model_id = ref 0 in
-    fun () ->
-      (* Start with 1, as 0 is the id of the empty model *)
-      model_id := !model_id + 1;
-      !model_id
+  let model_id = ref 0 in
+  let new_model_id () =
+    (* Start with 1, as 0 is the id of the empty model *)
+    model_id := !model_id + 1;
+    !model_id
   in
-  fun solver mo ->
+  let reset_model_evaluator_state () =
+    currently_loaded_model := 0;
+    model_evaluator_solver := None;
+    model_id := 0
+  in
+  let model_evaluator solver mo =
     match SMT.to_list mo with
     | None -> failwith "model is an atom"
     | Some defs ->
@@ -1383,6 +1388,8 @@ let model_evaluator =
       in
       Hashtbl.add models_tbl model_id model_fn;
       model_id
+  in
+  (model_evaluator, reset_model_evaluator_state)
 
 
 (* ---------------------------------------------------------------------------*)
