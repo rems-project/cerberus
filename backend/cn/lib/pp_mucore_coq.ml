@@ -2022,7 +2022,7 @@ let rec pp_argument_types pp_type = function
 
 (* Top-level file printer *)
 let pp_file pp_type pp_type_name file =
-  !^"Require Import MuCore."
+  !^"From MuCore Require Import Annot ArgumentTypes BaseTypes CN CNProgs Ctype False Id ImplMem IndexTerms IntegerType Location Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes Memory MuCore Request ReturnTypes SCtypes Sym Symbol Terms Undefined Utils."
   ^^ P.hardline
   ^^ P.hardline
   (* Print globals *)
