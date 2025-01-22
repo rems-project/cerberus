@@ -433,11 +433,11 @@ let pp_digest (d : Digest.t) =
 let rec pp_symbol_description = function
   | CF.Symbol.SD_None -> !^"SD_None"
   | CF.Symbol.SD_unnamed_tag loc -> !^"(SD_unnamed_tag" ^^^ pp_location loc ^^ !^")"
-  | CF.Symbol.SD_Id s -> !^"(SD_Id" ^^^ !^s ^^ !^")"
-  | CF.Symbol.SD_CN_Id s -> !^"(SD_CN_Id" ^^^ !^s ^^ !^")"
-  | CF.Symbol.SD_ObjectAddress s -> !^"(SD_ObjectAddress" ^^^ !^s ^^ !^")"
+  | CF.Symbol.SD_Id s -> !^"(SD_Id" ^^^ pp_string s ^^ !^")"
+  | CF.Symbol.SD_CN_Id s -> !^"(SD_CN_Id" ^^^ pp_string s ^^ !^")"
+  | CF.Symbol.SD_ObjectAddress s -> !^"(SD_ObjectAddress" ^^^ pp_string s ^^ !^")"
   | CF.Symbol.SD_Return -> !^"SD_Return"
-  | CF.Symbol.SD_FunArgValue s -> !^"(SD_FunArgValue" ^^^ !^s ^^ !^")"
+  | CF.Symbol.SD_FunArgValue s -> !^"(SD_FunArgValue" ^^^ pp_string s ^^ !^")"
   | CF.Symbol.SD_FunArg (loc, n) ->
     !^"(SD_FunArg" ^^^ pp_location loc ^^^ !^(string_of_int n) ^^ !^")"
 
@@ -2020,9 +2020,19 @@ let rec pp_argument_types pp_type = function
   | L at -> !^"(L" ^^^ pp_logical_argument_types pp_type at ^^ !^")"
 
 
-(* Top-level file printer *)
-let pp_file pp_type pp_type_name file =
+  
+let coq_prologue = 
   !^"From MuCore Require Import Annot ArgumentTypes BaseTypes CN CNProgs Ctype False Id ImplMem IndexTerms IntegerType Location Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes Memory MuCore Request ReturnTypes SCtypes Sym Symbol Terms Undefined Utils."
+  ^^^ P.hardline
+  ^^^ !^"Require Import List."
+  ^^^ P.hardline
+  ^^^ !^"Import ListNotations."
+  ^^^ P.hardline
+  ^^^ !^"Require Import String."
+  ^^^ P.hardline 
+
+  let pp_file pp_type pp_type_name file =
+  coq_prologue
   ^^ P.hardline
   ^^ P.hardline
   (* Print globals *)
@@ -2055,16 +2065,18 @@ let pp_file pp_type pp_type_name file =
          | ProcDecl (loc, ft) ->
            coq_def
              (Pp_symbol.to_string_pretty_cn sym)
-             P.empty
+             (!^"(TY:Type)")
              (!^"ProcDecl"
+              ^^^ !^"TY"
               ^^^ pp_location loc
               ^^^ pp_option (pp_argument_types pp_return_type) ft)
          | Proc { loc; args_and_body; trusted; desugared_spec } ->
            coq_def
              (Pp_symbol.to_string_pretty_cn sym)
-             P.empty
+             (!^"(TY:Type)")
              (!^"Proc"
-              ^^^ pp_location loc
+             ^^^ !^"TY"
+             ^^^ pp_location loc
               ^^^ pp_args_and_body pp_type args_and_body
               ^^^ pp_trusted trusted
               ^^^ pp_desugared_spec desugared_spec))
