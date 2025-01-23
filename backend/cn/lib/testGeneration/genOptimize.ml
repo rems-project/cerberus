@@ -2535,7 +2535,7 @@ module ConstraintPropagation = struct
           (Not, IT (Binop (EQ, IT (Const (Bits (_, n)), _, _), IT (Sym x, x_bt, _)), _, _))
         ->
         let@ bt_rep = IntRep.of_bt x_bt in
-        Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.ne n))))
+        Some (false, (x, Int (IntRep.intersect bt_rep (IntRep.ne n))))
       | Binop
           ( EQ,
             IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _),
