@@ -464,6 +464,9 @@ and pp_symbol_prefix = function
   | CF.Symbol.PrefMalloc -> !^"PrefMalloc"
   | CF.Symbol.PrefOther s -> !^"(PrefOther" ^^^ !^s ^^ !^")"
 
+let pp_sign = function
+  | BaseTypes.Signed -> !^"BaseTypes.Signed"
+  | BaseTypes.Unsigned -> !^"BaseTypes.Unsigned"
 
 let rec pp_basetype pp_loc = function
   | BaseTypes.Unit -> !^"Unit"
@@ -471,10 +474,9 @@ let rec pp_basetype pp_loc = function
   | BaseTypes.Integer -> !^"Integer"
   | BaseTypes.MemByte -> !^"MemByte"
   | BaseTypes.Bits (sign, n) ->
-    !^"(Bits"
-    ^^^ (match sign with
-         | BaseTypes.Signed -> !^"Signed"
-         | BaseTypes.Unsigned -> !^"Unsigned")
+    !^"(BaseTypes.Bits"
+    ^^^ !^"_"
+    ^^^ pp_sign sign
     ^^^ !^(string_of_int n)
     ^^ !^")"
   | BaseTypes.Real -> !^"Real"
@@ -1134,10 +1136,6 @@ let pp_unop = function
   | BW_Compl -> !^"BW_Compl"
 
 
-let pp_sign = function
-  | BaseTypes.Signed -> !^"Signed"
-  | BaseTypes.Unsigned -> !^"Unsigned"
-
 
 let rec pp_terms_pattern (Terms.Pat (pat, bt, loc)) =
   !^"(Pat"
@@ -1185,7 +1183,8 @@ let pp_const = function
 
 
 let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
-  !^"(IT"
+  !^"(Terms.IT"
+  ^^^ !^"_"
   ^^^ pp_index_term_content term
   ^^^ pp_basetype pp_unit bt
   ^^^ pp_location loc
@@ -1194,7 +1193,7 @@ let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
 
 and pp_index_term_content = function
   | IndexTerms.Const c -> !^"(Const" ^^^ pp_const c ^^ !^")"
-  | Sym s -> !^"(Sym" ^^^ pp_symbol s ^^ !^")"
+  | Sym s -> !^"(Sym" ^^^ !^"_" ^^^ pp_symbol s ^^ !^")"
   | Unop (op, t) -> !^"(Unop" ^^^ pp_unop op ^^^ pp_index_term t ^^ !^")"
   | Binop (op, t1, t2) ->
     !^"(Binop" ^^^ pp_binop op ^^^ pp_index_term t1 ^^^ pp_index_term t2 ^^ !^")"
@@ -1329,10 +1328,18 @@ and pp_index_term_content = function
 
 let pp_request_init = function Request.Init -> !^"Init" | Request.Uninit -> !^"Uninit"
 
+
 let rec pp_request = function
-  | Request.P pred -> pp_request_predicate pred
+  | Request.P pred -> 
+    !^"(Request.P"
+    ^^^ pp_request_ppredicate pred
+    ^^^ !^")"
   | Request.Q qpred ->
-  !^"{|"
+    !^"(Request.Q"
+    ^^^ pp_request_qpredicate  qpred
+    ^^^ !^")"
+and pp_request_qpredicate qpred =
+    !^"{|"
     ^^^ !^"QPredicate.name :="
     ^^^ pp_request_name qpred.Request.QPredicate.name
     ^^ !^";"
@@ -1359,7 +1366,7 @@ let rec pp_request = function
     ^^^ pp_list pp_index_term qpred.iargs
     ^^^ !^"|}"
 
-and pp_request_predicate (pred : Request.Predicate.t) =
+and pp_request_ppredicate (pred : Request.Predicate.t) =
   !^"{|"
   ^^^ !^"Predicate.name :="
   ^^^ pp_request_name pred.Request.Predicate.name
@@ -1483,7 +1490,8 @@ and pp_logical_return_type = function
     ^^^ pp_logical_return_type lrt
     ^^^ !^")"
   | LogicalReturnTypes.Resource ((sym, (req, bt)), info, lrt) ->
-    !^"(Resource"
+    !^"(LogicalReturnTypes.Resource"
+    ^^^ !^"_"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -1516,7 +1524,8 @@ let rec pp_logical_args ppf = function
     ^^^ pp_logical_args ppf rest
     ^^ !^")"
   | Resource ((sym, (req, bt)), info, rest) ->
-    !^"(Resource"
+    !^"(MuCore.Resource"
+    ^^^ !^"_"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^^ !^","
@@ -1525,7 +1534,9 @@ let rec pp_logical_args ppf = function
     ^^ !^","
     ^^^ pp_basetype pp_unit bt
     ^^ !^"))"
+    ^^ !^","
     ^^^ pp_location_info info
+    ^^ !^","
     ^^^ pp_logical_args ppf rest
     ^^ !^")"
   | Constraint (lc, info, rest) ->
@@ -1810,9 +1821,9 @@ let pp_cn_condition ppfa ppfty = function
 
 let pp_cnprog_statement = function
   | Cnprog.Pack_unpack (pu, pred) ->
-    !^"(Pack_unpack" ^^^ pp_pack_unpack pu ^^^ pp_request_predicate pred ^^ !^")"
+    !^"(Pack_unpack" ^^^ pp_pack_unpack pu ^^^ pp_request_ppredicate pred ^^ !^")"
   | To_from_bytes (tf, pred) ->
-    !^"(To_from_bytes" ^^^ pp_to_from tf ^^^ pp_request_predicate pred ^^ !^")"
+    !^"(To_from_bytes" ^^^ pp_to_from tf ^^^ pp_request_ppredicate pred ^^ !^")"
   | Have lc -> !^"(Have" ^^^ pp_logical_constraint lc ^^ !^")"
   | Instantiate (inst, term) ->
     !^"(Instantiate"
@@ -1982,7 +1993,8 @@ let pp_desugared_spec { accesses; requires; ensures } =
 let rec pp_logical_argument_types pp_type = function
   | LogicalArgumentTypes.I i -> !^"(I" ^^^ pp_type i ^^ !^")"
   | Resource ((sym, (req, bt)), info, at) ->
-    !^"(Resource"
+    !^"(LogicalArgumentTypes.Resource"
+    ^^^ !^"_"
     ^^^ pp_symbol sym
     ^^ !^","
     ^^^ pp_request req
@@ -1993,13 +2005,13 @@ let rec pp_logical_argument_types pp_type = function
     ^^^ pp_logical_argument_types pp_type at
     ^^ !^")"
   | Constraint (lc, info, at) ->
-    !^"(Constraint"
+    !^"(LogicalArgumentTypes.Constraint"
     ^^^ pp_logical_constraint lc
     ^^^ pp_location_info info
     ^^^ pp_logical_argument_types pp_type at
     ^^ !^")"
   | LogicalArgumentTypes.Define (si, info, at) ->
-    !^"(Define"
+    !^"(LogicalArgumentTypes.Define"
     ^^^ (pp_pair pp_symbol pp_index_term) si
     ^^^ pp_location_info info
     ^^^ pp_logical_argument_types pp_type at
