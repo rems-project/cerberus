@@ -901,7 +901,7 @@ let verify_cmd =
 module Testing_flags = struct
   let output_test_dir =
     let doc = "Place generated tests in the provided directory" in
-    Arg.(required & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
+    Arg.(value & opt string "." & info [ "output-dir" ] ~docv:"DIR" ~doc)
 
 
   let only =
