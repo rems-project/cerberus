@@ -475,7 +475,7 @@ let rec pp_basetype pp_loc = function
   | BaseTypes.MemByte -> !^"MemByte"
   | BaseTypes.Bits (sign, n) ->
     !^"(BaseTypes.Bits"
-    ^^^ !^"_"
+    ^^^ !^"unit"
     ^^^ pp_sign sign
     ^^^ !^(string_of_int n)
     ^^ !^")"
@@ -1526,7 +1526,7 @@ let rec pp_logical_args ppf = function
   | Resource ((sym, (req, bt)), info, rest) ->
     !^"(MuCore.Resource"
     ^^^ !^"_"
-    ^^^ !^"("
+    ^^^ !^"(("
     ^^^ pp_symbol sym
     ^^^ !^","
     ^^^ !^"("
@@ -1538,7 +1538,7 @@ let rec pp_logical_args ppf = function
     ^^^ pp_location_info info
     ^^ !^","
     ^^^ pp_logical_args ppf rest
-    ^^ !^")"
+    ^^ !^"))"
   | Constraint (lc, info, rest) ->
     !^"(Constraint"
     ^^^ pp_logical_constraint lc
