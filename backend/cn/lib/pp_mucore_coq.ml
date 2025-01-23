@@ -469,23 +469,23 @@ let pp_sign = function
   | BaseTypes.Unsigned -> !^"BaseTypes.Unsigned"
 
 let rec pp_basetype pp_loc = function
-  | BaseTypes.Unit -> !^"Unit"
-  | BaseTypes.Bool -> !^"Bool"
-  | BaseTypes.Integer -> !^"Integer"
-  | BaseTypes.MemByte -> !^"MemByte"
+  | BaseTypes.Unit -> !^"(BaseTypes.Unit unit)"
+  | BaseTypes.Bool -> !^"(BaseTypes.Bool unit )"
+  | BaseTypes.Integer -> !^"(BaseTypes.Integer unit)"
+  | BaseTypes.MemByte -> !^"(BaseTypes.MemByte unit)"
   | BaseTypes.Bits (sign, n) ->
     !^"(BaseTypes.Bits"
     ^^^ !^"unit"
     ^^^ pp_sign sign
     ^^^ !^(string_of_int n)
     ^^ !^")"
-  | BaseTypes.Real -> !^"Real"
-  | BaseTypes.Alloc_id -> !^"Alloc_id"
-  | BaseTypes.CType -> !^"CType"
-  | BaseTypes.Struct sym -> !^"(Struct" ^^^ pp_symbol sym ^^ !^")"
-  | BaseTypes.Datatype sym -> !^"(Datatype" ^^^ pp_symbol sym ^^ !^")"
+  | BaseTypes.Real -> !^"(BaseTypes.Real unit)"
+  | BaseTypes.Alloc_id -> !^"(BaseTypes.Alloc_id unit)"
+  | BaseTypes.CType -> !^"(BaseTypes.CType unit)"
+  | BaseTypes.Struct sym -> !^"(BaseTypes.Struct unit" ^^^ pp_symbol sym ^^ !^")"
+  | BaseTypes.Datatype sym -> !^"(BaseTypes.Datatype unit" ^^^ pp_symbol sym ^^ !^")"
   | BaseTypes.Record fields ->
-    !^"(Record"
+    !^"(BaseTypes.Record unit"
     ^^^ P.separate_map
           (!^";" ^^ P.break 1)
           (fun (id, ty) ->
@@ -493,12 +493,12 @@ let rec pp_basetype pp_loc = function
           fields
     ^^ !^")"
   | BaseTypes.Map (t1, t2) ->
-    !^"(Map" ^^^ pp_basetype pp_loc t1 ^^^ pp_basetype pp_loc t2 ^^ !^")"
-  | BaseTypes.List t -> !^"(List" ^^^ pp_basetype pp_loc t ^^ !^")"
+    !^"(BaseTypes.Map unit" ^^^ pp_basetype pp_loc t1 ^^^ pp_basetype pp_loc t2 ^^ !^")"
+  | BaseTypes.List t -> !^"(BaseTypes.List unit" ^^^ pp_basetype pp_loc t ^^ !^")"
   | BaseTypes.Tuple ts ->
-    !^"(Tuple" ^^^ P.separate_map (!^";" ^^ P.break 1) (pp_basetype pp_loc) ts ^^ !^")"
-  | BaseTypes.Set t -> !^"(TSet" ^^^ pp_basetype pp_loc t ^^ !^")"
-  | BaseTypes.Loc x -> !^"(Loc" ^^^ !^"unit" ^^^ pp_unit x ^^ !^")" (* NOTE hardcoded unit *)
+    !^"(BaseTypes.Tuple unit" ^^^ P.separate_map (!^";" ^^ P.break 1) (pp_basetype pp_loc) ts ^^ !^")"
+  | BaseTypes.Set t -> !^"(BaseTypes.TSet unit" ^^^ pp_basetype pp_loc t ^^ !^")"
+  | BaseTypes.Loc x -> !^"(BaseTypes.Loc" ^^^ !^"unit" ^^^ pp_unit x ^^ !^")" (* NOTE hardcoded unit *)
 
 
 let pp_integer_base_type = function
@@ -679,15 +679,15 @@ and pp_qualifiers quals =
 
 
 let rec pp_sctype = function
-  | Sctypes.Void -> !^"Void"
-  | Sctypes.Integer it -> !^"(Integer" ^^^ pp_integer_type it ^^ !^")"
-  | Sctypes.Array (ct, None) -> !^"(Array" ^^^ pp_sctype ct ^^^ !^"None" ^^ !^")"
+  | Sctypes.Void -> !^"SCtypes.Void"
+  | Sctypes.Integer it -> !^"(SCtypes.Integer" ^^^ pp_integer_type it ^^ !^")"
+  | Sctypes.Array (ct, None) -> !^"(SCtypes.Array" ^^^ pp_sctype ct ^^^ !^"None" ^^ !^")"
   | Sctypes.Array (ct, Some n) ->
-    !^"(Array" ^^^ pp_sctype ct ^^^ !^"(Some" ^^^ !^(string_of_int n) ^^ !^"))" ^^ !^")"
-  | Sctypes.Pointer ct -> !^"(Pointer" ^^^ pp_sctype ct ^^ !^")"
-  | Sctypes.Struct sym -> !^"(Struct" ^^^ pp_symbol sym ^^ !^")"
+    !^"(SCtypes.Array" ^^^ pp_sctype ct ^^^ !^"(Some" ^^^ !^(string_of_int n) ^^ !^"))" ^^ !^")"
+  | Sctypes.Pointer ct -> !^"(SCtypes.Pointer" ^^^ pp_sctype ct ^^ !^")"
+  | Sctypes.Struct sym -> !^"(SCtypes.Struct" ^^^ pp_symbol sym ^^ !^")"
   | Sctypes.Function ((quals, ret), args, variadic) ->
-    !^"(SCFunction"
+    !^"(SCtypes.Function"
     ^^^ !^"("
     ^^^ pp_qualifiers quals
     ^^ !^","

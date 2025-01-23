@@ -5,7 +5,8 @@ Require Import QArith.
 Require Import Symbol.
 Require Import BaseTypes.
 Require Import Location.
-
+Require Import SCtypes.
+Require Import IntegerType.
 (* Constants *)
 Inductive const : Type :=
   | Z : Z -> const
@@ -95,7 +96,7 @@ Inductive term (bt : Type) : Type :=
   | ArrayShift : annot bt -> Type -> annot bt -> term bt  (* base * ct * index *)
   | CopyAllocId : annot bt -> annot bt -> term bt  (* addr * loc *)
   | HasAllocId : annot bt -> term bt
-  | SizeOf : Type -> term bt  (* simplified from ctype *)
+  | SizeOf : SCtypes.t -> term bt 
   | OffsetOf : sym -> Symbol.identifier -> term bt
   | Nil : BaseTypes.t -> term bt
   | Cons : annot bt -> annot bt -> term bt
@@ -103,10 +104,10 @@ Inductive term (bt : Type) : Type :=
   | Tail : annot bt -> term bt
   | NthList : annot bt -> annot bt -> annot bt -> term bt
   | ArrayToList : annot bt -> annot bt -> annot bt -> term bt
-  | Representable : Type -> annot bt -> term bt  (* simplified from ctype *)
-  | Good : Type -> annot bt -> term bt  (* simplified from ctype *)
+  | Representable : SCtypes.t -> annot bt -> term bt  
+  | Good : SCtypes.t -> annot bt -> term bt  
   | Aligned : annot bt -> annot bt -> term bt  (* t * align *)
-  | WrapI : Type -> annot bt -> term bt  (* simplified from integer type *)
+  | WrapI : IntegerType.t  -> annot bt -> term bt 
   | MapConst : BaseTypes.t -> annot bt -> term bt
   | MapSet : annot bt -> annot bt -> annot bt -> term bt
   | MapGet : annot bt -> annot bt -> term bt

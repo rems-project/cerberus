@@ -25,4 +25,6 @@ Inductive integerType : Type := (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*
  | Wint_t: integerType
  | Size_t: integerType
  | Ptrdiff_t: integerType
- | Ptraddr_t: integerType .
+ | Ptraddr_t: integerType.
+
+ Definition t := integerType.
