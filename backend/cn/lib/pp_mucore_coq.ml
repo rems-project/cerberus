@@ -1192,15 +1192,16 @@ let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
 
 
 and pp_index_term_content = function
-  | IndexTerms.Const c -> !^"(Const" ^^^ pp_const c ^^ !^")"
+  | IndexTerms.Const c -> !^"(Const" ^^^ !^"_"  ^^^ pp_const c ^^ !^")"
   | Sym s -> !^"(Sym" ^^^ !^"_" ^^^ pp_symbol s ^^ !^")"
-  | Unop (op, t) -> !^"(Unop" ^^^ pp_unop op ^^^ pp_index_term t ^^ !^")"
+  | Unop (op, t) -> !^"(Unop" ^^^ !^"_" ^^^ pp_unop op ^^^ pp_index_term t ^^ !^")"
   | Binop (op, t1, t2) ->
-    !^"(Binop" ^^^ pp_binop op ^^^ pp_index_term t1 ^^^ pp_index_term t2 ^^ !^")"
+    !^"(Binop" ^^^ !^"_" ^^^ pp_binop op ^^^ pp_index_term t1 ^^^ pp_index_term t2 ^^ !^")"
   | ITE (c, t, e) ->
-    !^"(ITE" ^^^ pp_index_term c ^^^ pp_index_term t ^^^ pp_index_term e ^^ !^")"
+    !^"(ITE" ^^^ !^"_" ^^^ pp_index_term c ^^^ pp_index_term t ^^^ pp_index_term e ^^ !^")"
   | EachI ((n1, (sym, bt), n2), t) ->
     !^"(EachI"
+    ^^^ !^"_"     
     ^^^ !^"("
     ^^^ !^(string_of_int n1)
     ^^ !^","
@@ -1275,39 +1276,43 @@ and pp_index_term_content = function
   | Nil bt -> !^"(Nil" ^^^ pp_basetype pp_unit bt ^^ !^")"
   | Cons (t1, t2) -> !^"(Cons" ^^^ pp_index_term t1 ^^^ pp_index_term t2 ^^ !^")"
   | Head t -> !^"(Head" ^^^ pp_index_term t ^^ !^")"
-  | Tail t -> !^"(Tail" ^^^ pp_index_term t ^^ !^")"
+  | Tail t -> !^"(Tail" ^^^ !^"_" ^^^ pp_index_term t ^^ !^")"
   | NthList (i, xs, d) ->
-    !^"(NthList" ^^^ pp_index_term i ^^^ pp_index_term xs ^^^ pp_index_term d ^^ !^")"
+    !^"(NthList" ^^^ !^"_" ^^^ pp_index_term i ^^^ pp_index_term xs ^^^ pp_index_term d ^^ !^")"
   | ArrayToList (arr, i, len) ->
     !^"(ArrayToList"
+    ^^^ !^"_"
     ^^^ pp_index_term arr
     ^^^ pp_index_term i
     ^^^ pp_index_term len
     ^^ !^")"
   | Representable (ct, t) ->
-    !^"(Representable" ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
-  | Good (ct, t) -> !^"(Good" ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
+    !^"(Representable" ^^^ !^"_" ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
+  | Good (ct, t) -> !^"(Good" ^^^ !^"_" ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
   | Aligned { t; align } ->
-    !^"(Aligned" ^^^ pp_index_term t ^^^ pp_index_term align ^^ !^")"
-  | WrapI (ct, t) -> !^"(WrapI" ^^^ pp_integer_type ct ^^^ pp_index_term t ^^ !^")"
+    !^"(Aligned" ^^^ !^"_" ^^^ pp_index_term t ^^^ pp_index_term align ^^ !^")"
+  | WrapI (ct, t) -> !^"(WrapI" ^^^ !^"_" ^^^ pp_integer_type ct ^^^ pp_index_term t ^^ !^")"
   | MapConst (bt, t) ->
-    !^"(MapConst" ^^^ pp_basetype pp_unit bt ^^^ pp_index_term t ^^ !^")"
+    !^"(MapConst" ^^^ !^"_" ^^^ pp_basetype pp_unit bt ^^^ pp_index_term t ^^ !^")"
   | MapSet (m, k, v) ->
-    !^"(MapSet" ^^^ pp_index_term m ^^^ pp_index_term k ^^^ pp_index_term v ^^ !^")"
-  | MapGet (m, k) -> !^"(MapGet" ^^^ pp_index_term m ^^^ pp_index_term k ^^ !^")"
+    !^"(MapSet" ^^^ !^"_" ^^^ pp_index_term m ^^^ pp_index_term k ^^^ pp_index_term v ^^ !^")"
+  | MapGet (m, k) -> !^"(MapGet" ^^^ !^"_" ^^^ pp_index_term m ^^^ pp_index_term k ^^ !^")"
   | MapDef ((sym, bt), t) ->
     !^"(MapDef"
+    ^^^ !^"_"     
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
     ^^^ pp_basetype pp_unit bt
     ^^ !^")"
+
     ^^^ pp_index_term t
     ^^ !^")"
   | Apply (sym, args) ->
-    !^"(Apply" ^^^ pp_symbol sym ^^^ pp_list pp_index_term args ^^ !^")"
+    !^"(Apply" ^^^ !^"_" ^^^ pp_symbol sym ^^^ pp_list pp_index_term args ^^ !^")"
   | Let ((sym, t1), t2) ->
     !^"(Let"
+    ^^^ !^"_" 
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -1317,13 +1322,14 @@ and pp_index_term_content = function
     ^^ !^")"
   | Match (t, cases) ->
     !^"(Match"
+    ^^^ !^"_"     
     ^^^ pp_index_term t
     ^^^ pp_list
           (fun (pat, body) ->
             !^"(" ^^ pp_terms_pattern pat ^^ !^"," ^^^ pp_index_term body ^^ !^")")
           cases
     ^^ !^")"
-  | Cast (bt, t) -> !^"(Cast" ^^^ pp_basetype pp_unit bt ^^^ pp_index_term t ^^ !^")"
+  | Cast (bt, t) -> !^"(Cast" ^^^ !^"_" ^^^ pp_basetype pp_unit bt ^^^ pp_index_term t ^^ !^")"
 
 
 let pp_request_init = function Request.Init -> !^"Init" | Request.Uninit -> !^"Uninit"
@@ -1480,7 +1486,8 @@ let rec pp_return_type = function
 
 and pp_logical_return_type = function
   | LogicalReturnTypes.Define ((sym, term), info, lrt) ->
-    !^"(Define"
+    !^"(LogicalReturnTypes.Define"
+    ^^^ !^"_"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -1504,24 +1511,25 @@ and pp_logical_return_type = function
     ^^^ pp_logical_return_type lrt
     ^^^ !^")"
   | LogicalReturnTypes.Constraint (lc, info, lrt) ->
-    !^"(Constraint"
+    !^"(LogicalReturnTypes.Constraint"
+    ^^^ !^"_"
     ^^^ pp_logical_constraint lc
     ^^^ pp_location_info info
     ^^^ pp_logical_return_type lrt
     ^^^ !^")"
-  | LogicalReturnTypes.I -> !^"I"
+  | LogicalReturnTypes.I -> !^"(I" ^^^ !^"_)"
+
 
 
 let rec pp_logical_args ppf = function
   | Define ((sym, term), info, rest) ->
-    !^"(Define"
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_index_term term
-    ^^ !^")"
-    ^^^ pp_location_info info
-    ^^^ pp_logical_args ppf rest
+    !^"(MuCore.Define"
+    ^^^ !^"_"
+    ^^^ P.parens (P.separate (!^",") 
+      [ 
+      (P.parens (P.separate (!^",") [pp_symbol sym;  pp_index_term term]))  ;
+      pp_location_info info;
+      pp_logical_args ppf rest])
     ^^ !^")"
   | Resource ((sym, (req, bt)), info, rest) ->
     !^"(MuCore.Resource"
@@ -1541,9 +1549,11 @@ let rec pp_logical_args ppf = function
     ^^ !^"))"
   | Constraint (lc, info, rest) ->
     !^"(Constraint"
-    ^^^ pp_logical_constraint lc
-    ^^^ pp_location_info info
-    ^^^ pp_logical_args ppf rest
+    ^^^ !^"_"
+    ^^^ P.parens (P.separate (!^",") [
+        pp_logical_constraint lc;
+        pp_location_info info;
+        pp_logical_args ppf rest])
     ^^ !^")"
   | I i -> !^"(I" ^^^ ppf i ^^ !^")"
 
