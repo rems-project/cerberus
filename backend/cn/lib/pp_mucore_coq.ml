@@ -1161,25 +1161,25 @@ and pp_terms_pattern_ = function
 let pp_const = function
   | Terms.Z z -> !^"(Z" ^^^ !^(Z.to_string z) ^^ !^")"
   | Bits ((sign, sz), z) ->
-    !^"(Bits"
-    ^^^ !^"("
+    !^"(Terms.Bits"
+    ^^^ !^"(("
     ^^ pp_sign sign
     ^^ !^","
-    ^^^ !^(string_of_int sz)
-    ^^ !^")"
-    ^^^ !^(Z.to_string z)
-    ^^ !^")"
+    ^^^ pp_nat sz
+    ^^ !^"),"
+    ^^^ pp_Z z
+    ^^ !^"))"
   | Q q -> !^"(Q" ^^^ !^(Q.to_string q) ^^ !^")"
   | MemByte { alloc_id; value } ->
-    !^"(MemByte" ^^^ !^(Z.to_string alloc_id) ^^^ !^(Z.to_string value) ^^ !^")"
+    !^"(Terms.MemByte" ^^^ !^(Z.to_string alloc_id) ^^^ !^(Z.to_string value) ^^ !^")"
   | Pointer { alloc_id; addr } ->
-    !^"(Pointer" ^^^ !^(Z.to_string alloc_id) ^^^ !^(Z.to_string addr) ^^ !^")"
-  | Alloc_id z -> !^"(Alloc_id" ^^^ !^(Z.to_string z) ^^ !^")"
-  | Bool b -> !^"(Bool" ^^^ pp_bool b ^^ !^")"
-  | Unit -> !^"Unit"
-  | Null -> !^"Null"
-  | CType_const t -> !^"(CType_const" ^^^ pp_sctype t ^^ !^")"
-  | Default bt -> !^"(Default" ^^^ pp_basetype pp_unit bt ^^ !^")"
+    !^"(Terms.Pointer" ^^^ !^(Z.to_string alloc_id) ^^^ !^(Z.to_string addr) ^^ !^")"
+  | Alloc_id z -> !^"(Terms.Alloc_id" ^^^ !^(Z.to_string z) ^^ !^")"
+  | Bool b -> !^"(Terms.Bool" ^^^ pp_bool b ^^ !^")"
+  | Unit -> !^"Terms.Unit"
+  | Null -> !^"Terms.Null"
+  | CType_const t -> !^"(Terms.CType_const" ^^^ pp_sctype t ^^ !^")"
+  | Default bt -> !^"(Terms.Default" ^^^ pp_basetype pp_unit bt ^^ !^")"
 
 
 let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
