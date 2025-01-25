@@ -12,7 +12,7 @@ let debug_print_locations = false (* Set to true to print actual locations *)
 
 let pp_nat n = !^(string_of_int n)
 
-let pp_Z z = !^(Z.to_string z ^ "%Z")
+let pp_Z z = if Z.lt z Z.zero then !^("(" ^ Z.to_string z ^ ")%Z") else !^(Z.to_string z ^ "%Z")
 
 let pp_pair p1 p2 (a, b) = P.parens (p1 a ^^ !^"," ^^ p2 b)
 
