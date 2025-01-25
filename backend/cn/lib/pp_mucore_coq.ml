@@ -621,13 +621,13 @@ let rec pp_ctype (Ctype.Ctype (annots, ct)) =
   !^"(Ctype"
   ^^^ pp_list pp_annot_t annots
   ^^^ (match ct with
-       | Ctype.Void -> !^"Void"
-       | Ctype.Basic bt -> !^"(Basic" ^^^ pp_basic_type bt ^^ !^")"
-       | Ctype.Array (ct, None) -> !^"(Array" ^^^ pp_ctype ct ^^^ !^"None" ^^ !^")"
+       | Ctype.Void -> !^"Ctype.Void"
+       | Ctype.Basic bt -> !^"(Ctype.Basic" ^^^ pp_basic_type bt ^^ !^")"
+       | Ctype.Array (ct, None) -> !^"(Ctype.Array" ^^^ pp_ctype ct ^^^ !^"None" ^^ !^")"
        | Ctype.Array (ct, Some n) ->
-         !^"(Array" ^^^ pp_ctype ct ^^^ !^"(Some" ^^^ !^(Z.to_string n) ^^ !^"))" ^^ !^")"
+         !^"(Ctype.Array" ^^^ pp_ctype ct ^^^ !^"(Some" ^^^ !^(Z.to_string n) ^^ !^"))" ^^ !^")"
        | Ctype.Function ((quals, ret), args, variadic) ->
-         !^"(Function"
+         !^"(Ctype.Function"
          ^^^ !^"("
          ^^^ pp_qualifiers quals
          ^^ !^","
@@ -646,23 +646,23 @@ let rec pp_ctype (Ctype.Ctype (annots, ct)) =
          ^^^ !^(string_of_bool variadic)
          ^^ !^")"
        | Ctype.FunctionNoParams (quals, ret) ->
-         !^"(FunctionNoParams"
+         !^"(Ctype.FunctionNoParams"
          ^^^ !^"("
          ^^^ pp_qualifiers quals
          ^^ !^","
          ^^^ pp_ctype ret
          ^^ !^"))"
        | Ctype.Pointer (quals, ct) ->
-         !^"(Pointer" ^^^ pp_qualifiers quals ^^^ pp_ctype ct ^^ !^")"
-       | Ctype.Atomic ct -> !^"(Atomic" ^^^ pp_ctype ct ^^ !^")"
-       | Ctype.Struct sym -> !^"(Struct" ^^^ pp_symbol sym ^^ !^")"
-       | Ctype.Union sym -> !^"(Union" ^^^ pp_symbol sym ^^ !^")")
+         !^"(Ctype.Pointer" ^^^ pp_qualifiers quals ^^^ pp_ctype ct ^^ !^")"
+       | Ctype.Atomic ct -> !^"(Ctype.Atomic" ^^^ pp_ctype ct ^^ !^")"
+       | Ctype.Struct sym -> !^"(Ctype.Struct" ^^^ pp_symbol sym ^^ !^")"
+       | Ctype.Union sym -> !^"(Ctype.Union" ^^^ pp_symbol sym ^^ !^")")
   ^^ !^")"
 
 
 and pp_basic_type = function
-  | Ctype.Integer it -> !^"(Integer" ^^^ pp_integer_type it ^^ !^")"
-  | Ctype.Floating ft -> !^"(Floating" ^^^ pp_floating_type ft ^^ !^")"
+  | Ctype.Integer it -> !^"(Ctype.Integer" ^^^ pp_integer_type it ^^ !^")"
+  | Ctype.Floating ft -> !^"(Ctype.Floating" ^^^ pp_floating_type ft ^^ !^")"
 
 
 and pp_floating_type = function
@@ -1170,7 +1170,6 @@ and pp_bool b = if b then !^"true" else !^"false"
 and pp_value pp_type (V (ty, v)) =
   !^"(V"
   ^^^ !^"_"
-  ^^^ pp_type ty
   ^^^ (match v with
        | Vobject ov -> !^"(Vobject" ^^^ !^"_" ^^^ pp_object_value pp_type ov ^^ !^")"
        | Vctype t -> !^"(Vctype" ^^^ !^"_" ^^^ pp_ctype t ^^ !^")"
