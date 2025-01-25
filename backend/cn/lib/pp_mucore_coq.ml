@@ -1168,19 +1168,24 @@ and pp_kill_kind = function
 and pp_bool b = if b then !^"true" else !^"false"
 
 and pp_value pp_type (V (ty, v)) =
-  !^"V"
+  !^"(V"
+  ^^^ !^"_"
   ^^^ pp_type ty
-  ^^^
-  match v with
-  | Vobject ov -> !^"(Vobject" ^^^ pp_object_value pp_type ov ^^ !^")"
-  | Vctype t -> !^"(Vctype" ^^^ pp_ctype t ^^ !^")"
-  | Vfunction_addr s -> !^"(Vfunction_addr" ^^^ pp_symbol s ^^ !^")"
-  | Vunit -> !^"Vunit"
-  | Vtrue -> !^"Vtrue"
-  | Vfalse -> !^"Vfalse"
-  | Vlist (bt, vs) ->
-    !^"(Vlist" ^^^ pp_core_base_type bt ^^^ pp_list (pp_value pp_type) vs ^^ !^")"
-  | Vtuple vs -> !^"(Vtuple" ^^^ pp_list (pp_value pp_type) vs ^^ !^")"
+  ^^^ (match v with
+       | Vobject ov -> !^"(Vobject" ^^^ !^"_" ^^^ pp_object_value pp_type ov ^^ !^")"
+       | Vctype t -> !^"(Vctype" ^^^ !^"_" ^^^ pp_ctype t ^^ !^")"
+       | Vfunction_addr s -> !^"(Vfunction_addr" ^^^ !^"_" ^^^ pp_symbol s ^^ !^")"
+       | Vunit -> !^"(Vunit" ^^^ !^")"
+       | Vtrue -> !^"(Vtrue" ^^^ !^")"
+       | Vfalse -> !^"(Vfalse" ^^^ !^")"
+       | Vlist (bt, vs) ->
+         !^"(Vlist"
+         ^^^ !^"_"
+         ^^^ pp_core_base_type bt
+         ^^^ pp_list (pp_value pp_type) vs
+         ^^ !^")"
+       | Vtuple vs -> !^"(Vtuple" ^^^ !^"_" ^^^ pp_list (pp_value pp_type) vs ^^ !^")")
+  ^^^ !^")"
 
 
 and pp_object_value pp_type (OV (ty, ov)) =
