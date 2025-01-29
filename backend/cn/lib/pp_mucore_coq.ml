@@ -1,7 +1,6 @@
 [@@@warning "-32-27-26"] (* Disable unused value warnings and unused variable warnings *)
 
 open Cerb_pp_prelude
-open Printf
 module CF = Cerb_frontend
 open CF
 module P = PPrint
@@ -87,7 +86,7 @@ let pp_constructor name args =
 
 
 let pp_undefined_behaviour = function
-  | Undefined.DUMMY str -> pp_constructor "DUMMY" [ !^(sprintf "%S" str) ]
+  | Undefined.DUMMY str -> pp_constructor "DUMMY" [ pp_string str ]
   | Undefined.UB_unspecified_lvalue -> pp_constructor "UB_unspecified_lvalue" []
   | Undefined.UB_std_omission om ->
     pp_constructor
@@ -96,8 +95,7 @@ let pp_undefined_behaviour = function
          | UB_OMIT_memcpy_non_object -> pp_constructor "UB_OMIT_memcpy_non_object" []
          | UB_OMIT_memcpy_out_of_bound -> pp_constructor "UB_OMIT_memcpy_out_of_bound" [])
       ]
-  | Undefined.Invalid_format str ->
-    pp_constructor "Invalid_format" [ !^(sprintf "%S" str) ]
+  | Undefined.Invalid_format str -> pp_constructor "Invalid_format" [ pp_string str ]
   | Undefined.UB_CERB004_unspecified ctx ->
     pp_constructor
       "UB_CERB004_unspecified"
@@ -422,10 +420,10 @@ let pp_polarity = function Core.Pos -> !^"Pos" | Core.Neg -> !^"Neg"
 
 let pp_lexing_position { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
   pp_record
-    [ ("pos_fname", !^(sprintf "%S" pos_fname));
-      ("pos_lnum", !^(string_of_int pos_lnum));
-      ("pos_bol", !^(string_of_int pos_bol));
-      ("pos_cnum", !^(string_of_int pos_cnum))
+    [ ("pos_fname", pp_string pos_fname);
+      ("pos_lnum", pp_nat pos_lnum);
+      ("pos_bol", pp_nat pos_bol);
+      ("pos_cnum", pp_nat pos_cnum)
     ]
 
 
@@ -442,7 +440,7 @@ let pp_location_cursor = function
 let pp_location = function
   | Cerb_location.Loc_unknown -> pp_constructor "Loc_unknown" []
   | _ when not debug_print_locations -> pp_constructor "Loc_unknown" []
-  | Cerb_location.Loc_other s -> pp_constructor "Loc_other" [ !^(sprintf "%S" s) ]
+  | Cerb_location.Loc_other s -> pp_constructor "Loc_other" [ pp_string s]
   | Cerb_location.Loc_point pos -> pp_constructor "Loc_point" [ pp_lexing_position pos ]
   | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
     pp_constructor
@@ -480,7 +478,7 @@ let rec pp_symbol_description = function
   | CF.Symbol.SD_Return -> pp_constructor "SD_Return" []
   | CF.Symbol.SD_FunArgValue s -> pp_constructor "SD_FunArgValue" [ pp_string s ]
   | CF.Symbol.SD_FunArg (loc, n) ->
-    pp_constructor "SD_FunArg" [ pp_location loc; !^(string_of_int n) ]
+    pp_constructor "SD_FunArg" [ pp_location loc; pp_nat n ]
 
 
 and pp_symbol (CF.Symbol.Symbol (d, n, sd)) =
@@ -537,63 +535,57 @@ let rec pp_basetype pp_loc = function
 
 
 let pp_integer_base_type = function
-  | Sctypes.IntegerBaseTypes.Ichar -> !^"Ichar"
-  | Sctypes.IntegerBaseTypes.Short -> !^"Short"
-  | Sctypes.IntegerBaseTypes.Int_ -> !^"Int_"
-  | Sctypes.IntegerBaseTypes.Long -> !^"Long"
-  | Sctypes.IntegerBaseTypes.LongLong -> !^"LongLong"
-  | Sctypes.IntegerBaseTypes.IntN_t n -> !^"(IntN_t" ^^^ !^(string_of_int n) ^^ !^")"
-  | Sctypes.IntegerBaseTypes.Int_leastN_t n ->
-    !^"(Int_leastN_t" ^^^ !^(string_of_int n) ^^ !^")"
-  | Sctypes.IntegerBaseTypes.Int_fastN_t n ->
-    !^"(Int_fastN_t" ^^^ !^(string_of_int n) ^^ !^")"
-  | Sctypes.IntegerBaseTypes.Intmax_t -> !^"Intmax_t"
-  | Sctypes.IntegerBaseTypes.Intptr_t -> !^"Intptr_t"
+  | Sctypes.IntegerBaseTypes.Ichar -> pp_constructor "Ichar" []
+  | Sctypes.IntegerBaseTypes.Short -> pp_constructor "Short" []
+  | Sctypes.IntegerBaseTypes.Int_ -> pp_constructor "Int_" []
+  | Sctypes.IntegerBaseTypes.Long -> pp_constructor "Long" []
+  | Sctypes.IntegerBaseTypes.LongLong -> pp_constructor "LongLong" []
+  | Sctypes.IntegerBaseTypes.IntN_t n -> pp_constructor "IntN_t" [ pp_nat n ]
+  | Sctypes.IntegerBaseTypes.Int_leastN_t n -> pp_constructor "Int_leastN_t" [ pp_nat n ]
+  | Sctypes.IntegerBaseTypes.Int_fastN_t n -> pp_constructor "Int_fastN_t" [ pp_nat n ]
+  | Sctypes.IntegerBaseTypes.Intmax_t -> pp_constructor "Intmax_t" []
+  | Sctypes.IntegerBaseTypes.Intptr_t -> pp_constructor "Intptr_t" []
 
 
 let pp_integer_type = function
-  | Sctypes.IntegerTypes.Char -> !^"Char"
-  | Sctypes.IntegerTypes.Bool -> !^"Bool"
-  | Sctypes.IntegerTypes.Signed ibt -> !^"(Signed" ^^^ pp_integer_base_type ibt ^^ !^")"
+  | Sctypes.IntegerTypes.Char -> pp_constructor "Char" []
+  | Sctypes.IntegerTypes.Bool -> pp_constructor "Bool" []
+  | Sctypes.IntegerTypes.Signed ibt ->
+    pp_constructor "Signed" [ pp_integer_base_type ibt ]
   | Sctypes.IntegerTypes.Unsigned ibt ->
-    !^"(Unsigned" ^^^ pp_integer_base_type ibt ^^ !^")"
-  | Sctypes.IntegerTypes.Enum sym -> !^"(Enum" ^^^ pp_symbol sym ^^ !^")"
-  | Sctypes.IntegerTypes.Wchar_t -> !^"Wchar_t"
-  | Sctypes.IntegerTypes.Wint_t -> !^"Wint_t"
-  | Sctypes.IntegerTypes.Size_t -> !^"Size_t"
-  | Sctypes.IntegerTypes.Ptrdiff_t -> !^"Ptrdiff_t"
-  | Sctypes.IntegerTypes.Ptraddr_t -> !^"Ptraddr_t"
+    pp_constructor "Unsigned" [ pp_integer_base_type ibt ]
+  | Sctypes.IntegerTypes.Enum sym -> pp_constructor "Enum" [ pp_symbol sym ]
+  | Sctypes.IntegerTypes.Wchar_t -> pp_constructor "Wchar_t" []
+  | Sctypes.IntegerTypes.Wint_t -> pp_constructor "Wint_t" []
+  | Sctypes.IntegerTypes.Size_t -> pp_constructor "Size_t" []
+  | Sctypes.IntegerTypes.Ptrdiff_t -> pp_constructor "Ptrdiff_t" []
+  | Sctypes.IntegerTypes.Ptraddr_t -> pp_constructor "Ptraddr_t" []
 
 
 let rec pp_annot_t = function
-  | Annot.Astd s -> !^"(Astd" ^^^ !^(sprintf "%S" s) ^^ !^")"
-  | Annot.Aloc loc -> !^"(Aloc" ^^^ pp_location loc ^^ !^")"
-  | Annot.Auid s -> !^"(Auid" ^^^ !^(sprintf "%S" s) ^^ !^")"
-  | Annot.Amarker n -> !^"(Amarker" ^^^ !^(string_of_int n) ^^ !^")"
-  | Annot.Amarker_object_types n ->
-    !^"(Amarker_object_types" ^^^ !^(string_of_int n) ^^ !^")"
-  | Annot.Abmc bmc -> !^"(Abmc" ^^^ pp_bmc_annot bmc ^^ !^")"
-  | Annot.Aattrs attrs -> !^"(Aattrs" ^^^ pp_attributes attrs ^^ !^")"
-  | Annot.Atypedef sym -> !^"(Atypedef" ^^^ pp_symbol sym ^^ !^")"
-  | Annot.Anot_explode -> !^"Anot_explode"
-  | Annot.Alabel la -> !^"(Alabel" ^^^ pp_label_annot la ^^ !^")"
-  | Annot.Acerb ca -> !^"(Acerb" ^^^ pp_cerb_attribute ca ^^ !^")"
-  | Annot.Avalue va -> !^"(Avalue" ^^^ pp_value_annot va ^^ !^")"
+  | Annot.Astd s -> pp_constructor "Astd" [ pp_string s]
+  | Annot.Aloc loc -> pp_constructor "Aloc" [ pp_location loc ]
+  | Annot.Auid s -> pp_constructor "Auid" [ pp_string s ]
+  | Annot.Amarker n -> pp_constructor "Amarker" [ pp_nat n ]
+  | Annot.Amarker_object_types n -> pp_constructor "Amarker_object_types" [ pp_nat n ]
+  | Annot.Abmc bmc -> pp_constructor "Abmc" [ pp_bmc_annot bmc ]
+  | Annot.Aattrs attrs -> pp_constructor "Aattrs" [ pp_attributes attrs ]
+  | Annot.Atypedef sym -> pp_constructor "Atypedef" [ pp_symbol sym ]
+  | Annot.Anot_explode -> pp_constructor "Anot_explode" []
+  | Annot.Alabel la -> pp_constructor "Alabel" [ pp_label_annot la ]
+  | Annot.Acerb ca -> pp_constructor "Acerb" [ pp_cerb_attribute ca ]
+  | Annot.Avalue va -> pp_constructor "Avalue" [ pp_value_annot va ]
   | Annot.Ainlined_label (loc, sym, la) ->
-    !^"(Ainlined_label"
-    ^^^ pp_location loc
-    ^^^ pp_symbol sym
-    ^^^ pp_label_annot la
-    ^^ !^")"
-  | Annot.Astmt -> !^"Astmt"
-  | Annot.Aexpr -> !^"Aexpr"
+    pp_constructor "Ainlined_label" [ pp_location loc; pp_symbol sym; pp_label_annot la ]
+  | Annot.Astmt -> pp_constructor "Astmt" []
+  | Annot.Aexpr -> pp_constructor "Aexpr" []
 
 
-and pp_bmc_annot = function
-  | Annot.Abmc_id n -> !^"(Abmc_id" ^^^ !^(string_of_int n) ^^ !^")"
+and pp_bmc_annot = function Annot.Abmc_id n -> pp_constructor "Abmc_id" [ pp_nat n ]
 
+and pp_attributes (Annot.Attrs attrs) =
+  pp_constructor "Attrs" [ pp_list pp_attribute attrs ]
 
-and pp_attributes (Annot.Attrs attrs) = !^"(Attrs" ^^^ pp_list pp_attribute attrs ^^ !^")"
 
 and pp_attribute attr =
   pp_record
@@ -604,22 +596,13 @@ and pp_attribute attr =
 
 
 and pp_attr_arg (loc, s, args) =
-  !^"("
-  ^^^ pp_location loc
-  ^^ !^","
-  ^^^ !^(sprintf "%S" s)
-  ^^ !^","
-  ^^^ pp_list
-        (fun (loc, s) ->
-          !^"(" ^^ pp_location loc ^^ !^"," ^^^ !^(sprintf "%S" s) ^^ !^")")
-        args
-  ^^ !^")"
+  pp_tuple [ pp_location loc; pp_string s; pp_list (pp_pair pp_location pp_string) args ]
 
 
 and pp_label_annot = function
-  | Annot.LAloop n -> !^"(LAloop" ^^^ !^(string_of_int n) ^^ !^")"
-  | Annot.LAloop_continue n -> !^"(LAloop_continue" ^^^ !^(string_of_int n) ^^ !^")"
-  | Annot.LAloop_break n -> !^"(LAloop_break" ^^^ !^(string_of_int n) ^^ !^")"
+  | Annot.LAloop n -> !^"(LAloop" ^^^ pp_nat n ^^ !^")"
+  | Annot.LAloop_continue n -> !^"(LAloop_continue" ^^^ pp_nat n ^^ !^")"
+  | Annot.LAloop_break n -> !^"(LAloop_break" ^^^ pp_nat n ^^ !^")"
   | Annot.LAreturn -> !^"LAreturn"
   | Annot.LAswitch -> !^"LAswitch"
   | Annot.LAcase -> !^"LAcase"
@@ -716,7 +699,7 @@ let rec pp_sctype = function
     !^"(SCtypes.Array"
     ^^^ pp_sctype ct
     ^^^ !^"(Some"
-    ^^^ !^(string_of_int n)
+    ^^^ pp_nat n
     ^^ !^"))"
     ^^ !^")"
   | Sctypes.Pointer ct -> !^"(SCtypes.Pointer" ^^^ pp_sctype ct ^^ !^")"
@@ -1310,7 +1293,7 @@ and pp_index_term_content = function
     ^^^ pp_index_term t
     ^^ !^")"
   | Tuple ts -> !^"(Tuple" ^^^ pp_list pp_index_term ts ^^ !^")"
-  | NthTuple (n, t) -> !^"(NthTuple" ^^^ !^(string_of_int n) ^^^ pp_index_term t ^^ !^")"
+  | NthTuple (n, t) -> !^"(NthTuple" ^^^ pp_nat n ^^^ pp_index_term t ^^ !^")"
   | Struct (tag, members) ->
     !^"(Struct"
     ^^^ pp_symbol tag
