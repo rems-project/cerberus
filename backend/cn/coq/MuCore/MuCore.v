@@ -302,9 +302,9 @@ Inductive globs (TY : Type) : Type :=
 
 (* Arguments list with logical constraints *)
 Inductive arguments (i : Type) : Type :=
-  | Define : (Sym.t * IndexTerms.t) * Location_t * arguments i -> arguments i
-  | Resource : (Sym.t * (Request.t * BaseTypes.t)) * Location_t * arguments i -> arguments i
-  | Constraint : LogicalConstraints.t * Location_t * arguments i -> arguments i
+  | Define : (Sym.t * IndexTerms.t) * Locations.info * arguments i -> arguments i
+  | Resource : (Sym.t * (Request.t * BaseTypes.t)) *Locations.info * arguments i -> arguments i
+  | Constraint : LogicalConstraints.t * Locations.info * arguments i -> arguments i
   | I : i -> arguments i.
 
 (* Label specification *)

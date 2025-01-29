@@ -16,8 +16,6 @@ let pp_Z z =
   if Z.lt z Z.zero then !^("(" ^ Z.to_string z ^ ")%Z") else !^(Z.to_string z ^ "%Z")
 
 
-let pp_pair p1 p2 (a, b) = P.parens (p1 a ^^ !^"," ^^ p2 b)
-
 let pp_string s = !^("\"" ^ String.escaped s ^ "\"")
 
 let pp_list pp_elem xs =
@@ -32,6 +30,10 @@ let pp_list pp_elem xs =
         xs
   ^^^ !^"]"
 
+
+let pp_tuple l = P.parens (P.separate !^"," l)
+
+let pp_pair p1 p2 (a, b) = pp_tuple [ p1 a; p2 b ]
 
 let pp_option pp_elem = function
   | None -> !^"None"
@@ -625,7 +627,12 @@ let rec pp_ctype (Ctype.Ctype (annots, ct)) =
        | Ctype.Basic bt -> !^"(Ctype.Basic" ^^^ pp_basic_type bt ^^ !^")"
        | Ctype.Array (ct, None) -> !^"(Ctype.Array" ^^^ pp_ctype ct ^^^ !^"None" ^^ !^")"
        | Ctype.Array (ct, Some n) ->
-         !^"(Ctype.Array" ^^^ pp_ctype ct ^^^ !^"(Some" ^^^ !^(Z.to_string n) ^^ !^"))" ^^ !^")"
+         !^"(Ctype.Array"
+         ^^^ pp_ctype ct
+         ^^^ !^"(Some"
+         ^^^ !^(Z.to_string n)
+         ^^ !^"))"
+         ^^ !^")"
        | Ctype.Function ((quals, ret), args, variadic) ->
          !^"(Ctype.Function"
          ^^^ !^"("
@@ -883,13 +890,9 @@ let rec pp_mem_constraint = function
 and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
   !^"(Pexpr"
   ^^^ !^"_"
-  ^^^ !^"("
   ^^^ pp_location loc
-  ^^^ !^","
   ^^^ pp_list pp_annot_t annots
-  ^^^ !^","
   ^^^ pp_type ty
-  ^^^ !^","
   ^^^ (match pe with
        | PEsym s -> !^"(PEsym" ^^^ !^"_" ^^^ pp_symbol s ^^ !^")"
        | PEval v -> !^"(PEval" ^^^ !^"_" ^^^ pp_value pp_type v ^^ !^")"
@@ -1021,7 +1024,7 @@ and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
          ^^^ pp_pexpr pp_type t
          ^^^ pp_pexpr pp_type e
          ^^ !^")")
-  ^^ !^"))"
+  ^^ !^")"
 
 
 and pp_bound_kind = function
@@ -1170,13 +1173,14 @@ and pp_bool b = if b then !^"true" else !^"false"
 and pp_value pp_type (V (ty, v)) =
   !^"(V"
   ^^^ !^"_"
+  ^^^ pp_type ty
   ^^^ (match v with
        | Vobject ov -> !^"(Vobject" ^^^ !^"_" ^^^ pp_object_value pp_type ov ^^ !^")"
        | Vctype t -> !^"(Vctype" ^^^ !^"_" ^^^ pp_ctype t ^^ !^")"
        | Vfunction_addr s -> !^"(Vfunction_addr" ^^^ !^"_" ^^^ pp_symbol s ^^ !^")"
-       | Vunit -> !^"(Vunit" ^^^ !^")"
-       | Vtrue -> !^"(Vtrue" ^^^ !^")"
-       | Vfalse -> !^"(Vfalse" ^^^ !^")"
+       | Vunit -> !^"(Vunit" ^^^ !^"_" ^^^ !^")"
+       | Vtrue -> !^"(Vtrue" ^^^ !^"_" ^^^ !^")"
+       | Vfalse -> !^"(Vfalse" ^^^ !^"_" ^^^ !^")"
        | Vlist (bt, vs) ->
          !^"(Vlist"
          ^^^ !^"_"
@@ -1504,61 +1508,98 @@ and pp_request_name = function
     !^"(Owned" ^^^ pp_sctype ct ^^^ pp_request_init init ^^ !^")"
 
 
-let pp_memop pp_type op =
-  match op with
-  | PtrEq (e1, e2) -> !^"(PtrEq" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
-  | PtrNe (e1, e2) -> !^"(PtrNe" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
-  | PtrLt (e1, e2) -> !^"(PtrLt" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
-  | PtrGt (e1, e2) -> !^"(PtrGt" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
-  | PtrLe (e1, e2) -> !^"(PtrLe" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
-  | PtrGe (e1, e2) -> !^"(PtrGe" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+let pp_memop pp_type = function
+  | PtrEq (e1, e2) ->
+    !^"(PtrEq"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
+  | PtrNe (e1, e2) ->
+    !^"(PtrNe"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
+  | PtrLt (e1, e2) ->
+    !^"(PtrLt"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
+  | PtrGt (e1, e2) ->
+    !^"(PtrGt"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
+  | PtrLe (e1, e2) ->
+    !^"(PtrLe"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
+  | PtrGe (e1, e2) ->
+    !^"(PtrGe"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
   | Ptrdiff (act, e1, e2) ->
-    !^"(Ptrdiff" ^^^ pp_act act ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+    !^"(Ptrdiff"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_act act; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
   | IntFromPtr (act1, act2, e) ->
-    !^"(IntFromPtr" ^^^ pp_act act1 ^^^ pp_act act2 ^^^ pp_pexpr pp_type e ^^ !^")"
+    !^"(IntFromPtr"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_act act1; pp_act act2; pp_pexpr pp_type e ]
+    ^^ !^")"
   | PtrFromInt (act1, act2, e) ->
-    !^"(PtrFromInt" ^^^ pp_act act1 ^^^ pp_act act2 ^^^ pp_pexpr pp_type e ^^ !^")"
+    !^"(PtrFromInt"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_act act1; pp_act act2; pp_pexpr pp_type e ]
+    ^^ !^")"
   | PtrValidForDeref (act, e) ->
-    !^"(PtrValidForDeref" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
+    !^"(PtrValidForDeref"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_act act; pp_pexpr pp_type e ]
+    ^^ !^")"
   | PtrWellAligned (act, e) ->
-    !^"(PtrWellAligned" ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
+    !^"(PtrWellAligned" ^^^ !^"_" ^^^ pp_tuple [ pp_act act; pp_pexpr pp_type e ] ^^ !^")"
   | PtrArrayShift (e1, act, e2) ->
     !^"(PtrArrayShift"
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e2
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_act act; pp_pexpr pp_type e2 ]
     ^^ !^")"
   | PtrMemberShift (sym, id, e) ->
     !^"(PtrMemberShift"
-    ^^^ pp_symbol sym
-    ^^^ pp_identifier id
-    ^^^ pp_pexpr pp_type e
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
     ^^ !^")"
   | Memcpy (e1, e2, e3) ->
     !^"(Memcpy"
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_pexpr pp_type e3
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_pexpr pp_type e3 ]
     ^^ !^")"
   | Memcmp (e1, e2, e3) ->
     !^"(Memcmp"
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_pexpr pp_type e3
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_pexpr pp_type e3 ]
     ^^ !^")"
   | Realloc (e1, e2, e3) ->
     !^"(Realloc"
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_pexpr pp_type e3
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_pexpr pp_type e3 ]
     ^^ !^")"
   | Va_start (e1, e2) ->
-    !^"(Va_start" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
-  | Va_copy e -> !^"(Va_copy" ^^^ pp_pexpr pp_type e ^^ !^")"
-  | Va_arg (e, act) -> !^"(Va_arg" ^^^ pp_pexpr pp_type e ^^^ pp_act act ^^ !^")"
-  | Va_end e -> !^"(Va_end" ^^^ pp_pexpr pp_type e ^^ !^")"
+    !^"(Va_start"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
+  | Va_copy e -> !^"(Va_copy" ^^^ !^"_" ^^^ pp_pexpr pp_type e ^^ !^")"
+  | Va_arg (e, act) ->
+    !^"(Va_arg" ^^^ !^"_" ^^^ pp_tuple [ pp_pexpr pp_type e; pp_act act ] ^^ !^")"
+  | Va_end e -> !^"(Va_end" ^^^ !^"_" ^^^ pp_pexpr pp_type e ^^ !^")"
   | CopyAllocId (e1, e2) ->
-    !^"(CopyAllocId" ^^^ pp_pexpr pp_type e1 ^^^ pp_pexpr pp_type e2 ^^ !^")"
+    !^"(CopyAllocId"
+    ^^^ !^"_"
+    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+    ^^ !^")"
 
 
 let pp_pack_unpack = function CF.Cn.Pack -> !^"Pack" | CF.Cn.Unpack -> !^"Unpack"
@@ -1600,7 +1641,6 @@ let rec pp_return_type = function
 and pp_logical_return_type = function
   | LogicalReturnTypes.Define ((sym, term), info, lrt) ->
     !^"(LogicalReturnTypes.Define"
-    ^^^ !^"_"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -1611,7 +1651,6 @@ and pp_logical_return_type = function
     ^^^ !^")"
   | LogicalReturnTypes.Resource ((sym, (req, bt)), info, lrt) ->
     !^"(LogicalReturnTypes.Resource"
-    ^^^ !^"_"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -1625,25 +1664,22 @@ and pp_logical_return_type = function
     ^^^ !^")"
   | LogicalReturnTypes.Constraint (lc, info, lrt) ->
     !^"(LogicalReturnTypes.Constraint"
-    ^^^ !^"_"
     ^^^ pp_logical_constraint lc
     ^^^ pp_location_info info
     ^^^ pp_logical_return_type lrt
     ^^^ !^")"
-  | LogicalReturnTypes.I -> !^"(I" ^^^ !^"_)"
+  | LogicalReturnTypes.I -> !^"LogicalReturnTypes.I"
 
 
 let rec pp_logical_args ppf = function
   | Define ((sym, term), info, rest) ->
     !^"(MuCore.Define"
     ^^^ !^"_"
-    ^^^ P.parens
-          (P.separate
-             !^","
-             [ P.parens (P.separate !^"," [ pp_symbol sym; pp_index_term term ]);
-               pp_location_info info;
-               pp_logical_args ppf rest
-             ])
+    ^^^ pp_tuple
+          [ pp_tuple [ pp_symbol sym; pp_index_term term ];
+            pp_location_info info;
+            pp_logical_args ppf rest
+          ]
     ^^ !^")"
   | Resource ((sym, (req, bt)), info, rest) ->
     !^"(MuCore.Resource"
@@ -1662,29 +1698,23 @@ let rec pp_logical_args ppf = function
     ^^^ pp_logical_args ppf rest
     ^^ !^"))"
   | Constraint (lc, info, rest) ->
-    !^"(Constraint"
+    !^"(MuCore.Constraint"
     ^^^ !^"_"
-    ^^^ P.parens
-          (P.separate
-             !^","
-             [ pp_logical_constraint lc; pp_location_info info; pp_logical_args ppf rest ])
+    ^^^ pp_tuple
+          [ pp_logical_constraint lc; pp_location_info info; pp_logical_args ppf rest ]
     ^^ !^")"
-  | I i -> !^"(I" ^^^ ppf i ^^ !^")"
+  | I i -> !^"(MuCore.I" ^^^ !^"_" ^^^ ppf i ^^ !^")"
 
 
 let rec pp_arguments ppf = function
-  | Computational ((sym, bt), loc, rest) ->
-    !^"(ArgumentTypes.Computational"
+  | Mucore.Computational ((sym, bt), loc, rest) ->
+    !^"(MuCore.Computational"
     ^^^ !^"_"
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^")"
+    ^^^ pp_tuple [ pp_symbol sym; pp_basetype pp_unit bt ]
     ^^^ pp_location_info loc
     ^^^ pp_arguments ppf rest
     ^^ !^")"
-  | L logical_args -> pp_logical_args ppf logical_args
+  | L at -> !^"(MuCore.L" ^^^ !^"_" ^^^ pp_logical_args ppf at ^^ !^")"
 
 
 let pp_cn_c_kind = function
@@ -2019,64 +2049,63 @@ let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
 
 
 and pp_expr pp_type (Expr (loc, annots, ty, e)) =
-  !^"Expr"
+  !^"(Expr"
   ^^^ !^"_"
   ^^^ pp_location loc
   ^^^ pp_list pp_annot_t annots
   ^^^ pp_type ty
-  ^^^
-  match e with
-  | Epure pe -> !^"(Epure" ^^^ !^"_" ^^^ pp_pexpr pp_type pe ^^ !^")"
-  | Ememop m -> !^"(Ememop" ^^^ !^"_" ^^^ pp_memop pp_type m ^^ !^")"
-  | Eaction pa -> !^"(Eaction" ^^^ !^"_" ^^^ pp_paction pp_type pa ^^ !^")"
-  | Eskip -> !^"(Eskip" ^^^ !^"_)"
-  | Eccall (act, f, args) ->
-    !^"(Eccall"
-    ^^^ !^"_"
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type f
-    ^^^ pp_list (pp_pexpr pp_type) args
-    ^^ !^")"
-  | Elet (pat, e1, e2) ->
-    !^"(Elet"
-    ^^^ !^"_"
-    ^^^ pp_pattern pp_type pat
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_expr pp_type e2
-    ^^ !^")"
-  | Eunseq exprs -> !^"(Eunseq" ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
-  | Ewseq (pat, e1, e2) ->
-    !^"(Ewseq"
-    ^^^ !^"_"
-    ^^^ pp_pattern pp_type pat
-    ^^^ pp_expr pp_type e1
-    ^^^ pp_expr pp_type e2
-    ^^ !^")"
-  | Esseq (pat, e1, e2) ->
-    !^"(Esseq"
-    ^^^ !^"_"
-    ^^^ P.parens
-          (P.separate
-             !^","
-             [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ])
-    ^^ !^")"
-  | Eif (c, t, e) ->
-    !^"(Eif"
-    ^^^ !^"_"
-    ^^^ pp_pexpr pp_type c
-    ^^^ pp_expr pp_type t
-    ^^^ pp_expr pp_type e
-    ^^ !^")"
-  | Ebound e -> !^"(Ebound" ^^^ !^"_" ^^^ pp_expr pp_type e ^^ !^")"
-  | End exprs -> !^"(End" ^^^ !^"_" ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
-  | Erun (sym, args) ->
-    !^"(Erun" ^^^ !^"_" ^^^ pp_symbol sym ^^^ pp_list (pp_pexpr pp_type) args ^^ !^")"
-  | CN_progs (stmts, progs) ->
-    !^"(CN_progs"
-    ^^^ !^"_"
-    ^^^ pp_list (pp_cn_statement pp_symbol pp_ctype) stmts
-    ^^^ pp_list pp_cn_prog progs
-    ^^ !^")"
+  ^^^ (match e with
+       | Epure pe -> !^"(Epure" ^^^ !^"_" ^^^ pp_pexpr pp_type pe ^^ !^")"
+       | Ememop m -> !^"(Ememop" ^^^ !^"_" ^^^ pp_memop pp_type m ^^ !^")"
+       | Eaction pa -> !^"(Eaction" ^^^ !^"_" ^^^ pp_paction pp_type pa ^^ !^")"
+       | Eskip -> !^"(Eskip" ^^^ !^"_)"
+       | Eccall (act, f, args) ->
+         !^"(Eccall"
+         ^^^ !^"_"
+         ^^^ pp_act act
+         ^^^ pp_pexpr pp_type f
+         ^^^ pp_list (pp_pexpr pp_type) args
+         ^^ !^")"
+       | Elet (pat, e1, e2) ->
+         !^"(Elet"
+         ^^^ !^"_"
+         ^^^ pp_pattern pp_type pat
+         ^^^ pp_pexpr pp_type e1
+         ^^^ pp_expr pp_type e2
+         ^^ !^")"
+       | Eunseq exprs ->
+         !^"(Eunseq" ^^^ !^"_" ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
+       | Ewseq (pat, e1, e2) ->
+         !^"(Ewseq"
+         ^^^ !^"_"
+         ^^^ pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
+         ^^ !^")"
+       | Esseq (pat, e1, e2) ->
+         !^"(Esseq"
+         ^^^ !^"_"
+         ^^^ pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
+         ^^ !^")"
+       | Eif (c, t, e) ->
+         !^"(Eif"
+         ^^^ !^"_"
+         ^^^ pp_pexpr pp_type c
+         ^^^ pp_expr pp_type t
+         ^^^ pp_expr pp_type e
+         ^^ !^")"
+       | Ebound e -> !^"(Ebound" ^^^ !^"_" ^^^ pp_expr pp_type e ^^ !^")"
+       | End exprs -> !^"(End" ^^^ !^"_" ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
+       | Erun (sym, args) ->
+         !^"(Erun"
+         ^^^ !^"_"
+         ^^^ pp_tuple [ pp_symbol sym; pp_list (pp_pexpr pp_type) args ]
+         ^^ !^")"
+       | CN_progs (stmts, progs) ->
+         !^"(CN_progs"
+         ^^^ !^"_"
+         ^^^ pp_list (pp_cn_statement pp_symbol pp_ctype) stmts
+         ^^^ pp_list pp_cn_prog progs
+         ^^ !^")")
+  ^^^ !^")"
 
 
 let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
@@ -2087,7 +2116,7 @@ let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
 
 
 let pp_label_def pp_type = function
-  | Return loc -> !^"(Return" ^^^ pp_location loc ^^ !^")"
+  | Return loc -> !^"(Return" ^^^ !^"_" ^^^ pp_location loc ^^ !^")"
   | Label (loc, args, annots, spec, `Loop loop_locs) ->
     !^"(Label"
     ^^^ pp_location loc
@@ -2130,13 +2159,7 @@ let rec pp_logical_argument_types pp_type = function
   | LogicalArgumentTypes.I i -> !^"(I" ^^^ pp_type i ^^ !^")"
   | Resource ((sym, (req, bt)), info, at) ->
     !^"(LogicalArgumentTypes.Resource"
-    ^^^ !^"_"
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_request req
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^")"
+    ^^^ pp_tuple [ pp_symbol sym; pp_tuple [ pp_request req; pp_basetype pp_unit bt ] ]
     ^^^ pp_location_info info
     ^^^ pp_logical_argument_types pp_type at
     ^^ !^")"
@@ -2157,6 +2180,7 @@ let rec pp_logical_argument_types pp_type = function
 let rec pp_argument_types pp_type = function
   | ArgumentTypes.Computational ((sym, bt), info, at) ->
     !^"(ArgumentTypes.Computational"
+    ^^^ !^"_"
     ^^^ !^"("
     ^^^ pp_symbol sym
     ^^ !^","
@@ -2165,7 +2189,7 @@ let rec pp_argument_types pp_type = function
     ^^^ pp_location_info info
     ^^^ pp_argument_types pp_type at
     ^^^ !^")"
-  | L at -> !^"(L" ^^^ pp_logical_argument_types pp_type at ^^ !^")"
+  | L at -> !^"(ArgumentTypes.L" ^^^ !^"_" ^^^ pp_logical_argument_types pp_type at ^^ !^")"
 
 
 let coq_prologue =
