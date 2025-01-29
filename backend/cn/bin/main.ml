@@ -477,6 +477,7 @@ let run_tests
   sized_null
   coverage
   disable_passes
+  trap
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -521,7 +522,8 @@ let run_tests
           allowed_size_split_backtracks;
           sized_null;
           coverage;
-          disable_passes
+          disable_passes;
+          trap
         }
       in
       TestGeneration.set_config config;
@@ -1096,6 +1098,11 @@ module Testing_flags = struct
                 ]))
           []
       & info [ "disable" ] ~doc)
+
+
+  let trap =
+    let doc = "Raise SIGTRAP on test failure" in
+    Arg.(value & flag & info [ "trap" ] ~doc)
 end
 
 let testing_cmd =
@@ -1139,6 +1146,7 @@ let testing_cmd =
     $ Testing_flags.sized_null
     $ Testing_flags.coverage
     $ Testing_flags.disable_passes
+    $ Testing_flags.trap
   in
   let doc =
     "Generates tests for all functions in [FILE] with CN specifications.\n\

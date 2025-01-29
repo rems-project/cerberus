@@ -183,7 +183,12 @@ let run () =
               string_of_int allowed_size_split_backtracks
             ])
           |> Option.to_list
-          |> List.flatten))
+          |> List.flatten)
+       @
+       if Config.is_trap () then
+         [ "--trap" ]
+       else
+         [])
   in
   string "# Run"
   ^^ hardline

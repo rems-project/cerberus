@@ -12,12 +12,14 @@ enum cn_test_gen_progress {
     CN_TEST_GEN_PROGRESS_ALL = 2
 };
 
-typedef enum cn_test_result cn_test_case_fn(enum cn_test_gen_progress);
+typedef enum cn_test_result cn_test_case_fn(enum cn_test_gen_progress, int);
 
 void cn_register_test_case(const char* suite, const char* name, cn_test_case_fn* func);
 
 void print_test_info(const char* suite, const char* name, int tests, int discards);
 
+/** This function is called right before rerunning a failing test case. */
+void cn_trap(void);
 
 #define CN_UNIT_TEST_CASE_NAME(FuncName) cn_test_const_##FuncName
 
@@ -53,7 +55,10 @@ void print_test_info(const char* suite, const char* name, int tests, int discard
         longjmp(buf_##Name, mode);                                                      \
     }                                                                                   \
                                                                                         \
-    enum cn_test_result cn_test_gen_##Name (enum cn_test_gen_progress progress_level) { \
+    enum cn_test_result cn_test_gen_##Name (                                            \
+        enum cn_test_gen_progress progress_level,                                       \
+        int trap                                                                        \
+    ) {                                                                                 \
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
         int i = 0, d = 0;                                                               \
         set_cn_failure_cb(&cn_test_gen_##Name##_fail);                                  \
@@ -94,6 +99,9 @@ void print_test_info(const char* suite, const char* name, int tests, int discard
             }                                                                           \
             assume_##Name(__VA_ARGS__);                                                 \
             Init(res);                                                                  \
+            if (trap) {                                                                 \
+                cn_trap();                                                              \
+            }                                                                           \
             Name(__VA_ARGS__);                                                          \
             cn_gen_rand_replace(checkpoint);                                            \
         }                                                                               \
