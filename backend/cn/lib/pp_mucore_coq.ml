@@ -361,7 +361,7 @@ let pp_pointer_value v = Impl_mem.pp_pointer_value_for_coq v
 
 let pp_unit (_ : unit) = !^"tt"
 
-let pp_unit_type _ = !^"unit"
+let pp_unit_type = !^"unit"
 
 let pp_memory_order = function
   | Cerb_frontend.Cmm_csem.NA -> !^"NA"
@@ -2248,17 +2248,17 @@ let pp_file pp_type pp_type_name file =
          | ProcDecl (loc, ft) ->
            coq_def
              (Pp_symbol.to_string_pretty_cn sym)
-             !^"(TY:Type)"
+             P.empty
              (!^"ProcDecl"
-              ^^^ !^"TY"
+              ^^^ pp_type_name
               ^^^ pp_location loc
               ^^^ pp_option (pp_argument_types pp_return_type) ft)
          | Proc { loc; args_and_body; trusted; desugared_spec } ->
            coq_def
              (Pp_symbol.to_string_pretty_cn sym)
-             !^"(TY:Type)"
+             P.empty
              (!^"Proc"
-              ^^^ !^"TY"
+              ^^^ pp_type_name
               ^^^ pp_location loc
               ^^^ pp_args_and_body pp_type args_and_body
               ^^^ pp_trusted trusted
