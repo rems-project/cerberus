@@ -79,7 +79,7 @@ let pp_constructor name args =
   if List.length args = 0 then
     !^name
   else
-    !^"(" ^^ !^name ^^^ !^"_" ^^^ P.separate_map !^" " (fun x -> x) args ^^ !^")"
+    !^"(" ^^ !^name ^^^ P.separate_map !^" " (fun x -> x) args ^^ !^")"
 
 
 let pp_undefined_behaviour = function
@@ -382,16 +382,16 @@ let pp_undefined_behaviour = function
 
 
 let pp_linux_memory_order = function
-  | CF.Linux.Once -> !^"Once"
-  | LAcquire -> !^"LAcquire"
-  | LRelease -> !^"LRelease"
-  | Rmb -> !^"Rmb"
-  | Wmb -> !^"Wmb"
-  | Mb -> !^"Mb"
-  | RbDep -> !^"RbDep"
-  | RcuLock -> !^"RcuLock"
-  | RcuUnlock -> !^"RcuUnlock"
-  | SyncRcu -> !^"SyncRcu"
+  | CF.Linux.Once -> pp_constructor "Once" []
+  | LAcquire -> pp_constructor "LAcquire" []
+  | LRelease -> pp_constructor "LRelease" []
+  | Rmb -> pp_constructor "Rmb" []
+  | Wmb -> pp_constructor "Wmb" []
+  | Mb -> pp_constructor "Mb" []
+  | RbDep -> pp_constructor "RbDep" []
+  | RcuLock -> pp_constructor "RcuLock" []
+  | RcuUnlock -> pp_constructor "RcuUnlock" []
+  | SyncRcu -> pp_constructor "SyncRcu" []
 
 
 let pp_integer_value v = Impl_mem.pp_integer_value_for_coq v
@@ -405,13 +405,13 @@ let pp_unit (_ : unit) = !^"tt"
 let pp_unit_type = !^"unit"
 
 let pp_memory_order = function
-  | Cerb_frontend.Cmm_csem.NA -> !^"NA"
-  | Seq_cst -> !^"Seq_cst"
-  | Relaxed -> !^"Relaxed"
-  | Release -> !^"Release"
-  | Acquire -> !^"Acquire"
-  | Consume -> !^"Consume"
-  | Acq_rel -> !^"Acq_rel"
+  | Cerb_frontend.Cmm_csem.NA -> pp_constructor "NA" []
+  | Seq_cst -> pp_constructor "Seq_cst" []
+  | Relaxed -> pp_constructor "Relaxed" []
+  | Release -> pp_constructor "Release" []
+  | Acquire -> pp_constructor "Acquire" []
+  | Consume -> pp_constructor "Consume" []
+  | Acq_rel -> pp_constructor "Acq_rel" []
 
 
 let pp_polarity = function Core.Pos -> !^"Pos" | Core.Neg -> !^"Neg"
@@ -426,26 +426,27 @@ let pp_lexing_position { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
 
 
 let pp_location_cursor = function
-  | Cerb_location.NoCursor -> !^"NoCursor"
-  | Cerb_location.PointCursor pos -> !^"(PointCursor" ^^^ pp_lexing_position pos ^^ !^")"
+  | Cerb_location.NoCursor -> pp_constructor "NoCursor" []
+  | Cerb_location.PointCursor pos ->
+    pp_constructor "PointCursor" [ pp_lexing_position pos ]
   | Cerb_location.RegionCursor (start_pos, end_pos) ->
-    !^"(RegionCursor"
-    ^^^ pp_lexing_position start_pos
-    ^^^ pp_lexing_position end_pos
-    ^^ !^")"
+    pp_constructor
+      "RegionCursor"
+      [ pp_lexing_position start_pos; pp_lexing_position end_pos ]
 
 
 let pp_location = function
-  | Cerb_location.Loc_unknown -> !^"Loc_unknown"
-  | _ when not debug_print_locations -> !^"Loc_unknown"
-  | Cerb_location.Loc_other s -> !^"(Loc_other" ^^^ !^(sprintf "%S" s) ^^ !^")"
-  | Cerb_location.Loc_point pos -> !^"(Loc_point" ^^^ pp_lexing_position pos ^^ !^")"
+  | Cerb_location.Loc_unknown -> pp_constructor "Loc_unknown" []
+  | _ when not debug_print_locations -> pp_constructor "Loc_unknown" []
+  | Cerb_location.Loc_other s -> pp_constructor "Loc_other" [ !^(sprintf "%S" s) ]
+  | Cerb_location.Loc_point pos -> pp_constructor "Loc_point" [ pp_lexing_position pos ]
   | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
-    !^"(Loc_region"
-    ^^^ pp_lexing_position start_pos
-    ^^^ pp_lexing_position end_pos
-    ^^^ pp_location_cursor cursor
-    ^^ !^")"
+    pp_constructor
+      "Loc_region"
+      [ pp_lexing_position start_pos;
+        pp_lexing_position end_pos;
+        pp_location_cursor cursor
+      ]
   | Cerb_location.Loc_regions (pos_list, cursor) ->
     let pp_pos_pair (start_pos, end_pos) =
       !^"("
@@ -454,16 +455,15 @@ let pp_location = function
       ^^^ pp_lexing_position end_pos
       ^^ !^")"
     in
-    !^"(Loc_regions"
-    ^^^ !^"["
-    ^^ P.separate_map (!^";" ^^ P.break 1) pp_pos_pair pos_list
-    ^^ !^"]"
-    ^^^ pp_location_cursor cursor
-    ^^ !^")"
+    pp_constructor
+      "Loc_regions"
+      [ !^"[" ^^ P.separate_map (!^";" ^^ P.break 1) pp_pos_pair pos_list ^^ !^"]";
+        pp_location_cursor cursor
+      ]
 
 
 let pp_identifier (CF.Symbol.Identifier (loc, s)) =
-  !^"(Identifier" ^^^ pp_location loc ^^^ pp_string s ^^ !^")"
+  pp_constructor "Identifier" [ pp_location loc; pp_string s ]
 
 
 let pp_digest (d : Digest.t) =
@@ -476,15 +476,15 @@ let pp_digest (d : Digest.t) =
 
 
 let rec pp_symbol_description = function
-  | CF.Symbol.SD_None -> !^"SD_None"
-  | CF.Symbol.SD_unnamed_tag loc -> !^"(SD_unnamed_tag" ^^^ pp_location loc ^^ !^")"
-  | CF.Symbol.SD_Id s -> !^"(SD_Id" ^^^ pp_string s ^^ !^")"
-  | CF.Symbol.SD_CN_Id s -> !^"(SD_CN_Id" ^^^ pp_string s ^^ !^")"
-  | CF.Symbol.SD_ObjectAddress s -> !^"(SD_ObjectAddress" ^^^ pp_string s ^^ !^")"
-  | CF.Symbol.SD_Return -> !^"SD_Return"
-  | CF.Symbol.SD_FunArgValue s -> !^"(SD_FunArgValue" ^^^ pp_string s ^^ !^")"
+  | CF.Symbol.SD_None -> pp_constructor "SD_None" []
+  | CF.Symbol.SD_unnamed_tag loc -> pp_constructor "SD_unnamed_tag" [ pp_location loc ]
+  | CF.Symbol.SD_Id s -> pp_constructor "SD_Id" [ pp_string s ]
+  | CF.Symbol.SD_CN_Id s -> pp_constructor "SD_CN_Id" [ pp_string s ]
+  | CF.Symbol.SD_ObjectAddress s -> pp_constructor "SD_ObjectAddress" [ pp_string s ]
+  | CF.Symbol.SD_Return -> pp_constructor "SD_Return" []
+  | CF.Symbol.SD_FunArgValue s -> pp_constructor "SD_FunArgValue" [ pp_string s ]
   | CF.Symbol.SD_FunArg (loc, n) ->
-    !^"(SD_FunArg" ^^^ pp_location loc ^^^ !^(string_of_int n) ^^ !^")"
+    pp_constructor "SD_FunArg" [ pp_location loc; !^(string_of_int n) ]
 
 
 and pp_symbol (CF.Symbol.Symbol (d, n, sd)) =
