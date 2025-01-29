@@ -151,10 +151,6 @@ let run () =
           |> Option.map (fun level -> [ "--progress-level"; string_of_int level ])
           |> Option.to_list
           |> List.flatten)
-       @ (if Config.is_interactive () then
-            [ "--interactive" ]
-          else
-            [])
        @ (match Config.is_until_timeout () with
           | Some timeout -> [ "--until-timeout"; string_of_int timeout ]
           | None -> [])
