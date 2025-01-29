@@ -12,11 +12,15 @@ let debug_print_locations = false (* Set to true to print actual locations *)
 
 let pp_cn_type_args = !^"_" ^^^ !^"_"
 
-let pp_nat n = !^(string_of_int n)
-
 let pp_Z z =
   if Z.lt z Z.zero then !^("(" ^ Z.to_string z ^ ")%Z") else !^(Z.to_string z ^ "%Z")
 
+
+(* Prints int as a Coq `nat` *)
+let pp_nat n = !^(string_of_int n)
+
+(* Prints int as a Coq `Z` *)
+let pp_int i = pp_Z (Z.of_int i)
 
 let pp_string s = !^("\"" ^ String.escaped s ^ "\"")
 
@@ -448,18 +452,10 @@ let pp_location = function
         pp_location_cursor cursor
       ]
   | Cerb_location.Loc_regions (pos_list, cursor) ->
-    let pp_pos_pair (start_pos, end_pos) =
-      !^"("
-      ^^ pp_lexing_position start_pos
-      ^^ !^","
-      ^^^ pp_lexing_position end_pos
-      ^^ !^")"
-    in
+    let pp_pos_pair ppair = pp_pair pp_lexing_position pp_lexing_position ppair in
     pp_constructor
       "Loc_regions"
-      [ !^"[" ^^ P.separate_map (!^";" ^^ P.break 1) pp_pos_pair pos_list ^^ !^"]";
-        pp_location_cursor cursor
-      ]
+      [ pp_list pp_pos_pair pos_list; pp_location_cursor cursor ]
 
 
 let pp_identifier (CF.Symbol.Identifier (loc, s)) =
@@ -488,63 +484,56 @@ let rec pp_symbol_description = function
 
 
 and pp_symbol (CF.Symbol.Symbol (d, n, sd)) =
-  !^"(Symbol" ^^^ pp_digest d ^^^ pp_nat n ^^^ pp_symbol_description sd ^^ !^")"
+  pp_constructor "Symbol" [ pp_digest d; pp_nat n; pp_symbol_description sd ]
 
 
 and pp_symbol_prefix = function
   | CF.Symbol.PrefSource (loc, syms) ->
-    !^"(PrefSource" ^^^ pp_location loc ^^^ pp_list pp_symbol syms ^^ !^")"
+    pp_constructor "PrefSource" [ pp_location loc; pp_list pp_symbol syms ]
   | CF.Symbol.PrefFunArg (loc, d, z) ->
-    !^"(PrefFunArg"
-    ^^^ pp_location loc
-    ^^^ pp_digest d
-    ^^^ !^(Z.to_string (Z.of_int z))
-    ^^ !^")"
+    pp_constructor "PrefFunArg" [ pp_location loc; pp_digest d; pp_int z ]
   | CF.Symbol.PrefStringLiteral (loc, d) ->
-    !^"(PrefStringLiteral" ^^^ pp_location loc ^^^ pp_digest d ^^ !^")"
+    pp_constructor "PrefStringLiteral" [ pp_location loc; pp_digest d ]
   | CF.Symbol.PrefTemporaryLifetime (loc, d) ->
-    !^"(PrefTemporaryLifetime" ^^^ pp_location loc ^^^ pp_digest d ^^ !^")"
+    pp_constructor "PrefTemporaryLifetime" [ pp_location loc; pp_digest d ]
   | CF.Symbol.PrefCompoundLiteral (loc, d) ->
-    !^"(PrefCompoundLiteral" ^^^ pp_location loc ^^^ pp_digest d ^^ !^")"
-  | CF.Symbol.PrefMalloc -> !^"PrefMalloc"
-  | CF.Symbol.PrefOther s -> !^"(PrefOther" ^^^ !^s ^^ !^")"
+    pp_constructor "PrefCompoundLiteral" [ pp_location loc; pp_digest d ]
+  | CF.Symbol.PrefMalloc -> pp_constructor "PrefMalloc" []
+  | CF.Symbol.PrefOther s -> pp_constructor "PrefOther" [ !^s ]
 
 
 let pp_sign = function
-  | BaseTypes.Signed -> !^"BaseTypes.Signed"
-  | BaseTypes.Unsigned -> !^"BaseTypes.Unsigned"
+  | BaseTypes.Signed -> pp_constructor "BaseTypes.Signed" []
+  | BaseTypes.Unsigned -> pp_constructor "BaseTypes.Unsigned" []
 
 
+(* Unit type is hardcoded bacause `BaseTypes.t` is defined as `t_gen unit` *)
 let rec pp_basetype pp_loc = function
-  | BaseTypes.Unit -> !^"(BaseTypes.Unit unit)"
-  | BaseTypes.Bool -> !^"(BaseTypes.Bool unit )"
-  | BaseTypes.Integer -> !^"(BaseTypes.Integer unit)"
-  | BaseTypes.MemByte -> !^"(BaseTypes.MemByte unit)"
+  | BaseTypes.Unit -> pp_constructor "BaseTypes.Unit" [ !^"unit" ]
+  | BaseTypes.Bool -> pp_constructor "BaseTypes.Bool" [ !^"unit" ]
+  | BaseTypes.Integer -> pp_constructor "BaseTypes.Integer" [ !^"unit" ]
+  | BaseTypes.MemByte -> pp_constructor "BaseTypes.MemByte" [ !^"unit" ]
   | BaseTypes.Bits (sign, n) ->
-    !^"(BaseTypes.Bits" ^^^ !^"unit" ^^^ pp_sign sign ^^^ !^(string_of_int n) ^^ !^")"
-  | BaseTypes.Real -> !^"(BaseTypes.Real unit)"
-  | BaseTypes.Alloc_id -> !^"(BaseTypes.Alloc_id unit)"
-  | BaseTypes.CType -> !^"(BaseTypes.CType unit)"
-  | BaseTypes.Struct sym -> !^"(BaseTypes.Struct unit" ^^^ pp_symbol sym ^^ !^")"
-  | BaseTypes.Datatype sym -> !^"(BaseTypes.Datatype unit" ^^^ pp_symbol sym ^^ !^")"
+    pp_constructor "BaseTypes.Bits" [ !^"unit"; pp_sign sign; pp_nat n ]
+  | BaseTypes.Real -> pp_constructor "BaseTypes.Real" [ !^"unit" ]
+  | BaseTypes.Alloc_id -> pp_constructor "BaseTypes.Alloc_id" [ !^"unit" ]
+  | BaseTypes.CType -> pp_constructor "BaseTypes.CType" [ !^"unit" ]
+  | BaseTypes.Struct sym -> pp_constructor "BaseTypes.Struct" [ !^"unit"; pp_symbol sym ]
+  | BaseTypes.Datatype sym ->
+    pp_constructor "BaseTypes.Datatype" [ !^"unit"; pp_symbol sym ]
   | BaseTypes.Record fields ->
-    !^"(BaseTypes.Record unit"
-    ^^^ P.separate_map
-          (!^";" ^^ P.break 1)
-          (fun (id, ty) ->
-            !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_basetype pp_loc ty ^^ !^")")
-          fields
-    ^^ !^")"
+    pp_constructor
+      "BaseTypes.Record"
+      [ !^"unit"; pp_list (pp_pair pp_identifier (pp_basetype pp_loc)) fields ]
   | BaseTypes.Map (t1, t2) ->
-    !^"(BaseTypes.Map unit" ^^^ pp_basetype pp_loc t1 ^^^ pp_basetype pp_loc t2 ^^ !^")"
-  | BaseTypes.List t -> !^"(BaseTypes.List unit" ^^^ pp_basetype pp_loc t ^^ !^")"
+    pp_constructor
+      "BaseTypes.Map"
+      [ !^"unit"; pp_basetype pp_loc t1; pp_basetype pp_loc t2 ]
+  | BaseTypes.List t -> pp_constructor "BaseTypes.List" [ !^"unit"; pp_basetype pp_loc t ]
   | BaseTypes.Tuple ts ->
-    !^"(BaseTypes.Tuple unit"
-    ^^^ P.separate_map (!^";" ^^ P.break 1) (pp_basetype pp_loc) ts
-    ^^ !^")"
-  | BaseTypes.Set t -> !^"(BaseTypes.TSet unit" ^^^ pp_basetype pp_loc t ^^ !^")"
-  | BaseTypes.Loc x ->
-    !^"(BaseTypes.Loc" ^^^ !^"unit" ^^^ pp_unit x ^^ !^")" (* NOTE hardcoded unit *)
+    pp_constructor "BaseTypes.Tuple" [ !^"unit"; pp_list (pp_basetype pp_loc) ts ]
+  | BaseTypes.Set t -> pp_constructor "BaseTypes.Set" [ !^"unit"; pp_basetype pp_loc t ]
+  | BaseTypes.Loc x -> pp_constructor "BaseTypes.Loc" [ !^"unit"; pp_unit x ]
 
 
 let pp_integer_base_type = function
