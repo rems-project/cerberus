@@ -1710,9 +1710,12 @@ let rec pp_arguments ppf = function
   | Mucore.Computational ((sym, bt), loc, rest) ->
     !^"(MuCore.Computational"
     ^^^ !^"_"
-    ^^^ pp_tuple [ pp_symbol sym; pp_basetype pp_unit bt ]
-    ^^^ pp_location_info loc
-    ^^^ pp_arguments ppf rest
+    ^^^ pp_tuple
+          [ pp_symbol sym;
+            pp_basetype pp_unit bt;
+            pp_location_info loc;
+            pp_arguments ppf rest
+          ]
     ^^ !^")"
   | L at -> !^"(MuCore.L" ^^^ !^"_" ^^^ pp_logical_args ppf at ^^ !^")"
 
@@ -2189,7 +2192,8 @@ let rec pp_argument_types pp_type = function
     ^^^ pp_location_info info
     ^^^ pp_argument_types pp_type at
     ^^^ !^")"
-  | L at -> !^"(ArgumentTypes.L" ^^^ !^"_" ^^^ pp_logical_argument_types pp_type at ^^ !^")"
+  | L at ->
+    !^"(ArgumentTypes.L" ^^^ !^"_" ^^^ pp_logical_argument_types pp_type at ^^ !^")"
 
 
 let coq_prologue =

@@ -301,11 +301,15 @@ Inductive globs (TY : Type) : Type :=
   | GlobalDecl : SCtypes.t -> globs TY.
 
 (* Arguments list with logical constraints *)
+Inductive arguments_l (i : Type) : Type :=
+  | Define : (Sym.t * IndexTerms.t) * Locations.info * arguments_l i -> arguments_l i
+  | Resource : (Sym.t * (Request.t * BaseTypes.t)) *Locations.info * arguments_l i -> arguments_l i
+  | Constraint : LogicalConstraints.t * Locations.info * arguments_l i -> arguments_l i
+  | I : i -> arguments_l i.
+
 Inductive arguments (i : Type) : Type :=
-  | Define : (Sym.t * IndexTerms.t) * Locations.info * arguments i -> arguments i
-  | Resource : (Sym.t * (Request.t * BaseTypes.t)) *Locations.info * arguments i -> arguments i
-  | Constraint : LogicalConstraints.t * Locations.info * arguments i -> arguments i
-  | I : i -> arguments i.
+  | Computational : (Sym.t * BaseTypes.t) * Locations.info * arguments i -> arguments i
+  | L : arguments_l i -> arguments i.
 
 (* Label specification *)
 Record parse_ast_label_spec := mk_parse_ast_label_spec {
