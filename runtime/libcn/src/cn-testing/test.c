@@ -52,6 +52,17 @@ void print_test_info(const char* suite, const char* name, int tests, int discard
     fflush(stdout);
 }
 
+#if defined(__has_builtin) && __has_builtin(__builtin_debugtrap)
+#define _cn_trap() __builtin_debugtrap()
+#elif defined(_MSC_VER) || (defined(__has_builtin) && __has_builtin(__debugbreak))
+#define _cn_trap() __debugbreak()
+#else
+#include <signal.h>
+#define _cn_trap() raise(SIGTRAP)
+#endif
+
+void cn_trap(void) { _cn_trap(); }
+
 int cn_test_main(int argc, char* argv[]) {
     int begin_time = cn_gen_get_milliseconds();
     set_cn_logging_level(CN_LOGGING_NONE);
@@ -63,6 +74,7 @@ int cn_test_main(int argc, char* argv[]) {
     int timeout = 0;
     int input_timeout = 5000;
     int exit_fast = 0;
+    int trap = 0;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
 
@@ -114,6 +126,9 @@ int cn_test_main(int argc, char* argv[]) {
             cn_gen_set_size_split_backtracks_allowed(strtoul(argv[i + 1], NULL, 10));
             i++;
         }
+        else if (strcmp("--trap", arg) == 0) {
+            trap = 1;
+        }
     }
 
     if (timeout != 0) {
@@ -142,7 +157,7 @@ int cn_test_main(int argc, char* argv[]) {
             }
             checkpoints[i] = cn_gen_rand_save();
             cn_gen_set_input_timeout(input_timeout);
-            enum cn_test_result result = test_case->func(progress_level);
+            enum cn_test_result result = test_case->func(progress_level, 0);
             if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {
                 results[i] = result;
             }
@@ -160,7 +175,7 @@ int cn_test_main(int argc, char* argv[]) {
                 set_cn_logging_level(logging_level);
                 cn_gen_rand_restore(checkpoints[i]);
                 cn_gen_set_input_timeout(0);
-                test_case->func(CN_TEST_GEN_PROGRESS_NONE);
+                test_case->func(CN_TEST_GEN_PROGRESS_NONE, trap);
                 set_cn_logging_level(CN_LOGGING_NONE);
                 printf("\n\n");
                 break;

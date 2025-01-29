@@ -21,7 +21,8 @@ type t =
     allowed_size_split_backtracks : int option;
     sized_null : bool;
     coverage : bool;
-    disable_passes : string list
+    disable_passes : string list;
+    trap : bool
   }
 
 val default : t
@@ -69,3 +70,5 @@ val is_sized_null : unit -> bool
 val is_coverage : unit -> bool
 
 val has_pass : string -> bool
+
+val is_trap : unit -> bool
