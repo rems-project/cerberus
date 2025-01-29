@@ -467,7 +467,6 @@ let run_tests
   seed
   logging_level
   progress_level
-  interactive
   until_timeout
   exit_fast
   max_stack_depth
@@ -513,7 +512,6 @@ let run_tests
           seed;
           logging_level;
           progress_level;
-          interactive;
           until_timeout;
           exit_fast;
           max_stack_depth;
@@ -1016,13 +1014,6 @@ module Testing_flags = struct
       & info [ "progress-level" ] ~doc)
 
 
-  let interactive =
-    let doc =
-      "Enable interactive features for testing, such as requesting more detailed logs"
-    in
-    Arg.(value & flag & info [ "interactive" ] ~doc)
-
-
   let until_timeout =
     let doc =
       "Keep rerunning tests until the given timeout (in seconds) has been reached"
@@ -1138,7 +1129,6 @@ let testing_cmd =
     $ Testing_flags.seed
     $ Testing_flags.logging_level
     $ Testing_flags.progress_level
-    $ Testing_flags.interactive
     $ Testing_flags.until_timeout
     $ Testing_flags.exit_fast
     $ Testing_flags.max_stack_depth

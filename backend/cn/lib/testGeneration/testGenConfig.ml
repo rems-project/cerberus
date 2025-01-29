@@ -12,7 +12,6 @@ type t =
     seed : string option;
     logging_level : int option;
     progress_level : int option;
-    interactive : bool;
     until_timeout : int option;
     exit_fast : bool;
     max_stack_depth : int option;
@@ -37,7 +36,6 @@ let default =
     seed = None;
     logging_level = None;
     progress_level = None;
-    interactive = false;
     until_timeout = None;
     exit_fast = false;
     max_stack_depth = None;
@@ -76,8 +74,6 @@ let has_seed () = !instance.seed
 let has_logging_level () = !instance.logging_level
 
 let has_progress_level () = !instance.progress_level
-
-let is_interactive () = !instance.interactive
 
 let is_until_timeout () = !instance.until_timeout
 

@@ -12,7 +12,6 @@ type t =
     seed : string option;
     logging_level : int option;
     progress_level : int option;
-    interactive : bool;
     until_timeout : int option;
     exit_fast : bool;
     max_stack_depth : int option;
@@ -50,8 +49,6 @@ val has_seed : unit -> string option
 val has_logging_level : unit -> int option
 
 val has_progress_level : unit -> int option
-
-val is_interactive : unit -> bool
 
 val is_until_timeout : unit -> int option
 
