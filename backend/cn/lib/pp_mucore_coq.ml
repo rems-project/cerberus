@@ -17,6 +17,7 @@ let pp_nat n = !^(string_of_int n)
 let pp_Z z =
   if Z.lt z Z.zero then !^("(" ^ Z.to_string z ^ ")%Z") else !^(Z.to_string z ^ "%Z")
 
+
 let pp_string s = !^("\"" ^ String.escaped s ^ "\"")
 
 let pp_list pp_elem xs =
@@ -64,6 +65,14 @@ let coq_def name args body =
 
 let coq_notation name args body =
   !^"Notation" ^^^ !^("\"" ^ name ^ "\"") ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
+
+
+let pp_record fields =
+  !^"{|"
+  ^^^ P.separate
+        (!^";" ^^ P.break 1)
+        (List.map (fun (name, value) -> !^(name ^ " :=") ^^^ value) fields)
+  ^^^ !^"|}"
 
 
 let pp_undefined_behaviour = function
@@ -377,19 +386,12 @@ let pp_memory_order = function
 let pp_polarity = function Core.Pos -> !^"Pos" | Core.Neg -> !^"Neg"
 
 let pp_lexing_position { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
-  !^"{"
-  ^^ !^"pos_fname :="
-  ^^ !^(sprintf "%S" pos_fname)
-  ^^ !^";"
-  ^^ !^"pos_lnum :="
-  ^^ !^(string_of_int pos_lnum)
-  ^^ !^";"
-  ^^ !^"pos_bol :="
-  ^^ !^(string_of_int pos_bol)
-  ^^ !^";"
-  ^^ !^"pos_cnum :="
-  ^^ !^(string_of_int pos_cnum)
-  ^^ !^"}"
+  pp_record
+    [ ("pos_fname", !^(sprintf "%S" pos_fname));
+      ("pos_lnum", !^(string_of_int pos_lnum));
+      ("pos_bol", !^(string_of_int pos_bol));
+      ("pos_cnum", !^(string_of_int pos_cnum))
+    ]
 
 
 let pp_location_cursor = function
@@ -574,16 +576,11 @@ and pp_bmc_annot = function
 and pp_attributes (Annot.Attrs attrs) = !^"(Attrs" ^^^ pp_list pp_attribute attrs ^^ !^")"
 
 and pp_attribute attr =
-  !^"{|"
-  ^^^ !^"attr_ns :="
-  ^^^ pp_option pp_identifier attr.Annot.attr_ns
-  ^^ !^";"
-  ^^^ !^"attr_id :="
-  ^^^ pp_identifier attr.attr_id
-  ^^ !^";"
-  ^^^ !^"attr_args :="
-  ^^^ pp_list pp_attr_arg attr.attr_args
-  ^^^ !^"|}"
+  pp_record
+    [ ("attr_ns", pp_option pp_identifier attr.Annot.attr_ns);
+      ("attr_id", pp_identifier attr.attr_id);
+      ("attr_args", pp_list pp_attr_arg attr.attr_args)
+    ]
 
 
 and pp_attr_arg (loc, s, args) =
@@ -618,6 +615,14 @@ and pp_cerb_attribute = function
 
 and pp_value_annot = function
   | Annot.Ainteger it -> !^"(Ainteger" ^^^ pp_integer_type it ^^ !^")"
+
+
+let pp_qualifiers quals =
+  pp_record
+    [ ("Ctype.const", !^(string_of_bool quals.Ctype.const));
+      ("Ctype.restrict", !^(string_of_bool quals.Ctype.restrict));
+      ("Ctype.volatile", !^(string_of_bool quals.Ctype.volatile))
+    ]
 
 
 let rec pp_ctype (Ctype.Ctype (annots, ct)) =
@@ -683,19 +688,6 @@ and pp_real_floating_type = function
   | Ctype.LongDouble -> !^"LongDouble"
 
 
-and pp_qualifiers quals =
-  !^"{|"
-  ^^^ !^"Ctype.const :="
-  ^^^ !^(string_of_bool quals.Ctype.const)
-  ^^ !^";"
-  ^^^ !^"Ctype.restrict :="
-  ^^^ !^(string_of_bool quals.Ctype.restrict)
-  ^^ !^";"
-  ^^^ !^"Ctype.volatile :="
-  ^^^ !^(string_of_bool quals.Ctype.volatile)
-  ^^^ !^"|}"
-
-
 let rec pp_sctype = function
   | Sctypes.Void -> !^"SCtypes.Void"
   | Sctypes.Integer it -> !^"(SCtypes.Integer" ^^^ pp_integer_type it ^^ !^")"
@@ -722,19 +714,6 @@ let rec pp_sctype = function
           args
     ^^^ !^(string_of_bool variadic)
     ^^ !^")"
-
-
-and pp_qualifiers quals =
-  !^"{|"
-  ^^^ !^"const :="
-  ^^^ !^(string_of_bool quals.Ctype.const)
-  ^^ !^";"
-  ^^^ !^"restrict :="
-  ^^^ !^(string_of_bool quals.Ctype.restrict)
-  ^^ !^";"
-  ^^^ !^"volatile :="
-  ^^^ !^(string_of_bool quals.Ctype.volatile)
-  ^^^ !^"|}"
 
 
 let rec pp_core_base_type = function
@@ -1034,23 +1013,13 @@ and pp_bound_kind = function
 
 
 and pp_action pp_type (Action (loc, act)) =
-  !^"{|"
-  ^^^ !^"action_loc :="
-  ^^^ pp_location loc
-  ^^ !^";"
-  ^^^ !^"action_content :="
-  ^^^ pp_action_content pp_type act
-  ^^^ !^"|}"
+  pp_record
+    [ ("action_loc", pp_location loc); ("action_content", pp_action_content pp_type act) ]
 
 
 and pp_paction pp_type (Paction (pol, act)) =
-  !^"{|"
-  ^^^ !^"paction_polarity :="
-  ^^^ pp_polarity pol
-  ^^ !^";"
-  ^^^ !^"paction_action :="
-  ^^^ pp_action pp_type act
-  ^^^ !^"|}"
+  pp_record
+    [ ("paction_polarity", pp_polarity pol); ("paction_action", pp_action pp_type act) ]
 
 
 and pp_action_content pp_type act =
@@ -1152,16 +1121,11 @@ and pp_action_content pp_type act =
 
 
 and pp_act { loc; annot; ct } =
-  !^"{|"
-  ^^^ !^"MuCore.loc :="
-  ^^^ pp_location loc
-  ^^ !^";"
-  ^^^ !^"MuCore.annot :="
-  ^^^ pp_list pp_annot_t annot
-  ^^ !^";"
-  ^^^ !^"MuCore.ct :="
-  ^^^ pp_sctype ct
-  ^^^ !^"|}"
+  pp_record
+    [ ("MuCore.loc", pp_location loc);
+      ("MuCore.annot", pp_list pp_annot_t annot);
+      ("MuCore.ct", pp_sctype ct)
+    ]
 
 
 and pp_kill_kind = function
@@ -1462,45 +1426,24 @@ let rec pp_request = function
 
 
 and pp_request_qpredicate qpred =
-  !^"{|"
-  ^^^ !^"QPredicate.name :="
-  ^^^ pp_request_name qpred.Request.QPredicate.name
-  ^^ !^";"
-  ^^^ !^"QPredicate.pointer :="
-  ^^^ pp_index_term qpred.pointer
-  ^^ !^";"
-  ^^^ !^"QPredicate. q :="
-  ^^^ !^"("
-  ^^ pp_symbol (fst qpred.q)
-  ^^ !^","
-  ^^^ pp_basetype pp_unit (snd qpred.q)
-  ^^ !^")"
-  ^^ !^";"
-  ^^^ !^"QPredicate.q_loc :="
-  ^^^ pp_location qpred.q_loc
-  ^^ !^";"
-  ^^^ !^"QPredicate.step :="
-  ^^^ pp_index_term qpred.step
-  ^^ !^";"
-  ^^^ !^"QPredicate.permission :="
-  ^^^ pp_index_term qpred.permission
-  ^^ !^";"
-  ^^^ !^"QPredicate.iargs :="
-  ^^^ pp_list pp_index_term qpred.iargs
-  ^^^ !^"|}"
+  pp_record
+    [ ("QPredicate.name", pp_request_name qpred.Request.QPredicate.name);
+      ("QPredicate.pointer", pp_index_term qpred.pointer);
+      ( "QPredicate.q",
+        pp_tuple [ pp_symbol (fst qpred.q); pp_basetype pp_unit (snd qpred.q) ] );
+      ("QPredicate.q_loc", pp_location qpred.q_loc);
+      ("QPredicate.step", pp_index_term qpred.step);
+      ("QPredicate.permission", pp_index_term qpred.permission);
+      ("QPredicate.iargs", pp_list pp_index_term qpred.iargs)
+    ]
 
 
 and pp_request_ppredicate (pred : Request.Predicate.t) =
-  !^"{|"
-  ^^^ !^"Predicate.name :="
-  ^^^ pp_request_name pred.Request.Predicate.name
-  ^^ !^";"
-  ^^^ !^"Predicate.pointer :="
-  ^^^ pp_index_term pred.pointer
-  ^^ !^";"
-  ^^^ !^"Predicate.iargs :="
-  ^^^ pp_list pp_index_term pred.iargs
-  ^^^ !^"|}"
+  pp_record
+    [ ("Predicate.name", pp_request_name pred.Request.Predicate.name);
+      ("Predicate.pointer", pp_index_term pred.pointer);
+      ("Predicate.iargs", pp_list pp_index_term pred.iargs)
+    ]
 
 
 and pp_request_name = function
@@ -1735,7 +1678,8 @@ let rec pp_cn_basetype ppfa = function
   | CF.Cn.CN_unit -> !^"(CN_unit" ^^^ !^"_" ^^^ !^")"
   | CN_bool -> !^"(CN_bool" ^^^ !^"_" ^^^ !^")"
   | CN_integer -> !^"(CN_integer" ^^^ !^"_" ^^^ !^")"
-  | CN_bits (sign, sz) -> !^"(CN_bits" ^^^ !^"_" ^^^ pp_pair pp_cn_sign pp_nat (sign, sz) ^^ !^")"
+  | CN_bits (sign, sz) ->
+    !^"(CN_bits" ^^^ !^"_" ^^^ pp_pair pp_cn_sign pp_nat (sign, sz) ^^ !^")"
   | CN_real -> !^"(CN_real" ^^^ !^"_" ^^^ !^")"
   | CN_loc -> !^"(CN_loc" ^^^ !^"_" ^^^ !^")"
   | CN_alloc_id -> !^"(CN_alloc_id" ^^^ !^"_" ^^^ !^")"
@@ -1747,7 +1691,10 @@ let rec pp_cn_basetype ppfa = function
     ^^ !^")"
   | CN_datatype a -> !^"(CN_datatype" ^^^ !^"_" ^^^ ppfa a ^^ !^")"
   | CN_map (k, v) ->
-    !^"(CN_map" ^^^ !^"_" ^^^ pp_pair (pp_cn_basetype ppfa) (pp_cn_basetype ppfa) (k, v) ^^ !^")"
+    !^"(CN_map"
+    ^^^ !^"_"
+    ^^^ pp_pair (pp_cn_basetype ppfa) (pp_cn_basetype ppfa) (k, v)
+    ^^ !^")"
   | CN_list t -> !^"(CN_list" ^^^ !^"_" ^^^ pp_cn_basetype ppfa t ^^ !^")"
   | CN_tuple ts -> !^"(CN_tuple" ^^^ !^"_" ^^^ pp_list (pp_cn_basetype ppfa) ts ^^ !^")"
   | CN_set t -> !^"(CN_set" ^^^ !^"_" ^^^ pp_cn_basetype ppfa t ^^ !^")"
@@ -1801,17 +1748,21 @@ let rec pp_cn_pat ppfa = function
 
 
 let rec pp_cn_expr ppfa ppfty = function
-    | CF.Cn.CNExpr (loc, e) ->
+  | CF.Cn.CNExpr (loc, e) ->
     !^"(CNExpr"
     ^^^ pp_cn_type_args
-    ^^^ !^"(" 
+    ^^^ !^"("
     ^^^ pp_location loc
     ^^^ !^","
     ^^^ (match e with
-         | CNExpr_const c -> !^"(CNExpr_const" ^^^ pp_cn_type_args ^^^ pp_cn_const c ^^ !^")"
+         | CNExpr_const c ->
+           !^"(CNExpr_const" ^^^ pp_cn_type_args ^^^ pp_cn_const c ^^ !^")"
          | CNExpr_var v -> !^"(CNExpr_var" ^^^ pp_cn_type_args ^^^ ppfa v ^^ !^")"
-         | CNExpr_list es -> 
-           !^"(CNExpr_list" ^^^ pp_cn_type_args ^^^ pp_list (pp_cn_expr ppfa ppfty) es ^^ !^")"
+         | CNExpr_list es ->
+           !^"(CNExpr_list"
+           ^^^ pp_cn_type_args
+           ^^^ pp_list (pp_cn_expr ppfa ppfty) es
+           ^^ !^")"
          | CNExpr_memberof (e, id) ->
            !^"(CNExpr_memberof"
            ^^^ pp_cn_type_args
@@ -1830,24 +1781,33 @@ let rec pp_cn_expr ppfa ppfty = function
          | CNExpr_struct (a, fs) ->
            !^"(CNExpr_struct"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ ppfa a; pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) fs ]
+           ^^^ pp_tuple
+                 [ ppfa a; pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) fs ]
            ^^ !^")"
          | CNExpr_memberupdates (e, us) ->
            !^"(CNExpr_memberupdates"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ pp_cn_expr ppfa ppfty e; pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) us ]
+           ^^^ pp_tuple
+                 [ pp_cn_expr ppfa ppfty e;
+                   pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) us
+                 ]
            ^^ !^")"
          | CNExpr_arrayindexupdates (e, us) ->
            !^"(CNExpr_arrayindexupdates"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ pp_cn_expr ppfa ppfty e; pp_list (pp_pair (pp_cn_expr ppfa ppfty) (pp_cn_expr ppfa ppfty)) us ]
+           ^^^ pp_tuple
+                 [ pp_cn_expr ppfa ppfty e;
+                   pp_list (pp_pair (pp_cn_expr ppfa ppfty) (pp_cn_expr ppfa ppfty)) us
+                 ]
            ^^ !^")"
          | CNExpr_binop (op, e1, e2) ->
            !^"(CNExpr_binop"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ pp_cn_binop op; pp_cn_expr ppfa ppfty e1; pp_cn_expr ppfa ppfty e2 ]
+           ^^^ pp_tuple
+                 [ pp_cn_binop op; pp_cn_expr ppfa ppfty e1; pp_cn_expr ppfa ppfty e2 ]
            ^^ !^")"
-         | CNExpr_sizeof ty -> !^"(CNExpr_sizeof" ^^^ pp_cn_type_args ^^^ ppfty ty ^^ !^")"
+         | CNExpr_sizeof ty ->
+           !^"(CNExpr_sizeof" ^^^ pp_cn_type_args ^^^ ppfty ty ^^ !^")"
          | CNExpr_offsetof (a, id) ->
            !^"(CNExpr_offsetof"
            ^^^ pp_cn_type_args
@@ -1867,7 +1827,11 @@ let rec pp_cn_expr ppfa ppfty = function
          | CNExpr_array_shift (e, oty, idx) ->
            !^"(CNExpr_array_shift"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ pp_cn_expr ppfa ppfty e; pp_option ppfty oty; pp_cn_expr ppfa ppfty idx ]
+           ^^^ pp_tuple
+                 [ pp_cn_expr ppfa ppfty e;
+                   pp_option ppfty oty;
+                   pp_cn_expr ppfa ppfty idx
+                 ]
            ^^ !^")"
          | CNExpr_call (a, args) ->
            !^"(CNExpr_call"
@@ -1877,12 +1841,18 @@ let rec pp_cn_expr ppfa ppfty = function
          | CNExpr_cons (a, args) ->
            !^"(CNExpr_cons"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ ppfa a; pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) args ]
+           ^^^ pp_tuple
+                 [ ppfa a; pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) args ]
            ^^ !^")"
          | CNExpr_each (a, bt, rng, e) ->
            !^"(CNExpr_each"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ ppfa a; pp_cn_basetype ppfa bt; pp_pair pp_Z pp_Z rng; pp_cn_expr ppfa ppfty e ]
+           ^^^ pp_tuple
+                 [ ppfa a;
+                   pp_cn_basetype ppfa bt;
+                   pp_pair pp_Z pp_Z rng;
+                   pp_cn_expr ppfa ppfty e
+                 ]
            ^^ !^")"
          | CNExpr_let (a, e1, e2) ->
            !^"(CNExpr_let"
@@ -1892,34 +1862,47 @@ let rec pp_cn_expr ppfa ppfty = function
          | CNExpr_match (e, cases) ->
            !^"(CNExpr_match"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ pp_cn_expr ppfa ppfty e; pp_list (pp_pair (pp_cn_pat ppfa) (pp_cn_expr ppfa ppfty)) cases ]
+           ^^^ pp_tuple
+                 [ pp_cn_expr ppfa ppfty e;
+                   pp_list (pp_pair (pp_cn_pat ppfa) (pp_cn_expr ppfa ppfty)) cases
+                 ]
            ^^ !^")"
          | CNExpr_ite (c, t, e) ->
            !^"(CNExpr_ite"
            ^^^ pp_cn_type_args
-           ^^^ pp_tuple [ pp_cn_expr ppfa ppfty c; pp_cn_expr ppfa ppfty t; pp_cn_expr ppfa ppfty e ]
+           ^^^ pp_tuple
+                 [ pp_cn_expr ppfa ppfty c;
+                   pp_cn_expr ppfa ppfty t;
+                   pp_cn_expr ppfa ppfty e
+                 ]
            ^^ !^")"
          | CNExpr_good (ty, e) ->
            !^"(CNExpr_good"
            ^^^ pp_cn_type_args
            ^^^ pp_tuple [ ppfty ty; pp_cn_expr ppfa ppfty e ]
            ^^ !^")"
-         | CNExpr_deref e -> !^"(CNExpr_deref" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_deref e ->
+           !^"(CNExpr_deref" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
          | CNExpr_value_of_c_atom (a, k) ->
            !^"(CNExpr_value_of_c_atom"
            ^^^ pp_cn_type_args
            ^^^ pp_tuple [ ppfa a; pp_cn_c_kind k ]
            ^^ !^")"
-         | CNExpr_unchanged e -> !^"(CNExpr_unchanged" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_unchanged e ->
+           !^"(CNExpr_unchanged" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
          | CNExpr_at_env (e, s) ->
            !^"(CNExpr_at_env"
            ^^^ pp_cn_type_args
            ^^^ pp_tuple [ pp_cn_expr ppfa ppfty e; pp_string s ]
            ^^ !^")"
-         | CNExpr_not e -> !^"(CNExpr_not" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
-         | CNExpr_negate e -> !^"(CNExpr_negate" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
-         | CNExpr_default bt -> !^"(CNExpr_default" ^^^ pp_cn_type_args ^^^ pp_cn_basetype ppfa bt ^^ !^")"
-         | CNExpr_bnot e -> !^"(CNExpr_bnot" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")")
+         | CNExpr_not e ->
+           !^"(CNExpr_not" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_negate e ->
+           !^"(CNExpr_negate" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")"
+         | CNExpr_default bt ->
+           !^"(CNExpr_default" ^^^ pp_cn_type_args ^^^ pp_cn_basetype ppfa bt ^^ !^")"
+         | CNExpr_bnot e ->
+           !^"(CNExpr_bnot" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty e ^^ !^")")
     ^^ !^"))"
 
 
@@ -1955,7 +1938,8 @@ let pp_cn_to_extract ppfa ppfty = function
 
 
 let pp_cn_assertion ppfa ppfty = function
-  | CF.Cn.CN_assert_exp ex -> !^"(CN_assert_exp" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty ex ^^ !^")"
+  | CF.Cn.CN_assert_exp ex ->
+    !^"(CN_assert_exp" ^^^ pp_cn_type_args ^^^ pp_cn_expr ppfa ppfty ex ^^ !^")"
   | CN_assert_qexp (sym, bt, it1, it2) ->
     !^"(CN_assert_qexp"
     ^^^ pp_cn_type_args
@@ -1976,7 +1960,7 @@ let pp_cn_condition ppfa ppfty = function
     ^^ !^")"
   | CN_cletExpr (loc, sym, ex) ->
     !^"(CN_cletExpr"
-    ^^^ pp_cn_type_args 
+    ^^^ pp_cn_type_args
     ^^^ pp_location loc
     ^^^ ppfa sym
     ^^^ pp_cn_expr ppfa ppfty ex
@@ -2125,10 +2109,7 @@ and pp_expr pp_type (Expr (loc, annots, ty, e)) =
 
 
 let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
-  !^"{|"
-  ^^^ !^"label_spec :="
-  ^^^ pp_list (pp_cn_condition pp_symbol pp_ctype) s.label_spec
-  ^^^ !^"|}"
+  pp_record [ ("label_spec", pp_list (pp_cn_condition pp_symbol pp_ctype) s.label_spec) ]
 
 
 let pp_label_def pp_type = function
@@ -2157,18 +2138,11 @@ let pp_args_and_body pp_type (args : 'a args_and_body) =
 
 
 let pp_desugared_spec { accesses; requires; ensures } =
-  !^"{|"
-  ^^^ !^"accesses :="
-  ^^^ pp_list
-        (fun (sym, ty) -> !^"(" ^^ pp_symbol sym ^^ !^"," ^^^ pp_ctype ty ^^ !^")")
-        accesses
-  ^^ !^";"
-  ^^^ !^"requires :="
-  ^^^ pp_list (pp_cn_condition pp_symbol pp_ctype) requires
-  ^^ !^";"
-  ^^^ !^"ensures :="
-  ^^^ pp_list (pp_cn_condition pp_symbol pp_ctype) ensures
-  ^^^ !^"|}"
+  pp_record
+    [ ("accesses", pp_list (pp_pair pp_symbol pp_ctype) accesses);
+      ("requires", pp_list (pp_cn_condition pp_symbol pp_ctype) requires);
+      ("ensures", pp_list (pp_cn_condition pp_symbol pp_ctype) ensures)
+    ]
 
 
 let rec pp_logical_argument_types pp_type = function
