@@ -75,279 +75,310 @@ let pp_record fields =
   ^^^ !^"|}"
 
 
+let pp_constructor name args =
+  if List.length args = 0 then
+    !^name
+  else
+    !^"(" ^^ !^name ^^^ !^"_" ^^^ P.separate_map !^" " (fun x -> x) args ^^ !^")"
+
+
 let pp_undefined_behaviour = function
-  | Undefined.DUMMY str -> !^"(DUMMY" ^^^ !^(sprintf "%S" str) ^^ !^")"
-  | Undefined.UB_unspecified_lvalue -> !^"UB_unspecified_lvalue"
+  | Undefined.DUMMY str -> pp_constructor "DUMMY" [ !^(sprintf "%S" str) ]
+  | Undefined.UB_unspecified_lvalue -> pp_constructor "UB_unspecified_lvalue" []
   | Undefined.UB_std_omission om ->
-    !^"(UB_std_omission"
-    ^^^ (match om with
-         | UB_OMIT_memcpy_non_object -> !^"UB_OMIT_memcpy_non_object"
-         | UB_OMIT_memcpy_out_of_bound -> !^"UB_OMIT_memcpy_out_of_bound")
-    ^^ !^")"
-  | Undefined.Invalid_format str -> !^"(Invalid_format" ^^^ !^(sprintf "%S" str) ^^ !^")"
+    pp_constructor
+      "UB_std_omission"
+      [ (match om with
+         | UB_OMIT_memcpy_non_object -> pp_constructor "UB_OMIT_memcpy_non_object" []
+         | UB_OMIT_memcpy_out_of_bound -> pp_constructor "UB_OMIT_memcpy_out_of_bound" [])
+      ]
+  | Undefined.Invalid_format str ->
+    pp_constructor "Invalid_format" [ !^(sprintf "%S" str) ]
   | Undefined.UB_CERB004_unspecified ctx ->
-    !^"(UB_CERB004_unspecified"
-    ^^^ (match ctx with
-         | UB_unspec_equality_ptr_vs_NULL -> !^"UB_unspec_equality_ptr_vs_NULL"
+    pp_constructor
+      "UB_CERB004_unspecified"
+      [ (match ctx with
+         | UB_unspec_equality_ptr_vs_NULL ->
+           pp_constructor "UB_unspec_equality_ptr_vs_NULL" []
          | UB_unspec_equality_both_arith_or_ptr ->
-           !^"UB_unspec_equality_both_arith_or_ptr"
-         | UB_unspec_pointer_add -> !^"UB_unspec_pointer_add"
-         | UB_unspec_pointer_sub -> !^"UB_unspec_pointer_sub"
-         | UB_unspec_conditional -> !^"UB_unspec_conditional"
-         | UB_unspec_copy_alloc_id -> !^"UB_unspec_copy_alloc_id"
-         | UB_unspec_rvalue_memberof -> !^"UB_unspec_rvalue_memberof"
-         | UB_unspec_memberofptr -> !^"UB_unspec_memberofptr"
-         | UB_unspec_do -> !^"UB_unspec_do")
-    ^^ !^")"
-  | Undefined.UB_CERB005_free_nullptr -> !^"UB_CERB005_free_nullptr"
-  | UB001 -> !^"UB001"
-  | UB002 -> !^"UB002"
-  | UB003 -> !^"UB003"
-  | UB004a_incorrect_main_return_type -> !^"UB004a_incorrect_main_return_type"
-  | UB004b_incorrect_main_argument1 -> !^"UB004b_incorrect_main_argument1"
-  | UB004c_incorrect_main_argument2 -> !^"UB004c_incorrect_main_argument2"
-  | UB004d_main_not_function -> !^"UB004d_main_not_function"
-  | UB005_data_race -> !^"UB005_data_race"
-  | UB006 -> !^"UB006"
-  | UB007 -> !^"UB007"
-  | UB008_multiple_linkage -> !^"UB008_multiple_linkage"
-  | UB009_outside_lifetime -> !^"UB009_outside_lifetime"
-  | UB010_pointer_to_dead_object -> !^"UB010_pointer_to_dead_object"
+           pp_constructor "UB_unspec_equality_both_arith_or_ptr" []
+         | UB_unspec_pointer_add -> pp_constructor "UB_unspec_pointer_add" []
+         | UB_unspec_pointer_sub -> pp_constructor "UB_unspec_pointer_sub" []
+         | UB_unspec_conditional -> pp_constructor "UB_unspec_conditional" []
+         | UB_unspec_copy_alloc_id -> pp_constructor "UB_unspec_copy_alloc_id" []
+         | UB_unspec_rvalue_memberof -> pp_constructor "UB_unspec_rvalue_memberof" []
+         | UB_unspec_memberofptr -> pp_constructor "UB_unspec_memberofptr" []
+         | UB_unspec_do -> pp_constructor "UB_unspec_do" [])
+      ]
+  | Undefined.UB_CERB005_free_nullptr -> pp_constructor "UB_CERB005_free_nullptr" []
+  | UB001 -> pp_constructor "UB001" []
+  | UB002 -> pp_constructor "UB002" []
+  | UB003 -> pp_constructor "UB003" []
+  | UB004a_incorrect_main_return_type ->
+    pp_constructor "UB004a_incorrect_main_return_type" []
+  | UB004b_incorrect_main_argument1 -> pp_constructor "UB004b_incorrect_main_argument1" []
+  | UB004c_incorrect_main_argument2 -> pp_constructor "UB004c_incorrect_main_argument2" []
+  | UB004d_main_not_function -> pp_constructor "UB004d_main_not_function" []
+  | UB005_data_race -> pp_constructor "UB005_data_race" []
+  | UB006 -> pp_constructor "UB006" []
+  | UB007 -> pp_constructor "UB007" []
+  | UB008_multiple_linkage -> pp_constructor "UB008_multiple_linkage" []
+  | UB009_outside_lifetime -> pp_constructor "UB009_outside_lifetime" []
+  | UB010_pointer_to_dead_object -> pp_constructor "UB010_pointer_to_dead_object" []
   | UB011_use_indeterminate_automatic_object ->
-    !^"UB011_use_indeterminate_automatic_object"
-  | UB_modifying_temporary_lifetime -> !^"UB_modifying_temporary_lifetime"
-  | UB012_lvalue_read_trap_representation -> !^"UB012_lvalue_read_trap_representation"
+    pp_constructor "UB011_use_indeterminate_automatic_object" []
+  | UB_modifying_temporary_lifetime -> pp_constructor "UB_modifying_temporary_lifetime" []
+  | UB012_lvalue_read_trap_representation ->
+    pp_constructor "UB012_lvalue_read_trap_representation" []
   | UB013_lvalue_side_effect_trap_representation ->
-    !^"UB013_lvalue_side_effect_trap_representation"
-  | UB014_unsupported_negative_zero -> !^"UB014_unsupported_negative_zero"
-  | UB015_incompatible_redeclaration -> !^"UB015_incompatible_redeclaration"
-  | UB016 -> !^"UB016"
+    pp_constructor "UB013_lvalue_side_effect_trap_representation" []
+  | UB014_unsupported_negative_zero -> pp_constructor "UB014_unsupported_negative_zero" []
+  | UB015_incompatible_redeclaration ->
+    pp_constructor "UB015_incompatible_redeclaration" []
+  | UB016 -> pp_constructor "UB016" []
   | UB017_out_of_range_floating_integer_conversion ->
-    !^"UB017_out_of_range_floating_integer_conversion"
-  | UB018 -> !^"UB018"
-  | UB019_lvalue_not_an_object -> !^"UB019_lvalue_not_an_object"
+    pp_constructor "UB017_out_of_range_floating_integer_conversion" []
+  | UB018 -> pp_constructor "UB018" []
+  | UB019_lvalue_not_an_object -> pp_constructor "UB019_lvalue_not_an_object" []
   | UB020_nonarray_incomplete_lvalue_conversion ->
-    !^"UB020_nonarray_incomplete_lvalue_conversion"
-  | UB021 -> !^"UB021"
-  | UB022_register_array_decay -> !^"UB022_register_array_decay"
-  | UB023 -> !^"UB023"
+    pp_constructor "UB020_nonarray_incomplete_lvalue_conversion" []
+  | UB021 -> pp_constructor "UB021" []
+  | UB022_register_array_decay -> pp_constructor "UB022_register_array_decay" []
+  | UB023 -> pp_constructor "UB023" []
   | UB024_out_of_range_pointer_to_integer_conversion ->
-    !^"UB024_out_of_range_pointer_to_integer_conversion"
-  | UB025_misaligned_pointer_conversion -> !^"UB025_misaligned_pointer_conversion"
-  | UB026 -> !^"UB026"
-  | UB027 -> !^"UB027"
-  | UB028 -> !^"UB028"
-  | UB029 -> !^"UB029"
-  | UB030 -> !^"UB030"
-  | UB031 -> !^"UB031"
-  | UB032 -> !^"UB032"
-  | UB033_modifying_string_literal -> !^"UB033_modifying_string_literal"
-  | UB034 -> !^"UB034"
-  | UB035_unsequenced_race -> !^"UB035_unsequenced_race"
-  | UB036_exceptional_condition -> !^"UB036_exceptional_condition"
-  | UB037_illtyped_load -> !^"UB037_illtyped_load"
-  | UB038_number_of_args -> !^"UB038_number_of_args"
-  | UB039 -> !^"UB039"
-  | UB040 -> !^"UB040"
-  | UB041_function_not_compatible -> !^"UB041_function_not_compatible"
-  | UB042_access_atomic_structUnion_member -> !^"UB042_access_atomic_structUnion_member"
-  | UB043_indirection_invalid_value -> !^"UB043_indirection_invalid_value"
-  | UB044 -> !^"UB044"
-  | UB045a_division_by_zero -> !^"UB045a_division_by_zero"
-  | UB045b_modulo_by_zero -> !^"UB045b_modulo_by_zero"
-  | UB045c_quotient_not_representable -> !^"UB045c_quotient_not_representable"
-  | UB046_array_pointer_outside -> !^"UB046_array_pointer_outside"
+    pp_constructor "UB024_out_of_range_pointer_to_integer_conversion" []
+  | UB025_misaligned_pointer_conversion ->
+    pp_constructor "UB025_misaligned_pointer_conversion" []
+  | UB026 -> pp_constructor "UB026" []
+  | UB027 -> pp_constructor "UB027" []
+  | UB028 -> pp_constructor "UB028" []
+  | UB029 -> pp_constructor "UB029" []
+  | UB030 -> pp_constructor "UB030" []
+  | UB031 -> pp_constructor "UB031" []
+  | UB032 -> pp_constructor "UB032" []
+  | UB033_modifying_string_literal -> pp_constructor "UB033_modifying_string_literal" []
+  | UB034 -> pp_constructor "UB034" []
+  | UB035_unsequenced_race -> pp_constructor "UB035_unsequenced_race" []
+  | UB036_exceptional_condition -> pp_constructor "UB036_exceptional_condition" []
+  | UB037_illtyped_load -> pp_constructor "UB037_illtyped_load" []
+  | UB038_number_of_args -> pp_constructor "UB038_number_of_args" []
+  | UB039 -> pp_constructor "UB039" []
+  | UB040 -> pp_constructor "UB040" []
+  | UB041_function_not_compatible -> pp_constructor "UB041_function_not_compatible" []
+  | UB042_access_atomic_structUnion_member ->
+    pp_constructor "UB042_access_atomic_structUnion_member" []
+  | UB043_indirection_invalid_value -> pp_constructor "UB043_indirection_invalid_value" []
+  | UB044 -> pp_constructor "UB044" []
+  | UB045a_division_by_zero -> pp_constructor "UB045a_division_by_zero" []
+  | UB045b_modulo_by_zero -> pp_constructor "UB045b_modulo_by_zero" []
+  | UB045c_quotient_not_representable ->
+    pp_constructor "UB045c_quotient_not_representable" []
+  | UB046_array_pointer_outside -> pp_constructor "UB046_array_pointer_outside" []
   | UB047a_array_pointer_addition_beyond_indirection ->
-    !^"UB047a_array_pointer_addition_beyond_indirection"
+    pp_constructor "UB047a_array_pointer_addition_beyond_indirection" []
   | UB047b_array_pointer_subtraction_beyond_indirection ->
-    !^"UB047b_array_pointer_subtraction_beyond_indirection"
+    pp_constructor "UB047b_array_pointer_subtraction_beyond_indirection" []
   | UB048_disjoint_array_pointers_subtraction ->
-    !^"UB048_disjoint_array_pointers_subtraction"
-  | UB049 -> !^"UB049"
+    pp_constructor "UB048_disjoint_array_pointers_subtraction" []
+  | UB049 -> pp_constructor "UB049" []
   | UB050_pointers_subtraction_not_representable ->
-    !^"UB050_pointers_subtraction_not_representable"
-  | UB051a_negative_shift -> !^"UB051a_negative_shift"
-  | UB51b_shift_too_large -> !^"UB51b_shift_too_large"
-  | UB052a_negative_left_shift -> !^"UB052a_negative_left_shift"
-  | UB052b_non_representable_left_shift -> !^"UB052b_non_representable_left_shift"
+    pp_constructor "UB050_pointers_subtraction_not_representable" []
+  | UB051a_negative_shift -> pp_constructor "UB051a_negative_shift" []
+  | UB51b_shift_too_large -> pp_constructor "UB51b_shift_too_large" []
+  | UB052a_negative_left_shift -> pp_constructor "UB052a_negative_left_shift" []
+  | UB052b_non_representable_left_shift ->
+    pp_constructor "UB052b_non_representable_left_shift" []
   | UB053_distinct_aggregate_union_pointer_comparison ->
-    !^"UB053_distinct_aggregate_union_pointer_comparison"
-  | UB054a_inexactly_overlapping_assignment -> !^"UB054a_inexactly_overlapping_assignment"
+    pp_constructor "UB053_distinct_aggregate_union_pointer_comparison" []
+  | UB054a_inexactly_overlapping_assignment ->
+    pp_constructor "UB054a_inexactly_overlapping_assignment" []
   | UB054b_incompatible_overlapping_assignment ->
-    !^"UB054b_incompatible_overlapping_assignment"
+    pp_constructor "UB054b_incompatible_overlapping_assignment" []
   | UB055_invalid_integer_constant_expression ->
-    !^"UB055_invalid_integer_constant_expression"
-  | UB056 -> !^"UB056"
-  | UB057 -> !^"UB057"
-  | UB058 -> !^"UB058"
-  | UB059_incomplete_no_linkage_identifier -> !^"UB059_incomplete_no_linkage_identifier"
+    pp_constructor "UB055_invalid_integer_constant_expression" []
+  | UB056 -> pp_constructor "UB056" []
+  | UB057 -> pp_constructor "UB057" []
+  | UB058 -> pp_constructor "UB058" []
+  | UB059_incomplete_no_linkage_identifier ->
+    pp_constructor "UB059_incomplete_no_linkage_identifier" []
   | UB060_block_scope_function_with_storage_class ->
-    !^"UB060_block_scope_function_with_storage_class"
-  | UB061_no_named_members -> !^"UB061_no_named_members"
-  | UB062 -> !^"UB062"
-  | UB063 -> !^"UB063"
-  | UB064_modifying_const -> !^"UB064_modifying_const"
-  | UB065 -> !^"UB065"
-  | UB066_qualified_function_specification -> !^"UB066_qualified_function_specification"
-  | UB067 -> !^"UB067"
-  | UB068 -> !^"UB068"
-  | UB069 -> !^"UB069"
-  | UB070_inline_not_defined -> !^"UB070_inline_not_defined"
-  | UB071_noreturn -> !^"UB071_noreturn"
-  | UB072_incompatible_alignment_specifiers -> !^"UB072_incompatible_alignment_specifiers"
-  | UB073 -> !^"UB073"
-  | UB074 -> !^"UB074"
-  | UB075 -> !^"UB075"
-  | UB076 -> !^"UB076"
-  | UB077 -> !^"UB077"
-  | UB078_modified_void_parameter -> !^"UB078_modified_void_parameter"
-  | UB079 -> !^"UB079"
-  | UB080 -> !^"UB080"
+    pp_constructor "UB060_block_scope_function_with_storage_class" []
+  | UB061_no_named_members -> pp_constructor "UB061_no_named_members" []
+  | UB062 -> pp_constructor "UB062" []
+  | UB063 -> pp_constructor "UB063" []
+  | UB064_modifying_const -> pp_constructor "UB064_modifying_const" []
+  | UB065 -> pp_constructor "UB065" []
+  | UB066_qualified_function_specification ->
+    pp_constructor "UB066_qualified_function_specification" []
+  | UB067 -> pp_constructor "UB067" []
+  | UB068 -> pp_constructor "UB068" []
+  | UB069 -> pp_constructor "UB069" []
+  | UB070_inline_not_defined -> pp_constructor "UB070_inline_not_defined" []
+  | UB071_noreturn -> pp_constructor "UB071_noreturn" []
+  | UB072_incompatible_alignment_specifiers ->
+    pp_constructor "UB072_incompatible_alignment_specifiers" []
+  | UB073 -> pp_constructor "UB073" []
+  | UB074 -> pp_constructor "UB074" []
+  | UB075 -> pp_constructor "UB075" []
+  | UB076 -> pp_constructor "UB076" []
+  | UB077 -> pp_constructor "UB077" []
+  | UB078_modified_void_parameter -> pp_constructor "UB078_modified_void_parameter" []
+  | UB079 -> pp_constructor "UB079" []
+  | UB080 -> pp_constructor "UB080" []
   | UB081_scalar_initializer_not_single_expression ->
-    !^"UB081_scalar_initializer_not_single_expression"
-  | UB082 -> !^"UB082"
-  | UB083 -> !^"UB083"
-  | UB084 -> !^"UB084"
-  | UB085 -> !^"UB085"
-  | UB086_incomplete_adjusted_parameter -> !^"UB086_incomplete_adjusted_parameter"
-  | UB087 -> !^"UB087"
-  | UB088_reached_end_of_function -> !^"UB088_reached_end_of_function"
+    pp_constructor "UB081_scalar_initializer_not_single_expression" []
+  | UB082 -> pp_constructor "UB082" []
+  | UB083 -> pp_constructor "UB083" []
+  | UB084 -> pp_constructor "UB084" []
+  | UB085 -> pp_constructor "UB085" []
+  | UB086_incomplete_adjusted_parameter ->
+    pp_constructor "UB086_incomplete_adjusted_parameter" []
+  | UB087 -> pp_constructor "UB087" []
+  | UB088_reached_end_of_function -> pp_constructor "UB088_reached_end_of_function" []
   | UB089_tentative_definition_internal_linkage ->
-    !^"UB089_tentative_definition_internal_linkage"
-  | UB090 -> !^"UB090"
-  | UB091 -> !^"UB091"
-  | UB092 -> !^"UB092"
-  | UB093 -> !^"UB093"
-  | UB094 -> !^"UB094"
-  | UB095 -> !^"UB095"
-  | UB096 -> !^"UB096"
-  | UB097 -> !^"UB097"
-  | UB098 -> !^"UB098"
-  | UB099 -> !^"UB099"
-  | UB100 -> !^"UB100"
-  | UB101 -> !^"UB101"
-  | UB102 -> !^"UB102"
-  | UB103 -> !^"UB103"
-  | UB104 -> !^"UB104"
-  | UB105 -> !^"UB105"
-  | UB106 -> !^"UB106"
-  | UB107 -> !^"UB107"
-  | UB108 -> !^"UB108"
-  | UB109 -> !^"UB109"
-  | UB110 -> !^"UB110"
-  | UB111_illtyped_assert -> !^"UB111_illtyped_assert"
-  | UB112 -> !^"UB112"
-  | UB113 -> !^"UB113"
-  | UB114 -> !^"UB114"
-  | UB115 -> !^"UB115"
-  | UB116 -> !^"UB116"
-  | UB117 -> !^"UB117"
-  | UB118 -> !^"UB118"
-  | UB119 -> !^"UB119"
-  | UB120 -> !^"UB120"
-  | UB121 -> !^"UB121"
-  | UB122 -> !^"UB122"
-  | UB123 -> !^"UB123"
-  | UB124 -> !^"UB124"
-  | UB125 -> !^"UB125"
-  | UB126 -> !^"UB126"
-  | UB127 -> !^"UB127"
-  | UB128 -> !^"UB128"
-  | UB129 -> !^"UB129"
-  | UB130 -> !^"UB130"
-  | UB131 -> !^"UB131"
-  | UB132 -> !^"UB132"
-  | UB133 -> !^"UB133"
-  | UB134 -> !^"UB134"
-  | UB135 -> !^"UB135"
-  | UB136 -> !^"UB136"
-  | UB137 -> !^"UB137"
-  | UB138 -> !^"UB138"
-  | UB139 -> !^"UB139"
-  | UB140 -> !^"UB140"
-  | UB141 -> !^"UB141"
-  | UB142 -> !^"UB142"
-  | UB143 -> !^"UB143"
-  | UB144 -> !^"UB144"
-  | UB145 -> !^"UB145"
-  | UB146 -> !^"UB146"
-  | UB147 -> !^"UB147"
-  | UB148 -> !^"UB148"
-  | UB149 -> !^"UB149"
-  | UB150 -> !^"UB150"
-  | UB151 -> !^"UB151"
-  | UB152 -> !^"UB152"
+    pp_constructor "UB089_tentative_definition_internal_linkage" []
+  | UB090 -> pp_constructor "UB090" []
+  | UB091 -> pp_constructor "UB091" []
+  | UB092 -> pp_constructor "UB092" []
+  | UB093 -> pp_constructor "UB093" []
+  | UB094 -> pp_constructor "UB094" []
+  | UB095 -> pp_constructor "UB095" []
+  | UB096 -> pp_constructor "UB096" []
+  | UB097 -> pp_constructor "UB097" []
+  | UB098 -> pp_constructor "UB098" []
+  | UB099 -> pp_constructor "UB099" []
+  | UB100 -> pp_constructor "UB100" []
+  | UB101 -> pp_constructor "UB101" []
+  | UB102 -> pp_constructor "UB102" []
+  | UB103 -> pp_constructor "UB103" []
+  | UB104 -> pp_constructor "UB104" []
+  | UB105 -> pp_constructor "UB105" []
+  | UB106 -> pp_constructor "UB106" []
+  | UB107 -> pp_constructor "UB107" []
+  | UB108 -> pp_constructor "UB108" []
+  | UB109 -> pp_constructor "UB109" []
+  | UB110 -> pp_constructor "UB110" []
+  | UB111_illtyped_assert -> pp_constructor "UB111_illtyped_assert" []
+  | UB112 -> pp_constructor "UB112" []
+  | UB113 -> pp_constructor "UB113" []
+  | UB114 -> pp_constructor "UB114" []
+  | UB115 -> pp_constructor "UB115" []
+  | UB116 -> pp_constructor "UB116" []
+  | UB117 -> pp_constructor "UB117" []
+  | UB118 -> pp_constructor "UB118" []
+  | UB119 -> pp_constructor "UB119" []
+  | UB120 -> pp_constructor "UB120" []
+  | UB121 -> pp_constructor "UB121" []
+  | UB122 -> pp_constructor "UB122" []
+  | UB123 -> pp_constructor "UB123" []
+  | UB124 -> pp_constructor "UB124" []
+  | UB125 -> pp_constructor "UB125" []
+  | UB126 -> pp_constructor "UB126" []
+  | UB127 -> pp_constructor "UB127" []
+  | UB128 -> pp_constructor "UB128" []
+  | UB129 -> pp_constructor "UB129" []
+  | UB130 -> pp_constructor "UB130" []
+  | UB131 -> pp_constructor "UB131" []
+  | UB132 -> pp_constructor "UB132" []
+  | UB133 -> pp_constructor "UB133" []
+  | UB134 -> pp_constructor "UB134" []
+  | UB135 -> pp_constructor "UB135" []
+  | UB136 -> pp_constructor "UB136" []
+  | UB137 -> pp_constructor "UB137" []
+  | UB138 -> pp_constructor "UB138" []
+  | UB139 -> pp_constructor "UB139" []
+  | UB140 -> pp_constructor "UB140" []
+  | UB141 -> pp_constructor "UB141" []
+  | UB142 -> pp_constructor "UB142" []
+  | UB143 -> pp_constructor "UB143" []
+  | UB144 -> pp_constructor "UB144" []
+  | UB145 -> pp_constructor "UB145" []
+  | UB146 -> pp_constructor "UB146" []
+  | UB147 -> pp_constructor "UB147" []
+  | UB148 -> pp_constructor "UB148" []
+  | UB149 -> pp_constructor "UB149" []
+  | UB150 -> pp_constructor "UB150" []
+  | UB151 -> pp_constructor "UB151" []
+  | UB152 -> pp_constructor "UB152" []
   | UB153a_insufficient_arguments_for_format ->
-    !^"UB153a_insufficient_arguments_for_format"
-  | UB153b_illtyped_argument_for_format -> !^"UB153b_illtyped_argument_for_format"
-  | UB154 -> !^"UB154"
-  | UB155 -> !^"UB155"
-  | UB156 -> !^"UB156"
-  | UB157 -> !^"UB157"
-  | UB158_invalid_length_modifier -> !^"UB158_invalid_length_modifier"
-  | UB159 -> !^"UB159"
-  | UB160 -> !^"UB160"
-  | UB161 -> !^"UB161"
-  | UB162 -> !^"UB162"
-  | UB163 -> !^"UB163"
-  | UB164 -> !^"UB164"
-  | UB165 -> !^"UB165"
-  | UB166 -> !^"UB166"
-  | UB167 -> !^"UB167"
-  | UB168 -> !^"UB168"
-  | UB169 -> !^"UB169"
-  | UB170 -> !^"UB170"
-  | UB171 -> !^"UB171"
-  | UB172 -> !^"UB172"
-  | UB173 -> !^"UB173"
-  | UB174 -> !^"UB174"
-  | UB175 -> !^"UB175"
-  | UB176 -> !^"UB176"
-  | UB177 -> !^"UB177"
-  | UB178 -> !^"UB178"
-  | UB179a_non_matching_allocation_free -> !^"UB179a_non_matching_allocation_free"
-  | UB179b_dead_allocation_free -> !^"UB179b_dead_allocation_free"
-  | UB179c_non_matching_allocation_realloc -> !^"UB179c_non_matching_allocation_realloc"
-  | UB179d_dead_allocation_realloc -> !^"UB179d_dead_allocation_realloc"
-  | UB180 -> !^"UB180"
-  | UB181 -> !^"UB181"
-  | UB182 -> !^"UB182"
-  | UB183 -> !^"UB183"
-  | UB184 -> !^"UB184"
-  | UB185 -> !^"UB185"
-  | UB186 -> !^"UB186"
-  | UB187 -> !^"UB187"
-  | UB188 -> !^"UB188"
-  | UB189 -> !^"UB189"
-  | UB190 -> !^"UB190"
-  | UB191 -> !^"UB191"
-  | UB192 -> !^"UB192"
-  | UB193 -> !^"UB193"
-  | UB194 -> !^"UB194"
-  | UB195 -> !^"UB195"
-  | UB196 -> !^"UB196"
-  | UB197 -> !^"UB197"
-  | UB198 -> !^"UB198"
-  | UB199 -> !^"UB199"
-  | UB200 -> !^"UB200"
-  | UB201 -> !^"UB201"
-  | UB202 -> !^"UB202"
-  | UB203 -> !^"UB203"
-  | UB204_illtyped_Static_assert -> !^"UB204_illtyped_Static_assert"
-  | UB205_atomic_store_memorder -> !^"UB205_atomic_store_memorder"
-  | UB206_atomic_load_memorder -> !^"UB206_atomic_load_memorder"
-  | UB207_atomic_compare_exchange_memorder -> !^"UB207_atomic_compare_exchange_memorder"
-  | UB_CERB001_integer_to_dead_pointer -> !^"UB_CERB001_integer_to_dead_pointer"
-  | UB_CERB002a_out_of_bound_load -> !^"UB_CERB002a_out_of_bound_load"
-  | UB_CERB002b_out_of_bound_store -> !^"UB_CERB002b_out_of_bound_store"
-  | UB_CERB002c_out_of_bound_free -> !^"UB_CERB002c_out_of_bound_free"
-  | UB_CERB002d_out_of_bound_realloc -> !^"UB_CERB002d_out_of_bound_realloc"
-  | UB_CERB003_invalid_function_pointer -> !^"UB_CERB003_invalid_function_pointer"
-  | UB_CHERI_InvalidCap -> !^"UB_CHERI_InvalidCap"
-  | UB_CHERI_InsufficientPermissions -> !^"UB_CHERI_InsufficientPermissions"
-  | UB_CHERI_BoundsViolation -> !^"UB_CHERI_BoundsViolation"
-  | UB_CHERI_UndefinedTag -> !^"UB_CHERI_UndefinedTag"
-  | UB_CHERI_ZeroLength -> !^"UB_CHERI_ZeroLength"
+    pp_constructor "UB153a_insufficient_arguments_for_format" []
+  | UB153b_illtyped_argument_for_format ->
+    pp_constructor "UB153b_illtyped_argument_for_format" []
+  | UB154 -> pp_constructor "UB154" []
+  | UB155 -> pp_constructor "UB155" []
+  | UB156 -> pp_constructor "UB156" []
+  | UB157 -> pp_constructor "UB157" []
+  | UB158_invalid_length_modifier -> pp_constructor "UB158_invalid_length_modifier" []
+  | UB159 -> pp_constructor "UB159" []
+  | UB160 -> pp_constructor "UB160" []
+  | UB161 -> pp_constructor "UB161" []
+  | UB162 -> pp_constructor "UB162" []
+  | UB163 -> pp_constructor "UB163" []
+  | UB164 -> pp_constructor "UB164" []
+  | UB165 -> pp_constructor "UB165" []
+  | UB166 -> pp_constructor "UB166" []
+  | UB167 -> pp_constructor "UB167" []
+  | UB168 -> pp_constructor "UB168" []
+  | UB169 -> pp_constructor "UB169" []
+  | UB170 -> pp_constructor "UB170" []
+  | UB171 -> pp_constructor "UB171" []
+  | UB172 -> pp_constructor "UB172" []
+  | UB173 -> pp_constructor "UB173" []
+  | UB174 -> pp_constructor "UB174" []
+  | UB175 -> pp_constructor "UB175" []
+  | UB176 -> pp_constructor "UB176" []
+  | UB177 -> pp_constructor "UB177" []
+  | UB178 -> pp_constructor "UB178" []
+  | UB179a_non_matching_allocation_free ->
+    pp_constructor "UB179a_non_matching_allocation_free" []
+  | UB179b_dead_allocation_free -> pp_constructor "UB179b_dead_allocation_free" []
+  | UB179c_non_matching_allocation_realloc ->
+    pp_constructor "UB179c_non_matching_allocation_realloc" []
+  | UB179d_dead_allocation_realloc -> pp_constructor "UB179d_dead_allocation_realloc" []
+  | UB180 -> pp_constructor "UB180" []
+  | UB181 -> pp_constructor "UB181" []
+  | UB182 -> pp_constructor "UB182" []
+  | UB183 -> pp_constructor "UB183" []
+  | UB184 -> pp_constructor "UB184" []
+  | UB185 -> pp_constructor "UB185" []
+  | UB186 -> pp_constructor "UB186" []
+  | UB187 -> pp_constructor "UB187" []
+  | UB188 -> pp_constructor "UB188" []
+  | UB189 -> pp_constructor "UB189" []
+  | UB190 -> pp_constructor "UB190" []
+  | UB191 -> pp_constructor "UB191" []
+  | UB192 -> pp_constructor "UB192" []
+  | UB193 -> pp_constructor "UB193" []
+  | UB194 -> pp_constructor "UB194" []
+  | UB195 -> pp_constructor "UB195" []
+  | UB196 -> pp_constructor "UB196" []
+  | UB197 -> pp_constructor "UB197" []
+  | UB198 -> pp_constructor "UB198" []
+  | UB199 -> pp_constructor "UB199" []
+  | UB200 -> pp_constructor "UB200" []
+  | UB201 -> pp_constructor "UB201" []
+  | UB202 -> pp_constructor "UB202" []
+  | UB203 -> pp_constructor "UB203" []
+  | UB204_illtyped_Static_assert -> pp_constructor "UB204_illtyped_Static_assert" []
+  | UB205_atomic_store_memorder -> pp_constructor "UB205_atomic_store_memorder" []
+  | UB206_atomic_load_memorder -> pp_constructor "UB206_atomic_load_memorder" []
+  | UB207_atomic_compare_exchange_memorder ->
+    pp_constructor "UB207_atomic_compare_exchange_memorder" []
+  | UB_CERB001_integer_to_dead_pointer ->
+    pp_constructor "UB_CERB001_integer_to_dead_pointer" []
+  | UB_CERB002a_out_of_bound_load -> pp_constructor "UB_CERB002a_out_of_bound_load" []
+  | UB_CERB002b_out_of_bound_store -> pp_constructor "UB_CERB002b_out_of_bound_store" []
+  | UB_CERB002c_out_of_bound_free -> pp_constructor "UB_CERB002c_out_of_bound_free" []
+  | UB_CERB002d_out_of_bound_realloc ->
+    pp_constructor "UB_CERB002d_out_of_bound_realloc" []
+  | UB_CERB003_invalid_function_pointer ->
+    pp_constructor "UB_CERB003_invalid_function_pointer" []
+  | UB_CHERI_InvalidCap -> pp_constructor "UB_CHERI_InvalidCap" []
+  | UB_CHERI_InsufficientPermissions ->
+    pp_constructor "UB_CHERI_InsufficientPermissions" []
+  | UB_CHERI_BoundsViolation -> pp_constructor "UB_CHERI_BoundsViolation" []
+  | UB_CHERI_UndefinedTag -> pp_constructor "UB_CHERI_UndefinedTag" []
+  | UB_CHERI_ZeroLength -> pp_constructor "UB_CHERI_ZeroLength" []
 
 
 let pp_linux_memory_order = function
