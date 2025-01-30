@@ -3,8 +3,9 @@ module A = CF.AilSyntax
 module C = CF.Ctype
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
-module CtA = Cn_internal_to_ail
-module ESpecInternal = Executable_spec_internal
+module CtA = Fulminate.Cn_internal_to_ail
+module ESpecInternal = Fulminate.Executable_spec_internal
+module FExtract = Fulminate.Executable_spec_extract
 module Config = TestGenConfig
 
 type config = Config.t
@@ -15,7 +16,7 @@ let set_config = Config.initialize
 
 let is_constant_function
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
-  (inst : Executable_spec_extract.instrumentation)
+  (inst : FExtract.instrumentation)
   =
   let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
   match decl with
@@ -30,16 +31,14 @@ let compile_assumes
   ~(without_ownership_checking : bool)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Executable_spec_extract.instrumentation list)
+  (insts : FExtract.instrumentation list)
   : Pp.document
   =
   let declarations, function_definitions =
     List.split
       (List.map
          (fun ctype ->
-           Cn_internal_to_ail.generate_assume_ownership_function
-             ~without_ownership_checking
-             ctype)
+           CtA.generate_assume_ownership_function ~without_ownership_checking ctype)
          (let module CtypeSet =
             Set.Make (struct
               type t = C.ctype
@@ -48,7 +47,7 @@ let compile_assumes
             end)
           in
          !CtA.ownership_ctypes |> CtypeSet.of_list |> CtypeSet.to_seq |> List.of_seq)
-       @ Cn_internal_to_ail.cn_to_ail_assume_predicates_internal
+       @ CtA.cn_to_ail_assume_predicates_internal
            prog5.resource_predicates
            sigma.cn_datatypes
            []
@@ -121,7 +120,7 @@ let compile_test_file
   (filename_base : string)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Executable_spec_extract.instrumentation list)
+  (insts : FExtract.instrumentation list)
   =
   let for_constant, for_generator = List.partition (is_constant_function sigma) insts in
   let constant_tests, constant_tests_defs =
@@ -176,7 +175,7 @@ let save_generators
   ~filename_base
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Executable_spec_extract.instrumentation list)
+  (insts : FExtract.instrumentation list)
   : unit
   =
   let generators_doc =
@@ -195,7 +194,7 @@ let save_tests
   ~without_ownership_checking
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (insts : Executable_spec_extract.instrumentation list)
+  (insts : FExtract.instrumentation list)
   : unit
   =
   let tests_doc =
@@ -214,7 +213,7 @@ let needs_static_hack
   ~(with_warning : bool)
   (cabs_tunit : CF.Cabs.translation_unit)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
-  (inst : Executable_spec_extract.instrumentation)
+  (inst : FExtract.instrumentation)
   =
   let (TUnit decls) = cabs_tunit in
   let is_static_func () =
@@ -298,7 +297,7 @@ let needs_static_hack
 let needs_enum_hack
   ~(with_warning : bool)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
-  (inst : Executable_spec_extract.instrumentation)
+  (inst : FExtract.instrumentation)
   =
   match List.assoc Sym.equal inst.fn sigma.declarations with
   | loc, _, Decl_function (_, (_, ret_ct), cts, _, _, _) ->
@@ -344,18 +343,16 @@ let functions_under_test
   (cabs_tunit : CF.Cabs.translation_unit)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  : Executable_spec_extract.instrumentation list
+  : FExtract.instrumentation list
   =
-  let insts = prog5 |> Executable_spec_extract.collect_instrumentation |> fst in
+  let insts = prog5 |> FExtract.collect_instrumentation |> fst in
   let selected_fsyms =
     Check.select_functions
       (Sym.Set.of_list
-         (List.map
-            (fun (inst : Executable_spec_extract.instrumentation) -> inst.fn)
-            insts))
+         (List.map (fun (inst : FExtract.instrumentation) -> inst.fn) insts))
   in
   insts
-  |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
+  |> List.filter (fun (inst : FExtract.instrumentation) ->
     Option.is_some inst.internal
     && Sym.Set.mem inst.fn selected_fsyms
     && (Config.with_static_hack ()

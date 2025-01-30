@@ -9,6 +9,7 @@ module GBT = GenBaseTypes
 module GT = GenTerms
 module GD = GenDefinitions
 module Config = TestGenConfig
+module FExtract = Fulminate.Executable_spec_extract
 
 type s = GD.context
 
@@ -379,13 +380,13 @@ let compile_spec
 let compile
   ?(ctx : GD.context option)
   (preds : (Sym.t * Def.Predicate.t) list)
-  (insts : Executable_spec_extract.instrumentation list)
+  (insts : FExtract.instrumentation list)
   : GD.context
   =
   let recursive_preds = GenAnalysis.get_recursive_preds preds in
   let context_specs =
     insts
-    |> List.map (fun (inst : Executable_spec_extract.instrumentation) ->
+    |> List.map (fun (inst : FExtract.instrumentation) ->
       compile_spec
         (Option.get (Cerb_location.get_filename inst.fn_loc))
         recursive_preds

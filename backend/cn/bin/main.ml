@@ -428,7 +428,7 @@ let generate_executable_specs
       Cerb_colour.without_colour
         (fun () ->
           (try
-             Executable_spec.main
+             Fulminate.Executable_spec.main
                ~without_ownership_checking
                ~with_test_gen
                ~copy_source_dir
@@ -549,9 +549,9 @@ let run_tests
         print_endline ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
       Cerb_colour.without_colour
         (fun () ->
-          Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
+          Fulminate.Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           (try
-             Executable_spec.main
+             Fulminate.Executable_spec.main
                ~without_ownership_checking
                ~with_test_gen:true
                ~copy_source_dir:false

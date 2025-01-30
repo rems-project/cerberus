@@ -1,8 +1,8 @@
 module BT = BaseTypes
 module IT = IndexTerms
 module GT = GenTerms
-module CtA = Cn_internal_to_ail
-module Utils = Executable_spec_utils
+module CtA = Fulminate.Cn_internal_to_ail
+module Utils = Fulminate.Executable_spec_utils
 
 let gen_syms_bits (name : string) : (BT.t * Sym.t) list =
   let aux (bt : BT.t) : BT.t * Sym.t =
