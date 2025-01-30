@@ -1474,7 +1474,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
        `True
      | SMT.Sat when !try_hard ->
        debug_ack_command solver (SMT.pop 1);
-       let assumptions = LC.Set.to_list assumptions in
+       let assumptions = LC.Set.elements assumptions in
        let foralls = TryHard.translate_foralls solver assumptions in
        let functions = TryHard.translate_functions solver in
        debug_ack_command solver (SMT.push 1);
