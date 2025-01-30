@@ -12,8 +12,11 @@ let debug_print_locations = false (* Set to true to print actual locations *)
 let pp_cn_type_args = !^"_" ^^^ !^"_"
 
 let pp_Z z =
-  if Z.lt z Z.zero then !^("(" ^ Z.to_string z ^ ")%Z") else !^(Z.to_string z ^ "%Z")
+  let s = Z.to_string z in
+  if Z.lt z Z.zero then !^("(" ^ s ^ ")%Z") else !^(s ^ "%Z")
 
+
+let pp_Q q = !^("(" ^ Q.to_string q ^ ")%Q")
 
 (* Prints int as a Coq `nat` *)
 let pp_nat n = !^(string_of_int n)
@@ -653,10 +656,10 @@ let rec pp_ctype (Ctype.Ctype (annots, ct)) =
                  ^^ !^","
                  ^^^ pp_ctype ct
                  ^^ !^","
-                 ^^^ !^(string_of_bool is_reg)
+                 ^^^ pp_bool is_reg
                  ^^ !^")")
                args
-         ^^^ !^(string_of_bool variadic)
+         ^^^ pp_bool variadic
          ^^ !^")"
        | Ctype.FunctionNoParams (quals, ret) ->
          !^"(Ctype.FunctionNoParams"
@@ -703,10 +706,9 @@ let rec pp_sctype = function
     ^^^ pp_sctype ret
     ^^ !^")"
     ^^^ pp_list
-          (fun (ct, is_reg) ->
-            !^"(" ^^ pp_sctype ct ^^ !^"," ^^^ !^(string_of_bool is_reg) ^^ !^")")
+          (fun (ct, is_reg) -> !^"(" ^^ pp_sctype ct ^^ !^"," ^^^ pp_bool is_reg ^^ !^")")
           args
-    ^^^ !^(string_of_bool variadic)
+    ^^^ pp_bool variadic
     ^^ !^")"
 
 
@@ -1215,7 +1217,7 @@ and pp_terms_pattern_ = function
 
 
 let pp_const = function
-  | Terms.Z z -> !^"(Z" ^^^ !^(Z.to_string z) ^^ !^")"
+  | Terms.Z z -> !^"(Z" ^^^ pp_Z z ^^ !^")"
   | Bits ((sign, sz), z) ->
     !^"(Terms.Bits"
     ^^^ !^"(("
@@ -1225,12 +1227,12 @@ let pp_const = function
     ^^ !^"),"
     ^^^ pp_Z z
     ^^ !^"))"
-  | Q q -> !^"(Q" ^^^ !^(Q.to_string q) ^^ !^")"
+  | Q q -> !^"(Q" ^^^ pp_Q q ^^ !^")"
   | MemByte { alloc_id; value } ->
-    !^"(Terms.MemByte" ^^^ !^(Z.to_string alloc_id) ^^^ !^(Z.to_string value) ^^ !^")"
+    !^"(Terms.MemByte" ^^^ pp_Z alloc_id ^^^ pp_Z value ^^ !^")"
   | Pointer { alloc_id; addr } ->
-    !^"(Terms.Pointer" ^^^ !^(Z.to_string alloc_id) ^^^ !^(Z.to_string addr) ^^ !^")"
-  | Alloc_id z -> !^"(Terms.Alloc_id" ^^^ !^(Z.to_string z) ^^ !^")"
+    !^"(Terms.Pointer" ^^^ pp_Z alloc_id ^^^ pp_Z addr ^^ !^")"
+  | Alloc_id z -> !^"(Terms.Alloc_id" ^^^ pp_Z z ^^ !^")"
   | Bool b -> !^"(Terms.Bool" ^^^ pp_bool b ^^ !^")"
   | Unit -> !^"Terms.Unit"
   | Null -> !^"Terms.Null"
@@ -1696,10 +1698,10 @@ let rec pp_cn_basetype ppfa = function
 
 let pp_cn_const = function
   | CF.Cn.CNConst_NULL -> !^"CNConst_NULL"
-  | CNConst_integer n -> !^"(CNConst_integer" ^^^ !^(Z.to_string n) ^^ !^")"
+  | CNConst_integer n -> !^"(CNConst_integer" ^^^ pp_Z n ^^ !^")"
   | CNConst_bits (sign_sz, n) ->
     !^"(CNConst_bits" ^^^ pp_pair (pp_pair pp_cn_sign pp_nat) pp_Z (sign_sz, n) ^^ !^")"
-  | CNConst_bool b -> !^"(CNConst_bool" ^^^ !^(string_of_bool b) ^^ !^")"
+  | CNConst_bool b -> !^"(CNConst_bool" ^^^ pp_bool b ^^ !^")"
   | CNConst_unit -> !^"CNConst_unit"
 
 
