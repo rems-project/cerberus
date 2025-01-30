@@ -1277,19 +1277,21 @@ and pp_index_term_content = function
     pp_constructor "Cast" [ pp_underscore; pp_basetype pp_unit bt; pp_index_term t ]
 
 
-let pp_request_init = function Request.Init -> !^"Init" | Request.Uninit -> !^"Uninit"
+let pp_request_init = function
+  | Request.Init -> pp_constructor "Init" []
+  | Request.Uninit -> pp_constructor "Uninit" []
+
 
 let rec pp_request = function
-  | Request.P pred -> !^"(Request.P" ^^^ pp_request_ppredicate pred ^^^ !^")"
-  | Request.Q qpred -> !^"(Request.Q" ^^^ pp_request_qpredicate qpred ^^^ !^")"
+  | Request.P pred -> pp_constructor "P" [ pp_request_ppredicate pred ]
+  | Request.Q qpred -> pp_constructor "Q" [ pp_request_qpredicate qpred ]
 
 
 and pp_request_qpredicate qpred =
   pp_record
     [ ("QPredicate.name", pp_request_name qpred.Request.QPredicate.name);
       ("QPredicate.pointer", pp_index_term qpred.pointer);
-      ( "QPredicate.q",
-        pp_tuple [ pp_symbol (fst qpred.q); pp_basetype pp_unit (snd qpred.q) ] );
+      ("QPredicate.q", pp_pair pp_symbol (pp_basetype pp_unit) qpred.q);
       ("QPredicate.q_loc", pp_location qpred.q_loc);
       ("QPredicate.step", pp_index_term qpred.step);
       ("QPredicate.permission", pp_index_term qpred.permission);
@@ -1306,175 +1308,100 @@ and pp_request_ppredicate (pred : Request.Predicate.t) =
 
 
 and pp_request_name = function
-  | Request.PName sym -> !^"(Request.PName" ^^^ pp_symbol sym ^^ !^")"
+  | Request.PName sym -> pp_constructor "PName" [ pp_symbol sym ]
   | Request.Owned (ct, init) ->
-    !^"(Request.Owned" ^^^ pp_sctype ct ^^^ pp_request_init init ^^ !^")"
+    pp_constructor "Owned" [ pp_sctype ct; pp_request_init init ]
 
 
-let pp_memop pp_type = function
-  | PtrEq (e1, e2) ->
-    !^"(PtrEq"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | PtrNe (e1, e2) ->
-    !^"(PtrNe"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | PtrLt (e1, e2) ->
-    !^"(PtrLt"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | PtrGt (e1, e2) ->
-    !^"(PtrGt"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | PtrLe (e1, e2) ->
-    !^"(PtrLe"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | PtrGe (e1, e2) ->
-    !^"(PtrGe"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | Ptrdiff (act, e1, e2) ->
-    !^"(Ptrdiff"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_act act; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | IntFromPtr (act1, act2, e) ->
-    !^"(IntFromPtr"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_act act1; pp_act act2; pp_pexpr pp_type e ]
-    ^^ !^")"
-  | PtrFromInt (act1, act2, e) ->
-    !^"(PtrFromInt"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_act act1; pp_act act2; pp_pexpr pp_type e ]
-    ^^ !^")"
-  | PtrValidForDeref (act, e) ->
-    !^"(PtrValidForDeref"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_act act; pp_pexpr pp_type e ]
-    ^^ !^")"
-  | PtrWellAligned (act, e) ->
-    !^"(PtrWellAligned"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_act act; pp_pexpr pp_type e ]
-    ^^ !^")"
-  | PtrArrayShift (e1, act, e2) ->
-    !^"(PtrArrayShift"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_act act; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | PtrMemberShift (sym, id, e) ->
-    !^"(PtrMemberShift"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
-    ^^ !^")"
-  | Memcpy (e1, e2, e3) ->
-    !^"(Memcpy"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_pexpr pp_type e3 ]
-    ^^ !^")"
-  | Memcmp (e1, e2, e3) ->
-    !^"(Memcmp"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_pexpr pp_type e3 ]
-    ^^ !^")"
-  | Realloc (e1, e2, e3) ->
-    !^"(Realloc"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_pexpr pp_type e3 ]
-    ^^ !^")"
-  | Va_start (e1, e2) ->
-    !^"(Va_start"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
-  | Va_copy e -> !^"(Va_copy" ^^^ pp_underscore ^^^ pp_pexpr pp_type e ^^ !^")"
-  | Va_arg (e, act) ->
-    !^"(Va_arg" ^^^ pp_underscore ^^^ pp_tuple [ pp_pexpr pp_type e; pp_act act ] ^^ !^")"
-  | Va_end e -> !^"(Va_end" ^^^ pp_underscore ^^^ pp_pexpr pp_type e ^^ !^")"
-  | CopyAllocId (e1, e2) ->
-    !^"(CopyAllocId"
-    ^^^ pp_underscore
-    ^^^ pp_tuple [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-    ^^ !^")"
+let pp_memop pp_type m =
+  let pte = pp_pexpr pp_type in
+  match m with
+  | PtrEq e12 -> pp_constructor "PtrEq" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrNe e12 -> pp_constructor "PtrNe" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrLt e12 -> pp_constructor "PtrLt" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrGt e12 -> pp_constructor "PtrGt" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrLe e12 -> pp_constructor "PtrLe" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrGe e12 -> pp_constructor "PtrGe" [ pp_underscore; pp_pair pte pte e12 ]
+  | Ptrdiff e123 ->
+    pp_constructor "Ptrdiff" [ pp_underscore; pp_triple pp_act pte pte e123 ]
+  | IntFromPtr e123 ->
+    pp_constructor "IntFromPtr" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
+  | PtrFromInt e123 ->
+    pp_constructor "PtrFromInt" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
+  | PtrValidForDeref e12 ->
+    pp_constructor "PtrValidForDeref" [ pp_underscore; pp_pair pp_act pte e12 ]
+  | PtrWellAligned e12 ->
+    pp_constructor "PtrWellAligned" [ pp_underscore; pp_pair pp_act pte e12 ]
+  | PtrArrayShift e123 ->
+    pp_constructor "PtrArrayShift" [ pp_underscore; pp_triple pte pp_act pte e123 ]
+  | PtrMemberShift e123 ->
+    pp_constructor
+      "PtrMemberShift"
+      [ pp_underscore; pp_triple pp_symbol pp_identifier pte e123 ]
+  | Memcpy e123 -> pp_constructor "Memcpy" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Memcmp e123 -> pp_constructor "Memcmp" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Realloc e123 -> pp_constructor "Realloc" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Va_start e12 -> pp_constructor "Va_start" [ pp_underscore; pp_pair pte pte e12 ]
+  | Va_copy e -> pp_constructor "Va_copy" [ pp_underscore; pte e ]
+  | Va_arg e12 -> pp_constructor "Va_arg" [ pp_underscore; pp_pair pte pp_act e12 ]
+  | Va_end e -> pp_constructor "Va_end" [ pp_underscore; pte e ]
+  | CopyAllocId e12 -> pp_constructor "CopyAllocId" [ pp_underscore; pp_pair pte pte e12 ]
 
 
-let pp_pack_unpack = function CF.Cn.Pack -> !^"Pack" | CF.Cn.Unpack -> !^"Unpack"
+let pp_pack_unpack = function
+  | CF.Cn.Pack -> pp_constructor "Pack" []
+  | CF.Cn.Unpack -> pp_constructor "Unpack" []
 
-let pp_to_from = function CF.Cn.To -> !^"To" | CF.Cn.From -> !^"From"
+
+let pp_to_from = function
+  | CF.Cn.To -> pp_constructor "To" []
+  | CF.Cn.From -> pp_constructor "From" []
+
 
 let pp_cn_to_instantiate ppfa ppfty = function
-  | CF.Cn.I_Function f -> !^"(I_Function" ^^^ ppfa f ^^ !^")"
-  | CF.Cn.I_Good ty -> !^"(I_Good" ^^^ ppfty ty ^^ !^")"
-  | CF.Cn.I_Everything -> !^"I_Everything"
+  | CF.Cn.I_Function f -> pp_constructor "I_Function" [ ppfa f ]
+  | CF.Cn.I_Good ty -> pp_constructor "I_Good" [ ppfty ty ]
+  | CF.Cn.I_Everything -> pp_constructor "I_Everything" []
 
 
 let pp_logical_constraint = function
-  | LogicalConstraints.T term -> !^"(T" ^^^ pp_index_term term ^^ !^")"
+  | LogicalConstraints.T term -> pp_constructor "T" [ pp_index_term term ]
   | LogicalConstraints.Forall ((sym, bt), term) ->
-    !^"(Forall"
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^")"
-    ^^^ pp_index_term term
-    ^^ !^")"
+    pp_constructor
+      "Forall"
+      [ pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt); pp_index_term term ]
 
 
 let rec pp_return_type = function
-  | ReturnTypes.Computational ((sym, bt), info, lrt) ->
-    !^"(ReturnTypes.Computational"
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^")"
-    ^^^ pp_location_info info
-    ^^^ pp_logical_return_type lrt
-    ^^^ !^")"
+  | ReturnTypes.Computational (sbt, info, lrt) ->
+    pp_constructor
+      "ReturnTypes.Computational"
+      [ pp_pair pp_symbol (pp_basetype pp_unit) sbt;
+        pp_location_info info;
+        pp_logical_return_type lrt
+      ]
 
 
 and pp_logical_return_type = function
-  | LogicalReturnTypes.Define ((sym, term), info, lrt) ->
-    !^"(LogicalReturnTypes.Define"
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_index_term term
-    ^^ !^")"
-    ^^^ pp_location_info info
-    ^^^ pp_logical_return_type lrt
-    ^^^ !^")"
-  | LogicalReturnTypes.Resource ((sym, (req, bt)), info, lrt) ->
-    !^"(LogicalReturnTypes.Resource"
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ !^"("
-    ^^^ pp_request req
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^"))"
-    ^^^ pp_location_info info
-    ^^^ pp_logical_return_type lrt
-    ^^^ !^")"
+  | LogicalReturnTypes.Define (st, info, lrt) ->
+    pp_constructor
+      "LogicalReturnTypes.Define"
+      [ pp_pair pp_symbol pp_index_term st;
+        pp_location_info info;
+        pp_logical_return_type lrt
+      ]
+  | LogicalReturnTypes.Resource (x, info, lrt) ->
+    pp_constructor
+      "LogicalReturnTypes.Resource"
+      [ pp_pair pp_symbol (pp_pair pp_request (pp_basetype pp_unit)) x;
+        pp_location_info info;
+        pp_logical_return_type lrt
+      ]
   | LogicalReturnTypes.Constraint (lc, info, lrt) ->
-    !^"(LogicalReturnTypes.Constraint"
-    ^^^ pp_logical_constraint lc
-    ^^^ pp_location_info info
-    ^^^ pp_logical_return_type lrt
-    ^^^ !^")"
-  | LogicalReturnTypes.I -> !^"LogicalReturnTypes.I"
+    pp_constructor
+      "LogicalReturnTypes.Constraint"
+      [ pp_logical_constraint lc; pp_location_info info; pp_logical_return_type lrt ]
+  | LogicalReturnTypes.I -> pp_constructor "LogicalReturnTypes.I" []
 
 
 let rec pp_logical_args ppf = function
