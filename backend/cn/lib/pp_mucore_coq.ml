@@ -842,165 +842,121 @@ let rec pp_mem_constraint = function
 
 
 and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
-  !^"(Pexpr"
-  ^^^ pp_underscore
-  ^^^ pp_location loc
-  ^^^ pp_list pp_annot_t annots
-  ^^^ pp_type ty
-  ^^^ (match pe with
-       | PEsym s -> !^"(PEsym" ^^^ pp_underscore ^^^ pp_symbol s ^^ !^")"
-       | PEval v -> !^"(PEval" ^^^ pp_underscore ^^^ pp_value pp_type v ^^ !^")"
+  pp_constructor
+    "Pexpr"
+    [ pp_underscore;
+      pp_location loc;
+      pp_list pp_annot_t annots;
+      pp_type ty;
+      (match pe with
+       | PEsym s -> pp_constructor "PEsym" [ pp_underscore; pp_symbol s ]
+       | PEval v -> pp_constructor "PEval" [ pp_underscore; pp_value pp_type v ]
        | PEctor (c, es) ->
-         !^"(PEctor"
-         ^^^ pp_underscore
-         ^^^ pp_ctor c
-         ^^^ pp_list (pp_pexpr pp_type) es
-         ^^ !^")"
+         pp_constructor
+           "PEctor"
+           [ pp_underscore; pp_ctor c; pp_list (pp_pexpr pp_type) es ]
        | PEop (op, e1, e2) ->
-         !^"(PEop"
-         ^^^ pp_underscore
-         ^^^ pp_core_binop op
-         ^^^ pp_pexpr pp_type e1
-         ^^^ pp_pexpr pp_type e2
-         ^^ !^")"
+         pp_constructor
+           "PEop"
+           [ pp_underscore; pp_core_binop op; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
        | PEconstrained cs ->
-         !^"(PEconstrained"
-         ^^^ pp_underscore
-         ^^^ pp_list
-               (fun (c, e) ->
-                 !^"(" ^^ pp_mem_constraint c ^^ !^"," ^^^ pp_pexpr pp_type e ^^ !^")")
-               cs
-         ^^ !^")"
+         pp_constructor
+           "PEconstrained"
+           [ pp_underscore; pp_list (pp_pair pp_mem_constraint (pp_pexpr pp_type)) cs ]
        | PEbitwise_unop (op, e) ->
-         !^"(PEbitwise_unop"
-         ^^^ pp_underscore
-         ^^^ pp_bw_unop op
-         ^^^ pp_pexpr pp_type e
-         ^^ !^")"
+         pp_constructor
+           "PEbitwise_unop"
+           [ pp_underscore; pp_bw_unop op; pp_pexpr pp_type e ]
        | PEbitwise_binop (op, e1, e2) ->
-         !^"(PEbitwise_binop"
-         ^^^ pp_underscore
-         ^^^ pp_bw_binop op
-         ^^^ pp_pexpr pp_type e1
-         ^^^ pp_pexpr pp_type e2
-         ^^ !^")"
-       | Cfvfromint e -> !^"(Cfvfromint" ^^^ pp_underscore ^^^ pp_pexpr pp_type e ^^ !^")"
+         pp_constructor
+           "PEbitwise_binop"
+           [ pp_underscore; pp_bw_binop op; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+       | Cfvfromint e -> pp_constructor "Cfvfromint" [ pp_underscore; pp_pexpr pp_type e ]
        | Civfromfloat (act, e) ->
-         !^"(Civfromfloat"
-         ^^^ pp_underscore
-         ^^^ pp_act act
-         ^^^ pp_pexpr pp_type e
-         ^^ !^")"
+         pp_constructor "Civfromfloat" [ pp_underscore; pp_act act; pp_pexpr pp_type e ]
        | PEarray_shift (base, ct, idx) ->
-         !^"(PEarray_shift"
-         ^^^ pp_underscore
-         ^^^ pp_pexpr pp_type base
-         ^^^ pp_sctype ct
-         ^^^ pp_pexpr pp_type idx
-         ^^ !^")"
+         pp_constructor
+           "PEarray_shift"
+           [ pp_underscore; pp_pexpr pp_type base; pp_sctype ct; pp_pexpr pp_type idx ]
        | PEmember_shift (e, sym, id) ->
-         !^"(PEmember_shift"
-         ^^^ pp_underscore
-         ^^^ pp_pexpr pp_type e
-         ^^^ pp_symbol sym
-         ^^^ pp_identifier id
-         ^^ !^")"
-       | PEnot e -> !^"(PEnot" ^^^ pp_underscore ^^^ pp_pexpr pp_type e ^^ !^")"
+         pp_constructor
+           "PEmember_shift"
+           [ pp_underscore; pp_pexpr pp_type e; pp_symbol sym; pp_identifier id ]
+       | PEnot e -> pp_constructor "PEnot" [ pp_underscore; pp_pexpr pp_type e ]
        | PEapply_fun (f, args) ->
-         !^"(PEapply_fun"
-         ^^^ pp_underscore
-         ^^^ pp_function f
-         ^^^ pp_list (pp_pexpr pp_type) args
-         ^^ !^")"
+         pp_constructor
+           "PEapply_fun"
+           [ pp_underscore; pp_function f; pp_list (pp_pexpr pp_type) args ]
        | PEstruct (sym, fields) ->
-         !^"(PEstruct"
-         ^^^ pp_underscore
-         ^^^ pp_symbol sym
-         ^^^ pp_list
-               (fun (id, e) ->
-                 !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_pexpr pp_type e ^^ !^")")
-               fields
-         ^^ !^")"
+         pp_constructor
+           "PEstruct"
+           [ pp_underscore;
+             pp_symbol sym;
+             pp_list (pp_pair pp_identifier (pp_pexpr pp_type)) fields
+           ]
        | PEunion (sym, id, e) ->
-         !^"(PEunion"
-         ^^^ pp_underscore
-         ^^^ pp_symbol sym
-         ^^^ pp_identifier id
-         ^^^ pp_pexpr pp_type e
-         ^^ !^")"
+         pp_constructor
+           "PEunion"
+           [ pp_underscore; pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
        | PEcfunction e ->
-         !^"(PEcfunction" ^^^ pp_underscore ^^^ pp_pexpr pp_type e ^^ !^")"
+         pp_constructor "PEcfunction" [ pp_underscore; pp_pexpr pp_type e ]
        | PEmemberof (sym, id, e) ->
-         !^"(PEmemberof"
-         ^^^ pp_underscore
-         ^^^ pp_symbol sym
-         ^^^ pp_identifier id
-         ^^^ pp_pexpr pp_type e
-         ^^ !^")"
+         pp_constructor
+           "PEmemberof"
+           [ pp_underscore; pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
        | PEbool_to_integer e ->
-         !^"(PEbool_to_integer" ^^^ pp_underscore ^^^ pp_pexpr pp_type e ^^ !^")"
+         pp_constructor "PEbool_to_integer" [ pp_underscore; pp_pexpr pp_type e ]
        | PEconv_int (e1, e2) ->
-         !^"(PEconv_int"
-         ^^^ pp_underscore
-         ^^^ pp_pexpr pp_type e1
-         ^^^ pp_pexpr pp_type e2
-         ^^ !^")"
+         pp_constructor
+           "PEconv_int"
+           [ pp_underscore; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
        | PEconv_loaded_int (e1, e2) ->
-         !^"(PEconv_loaded_int"
-         ^^^ pp_underscore
-         ^^^ pp_pexpr pp_type e1
-         ^^^ pp_pexpr pp_type e2
-         ^^ !^")"
+         pp_constructor
+           "PEconv_loaded_int"
+           [ pp_underscore; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
        | PEwrapI (act, e) ->
-         !^"(PEwrapI" ^^^ pp_underscore ^^^ pp_act act ^^^ pp_pexpr pp_type e ^^ !^")"
+         pp_constructor "PEwrapI" [ pp_underscore; pp_act act; pp_pexpr pp_type e ]
        | PEcatch_exceptional_condition (act, e) ->
-         !^"(PEcatch_exceptional_condition"
-         ^^^ pp_underscore
-         ^^^ pp_act act
-         ^^^ pp_pexpr pp_type e
-         ^^ !^")"
+         pp_constructor
+           "PEcatch_exceptional_condition"
+           [ pp_underscore; pp_act act; pp_pexpr pp_type e ]
        | PEbounded_binop (kind, op, e1, e2) ->
-         !^"(PEbounded_binop"
-         ^^^ pp_underscore
-         ^^^ pp_bound_kind kind
-         ^^^ pp_iop op
-         ^^^ pp_pexpr pp_type e1
-         ^^^ pp_pexpr pp_type e2
-         ^^ !^")"
+         pp_constructor
+           "PEbounded_binop"
+           [ pp_underscore;
+             pp_bound_kind kind;
+             pp_iop op;
+             pp_pexpr pp_type e1;
+             pp_pexpr pp_type e2
+           ]
        | PEis_representable_integer (e, act) ->
-         !^"(PEis_representable_integer"
-         ^^^ pp_underscore
-         ^^^ pp_pexpr pp_type e
-         ^^^ pp_act act
-         ^^ !^")"
+         pp_constructor
+           "PEis_representable_integer"
+           [ pp_underscore; pp_pexpr pp_type e; pp_act act ]
        | PEundef (loc, ub) ->
-         !^"(PEundef"
-         ^^^ pp_underscore
-         ^^^ pp_location loc
-         ^^^ pp_undefined_behaviour ub
-         ^^ !^")"
+         pp_constructor
+           "PEundef"
+           [ pp_underscore; pp_location loc; pp_undefined_behaviour ub ]
        | PEerror (msg, e) ->
-         !^"(PEerror" ^^^ pp_underscore ^^^ !^msg ^^^ pp_pexpr pp_type e ^^ !^")"
+         pp_constructor "PEerror" [ pp_underscore; pp_string msg; pp_pexpr pp_type e ]
        | PElet (pat, e1, e2) ->
-         !^"(PElet"
-         ^^^ pp_underscore
-         ^^^ pp_pattern pp_type pat
-         ^^^ pp_pexpr pp_type e1
-         ^^^ pp_pexpr pp_type e2
-         ^^ !^")"
+         pp_constructor
+           "PElet"
+           [ pp_underscore;
+             pp_pattern pp_type pat;
+             pp_pexpr pp_type e1;
+             pp_pexpr pp_type e2
+           ]
        | PEif (c, t, e) ->
-         !^"(PEif"
-         ^^^ pp_underscore
-         ^^^ pp_pexpr pp_type c
-         ^^^ pp_pexpr pp_type t
-         ^^^ pp_pexpr pp_type e
-         ^^ !^")")
-  ^^ !^")"
+         pp_constructor
+           "PEif"
+           [ pp_underscore; pp_pexpr pp_type c; pp_pexpr pp_type t; pp_pexpr pp_type e ])
+    ]
 
 
 and pp_bound_kind = function
-  | Bound_Wrap act -> !^"(Bound_Wrap" ^^^ pp_act act ^^ !^")"
-  | Bound_Except act -> !^"(Bound_Except" ^^^ pp_act act ^^ !^")"
+  | Bound_Wrap act -> pp_constructor "Bound_Wrap" [ pp_act act ]
+  | Bound_Except act -> pp_constructor "Bound_Except" [ pp_act act ]
 
 
 and pp_action pp_type (Action (loc, act)) =
@@ -1016,100 +972,96 @@ and pp_paction pp_type (Paction (pol, act)) =
 and pp_action_content pp_type act =
   match act with
   | Create (e, act, sym) ->
-    !^"(Create"
-    ^^^ pp_underscore
-    ^^^ pp_pexpr pp_type e
-    ^^^ pp_act act
-    ^^^ pp_symbol_prefix sym
-    ^^ !^")"
+    pp_constructor
+      "Create"
+      [ pp_underscore; pp_pexpr pp_type e; pp_act act; pp_symbol_prefix sym ]
   | CreateReadOnly (e1, act, e2, sym) ->
-    !^"(CreateReadOnly"
-    ^^^ pp_underscore
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_symbol_prefix sym
-    ^^ !^")"
+    pp_constructor
+      "CreateReadOnly"
+      [ pp_underscore;
+        pp_pexpr pp_type e1;
+        pp_act act;
+        pp_pexpr pp_type e2;
+        pp_symbol_prefix sym
+      ]
   | Alloc (e1, e2, sym) ->
-    !^"(Alloc"
-    ^^^ pp_underscore
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_symbol_prefix sym
-    ^^ !^")"
+    pp_constructor
+      "Alloc"
+      [ pp_underscore; pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_symbol_prefix sym ]
   | Kill (kind, e) ->
-    !^"(Kill" ^^^ pp_underscore ^^^ pp_kill_kind kind ^^^ pp_pexpr pp_type e ^^ !^")"
+    pp_constructor "Kill" [ pp_underscore; pp_kill_kind kind; pp_pexpr pp_type e ]
   | Store (b, act, e1, e2, mo) ->
-    !^"(Store"
-    ^^^ pp_underscore
-    ^^^ pp_bool b
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_memory_order mo
-    ^^ !^")"
+    pp_constructor
+      "Store"
+      [ pp_underscore;
+        pp_bool b;
+        pp_act act;
+        pp_pexpr pp_type e1;
+        pp_pexpr pp_type e2;
+        pp_memory_order mo
+      ]
   | Load (act, e, mo) ->
-    !^"(Load"
-    ^^^ pp_underscore
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e
-    ^^^ pp_memory_order mo
-    ^^ !^")"
+    pp_constructor
+      "Load"
+      [ pp_underscore; pp_act act; pp_pexpr pp_type e; pp_memory_order mo ]
   | RMW (act, e1, e2, e3, mo1, mo2) ->
-    !^"(RMW"
-    ^^^ pp_underscore
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_pexpr pp_type e3
-    ^^^ pp_memory_order mo1
-    ^^^ pp_memory_order mo2
-    ^^ !^")"
-  | Fence mo -> !^"(Fence" ^^^ pp_underscore ^^^ pp_memory_order mo ^^ !^")"
+    pp_constructor
+      "RMW"
+      [ pp_underscore;
+        pp_act act;
+        pp_pexpr pp_type e1;
+        pp_pexpr pp_type e2;
+        pp_pexpr pp_type e3;
+        pp_memory_order mo1;
+        pp_memory_order mo2
+      ]
+  | Fence mo -> pp_constructor "Fence" [ pp_underscore; pp_memory_order mo ]
   | CompareExchangeStrong (act, e1, e2, e3, mo1, mo2) ->
-    !^"(CompareExchangeStrong"
-    ^^^ pp_underscore
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_pexpr pp_type e3
-    ^^^ pp_memory_order mo1
-    ^^^ pp_memory_order mo2
-    ^^ !^")"
+    pp_constructor
+      "CompareExchangeStrong"
+      [ pp_underscore;
+        pp_act act;
+        pp_pexpr pp_type e1;
+        pp_pexpr pp_type e2;
+        pp_pexpr pp_type e3;
+        pp_memory_order mo1;
+        pp_memory_order mo2
+      ]
   | CompareExchangeWeak (act, e1, e2, e3, mo1, mo2) ->
-    !^"(CompareExchangeWeak"
-    ^^^ pp_underscore
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_pexpr pp_type e3
-    ^^^ pp_memory_order mo1
-    ^^^ pp_memory_order mo2
-    ^^ !^")"
+    pp_constructor
+      "CompareExchangeWeak"
+      [ pp_underscore;
+        pp_act act;
+        pp_pexpr pp_type e1;
+        pp_pexpr pp_type e2;
+        pp_pexpr pp_type e3;
+        pp_memory_order mo1;
+        pp_memory_order mo2
+      ]
   | LinuxFence lmo ->
-    !^"(LinuxFence" ^^^ pp_underscore ^^^ pp_linux_memory_order lmo ^^ !^")"
+    pp_constructor "LinuxFence" [ pp_underscore; pp_linux_memory_order lmo ]
   | LinuxLoad (act, e, lmo) ->
-    !^"(LinuxLoad"
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e
-    ^^^ pp_linux_memory_order lmo
-    ^^ !^")"
+    pp_constructor
+      "LinuxLoad"
+      [ pp_act act; pp_pexpr pp_type e; pp_linux_memory_order lmo ]
   | LinuxStore (act, e1, e2, lmo) ->
-    !^"(LinuxStore"
-    ^^^ pp_underscore
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_linux_memory_order lmo
-    ^^ !^")"
+    pp_constructor
+      "LinuxStore"
+      [ pp_underscore;
+        pp_act act;
+        pp_pexpr pp_type e1;
+        pp_pexpr pp_type e2;
+        pp_linux_memory_order lmo
+      ]
   | LinuxRMW (act, e1, e2, lmo) ->
-    !^"(LinuxRMW"
-    ^^^ pp_underscore
-    ^^^ pp_act act
-    ^^^ pp_pexpr pp_type e1
-    ^^^ pp_pexpr pp_type e2
-    ^^^ pp_linux_memory_order lmo
-    ^^ !^")"
+    pp_constructor
+      "LinuxRMW"
+      [ pp_underscore;
+        pp_act act;
+        pp_pexpr pp_type e1;
+        pp_pexpr pp_type e2;
+        pp_linux_memory_order lmo
+      ]
 
 
 and pp_act { loc; annot; ct } =
@@ -1121,131 +1073,107 @@ and pp_act { loc; annot; ct } =
 
 
 and pp_kill_kind = function
-  | Dynamic -> !^"Dynamic" (* constructor with no arguments *)
-  | Static ct -> !^"(Static" ^^^ pp_sctype ct ^^ !^")"
+  | Dynamic -> pp_constructor "Dynamic" []
+  | Static ct -> pp_constructor "Static" [ pp_sctype ct ]
 
 
 and pp_value pp_type (V (ty, v)) =
-  !^"(V"
-  ^^^ pp_underscore
-  ^^^ pp_type ty
-  ^^^ (match v with
+  pp_constructor
+    "V"
+    [ pp_underscore;
+      pp_type ty;
+      (match v with
        | Vobject ov ->
-         !^"(Vobject" ^^^ pp_underscore ^^^ pp_object_value pp_type ov ^^ !^")"
-       | Vctype t -> !^"(Vctype" ^^^ pp_underscore ^^^ pp_ctype t ^^ !^")"
+         pp_constructor "Vobject" [ pp_underscore; pp_object_value pp_type ov ]
+       | Vctype t -> pp_constructor "Vctype" [ pp_underscore; pp_ctype t ]
        | Vfunction_addr s ->
-         !^"(Vfunction_addr" ^^^ pp_underscore ^^^ pp_symbol s ^^ !^")"
-       | Vunit -> !^"(Vunit" ^^^ pp_underscore ^^^ !^")"
-       | Vtrue -> !^"(Vtrue" ^^^ pp_underscore ^^^ !^")"
-       | Vfalse -> !^"(Vfalse" ^^^ pp_underscore ^^^ !^")"
+         pp_constructor "Vfunction_addr" [ pp_underscore; pp_symbol s ]
+       | Vunit -> pp_constructor "Vunit" [ pp_underscore ]
+       | Vtrue -> pp_constructor "Vtrue" [ pp_underscore ]
+       | Vfalse -> pp_constructor "Vfalse" [ pp_underscore ]
        | Vlist (bt, vs) ->
-         !^"(Vlist"
-         ^^^ pp_underscore
-         ^^^ pp_core_base_type bt
-         ^^^ pp_list (pp_value pp_type) vs
-         ^^ !^")"
+         pp_constructor
+           "Vlist"
+           [ pp_underscore; pp_core_base_type bt; pp_list (pp_value pp_type) vs ]
        | Vtuple vs ->
-         !^"(Vtuple" ^^^ pp_underscore ^^^ pp_list (pp_value pp_type) vs ^^ !^")")
-  ^^^ !^")"
+         pp_constructor "Vtuple" [ pp_underscore; pp_list (pp_value pp_type) vs ])
+    ]
 
 
 and pp_object_value pp_type (OV (ty, ov)) =
-  !^"OV"
-  ^^^ pp_type ty
-  ^^^
-  match ov with
-  | OVinteger i -> !^"(OVinteger" ^^^ pp_integer_value i ^^ !^")"
-  | OVfloating f -> !^"(OVfloating" ^^^ pp_floating_value f ^^ !^")"
-  | OVpointer p -> !^"(OVpointer" ^^^ pp_pointer_value pp_symbol p ^^ !^")"
-  | OVarray vs -> !^"(OVarray" ^^^ pp_list (pp_object_value pp_type) vs ^^ !^")"
-  | OVstruct (sym, fields) ->
-    !^"(OVstruct"
-    ^^^ pp_symbol sym
-    ^^^ pp_list
-          (fun (id, ty, v) ->
-            !^"("
-            ^^ pp_identifier id
-            ^^ !^","
-            ^^^ pp_sctype ty
-            ^^ !^","
-            ^^^ pp_mem_value v
-            ^^ !^")")
-          fields
-    ^^ !^")"
-  | OVunion (sym, id, v) ->
-    !^"(OVunion" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ pp_mem_value v ^^ !^")"
+  pp_constructor
+    "OV"
+    [ pp_type ty;
+      (match ov with
+       | OVinteger i -> pp_constructor "OVinteger" [ pp_integer_value i ]
+       | OVfloating f -> pp_constructor "OVfloating" [ pp_floating_value f ]
+       | OVpointer p -> pp_constructor "OVpointer" [ pp_pointer_value pp_symbol p ]
+       | OVarray vs -> pp_constructor "OVarray" [ pp_list (pp_object_value pp_type) vs ]
+       | OVstruct (sym, fields) ->
+         pp_constructor
+           "OVstruct"
+           [ pp_symbol sym;
+             pp_list (pp_triple pp_identifier pp_sctype pp_mem_value) fields
+           ]
+       | OVunion (sym, id, v) ->
+         pp_constructor "OVunion" [ pp_symbol sym; pp_identifier id; pp_mem_value v ])
+    ]
 
 
 (* TODO: hardcoded None. pass `pp_type` *)
-let pp_location_info (x, _) = !^"(" ^^^ pp_location x ^^^ !^"," ^^^ !^"None" ^^^ !^")"
+let pp_location_info = pp_pair pp_location (fun _ -> !^"None")
 
 let pp_trusted = function
-  | Trusted loc -> !^"(Trusted" ^^^ pp_location loc ^^ !^")"
-  | Checked -> !^"Checked"
+  | Trusted loc -> pp_constructor "Trusted" [ pp_location loc ]
+  | Checked -> pp_constructor "Checked" []
 
 
 let pp_unop = function
-  | Terms.Not -> !^"Not"
-  | Negate -> !^"Negate"
-  | BW_CLZ_NoSMT -> !^"BW_CLZ_NoSMT"
-  | BW_CTZ_NoSMT -> !^"BW_CTZ_NoSMT"
-  | BW_FFS_NoSMT -> !^"BW_FFS_NoSMT"
-  | BW_FLS_NoSMT -> !^"BW_FLS_NoSMT"
-  | BW_Compl -> !^"BW_Compl"
+  | Terms.Not -> pp_constructor "Not" []
+  | Negate -> pp_constructor "Negate" []
+  | BW_CLZ_NoSMT -> pp_constructor "BW_CLZ_NoSMT" []
+  | BW_CTZ_NoSMT -> pp_constructor "BW_CTZ_NoSMT" []
+  | BW_FFS_NoSMT -> pp_constructor "BW_FFS_NoSMT" []
+  | BW_FLS_NoSMT -> pp_constructor "BW_FLS_NoSMT" []
+  | BW_Compl -> pp_constructor "BW_Compl" []
 
 
 let rec pp_terms_pattern (Terms.Pat (pat, bt, loc)) =
-  !^"(Pat"
-  ^^^ pp_terms_pattern_ pat
-  ^^^ pp_basetype pp_unit bt
-  ^^^ pp_location loc
-  ^^ !^")"
+  pp_constructor "Pat" [ pp_terms_pattern_ pat; pp_basetype pp_unit bt; pp_location loc ]
 
 
 and pp_terms_pattern_ = function
-  | Terms.PSym s -> !^"(PSym" ^^^ pp_symbol s ^^ !^")"
-  | Terms.PWild -> !^"PWild"
+  | Terms.PSym s -> pp_constructor "PSym" [ pp_symbol s ]
+  | Terms.PWild -> pp_constructor "PWild" []
   | Terms.PConstructor (sym, args) ->
-    !^"(PConstructor"
-    ^^^ pp_symbol sym
-    ^^^ pp_list
-          (fun (id, pat) ->
-            !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_terms_pattern pat ^^ !^")")
-          args
-    ^^ !^")"
+    pp_constructor
+      "PConstructor"
+      [ pp_symbol sym; pp_list (pp_pair pp_identifier pp_terms_pattern) args ]
 
 
 let pp_const = function
-  | Terms.Z z -> !^"(Z" ^^^ pp_Z z ^^ !^")"
-  | Bits ((sign, sz), z) ->
-    !^"(Terms.Bits"
-    ^^^ !^"(("
-    ^^ pp_sign sign
-    ^^ !^","
-    ^^^ pp_nat sz
-    ^^ !^"),"
-    ^^^ pp_Z z
-    ^^ !^"))"
-  | Q q -> !^"(Q" ^^^ pp_Q q ^^ !^")"
-  | MemByte { alloc_id; value } ->
-    !^"(Terms.MemByte" ^^^ pp_Z alloc_id ^^^ pp_Z value ^^ !^")"
-  | Pointer { alloc_id; addr } ->
-    !^"(Terms.Pointer" ^^^ pp_Z alloc_id ^^^ pp_Z addr ^^ !^")"
-  | Alloc_id z -> !^"(Terms.Alloc_id" ^^^ pp_Z z ^^ !^")"
-  | Bool b -> !^"(Terms.Bool" ^^^ pp_bool b ^^ !^")"
-  | Unit -> !^"Terms.Unit"
-  | Null -> !^"Terms.Null"
-  | CType_const t -> !^"(Terms.CType_const" ^^^ pp_sctype t ^^ !^")"
-  | Default bt -> !^"(Terms.Default" ^^^ pp_basetype pp_unit bt ^^ !^")"
+  | Terms.Z z -> pp_constructor "Z" [ pp_Z z ]
+  | Terms.Bits (x, z) ->
+    pp_constructor "Bits" [ pp_pair (pp_pair pp_sign pp_nat) pp_Z (x, z) ]
+  | Q q -> pp_constructor "Q" [ pp_Q q ]
+  | MemByte { alloc_id; value } -> pp_constructor "MemByte" [ pp_Z alloc_id; pp_Z value ]
+  | Pointer { alloc_id; addr } -> pp_constructor "Pointer" [ pp_Z alloc_id; pp_Z addr ]
+  | Alloc_id z -> pp_constructor "Alloc_id" [ pp_Z z ]
+  | Bool b -> pp_constructor "Bool" [ pp_bool b ]
+  | Unit -> pp_constructor "Unit" []
+  | Null -> pp_constructor "Null" []
+  | CType_const t -> pp_constructor "CType_const" [ pp_sctype t ]
+  | Default bt -> pp_constructor "Default" [ pp_basetype pp_unit bt ]
 
 
 let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
-  !^"(Terms.IT"
-  ^^^ pp_underscore
-  ^^^ pp_index_term_content term
-  ^^^ pp_basetype pp_unit bt
-  ^^^ pp_location loc
-  ^^ !^")"
+  pp_constructor
+    "IT"
+    [ pp_underscore;
+      pp_index_term_content term;
+      pp_basetype pp_unit bt;
+      pp_location loc
+    ]
 
 
 and pp_index_term_content = function
