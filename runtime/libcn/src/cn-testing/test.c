@@ -25,9 +25,16 @@ struct cn_test_case {
 static struct cn_test_case test_cases[CN_TEST_MAX_TEST_CASES];
 static uint16_t num_test_cases = 0;
 
+/**
+ * Registers a test.
+ *
+ * @param suite The name of the test suite.
+ * @param name The name of the test.
+ * @param func The function pointer to the test.
+ */
 void cn_register_test_case(const char* suite, const char* name, cn_test_case_fn* func) {
     if (num_test_cases == CN_TEST_MAX_TEST_CASES) {
-        printf("Tried to register too many tests.");
+        fprintf(stderr, "Error: Tried to register too many tests.\n");
         exit(1);
     }
 
@@ -38,6 +45,14 @@ void cn_register_test_case(const char* suite, const char* name, cn_test_case_fn*
     };
 }
 
+/**
+ * Prints information about a test.
+ *
+ * @param suite The name of the test suite.
+ * @param name The name of the test.
+ * @param tests The number of test runs.
+ * @param discards The number of discarded test cases.
+ */
 void print_test_info(const char* suite, const char* name, int tests, int discards) {
     if (tests == 0 && discards == 0) {
         printf("Testing %s::%s:", suite, name);
@@ -46,7 +61,7 @@ void print_test_info(const char* suite, const char* name, int tests, int discard
         printf("Testing %s::%s: %d runs", suite, name, tests);
     }
     else {
-        printf("Testing %s::%s: %d runs; %d discarded", suite, name, tests, discards);
+        printf("Testing %s::%s: %d runs, %d discards", suite, name, tests, discards);
     }
 
     fflush(stdout);
