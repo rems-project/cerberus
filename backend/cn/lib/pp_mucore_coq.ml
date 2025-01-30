@@ -1169,180 +1169,112 @@ let pp_const = function
 let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
   pp_constructor
     "IT"
-    [ pp_underscore;
-      pp_index_term_content term;
-      pp_basetype pp_unit bt;
-      pp_location loc
-    ]
+    [ pp_underscore; pp_index_term_content term; pp_basetype pp_unit bt; pp_location loc ]
 
 
 and pp_index_term_content = function
-  | IndexTerms.Const c -> !^"(Const" ^^^ pp_underscore ^^^ pp_const c ^^ !^")"
-  | Sym s -> !^"(Sym" ^^^ pp_underscore ^^^ pp_symbol s ^^ !^")"
-  | Unop (op, t) ->
-    !^"(Unop" ^^^ pp_underscore ^^^ pp_unop op ^^^ pp_index_term t ^^ !^")"
+  | IndexTerms.Const c -> pp_constructor "Const" [ pp_underscore; pp_const c ]
+  | Sym s -> pp_constructor "Sym" [ pp_underscore; pp_symbol s ]
+  | Unop (op, t) -> pp_constructor "Unop" [ pp_underscore; pp_unop op; pp_index_term t ]
   | Binop (op, t1, t2) ->
-    !^"(Binop"
-    ^^^ pp_underscore
-    ^^^ pp_binop op
-    ^^^ pp_index_term t1
-    ^^^ pp_index_term t2
-    ^^ !^")"
+    pp_constructor
+      "Binop"
+      [ pp_underscore; pp_binop op; pp_index_term t1; pp_index_term t2 ]
   | ITE (c, t, e) ->
-    !^"(ITE"
-    ^^^ pp_underscore
-    ^^^ pp_index_term c
-    ^^^ pp_index_term t
-    ^^^ pp_index_term e
-    ^^ !^")"
+    pp_constructor
+      "ITE"
+      [ pp_underscore; pp_index_term c; pp_index_term t; pp_index_term e ]
   | EachI ((n1, (sym, bt), n2), t) ->
-    !^"(EachI"
-    ^^^ pp_underscore
-    ^^^ !^"("
-    ^^^ !^(string_of_int n1)
-    ^^ !^","
-    ^^^ !^"("
-    ^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^")"
-    ^^ !^","
-    ^^^ !^(string_of_int n2)
-    ^^ !^")"
-    ^^^ pp_index_term t
-    ^^ !^")"
-  | Tuple ts -> !^"(Tuple" ^^^ pp_list pp_index_term ts ^^ !^")"
-  | NthTuple (n, t) -> !^"(NthTuple" ^^^ pp_nat n ^^^ pp_index_term t ^^ !^")"
+    pp_constructor
+      "EachI"
+      [ pp_underscore;
+        pp_tuple
+          [ pp_nat n1; pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt); pp_nat n2 ];
+        pp_index_term t
+      ]
+  | Tuple ts -> pp_constructor "Tuple" [ pp_list pp_index_term ts ]
+  | NthTuple (n, t) -> pp_constructor "NthTuple" [ pp_nat n; pp_index_term t ]
   | Struct (tag, members) ->
-    !^"(Struct"
-    ^^^ pp_symbol tag
-    ^^^ pp_list
-          (fun (id, t) -> !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_index_term t ^^ !^")")
-          members
-    ^^ !^")"
+    pp_constructor
+      "Struct"
+      [ pp_symbol tag; pp_list (pp_pair pp_identifier pp_index_term) members ]
   | StructMember (t, member) ->
-    !^"(StructMember" ^^^ pp_index_term t ^^^ pp_identifier member ^^ !^")"
+    pp_constructor "StructMember" [ pp_index_term t; pp_identifier member ]
   | StructUpdate ((t1, member), t2) ->
-    !^"(StructUpdate"
-    ^^^ !^"("
-    ^^^ pp_index_term t1
-    ^^ !^","
-    ^^^ pp_identifier member
-    ^^ !^")"
-    ^^^ pp_index_term t2
-    ^^ !^")"
+    pp_constructor
+      "StructUpdate"
+      [ pp_pair pp_index_term pp_identifier (t1, member); pp_index_term t2 ]
   | Record members ->
-    !^"(Record"
-    ^^^ pp_list
-          (fun (id, t) -> !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_index_term t ^^ !^")")
-          members
-    ^^ !^")"
+    pp_constructor "Record" [ pp_list (pp_pair pp_identifier pp_index_term) members ]
   | RecordMember (t, member) ->
-    !^"(RecordMember" ^^^ pp_index_term t ^^^ pp_identifier member ^^ !^")"
+    pp_constructor "RecordMember" [ pp_index_term t; pp_identifier member ]
   | RecordUpdate ((t1, member), t2) ->
-    !^"(RecordUpdate"
-    ^^^ !^"("
-    ^^^ pp_index_term t1
-    ^^ !^","
-    ^^^ pp_identifier member
-    ^^ !^")"
-    ^^^ pp_index_term t2
-    ^^ !^")"
+    pp_constructor
+      "RecordUpdate"
+      [ pp_pair pp_index_term pp_identifier (t1, member); pp_index_term t2 ]
   | Constructor (sym, args) ->
-    !^"(Constructor"
-    ^^^ pp_symbol sym
-    ^^^ pp_list
-          (fun (id, t) -> !^"(" ^^ pp_identifier id ^^ !^"," ^^^ pp_index_term t ^^ !^")")
-          args
-    ^^ !^")"
+    pp_constructor
+      "Constructor"
+      [ pp_symbol sym; pp_list (pp_pair pp_identifier pp_index_term) args ]
   | MemberShift (t, tag, id) ->
-    !^"(MemberShift" ^^^ pp_index_term t ^^^ pp_symbol tag ^^^ pp_identifier id ^^ !^")"
+    pp_constructor "MemberShift" [ pp_index_term t; pp_symbol tag; pp_identifier id ]
   | ArrayShift { base; ct; index } ->
-    !^"(ArrayShift"
-    ^^^ pp_index_term base
-    ^^^ pp_sctype ct
-    ^^^ pp_index_term index
-    ^^ !^")"
+    pp_constructor "ArrayShift" [ pp_index_term base; pp_sctype ct; pp_index_term index ]
   | CopyAllocId { addr; loc } ->
-    !^"(CopyAllocId" ^^^ pp_index_term addr ^^^ pp_index_term loc ^^ !^")"
-  | HasAllocId t -> !^"(HasAllocId" ^^^ pp_index_term t ^^ !^")"
-  | SizeOf ct -> !^"(SizeOf" ^^^ pp_sctype ct ^^ !^")"
+    pp_constructor "CopyAllocId" [ pp_index_term addr; pp_index_term loc ]
+  | HasAllocId t -> pp_constructor "HasAllocId" [ pp_index_term t ]
+  | SizeOf ct -> pp_constructor "SizeOf" [ pp_sctype ct ]
   | OffsetOf (tag, member) ->
-    !^"(OffsetOf" ^^^ pp_symbol tag ^^^ pp_identifier member ^^ !^")"
-  | Nil bt -> !^"(Nil" ^^^ pp_basetype pp_unit bt ^^ !^")"
-  | Cons (t1, t2) -> !^"(Cons" ^^^ pp_index_term t1 ^^^ pp_index_term t2 ^^ !^")"
-  | Head t -> !^"(Head" ^^^ pp_index_term t ^^ !^")"
-  | Tail t -> !^"(Tail" ^^^ pp_underscore ^^^ pp_index_term t ^^ !^")"
+    pp_constructor "OffsetOf" [ pp_symbol tag; pp_identifier member ]
+  | Nil bt -> pp_constructor "Nil" [ pp_basetype pp_unit bt ]
+  | Cons (t1, t2) -> pp_constructor "Cons" [ pp_index_term t1; pp_index_term t2 ]
+  | Head t -> pp_constructor "Head" [ pp_index_term t ]
+  | Tail t -> pp_constructor "Tail" [ pp_underscore; pp_index_term t ]
   | NthList (i, xs, d) ->
-    !^"(NthList"
-    ^^^ pp_underscore
-    ^^^ pp_index_term i
-    ^^^ pp_index_term xs
-    ^^^ pp_index_term d
-    ^^ !^")"
+    pp_constructor
+      "NthList"
+      [ pp_underscore; pp_index_term i; pp_index_term xs; pp_index_term d ]
   | ArrayToList (arr, i, len) ->
-    !^"(ArrayToList"
-    ^^^ pp_underscore
-    ^^^ pp_index_term arr
-    ^^^ pp_index_term i
-    ^^^ pp_index_term len
-    ^^ !^")"
+    pp_constructor
+      "ArrayToList"
+      [ pp_underscore; pp_index_term arr; pp_index_term i; pp_index_term len ]
   | Representable (ct, t) ->
-    !^"(Representable" ^^^ pp_underscore ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
-  | Good (ct, t) ->
-    !^"(Good" ^^^ pp_underscore ^^^ pp_sctype ct ^^^ pp_index_term t ^^ !^")"
+    pp_constructor "Representable" [ pp_underscore; pp_sctype ct; pp_index_term t ]
+  | Good (ct, t) -> pp_constructor "Good" [ pp_underscore; pp_sctype ct; pp_index_term t ]
   | Aligned { t; align } ->
-    !^"(Aligned" ^^^ pp_underscore ^^^ pp_index_term t ^^^ pp_index_term align ^^ !^")"
+    pp_constructor "Aligned" [ pp_underscore; pp_index_term t; pp_index_term align ]
   | WrapI (ct, t) ->
-    !^"(WrapI" ^^^ pp_underscore ^^^ pp_integer_type ct ^^^ pp_index_term t ^^ !^")"
+    pp_constructor "WrapI" [ pp_underscore; pp_integer_type ct; pp_index_term t ]
   | MapConst (bt, t) ->
-    !^"(MapConst"
-    ^^^ pp_underscore
-    ^^^ pp_basetype pp_unit bt
-    ^^^ pp_index_term t
-    ^^ !^")"
+    pp_constructor "MapConst" [ pp_underscore; pp_basetype pp_unit bt; pp_index_term t ]
   | MapSet (m, k, v) ->
-    !^"(MapSet"
-    ^^^ pp_underscore
-    ^^^ pp_index_term m
-    ^^^ pp_index_term k
-    ^^^ pp_index_term v
-    ^^ !^")"
+    pp_constructor
+      "MapSet"
+      [ pp_underscore; pp_index_term m; pp_index_term k; pp_index_term v ]
   | MapGet (m, k) ->
-    !^"(MapGet" ^^^ pp_underscore ^^^ pp_index_term m ^^^ pp_index_term k ^^ !^")"
+    pp_constructor "MapGet" [ pp_underscore; pp_index_term m; pp_index_term k ]
   | MapDef ((sym, bt), t) ->
-    !^"(MapDef"
-    ^^^ pp_underscore
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^")"
-    ^^^ pp_index_term t
-    ^^ !^")"
+    pp_constructor
+      "MapDef"
+      [ pp_underscore;
+        pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt);
+        pp_index_term t
+      ]
   | Apply (sym, args) ->
-    !^"(Apply" ^^^ pp_underscore ^^^ pp_symbol sym ^^^ pp_list pp_index_term args ^^ !^")"
+    pp_constructor "Apply" [ pp_underscore; pp_symbol sym; pp_list pp_index_term args ]
   | Let ((sym, t1), t2) ->
-    !^"(Let"
-    ^^^ pp_underscore
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_index_term t1
-    ^^ !^")"
-    ^^^ pp_index_term t2
-    ^^ !^")"
+    pp_constructor
+      "Let"
+      [ pp_underscore; pp_pair pp_symbol pp_index_term (sym, t1); pp_index_term t2 ]
   | Match (t, cases) ->
-    !^"(Match"
-    ^^^ pp_underscore
-    ^^^ pp_index_term t
-    ^^^ pp_list
-          (fun (pat, body) ->
-            !^"(" ^^ pp_terms_pattern pat ^^ !^"," ^^^ pp_index_term body ^^ !^")")
-          cases
-    ^^ !^")"
+    pp_constructor
+      "Match"
+      [ pp_underscore;
+        pp_index_term t;
+        pp_list (pp_pair pp_terms_pattern pp_index_term) cases
+      ]
   | Cast (bt, t) ->
-    !^"(Cast" ^^^ pp_underscore ^^^ pp_basetype pp_unit bt ^^^ pp_index_term t ^^ !^")"
+    pp_constructor "Cast" [ pp_underscore; pp_basetype pp_unit bt; pp_index_term t ]
 
 
 let pp_request_init = function Request.Init -> !^"Init" | Request.Uninit -> !^"Uninit"
