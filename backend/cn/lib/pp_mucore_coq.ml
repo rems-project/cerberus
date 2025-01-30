@@ -1,4 +1,4 @@
-open Cerb_pp_prelude
+  open Cerb_pp_prelude
 module CF = Cerb_frontend
 open CF
 module P = PPrint
@@ -451,7 +451,9 @@ let pp_memory_order = function
 
 let pp_polarity = function Core.Pos -> !^"Pos" | Core.Neg -> !^"Neg"
 
-let pp_lexing_position { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
+(* XXX: use the original source locations? *)
+let pp_lexing_position pos =
+  let { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } = Cerb_position.to_file_lexing pos in
   pp_record
     [ ("pos_fname", pp_string pos_fname);
       ("pos_lnum", pp_nat pos_lnum);

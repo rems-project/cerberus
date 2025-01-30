@@ -40,9 +40,9 @@ val json_loc : t -> Yojson.Safe.t
 
 val json_path : path -> Yojson.Safe.t
 
-type region = Lexing.position * Lexing.position
+type region = Cerb_position.t * Cerb_position.t
 
-val point : Lexing.position -> t
+val point : Cerb_position.t -> t
 
 val region : region -> Cerb_location.cursor -> t
 
@@ -54,8 +54,8 @@ val line_numbers : t -> (int * int) option
 
 val is_region : t -> region option
 
-val start_pos : t -> Lexing.position option
+val start_pos : t -> Cerb_position.t option
 
-val end_pos : t -> Lexing.position option
+val end_pos : t -> Cerb_position.t option
 
-val get_region : t -> (Lexing.position * Lexing.position * Cerb_location.cursor) option
+val get_region : t -> (Cerb_position.t * Cerb_position.t * Cerb_location.cursor) option
