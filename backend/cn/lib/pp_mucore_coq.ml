@@ -1764,217 +1764,233 @@ let rec pp_cn_expr ppfa ppfty = function
 
 let rec pp_cn_resource ppfa ppfty = function
   | CF.Cn.CN_pred (loc, pred, args) ->
-    !^"(CN_pred"
-    ^^^ pp_underscore
-    ^^^ pp_underscore
-    ^^^ pp_location loc
-    ^^^ pp_cn_pred ppfa ppfty pred
-    ^^^ pp_list (pp_cn_expr ppfa ppfty) args
-    ^^ !^")"
+    pp_constructor
+      "CN_pred"
+      [ pp_underscore;
+        pp_underscore;
+        pp_location loc;
+        pp_cn_pred ppfa ppfty pred;
+        pp_list (pp_cn_expr ppfa ppfty) args
+      ]
   | CN_each (a, bt, e, loc, pred, args) ->
-    !^"(CN_each"
-    ^^^ pp_underscore
-    ^^^ pp_underscore
-    ^^^ ppfa a
-    ^^^ pp_cn_basetype ppfa bt
-    ^^^ pp_cn_expr ppfa ppfty e
-    ^^^ pp_location loc
-    ^^^ pp_cn_pred ppfa ppfty pred
-    ^^^ pp_list (pp_cn_expr ppfa ppfty) args
-    ^^ !^")"
+    pp_constructor
+      "CN_each"
+      [ pp_underscore;
+        pp_underscore;
+        ppfa a;
+        pp_cn_basetype ppfa bt;
+        pp_cn_expr ppfa ppfty e;
+        pp_location loc;
+        pp_cn_pred ppfa ppfty pred;
+        pp_list (pp_cn_expr ppfa ppfty) args
+      ]
 
 
 and pp_cn_pred ppfa ppfty = function
   | CF.Cn.CN_owned ty ->
-    !^"(CN_owned" ^^^ pp_underscore ^^^ pp_underscore ^^^ pp_option ppfty ty ^^ !^")"
+    pp_constructor "CN_owned" [ pp_underscore; pp_underscore; pp_option ppfty ty ]
   | CN_block ty ->
-    !^"(CN_block" ^^^ pp_underscore ^^^ pp_underscore ^^^ pp_option ppfty ty ^^ !^")"
-  | CN_named a -> !^"(CN_named" ^^^ pp_underscore ^^^ pp_underscore ^^^ ppfa a ^^ !^")"
+    pp_constructor "CN_block" [ pp_underscore; pp_underscore; pp_option ppfty ty ]
+  | CN_named a -> pp_constructor "CN_named" [ pp_underscore; pp_underscore; ppfa a ]
 
 
 let pp_cn_to_extract ppfa ppfty = function
-  | CF.Cn.E_Pred pred -> !^"(E_Pred" ^^^ pp_cn_pred ppfa ppfty pred ^^ !^")"
-  | CF.Cn.E_Everything -> !^"E_Everything"
+  | CF.Cn.E_Pred pred ->
+    pp_constructor "E_Pred" [ pp_underscore; pp_underscore; pp_cn_pred ppfa ppfty pred ]
+  | CF.Cn.E_Everything -> pp_constructor "E_Everything" [ pp_underscore; pp_underscore ]
 
 
 let pp_cn_assertion ppfa ppfty = function
   | CF.Cn.CN_assert_exp ex ->
-    !^"(CN_assert_exp"
-    ^^^ pp_underscore
-    ^^^ pp_underscore
-    ^^^ pp_cn_expr ppfa ppfty ex
-    ^^ !^")"
+    pp_constructor
+      "CN_assert_exp"
+      [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty ex ]
   | CN_assert_qexp (sym, bt, it1, it2) ->
-    !^"(CN_assert_qexp"
-    ^^^ pp_underscore
-    ^^^ pp_underscore
-    ^^^ ppfa sym
-    ^^^ pp_cn_basetype ppfa bt
-    ^^^ pp_cn_expr ppfa ppfty it1
-    ^^^ pp_cn_expr ppfa ppfty it2
-    ^^ !^")"
+    pp_constructor
+      "CN_assert_qexp"
+      [ pp_underscore;
+        pp_underscore;
+        ppfa sym;
+        pp_cn_basetype ppfa bt;
+        pp_cn_expr ppfa ppfty it1;
+        pp_cn_expr ppfa ppfty it2
+      ]
 
 
 let pp_cn_condition ppfa ppfty = function
   | CF.Cn.CN_cletResource (loc, sym, res) ->
-    !^"(CN_cletResource"
-    ^^^ pp_underscore
-    ^^^ pp_underscore
-    ^^^ pp_location loc
-    ^^^ ppfa sym
-    ^^^ pp_cn_resource ppfa ppfty res
-    ^^ !^")"
+    pp_constructor
+      "CN_cletResource"
+      [ pp_underscore;
+        pp_underscore;
+        pp_location loc;
+        ppfa sym;
+        pp_cn_resource ppfa ppfty res
+      ]
   | CN_cletExpr (loc, sym, ex) ->
-    !^"(CN_cletExpr"
-    ^^^ pp_underscore
-    ^^^ pp_underscore
-    ^^^ pp_location loc
-    ^^^ ppfa sym
-    ^^^ pp_cn_expr ppfa ppfty ex
-    ^^ !^")"
+    pp_constructor
+      "CN_cletExpr"
+      [ pp_underscore;
+        pp_underscore;
+        pp_location loc;
+        ppfa sym;
+        pp_cn_expr ppfa ppfty ex
+      ]
   | CN_cconstr (loc, assertion) ->
-    !^"(CN_cconstr"
-    ^^^ pp_underscore
-    ^^^ pp_underscore
-    ^^^ pp_location loc
-    ^^^ pp_cn_assertion ppfa ppfty assertion
-    ^^ !^")"
+    pp_constructor
+      "CN_cconstr"
+      [ pp_underscore;
+        pp_underscore;
+        pp_location loc;
+        pp_cn_assertion ppfa ppfty assertion
+      ]
 
 
 let pp_cnprog_statement = function
   | Cnprog.Pack_unpack (pu, pred) ->
-    !^"(Pack_unpack" ^^^ pp_pack_unpack pu ^^^ pp_request_ppredicate pred ^^ !^")"
+    pp_constructor "Pack_unpack" [ pp_pack_unpack pu; pp_request_ppredicate pred ]
   | To_from_bytes (tf, pred) ->
-    !^"(To_from_bytes" ^^^ pp_to_from tf ^^^ pp_request_ppredicate pred ^^ !^")"
-  | Have lc -> !^"(Have" ^^^ pp_logical_constraint lc ^^ !^")"
+    pp_constructor "To_from_bytes" [ pp_to_from tf; pp_request_ppredicate pred ]
+  | Have lc -> pp_constructor "Have" [ pp_logical_constraint lc ]
   | Instantiate (inst, term) ->
-    !^"(Instantiate"
-    ^^^ pp_cn_to_instantiate pp_symbol pp_sctype inst
-    ^^^ pp_index_term term
-    ^^ !^")"
-  | Split_case lc -> !^"(Split_case" ^^^ pp_logical_constraint lc ^^ !^")"
+    pp_constructor
+      "Instantiate"
+      [ pp_cn_to_instantiate pp_symbol pp_sctype inst; pp_index_term term ]
+  | Split_case lc -> pp_constructor "Split_case" [ pp_logical_constraint lc ]
   | Extract (ids, ext, term) ->
-    !^"(Extract"
-    ^^^ pp_list pp_identifier ids
-    ^^^ pp_cn_to_extract pp_symbol pp_sctype ext
-    ^^^ pp_index_term term
-    ^^ !^")"
+    pp_constructor
+      "Extract"
+      [ pp_list pp_identifier ids;
+        pp_cn_to_extract pp_symbol pp_sctype ext;
+        pp_index_term term
+      ]
   | Unfold (sym, terms) ->
-    !^"(Unfold" ^^^ pp_symbol sym ^^^ pp_list pp_index_term terms ^^ !^")"
+    pp_constructor "Unfold" [ pp_symbol sym; pp_list pp_index_term terms ]
   | Apply (sym, terms) ->
-    !^"(Apply" ^^^ pp_symbol sym ^^^ pp_list pp_index_term terms ^^ !^")"
-  | Assert lc -> !^"(Assert" ^^^ pp_logical_constraint lc ^^ !^")"
-  | Inline syms -> !^"(Inline" ^^^ pp_list pp_symbol syms ^^ !^")"
-  | Print term -> !^"(Print" ^^^ pp_index_term term ^^ !^")"
+    pp_constructor "Apply" [ pp_symbol sym; pp_list pp_index_term terms ]
+  | Assert lc -> pp_constructor "Assert" [ pp_logical_constraint lc ]
+  | Inline syms -> pp_constructor "Inline" [ pp_list pp_symbol syms ]
+  | Print term -> pp_constructor "Print" [ pp_index_term term ]
 
 
 let rec pp_cn_prog = function
   | Cnprog.Let (loc, (name, { ct; pointer }), prog) ->
-    !^"(Let" ^^^ pp_location loc ^^^ pp_symbol name ^^^ pp_cn_prog prog ^^ !^")"
+    pp_constructor "Let" [ pp_location loc; pp_symbol name; pp_cn_prog prog ]
   | Statement (loc, stmt) ->
-    !^"(Statement" ^^^ pp_location loc ^^^ pp_cnprog_statement stmt ^^ !^")"
+    pp_constructor "Statement" [ pp_location loc; pp_cnprog_statement stmt ]
 
 
 let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
-  !^"(CN_statement"
-  ^^^ pp_location loc
-  ^^^
-  match stmt with
-  | CN_pack_unpack (pu, pred, exprs) ->
-    !^"(CN_pack_unpack"
-    ^^^ pp_pack_unpack pu
-    ^^^ pp_cn_pred ppfa ppfty pred
-    ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs
-    ^^ !^")"
-  | CN_to_from_bytes (tf, pred, exprs) ->
-    !^"(CN_to_from_bytes"
-    ^^^ pp_to_from tf
-    ^^^ pp_cn_pred ppfa ppfty pred
-    ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs
-    ^^ !^")"
-  | CN_have assertion -> !^"(CN_have" ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
-  | CN_instantiate (inst, expr) ->
-    !^"(CN_instantiate"
-    ^^^ pp_cn_to_instantiate ppfa ppfty inst
-    ^^^ pp_cn_expr ppfa ppfty expr
-    ^^ !^")"
-  | CN_split_case assertion ->
-    !^"(CN_split_case" ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
-  | CN_extract (ids, extract, expr) ->
-    !^"(CN_extract"
-    ^^^ pp_list pp_identifier ids
-    ^^^ pp_cn_to_extract ppfa ppfty extract
-    ^^^ pp_cn_expr ppfa ppfty expr
-    ^^ !^")"
-  | CN_unfold (sym, exprs) ->
-    !^"(CN_unfold" ^^^ ppfa sym ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
-  | CN_assert_stmt assertion ->
-    !^"(CN_assert_stmt" ^^^ pp_cn_assertion ppfa ppfty assertion ^^ !^")"
-  | CN_apply (sym, exprs) ->
-    !^"(CN_apply" ^^^ ppfa sym ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
-  | CN_inline syms -> !^"(CN_inline" ^^^ pp_list ppfa syms ^^ !^")"
-  | CN_print expr -> !^"(CN_print" ^^^ pp_cn_expr ppfa ppfty expr ^^ !^")" ^^ !^")"
+  pp_constructor
+    "CN_statement"
+    [ pp_location loc;
+      (match stmt with
+       | CN_pack_unpack (pu, pred, exprs) ->
+         pp_constructor
+           "CN_pack_unpack"
+           [ pp_pack_unpack pu;
+             pp_cn_pred ppfa ppfty pred;
+             pp_list (pp_cn_expr ppfa ppfty) exprs
+           ]
+       | CN_to_from_bytes (tf, pred, exprs) ->
+         pp_constructor
+           "CN_to_from_bytes"
+           [ pp_to_from tf;
+             pp_cn_pred ppfa ppfty pred;
+             pp_list (pp_cn_expr ppfa ppfty) exprs
+           ]
+       | CN_have assertion ->
+         pp_constructor "CN_have" [ pp_cn_assertion ppfa ppfty assertion ]
+       | CN_instantiate (inst, expr) ->
+         pp_constructor
+           "CN_instantiate"
+           [ pp_cn_to_instantiate ppfa ppfty inst; pp_cn_expr ppfa ppfty expr ]
+       | CN_split_case assertion ->
+         pp_constructor "CN_split_case" [ pp_cn_assertion ppfa ppfty assertion ]
+       | CN_extract (ids, extract, expr) ->
+         pp_constructor
+           "CN_extract"
+           [ pp_list pp_identifier ids;
+             pp_cn_to_extract ppfa ppfty extract;
+             pp_cn_expr ppfa ppfty expr
+           ]
+       | CN_unfold (sym, exprs) ->
+         pp_constructor "CN_unfold" [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ]
+       | CN_assert_stmt assertion ->
+         pp_constructor "CN_assert_stmt" [ pp_cn_assertion ppfa ppfty assertion ]
+       | CN_apply (sym, exprs) ->
+         !^"(CN_apply" ^^^ ppfa sym ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
+       | CN_inline syms -> !^"(CN_inline" ^^^ pp_list ppfa syms ^^ !^")"
+       | CN_print expr -> !^"(CN_print" ^^^ pp_cn_expr ppfa ppfty expr ^^ !^")" ^^ !^")")
+    ]
 
 
-and pp_expr pp_type (Expr (loc, annots, ty, e)) =
-  !^"(Expr"
-  ^^^ pp_underscore
-  ^^^ pp_location loc
-  ^^^ pp_list pp_annot_t annots
-  ^^^ pp_type ty
-  ^^^ (match e with
-       | Epure pe -> !^"(Epure" ^^^ pp_underscore ^^^ pp_pexpr pp_type pe ^^ !^")"
-       | Ememop m -> !^"(Ememop" ^^^ pp_underscore ^^^ pp_memop pp_type m ^^ !^")"
-       | Eaction pa -> !^"(Eaction" ^^^ pp_underscore ^^^ pp_paction pp_type pa ^^ !^")"
-       | Eskip -> !^"(Eskip" ^^^ !^"_)"
-       | Eccall (act, f, args) ->
-         !^"(Eccall"
-         ^^^ pp_underscore
-         ^^^ pp_act act
-         ^^^ pp_pexpr pp_type f
-         ^^^ pp_list (pp_pexpr pp_type) args
-         ^^ !^")"
-       | Elet (pat, e1, e2) ->
-         !^"(Elet"
-         ^^^ pp_underscore
-         ^^^ pp_pattern pp_type pat
-         ^^^ pp_pexpr pp_type e1
-         ^^^ pp_expr pp_type e2
-         ^^ !^")"
-       | Eunseq exprs ->
-         !^"(Eunseq" ^^^ pp_underscore ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
-       | Ewseq (pat, e1, e2) ->
-         !^"(Ewseq"
-         ^^^ pp_underscore
-         ^^^ pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
-         ^^ !^")"
-       | Esseq (pat, e1, e2) ->
-         !^"(Esseq"
-         ^^^ pp_underscore
-         ^^^ pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
-         ^^ !^")"
-       | Eif (c, t, e) ->
-         !^"(Eif"
-         ^^^ pp_underscore
-         ^^^ pp_pexpr pp_type c
-         ^^^ pp_expr pp_type t
-         ^^^ pp_expr pp_type e
-         ^^ !^")"
-       | Ebound e -> !^"(Ebound" ^^^ pp_underscore ^^^ pp_expr pp_type e ^^ !^")"
-       | End exprs ->
-         !^"(End" ^^^ pp_underscore ^^^ pp_list (pp_expr pp_type) exprs ^^ !^")"
-       | Erun (sym, args) ->
-         !^"(Erun"
-         ^^^ pp_underscore
-         ^^^ pp_tuple [ pp_symbol sym; pp_list (pp_pexpr pp_type) args ]
-         ^^ !^")"
-       | CN_progs (stmts, progs) ->
-         !^"(CN_progs"
-         ^^^ pp_underscore
-         ^^^ pp_list (pp_cn_statement pp_symbol pp_ctype) stmts
-         ^^^ pp_list pp_cn_prog progs
-         ^^ !^")")
-  ^^^ !^")"
+and pp_expr pp_type = function
+  | Expr (loc, annots, ty, e) ->
+    pp_constructor
+      "Expr"
+      [ pp_underscore;
+        pp_location loc;
+        pp_list pp_annot_t annots;
+        pp_type ty;
+        (match e with
+         | Epure pe -> pp_constructor "Epure" [ pp_underscore; pp_pexpr pp_type pe ]
+         | Ememop m -> pp_constructor "Ememop" [ pp_underscore; pp_memop pp_type m ]
+         | Eaction pa -> pp_constructor "Eaction" [ pp_underscore; pp_paction pp_type pa ]
+         | Eskip -> pp_constructor "Eskip" [ pp_underscore ]
+         | Eccall (act, f, args) ->
+           pp_constructor
+             "Eccall"
+             [ pp_underscore;
+               pp_tuple
+                 [ pp_act act; pp_pexpr pp_type f; pp_list (pp_pexpr pp_type) args ]
+             ]
+         | Elet (pat, e1, e2) ->
+           pp_constructor
+             "Elet"
+             [ pp_underscore;
+               pp_tuple
+                 [ pp_pattern pp_type pat; pp_pexpr pp_type e1; pp_expr pp_type e2 ]
+             ]
+         | Eunseq exprs ->
+           pp_constructor "Eunseq" [ pp_underscore; pp_list (pp_expr pp_type) exprs ]
+         | Ewseq (pat, e1, e2) ->
+           pp_constructor
+             "Ewseq"
+             [ pp_underscore;
+               pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
+             ]
+         | Esseq (pat, e1, e2) ->
+           pp_constructor
+             "Esseq"
+             [ pp_underscore;
+               pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
+             ]
+         | Eif (c, t, e) ->
+           pp_constructor
+             "Eif"
+             [ pp_underscore;
+               pp_tuple [ pp_pexpr pp_type c; pp_expr pp_type t; pp_expr pp_type e ]
+             ]
+         | Ebound e -> pp_constructor "Ebound" [ pp_underscore; pp_expr pp_type e ]
+         | End exprs ->
+           pp_constructor "End" [ pp_underscore; pp_list (pp_expr pp_type) exprs ]
+         | Erun (sym, args) ->
+           pp_constructor
+             "Erun"
+             [ pp_underscore;
+               pp_tuple [ pp_symbol sym; pp_list (pp_pexpr pp_type) args ]
+             ]
+         | CN_progs (stmts, progs) ->
+           pp_constructor
+             "CN_progs"
+             [ pp_underscore;
+               pp_tuple
+                 [ pp_list (pp_cn_statement pp_symbol pp_ctype) stmts;
+                   pp_list pp_cn_prog progs
+                 ]
+             ])
+      ]
 
 
 let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
@@ -1982,28 +1998,26 @@ let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
 
 
 let pp_label_def pp_type = function
-  | Return loc -> !^"(Return" ^^^ pp_underscore ^^^ pp_location loc ^^ !^")"
+  | Return loc -> pp_constructor "Return" [ pp_underscore; pp_location loc ]
   | Label (loc, args, annots, spec, `Loop loop_locs) ->
-    !^"(Label"
-    ^^^ pp_location loc
-    ^^^ pp_arguments (pp_expr pp_type) args
-    ^^^ pp_list pp_annot_t annots
-    ^^^ pp_parse_ast_label_spec spec
-    ^^^ pp_pair pp_location pp_location loop_locs
-    ^^ !^")"
+    pp_constructor
+      "Label"
+      [ pp_location loc;
+        pp_arguments (pp_expr pp_type) args;
+        pp_list pp_annot_t annots;
+        pp_parse_ast_label_spec spec;
+        pp_pair pp_location pp_location loop_locs
+      ]
 
 
-let pp_args_and_body pp_type (args : 'a args_and_body) =
+let pp_args_and_body pp_type =
   pp_arguments
     (fun (body, (labels : (Symbol.sym, 'a label_def) Pmap.map), (rt : ReturnTypes.t)) ->
-      !^"("
-      ^^^ pp_expr pp_type body
-      ^^ !^","
-      ^^^ pp_pmap "Sym.map_from_list" pp_symbol (pp_label_def pp_type) labels
-      ^^ !^","
-      ^^^ pp_return_type rt
-      ^^ !^")")
-    args
+       pp_tuple
+         [ pp_expr pp_type body;
+           pp_pmap "Sym.map_from_list" pp_symbol (pp_label_def pp_type) labels;
+           pp_return_type rt
+         ])
 
 
 let pp_desugared_spec { accesses; requires; ensures } =
@@ -2017,42 +2031,42 @@ let pp_desugared_spec { accesses; requires; ensures } =
 let rec pp_logical_argument_types pp_type = function
   | LogicalArgumentTypes.I i -> !^"(I" ^^^ pp_type i ^^ !^")"
   | Resource ((sym, (req, bt)), info, at) ->
-    !^"(LogicalArgumentTypes.Resource"
-    ^^^ pp_tuple [ pp_symbol sym; pp_tuple [ pp_request req; pp_basetype pp_unit bt ] ]
-    ^^^ pp_location_info info
-    ^^^ pp_logical_argument_types pp_type at
-    ^^ !^")"
+    pp_constructor
+      "LogicalArgumentTypes.Resource"
+      [ pp_symbol sym;
+        pp_tuple [ pp_request req; pp_basetype pp_unit bt ];
+        pp_location_info info;
+        pp_logical_argument_types pp_type at
+      ]
   | Constraint (lc, info, at) ->
-    !^"(LogicalArgumentTypes.Constraint"
-    ^^^ pp_logical_constraint lc
-    ^^^ pp_location_info info
-    ^^^ pp_logical_argument_types pp_type at
-    ^^ !^")"
+    pp_constructor
+      "LogicalArgumentTypes.Constraint"
+      [ pp_logical_constraint lc;
+        pp_location_info info;
+        pp_logical_argument_types pp_type at
+      ]
   | LogicalArgumentTypes.Define (si, info, at) ->
-    !^"(LogicalArgumentTypes.Define"
-    ^^^ (pp_pair pp_symbol pp_index_term) si
-    ^^^ pp_location_info info
-    ^^^ pp_logical_argument_types pp_type at
-    ^^ !^")"
+    pp_constructor
+      "LogicalArgumentTypes.Define"
+      [ pp_pair pp_symbol pp_index_term si;
+        pp_location_info info;
+        pp_logical_argument_types pp_type at
+      ]
 
 
 let rec pp_argument_types pp_type = function
-  | ArgumentTypes.Computational ((sym, bt), info, at) ->
-    !^"(ArgumentTypes.Computational"
-    ^^^ pp_underscore
-    ^^^ !^"("
-    ^^^ pp_symbol sym
-    ^^ !^","
-    ^^^ pp_basetype pp_unit bt
-    ^^ !^")"
-    ^^^ pp_location_info info
-    ^^^ pp_argument_types pp_type at
-    ^^^ !^")"
+  | ArgumentTypes.Computational (sbt, info, at) ->
+    pp_constructor
+      "ArgumentTypes.Computational"
+      [ pp_underscore;
+        pp_pair pp_symbol (pp_basetype pp_unit) sbt;
+        pp_location_info info;
+        pp_argument_types pp_type at
+      ]
   | L at ->
-    !^"(ArgumentTypes.L"
-    ^^^ pp_underscore
-    ^^^ pp_logical_argument_types pp_type at
-    ^^ !^")"
+    pp_constructor
+      "ArgumentTypes.L"
+      [ pp_underscore; pp_logical_argument_types pp_type at ]
 
 
 let coq_prologue =
@@ -2089,10 +2103,13 @@ let pp_file pp_type pp_type_name file =
            coq_def
              (Pp_symbol.to_string sym)
              P.empty
-             (!^"GlobalDef" ^^^ pp_sctype ct ^^^ pp_expr pp_type e)
+             (pp_constructor "GlobalDef" [ pp_sctype ct; pp_expr pp_type e ])
            ^^ P.hardline
          | GlobalDecl ct ->
-           coq_def (Pp_symbol.to_string sym) P.empty (!^"GlobalDecl" ^^^ pp_sctype ct)
+           coq_def
+             (Pp_symbol.to_string sym)
+             P.empty
+             (pp_constructor "GlobalDecl" [ pp_sctype ct ])
            ^^ P.hardline)
        P.empty
        file.globs
@@ -2108,24 +2125,26 @@ let pp_file pp_type pp_type_name file =
            coq_def
              (Pp_symbol.to_string_pretty_cn sym)
              P.empty
-             (!^"ProcDecl"
-              ^^^ pp_type_name
-              ^^^ pp_location loc
-              ^^^ pp_option (pp_argument_types pp_return_type) ft)
+             (pp_constructor
+                "ProcDecl"
+                [ pp_type_name;
+                  pp_location loc;
+                  pp_option (pp_argument_types pp_return_type) ft
+                ])
          | Proc { loc; args_and_body; trusted; desugared_spec } ->
            coq_def
              (Pp_symbol.to_string_pretty_cn sym)
              P.empty
-             (!^"Proc"
-              ^^^ pp_type_name
-              ^^^ pp_location loc
-              ^^^ pp_args_and_body pp_type args_and_body
-              ^^^ pp_trusted trusted
-              ^^^ pp_desugared_spec desugared_spec))
+             (pp_constructor
+                "Proc"
+                [ pp_type_name;
+                  pp_location loc;
+                  pp_args_and_body pp_type args_and_body;
+                  pp_trusted trusted;
+                  pp_desugared_spec desugared_spec
+                ]))
        file.funs
        P.empty
 
-
-(* let pp_file_string file = Pp_utils.to_plain_string (pp_file file) *)
 
 let pp_unit_file (f : unit file) = pp_file pp_unit pp_unit_type f
