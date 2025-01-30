@@ -41,7 +41,17 @@ let pp_list pp_elem xs =
   ^^^ !^"]"
 
 
-let pp_tuple l = P.parens (P.separate !^"," l)
+let pp_tuple l = 
+  P.group (
+    !^"(" 
+    ^^ P.nest 2 (
+      P.break 0 
+      ^^ P.separate_map (P.break 1 ^^ !^"," ^^ P.break 1) (fun x -> x) l
+    )
+    ^^ P.break 0
+    ^^ !^")"
+  )
+
 
 let pp_pair p1 p2 (a, b) = pp_tuple [ p1 a; p2 b ]
 
@@ -76,18 +86,26 @@ let coq_notation name args body =
 
 
 let pp_record fields =
-  !^"{|"
-  ^^^ P.separate
-        (!^";" ^^ P.break 1)
-        (List.map (fun (name, value) -> !^(name ^ " :=") ^^^ value) fields)
-  ^^^ !^"|}"
+  P.group (!^"{|"
+  ^^ P.nest 2 (P.break 1
+    ^^ P.separate_map
+      (!^";" ^^ P.break 1)
+      (fun (name, value) -> 
+        P.group (!^(name ^ " :=") ^^ P.nest 2 (P.break 1 ^^ value))
+      )
+      fields)
+  ^^ P.break 1
+  ^^ !^"|}")
 
 
 let pp_constructor name args =
   if List.length args = 0 then
     !^name
   else
-    !^"(" ^^ !^name ^^^ P.separate_map !^" " (fun x -> x) args ^^ !^")"
+    P.group (!^"(" ^^ !^name
+    ^^ P.nest 2 (P.break 1 
+      ^^ P.separate_map (P.break 1) (fun x -> x) args)
+    ^^ !^")")
 
 
 let pp_option pp_elem = function
