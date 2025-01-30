@@ -303,6 +303,7 @@ let verify
   no_inherit_loc
   magic_comment_char_dollar
   disable_resource_derived_constraints
+  try_hard
   =
   if json then (
     if debug_level > 0 then
@@ -323,6 +324,7 @@ let verify
   Solver.solver_path := solver_path;
   Solver.solver_type := solver_type;
   Solver.solver_flags := solver_flags;
+  Solver.try_hard := try_hard;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   IndexTerms.use_vip := not dont_use_vip;
   Check.fail_fast := fail_fast;
@@ -862,6 +864,11 @@ module Verify_flags = struct
       & info [ "solver-type" ] ~docv:"z3|cvc5" ~doc)
 
 
+  let try_hard =
+    let doc = "Try undecidable SMT solving using full set of assumptions" in
+    Arg.(value & flag & info [ "try_hard" ] ~doc)
+
+
   let only =
     let doc = "only type-check this function (or comma-separated names)" in
     Arg.(value & opt (some string) None & info [ "only" ] ~doc)
@@ -1019,6 +1026,7 @@ let verify_t : unit Term.t =
   $ Common_flags.no_inherit_loc
   $ Common_flags.magic_comment_char_dollar
   $ Verify_flags.disable_resource_derived_constraints
+  $ Verify_flags.try_hard
 
 
 let verify_cmd =

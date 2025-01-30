@@ -58,3 +58,6 @@ val model : unit -> model_with_q
 val eval : model -> IndexTerms.t -> IndexTerms.t option
 
 val ask_solver : solver -> LogicalConstraints.t list -> Simple_smt.result
+
+(** Try undecidable SMT solving using full set of assumptions. *)
+val try_hard : bool ref
