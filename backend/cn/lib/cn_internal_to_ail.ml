@@ -782,6 +782,8 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   (decl, def)
 
 
+let alloc_sym = Sym.fresh_pretty "cn_alloc"
+
 let mk_alloc_expr (ct_ : C.ctype_) : CF.GenTypes.genTypeCategory A.expression =
   A.(
     mk_expr
@@ -790,7 +792,7 @@ let mk_alloc_expr (ct_ : C.ctype_) : CF.GenTypes.genTypeCategory A.expression =
            C.(mk_ctype_pointer no_qualifiers (mk_ctype ct_)),
            mk_expr
              (AilEcall
-                ( mk_expr (AilEident (Sym.fresh_pretty "alloc")),
+                ( mk_expr (AilEident alloc_sym),
                   [ mk_expr (AilEsizeof (empty_qualifiers, mk_ctype ct_)) ] )) )))
 
 
@@ -1094,7 +1096,6 @@ let rec cn_to_ail_expr_aux_internal
     let res_ident = A.(AilEident res_sym) in
     let ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct parent_dt.cn_dt_name))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
-    let alloc_sym = Sym.fresh_pretty "alloc" in
     let fn_call =
       A.(
         AilEcast
@@ -1897,9 +1898,9 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
       ->
 
       struct tree * default_struct_tree(void) {
-        struct tree *res = alloc(sizeof(struct tree));
+        struct tree *res = cn_alloc(sizeof(struct tree));
         res->tag = TREE_EMPTY;
-        res->u.tree_empty = alloc(sizeof(struct tree_empty));
+        res->u.tree_empty = cn_alloc(sizeof(struct tree_empty));
         res->u.tree_empty->k = default_cn_bits_i32();
         return res;
       }

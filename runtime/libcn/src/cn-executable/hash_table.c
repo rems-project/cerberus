@@ -35,7 +35,7 @@ SOFTWARE.
 
 hash_table* ht_create(void) {
     // Allocate space for hash table struct.
-    hash_table* table = alloc(sizeof(hash_table));
+    hash_table* table = cn_alloc(sizeof(hash_table));
     if (table == NULL) {
         return NULL;
     }
@@ -43,7 +43,7 @@ hash_table* ht_create(void) {
     table->capacity = INITIAL_CAPACITY;
 
     // Allocate (zero'd) space for entry buckets.
-    table->entries = zalloc(table->capacity * sizeof(ht_entry));
+    table->entries = cn_zalloc(table->capacity * sizeof(ht_entry));
     if (table->entries == NULL) {
         // free(table); // error, free table before we return!
         return NULL;
@@ -100,7 +100,7 @@ void* ht_get(hash_table* table, signed long *key) {
 }
 
 signed long *duplicate_key(signed long *key) {
-    signed long *new_key = alloc(sizeof(signed long));
+    signed long *new_key = cn_alloc(sizeof(signed long));
     *new_key = *key;
     return new_key;
 }
@@ -148,7 +148,7 @@ static _Bool ht_expand(hash_table* table) {
     if (new_capacity < table->capacity) {
         return 0;  // overflow (capacity would be too big)
     }
-    ht_entry* new_entries = zalloc(new_capacity * sizeof(ht_entry));
+    ht_entry* new_entries = cn_zalloc(new_capacity * sizeof(ht_entry));
     if (new_entries == NULL) {
         return 0;
     }
