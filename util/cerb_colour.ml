@@ -34,6 +34,13 @@ let int_fg = function
 let do_colour =
   ref (Unix.isatty Unix.stdout)
 
+let with_colour f x =
+  let col = ! do_colour in
+  do_colour := true;
+  let r = f x in
+  do_colour := col;
+  r
+
 let without_colour f x =
   let col = ! do_colour in
   do_colour := false;

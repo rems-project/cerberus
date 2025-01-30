@@ -9,7 +9,6 @@ module GBT = GenBaseTypes
 module GT = GenTerms
 module GD = GenDefinitions
 module Config = TestGenConfig
-module CtA = Cn_internal_to_ail
 
 type s = GD.context
 
@@ -114,7 +113,7 @@ let rec compile_it_lat
     match lat with
     | Define ((x, it), (loc, _), lat') ->
       let@ gt' = compile_it_lat filename recursive preds name generated oargs lat' in
-      return (GT.let_ (backtrack_num, (x, GT.return_ it (IT.loc it)), gt') loc)
+      return (GT.let_ (backtrack_num, (x, GT.return_ it (IT.get_loc it)), gt') loc)
     | Resource ((x, (P { name = Owned (ct, _); pointer; iargs = _ }, bt)), (loc, _), lat')
       ->
       let@ gt' = compile_it_lat filename recursive preds name generated oargs lat' in
@@ -131,7 +130,8 @@ let rec compile_it_lat
       ->
       let here = Locations.other __LOC__ in
       let ret_bt =
-        BT.Record (compile_oargs bt [] |> List.map_fst (fun x -> Id.id (Sym.pp_string x)))
+        BT.Record
+          (compile_oargs bt [] |> List.map_fst (fun x -> Id.make here (Sym.pp_string x)))
       in
       (* Recurse *)
       let@ gt' =
@@ -183,7 +183,7 @@ let rec compile_it_lat
       let gt_body =
         let sym_val = Sym.fresh () in
         let it_q = IT.sym_ (q_sym, k_bt, q_loc) in
-        let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.loc step)) loc in
+        let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.get_loc step)) loc in
         let gt_asgn =
           GT.asgn_
             ( (it_p, ct),
@@ -218,15 +218,17 @@ let rec compile_it_lat
       let pred = List.assoc Sym.equal fsym preds in
       let arg_syms = pred.pointer :: fst (List.split pred.iargs) in
       let it_q = IT.sym_ (q_sym, q_bt, q_loc) in
-      let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.loc step)) loc in
+      let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.get_loc step)) loc in
       let arg_its = it_p :: iargs in
       let args = List.combine arg_syms arg_its in
       (* Build [GT.t] *)
       let _, v_bt = BT.map_bt bt in
       let gt_body =
+        let here = Locations.other __LOC__ in
         let ret_bt =
           BT.Record
-            (compile_oargs v_bt [] |> List.map_fst (fun x -> Id.id (Sym.pp_string x)))
+            (compile_oargs v_bt []
+             |> List.map_fst (fun x -> Id.make here (Sym.pp_string x)))
         in
         let y = Sym.fresh () in
         if BT.equal (BT.Record []) ret_bt then
@@ -239,7 +241,7 @@ let rec compile_it_lat
           let it_ret =
             IT.recordMember_
               ~member_bt:v_bt
-              (IT.sym_ (y, ret_bt, loc), Id.id "cn_return")
+              (IT.sym_ (y, ret_bt, loc), Id.make here "cn_return")
               loc
           in
           GT.let_ (0, (y, GT.call_ (fsym, args) ret_bt loc), GT.return_ it_ret loc) loc)
@@ -260,9 +262,11 @@ let rec compile_it_lat
         | _ -> conv_fn oargs
       in
       let it_ret =
-        IT.record_ (List.map_fst (fun sym -> Id.id (Sym.pp_string sym)) it_oargs) here
+        IT.record_
+          (List.map_fst (fun sym -> Id.make here (Sym.pp_string sym)) it_oargs)
+          here
       in
-      return (GT.return_ it_ret (IT.loc it))
+      return (GT.return_ it_ret (IT.get_loc it))
   in
   return (f_gt_init gt)
 
@@ -322,7 +326,7 @@ let compile_spec
   : unit m
   =
   (* Necessary to avoid triggering special-cased logic in [CtA] w.r.t globals *)
-  let rename x = Sym.fresh_named ("cn_gen_" ^ Sym.pp_string x) in
+  let rename x = GenUtils.get_mangled_name [ x ] in
   let lat =
     let lat = AT.get_lat at in
     let subst =

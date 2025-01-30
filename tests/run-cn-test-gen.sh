@@ -12,6 +12,9 @@ cd "$DIRNAME"/cn-test-gen || exit
 rm -rf build decorated test
 mkdir build decorated test
 
+# For UBSan
+export UBSAN_OPTIONS=halt_on_error=1
+
 # Get `*.c` files
 FILES=$(find "$DIRNAME"/src -name '*.c')
 
@@ -27,7 +30,7 @@ function separator() {
   printf '\n\n'
 }
 
-CONFIGS=("--coverage" "--sized-null" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
+CONFIGS=("--coverage" "--with-static-hack --coverage --sanitize=undefined --no-sanitize=alignment" "--sized-null" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
 
 # For each configuration
 for CONFIG in "${CONFIGS[@]}"; do

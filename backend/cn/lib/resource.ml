@@ -23,7 +23,7 @@ let free_vars (r, O oargs) = Sym.Set.union (Req.free_vars r) (IT.free_vars oargs
 
 (* assumption: the resource is owned *)
 let derived_lc1 ((resource : Req.t), O output) =
-  let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
+  let here = Locations.other __LOC__ in
   match resource with
   | P { name = Owned (ct, _); pointer; iargs = _ } ->
     let addr = IT.addr_ pointer here in
@@ -53,7 +53,7 @@ let derived_lc2 ((resource : Req.t), _) ((resource' : Req.t), _) =
   match (resource, resource') with
   | ( P { name = Owned (ct1, _); pointer = p1; iargs = _ },
       P { name = Owned (ct2, _); pointer = p2; iargs = _ } ) ->
-    let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
+    let here = Locations.other __LOC__ in
     let addr1 = IT.addr_ p1 here in
     let addr2 = IT.addr_ p2 here in
     let up1 = IT.upper_bound addr1 ct1 here in

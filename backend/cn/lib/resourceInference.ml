@@ -25,7 +25,7 @@ let debug_constraint_failure_diagnostics
         Pp.debug lvl (lazy (pp_f tm'))
       | _ ->
         Pp.warn
-          (Locations.other __FUNCTION__)
+          (Locations.other __LOC__)
           (Pp.bold "unexpected quantifier count with model")
     in
     diag "counterexample, expanding" c;
@@ -47,7 +47,7 @@ module General = struct
       value : IT.t
     }
 
-  type uiinfo = TypeErrors.situation * TypeErrors.request_chain
+  type uiinfo = TypeErrors.situation * TypeErrors.RequestChain.t
 
   type case =
     | One of one
@@ -58,7 +58,7 @@ module General = struct
   let add_case case (C cases) = C (cases @ [ case ])
 
   let cases_to_map loc (situation, requests) a_bt item_bt (C cases) =
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let update_with_ones base_array ones =
       List.fold_left
         (fun m { one_index; value } -> IT.map_set_ m (one_index, value) here)
@@ -105,7 +105,7 @@ module General = struct
       let resource = Simplify.Request.simp simp_ctxt resource in
       let situation, request_chain = uiinfo in
       let step =
-        TypeErrors.
+        TypeErrors.RequestChain.
           { resource; loc = Some (fst info); reason = Some ("arg " ^ Sym.pp_string s) }
       in
       let request_chain = step :: request_chain in
@@ -113,7 +113,7 @@ module General = struct
       let@ o_re_oarg = resource_request loc uiinfo resource in
       (match o_re_oarg with
        | None ->
-         let here = Locations.other __FUNCTION__ in
+         let here = Locations.other __LOC__ in
          let@ model = model_with loc (IT.bool_ true here) in
          let model = Option.get model in
          fail (fun ctxt ->
@@ -141,7 +141,7 @@ module General = struct
        | `False ->
          let@ model = model () in
          let@ all_cs = get_cs () in
-         let () = assert (not (Context.LC.Set.mem c all_cs)) in
+         let () = assert (not (LC.Set.mem c all_cs)) in
          debug_constraint_failure_diagnostics 6 model simp_ctxt c;
          let@ () = Diagnostics.investigate model c in
          fail (fun ctxt ->
@@ -158,8 +158,8 @@ module General = struct
   let rec predicate_request loc (uiinfo : uiinfo) (requested : Req.Predicate.t)
     : (Resource.predicate * int list) option m
     =
-    Pp.(debug 7 (lazy (item __FUNCTION__ (Req.pp (P requested)))));
-    let start_timing = Pp.time_log_start __FUNCTION__ "" in
+    Pp.(debug 7 (lazy (item __LOC__ (Req.pp (P requested)))));
+    let start_timing = Pp.time_log_start __LOC__ "" in
     let@ oarg_bt = WellTyped.oarg_bt_of_pred loc requested.name in
     let@ provable = provable loc in
     let@ global = get_global () in
@@ -171,7 +171,7 @@ module General = struct
       else (
         match re with
         | Req.P p', p'_oarg when Req.subsumed requested.name p'.name ->
-          let here = Locations.other __FUNCTION__ in
+          let here = Locations.other __LOC__ in
           let addr_iargs_eqs =
             IT.(eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here)
             :: List.map2 (fun x y -> IT.eq__ x y here) requested.iargs p'.iargs
@@ -217,7 +217,7 @@ module General = struct
         | _re -> continue)
     in
     let needed = true in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ (needed, oarg), changed_or_deleted =
       map_and_fold_resources loc resource_scan (needed, O (IT.default_ oarg_bt here))
     in
@@ -247,7 +247,7 @@ module General = struct
 
 
   and qpredicate_request_aux loc uiinfo (requested : Req.QPredicate.t) =
-    Pp.(debug 7 (lazy (item __FUNCTION__ (Req.pp (Q requested)))));
+    Pp.(debug 7 (lazy (item __LOC__ (Req.pp (Q requested)))));
     let@ provable = provable loc in
     let@ simp_ctxt = simp_ctxt () in
     let needed = requested.permission in
@@ -280,7 +280,7 @@ module General = struct
                    && IT.equal step p'.step
                    && BaseTypes.equal (snd requested.q) (snd p'.q) ->
               let p' = Req.QPredicate.alpha_rename_ (fst requested.q) p' in
-              let here = Locations.other __FUNCTION__ in
+              let here = Locations.other __LOC__ in
               let pmatch =
                 (* Work-around for https://github.com/Z3Prover/z3/issues/7352 *)
                 Simplify.IndexTerms.simp simp_ctxt
@@ -321,7 +321,7 @@ module General = struct
             | _re -> continue))
         (needed, C [])
     in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ needed, oarg =
       let@ movable_indices = get_movable_indices () in
       let module Eff = Effectful.Make (Typing) in
@@ -331,7 +331,7 @@ module General = struct
           if
             (not (IT.is_false needed))
             && Req.subsumed requested.name predicate_name
-            && BaseTypes.equal (snd requested.q) (IT.bt index)
+            && BaseTypes.equal (snd requested.q) (IT.get_bt index)
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
             let needed_at_index = IT.subst su needed in
@@ -459,7 +459,7 @@ end
 
 module Special = struct
   let fail_missing_resource loc (situation, requests) =
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ model = model_with loc (IT.bool_ true here) in
     let model = Option.get model in
     fail (fun ctxt ->
@@ -469,7 +469,7 @@ module Special = struct
 
   let predicate_request loc situation (request, oinfo) =
     let requests =
-      [ TypeErrors.
+      [ TypeErrors.RequestChain.
           { resource = P request;
             loc = Option.map fst oinfo;
             reason = Option.map snd oinfo
@@ -497,7 +497,7 @@ module Special = struct
         | Model of (Solver.model_with_q * IT.t)
     end
     in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let alloc_id_matches found res_ptr =
       let@ found in
       match found with
@@ -546,7 +546,7 @@ module Special = struct
 
   let qpredicate_request loc situation (request, oinfo) =
     let requests =
-      [ TypeErrors.
+      [ TypeErrors.RequestChain.
           { resource = Q request;
             loc = Option.map fst oinfo;
             reason = Option.map snd oinfo

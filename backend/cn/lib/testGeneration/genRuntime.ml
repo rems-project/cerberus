@@ -451,7 +451,7 @@ let elaborate_gt (inputs : Sym.Set.t) (gt : GT.t) : term =
       let path_vars = Sym.Set.union path_vars (IT.free_vars cond) in
       ITE { bt; cond; t = aux vars path_vars gt_then; f = aux vars path_vars gt_else }
     | Map ((i, i_bt, perm), inner) ->
-      let min, max = GenAnalysis.get_bounds (i, i_bt) perm in
+      let min, max = IndexTerms.Bounds.get_bounds (i, i_bt) perm in
       Map
         { i;
           bt = Map (i_bt, GT.bt inner);

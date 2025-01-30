@@ -2,8 +2,6 @@
 
 type 'a t = ('a, TypeErrors.t) Result.t
 
-type 'a m = 'a t
-
 let return (a : 'a) : 'a t = Ok a
 
 let fail (e : 'e) : 'a t = Error e

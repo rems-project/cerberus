@@ -8,7 +8,6 @@ module Ctype = CF.Ctype
 module BT = BaseTypes
 module C = Compile
 module IT = IndexTerms
-module IdMap = Map.Make (Id)
 module SBT = BaseTypes.Surface
 module Mu = Mucore
 
@@ -30,9 +29,9 @@ let get_loc_ = CF.Annot.get_loc_
 open CF.Core
 open Pp
 
-open Effectful.Make (Resultat)
+open Effectful.Make (Or_TypeError)
 
-let fail = Resultat.fail
+let fail = Or_TypeError.fail
 
 let do_ail_desugar_op desugar_state f =
   match f desugar_state with
@@ -629,7 +628,7 @@ let n_memop ~inherit_loc loc memop pexprs =
   | PtrMemberShift _, _ -> assert_error loc !^"PtrMemberShift (CHERI only)"
   | memop, pexprs1 ->
     let err =
-      !^__FUNCTION__
+      !^__LOC__
       ^^ colon
       ^^^ !^(show_n_memop memop)
       ^^^ !^"applied to"
@@ -647,7 +646,7 @@ let rec n_expr
   ((env, old_states), desugaring_things)
   (global_types, visible_objects_env)
   e
-  : unit Mucore.expr Resultat.m
+  : unit Mucore.expr Or_TypeError.t
   =
   let markers_env, cn_desugaring_state = desugaring_things in
   let (Expr (annots, pe)) = e in
@@ -849,9 +848,7 @@ let rec n_expr
   | Eexcluded _ -> assert_error loc !^"core_anormalisation: Eexcluded"
 
 
-module RT = ReturnTypes
 module AT = ArgumentTypes
-module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
 
 let rec lat_of_arguments f_i = function
@@ -899,7 +896,7 @@ let make_largs f_i =
       let@ expr =
         C.LocalState.handle st (C.ET.translate_cn_expr Sym.Set.empty env expr)
       in
-      let@ lat = aux (C.add_logical name (IT.bt expr) env) st conditions in
+      let@ lat = aux (C.add_logical name (IT.get_bt expr) env) st conditions in
       return (Mu.mDefine ((name, IT.Surface.proj expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conditions ->
       let@ lc = C.LocalState.handle st (C.ET.translate_cn_assrt env (loc, constr)) in
@@ -930,8 +927,9 @@ let rec make_largs_with_accesses f_i env st (accesses, conditions) =
 
 let is_pass_by_pointer = function By_pointer -> true | By_value -> false
 
-let check_against_core_bt loc =
-  CoreTypeChecks.check_against_core_bt (fun msg -> fail { loc; msg = Generic msg })
+let check_against_core_bt loc cbt bt =
+  CoreTypeChecks.check_against_core_bt cbt bt
+  |> Result.map_error (fun msg -> TypeErrors.{ loc; msg = Generic msg })
 
 
 let make_label_args f_i loc env st args (accesses, inv) =
@@ -946,7 +944,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
       let env = C.add_computational s p_sbt env in
       (* let good_pointer_lc = *)
       (*   let info = (loc, Some (Sym.pp_string s ^ " good")) in *)
-      (*   let here = Locations.other __FUNCTION__ in *)
+      (*   let here = Locations.other __LOC__ in *)
       (*   (LC.T (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc, here)) here), info) *)
       (* in *)
       let@ oa_name, ((pt_ret, oa_bt), lcs), value = C.ownership (loc, (s, ct)) env in
@@ -983,7 +981,7 @@ let make_function_args f_i loc env args (accesses, requires) =
       let st = C.LocalState.add_c_variable_state mut_arg arg_state st in
       (* let good_lc = *)
       (*   let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in *)
-      (*   let here = Locations.other __FUNCTION__ in *)
+      (*   let here = Locations.other __LOC__ in *)
       (*   (LC.T (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
       (* in *)
       let@ at =
@@ -1022,7 +1020,7 @@ let make_fun_with_spec_args f_i loc env args requires =
       let env = C.add_computational pure_arg sbt env in
       (* let good_lc = *)
       (*   let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in *)
-      (*   let here = Locations.other __FUNCTION__ in *)
+      (*   let here = Locations.other __LOC__ in *)
       (*   (LC.T (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
       (* in *)
       let@ at = aux (* good_lc :: *) good_lcs env st rest in
@@ -1266,7 +1264,8 @@ let normalise_fun_map_decl
        let@ accesses = ListM.mapM (desugar_access d_st global_types) accesses in
        let@ requires, d_st = desugar_conds d_st (List.map snd requires) in
        debug 6 (lazy (string "desugared requires conds"));
-       let@ ret_s, ret_d_st = register_new_cn_local (Id.id "return") d_st in
+       let here = Locations.other __LOC__ in
+       let@ ret_s, ret_d_st = register_new_cn_local (Id.make here "return") d_st in
        let@ ensures, _ret_d_st = desugar_conds ret_d_st (List.map snd ensures) in
        debug 6 (lazy (string "desugared ensures conds"));
        let@ spec_req, spec_ens, env =
@@ -1428,7 +1427,7 @@ let normalise_fun_map
 
 
 let normalise_globs ~inherit_loc env _sym g =
-  let loc = Locations.other __FUNCTION__ in
+  let loc = Locations.other __LOC__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
     let@ () = check_against_core_bt loc bt BT.(Loc ()) in

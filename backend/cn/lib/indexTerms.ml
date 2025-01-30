@@ -15,27 +15,22 @@ module Surface = struct
 
   type t = BaseTypes.Surface.t annot
 
-  let compare = Terms.compare_annot BaseTypes.Surface.compare
+  let compare = compare_annot BaseTypes.Surface.compare
 
-  let proj = Terms.map_annot BaseTypes.Surface.proj
+  let proj = map_annot BaseTypes.Surface.proj
 
-  let inj x = Terms.map_annot BaseTypes.Surface.inj x
+  let inj x = map_annot BaseTypes.Surface.inj x
 end
 
-let basetype : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
+let get_bt : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
 
-(* TODO rename this get_bt *)
-let bt = basetype
+let get_term (IT (t, _, _)) = t
 
-(* TODO rename this get_term *)
-let term (IT (t, _, _)) = t
+let get_loc (IT (_, _, l)) = l
 
-(* TODO rename this get_loc *)
-let loc (IT (_, _, l)) = l
+let pp ?(prec = 0) = pp ~prec
 
-let pp ?(prec = 0) = Terms.pp ~prec
-
-let pp_with_typf f it = Pp.typ (pp it) (f (bt it))
+let pp_with_typf f it = Pp.typ (pp it) (f (get_bt it))
 
 let pp_with_typ = pp_with_typf BT.pp
 
@@ -62,9 +57,9 @@ let rec bound_by_pattern (Pat (pat_, bt, _)) =
 
 
 let rec free_vars_bts (it : 'a annot) : BT.t Sym.Map.t =
-  match term it with
+  match get_term it with
   | Const _ -> Sym.Map.empty
-  | Sym s -> Sym.Map.singleton s (bt it)
+  | Sym s -> Sym.Map.singleton s (get_bt it)
   | Unop (_uop, t1) -> free_vars_bts t1
   | Binop (_bop, t1, t2) -> free_vars_bts_list [ t1; t2 ]
   | ITE (t1, t2, t3) -> free_vars_bts_list [ t1; t2; t3 ]
@@ -145,7 +140,7 @@ let free_vars (it : 'a annot) : Sym.Set.t =
   it |> free_vars_bts |> Sym.Map.bindings |> List.map fst |> Sym.Set.of_list
 
 
-let free_vars_ (t_ : 'a Terms.term) : Sym.Set.t =
+let free_vars_ (t_ : 'a term) : Sym.Set.t =
   IT (t_, Unit, Locations.other "")
   |> free_vars_bts
   |> Sym.Map.bindings
@@ -169,7 +164,7 @@ let rec fold_ f binders acc = function
   | ITE (t1, t2, t3) -> fold_list f binders acc [ t1; t2; t3 ]
   | EachI ((_, (s, bt), _), t) ->
     (* TODO - add location information to binders *)
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     fold f (binders @ [ (Pat (PSym s, bt, here), None) ]) acc t
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
@@ -201,14 +196,14 @@ let rec fold_ f binders acc = function
   | MapGet (t1, t2) -> fold_list f binders acc [ t1; t2 ]
   | MapDef ((s, bt), t) ->
     (* TODO - add location information to binders *)
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     fold f (binders @ [ (Pat (PSym s, bt, here), None) ]) acc t
   | Apply (_pred, ts) -> fold_list f binders acc ts
   | Let ((nm, t1), t2) ->
     let acc' = fold f binders acc t1 in
     (* TODO - add location information to binders *)
-    let here = Locations.other __FUNCTION__ in
-    fold f (binders @ [ (Pat (PSym nm, basetype t1, here), Some t1) ]) acc' t2
+    let here = Locations.other __LOC__ in
+    fold f (binders @ [ (Pat (PSym nm, get_bt t1, here), Some t1) ]) acc' t2
   | Match (e, cases) ->
     (* TODO: check this is good *)
     let acc' = fold f binders acc e in
@@ -283,7 +278,7 @@ let rec subst (su : [ `Term of t | `Rename of Sym.t ] Subst.t) (IT (it, bt, loc)
   | Sym sym ->
     (match List.assoc_opt Sym.equal sym su.replace with
      | Some (`Term after) ->
-       if BT.equal bt (basetype after) then
+       if BT.equal bt (get_bt after) then
          ()
        else
          failwith
@@ -397,7 +392,7 @@ let is_z = function IT (Const (Z z), _bt, _loc) -> Some z | _ -> None
 let is_z_ it = Option.is_some (is_z it)
 
 let get_num_z it =
-  match term it with
+  match get_term it with
   | Const (Z _) -> is_z it
   | Const (Bits (info, z)) -> Some (BT.normalise_to_range info z)
   | _ -> None
@@ -512,7 +507,7 @@ let const_ctype_ ct loc = IT (Const (CType_const ct), BT.CType, loc)
 
 (* cmp_op *)
 let lt_ (it, it') loc =
-  if BT.equal (bt it) (bt it') then
+  if BT.equal (get_bt it) (get_bt it') then
     ()
   else
     failwith ("lt_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [ it; it' ]));
@@ -520,7 +515,7 @@ let lt_ (it, it') loc =
 
 
 let le_ (it, it') loc =
-  if BT.equal (bt it) (bt it') then
+  if BT.equal (get_bt it) (get_bt it') then
     ()
   else
     failwith ("le_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [ it; it' ]));
@@ -547,14 +542,14 @@ let or_ its loc = vargs_binop (bool_ false loc) (Tools.curry (fun p -> or2_ p lo
 
 let impl_ (it, it') loc = IT (Binop (Implies, it, it'), BT.Bool, loc)
 
-let not_ it loc = IT (Unop (Not, it), bt it, loc)
+let not_ it loc = IT (Unop (Not, it), get_bt it, loc)
 
-let bw_compl_ it loc = IT (Unop (BW_Compl, it), bt it, loc)
+let bw_compl_ it loc = IT (Unop (BW_Compl, it), get_bt it, loc)
 
-let ite_ (it, it', it'') loc = IT (ITE (it, it', it''), bt it', loc)
+let ite_ (it, it', it'') loc = IT (ITE (it, it', it''), get_bt it', loc)
 
 let eq_ (it, it') loc =
-  if BT.equal (bt it) (bt it') then
+  if BT.equal (get_bt it) (get_bt it') then
     ()
   else
     failwith ("eq_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [ it; it' ]));
@@ -583,7 +578,7 @@ let or_sterm_ its loc =
   vargs_binop (bool_sterm_ true loc) (Tools.curry (fun p -> or2_sterm_ p loc)) its
 
 
-let let_ ((nm, x), y) loc = IT (Let ((nm, x), y), basetype y, loc)
+let let_ ((nm, x), y) loc = IT (Let ((nm, x), y), get_bt y, loc)
 
 (* let disperse_not_ it = *)
 (*   match term it with *)
@@ -596,55 +591,55 @@ let eachI_ (i1, (s, bt), i2) t loc = IT (EachI ((i1, (s, bt), i2), t), BT.Bool, 
 (* let existsI_ (i1, s, i2) t = not_ (eachI_ (i1, s, i2) (not_ t)) *)
 
 (* arith_op *)
-let negate it loc = IT (Unop (Negate, it), bt it, loc)
+let negate it loc = IT (Unop (Negate, it), get_bt it, loc)
 
-let add_ (it, it') loc = IT (Binop (Add, it, it'), bt it, loc)
+let add_ (it, it') loc = IT (Binop (Add, it, it'), get_bt it, loc)
 
-let sub_ (it, it') loc = IT (Binop (Sub, it, it'), bt it, loc)
+let sub_ (it, it') loc = IT (Binop (Sub, it, it'), get_bt it, loc)
 
 let mul_ (it, it') loc =
-  if BT.equal (bt it) (bt it') then
-    IT (Binop (Mul, it, it'), bt it, loc)
+  if BT.equal (get_bt it) (get_bt it') then
+    IT (Binop (Mul, it, it'), get_bt it, loc)
   else
     failwith ("mul_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [ it; it' ]))
 
 
-let mul_no_smt_ (it, it') loc = IT (Binop (MulNoSMT, it, it'), bt it, loc)
+let mul_no_smt_ (it, it') loc = IT (Binop (MulNoSMT, it, it'), get_bt it, loc)
 
-let div_ (it, it') loc = IT (Binop (Div, it, it'), bt it, loc)
+let div_ (it, it') loc = IT (Binop (Div, it, it'), get_bt it, loc)
 
-let div_no_smt_ (it, it') loc = IT (Binop (DivNoSMT, it, it'), bt it, loc)
+let div_no_smt_ (it, it') loc = IT (Binop (DivNoSMT, it, it'), get_bt it, loc)
 
-let exp_ (it, it') loc = IT (Binop (Exp, it, it'), bt it, loc)
+let exp_ (it, it') loc = IT (Binop (Exp, it, it'), get_bt it, loc)
 
-let exp_no_smt_ (it, it') loc = IT (Binop (ExpNoSMT, it, it'), bt it, loc)
+let exp_no_smt_ (it, it') loc = IT (Binop (ExpNoSMT, it, it'), get_bt it, loc)
 
-let rem_ (it, it') loc = IT (Binop (Rem, it, it'), bt it, loc)
+let rem_ (it, it') loc = IT (Binop (Rem, it, it'), get_bt it, loc)
 
-let rem_no_smt_ (it, it') loc = IT (Binop (RemNoSMT, it, it'), bt it, loc)
+let rem_no_smt_ (it, it') loc = IT (Binop (RemNoSMT, it, it'), get_bt it, loc)
 
-let mod_ (it, it') loc = IT (Binop (Mod, it, it'), bt it, loc)
+let mod_ (it, it') loc = IT (Binop (Mod, it, it'), get_bt it, loc)
 
-let mod_no_smt_ (it, it') loc = IT (Binop (ModNoSMT, it, it'), bt it, loc)
+let mod_no_smt_ (it, it') loc = IT (Binop (ModNoSMT, it, it'), get_bt it, loc)
 
-let divisible_ (it, it') loc = eq_ (mod_ (it, it') loc, int_lit_ 0 (bt it) loc) loc
+let divisible_ (it, it') loc = eq_ (mod_ (it, it') loc, int_lit_ 0 (get_bt it) loc) loc
 
 let rem_f_ (it, it') loc = mod_ (it, it') loc
 
-let min_ (it, it') loc = IT (Binop (Min, it, it'), bt it, loc)
+let min_ (it, it') loc = IT (Binop (Min, it, it'), get_bt it, loc)
 
-let max_ (it, it') loc = IT (Binop (Max, it, it'), bt it, loc)
+let max_ (it, it') loc = IT (Binop (Max, it, it'), get_bt it, loc)
 
 let intToReal_ it loc = IT (Cast (Real, it), BT.Real, loc)
 
 let realToInt_ it loc = IT (Cast (Integer, it), BT.Integer, loc)
 
-let arith_binop op (it, it') loc = IT (Binop (op, it, it'), bt it, loc)
+let arith_binop op (it, it') loc = IT (Binop (op, it, it'), get_bt it, loc)
 
-let arith_unop op it loc = IT (Unop (op, it), bt it, loc)
+let arith_unop op it loc = IT (Unop (op, it), get_bt it, loc)
 
 let arith_binop_check op (it, it') loc =
-  assert (BT.equal (bt it) (bt it'));
+  assert (BT.equal (get_bt it) (get_bt it'));
   arith_binop op (it, it') loc
 
 
@@ -671,7 +666,7 @@ let ( %> ) t t' = gt_ (t, t')
 let ( %>= ) t t' = ge_ (t, t')
 
 (* tuple_op *)
-let tuple_ its loc = IT (Tuple its, BT.Tuple (List.map bt its), loc)
+let tuple_ its loc = IT (Tuple its, BT.Tuple (List.map get_bt its), loc)
 
 let nthTuple_ ~item_bt (n, it) loc = IT (NthTuple (n, it), item_bt, loc)
 
@@ -682,7 +677,7 @@ let member_ ~member_bt (it, member) loc = IT (StructMember (it, member), member_
 
 let ( %. ) struct_decls t member =
   let tag =
-    match bt t with
+    match get_bt t with
     | BT.Struct tag -> tag
     | _ -> Cerb_debug.error "illtyped index term. not a struct"
   in
@@ -693,13 +688,13 @@ let ( %. ) struct_decls t member =
     | Some sct -> Memory.bt_of_sct sct
     | None ->
       Cerb_debug.error
-        ("struct " ^ Sym.pp_string tag ^ " does not have member " ^ Id.pp_string member)
+        ("struct " ^ Sym.pp_string tag ^ " does not have member " ^ Id.get_string member)
   in
   member_ ~member_bt (t, member)
 
 
 let record_ members loc =
-  IT (Record members, BT.Record (List.map (fun (s, t) -> (s, basetype t)) members), loc)
+  IT (Record members, BT.Record (List.map (fun (s, t) -> (s, get_bt t)) members), loc)
 
 
 let recordMember_ ~member_bt (t, member) loc =
@@ -717,7 +712,9 @@ let gtPointer_ (it, it') loc = ltPointer_ (it', it) loc
 
 let gePointer_ (it, it') loc = lePointer_ (it', it) loc
 
-let cast_ bt' it loc = if BT.equal bt' (bt it) then it else IT (Cast (bt', it), bt', loc)
+let cast_ bt' it loc =
+  if BT.equal bt' (get_bt it) then it else IT (Cast (bt', it), bt', loc)
+
 
 let uintptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
 
@@ -725,7 +722,7 @@ let uintptr_int_ n loc = uintptr_const_ (Z.of_int n) loc
 (* for integer-mode: z_ n *)
 
 let addr_ it loc =
-  assert (BT.equal (bt it) (Loc ()));
+  assert (BT.equal (get_bt it) (Loc ()));
   cast_ Memory.uintptr_bt it loc
 
 
@@ -775,26 +772,26 @@ let pointer_offset_ (base, offset) loc =
 (* list_op *)
 let nil_ ~item_bt loc = IT (Nil item_bt, BT.List item_bt, loc)
 
-let cons_ (it, it') loc = IT (Cons (it, it'), bt it', loc)
+let cons_ (it, it') loc = IT (Cons (it, it'), get_bt it', loc)
 
 let list_ ~item_bt its ~nil_loc =
   let rec aux = function
     | [] -> IT (Nil item_bt, BT.List item_bt, nil_loc)
-    | x :: xs -> IT (Cons (x, aux xs), BT.List item_bt, loc x)
+    | x :: xs -> IT (Cons (x, aux xs), BT.List item_bt, get_loc x)
   in
   aux its
 
 
 let head_ ~item_bt it loc = IT (Head it, item_bt, loc)
 
-let tail_ it loc = IT (Tail it, bt it, loc)
+let tail_ it loc = IT (Tail it, get_bt it, loc)
 
-let nthList_ (n, it, d) loc = IT (NthList (n, it, d), bt d, loc)
+let nthList_ (n, it, d) loc = IT (NthList (n, it, d), get_bt d, loc)
 
 let array_to_list_ (arr, i, len) bt loc = IT (ArrayToList (arr, i, len), bt, loc)
 
 let rec dest_list it =
-  match term it with
+  match get_term it with
   | Nil _bt -> Some []
   | Cons (x, xs) -> Option.map (fun ys -> x :: ys) (dest_list xs)
   (* TODO: maybe include Tail, if we ever actually use it? *)
@@ -806,7 +803,7 @@ let setMember_ (it, it') loc = IT (Binop (SetMember, it, it'), BT.Bool, loc)
 
 (* let setUnion_ its = IT (Set_op (SetUnion its), bt (hd its))
  * let setIntersection_ its = IT (Set_op (SetIntersection its), bt (hd its)) *)
-let setDifference_ (it, it') loc = IT (Binop (SetDifference, it, it'), bt it, loc)
+let setDifference_ (it, it') loc = IT (Binop (SetDifference, it, it'), get_bt it, loc)
 
 let subset_ (it, it') loc = IT (Binop (Subset, it, it'), BT.Bool, loc)
 
@@ -820,8 +817,8 @@ let wrapI_ (ity, arg) loc =
 
 
 let alignedI_ ~t ~align loc =
-  assert (BT.equal (bt t) (Loc ()));
-  assert (BT.equal Memory.uintptr_bt (bt align));
+  assert (BT.equal (get_bt t) (Loc ()));
+  assert (BT.equal Memory.uintptr_bt (get_bt align));
   IT (Aligned { t; align }, BT.Bool, loc)
 
 
@@ -829,14 +826,16 @@ let aligned_ (t, ct) loc =
   alignedI_ ~t ~align:(int_lit_ (Memory.align_of_ctype ct) Memory.uintptr_bt loc) loc
 
 
-let const_map_ index_bt t loc = IT (MapConst (index_bt, t), BT.Map (index_bt, bt t), loc)
+let const_map_ index_bt t loc =
+  IT (MapConst (index_bt, t), BT.Map (index_bt, get_bt t), loc)
 
-let map_set_ t1 (t2, t3) loc = IT (MapSet (t1, t2, t3), bt t1, loc)
+
+let map_set_ t1 (t2, t3) loc = IT (MapSet (t1, t2, t3), get_bt t1, loc)
 
 let map_get_ v arg loc =
-  match bt v with
+  match get_bt v with
   | BT.Map (dt, rbt) ->
-    if BT.equal dt (bt arg) then
+    if BT.equal dt (get_bt arg) then
       ()
     else
       failwith ("mag_get_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [ v; arg ]));
@@ -844,7 +843,9 @@ let map_get_ v arg loc =
   | _ -> Cerb_debug.error "illtyped index term"
 
 
-let map_def_ (s, abt) body loc = IT (MapDef ((s, abt), body), BT.Map (abt, bt body), loc)
+let map_def_ (s, abt) body loc =
+  IT (MapDef ((s, abt), body), BT.Map (abt, get_bt body), loc)
+
 
 let make_array_ ~index_bt ~item_bt items (* assumed all of item_bt *) loc =
   let base_value = const_map_ index_bt (default_ item_bt loc) loc in
@@ -879,17 +880,17 @@ let fresh_same bt symbol' loc =
   (symbol, sym_ (symbol, bt, loc))
 
 
-let def_ sym e loc = eq_ (sym_ (sym, bt e, loc), e) loc
+let def_ sym e loc = eq_ (sym_ (sym, get_bt e, loc), e) loc
 
 let in_range within (min, max) loc =
   and_ [ le_ (min, within) loc; le_ (within, max) loc ] loc
 
 
 let rec in_z_range within (min_z, max_z) loc =
-  match bt within with
+  match get_bt within with
   | BT.Integer -> in_range within (z_ min_z loc, z_ max_z loc) loc
   | BT.Bits (sign, sz) ->
-    let the_bt = bt within in
+    let the_bt = get_bt within in
     let min_possible, max_possible = BT.bits_range (sign, sz) in
     let min_c =
       if Z.leq min_z min_possible then
@@ -989,7 +990,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
         ();
       (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
       let ix_bt =
-        match BT.is_map_bt (bt about) with
+        match BT.is_map_bt (get_bt about) with
         | Some (abt, _) -> abt
         | _ ->
           failwith ("value_check: argument not a map: " ^ Pp.plain (pp_with_typ about))
@@ -999,7 +1000,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
           ()
         else
           Pp.warn
-            (Locations.other __FUNCTION__)
+            (Locations.other __LOC__)
             (Pp.item "unexpected type of array arg" (pp_with_typ about))
       in
       let i_s, i = fresh ix_bt loc in
@@ -1030,7 +1031,7 @@ let good_pointer = value_check_pointer `Good
 
 let promote_to_compare it it' loc =
   let res_bt =
-    match (bt it, bt it') with
+    match (get_bt it, get_bt it') with
     | bt1, bt2 when BT.equal bt1 bt2 -> bt1
     | BT.Bits (_, sz), BT.Bits (_, sz') -> BT.Bits (BT.Signed, sz + sz' + 2)
     | _ ->
@@ -1038,20 +1039,20 @@ let promote_to_compare it it' loc =
         ("promote to compare: impossible types to compare: "
          ^ Pp.plain (Pp.list pp_with_typ [ it; it' ]))
   in
-  let cast it = if BT.equal (bt it) res_bt then it else cast_ res_bt it loc in
+  let cast it = if BT.equal (get_bt it) res_bt then it else cast_ res_bt it loc in
   (cast it, cast it')
 
 
 let nth_array_to_list_fact n xs d =
-  let here = Locations.other __FUNCTION__ in
-  match term xs with
+  let here = Locations.other __LOC__ in
+  match get_term xs with
   | ArrayToList (arr, i, len) ->
     let lt_n_len = lt_ (promote_to_compare n len here) here in
     let lhs = nthList_ (n, xs, d) here in
     let rhs =
       ite_
-        ( and_ [ le_ (int_lit_ 0 (bt n) here, n) here; lt_n_len ] here,
-          map_get_ arr (add_ (i, cast_ (bt i) n here) here) here,
+        ( and_ [ le_ (int_lit_ 0 (get_bt n) here, n) here; lt_n_len ] here,
+          map_get_ arr (add_ (i, cast_ (get_bt i) n here) here) here,
           d )
         here
     in
@@ -1074,28 +1075,30 @@ let rec wrap_bindings_match bs default_v v =
          match x with
          | None -> None
          | Some match_e ->
-           let here = Locations.other __FUNCTION__ in
+           let here = Locations.other __LOC__ in
            Some
              (IT
                 ( Match
                     ( match_e,
-                      [ (pat, v2); (Pat (PWild, basetype match_e, here), default_v) ] ),
-                  basetype v2,
+                      [ (pat, v2); (Pat (PWild, get_bt match_e, here), default_v) ] ),
+                  get_bt v2,
                   here ))))
 
 
 let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) =
-  let here = Locations.other __FUNCTION__ in
+  let here = Locations.other __LOC__ in
   let nths =
     List.filter_map
       (fun (bs, it) ->
-        match term it with NthList (n, xs, d) -> Some (bs, (n, d, bt xs)) | _ -> None)
+        match get_term it with
+        | NthList (n, xs, d) -> Some (bs, (n, d, get_bt xs))
+        | _ -> None)
       binders_terms
   in
   let arr_lists =
     List.filter_map
       (fun (bs, it) ->
-        match term it with ArrayToList _ -> Some (bs, (it, bt it)) | _ -> None)
+        match get_term it with ArrayToList _ -> Some (bs, (it, get_bt it)) | _ -> None)
       binders_terms
   in
   List.concat_map
@@ -1205,3 +1208,113 @@ let rec map_term_post (f : t -> t) (it : t) : t =
     | Cast (bt', it') -> Cast (bt', loop it')
   in
   f (IT (it_, bt, here))
+
+
+module Bounds = struct
+  let get_lower_bound_opt ((x, bt) : Sym.sym * BT.t) (it : t) : t option =
+    let rec aux (it : t) : t option =
+      match it with
+      | IT (Binop (EQ, IT (Sym x', _, _), tm2), _, _)
+      | IT (Binop (EQ, tm2, IT (Sym x', _, _)), _, _) ->
+        if Sym.equal x x' then Some tm2 else None
+      | IT (Binop (LE, it', IT (Sym x', _, _)), _, _) when Sym.equal x x' -> Some it'
+      | IT (Binop (LT, it', IT (Sym x', _, _)), _, _) when Sym.equal x x' ->
+        Some
+          (IT
+             ( Binop (Add, it', num_lit_ Z.one bt Cerb_location.unknown),
+               bt,
+               Cerb_location.unknown ))
+      | IT (Binop (And, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None -> None
+         | None, it' | it', None -> it'
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Max, tm1, tm2), bt, Cerb_location.unknown)))
+      | IT (Binop (Or, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None | None, _ | _, None -> None
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Min, tm1, tm2), bt, Cerb_location.unknown)))
+      | _ -> None
+    in
+    aux it
+
+
+  let get_lower_bound ((x, bt) : Sym.sym * BT.t) (it : t) : t =
+    let min =
+      match bt with
+      | Bits (sign, sz) -> fst (BT.bits_range (sign, sz))
+      | _ ->
+        Cerb_colour.with_colour
+          (fun () ->
+            print_endline
+              Pp.(
+                plain
+                  (!^"unsupported type"
+                   ^^^ squotes (BT.pp bt)
+                   ^^^ !^"in permission"
+                   ^^^ squotes (pp it)
+                   ^^^ !^"at"
+                   ^^^ Locations.pp (get_loc it))))
+          ();
+        exit 2
+    in
+    get_lower_bound_opt (x, bt) it
+    |> Option.value ~default:(num_lit_ min bt Cerb_location.unknown)
+
+
+  let get_upper_bound_opt ((x, bt) : Sym.sym * BT.t) (it : t) : t option =
+    let rec aux (it : t) : t option =
+      match it with
+      | IT (Binop (EQ, IT (Sym x', _, _), tm2), _, _)
+      | IT (Binop (EQ, tm2, IT (Sym x', _, _)), _, _) ->
+        if Sym.equal x x' then Some tm2 else None
+      | IT (Binop (LE, IT (Sym x', _, _), it'), _, _) when Sym.equal x x' -> Some it'
+      | IT (Binop (LT, IT (Sym x', _, _), it'), _, _) when Sym.equal x x' ->
+        Some
+          (IT
+             ( Binop (Sub, it', num_lit_ Z.one bt Cerb_location.unknown),
+               bt,
+               Cerb_location.unknown ))
+      | IT (Binop (And, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None -> None
+         | None, it' | it', None -> it'
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Min, tm1, tm2), bt, Cerb_location.unknown)))
+      | IT (Binop (Or, tm1, tm2), _, _) ->
+        (match (aux tm1, aux tm2) with
+         | None, None | None, _ | _, None -> None
+         | Some tm1, Some tm2 ->
+           Some (IT (Binop (Max, tm1, tm2), bt, Cerb_location.unknown)))
+      | _ -> None
+    in
+    aux it
+
+
+  let get_upper_bound ((x, bt) : Sym.sym * BT.t) (it : t) : t =
+    let max =
+      match bt with
+      | Bits (sign, sz) -> snd (BT.bits_range (sign, sz))
+      | _ ->
+        Cerb_colour.with_colour
+          (fun () ->
+            print_endline
+              Pp.(
+                plain
+                  (!^"unsupported type"
+                   ^^^ squotes (BT.pp bt)
+                   ^^^ !^"in permission"
+                   ^^^ squotes (pp it)
+                   ^^^ !^"at"
+                   ^^^ Locations.pp (get_loc it))))
+          ();
+        exit 2
+    in
+    get_upper_bound_opt (x, bt) it
+    |> Option.value ~default:(num_lit_ max bt Cerb_location.unknown)
+
+
+  let get_bounds ((x, bt) : Sym.sym * BT.t) (it : t) : t * t =
+    (get_lower_bound (x, bt) it, get_upper_bound (x, bt) it)
+end

@@ -3,7 +3,6 @@ open List
 module BT = BaseTypes
 module Res = Resource
 module LC = LogicalConstraints
-module Loc = Locations
 module IntMap = Map.Make (Int)
 
 type l_info = Locations.t * Pp.document Lazy.t
@@ -16,7 +15,7 @@ type basetype_or_value =
   | BaseType of BT.t
   | Value of IndexTerms.t
 
-let bt_of = function BaseType bt -> bt | Value v -> IndexTerms.bt v
+let bt_of = function BaseType bt -> bt | Value v -> IndexTerms.get_bt v
 
 let has_value = function BaseType _ -> false | Value _ -> true
 
@@ -201,7 +200,7 @@ let res_map_history m id =
   match IntMap.find_opt id m with
   | Some h -> h
   | None ->
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     { last_written = here;
       reason_written = "unknown";
       last_written_id = id;

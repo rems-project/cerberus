@@ -43,7 +43,8 @@ let simp simp_it simp_lc simp_re = function
 let binders = function
   | Computational ((s, bt), _, t) ->
     let s, t = LRT.alpha_rename s t in
-    (Id.id (Sym.pp_string s), bt) :: LRT.binders t
+    let here = Locations.other __LOC__ in
+    (Id.make here (Sym.pp_string s), bt) :: LRT.binders t
 
 
 let map (f : LRT.t -> LRT.t) = function

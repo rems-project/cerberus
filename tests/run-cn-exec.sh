@@ -17,7 +17,7 @@ CHECK_SCRIPT="${RUNTIME_PREFIX}/libexec/cn-runtime-single-file.sh"
 
 [ -f "${CHECK_SCRIPT}" ] || echo_and_err "Could not find single file helper script: ${CHECK_SCRIPT}"
 
-SCRIPT_OPT="-q"
+SCRIPT_OPT="-qu"
 
 function exits_with_code() {
   local file=$1
@@ -102,7 +102,7 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "int_to_ptr.c" \
     ! -name "int_to_ptr.error.c" \
     ! -name "create_rdonly.c" \
-    ! -name "to_from_bytes_block.c" \
+    ! -name "offsetof_int_const.c" \
 )
 
 # Include files which cause error for proof but not testing
@@ -169,7 +169,7 @@ BUGGY="cn/division_casting.c \
        cn/int_to_ptr.c \
        cn/int_to_ptr.error.c \
        cn/create_rdonly.c \
-       cn/to_from_bytes_block.c \
+       cn/offsetof_int_const.c \
        "
 
 # Exclude files which cause error for proof but not testing

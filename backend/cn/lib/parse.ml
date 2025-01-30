@@ -1,7 +1,7 @@
 open Cerb_frontend.Annot
-open Resultat
+open Or_TypeError
 
-open Effectful.Make (Resultat)
+open Effectful.Make (Or_TypeError)
 
 open TypeErrors
 open Pp

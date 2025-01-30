@@ -126,7 +126,7 @@ module Fusion = struct
                 ((i, i_bt), (IT (Binop (Implies, it_perm, it_body), _, loc_implies) as it)),
               gt' )
           when Sym.Set.mem x (IT.free_vars it) && check_index_ok x i it ->
-          let it_min', it_max' = GA.get_bounds (i, i_bt) it_perm in
+          let it_min', it_max' = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
           let gt', res = aux gt' in
           if
             IT.equal it_min it_min'
@@ -171,43 +171,52 @@ module Fusion = struct
         | Let
             (backtracks, (x, GT (Map ((i, i_bt, it_perm), gt_inner), _, loc_map)), gt_rest)
           ->
-          let its_bounds = GA.get_bounds (i, i_bt) it_perm in
+          let its_bounds = IndexTerms.Bounds.get_bounds (i, i_bt) it_perm in
           let gt_rest, constraints =
             collect_constraints (Sym.Set.add x vars) x its_bounds gt_rest
           in
-          let gt_inner =
-            let stmts, gt_last = GS.stmts_of_gt (aux (Sym.Set.add i vars) gt_inner) in
-            let sym_bt, stmts', gt_last =
-              match gt_last with
-              | GT (Return (IT (Sym x, x_bt, _)), _, _) -> ((x, x_bt), [], gt_last)
-              | GT (Return it, ret_bt, loc_ret) ->
-                let here = Locations.other __LOC__ in
-                let y = Sym.fresh () in
-                ( (y, ret_bt),
-                  [ GS.Let (0, (y, GT.return_ it loc_ret)) ],
-                  GT.return_ (IT.sym_ (y, ret_bt, here)) loc_ret )
-              | _ -> failwith (Pp.plain (GT.pp gt_last) ^ " @ " ^ __LOC__)
+          if List.is_empty constraints then
+            gt
+          else (
+            let gt_inner =
+              let stmts, gt_last = GS.stmts_of_gt (aux (Sym.Set.add i vars) gt_inner) in
+              let sym_bt, stmts', gt_last =
+                match gt_last with
+                | GT (Return (IT (Sym x, x_bt, _)), _, _) -> ((x, x_bt), [], gt_last)
+                | GT (Return it, ret_bt, loc_ret) ->
+                  let here = Locations.other __LOC__ in
+                  let y = Sym.fresh () in
+                  ( (y, ret_bt),
+                    [ GS.Let (0, (y, GT.return_ it loc_ret)) ],
+                    GT.return_ (IT.sym_ (y, ret_bt, here)) loc_ret )
+                | gt' ->
+                  let ret_bt = GT.bt gt' in
+                  let here = Locations.other __LOC__ in
+                  let y = Sym.fresh () in
+                  ( (y, ret_bt),
+                    [ GS.Let (0, (y, gt')) ],
+                    GT.return_ (IT.sym_ (y, ret_bt, here)) (GT.loc gt') )
+              in
+              let here = Locations.other __LOC__ in
+              let stmts'' =
+                List.map
+                  (fun (j, lc) : GS.t ->
+                    Assert
+                      (LC.T
+                         (replace_index
+                            x
+                            sym_bt
+                            i
+                            (IT.subst (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ]) lc))))
+                  constraints
+              in
+              GS.gt_of_stmts (stmts @ stmts' @ stmts'') gt_last
             in
-            let here = Locations.other __LOC__ in
-            let stmts'' =
-              List.map
-                (fun (j, lc) : GS.t ->
-                  Assert
-                    (LC.T
-                       (replace_index
-                          x
-                          sym_bt
-                          i
-                          (IT.subst (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ]) lc))))
-                constraints
-            in
-            GS.gt_of_stmts (stmts @ stmts' @ stmts'') gt_last
-          in
-          GT.let_
-            ( backtracks,
-              (x, GT.map_ ((i, i_bt, it_perm), gt_inner) loc_map),
-              aux (Sym.Set.add x vars) gt_rest )
-            loc
+            GT.let_
+              ( backtracks,
+                (x, GT.map_ ((i, i_bt, it_perm), gt_inner) loc_map),
+                aux (Sym.Set.add x vars) gt_rest )
+              loc)
         | Let (backtracks, (x, gt_inner), gt_rest) ->
           GT.let_
             (backtracks, (x, aux vars gt_inner), aux (Sym.Set.add x vars) gt_rest)
@@ -293,7 +302,7 @@ module Fusion = struct
                 loc,
               reqs )
           else (
-            let old_args = List.map_snd IT.bt xits in
+            let old_args = List.map_snd IT.get_bt xits in
             let ret_sym = Sym.fresh_make_uniq (Sym.pp_string x) in
             let xits' =
               lcs
@@ -314,11 +323,11 @@ module Fusion = struct
               :: (xits'
                   |> List.map (fun (y, it) ->
                     ( fst (Option.get (IT.is_sym it)),
-                      IT.sym_ (y, IT.bt it, Locations.other __LOC__) )))
+                      IT.sym_ (y, IT.get_bt it, Locations.other __LOC__) )))
             in
             let lcs = List.map (LC.subst (IT.make_subst subst)) lcs in
             let new_name = Sym.fresh_make_uniq (Sym.pp_string fsym) in
-            let new_args = xits' |> List.map (fun (y, it) -> (y, IT.bt it)) in
+            let new_args = xits' |> List.map (fun (y, it) -> (y, IT.get_bt it)) in
             ( GT.let_
                 ( backtracks,
                   (x, GT.call_ (new_name, xits @ xits') bt_call loc_call),
@@ -758,7 +767,7 @@ module PartialEvaluation = struct
         eval_aux (good_value struct_decls ty it' here)
       | Aligned { t; align } ->
         let addr = addr_ t here in
-        if not (BT.equal (IT.bt addr) (IT.bt align)) then
+        if not (BT.equal (IT.get_bt addr) (IT.get_bt align)) then
           Error "Mismatched types"
         else
           eval_aux (divisible_ (addr, align) here)
@@ -1254,7 +1263,7 @@ module BranchPruning = struct
           if contains_false_assertion gt_else then
             GT.assert_ (T it_if, gt_then) loc_ite
           else if contains_false_assertion gt_then then
-            GT.assert_ (T (IT.not_ it_if (IT.loc it_if)), gt_else) loc_ite
+            GT.assert_ (T (IT.not_ it_if (IT.get_loc it_if)), gt_else) loc_ite
           else
             gt
         | _ -> gt
@@ -1473,7 +1482,7 @@ module SplitConstraints = struct
         | Assert (T (IT (Let ((x, it_inner), it_rest), _, loc_let)), gt') ->
           GT.let_
             ( 0,
-              (x, GT.return_ it_inner (IT.loc it_inner)),
+              (x, GT.return_ it_inner (IT.get_loc it_inner)),
               GT.assert_ (LC.T it_rest, gt') loc )
             loc_let
         | Assert (Forall ((_i_sym, _i_bt), IT (Let _, _, _)), _) ->
@@ -2526,7 +2535,7 @@ module ConstraintPropagation = struct
           (Not, IT (Binop (EQ, IT (Const (Bits (_, n)), _, _), IT (Sym x, x_bt, _)), _, _))
         ->
         let@ bt_rep = IntRep.of_bt x_bt in
-        Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.ne n))))
+        Some (false, (x, Int (IntRep.intersect bt_rep (IntRep.ne n))))
       | Binop
           ( EQ,
             IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _),

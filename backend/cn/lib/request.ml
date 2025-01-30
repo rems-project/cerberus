@@ -142,6 +142,17 @@ module QPredicate = struct
         :: dtree_of_name qpred.name
         :: IT.dtree qpred.pointer
         :: List.map IT.dtree qpred.iargs )
+
+
+  let get_lower_bound (qpred : t) : IT.t =
+    IndexTerms.Bounds.get_lower_bound qpred.q qpred.permission
+
+
+  let get_upper_bound (qpred : t) : IT.t =
+    IndexTerms.Bounds.get_upper_bound qpred.q qpred.permission
+
+
+  let get_bounds (qpred : t) : IT.t * IT.t = (get_lower_bound qpred, get_upper_bound qpred)
 end
 
 type t =

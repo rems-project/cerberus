@@ -2,11 +2,11 @@ val debug_constraint_failure_diagnostics
   :  int ->
   Solver.model_with_q ->
   Simplify.simp_ctxt ->
-  LogicalConstraints.logical_constraint ->
+  LogicalConstraints.t ->
   unit
 
 module General : sig
-  type uiinfo = TypeErrors.situation * TypeErrors.request_chain
+  type uiinfo = TypeErrors.situation * TypeErrors.RequestChain.t
 
   val ftyp_args_request_step
     :  ([ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> 'a -> 'a) ->

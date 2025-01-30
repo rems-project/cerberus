@@ -2,21 +2,16 @@ module IT = IndexTerms
 module BT = BaseTypes
 open Pp
 
-type logical_constraint =
+type t =
   | T of IT.t
   | Forall of (Sym.t * BT.t) * IT.t
 [@@deriving eq, ord]
 
-module Ord = struct
-  type t = logical_constraint
+module Set = Set.Make (struct
+    type nonrec t = t
 
-  let equal = equal_logical_constraint
-
-  let compare = compare_logical_constraint
-end
-
-include Ord
-module Set = Set.Make (Ord)
+    let compare = compare
+  end)
 
 let pp = function
   | T it -> IT.pp it

@@ -84,13 +84,14 @@ let alpha_unique ss =
 
 
 let binders =
+  let here = Locations.other __LOC__ in
   let rec aux = function
     | Define ((s, it), _, t) ->
       let s, t = alpha_rename s t in
-      (Id.id (Sym.pp_string s), IT.bt it) :: aux t
+      (Id.make here (Sym.pp_string s), IT.get_bt it) :: aux t
     | Resource ((s, (_, bt)), _, t) ->
       let s, t = alpha_rename s t in
-      (Id.id (Sym.pp_string s), bt) :: aux t
+      (Id.make here (Sym.pp_string s), bt) :: aux t
     | Constraint (_, _, t) -> aux t
     | I -> []
   in

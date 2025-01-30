@@ -1,13 +1,10 @@
-open Explain
-open Pp
-open Locations
-module BT = BaseTypes
 module IT = IndexTerms
 module CF = Cerb_frontend
 module Loc = Locations
 module Res = Resource
 module LC = LogicalConstraints
 module Req = Request
+open Pp
 
 type label_kind = Where.label
 
@@ -87,88 +84,63 @@ let for_situation = function
      | Subtyping -> !^"for returning")
 
 
-type request_chain_elem =
-  { resource : Req.t;
-    loc : Locations.t option;
-    reason : string option
-  }
+module RequestChain = struct
+  type elem =
+    { resource : Req.t;
+      loc : Locations.t option;
+      reason : string option
+    }
 
-type request_chain = request_chain_elem list
+  type t = elem list
+
+  let pp requests =
+    let pp_req req =
+      let doc = Req.pp req.resource in
+      let doc =
+        match req.loc with
+        | None -> doc
+        | Some loc ->
+          doc ^^ hardline ^^ !^"      " ^^ !^(fst (Locations.head_pos_of_location loc))
+      in
+      match req.reason with None -> doc | Some str -> doc ^^^ parens !^str
+    in
+    let rec loop req = function
+      | [] -> !^"Resource needed:" ^^^ pp_req req
+      | req2 :: reqs -> loop req2 reqs ^^ hardline ^^ !^"  which requires:" ^^^ pp_req req
+    in
+    match requests with [] -> None | req :: reqs -> Some (loop req reqs)
+end
 
 type message =
-  | Unknown_variable of Sym.t
-  | Unknown_function of Sym.t
-  | Unknown_struct of Sym.t
-  | Unknown_datatype of Sym.t
-  | Unknown_datatype_constr of Sym.t
-  | Unknown_resource_predicate of
-      { id : Sym.t;
-        logical : bool
-      }
-  | Unknown_logical_function of
-      { id : Sym.t;
-        resource : bool
-      }
-  | Unexpected_member of Id.t list * Id.t
-  | Unknown_lemma of Sym.t
+  | Global of Global.error
+  | WellTyped of WellTyped.message
   (* some from Kayvan's compilePredicates module *)
   | First_iarg_missing
   | First_iarg_not_pointer of
       { pname : Request.name;
         found_bty : BaseTypes.t
       }
-  | Missing_member of Id.t
   | Missing_resource of
-      { requests : request_chain;
+      { requests : RequestChain.t;
         situation : situation;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Merging_multiple_arrays of
-      { requests : request_chain;
+      { requests : RequestChain.t;
         situation : situation;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Unused_resource of
       { resource : Res.t;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
-      }
-  | Number_members of
-      { has : int;
-        expect : int
-      }
-  | Number_arguments of
-      { has : int;
-        expect : int
-      }
-  | Number_input_arguments of
-      { has : int;
-        expect : int
-      }
-  | Number_output_arguments of
-      { has : int;
-        expect : int
-      }
-  | Mismatch of
-      { has : document;
-        expect : document
-      }
-  | Illtyped_it of
-      { it : Pp.document;
-        has : Pp.document; (* 'expected' and 'has' as in Kayvan's Core type checker *)
-        expected : string;
-        reason : string
       }
   | Illtyped_binary_it of
       { left : IT.Surface.t;
         right : IT.Surface.t;
         binop : CF.Cn.cn_binop
-      }
-  | NIA of
-      { it : IT.t;
-        hint : string
       }
   | TooBigExponent : { it : IT.t } -> message
   | NegativeExponent : { it : IT.t } -> message
@@ -176,105 +148,79 @@ type message =
       { ct : Sctypes.t;
         location : IT.t;
         value : IT.t;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Int_unrepresentable of
       { value : IT.t;
         ict : Sctypes.t;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Unproven_constraint of
       { constr : LC.t;
-        requests : request_chain;
-        info : info;
-        ctxt : Context.t * log;
+        requests : RequestChain.t;
+        info : Locations.info;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Undefined_behaviour of
       { ub : CF.Undefined.undefined_behaviour;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Needs_alloc_id of
       { ptr : IT.t;
         ub : CF.Undefined.undefined_behaviour;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Alloc_out_of_bounds of
       { term : IT.t;
         constr : IT.t;
         ub : CF.Undefined.undefined_behaviour;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Allocation_not_live of
       { reason :
           [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift | `ISO_member_shift ];
         ptr : IT.t;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model_constr : (Solver.model_with_q * IT.t) option
       }
   (* | Implementation_defined_behaviour of document * state_report *)
   | Unspecified of CF.Ctype.ctype
   | StaticError of
       { err : string;
-        ctxt : Context.t * log;
+        ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
-  | Generic of Pp.document
+  | Generic of Pp.document (** TODO delete this *)
   | Generic_with_model of
-      { err : Pp.document;
+      { err : document;
         model : Solver.model_with_q;
-        ctxt : Context.t * log
+        ctxt : Context.t * Explain.log
       }
-  | Unsupported of Pp.document
+  | Unsupported of document
   | Parser of Cerb_frontend.Errors.cparser_cause
-  | Empty_pattern
-  | Missing_pattern of Pp.document
-  | Redundant_pattern of Pp.document
-  | Duplicate_pattern
   | Empty_provenance
-  | Inconsistent_assumptions of string * (Context.t * log)
+  | Inconsistent_assumptions of string * (Context.t * Explain.log)
   | Byte_conv_needs_owned
 
-type type_error =
+type t =
   { loc : Locations.t;
     msg : message
   }
 
 type report =
-  { short : Pp.document;
-    descr : Pp.document option;
+  { short : document;
+    descr : document option;
     state : Report.report option
   }
 
-let request_chain_description requests =
-  let pp_req req =
-    let doc = Req.pp req.resource in
-    let doc =
-      match req.loc with
-      | None -> doc
-      | Some loc ->
-        doc ^^ hardline ^^ !^"      " ^^ !^(fst (Locations.head_pos_of_location loc))
-    in
-    match req.reason with None -> doc | Some str -> doc ^^^ parens !^str
-  in
-  let rec loop req = function
-    | [] -> !^"Resource needed:" ^^^ pp_req req
-    | req2 :: reqs -> loop req2 reqs ^^ hardline ^^ !^"  which requires:" ^^^ pp_req req
-  in
-  match requests with [] -> None | req :: reqs -> Some (loop req reqs)
-
-
-let pp_message te =
-  match te with
-  | Unknown_variable s ->
-    let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
-    { short; descr = None; state = None }
-  | Unknown_function sym ->
+let pp_global = function
+  | Global.Unknown_function sym ->
     let short = !^"Unknown function" ^^^ squotes (Sym.pp sym) in
     { short; descr = None; state = None }
   | Unknown_struct tag ->
@@ -304,89 +250,25 @@ let pp_message te =
         None
     in
     { short; descr; state = None }
-  | Unexpected_member (expected, member) ->
-    let short = !^"Unexpected member" ^^^ Id.pp member in
-    let descr = !^"the struct only has members" ^^^ Pp.list Id.pp expected in
-    { short; descr = Some descr; state = None }
   | Unknown_lemma sym ->
     let short = !^"Unknown lemma" ^^^ squotes (Sym.pp sym) in
     { short; descr = None; state = None }
-  | First_iarg_missing ->
-    let short = !^"Missing pointer input argument" in
-    let descr = !^"a predicate definition must have at least one input argument" in
+  | Unexpected_member (expected, member) ->
+    let short = !^"Unexpected member" ^^^ Id.pp member in
+    let descr = !^"the struct only has members" ^^^ list Id.pp expected in
     { short; descr = Some descr; state = None }
-  | First_iarg_not_pointer { pname; found_bty } ->
-    let short = !^"Non-pointer first input argument" in
-    let descr =
-      !^"the first input argument of predicate"
-      ^^^ Pp.squotes (Request.pp_name pname)
-      ^^^ !^"must have type"
-      ^^^ Pp.squotes BaseTypes.(pp (Loc ()))
-      ^^^ !^"but was found with type"
-      ^^^ Pp.squotes BaseTypes.(pp found_bty)
-    in
-    { short; descr = Some descr; state = None }
-  | Missing_member m ->
-    let short = !^"Missing member" ^^^ Id.pp m in
+
+
+let pp_welltyped = function
+  | WellTyped.Global msg -> pp_global msg
+  | Unknown_variable s ->
+    let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
     { short; descr = None; state = None }
-  | Missing_resource { requests; situation; ctxt; model } ->
-    let short = !^"Missing resource" ^^^ for_situation situation in
-    let descr = request_chain_description requests in
-    let orequest =
-      Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0)
+  | Number_arguments { type_; has; expect } ->
+    let type_ =
+      match type_ with `Other -> "" | `Input -> "input" | `Output -> "output"
     in
-    let state = trace ctxt model Explain.{ no_ex with request = orequest } in
-    { short; descr; state = Some state }
-  | Merging_multiple_arrays { requests; situation; ctxt; model } ->
-    let short =
-      !^"Cannot satisfy request for resource"
-      ^^^ for_situation situation
-      ^^ dot
-      ^^^ !^"It requires merging multiple arrays."
-    in
-    let descr = request_chain_description requests in
-    let orequest =
-      Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0)
-    in
-    let state = trace ctxt model Explain.{ no_ex with request = orequest } in
-    { short; descr; state = Some state }
-  | Unused_resource { resource; ctxt; model } ->
-    let resource = Res.pp resource in
-    let short = !^"Left-over unused resource" ^^^ squotes resource in
-    let state = trace ctxt model Explain.no_ex in
-    { short; descr = None; state = Some state }
-  | Number_members { has; expect } ->
-    let short = !^"Wrong number of struct members" in
-    let descr =
-      !^"Expected"
-      ^^^ !^(string_of_int expect)
-      ^^ comma
-      ^^^ !^"has"
-      ^^^ !^(string_of_int has)
-    in
-    { short; descr = Some descr; state = None }
-  | Number_arguments { has; expect } ->
-    let short = !^"Wrong number of arguments" in
-    let descr =
-      !^"Expected"
-      ^^^ !^(string_of_int expect)
-      ^^ comma
-      ^^^ !^"has"
-      ^^^ !^(string_of_int has)
-    in
-    { short; descr = Some descr; state = None }
-  | Number_input_arguments { has; expect } ->
-    let short = !^"Wrong number of input arguments" in
-    let descr =
-      !^"Expected"
-      ^^^ !^(string_of_int expect)
-      ^^ comma
-      ^^^ !^"has"
-      ^^^ !^(string_of_int has)
-    in
-    { short; descr = Some descr; state = None }
-  | Number_output_arguments { has; expect } ->
-    let short = !^"Wrong number of output arguments" in
+    let short = !^"Wrong number" ^^^ !^type_ ^^^ !^"of arguments" in
     let descr =
       !^"Expected"
       ^^^ !^(string_of_int expect)
@@ -431,6 +313,66 @@ let pp_message te =
       ^^^ !^hint
     in
     { short; descr = Some descr; state = None }
+  | Empty_pattern ->
+    let short = !^"Empty match expression." in
+    { short; descr = None; state = None }
+  | Generic err ->
+    let short = err in
+    { short; descr = None; state = None }
+  | Redundant_pattern p' ->
+    let short = !^"Redundant pattern" in
+    { short; descr = Some p'; state = None }
+  | Missing_member m ->
+    let short = !^"Missing member" ^^^ Id.pp m in
+    { short; descr = None; state = None }
+
+
+let pp_message = function
+  | Global msg -> pp_global msg
+  | WellTyped msg -> pp_welltyped msg
+  | First_iarg_missing ->
+    let short = !^"Missing pointer input argument" in
+    let descr = !^"a predicate definition must have at least one input argument" in
+    { short; descr = Some descr; state = None }
+  | First_iarg_not_pointer { pname; found_bty } ->
+    let short = !^"Non-pointer first input argument" in
+    let descr =
+      !^"the first input argument of predicate"
+      ^^^ squotes (Request.pp_name pname)
+      ^^^ !^"must have type"
+      ^^^ squotes BaseTypes.(pp (Loc ()))
+      ^^^ !^"but was found with type"
+      ^^^ squotes BaseTypes.(pp found_bty)
+    in
+    { short; descr = Some descr; state = None }
+  | Missing_resource { requests; situation; ctxt; model } ->
+    let short = !^"Missing resource" ^^^ for_situation situation in
+    let descr = RequestChain.pp requests in
+    let orequest =
+      Option.map
+        (fun (r : RequestChain.elem) -> r.RequestChain.resource)
+        (List.nth_opt (List.rev requests) 0)
+    in
+    let state = Explain.trace ctxt model Explain.{ no_ex with request = orequest } in
+    { short; descr; state = Some state }
+  | Merging_multiple_arrays { requests; situation; ctxt; model } ->
+    let short =
+      !^"Cannot satisfy request for resource"
+      ^^^ for_situation situation
+      ^^ dot
+      ^^^ !^"It requires merging multiple arrays."
+    in
+    let descr = RequestChain.pp requests in
+    let orequest =
+      Option.map (fun r -> r.RequestChain.resource) (List.nth_opt (List.rev requests) 0)
+    in
+    let state = Explain.trace ctxt model Explain.{ no_ex with request = orequest } in
+    { short; descr; state = Some state }
+  | Unused_resource { resource; ctxt; model } ->
+    let resource = Res.pp resource in
+    let short = !^"Left-over unused resource" ^^^ squotes resource in
+    let state = Explain.trace ctxt model Explain.no_ex in
+    { short; descr = None; state = Some state }
   | TooBigExponent { it } ->
     let it = IT.pp it in
     let short = !^"Exponent too big" in
@@ -461,7 +403,7 @@ let pp_message te =
     let short = !^"Write value not representable at type" ^^^ Sctypes.pp ct in
     let location = IT.pp location in
     let value = IT.pp value in
-    let state = trace ctxt model Explain.no_ex in
+    let state = Explain.trace ctxt model Explain.no_ex in
     let descr =
       !^"Location" ^^ colon ^^^ location ^^ comma ^^^ !^"value" ^^ colon ^^^ value ^^ dot
     in
@@ -470,12 +412,12 @@ let pp_message te =
     let short = !^"integer value not representable at type" ^^^ Sctypes.pp ict in
     let value = IT.pp value in
     let descr = !^"Value" ^^ colon ^^^ value in
-    let state = trace ctxt model Explain.no_ex in
+    let state = Explain.trace ctxt model Explain.no_ex in
     { short; descr = Some descr; state = Some state }
   | Unproven_constraint { constr; requests; info; ctxt; model } ->
     let short = !^"Unprovable constraint" in
     let state =
-      trace ctxt model Explain.{ no_ex with unproven_constraint = Some constr }
+      Explain.trace ctxt model Explain.{ no_ex with unproven_constraint = Some constr }
     in
     let descr =
       let spec_loc, odescr = info in
@@ -485,14 +427,14 @@ let pp_message te =
         | None -> !^"Constraint from" ^^^ !^head ^/^ !^pos
         | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ !^head ^/^ !^pos
       in
-      match request_chain_description requests with
+      match RequestChain.pp requests with
       | Some doc2 -> doc ^^ hardline ^^ doc2
       | None -> doc
     in
     { short; descr = Some descr; state = Some state }
   | Undefined_behaviour { ub; ctxt; model } ->
     let short = !^"Undefined behaviour" in
-    let state = trace ctxt model Explain.no_ex in
+    let state = Explain.trace ctxt model Explain.no_ex in
     let descr =
       match CF.Undefined.std_of_undefined_behaviour ub with
       | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
@@ -501,7 +443,7 @@ let pp_message te =
     { short; descr = Some descr; state = Some state }
   | Needs_alloc_id { ptr; ub; ctxt; model } ->
     let short = !^"Pointer " ^^ bquotes (IT.pp ptr) ^^ !^" needs allocation ID" in
-    let state = trace ctxt model Explain.no_ex in
+    let state = Explain.trace ctxt model Explain.no_ex in
     let descr =
       match CF.Undefined.std_of_undefined_behaviour ub with
       | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
@@ -511,7 +453,10 @@ let pp_message te =
   | Alloc_out_of_bounds { constr; term; ub; ctxt; model } ->
     let short = bquotes (IT.pp term) ^^ !^" out of bounds" in
     let state =
-      trace ctxt model Explain.{ no_ex with unproven_constraint = Some (LC.T constr) }
+      Explain.trace
+        ctxt
+        model
+        Explain.{ no_ex with unproven_constraint = Some (LC.T constr) }
     in
     let descr =
       match CF.Undefined.std_of_undefined_behaviour ub with
@@ -540,7 +485,10 @@ let pp_message te =
     let state =
       Option.map
         (fun (model, constr) ->
-          trace ctxt model Explain.{ no_ex with unproven_constraint = Some (LC.T constr) })
+          Explain.trace
+            ctxt
+            model
+            Explain.{ no_ex with unproven_constraint = Some (LC.T constr) })
         model_constr
     in
     let descr = !^"Need an Alloc or Owned in context with same allocation id" in
@@ -554,7 +502,7 @@ let pp_message te =
     { short; descr = None; state = None }
   | StaticError { err; ctxt; model } ->
     let short = !^"Static error" in
-    let state = trace ctxt model Explain.no_ex in
+    let state = Explain.trace ctxt model Explain.no_ex in
     let descr = !^err in
     { short; descr = Some descr; state = Some state }
   | Generic err ->
@@ -562,25 +510,13 @@ let pp_message te =
     { short; descr = None; state = None }
   | Generic_with_model { err; model; ctxt } ->
     let short = err in
-    let state = trace ctxt model Explain.no_ex in
+    let state = Explain.trace ctxt model Explain.no_ex in
     { short; descr = None; state = Some state }
   | Unsupported err ->
     let short = err in
     { short; descr = None; state = None }
   | Parser err ->
     let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
-    { short; descr = None; state = None }
-  | Empty_pattern ->
-    let short = !^"Empty match expression." in
-    { short; descr = None; state = None }
-  | Missing_pattern p' ->
-    let short = !^"Missing pattern" ^^^ squotes p' ^^ dot in
-    { short; descr = None; state = None }
-  | Redundant_pattern p' ->
-    let short = !^"Redundant pattern" in
-    { short; descr = Some p'; state = None }
-  | Duplicate_pattern ->
-    let short = !^"Duplicate pattern" in
     { short; descr = None; state = None }
   | Empty_provenance ->
     let short = !^"Empty provenance" in
@@ -595,24 +531,22 @@ let pp_message te =
       Some
         (squotes (IT.pp left)
          ^^^ !^"has type"
-         ^^^ squotes (BaseTypes.Surface.pp (IT.bt left))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.get_bt left))
          ^^ comma
          ^^^ squotes (IT.pp right)
          ^^^ !^"has type"
-         ^^^ squotes (BaseTypes.Surface.pp (IT.bt right))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.get_bt right))
          ^^ dot)
     in
     { short; descr; state = None }
   | Inconsistent_assumptions (kind, ctxt_log) ->
     let short = !^kind ^^ !^" makes inconsistent assumptions" in
-    let state = Some (trace ctxt_log (Solver.empty_model, []) Explain.no_ex) in
+    let state = Some (Explain.trace ctxt_log (Solver.empty_model, []) Explain.no_ex) in
     { short; descr = None; state }
   | Byte_conv_needs_owned ->
     let short = !^"byte conversion only supports Owned/Block" in
     { short; descr = None; state = None }
 
-
-type t = type_error
 
 (** Convert a possibly-relative filepath into an absolute one. *)
 let canonicalize (path : string) : string =
@@ -713,7 +647,7 @@ let report_pretty
         [ state_msg ]
     | None -> []
   in
-  Pp.error loc report.short (Option.to_list report.descr @ consider)
+  error loc report.short (Option.to_list report.descr @ consider)
 
 
 (* stealing some logic from pp_errors *)
@@ -740,12 +674,12 @@ let report_json
     | None -> (`Null, `Null)
   in
   let descr =
-    match report.descr with None -> `Null | Some descr -> `String (Pp.plain descr)
+    match report.descr with None -> `Null | Some descr -> `String (plain descr)
   in
   let json =
     `Assoc
       [ ("loc", Loc.json_loc loc);
-        ("short", `String (Pp.plain report.short));
+        ("short", `String (plain report.short));
         ("descr", descr);
         ("state", state_error_file);
         ("report", report_file)

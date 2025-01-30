@@ -34,8 +34,8 @@ type env =
     datatypes : BaseTypes.dt_info Sym.Map.t;
     datatype_constrs : BaseTypes.constr_info Sym.Map.t;
     tagDefs : (Cerb_frontend.Symbol.sym, Mu.tag_definition) Pmap.map;
-    fetch_enum_expr : Locations.t -> Sym.t -> unit CF.AilSyntax.expression Resultat.t;
-    fetch_typedef : Locations.t -> Sym.t -> CF.Ctype.ctype Resultat.t
+    fetch_enum_expr : Locations.t -> Sym.t -> unit CF.AilSyntax.expression Or_TypeError.t;
+    fetch_typedef : Locations.t -> Sym.t -> CF.Ctype.ctype Or_TypeError.t
   }
 
 let init_env tagDefs fetch_enum_expr fetch_typedef =
@@ -238,7 +238,7 @@ let rec translate_cn_base_type env (bTy : CF.Symbol.sym cn_base_type) =
     failwith "user type-abbreviation not removed by cabs->ail elaboration"
   | CN_c_typedef_name sym ->
     (* FIXME handle errors here properly *)
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     (match env.fetch_typedef here sym with
      | Result.Ok r -> Memory.sbt_of_sct (Sctypes.of_ctype_unsafe here r)
      | Result.Error e -> failwith (Pp.plain TypeErrors.((pp_message e.msg).short)))
@@ -258,9 +258,9 @@ let register_cn_predicates env (defs : cn_predicate list) =
   List.fold_left aux env defs
 
 
-open Resultat
+open Or_TypeError
 
-open Effectful.Make (Resultat)
+open Effectful.Make (Or_TypeError)
 
 (* TODO: handle more kinds of constant expression *)
 let convert_enum_expr =
@@ -334,12 +334,16 @@ let add_datatype_info env (dt : cn_datatype) =
   (* SMT format constraints seem to require variables to be unique to the
      datatype, not just the constructor. *)
   let add_param m (nm, ty) =
-    match StringMap.find_opt (Id.s nm) m with
+    match StringMap.find_opt (Id.get_string nm) m with
     | None ->
-      return (StringMap.add (Id.s nm) (nm, SBT.proj (translate_cn_base_type env ty)) m)
+      return
+        (StringMap.add
+           (Id.get_string nm)
+           (nm, SBT.proj (translate_cn_base_type env ty))
+           m)
     | Some _ ->
       fail
-        { loc = Id.loc nm;
+        { loc = Id.get_loc nm;
           msg =
             Generic
               (!^"Re-using member name"
@@ -368,18 +372,21 @@ let add_datatype_infos env dts = ListM.fold_leftM add_datatype_info env dts
 module E = struct
   type evaluation_scope = string
 
-  type 'a m =
+  type 'a t =
     | Done of 'a
     | Error of TypeErrors.t
-    | ScopeExists of Loc.t * evaluation_scope * (bool -> 'a m)
+    | ScopeExists of Locations.t * evaluation_scope * (bool -> 'a t)
     | Value_of_c_variable of
-        Loc.t * Sym.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
+        Locations.t * Sym.t * evaluation_scope option * (IT.Surface.t option -> 'a t)
     | Deref of
-        Loc.t * IT.Surface.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
+        Locations.t
+        * IT.Surface.t
+        * evaluation_scope option
+        * (IT.Surface.t option -> 'a t)
 
   let return x = Done x
 
-  let rec bind (m : 'a m) (f : 'a -> 'b m) : 'b m =
+  let rec bind (m : 'a t) (f : 'a -> 'b t) : 'b t =
     match m with
     | Done x -> f x
     | Error err -> Error err
@@ -399,7 +406,7 @@ module E = struct
     Value_of_c_variable (loc, sym, scope, fun o_v_it -> Done o_v_it)
 
 
-  let liftResultat = function Result.Ok a -> Done a | Result.Error e -> Error e
+  let liftResult = function Result.Ok a -> Done a | Result.Error e -> Error e
 end
 
 let start_evaluation_scope = "start"
@@ -417,26 +424,27 @@ module EffectfulTranslation = struct
   let lookup_struct loc tag env =
     match lookup_struct_opt tag env with
     | Some def -> return def
-    | None -> fail { loc; msg = Unknown_struct tag }
+    | None -> fail { loc; msg = Global (Unknown_struct tag) }
 
 
   let lookup_member loc (_tag, def) member =
     let member_types = Memory.member_types def in
     match List.assoc_opt Id.equal member member_types with
     | Some ty -> return ty
-    | None -> fail { loc; msg = Unexpected_member (List.map fst member_types, member) }
+    | None ->
+      fail { loc; msg = Global (Unexpected_member (List.map fst member_types, member)) }
 
 
   let lookup_datatype loc sym env =
     match Sym.Map.find_opt sym env.datatypes with
     | Some info -> return info
-    | None -> fail TypeErrors.{ loc; msg = TypeErrors.Unknown_datatype sym }
+    | None -> fail { loc; msg = Global (Unknown_datatype sym) }
 
 
   let lookup_constr loc sym env =
     match Sym.Map.find_opt sym env.datatype_constrs with
     | Some info -> return info
-    | None -> fail TypeErrors.{ loc; msg = TypeErrors.Unknown_datatype_constr sym }
+    | None -> fail { loc; msg = Global (Unknown_datatype_constr sym) }
 
 
   let cannot_tell_pointee_ctype loc e =
@@ -446,12 +454,11 @@ module EffectfulTranslation = struct
 
   (* TODO: type checks and disambiguation at this stage seems ill-advised,
      ideally would be integrated into wellTyped.ml *)
-  let mk_translate_binop loc' bop (e1, e2) =
+  let mk_translate_binop loc bop (e1, e2) =
     let open IndexTerms in
-    let loc = loc' in
-    match (bop, IT.bt e1) with
+    match (bop, get_bt e1) with
     | CN_add, (BT.Integer | Real | Bits _) ->
-      return (IT (Binop (Add, e1, e2), IT.bt e1, loc))
+      return (IT (Binop (Add, e1, e2), get_bt e1, loc))
     | CN_add, Loc oct ->
       (match oct with
        | Some ct ->
@@ -462,11 +469,11 @@ module EffectfulTranslation = struct
          return (IT (it_, Loc oct, loc))
        | None -> cannot_tell_pointee_ctype loc e1)
     | CN_sub, (Integer | Real | Bits _) ->
-      return (IT (Binop (Sub, e1, e2), IT.bt e1, loc))
+      return (IT (Binop (Sub, e1, e2), get_bt e1, loc))
     | CN_sub, Loc oct ->
       (match oct with
        | Some ct ->
-         let here = Locations.other __FUNCTION__ in
+         let here = Locations.other __LOC__ in
          let (IT (it_, _, _)) =
            Surface.inj
              (arrayShift_
@@ -477,11 +484,11 @@ module EffectfulTranslation = struct
          in
          return (IT (it_, Loc oct, loc))
        | None -> cannot_tell_pointee_ctype loc e1)
-    | CN_mul, _ -> return (IT (Binop (Mul, e1, e2), IT.bt e1, loc))
-    | CN_div, _ -> return (IT (Binop (Div, e1, e2), IT.bt e1, loc))
-    | CN_mod, _ -> return (IT (Binop (Rem, e1, e2), IT.bt e1, loc))
+    | CN_mul, _ -> return (IT (Binop (Mul, e1, e2), get_bt e1, loc))
+    | CN_div, _ -> return (IT (Binop (Div, e1, e2), get_bt e1, loc))
+    | CN_mod, _ -> return (IT (Binop (Rem, e1, e2), get_bt e1, loc))
     | CN_equal, _ ->
-      (match (IT.bt e1, IT.bt e2, !pointer_eq_warned) with
+      (match (get_bt e1, get_bt e2, !pointer_eq_warned) with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn
@@ -491,7 +498,7 @@ module EffectfulTranslation = struct
        | _, _, _ -> ());
       return (IT (Binop (EQ, e1, e2), BT.Bool, loc))
     | CN_inequal, _ ->
-      (match (IT.bt e1, IT.bt e2, !pointer_eq_warned) with
+      (match (get_bt e1, get_bt e2, !pointer_eq_warned) with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn
@@ -517,14 +524,16 @@ module EffectfulTranslation = struct
     | CN_implies, BT.Bool -> return (IT (Binop (Implies, e1, e2), BT.Bool, loc))
     | CN_map_get, _ ->
       let@ rbt =
-        match IT.bt e1 with
+        match get_bt e1 with
         | Map (_, rbt) -> return rbt
         | has ->
           let expected = "map/array" in
           let reason = "map/array index" in
           fail
             { loc;
-              msg = Illtyped_it { it = Terms.pp e1; has = SBT.pp has; expected; reason }
+              msg =
+                WellTyped
+                  (Illtyped_it { it = Terms.pp e1; has = SBT.pp has; expected; reason })
             }
       in
       return (IT (MapGet (e1, e2), rbt, loc))
@@ -536,12 +545,13 @@ module EffectfulTranslation = struct
 
   (* just copy-pasting and adapting Kayvan's older version of this code *)
   let translate_member_access loc env (t : IT.Surface.t) member =
-    match IT.bt t with
+    match IT.get_bt t with
     | BT.Record members ->
       let@ member_bt =
         match List.assoc_opt Id.equal member members with
         | Some member_bt -> return member_bt
-        | None -> fail { loc; msg = Unexpected_member (List.map fst members, member) }
+        | None ->
+          fail { loc; msg = Global (Unexpected_member (List.map fst members, member)) }
       in
       return (IT.recordMember_ ~member_bt (t, member) loc)
     | Struct tag ->
@@ -566,8 +576,9 @@ module EffectfulTranslation = struct
       fail
         { loc;
           msg =
-            Illtyped_it
-              { it = Terms.pp t; has = BaseTypes.Surface.pp has; expected; reason }
+            WellTyped
+              (Illtyped_it
+                 { it = Terms.pp t; has = BaseTypes.Surface.pp has; expected; reason })
         }
 
 
@@ -585,7 +596,10 @@ module EffectfulTranslation = struct
           (fun (env, locally_bound, acc) (m, pat') ->
             match List.assoc_opt Id.equal m cons_info.params with
             | None ->
-              fail { loc; msg = Unexpected_member (List.map fst cons_info.params, m) }
+              fail
+                { loc;
+                  msg = Global (Unexpected_member (List.map fst cons_info.params, m))
+                }
             | Some mbt ->
               let@ env', locally_bound', pat' =
                 translate_cn_pat env locally_bound (pat', SBT.inj mbt)
@@ -644,20 +658,20 @@ module EffectfulTranslation = struct
                    (Pp.list
                       (fun (nm, _) -> Sym.pp nm)
                       (Sym.Map.bindings env.computationals))));
-            fail { loc; msg = Unknown_variable sym }
+            fail { loc; msg = WellTyped (Unknown_variable sym) }
           | Some (bt, None) -> return (sym, bt)
           | Some (bt, Some renamed_sym) -> return (renamed_sym, bt)
         in
         return (IT (Sym sym, bTy, loc))
       | CNExpr_list es ->
         let@ es = ListM.mapM self es in
-        let item_bt = basetype (List.hd es) in
+        let item_bt = get_bt (List.hd es) in
         let _, nil_pos, _ =
           (* parser should ensure loc is a region *)
           Option.get @@ Locations.get_region loc
         in
         let cons hd tl =
-          let hd_pos = Option.get @@ Locations.start_pos @@ IT.loc hd in
+          let hd_pos = Option.get @@ Locations.start_pos @@ IT.get_loc hd in
           let loc = Locations.(region (hd_pos, nil_pos) NoCursor) in
           IT (Cons (hd, tl), BT.List item_bt, loc)
         in
@@ -675,22 +689,22 @@ module EffectfulTranslation = struct
         translate_member_access loc env e xs
       | CNExpr_record members ->
         let@ members = ListM.mapsndM self members in
-        let bts = List.map_snd IT.bt members in
+        let bts = List.map_snd IT.get_bt members in
         return (IT (IT.Record members, BT.Record bts, loc))
       | CNExpr_struct (tag, members) ->
         let@ members = ListM.mapsndM self members in
         return (IT (IT.Struct (tag, members), BT.Struct tag, loc))
       | CNExpr_memberupdates (e, updates) ->
         let@ e = self e in
-        let bt = IT.bt e in
+        let bt = IT.get_bt e in
         let end_pos = Option.get @@ Locations.end_pos loc in
-        (match IT.bt e with
+        (match IT.get_bt e with
          | Struct _ ->
            let@ expr =
              ListM.fold_rightM
                (fun (id, v) expr ->
                  let@ v = self v in
-                 let start_pos = Option.get @@ Locations.start_pos @@ Id.loc id in
+                 let start_pos = Option.get @@ Locations.start_pos @@ Id.get_loc id in
                  let cursor = Cerb_location.PointCursor start_pos in
                  let loc = Locations.region (start_pos, end_pos) cursor in
                  return (IT (StructUpdate ((expr, id), v), bt, loc)))
@@ -700,20 +714,21 @@ module EffectfulTranslation = struct
            return expr
          | _ ->
            fail
-             { loc = IT.loc e;
+             { loc = IT.get_loc e;
                msg =
-                 Illtyped_it
-                   { it = Terms.pp e;
-                     has = SBT.pp bt;
-                     expected = "struct";
-                     reason =
-                       (let head, pos = Locations.head_pos_of_location loc in
-                        head ^ "\n" ^ pos)
-                   }
+                 WellTyped
+                   (Illtyped_it
+                      { it = Terms.pp e;
+                        has = SBT.pp bt;
+                        expected = "struct";
+                        reason =
+                          (let head, pos = Locations.head_pos_of_location loc in
+                           head ^ "\n" ^ pos)
+                      })
              })
       | CNExpr_arrayindexupdates (e, updates) ->
         let@ e = self e in
-        let bt = IT.bt e in
+        let bt = IT.get_bt e in
         (* start_pos points to start_pos of e ignored cursor points to '[' end_pos points
            to ']' *)
         let start_pos, end_pos, _ =
@@ -725,10 +740,11 @@ module EffectfulTranslation = struct
             (fun acc (i, v) ->
               let@ i = self i in
               let@ v = self v in
-              let end_pos = Option.get @@ Locations.end_pos @@ IT.loc v in
+              let end_pos = Option.get @@ Locations.end_pos @@ IT.get_loc v in
               (* cursor for the first update doesn't point to '[' - oh well *)
               let cursor =
-                Cerb_location.PointCursor (Option.get @@ Locations.start_pos @@ IT.loc i)
+                Cerb_location.PointCursor
+                  (Option.get @@ Locations.start_pos @@ IT.get_loc i)
               in
               return
                 (IT
@@ -756,7 +772,7 @@ module EffectfulTranslation = struct
       | CNExpr_array_shift (base, ty_annot, index) ->
         let@ base = self base in
         let@ ct =
-          match (ty_annot, IT.bt base) with
+          match (ty_annot, IT.get_bt base) with
           | Some ty, _ ->
             (* this does not check whether the annotation and pointer type agree and just
                defers to what the user wrote, because pointer arithmetic can happen at any
@@ -772,10 +788,10 @@ module EffectfulTranslation = struct
                        pointer"
               }
         in
-        (match IT.bt base with
+        (match IT.get_bt base with
          | Loc _ ->
            let@ index = self index in
-           (match IT.bt index with
+           (match IT.get_bt index with
             | Integer | Bits _ ->
               return (IT (ArrayShift { base; ct; index }, Loc (Some ct), loc))
             | has ->
@@ -784,8 +800,9 @@ module EffectfulTranslation = struct
               fail
                 { loc;
                   msg =
-                    Illtyped_it
-                      { it = Terms.pp index; has = SBT.pp has; expected; reason }
+                    WellTyped
+                      (Illtyped_it
+                         { it = Terms.pp index; has = SBT.pp has; expected; reason })
                 })
          | has ->
            let expected = "pointer" in
@@ -793,7 +810,8 @@ module EffectfulTranslation = struct
            fail
              { loc;
                msg =
-                 Illtyped_it { it = Terms.pp base; has = SBT.pp has; expected; reason }
+                 WellTyped
+                   (Illtyped_it { it = Terms.pp base; has = SBT.pp has; expected; reason })
              })
       | CNExpr_membershift (e, opt_tag, member) ->
         let@ e = self e in
@@ -807,7 +825,7 @@ module EffectfulTranslation = struct
              now. *)
           return (IT (it_, Loc (Some member_ty), loc))
         in
-        (match (opt_tag, IT.bt e) with
+        (match (opt_tag, IT.get_bt e) with
          | Some tag, Loc (Some (Struct tag')) ->
            if Sym.equal tag tag' then
              with_tag tag
@@ -817,8 +835,9 @@ module EffectfulTranslation = struct
              fail
                { loc;
                  msg =
-                   Illtyped_it
-                     { it = Terms.pp e; has = SBT.pp (Struct tag'); expected; reason }
+                   WellTyped
+                     (Illtyped_it
+                        { it = Terms.pp e; has = SBT.pp (Struct tag'); expected; reason })
                })
          | Some tag, Loc None | None, Loc (Some (Struct tag)) -> with_tag tag
          | None, Loc None -> cannot_tell_pointee_ctype loc e
@@ -827,7 +846,9 @@ module EffectfulTranslation = struct
            let reason = "struct member offset" in
            fail
              { loc;
-               msg = Illtyped_it { it = Terms.pp e; has = SBT.pp has; expected; reason }
+               msg =
+                 WellTyped
+                   (Illtyped_it { it = Terms.pp e; has = SBT.pp has; expected; reason })
              })
       | CNExpr_addr nm -> return (sym_ (nm, BT.Loc None, loc))
       | CNExpr_cast (bt, expr) ->
@@ -836,7 +857,7 @@ module EffectfulTranslation = struct
         return (IT (Cast (SBT.proj bt, expr), bt, loc))
       | CNExpr_call (fsym, exprs) ->
         let@ args = ListM.mapM self exprs in
-        let@ b = liftResultat (Builtins.apply_builtin_funs fsym args loc) in
+        let@ b = liftResult (Builtins.apply_builtin_funs fsym args loc) in
         (match b with
          | Some t -> return t
          | None ->
@@ -845,7 +866,9 @@ module EffectfulTranslation = struct
              | Some fsig -> return fsig.return_bty
              | None ->
                fail
-                 { loc; msg = Unknown_logical_function { id = fsym; resource = false } }
+                 { loc;
+                   msg = Global (Unknown_logical_function { id = fsym; resource = false })
+                 }
            in
            return (apply_ fsym args (BaseTypes.Surface.inj bt) loc))
       | CNExpr_cons (c_nm, exprs) ->
@@ -878,13 +901,13 @@ module EffectfulTranslation = struct
           ListM.mapM
             (fun (pat, body) ->
               let@ env', locally_bound', pat =
-                translate_cn_pat env locally_bound (pat, IT.bt x)
+                translate_cn_pat env locally_bound (pat, IT.get_bt x)
               in
               let@ body = trans evaluation_scope locally_bound' env' body in
               return (pat, body))
             ms
         in
-        let rbt = IT.basetype (snd (List.hd ms)) in
+        let rbt = IT.get_bt (snd (List.hd ms)) in
         return (IT (Match (x, ms), rbt, loc))
       | CNExpr_let (s, e, body) ->
         let@ e = self e in
@@ -892,10 +915,10 @@ module EffectfulTranslation = struct
           trans
             evaluation_scope
             (Sym.Set.add s locally_bound)
-            (add_logical s (IT.bt e) env)
+            (add_logical s (IT.get_bt e) env)
             body
         in
-        return (IT (Let ((s, e), body), IT.bt body, loc))
+        return (IT (Let ((s, e), body), IT.get_bt body, loc))
       | CNExpr_ite (e1, e2, e3) ->
         let@ e1 = self e1 in
         let@ e2 = self e2 in
@@ -1008,7 +1031,7 @@ module EffectfulTranslation = struct
          | Some v -> return v)
       | CNExpr_value_of_c_atom (sym, C_kind_enum) ->
         assert (not (Sym.Set.mem sym locally_bound));
-        liftResultat (do_decode_enum env loc sym)
+        liftResult (do_decode_enum env loc sym)
     in
     trans None
 
@@ -1025,7 +1048,7 @@ module EffectfulTranslation = struct
         match oty with
         | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
         | None ->
-          (match IT.bt ptr_expr with
+          (match IT.get_bt ptr_expr with
            | BT.Loc (Some ty) -> return ty
            | Loc None ->
              fail
@@ -1044,8 +1067,9 @@ module EffectfulTranslation = struct
              fail
                { loc;
                  msg =
-                   Illtyped_it
-                     { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason }
+                   WellTyped
+                     (Illtyped_it
+                        { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason })
                })
       in
       match res with
@@ -1063,7 +1087,10 @@ module EffectfulTranslation = struct
         let@ pred_sig =
           match lookup_predicate pred env with
           | None ->
-            fail { loc; msg = Unknown_resource_predicate { id = pred; logical = false } }
+            fail
+              { loc;
+                msg = Global (Unknown_resource_predicate { id = pred; logical = false })
+              }
           | Some pred_sig -> return pred_sig
         in
         let output_bt = pred_sig.pred_output in
@@ -1076,15 +1103,15 @@ module EffectfulTranslation = struct
     let open Pp in
     let qs = IT.sym_ sym_args in
     let msg_s = "Iterated predicate pointer must be array_shift<ctype>(ptr, q_var):" in
-    match IT.term ptr_expr with
+    match IT.get_term ptr_expr with
     | ArrayShift { base = p; ct; index = x } when Terms.equal_annot SBT.equal x qs ->
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       return (p, IT.cast_ (SBT.proj bt) (IT.sizeOf_ ct here) here)
     | _ -> fail { loc; msg = Generic (!^msg_s ^^^ IT.pp ptr_expr) }
 
 
   let owned_good _sym (res_t, _oargs_ty) =
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     match res_t with
     | Req.P { pointer; name = Owned (scty, _); _ } ->
       [ ( LC.T (IT.good_ (Pointer scty, pointer) here),
@@ -1113,7 +1140,7 @@ module EffectfulTranslation = struct
     let pointee_value =
       match pname with
       | Owned (_, Init) ->
-        let here = Locations.other __FUNCTION__ in
+        let here = Locations.other __LOC__ in
         [ (ptr_expr, IT.sym_ (sym, oargs_ty, here)) ]
       | _ -> []
     in
@@ -1128,7 +1155,7 @@ module EffectfulTranslation = struct
     let@ pname, ptr_expr, iargs, oargs_ty =
       translate_cn_res_info res_loc pred_loc env_with_q res args
     in
-    let here = Locations.other __FUNCTION__ in
+    let here = Locations.other __LOC__ in
     let@ ptr_base, step = split_pointer_linear_step pred_loc (q, bt', here) ptr_expr in
     let m_oargs_ty = SBT.make_map_bt bt' oargs_ty in
     let pt =
@@ -1176,8 +1203,8 @@ module ET = EffectfulTranslation
 
 module Pure = struct
   let handle what = function
-    | E.Done x -> Resultat.return x
-    | E.Error e -> Resultat.fail e
+    | E.Done x -> Or_TypeError.return x
+    | E.Error e -> Or_TypeError.fail e
     | E.Value_of_c_variable (loc, _, _, _) ->
       let msg = !^what ^^^ !^"are not allowed to refer to (the state of) C variables." in
       fail { loc; msg = Generic msg }
@@ -1203,14 +1230,16 @@ let translate_cn_function env (def : cn_function) =
     List.map (fun (sym, bTy) -> (sym, translate_cn_base_type env bTy)) def.cn_func_args
   in
   let env' = List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc) env args in
-  let is_rec = List.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
+  let is_rec =
+    List.exists (fun id -> String.equal (Id.get_string id) "rec") def.cn_func_attrs
+  in
   let coq_unfold =
-    List.exists (fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs
+    List.exists (fun id -> String.equal (Id.get_string id) "coq_unfold") def.cn_func_attrs
   in
   let@ () =
     ListM.iterM
       (fun id ->
-        if List.exists (String.equal (Id.s id)) known_attrs then
+        if List.exists (String.equal (Id.get_string id)) known_attrs then
           return ()
         else
           fail
@@ -1309,14 +1338,14 @@ module LocalState = struct
     List.fold_left (fun st (p, v) -> add_pointee_value p v st) st pvs
 
 
-  let handle { state; old_states } : 'a E.m -> 'a Resultat.m =
+  let handle { state; old_states } : 'a E.t -> 'a Or_TypeError.t =
     let state_for_scope = function
       | None -> state
       | Some s -> StringMap.find s old_states
     in
     let rec aux = function
-      | E.Done x -> Resultat.return x
-      | E.Error e -> Resultat.fail e
+      | E.Done x -> Or_TypeError.return x
+      | E.Error e -> Or_TypeError.fail e
       | E.Value_of_c_variable (loc, sym, scope, k) ->
         let variable_state = (state_for_scope scope).c_variable_state in
         let o_v =
@@ -1357,7 +1386,7 @@ let translate_cn_clause env clause =
     | CN_letExpr (loc, sym, e_, cl) ->
       let@ e = handle st (ET.translate_cn_expr Sym.Set.empty env e_) in
       let acc' z = acc (LAT.mDefine (sym, IT.Surface.proj e, (loc, None)) z) in
-      translate_cn_clause_aux (add_logical sym (IT.basetype e) env) st acc' cl
+      translate_cn_clause_aux (add_logical sym (IT.get_bt e) env) st acc' cl
     | CN_assert (loc, assrt, cl) ->
       let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
       let acc' z = acc (LAT.mConstraint (lc, (loc, None)) z) in
@@ -1374,7 +1403,7 @@ let translate_cn_clauses env clauses =
   let rec self acc = function
     | CN_clause (loc, cl_) ->
       let@ cl = translate_cn_clause env cl_ in
-      let here = Locations.other __FUNCTION__ in
+      let here = Locations.other __LOC__ in
       return (Def.Clause.{ loc; guard = IT.bool_ true here; packing_ft = cl } :: acc)
     | CN_if (loc, e_, cl_, clauses') ->
       let@ e =
@@ -1442,7 +1471,9 @@ let rec make_lrt_generic env st =
         st )
   | CN_cletExpr (loc, name, expr) :: ensures ->
     let@ expr = handle st (ET.translate_cn_expr Sym.Set.empty env expr) in
-    let@ lrt, env, st = make_lrt_generic (add_logical name (IT.bt expr) env) st ensures in
+    let@ lrt, env, st =
+      make_lrt_generic (add_logical name (IT.get_bt expr) env) st ensures
+    in
     return (LRT.mDefine (name, IT.Surface.proj expr, (loc, None)) lrt, env, st)
   | CN_cconstr (loc, constr) :: ensures ->
     let@ lc = handle st (ET.translate_cn_assrt env (loc, constr)) in
@@ -1485,7 +1516,7 @@ let make_rt loc (env : env) st (s, ct) (accesses, ensures) =
     make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures)
   in
   (* let info = (loc, Some "return value good") in *)
-  (* let here = Locations.other __FUNCTION__ in *)
+  (* let here = Locations.other __LOC__ in *)
   (* let lrt = LRT.mConstraint (LC.T (IT.good_ (ct, IT.sym_ (s, bt, here)) here), info)
      lrt in *)
   return (RT.mComputational ((s, bt), (loc, None)) lrt)
@@ -1513,7 +1544,7 @@ let translate_cn_lemma env (def : cn_lemma) =
 
 module UsingLoads = struct
   let pointee_ct loc it =
-    match IT.bt it with
+    match IT.get_bt it with
     | BT.Loc (Some ct) -> return ct
     | BT.Loc None ->
       let msg = !^"Cannot tell pointee C-type of" ^^^ squotes (IT.pp it) ^^ dot in
@@ -1521,11 +1552,13 @@ module UsingLoads = struct
     | has ->
       let expected = "pointer" in
       let reason = "dereferencing" in
-      let msg = Illtyped_it { it = IT.pp it; has = SBT.pp has; expected; reason } in
+      let msg =
+        WellTyped (Illtyped_it { it = IT.pp it; has = SBT.pp has; expected; reason })
+      in
       fail { loc; msg }
 
 
-  let handle allocations old_states : Cnprog.t E.m -> Cnprog.t Resultat.m =
+  let handle allocations old_states : Cnprog.t E.t -> Cnprog.t Or_TypeError.t =
     let rec aux = function
       | E.Done x -> return x
       | E.Error e -> fail e
@@ -1557,7 +1590,7 @@ module UsingLoads = struct
       | ScopeExists (_loc, scope, k) -> aux (k (StringMap.mem scope old_states))
     and load loc action_pp pointer k =
       let@ pointee_ct = pointee_ct loc pointer in
-      let value_loc = Locations.other __FUNCTION__ in
+      let value_loc = Locations.other __LOC__ in
       let value_s = Sym.fresh_make_uniq (action_pp ^ "_" ^ Pp.plain (IT.pp pointer)) in
       let value_bt = Memory.sbt_of_sct pointee_ct in
       let value = IT.sym_ (value_s, value_bt, value_loc) in

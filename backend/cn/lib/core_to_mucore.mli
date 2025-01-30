@@ -5,7 +5,7 @@ val normalise_file
   :  inherit_loc:bool ->
   Cerb_frontend.Cabs_to_ail_effect.fin_markers_env * 'a Cerb_frontend.AilSyntax.sigma ->
   ('b, unit) Cerb_frontend.Milicore.mi_file ->
-  unit Mucore.file Resultat.m
+  unit Mucore.file Or_TypeError.t
 
 val arguments_of_at : ('a -> 'b) -> 'a ArgumentTypes.t -> 'b Mucore.arguments
 

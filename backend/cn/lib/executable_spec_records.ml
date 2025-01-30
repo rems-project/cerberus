@@ -9,9 +9,10 @@ module LAT = LogicalArgumentTypes
 module AT = ArgumentTypes
 
 let rec add_records_to_map_from_it it =
-  match IT.term it with
+  match IT.get_term it with
   | IT.Sym _s -> ()
-  | Const _c -> ()
+  | Const c ->
+    (match c with Default bt -> Cn_internal_to_ail.augment_record_map bt | _ -> ())
   | Unop (_uop, t1) -> add_records_to_map_from_it t1
   | Binop (_bop, t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | ITE (t1, t2, t3) -> List.iter add_records_to_map_from_it [ t1; t2; t3 ]
@@ -24,7 +25,7 @@ let rec add_records_to_map_from_it it =
   | StructUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | Record members ->
     (* Anonymous record instantiation -> add to records map *)
-    Cn_internal_to_ail.augment_record_map (IT.bt it);
+    Cn_internal_to_ail.augment_record_map (IT.get_bt it);
     List.iter (fun (_, it') -> add_records_to_map_from_it it') members
   | RecordMember (t, _member) -> add_records_to_map_from_it t
   | RecordUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]

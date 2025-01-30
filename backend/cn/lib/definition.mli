@@ -20,6 +20,8 @@ module Function : sig
 
   val pp_args : (Cerb_frontend.Symbol.sym * unit BaseTypes.t_gen) list -> Pp.document
 
+  val pp_sig : Pp.document -> t -> Pp.document
+
   val pp : Pp.document -> t -> Pp.document
 
   val open_ : (Sym.t * 'a) list -> IndexTerms.t -> IndexTerms.t list -> IndexTerms.t
@@ -59,7 +61,7 @@ module Predicate : sig
   val instantiate : t -> IndexTerms.t -> IndexTerms.t list -> Clause.t list option
 
   val identify_right_clause
-    :  (LogicalConstraints.logical_constraint -> [< `False | `True ]) ->
+    :  (LogicalConstraints.t -> [< `False | `True ]) ->
     t ->
     IndexTerms.t ->
     IndexTerms.t list ->

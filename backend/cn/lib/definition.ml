@@ -1,5 +1,4 @@
 module IT = IndexTerms
-module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 
 module Function = struct
@@ -33,18 +32,27 @@ module Function = struct
 
 
   let pp_args xs =
-    Pp.flow_map
-      (Pp.break 1)
-      (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BaseTypes.pp typ)))
-      xs
+    let doc =
+      Pp.flow_map
+        (Pp.break 1)
+        (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BaseTypes.pp typ)))
+        xs
+    in
+    if PPrint.requirement doc = 0 then
+      Pp.parens Pp.empty
+    else
+      doc
+
+
+  let pp_sig nm def =
+    let open Pp in
+    nm ^^ pp_args def.args ^^^ colon ^^^ BaseTypes.pp def.return_bt
 
 
   let pp nm def =
     let open Pp in
-    nm
-    ^^ colon
-    ^^^ pp_args def.args
-    ^^ colon
+    pp_sig nm def
+    ^^^ equals
     ^/^
     match def.body with
     | Uninterp -> !^"uninterpreted"
@@ -102,7 +110,7 @@ module Clause = struct
       | LAT.Resource (bound, info, lat) -> LRT.Resource (bound, info, aux lat)
       | LAT.Constraint (lc, info, lat) -> LRT.Constraint (lc, info, aux lat)
       | I output ->
-        let loc = Locations.other __FUNCTION__ in
+        let loc = Locations.other __LOC__ in
         let lc = LogicalConstraints.T (IT.eq_ (pred_oarg, output) loc) in
         LRT.Constraint (lc, (loc, None), LRT.I)
     in
@@ -154,7 +162,7 @@ module Predicate = struct
           (match provable (LogicalConstraints.T clause.guard) with
            | `True -> Some clause
            | `False ->
-             let loc = Locations.other __FUNCTION__ in
+             let loc = Locations.other __LOC__ in
              (match provable (LogicalConstraints.T (IT.not_ clause.guard loc)) with
               | `True -> try_clauses clauses
               | `False ->
@@ -179,7 +187,7 @@ end
 
 let alloc =
   Predicate.
-    { loc = Locations.other (__FILE__ ^ ":" ^ string_of_int __LINE__);
+    { loc = Locations.other __LOC__;
       pointer = Sym.fresh_named "ptr";
       iargs = [];
       oarg_bt = Alloc.History.value_bt;

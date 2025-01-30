@@ -35,13 +35,16 @@ val pop : solver -> int -> unit
     but may be unnecessary https://github.com/rems-project/cerberus/issues/752 *)
 val num_scopes : solver -> int
 
+(* Resets internal state for the model evaluator *)
+val reset_model_evaluator_state : unit -> unit
+
 (* Run the solver. Note that we pass the assumptions explicitly even though they are also
    available in the solver context, because CN is going some simplification on its own. *)
 val provable
   :  loc:Locations.t ->
   solver:solver ->
   global:Global.t ->
-  assumptions:Context.LC.Set.t ->
+  assumptions:LogicalConstraints.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
   [> `True | `False ]

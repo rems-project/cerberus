@@ -142,7 +142,7 @@ module MemberIndirection = struct
                      indirect_map
                      |> List.map (fun (y, z) ->
                        let it = List.assoc Id.equal y xits in
-                       (y, IT.sym_ (z, IT.bt it, IT.loc it)))
+                       (y, IT.sym_ (z, IT.get_bt it, IT.get_loc it)))
                    in
                    match k with
                    | Struct tag -> IT.struct_ (tag, members) loc_it
