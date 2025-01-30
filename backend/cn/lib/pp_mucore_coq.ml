@@ -18,6 +18,8 @@ let pp_Z z =
 (* Prints int as a Coq `nat` *)
 let pp_nat n = !^(string_of_int n)
 
+let pp_Z_as_nat z = pp_nat (Z.to_int z)
+
 (* Prints int as a Coq `Z` *)
 let pp_int i = pp_Z (Z.of_int i)
 
@@ -40,11 +42,6 @@ let pp_tuple l = P.parens (P.separate !^"," l)
 
 let pp_pair p1 p2 (a, b) = pp_tuple [ p1 a; p2 b ]
 
-let pp_option pp_elem = function
-  | None -> !^"None"
-  | Some x -> !^"(Some" ^^^ pp_elem x ^^ !^")"
-
-
 let pp_pmap
   fromlist_fun
   (pp_key : 'a -> P.document)
@@ -53,6 +50,8 @@ let pp_pmap
   =
   P.parens (!^fromlist_fun ^^^ pp_list (pp_pair pp_key pp_value) (Pmap.bindings_list m))
 
+
+let pp_bool b = if b then !^"true" else !^"false"
 
 (* Helper to print Coq definitions *)
 let coq_def name args body =
@@ -83,6 +82,11 @@ let pp_constructor name args =
     !^name
   else
     !^"(" ^^ !^name ^^^ P.separate_map !^" " (fun x -> x) args ^^ !^")"
+
+
+let pp_option pp_elem = function
+  | None -> pp_constructor "None" []
+  | Some x -> pp_constructor "Some" [ pp_elem x ]
 
 
 let pp_undefined_behaviour = function
@@ -440,7 +444,7 @@ let pp_location_cursor = function
 let pp_location = function
   | Cerb_location.Loc_unknown -> pp_constructor "Loc_unknown" []
   | _ when not debug_print_locations -> pp_constructor "Loc_unknown" []
-  | Cerb_location.Loc_other s -> pp_constructor "Loc_other" [ pp_string s]
+  | Cerb_location.Loc_other s -> pp_constructor "Loc_other" [ pp_string s ]
   | Cerb_location.Loc_point pos -> pp_constructor "Loc_point" [ pp_lexing_position pos ]
   | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
     pp_constructor
@@ -563,7 +567,7 @@ let pp_integer_type = function
 
 
 let rec pp_annot_t = function
-  | Annot.Astd s -> pp_constructor "Astd" [ pp_string s]
+  | Annot.Astd s -> pp_constructor "Astd" [ pp_string s ]
   | Annot.Aloc loc -> pp_constructor "Aloc" [ pp_location loc ]
   | Annot.Auid s -> pp_constructor "Auid" [ pp_string s ]
   | Annot.Amarker n -> pp_constructor "Amarker" [ pp_nat n ]
@@ -600,31 +604,30 @@ and pp_attr_arg (loc, s, args) =
 
 
 and pp_label_annot = function
-  | Annot.LAloop n -> !^"(LAloop" ^^^ pp_nat n ^^ !^")"
-  | Annot.LAloop_continue n -> !^"(LAloop_continue" ^^^ pp_nat n ^^ !^")"
-  | Annot.LAloop_break n -> !^"(LAloop_break" ^^^ pp_nat n ^^ !^")"
-  | Annot.LAreturn -> !^"LAreturn"
-  | Annot.LAswitch -> !^"LAswitch"
-  | Annot.LAcase -> !^"LAcase"
-  | Annot.LAdefault -> !^"LAdefault"
-  | Annot.LAactual_label -> !^"LAactual_label"
+  | Annot.LAloop n -> pp_constructor "LAloop" [ pp_nat n ]
+  | Annot.LAloop_continue n -> pp_constructor "LAloop_continue" [ pp_nat n ]
+  | Annot.LAloop_break n -> pp_constructor "LAloop_break" [ pp_nat n ]
+  | Annot.LAreturn -> pp_constructor "LAreturn" []
+  | Annot.LAswitch -> pp_constructor "LAswitch" []
+  | Annot.LAcase -> pp_constructor "LAcase" []
+  | Annot.LAdefault -> pp_constructor "LAdefault" []
+  | Annot.LAactual_label -> pp_constructor "LAactual_label" []
 
 
 and pp_cerb_attribute = function
-  | Annot.ACerb_with_address n ->
-    !^"(ACerb_with_address" ^^^ !^(Nat_big_num.to_string n) ^^ !^")"
-  | Annot.ACerb_hidden -> !^"ACerb_hidden"
+  | Annot.ACerb_with_address n -> pp_constructor "ACerb_with_address" [ pp_Z_as_nat n ]
+  | Annot.ACerb_hidden -> pp_constructor "ACerb_hidden" []
 
 
 and pp_value_annot = function
-  | Annot.Ainteger it -> !^"(Ainteger" ^^^ pp_integer_type it ^^ !^")"
+  | Annot.Ainteger it -> pp_constructor "Ainteger" [ pp_integer_type it ]
 
 
 let pp_qualifiers quals =
   pp_record
-    [ ("Ctype.const", !^(string_of_bool quals.Ctype.const));
-      ("Ctype.restrict", !^(string_of_bool quals.Ctype.restrict));
-      ("Ctype.volatile", !^(string_of_bool quals.Ctype.volatile))
+    [ ("Ctype.const", pp_bool quals.Ctype.const);
+      ("Ctype.restrict", pp_bool quals.Ctype.restrict);
+      ("Ctype.volatile", pp_bool quals.Ctype.volatile)
     ]
 
 
@@ -634,14 +637,8 @@ let rec pp_ctype (Ctype.Ctype (annots, ct)) =
   ^^^ (match ct with
        | Ctype.Void -> !^"Ctype.Void"
        | Ctype.Basic bt -> !^"(Ctype.Basic" ^^^ pp_basic_type bt ^^ !^")"
-       | Ctype.Array (ct, None) -> !^"(Ctype.Array" ^^^ pp_ctype ct ^^^ !^"None" ^^ !^")"
-       | Ctype.Array (ct, Some n) ->
-         !^"(Ctype.Array"
-         ^^^ pp_ctype ct
-         ^^^ !^"(Some"
-         ^^^ !^(Z.to_string n)
-         ^^ !^"))"
-         ^^ !^")"
+       | Ctype.Array (ct, on) ->
+         !^"(Ctype.Array" ^^^ pp_ctype ct ^^^ pp_option pp_Z_as_nat on ^^ !^")"
        | Ctype.Function ((quals, ret), args, variadic) ->
          !^"(Ctype.Function"
          ^^^ !^"("
@@ -694,14 +691,8 @@ and pp_real_floating_type = function
 let rec pp_sctype = function
   | Sctypes.Void -> !^"SCtypes.Void"
   | Sctypes.Integer it -> !^"(SCtypes.Integer" ^^^ pp_integer_type it ^^ !^")"
-  | Sctypes.Array (ct, None) -> !^"(SCtypes.Array" ^^^ pp_sctype ct ^^^ !^"None" ^^ !^")"
-  | Sctypes.Array (ct, Some n) ->
-    !^"(SCtypes.Array"
-    ^^^ pp_sctype ct
-    ^^^ !^"(Some"
-    ^^^ pp_nat n
-    ^^ !^"))"
-    ^^ !^")"
+  | Sctypes.Array (ct, on) ->
+    !^"(SCtypes.Array" ^^^ pp_sctype ct ^^^ pp_option pp_nat on ^^ !^")"
   | Sctypes.Pointer ct -> !^"(SCtypes.Pointer" ^^^ pp_sctype ct ^^ !^")"
   | Sctypes.Struct sym -> !^"(SCtypes.Struct" ^^^ pp_symbol sym ^^ !^")"
   | Sctypes.Function ((quals, ret), args, variadic) ->
@@ -1135,8 +1126,6 @@ and pp_kill_kind = function
   | Dynamic -> !^"Dynamic" (* constructor with no arguments *)
   | Static ct -> !^"(Static" ^^^ pp_sctype ct ^^ !^")"
 
-
-and pp_bool b = if b then !^"true" else !^"false"
 
 and pp_value pp_type (V (ty, v)) =
   !^"(V"
