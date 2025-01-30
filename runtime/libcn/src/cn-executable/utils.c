@@ -70,7 +70,7 @@ void print_error_msg_info(struct cn_error_message_info *info) {
 }
 
 cn_bool *convert_to_cn_bool(_Bool b) {
-    cn_bool *res = alloc(sizeof(cn_bool));
+    cn_bool *res = cn_alloc(sizeof(cn_bool));
     if (!res) exit(1);
     res->val = b;
     return res;
@@ -100,25 +100,25 @@ void cn_assert(cn_bool *cn_b) {
 /* } */
 
 cn_bool *cn_bool_and(cn_bool *b1, cn_bool *b2) {
-    cn_bool *res = alloc(sizeof(cn_bool));
+    cn_bool *res = cn_alloc(sizeof(cn_bool));
     res->val = b1->val && b2->val;
     return res;
 }
 
 cn_bool *cn_bool_or(cn_bool *b1, cn_bool *b2) {
-    cn_bool *res = alloc(sizeof(cn_bool));
+    cn_bool *res = cn_alloc(sizeof(cn_bool));
     res->val = b1->val || b2->val;
     return res;
 }
 
 cn_bool *cn_bool_implies(cn_bool *b1, cn_bool *b2) {
-    cn_bool *res = alloc(sizeof(cn_bool));
+    cn_bool *res = cn_alloc(sizeof(cn_bool));
     res->val = !b1->val || b2->val;
     return res;
 }
 
 cn_bool *cn_bool_not(cn_bool *b) {
-    cn_bool *res = alloc(sizeof(cn_bool));
+    cn_bool *res = cn_alloc(sizeof(cn_bool));
     res->val = !(b->val);
     return res;
 }
@@ -185,7 +185,7 @@ int ownership_ghost_state_get(signed long *address_key) {
 }
 
 void ownership_ghost_state_set(signed long* address_key, int stack_depth_val) {
-    int *new_depth = alloc(sizeof(int));
+    int *new_depth = cn_alloc(sizeof(int));
     *new_depth = stack_depth_val;
     ht_set(cn_ownership_global_ghost_state, address_key, new_depth);
 }
@@ -225,7 +225,7 @@ void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
     // cn_printf(CN_LOGGING_INFO, "[CN: assuming ownership (%s)] " FMT_PTR_2 ", size: %lu\n", fun, (uintptr_t) generic_c_ptr, size);
     //// print_error_msg_info();
     for (int i = 0; i < size; i++) { 
-        signed long *address_key = alloc(sizeof(long));
+        signed long *address_key = cn_alloc(sizeof(long));
         *address_key = ((uintptr_t) generic_c_ptr) + i;
         /* // cn_printf(CN_LOGGING_INFO, "CN: Assuming ownership for %lu (function: %s)\n",  */
         /*        ((uintptr_t) generic_c_ptr) + i, fun); */
@@ -255,7 +255,7 @@ void cn_get_or_put_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr,
 void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack_depth) {
   // cn_printf(CN_LOGGING_INFO, "[C access checking] add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
-      signed long *address_key = alloc(sizeof(long));
+      signed long *address_key = cn_alloc(sizeof(long));
       *address_key = ptr_to_local + i;
       /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
       ownership_ghost_state_set(address_key, stack_depth);
@@ -265,7 +265,7 @@ void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack
 void c_remove_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
   // cn_printf(CN_LOGGING_INFO, "[C access checking] remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
-      signed long *address_key = alloc(sizeof(long));
+      signed long *address_key = cn_alloc(sizeof(long));
       *address_key = ptr_to_local + i;
       /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
       ownership_ghost_state_remove(address_key);
@@ -302,7 +302,7 @@ void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, s
  
 //     for (int i = 0; i < n; i++) {
 //         uintptr_t fn_local_ptr = va_arg(args, uintptr_t);
-//         signed long *address_key = alloc(sizeof(long));
+//         signed long *address_key = cn_alloc(sizeof(long));
 //         *address_key = fn_local_ptr;
 //         ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
 //     }
@@ -312,7 +312,7 @@ void c_ownership_check(char *access_kind, uintptr_t generic_c_ptr, int offset, s
 
 
 cn_map *cn_map_set(cn_map *m, cn_integer *key, void *value) {
-    signed long *key_ptr = alloc(sizeof(signed long));
+    signed long *key_ptr = cn_alloc(sizeof(signed long));
     *key_ptr = key->val;
     ht_set(m, key_ptr, value);
     return m;
@@ -402,13 +402,13 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
 // TODO (RB) does this need to be in here, or should it be auto-generated?
 // See https://github.com/rems-project/cerberus/pull/652 for details
 cn_bool *void_pointer_equality(void *p1, void *p2) {
-    cn_bool *res = alloc(sizeof(cn_bool));
+    cn_bool *res = cn_alloc(sizeof(cn_bool));
     res->val = (p1 == p2);
     return res;
 }
 
 cn_pointer *convert_to_cn_pointer(void *ptr) {
-    cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));
+    cn_pointer *res = (cn_pointer *) cn_alloc(sizeof(cn_pointer));
     res->ptr = ptr; // Carries around an address
     return res;
 }
@@ -423,7 +423,7 @@ struct cn_error_message_info *make_error_message_info_entry(const char *function
                                    char *cn_source_loc, 
                                    struct cn_error_message_info *parent)
 {
-  struct cn_error_message_info *entry = (struct cn_error_message_info *) alloc(sizeof(struct cn_error_message_info));
+  struct cn_error_message_info *entry = (struct cn_error_message_info *) cn_alloc(sizeof(struct cn_error_message_info));
   entry->function_name = function_name;
   entry->file_name = file_name;
   entry->line_number = line_number;
@@ -466,13 +466,13 @@ static uint64_t cn_flsl(uint64_t x)
 
 
 cn_bits_u32 *cn_bits_u32_fls(cn_bits_u32 *i1) {
-        cn_bits_u32 *res = (cn_bits_u32 *) alloc(sizeof(cn_bits_u32));
+        cn_bits_u32 *res = (cn_bits_u32 *) cn_alloc(sizeof(cn_bits_u32));
         res->val = cn_fls(i1->val);
         return res;
     }
 
 cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1) {
-        cn_bits_u64 *res = (cn_bits_u64 *) alloc(sizeof(cn_bits_u64));
+        cn_bits_u64 *res = (cn_bits_u64 *) cn_alloc(sizeof(cn_bits_u64));
         res->val = cn_flsl(i1->val);
         return res;
     }
