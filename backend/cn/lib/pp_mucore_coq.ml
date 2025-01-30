@@ -69,6 +69,7 @@ let coq_def name args body =
   ^^ P.hardline
   ^^ P.hardline
 
+let pp_comment s = !^("(* " ^ s ^ " *)")
 
 let coq_notation name args body =
   !^"Notation" ^^^ !^("\"" ^ name ^ "\"") ^^^ args ^^^ !^":=" ^^^ body ^^ !^"."
@@ -2092,7 +2093,7 @@ let pp_file pp_type pp_type_name file =
   ^^ P.hardline
   ^^ P.hardline
   (* Print globals *)
-  ^^ !^"(* Global definitions *)"
+  ^^ pp_comment "Global definitions"
   ^^ P.hardline
   ^^ List.fold_left
        (fun acc (sym, glob) ->
@@ -2114,7 +2115,7 @@ let pp_file pp_type pp_type_name file =
        P.empty
        file.globs
   (* Print functions *)
-  ^^ !^"(* Function definitions *)"
+  ^^ pp_comment "Function definitions"
   ^^ P.hardline
   ^^ Pmap.fold
        (fun sym decl acc ->
