@@ -11,7 +11,7 @@ Require Import Symbol.
 Require Import IntegerType.
 Require Import Ctype.
 
-Module CNMem : Memory.
+Module CNMem.
 
     (* INTERNAL: allocation_id *)
     Definition allocation_id := N.t.

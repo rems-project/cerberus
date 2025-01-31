@@ -19,3 +19,27 @@ Inductive core_base_type : Type :=  (* Core base types *)
   | BTy_loaded   : core_object_type -> core_base_type  (* core_object_type or unspecified *)
   | BTy_storable : core_base_type  (* top type for integer/float/pointer/structs (maybe union?). This is only used in the type system *)
 .
+
+Inductive binop : Type :=  (* binary operators *)
+  | OpAdd
+  | OpSub
+  | OpMul
+  | OpDiv
+  | OpRem_t
+  | OpRem_f
+  | OpExp
+  | OpEq
+  | OpGt
+  | OpLt
+  | OpGe
+  | OpLe
+  | OpAnd
+  | OpOr.
+
+Inductive iop : Type :=
+  | IOpAdd
+  | IOpSub
+  | IOpMul
+  | IOpShl
+  | IOpShr.
+  

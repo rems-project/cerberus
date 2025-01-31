@@ -93,7 +93,7 @@ Inductive term (bt : Type) : Type :=
   | RecordUpdate :  (annot bt * Symbol.identifier) -> annot bt -> term bt
   | Constructor : sym -> list (Symbol.identifier * annot bt) -> term bt
   | MemberShift : annot bt -> sym -> Symbol.identifier -> term bt
-  | ArrayShift : annot bt -> Type -> annot bt -> term bt  (* base * ct * index *)
+  | ArrayShift : annot bt -> SCtypes.t -> annot bt -> term bt  (* base * ct * index *)
   | CopyAllocId : annot bt -> annot bt -> term bt  (* addr * loc *)
   | HasAllocId : annot bt -> term bt
   | SizeOf : SCtypes.t -> term bt 
@@ -113,7 +113,7 @@ Inductive term (bt : Type) : Type :=
   | MapGet : annot bt -> annot bt -> term bt
   | MapDef : (sym * BaseTypes.t) -> annot bt -> term bt
   | Apply : sym -> (list  (annot bt)) -> term bt
-  | Let : (sym * annot bt) -> annot bt -> term bt
+  | TLet : (sym * annot bt) -> annot bt -> term bt
   | _Match : annot bt -> list (pattern bt * annot bt) -> term bt
   | Cast : BaseTypes.t -> annot bt -> term bt
 

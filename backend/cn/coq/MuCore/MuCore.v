@@ -196,7 +196,7 @@ Inductive pexpr_ (TY: Type) : Type :=
   | PEarray_shift : pexpr TY -> SCtypes.t -> pexpr TY -> pexpr_ TY
   | PEmember_shift : pexpr TY -> Sym.t -> Symbol.identifier -> pexpr_ TY
   | PEnot : pexpr TY -> pexpr_ TY
-  | PEop : binop -> pexpr TY -> pexpr TY -> pexpr_ TY
+  | PEop : Core.binop -> pexpr TY -> pexpr TY -> pexpr_ TY
   | PEapply_fun : mu_function -> list (pexpr TY) -> pexpr_ TY
   | PEstruct : Sym.t -> list (Symbol.identifier * pexpr TY) -> pexpr_ TY
   | PEunion : Sym.t -> Symbol.identifier -> pexpr TY -> pexpr_ TY
@@ -207,7 +207,7 @@ Inductive pexpr_ (TY: Type) : Type :=
   | PEconv_loaded_int : pexpr TY -> pexpr TY -> pexpr_ TY
   | PEwrapI : act -> pexpr TY -> pexpr_ TY
   | PEcatch_exceptional_condition : act -> pexpr TY -> pexpr_ TY
-  | PEbounded_binop : bound_kind -> iop -> pexpr TY -> pexpr TY -> pexpr_ TY
+  | PEbounded_binop : bound_kind -> Core.iop -> pexpr TY -> pexpr TY -> pexpr_ TY
   | PEis_representable_integer : pexpr TY -> act -> pexpr_ TY
   | PEundef : Location_t -> undefined_behaviour -> pexpr_ TY
   | PEerror : string -> pexpr TY -> pexpr_ TY
@@ -287,7 +287,7 @@ Inductive expr_ (TY : Type) : Type :=
   | Ebound : expr TY -> expr_ TY
   | End : list (expr TY) -> expr_ TY
   | Erun : Sym.t * list (pexpr TY) -> expr_ TY
-  | ECN_progs : 
+  | CN_progs : 
       list (cn_statement Symbol.t Ctype.ctype) * 
       list CNProgs.t -> 
       expr_ TY

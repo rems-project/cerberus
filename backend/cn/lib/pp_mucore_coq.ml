@@ -41,16 +41,14 @@ let pp_list pp_elem xs =
   ^^^ !^"]"
 
 
-let pp_tuple l = 
-  P.group (
-    !^"(" 
-    ^^ P.nest 2 (
-      P.break 0 
-      ^^ P.separate_map (P.break 1 ^^ !^"," ^^ P.break 1) (fun x -> x) l
-    )
-    ^^ P.break 0
-    ^^ !^")"
-  )
+let pp_tuple l =
+  P.group
+    (!^"("
+     ^^ P.nest
+          2
+          (P.break 0 ^^ P.separate_map (P.break 1 ^^ !^"," ^^ P.break 1) (fun x -> x) l)
+     ^^ P.break 0
+     ^^ !^")")
 
 
 let pp_pair p1 p2 (a, b) = pp_tuple [ p1 a; p2 b ]
@@ -79,6 +77,7 @@ let coq_def name args body =
   ^^ P.hardline
   ^^ P.hardline
 
+
 let pp_comment s = !^("(* " ^ s ^ " *)")
 
 let coq_notation name args body =
@@ -86,26 +85,29 @@ let coq_notation name args body =
 
 
 let pp_record fields =
-  P.group (!^"{|"
-  ^^ P.nest 2 (P.break 1
-    ^^ P.separate_map
-      (!^";" ^^ P.break 1)
-      (fun (name, value) -> 
-        P.group (!^(name ^ " :=") ^^ P.nest 2 (P.break 1 ^^ value))
-      )
-      fields)
-  ^^ P.break 1
-  ^^ !^"|}")
+  P.group
+    (!^"{|"
+     ^^ P.nest
+          2
+          (P.break 1
+           ^^ P.separate_map
+                (!^";" ^^ P.break 1)
+                (fun (name, value) ->
+                  P.group (!^(name ^ " :=") ^^ P.nest 2 (P.break 1 ^^ value)))
+                fields)
+     ^^ P.break 1
+     ^^ !^"|}")
 
 
 let pp_constructor name args =
   if List.length args = 0 then
     !^name
   else
-    P.group (!^"(" ^^ !^name
-    ^^ P.nest 2 (P.break 1 
-      ^^ P.separate_map (P.break 1) (fun x -> x) args)
-    ^^ !^")")
+    P.group
+      (!^"("
+       ^^ !^name
+       ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) (fun x -> x) args)
+       ^^ !^")")
 
 
 let pp_option pp_elem = function
@@ -424,8 +426,6 @@ let pp_linux_memory_order = function
   | SyncRcu -> pp_constructor "SyncRcu" []
 
 
-let pp_integer_value v = Impl_mem.pp_integer_value_for_coq v
-
 let pp_floating_value v = Impl_mem.pp_floating_value_for_coq v
 
 let pp_pointer_value v = Impl_mem.pp_pointer_value_for_coq v
@@ -702,15 +702,17 @@ let rec pp_sctype = function
   | Sctypes.Void -> pp_constructor "SCtypes.Void" []
   | Sctypes.Integer it -> pp_constructor "SCtypes.Integer" [ pp_integer_type it ]
   | Sctypes.Array (ct, on) ->
-    pp_constructor "SCtypes.Array" [ pp_sctype ct; pp_option pp_nat on ]
+    pp_constructor "SCtypes.Array" [ pp_tuple [ pp_sctype ct; pp_option pp_nat on ] ]
   | Sctypes.Pointer ct -> pp_constructor "SCtypes.Pointer" [ pp_sctype ct ]
   | Sctypes.Struct sym -> pp_constructor "SCtypes.Struct" [ pp_symbol sym ]
   | Sctypes.Function ((quals, ret), args, variadic) ->
     pp_constructor
-      "SCtypes.Function"
-      [ pp_pair pp_qualifiers pp_sctype (quals, ret);
-        pp_list (pp_pair pp_sctype pp_bool) args;
-        pp_bool variadic
+      "SCtypes.SCFunction"
+      [ pp_tuple
+          [ pp_pair pp_qualifiers pp_sctype (quals, ret);
+            pp_list (pp_pair pp_sctype pp_bool) args;
+            pp_bool variadic
+          ]
       ]
 
 
@@ -742,55 +744,55 @@ let pp_ctor = function
 
 
 let pp_core_binop = function
-  | Core.OpAdd -> pp_constructor "Add" []
-  | Core.OpSub -> pp_constructor "Sub" []
-  | Core.OpMul -> pp_constructor "Mul" []
-  | Core.OpDiv -> pp_constructor "Div" []
-  | Core.OpRem_t -> pp_constructor "Rem_t" []
-  | Core.OpRem_f -> pp_constructor "Rem_f" []
-  | Core.OpExp -> pp_constructor "Exp" []
-  | Core.OpEq -> pp_constructor "Eq" []
-  | Core.OpGt -> pp_constructor "Gt" []
-  | Core.OpLt -> pp_constructor "Lt" []
-  | Core.OpGe -> pp_constructor "Ge" []
-  | Core.OpLe -> pp_constructor "Le" []
-  | Core.OpAnd -> pp_constructor "And" []
-  | Core.OpOr -> pp_constructor "Or" []
+  | Core.OpAdd -> pp_constructor "Core.OpAdd" []
+  | Core.OpSub -> pp_constructor "Core.OpSub" []
+  | Core.OpMul -> pp_constructor "Core.OpMul" []
+  | Core.OpDiv -> pp_constructor "Core.OpDiv" []
+  | Core.OpRem_t -> pp_constructor "Core.OpRem_t" []
+  | Core.OpRem_f -> pp_constructor "Core.OpRem_f" []
+  | Core.OpExp -> pp_constructor "Core.OpExp" []
+  | Core.OpEq -> pp_constructor "Core.OpEq" []
+  | Core.OpGt -> pp_constructor "Core.OpGt" []
+  | Core.OpLt -> pp_constructor "Core.OpLt" []
+  | Core.OpGe -> pp_constructor "Core.OpGe" []
+  | Core.OpLe -> pp_constructor "Core.OpLe" []
+  | Core.OpAnd -> pp_constructor "Core.OpAnd" []
+  | Core.OpOr -> pp_constructor "Core.OpOr" []
 
 
 let pp_binop = function
-  | Terms.And -> pp_constructor "And" []
-  | Terms.Or -> pp_constructor "Or" []
-  | Terms.Implies -> pp_constructor "Implies" []
-  | Terms.Add -> pp_constructor "Add" []
-  | Terms.Sub -> pp_constructor "Sub" []
-  | Terms.Mul -> pp_constructor "Mul" []
-  | Terms.MulNoSMT -> pp_constructor "MulNoSMT" []
-  | Terms.Div -> pp_constructor "Div" []
-  | Terms.DivNoSMT -> pp_constructor "DivNoSMT" []
-  | Terms.Exp -> pp_constructor "Exp" []
-  | Terms.ExpNoSMT -> pp_constructor "ExpNoSMT" []
-  | Terms.Rem -> pp_constructor "Rem" []
-  | Terms.RemNoSMT -> pp_constructor "RemNoSMT" []
-  | Terms.Mod -> pp_constructor "Mod" []
-  | Terms.ModNoSMT -> pp_constructor "ModNoSMT" []
-  | Terms.BW_Xor -> pp_constructor "BW_Xor" []
-  | Terms.BW_And -> pp_constructor "BW_And" []
-  | Terms.BW_Or -> pp_constructor "BW_Or" []
-  | Terms.ShiftLeft -> pp_constructor "ShiftLeft" []
-  | Terms.ShiftRight -> pp_constructor "ShiftRight" []
-  | Terms.LT -> pp_constructor "LT" []
-  | Terms.LE -> pp_constructor "LE" []
-  | Terms.Min -> pp_constructor "Min" []
-  | Terms.Max -> pp_constructor "Max" []
-  | Terms.EQ -> pp_constructor "EQ" []
-  | Terms.LTPointer -> pp_constructor "LTPointer" []
-  | Terms.LEPointer -> pp_constructor "LEPointer" []
-  | Terms.SetUnion -> pp_constructor "SetUnion" []
-  | Terms.SetIntersection -> pp_constructor "SetIntersection" []
-  | Terms.SetDifference -> pp_constructor "SetDifference" []
-  | Terms.SetMember -> pp_constructor "SetMember" []
-  | Terms.Subset -> pp_constructor "Subset" []
+  | Terms.And -> pp_constructor "Terms.And" []
+  | Terms.Or -> pp_constructor "Terms.Or" []
+  | Terms.Implies -> pp_constructor "Terms.Implies" []
+  | Terms.Add -> pp_constructor "Terms.Add" []
+  | Terms.Sub -> pp_constructor "Terms.Sub" []
+  | Terms.Mul -> pp_constructor "Terms.Mul" []
+  | Terms.MulNoSMT -> pp_constructor "Terms.MulNoSMT" []
+  | Terms.Div -> pp_constructor "Terms.Div" []
+  | Terms.DivNoSMT -> pp_constructor "Terms.DivNoSMT" []
+  | Terms.Exp -> pp_constructor "Terms.Exp" []
+  | Terms.ExpNoSMT -> pp_constructor "Terms.ExpNoSMT" []
+  | Terms.Rem -> pp_constructor "Terms.Rem" []
+  | Terms.RemNoSMT -> pp_constructor "Terms.RemNoSMT" []
+  | Terms.Mod -> pp_constructor "Terms.Mod" []
+  | Terms.ModNoSMT -> pp_constructor "Terms.ModNoSMT" []
+  | Terms.BW_Xor -> pp_constructor "Terms.BW_Xor" []
+  | Terms.BW_And -> pp_constructor "Terms.BW_And" []
+  | Terms.BW_Or -> pp_constructor "Terms.BW_Or" []
+  | Terms.ShiftLeft -> pp_constructor "Terms.ShiftLeft" []
+  | Terms.ShiftRight -> pp_constructor "Terms.ShiftRight" []
+  | Terms.LT -> pp_constructor "Terms.LT" []
+  | Terms.LE -> pp_constructor "Terms.LE" []
+  | Terms.Min -> pp_constructor "Terms.Min" []
+  | Terms.Max -> pp_constructor "Terms.Max" []
+  | Terms.EQ -> pp_constructor "Terms.EQ" []
+  | Terms.LTPointer -> pp_constructor "Terms.LTPointer" []
+  | Terms.LEPointer -> pp_constructor "Terms.LEPointer" []
+  | Terms.SetUnion -> pp_constructor "Terms.SetUnion" []
+  | Terms.SetIntersection -> pp_constructor "Terms.SetIntersection" []
+  | Terms.SetDifference -> pp_constructor "Terms.SetDifference" []
+  | Terms.SetMember -> pp_constructor "Terms.SetMember" []
+  | Terms.Subset -> pp_constructor "Terms.Subset" []
 
 
 let pp_bw_binop = function
@@ -805,12 +807,12 @@ let pp_bw_unop = function
   | BW_FFS -> pp_constructor "BW_FFS" []
 
 
-let pp_iop = function
-  | Core.IOpAdd -> pp_constructor "IOpAdd" []
-  | Core.IOpSub -> pp_constructor "IOpSub" []
-  | Core.IOpMul -> pp_constructor "IOpMul" []
-  | Core.IOpShl -> pp_constructor "IOpShl" []
-  | Core.IOpShr -> pp_constructor "IOpShr" []
+let pp_core_iop = function
+  | Core.IOpAdd -> pp_constructor "Core.IOpAdd" []
+  | Core.IOpSub -> pp_constructor "Core.IOpSub" []
+  | Core.IOpMul -> pp_constructor "Core.IOpMul" []
+  | Core.IOpShl -> pp_constructor "Core.IOpShl" []
+  | Core.IOpShr -> pp_constructor "Core.IOpShr" []
 
 
 let rec pp_pattern_ pp_type = function
@@ -848,12 +850,19 @@ let pp_mem_value v =
 let rec pp_mem_constraint = function
   | Mem_common.MC_empty -> pp_constructor "MC_empty" []
   | Mem_common.MC_eq (x, y) ->
-    pp_constructor "MC_eq" [ pp_integer_value x; pp_integer_value y ]
+    pp_constructor
+      "MC_eq"
+      [ Impl_mem.pp_integer_value_for_coq x; Impl_mem.pp_integer_value_for_coq y ]
   | Mem_common.MC_le (x, y) ->
-    pp_constructor "MC_le" [ pp_integer_value x; pp_integer_value y ]
+    pp_constructor
+      "MC_le"
+      [ Impl_mem.pp_integer_value_for_coq x; Impl_mem.pp_integer_value_for_coq y ]
   | Mem_common.MC_lt (x, y) ->
-    pp_constructor "MC_lt" [ pp_integer_value x; pp_integer_value y ]
-  | Mem_common.MC_in_device x -> pp_constructor "MC_in_device" [ pp_integer_value x ]
+    pp_constructor
+      "MC_lt"
+      [ Impl_mem.pp_integer_value_for_coq x; Impl_mem.pp_integer_value_for_coq y ]
+  | Mem_common.MC_in_device x ->
+    pp_constructor "MC_in_device" [ Impl_mem.pp_integer_value_for_coq x ]
   | Mem_common.MC_or (x, y) ->
     pp_constructor "MC_or" [ pp_mem_constraint x; pp_mem_constraint y ]
   | Mem_common.MC_conj xs -> pp_constructor "MC_conj" [ pp_list pp_mem_constraint xs ]
@@ -944,7 +953,7 @@ and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
            "PEbounded_binop"
            [ pp_underscore;
              pp_bound_kind kind;
-             pp_iop op;
+             pp_core_iop op;
              pp_pexpr pp_type e1;
              pp_pexpr pp_type e2
            ]
@@ -1122,20 +1131,28 @@ and pp_value pp_type (V (ty, v)) =
 and pp_object_value pp_type (OV (ty, ov)) =
   pp_constructor
     "OV"
-    [ pp_type ty;
+    [ pp_underscore;
+      pp_type ty;
       (match ov with
-       | OVinteger i -> pp_constructor "OVinteger" [ pp_integer_value i ]
-       | OVfloating f -> pp_constructor "OVfloating" [ pp_floating_value f ]
-       | OVpointer p -> pp_constructor "OVpointer" [ pp_pointer_value pp_symbol p ]
-       | OVarray vs -> pp_constructor "OVarray" [ pp_list (pp_object_value pp_type) vs ]
+       | OVinteger i ->
+         pp_constructor "OVinteger" [ pp_underscore; Impl_mem.pp_integer_value_for_coq i ]
+       | OVfloating f ->
+         pp_constructor "OVfloating" [ pp_underscore; pp_floating_value f ]
+       | OVpointer p ->
+         pp_constructor "OVpointer" [ pp_underscore; pp_pointer_value pp_symbol p ]
+       | OVarray vs ->
+         pp_constructor "OVarray" [ pp_underscore; pp_list (pp_object_value pp_type) vs ]
        | OVstruct (sym, fields) ->
          pp_constructor
            "OVstruct"
-           [ pp_symbol sym;
+           [ pp_underscore;
+             pp_symbol sym;
              pp_list (pp_triple pp_identifier pp_sctype pp_mem_value) fields
            ]
        | OVunion (sym, id, v) ->
-         pp_constructor "OVunion" [ pp_symbol sym; pp_identifier id; pp_mem_value v ])
+         pp_constructor
+           "OVunion"
+           [ pp_underscore; pp_symbol sym; pp_identifier id; pp_mem_value v ])
     ]
 
 
@@ -1211,43 +1228,60 @@ and pp_index_term_content = function
           [ pp_nat n1; pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt); pp_nat n2 ];
         pp_index_term t
       ]
-  | Tuple ts -> pp_constructor "Tuple" [ pp_list pp_index_term ts ]
-  | NthTuple (n, t) -> pp_constructor "NthTuple" [ pp_nat n; pp_index_term t ]
+  | Tuple ts -> pp_constructor "Tuple" [ pp_underscore; pp_list pp_index_term ts ]
+  | NthTuple (n, t) ->
+    pp_constructor "NthTuple" [ pp_underscore; pp_nat n; pp_index_term t ]
   | Struct (tag, members) ->
     pp_constructor
       "Struct"
-      [ pp_symbol tag; pp_list (pp_pair pp_identifier pp_index_term) members ]
+      [ pp_underscore;
+        pp_symbol tag;
+        pp_list (pp_pair pp_identifier pp_index_term) members
+      ]
   | StructMember (t, member) ->
-    pp_constructor "StructMember" [ pp_index_term t; pp_identifier member ]
+    pp_constructor "StructMember" [ pp_underscore; pp_index_term t; pp_identifier member ]
   | StructUpdate ((t1, member), t2) ->
     pp_constructor
       "StructUpdate"
-      [ pp_pair pp_index_term pp_identifier (t1, member); pp_index_term t2 ]
+      [ pp_underscore;
+        pp_pair pp_index_term pp_identifier (t1, member);
+        pp_index_term t2
+      ]
   | Record members ->
-    pp_constructor "Record" [ pp_list (pp_pair pp_identifier pp_index_term) members ]
+    pp_constructor
+      "Record"
+      [ pp_underscore; pp_list (pp_pair pp_identifier pp_index_term) members ]
   | RecordMember (t, member) ->
-    pp_constructor "RecordMember" [ pp_index_term t; pp_identifier member ]
+    pp_constructor "RecordMember" [ pp_underscore; pp_index_term t; pp_identifier member ]
   | RecordUpdate ((t1, member), t2) ->
     pp_constructor
       "RecordUpdate"
-      [ pp_pair pp_index_term pp_identifier (t1, member); pp_index_term t2 ]
+      [ pp_underscore;
+        pp_pair pp_index_term pp_identifier (t1, member);
+        pp_index_term t2
+      ]
   | Constructor (sym, args) ->
     pp_constructor
       "Constructor"
       [ pp_symbol sym; pp_list (pp_pair pp_identifier pp_index_term) args ]
   | MemberShift (t, tag, id) ->
-    pp_constructor "MemberShift" [ pp_index_term t; pp_symbol tag; pp_identifier id ]
+    pp_constructor
+      "MemberShift"
+      [ pp_underscore; pp_index_term t; pp_symbol tag; pp_identifier id ]
   | ArrayShift { base; ct; index } ->
-    pp_constructor "ArrayShift" [ pp_index_term base; pp_sctype ct; pp_index_term index ]
+    pp_constructor
+      "ArrayShift"
+      [ pp_underscore; pp_index_term base; pp_sctype ct; pp_index_term index ]
   | CopyAllocId { addr; loc } ->
-    pp_constructor "CopyAllocId" [ pp_index_term addr; pp_index_term loc ]
-  | HasAllocId t -> pp_constructor "HasAllocId" [ pp_index_term t ]
-  | SizeOf ct -> pp_constructor "SizeOf" [ pp_sctype ct ]
+    pp_constructor "CopyAllocId" [ pp_underscore; pp_index_term addr; pp_index_term loc ]
+  | HasAllocId t -> pp_constructor "HasAllocId" [ pp_underscore; pp_index_term t ]
+  | SizeOf ct -> pp_constructor "SizeOf" [ pp_underscore; pp_sctype ct ]
   | OffsetOf (tag, member) ->
-    pp_constructor "OffsetOf" [ pp_symbol tag; pp_identifier member ]
-  | Nil bt -> pp_constructor "Nil" [ pp_basetype pp_unit bt ]
-  | Cons (t1, t2) -> pp_constructor "Cons" [ pp_index_term t1; pp_index_term t2 ]
-  | Head t -> pp_constructor "Head" [ pp_index_term t ]
+    pp_constructor "OffsetOf" [ pp_underscore; pp_symbol tag; pp_identifier member ]
+  | Nil bt -> pp_constructor "Nil" [ pp_underscore; pp_basetype pp_unit bt ]
+  | Cons (t1, t2) ->
+    pp_constructor "Cons" [ pp_underscore; pp_index_term t1; pp_index_term t2 ]
+  | Head t -> pp_constructor "Head" [ pp_underscore; pp_index_term t ]
   | Tail t -> pp_constructor "Tail" [ pp_underscore; pp_index_term t ]
   | NthList (i, xs, d) ->
     pp_constructor
@@ -1283,7 +1317,7 @@ and pp_index_term_content = function
     pp_constructor "Apply" [ pp_underscore; pp_symbol sym; pp_list pp_index_term args ]
   | Let ((sym, t1), t2) ->
     pp_constructor
-      "Let"
+      "TLet"
       [ pp_underscore; pp_pair pp_symbol pp_index_term (sym, t1); pp_index_term t2 ]
   | Match (t, cases) ->
     pp_constructor
@@ -1892,9 +1926,15 @@ let pp_cnprog_statement = function
   | Print term -> pp_constructor "Print" [ pp_index_term term ]
 
 
+let pp_cnprog_load (r : Cnprog.load) =
+  pp_record [ ("CNProgs.ct", pp_sctype r.ct); ("CNProgs.pointer", pp_index_term r.pointer) ]
+
+
 let rec pp_cn_prog = function
-  | Cnprog.Let (loc, (name, { ct; pointer }), prog) ->
-    pp_constructor "Let" [ pp_location loc; pp_symbol name; pp_cn_prog prog ]
+  | Cnprog.Let (loc, (name, l), prog) ->
+    pp_constructor
+      "CLet"
+      [ pp_location loc; pp_tuple [ pp_symbol name; pp_cnprog_load l ]; pp_cn_prog prog ]
   | Statement (loc, stmt) ->
     pp_constructor "Statement" [ pp_location loc; pp_cnprog_statement stmt ]
 
@@ -1902,45 +1942,79 @@ let rec pp_cn_prog = function
 let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
   pp_constructor
     "CN_statement"
-    [ pp_location loc;
+    [ pp_underscore;
+      pp_underscore;
+      pp_location loc;
       (match stmt with
        | CN_pack_unpack (pu, pred, exprs) ->
          pp_constructor
            "CN_pack_unpack"
-           [ pp_pack_unpack pu;
+           [ pp_underscore;
+             pp_underscore;
+             pp_pack_unpack pu;
              pp_cn_pred ppfa ppfty pred;
              pp_list (pp_cn_expr ppfa ppfty) exprs
            ]
        | CN_to_from_bytes (tf, pred, exprs) ->
          pp_constructor
            "CN_to_from_bytes"
-           [ pp_to_from tf;
+           [ pp_underscore;
+             pp_underscore;
+             pp_to_from tf;
              pp_cn_pred ppfa ppfty pred;
              pp_list (pp_cn_expr ppfa ppfty) exprs
            ]
        | CN_have assertion ->
-         pp_constructor "CN_have" [ pp_cn_assertion ppfa ppfty assertion ]
+         pp_constructor
+           "CN_have"
+           [ pp_underscore; pp_underscore; pp_cn_assertion ppfa ppfty assertion ]
        | CN_instantiate (inst, expr) ->
          pp_constructor
            "CN_instantiate"
-           [ pp_cn_to_instantiate ppfa ppfty inst; pp_cn_expr ppfa ppfty expr ]
+           [ pp_underscore;
+             pp_underscore;
+             pp_cn_to_instantiate ppfa ppfty inst;
+             pp_cn_expr ppfa ppfty expr
+           ]
        | CN_split_case assertion ->
-         pp_constructor "CN_split_case" [ pp_cn_assertion ppfa ppfty assertion ]
+         pp_constructor
+           "CN_split_case"
+           [ pp_underscore; pp_underscore; pp_cn_assertion ppfa ppfty assertion ]
        | CN_extract (ids, extract, expr) ->
          pp_constructor
            "CN_extract"
-           [ pp_list pp_identifier ids;
+           [ pp_underscore;
+             pp_underscore;
+             pp_list pp_identifier ids;
              pp_cn_to_extract ppfa ppfty extract;
              pp_cn_expr ppfa ppfty expr
            ]
        | CN_unfold (sym, exprs) ->
-         pp_constructor "CN_unfold" [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ]
+         pp_constructor
+           "CN_unfold"
+           [ pp_underscore;
+             pp_underscore;
+             ppfa sym;
+             pp_list (pp_cn_expr ppfa ppfty) exprs
+           ]
        | CN_assert_stmt assertion ->
-         pp_constructor "CN_assert_stmt" [ pp_cn_assertion ppfa ppfty assertion ]
+         pp_constructor
+           "CN_assert_stmt"
+           [ pp_underscore; pp_underscore; pp_cn_assertion ppfa ppfty assertion ]
        | CN_apply (sym, exprs) ->
-         !^"(CN_apply" ^^^ ppfa sym ^^^ pp_list (pp_cn_expr ppfa ppfty) exprs ^^ !^")"
-       | CN_inline syms -> !^"(CN_inline" ^^^ pp_list ppfa syms ^^ !^")"
-       | CN_print expr -> !^"(CN_print" ^^^ pp_cn_expr ppfa ppfty expr ^^ !^")" ^^ !^")")
+         pp_constructor
+           "CN_apply"
+           [ pp_underscore;
+             pp_underscore;
+             ppfa sym;
+             pp_list (pp_cn_expr ppfa ppfty) exprs
+           ]
+       | CN_inline syms ->
+         pp_constructor "CN_inline" [ pp_underscore; pp_underscore; pp_list ppfa syms ]
+       | CN_print expr ->
+         pp_constructor
+           "CN_print"
+           [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty expr ])
     ]
 
 

@@ -186,10 +186,9 @@ Inductive cn_statement_ (A TY : Type) : Type :=
   | CN_assert_stmt : cn_assertion A TY -> cn_statement_ A TY
   | CN_apply : A * list (cn_expr A TY) -> cn_statement_ A TY
   | CN_inline : list A -> cn_statement_ A TY
-  | CN_print : cn_expr A TY -> cn_statement_ A TY.
-
-Definition cn_statement (A TY : Type) := 
-  (Location.t * (cn_statement_ A TY))%type.
+  | CN_print : cn_expr A TY -> cn_statement_ A TY
+with cn_statement (A TY : Type) := 
+  | CN_statement: Location.t -> (cn_statement_ A TY) -> cn_statement A TY.
 
 (* Namespace types *)
 Inductive cn_namespace : Type :=

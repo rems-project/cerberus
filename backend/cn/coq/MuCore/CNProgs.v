@@ -38,5 +38,5 @@ Record load := {
 
 (* Main program type *)
 Inductive t : Type :=
-  | Let : Location.t -> (Sym.t * load) -> t -> t
+  | CLet : Location.t -> (Sym.t * load) -> t -> t
   | Statement : Location.t -> statement -> t. 
