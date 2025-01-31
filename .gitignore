@@ -39,6 +39,17 @@ public/package-lock.json
 /backend/cheri/cerb.prof
 /cerb.prof
 
+# Coq generated files
+*.vo
+*.vok
+*.vos
+*.glob
+*.aux
+*.log
+*.html
+*.vty
+*.vti
+
 # debug stuff
 log*.txt
 *.cache

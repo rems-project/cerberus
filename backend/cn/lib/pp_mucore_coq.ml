@@ -66,10 +66,14 @@ let pp_pmap
 
 let pp_bool b = if b then !^"true" else !^"false"
 
+
+(* Some user-defined names can clash with existing Coq identifiers so we need to quote them *)
+let quote_coq_name name = "_cn_" ^ name
+
 (* Helper to print Coq definitions *)
 let coq_def name args body =
   !^"Definition"
-  ^^^ !^name
+  ^^^ !^(quote_coq_name name)
   ^^^ args
   ^^^ !^":="
   ^^^ body
@@ -576,18 +580,18 @@ let pp_integer_base_type = function
 
 
 let pp_integer_type = function
-  | Sctypes.IntegerTypes.Char -> pp_constructor "Char" []
-  | Sctypes.IntegerTypes.Bool -> pp_constructor "Bool" []
+  | Sctypes.IntegerTypes.Char -> pp_constructor "IntegerType.Char" []
+  | Sctypes.IntegerTypes.Bool -> pp_constructor "IntegerType.Bool" []
   | Sctypes.IntegerTypes.Signed ibt ->
-    pp_constructor "Signed" [ pp_integer_base_type ibt ]
+    pp_constructor "IntegerType.Signed" [ pp_integer_base_type ibt ]
   | Sctypes.IntegerTypes.Unsigned ibt ->
-    pp_constructor "Unsigned" [ pp_integer_base_type ibt ]
-  | Sctypes.IntegerTypes.Enum sym -> pp_constructor "Enum" [ pp_symbol sym ]
-  | Sctypes.IntegerTypes.Wchar_t -> pp_constructor "Wchar_t" []
-  | Sctypes.IntegerTypes.Wint_t -> pp_constructor "Wint_t" []
-  | Sctypes.IntegerTypes.Size_t -> pp_constructor "Size_t" []
-  | Sctypes.IntegerTypes.Ptrdiff_t -> pp_constructor "Ptrdiff_t" []
-  | Sctypes.IntegerTypes.Ptraddr_t -> pp_constructor "Ptraddr_t" []
+    pp_constructor "IntegerType.Unsigned" [ pp_integer_base_type ibt ]
+  | Sctypes.IntegerTypes.Enum sym -> pp_constructor "IntegerType.Enum" [ pp_symbol sym ]
+  | Sctypes.IntegerTypes.Wchar_t -> pp_constructor "IntegerType.Wchar_t" []
+  | Sctypes.IntegerTypes.Wint_t -> pp_constructor "IntegerType.Wint_t" []
+  | Sctypes.IntegerTypes.Size_t -> pp_constructor "IntegerType.Size_t" []
+  | Sctypes.IntegerTypes.Ptrdiff_t -> pp_constructor "IntegerType.Ptrdiff_t" []
+  | Sctypes.IntegerTypes.Ptraddr_t -> pp_constructor "IntegerType.Ptraddr_t" []
 
 
 let rec pp_annot_t = function
@@ -1188,18 +1192,20 @@ and pp_terms_pattern_ = function
 
 
 let pp_const = function
-  | Terms.Z z -> pp_constructor "Z" [ pp_Z z ]
+  | Terms.Z z -> pp_constructor "Terms.Z" [ pp_Z z ]
   | Terms.Bits (x, z) ->
-    pp_constructor "Bits" [ pp_pair (pp_pair pp_sign pp_nat) pp_Z (x, z) ]
-  | Q q -> pp_constructor "Q" [ pp_Q q ]
-  | MemByte { alloc_id; value } -> pp_constructor "MemByte" [ pp_Z alloc_id; pp_Z value ]
-  | Pointer { alloc_id; addr } -> pp_constructor "Pointer" [ pp_Z alloc_id; pp_Z addr ]
-  | Alloc_id z -> pp_constructor "Alloc_id" [ pp_Z z ]
-  | Bool b -> pp_constructor "Bool" [ pp_bool b ]
-  | Unit -> pp_constructor "Unit" []
-  | Null -> pp_constructor "Null" []
-  | CType_const t -> pp_constructor "CType_const" [ pp_sctype t ]
-  | Default bt -> pp_constructor "Default" [ pp_basetype pp_unit bt ]
+    pp_constructor "Terms.Bits" [ pp_pair (pp_pair pp_sign pp_nat) pp_Z (x, z) ]
+  | Terms.Q q -> pp_constructor "Terms.Q" [ pp_Q q ]
+  | Terms.MemByte { alloc_id; value } ->
+    pp_constructor "Terms.MemByte" [ pp_Z alloc_id; pp_Z value ]
+  | Terms.Pointer { alloc_id; addr } ->
+    pp_constructor "Terms.Pointer" [ pp_Z alloc_id; pp_Z addr ]
+  | Terms.Alloc_id z -> pp_constructor "Terms.Alloc_id" [ pp_Z z ]
+  | Terms.Bool b -> pp_constructor "Terms.Bool" [ pp_bool b ]
+  | Terms.Unit -> pp_constructor "Terms.Unit" []
+  | Terms.Null -> pp_constructor "Terms.Null" []
+  | Terms.CType_const t -> pp_constructor "Terms.CType_const" [ pp_sctype t ]
+  | Terms.Default bt -> pp_constructor "Terms.Default" [ pp_basetype pp_unit bt ]
 
 
 let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
@@ -1263,7 +1269,7 @@ and pp_index_term_content = function
   | Constructor (sym, args) ->
     pp_constructor
       "Constructor"
-      [ pp_symbol sym; pp_list (pp_pair pp_identifier pp_index_term) args ]
+      [ pp_underscore; pp_symbol sym; pp_list (pp_pair pp_identifier pp_index_term) args ]
   | MemberShift (t, tag, id) ->
     pp_constructor
       "MemberShift"
@@ -1336,8 +1342,8 @@ let pp_request_init = function
 
 
 let rec pp_request = function
-  | Request.P pred -> pp_constructor "P" [ pp_request_ppredicate pred ]
-  | Request.Q qpred -> pp_constructor "Q" [ pp_request_qpredicate qpred ]
+  | Request.P pred -> pp_constructor "Request.P" [ pp_request_ppredicate pred ]
+  | Request.Q qpred -> pp_constructor "Request.Q" [ pp_request_qpredicate qpred ]
 
 
 and pp_request_qpredicate qpred =
@@ -1369,36 +1375,36 @@ and pp_request_name = function
 let pp_memop pp_type m =
   let pte = pp_pexpr pp_type in
   match m with
-  | PtrEq e12 -> pp_constructor "PtrEq" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrNe e12 -> pp_constructor "PtrNe" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrLt e12 -> pp_constructor "PtrLt" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrGt e12 -> pp_constructor "PtrGt" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrLe e12 -> pp_constructor "PtrLe" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrGe e12 -> pp_constructor "PtrGe" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrEq e12 -> pp_constructor "MuCore.PtrEq" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrNe e12 -> pp_constructor "MuCore.PtrNe" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrLt e12 -> pp_constructor "MuCore.PtrLt" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrGt e12 -> pp_constructor "MuCore.PtrGt" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrLe e12 -> pp_constructor "MuCore.PtrLe" [ pp_underscore; pp_pair pte pte e12 ]
+  | PtrGe e12 -> pp_constructor "MuCore.PtrGe" [ pp_underscore; pp_pair pte pte e12 ]
   | Ptrdiff e123 ->
-    pp_constructor "Ptrdiff" [ pp_underscore; pp_triple pp_act pte pte e123 ]
+    pp_constructor "MuCore.Ptrdiff" [ pp_underscore; pp_triple pp_act pte pte e123 ]
   | IntFromPtr e123 ->
-    pp_constructor "IntFromPtr" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
+    pp_constructor "MuCore.IntFromPtr" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
   | PtrFromInt e123 ->
-    pp_constructor "PtrFromInt" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
+    pp_constructor "MuCore.PtrFromInt" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
   | PtrValidForDeref e12 ->
-    pp_constructor "PtrValidForDeref" [ pp_underscore; pp_pair pp_act pte e12 ]
+    pp_constructor "MuCore.PtrValidForDeref" [ pp_underscore; pp_pair pp_act pte e12 ]
   | PtrWellAligned e12 ->
-    pp_constructor "PtrWellAligned" [ pp_underscore; pp_pair pp_act pte e12 ]
+    pp_constructor "MuCore.PtrWellAligned" [ pp_underscore; pp_pair pp_act pte e12 ]
   | PtrArrayShift e123 ->
-    pp_constructor "PtrArrayShift" [ pp_underscore; pp_triple pte pp_act pte e123 ]
+    pp_constructor "MuCore.PtrArrayShift" [ pp_underscore; pp_triple pte pp_act pte e123 ]
   | PtrMemberShift e123 ->
     pp_constructor
-      "PtrMemberShift"
+      "MuCore.PtrMemberShift"
       [ pp_underscore; pp_triple pp_symbol pp_identifier pte e123 ]
-  | Memcpy e123 -> pp_constructor "Memcpy" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Memcmp e123 -> pp_constructor "Memcmp" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Realloc e123 -> pp_constructor "Realloc" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Va_start e12 -> pp_constructor "Va_start" [ pp_underscore; pp_pair pte pte e12 ]
-  | Va_copy e -> pp_constructor "Va_copy" [ pp_underscore; pte e ]
-  | Va_arg e12 -> pp_constructor "Va_arg" [ pp_underscore; pp_pair pte pp_act e12 ]
-  | Va_end e -> pp_constructor "Va_end" [ pp_underscore; pte e ]
-  | CopyAllocId e12 -> pp_constructor "CopyAllocId" [ pp_underscore; pp_pair pte pte e12 ]
+  | Memcpy e123 -> pp_constructor "MuCore.Memcpy" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Memcmp e123 -> pp_constructor "MuCore.Memcmp" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Realloc e123 -> pp_constructor "MuCore.Realloc" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Va_start e12 -> pp_constructor "MuCore.Va_start" [ pp_underscore; pp_pair pte pte e12 ]
+  | Va_copy e -> pp_constructor "MuCore.Va_copy" [ pp_underscore; pte e ]
+  | Va_arg e12 -> pp_constructor "MuCore.Va_arg" [ pp_underscore; pp_pair pte pp_act e12 ]
+  | Va_end e -> pp_constructor "MuCore.Va_end" [ pp_underscore; pte e ]
+  | CopyAllocId e12 -> pp_constructor "MuCore.CopyAllocId" [ pp_underscore; pp_pair pte pte e12 ]
 
 
 let pp_pack_unpack = function
@@ -1412,16 +1418,18 @@ let pp_to_from = function
 
 
 let pp_cn_to_instantiate ppfa ppfty = function
-  | CF.Cn.I_Function f -> pp_constructor "I_Function" [ ppfa f ]
-  | CF.Cn.I_Good ty -> pp_constructor "I_Good" [ ppfty ty ]
-  | CF.Cn.I_Everything -> pp_constructor "I_Everything" []
+  | CF.Cn.I_Function f ->
+    pp_constructor "I_Function" [ pp_underscore; pp_underscore; ppfa f ]
+  | CF.Cn.I_Good ty -> pp_constructor "I_Good" [ pp_underscore; pp_underscore; ppfty ty ]
+  | CF.Cn.I_Everything -> pp_constructor "I_Everything" [ pp_underscore; pp_underscore ]
 
 
 let pp_logical_constraint = function
-  | LogicalConstraints.T term -> pp_constructor "T" [ pp_index_term term ]
+  | LogicalConstraints.T term ->
+    pp_constructor "LogicalConstraints.T" [ pp_index_term term ]
   | LogicalConstraints.Forall ((sym, bt), term) ->
     pp_constructor
-      "Forall"
+      "LogicalConstraints.Forall"
       [ pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt); pp_index_term term ]
 
 
@@ -1899,44 +1907,47 @@ let pp_cn_condition ppfa ppfty = function
       ]
 
 
+let pp_cnprogs_extract (ids, extract, term) =
+  pp_tuple
+    [ pp_list pp_identifier ids;
+      pp_cn_to_extract pp_symbol pp_sctype extract;
+      pp_index_term term
+    ]
+
+
 let pp_cnprog_statement = function
   | Cnprog.Pack_unpack (pu, pred) ->
-    pp_constructor "Pack_unpack" [ pp_pack_unpack pu; pp_request_ppredicate pred ]
+    pp_constructor "CNProgs.Pack_unpack" [ pp_pack_unpack pu; pp_request_ppredicate pred ]
   | To_from_bytes (tf, pred) ->
-    pp_constructor "To_from_bytes" [ pp_to_from tf; pp_request_ppredicate pred ]
-  | Have lc -> pp_constructor "Have" [ pp_logical_constraint lc ]
+    pp_constructor "CNProgs.To_from_bytes" [ pp_to_from tf; pp_request_ppredicate pred ]
+  | Have lc -> pp_constructor "CNProgs.Have" [ pp_logical_constraint lc ]
   | Instantiate (inst, term) ->
     pp_constructor
-      "Instantiate"
+      "CNProgs.Instantiate"
       [ pp_cn_to_instantiate pp_symbol pp_sctype inst; pp_index_term term ]
-  | Split_case lc -> pp_constructor "Split_case" [ pp_logical_constraint lc ]
-  | Extract (ids, ext, term) ->
-    pp_constructor
-      "Extract"
-      [ pp_list pp_identifier ids;
-        pp_cn_to_extract pp_symbol pp_sctype ext;
-        pp_index_term term
-      ]
+  | Split_case lc -> pp_constructor "CNProgs.Split_case" [ pp_logical_constraint lc ]
+  | Extract extract -> pp_constructor "CNProgs.Extract" [ pp_cnprogs_extract extract ]
   | Unfold (sym, terms) ->
-    pp_constructor "Unfold" [ pp_symbol sym; pp_list pp_index_term terms ]
+    pp_constructor "CNProgs.Unfold" [ pp_symbol sym; pp_list pp_index_term terms ]
   | Apply (sym, terms) ->
-    pp_constructor "Apply" [ pp_symbol sym; pp_list pp_index_term terms ]
-  | Assert lc -> pp_constructor "Assert" [ pp_logical_constraint lc ]
-  | Inline syms -> pp_constructor "Inline" [ pp_list pp_symbol syms ]
-  | Print term -> pp_constructor "Print" [ pp_index_term term ]
+    pp_constructor "CNProgs.Apply" [ pp_symbol sym; pp_list pp_index_term terms ]
+  | Assert lc -> pp_constructor "CNProgs.Assert" [ pp_logical_constraint lc ]
+  | Inline syms -> pp_constructor "CNProgs.Inline" [ pp_list pp_symbol syms ]
+  | Print term -> pp_constructor "CNProgs.Print" [ pp_index_term term ]
 
 
 let pp_cnprog_load (r : Cnprog.load) =
-  pp_record [ ("CNProgs.ct", pp_sctype r.ct); ("CNProgs.pointer", pp_index_term r.pointer) ]
+  pp_record
+    [ ("CNProgs.ct", pp_sctype r.ct); ("CNProgs.pointer", pp_index_term r.pointer) ]
 
 
 let rec pp_cn_prog = function
   | Cnprog.Let (loc, (name, l), prog) ->
     pp_constructor
-      "CLet"
+      "CNProgs.CLet"
       [ pp_location loc; pp_tuple [ pp_symbol name; pp_cnprog_load l ]; pp_cn_prog prog ]
   | Statement (loc, stmt) ->
-    pp_constructor "Statement" [ pp_location loc; pp_cnprog_statement stmt ]
+    pp_constructor "CNProgs.Statement" [ pp_location loc; pp_cnprog_statement stmt ]
 
 
 let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
@@ -1951,18 +1962,22 @@ let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
            "CN_pack_unpack"
            [ pp_underscore;
              pp_underscore;
-             pp_pack_unpack pu;
-             pp_cn_pred ppfa ppfty pred;
-             pp_list (pp_cn_expr ppfa ppfty) exprs
+             pp_tuple
+               [ pp_pack_unpack pu;
+                 pp_cn_pred ppfa ppfty pred;
+                 pp_list (pp_cn_expr ppfa ppfty) exprs
+               ]
            ]
        | CN_to_from_bytes (tf, pred, exprs) ->
          pp_constructor
            "CN_to_from_bytes"
            [ pp_underscore;
              pp_underscore;
-             pp_to_from tf;
-             pp_cn_pred ppfa ppfty pred;
-             pp_list (pp_cn_expr ppfa ppfty) exprs
+             pp_tuple
+               [ pp_to_from tf;
+                 pp_cn_pred ppfa ppfty pred;
+                 pp_list (pp_cn_expr ppfa ppfty) exprs
+               ]
            ]
        | CN_have assertion ->
          pp_constructor
@@ -1973,8 +1988,7 @@ let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
            "CN_instantiate"
            [ pp_underscore;
              pp_underscore;
-             pp_cn_to_instantiate ppfa ppfty inst;
-             pp_cn_expr ppfa ppfty expr
+             pp_tuple [ pp_cn_to_instantiate ppfa ppfty inst; pp_cn_expr ppfa ppfty expr ]
            ]
        | CN_split_case assertion ->
          pp_constructor
@@ -1985,17 +1999,18 @@ let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
            "CN_extract"
            [ pp_underscore;
              pp_underscore;
-             pp_list pp_identifier ids;
-             pp_cn_to_extract ppfa ppfty extract;
-             pp_cn_expr ppfa ppfty expr
+             pp_tuple
+               [ pp_list pp_identifier ids;
+                 pp_cn_to_extract ppfa ppfty extract;
+                 pp_cn_expr ppfa ppfty expr
+               ]
            ]
        | CN_unfold (sym, exprs) ->
          pp_constructor
            "CN_unfold"
            [ pp_underscore;
              pp_underscore;
-             ppfa sym;
-             pp_list (pp_cn_expr ppfa ppfty) exprs
+             pp_tuple [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ]
            ]
        | CN_assert_stmt assertion ->
          pp_constructor
@@ -2006,8 +2021,7 @@ let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
            "CN_apply"
            [ pp_underscore;
              pp_underscore;
-             ppfa sym;
-             pp_list (pp_cn_expr ppfa ppfty) exprs
+             pp_tuple [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ]
            ]
        | CN_inline syms ->
          pp_constructor "CN_inline" [ pp_underscore; pp_underscore; pp_list ppfa syms ]
@@ -2095,7 +2109,8 @@ let pp_label_def pp_type = function
   | Label (loc, args, annots, spec, `Loop loop_locs) ->
     pp_constructor
       "Label"
-      [ pp_location loc;
+      [ pp_underscore;
+        pp_location loc;
         pp_arguments (pp_expr pp_type) args;
         pp_list pp_annot_t annots;
         pp_parse_ast_label_spec spec;
@@ -2122,26 +2137,29 @@ let pp_desugared_spec { accesses; requires; ensures } =
 
 
 let rec pp_logical_argument_types pp_type = function
-  | LogicalArgumentTypes.I i -> !^"(I" ^^^ pp_type i ^^ !^")"
+  | LogicalArgumentTypes.I i ->
+    pp_constructor "LogicalArgumentTypes.I" [ pp_underscore; pp_type i ]
   | Resource ((sym, (req, bt)), info, at) ->
     pp_constructor
       "LogicalArgumentTypes.Resource"
-      [ pp_symbol sym;
-        pp_tuple [ pp_request req; pp_basetype pp_unit bt ];
+      [ pp_underscore;
+        pp_tuple [ pp_symbol sym; pp_tuple [ pp_request req; pp_basetype pp_unit bt ] ];
         pp_location_info info;
         pp_logical_argument_types pp_type at
       ]
   | Constraint (lc, info, at) ->
     pp_constructor
       "LogicalArgumentTypes.Constraint"
-      [ pp_logical_constraint lc;
+      [ pp_underscore;
+        pp_logical_constraint lc;
         pp_location_info info;
         pp_logical_argument_types pp_type at
       ]
   | LogicalArgumentTypes.Define (si, info, at) ->
     pp_constructor
       "LogicalArgumentTypes.Define"
-      [ pp_pair pp_symbol pp_index_term si;
+      [ pp_underscore;
+        pp_pair pp_symbol pp_index_term si;
         pp_location_info info;
         pp_logical_argument_types pp_type at
       ]
@@ -2196,13 +2214,13 @@ let pp_file pp_type pp_type_name file =
            coq_def
              (Pp_symbol.to_string sym)
              P.empty
-             (pp_constructor "GlobalDef" [ pp_sctype ct; pp_expr pp_type e ])
+             (pp_constructor "GlobalDef" [ pp_underscore; pp_sctype ct; pp_expr pp_type e ])
            ^^ P.hardline
          | GlobalDecl ct ->
            coq_def
              (Pp_symbol.to_string sym)
              P.empty
-             (pp_constructor "GlobalDecl" [ pp_sctype ct ])
+             (pp_constructor "GlobalDecl" [ pp_underscore; pp_sctype ct ])
            ^^ P.hardline)
        P.empty
        file.globs
