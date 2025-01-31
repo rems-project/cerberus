@@ -2529,7 +2529,8 @@ let cn_to_ail_resource_internal
   (preds : (Sym.t * Def.Predicate.t) list)
   loc
   =
-  let calculate_return_type = function
+  let calculate_resource_return_type (preds : (Sym.t * Def.Predicate.t) list) loc
+    = function
     | Request.Owned (sct, _) ->
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
@@ -2573,21 +2574,23 @@ let cn_to_ail_resource_internal
       in
       (ctype, pred_def'.oarg_bt)
   in
-  (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in *)
+  let generate_owned_fn_name sct =
+    let ct_str = str_of_ctype (Sctypes.to_ctype sct) in
+    let ct_str = String.concat "_" (String.split_on_char ' ' ct_str) in
+    "owned_" ^ ct_str
+  in
+  let enum_str = if is_pre then "GET" else "PUT" in
+  let enum_str = if not is_toplevel then "owned_enum" else enum_str in
+  let enum_sym = Sym.fresh_pretty enum_str in
   function
   | Request.P p ->
-    let ctype, bt = calculate_return_type p.name in
+    let ctype, bt = calculate_resource_return_type preds loc p.name in
     let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
-    let enum_str = if is_pre then "GET" else "PUT" in
-    let enum_str = if not is_toplevel then "owned_enum" else enum_str in
-    let enum_sym = Sym.fresh_pretty enum_str in
-    let rhs, bs, ss, _owned_ctype =
+    let rhs, bs, ss =
       match p.name with
       | Owned (sct, _) ->
         ownership_ctypes := Sctypes.to_ctype sct :: !ownership_ctypes;
-        let ct_str = str_of_ctype (Sctypes.to_ctype sct) in
-        let ct_str = String.concat "_" (String.split_on_char ' ' ct_str) in
-        let owned_fn_name = "owned_" ^ ct_str in
+        let owned_fn_name = generate_owned_fn_name sct in
         (* Hack with enum as sym *)
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
         let fn_call_it =
@@ -2598,7 +2601,7 @@ let cn_to_ail_resource_internal
         in
         let bs', ss', e' = cn_to_ail_expr_internal dts globals fn_call_it PassBack in
         let binding = create_binding sym (bt_to_ail_ctype bt) in
-        (e', binding :: bs', ss', Some (Sctypes.to_ctype sct))
+        (e', binding :: bs', ss')
       | PName pname ->
         let bs, ss, es =
           list_split_three
@@ -2610,10 +2613,7 @@ let cn_to_ail_resource_internal
               (mk_expr (AilEident pname), (e :: es) @ [ mk_expr (AilEident enum_sym) ]))
         in
         let binding = create_binding sym (bt_to_ail_ctype ~pred_sym:(Some pname) bt) in
-        ( mk_expr fcall,
-          binding :: List.concat bs,
-          List.concat ss (*@ error_msg_update_stats_*),
-          None )
+        (mk_expr fcall, binding :: List.concat bs, List.concat ss)
     in
     let s_decl =
       match rm_ctype ctype with
@@ -2647,7 +2647,7 @@ let cn_to_ail_resource_internal
     let b3, s3, _e3 = cn_to_ail_expr_internal dts globals q.step PassBack in
     let start_binding = create_binding i_sym cn_integer_ptr_ctype in
     let start_assign = A.(AilSdeclaration [ (i_sym, Some e_start) ]) in
-    let return_ctype, _return_bt = calculate_return_type q.name in
+    let return_ctype, _return_bt = calculate_resource_return_type preds loc q.name in
     (* Translation of q.pointer *)
     let i_it = IT.IT (IT.(Sym i_sym), i_bt, Cerb_location.unknown) in
     let step_binop =
@@ -2661,16 +2661,11 @@ let cn_to_ail_resource_internal
     let cn_pointer_return_type = bt_to_ail_ctype BT.(Loc ()) in
     let ptr_add_binding = create_binding ptr_add_sym cn_pointer_return_type in
     let ptr_add_stat = A.(AilSdeclaration [ (ptr_add_sym, Some e4) ]) in
-    let enum_str = if is_pre then "GET" else "PUT" in
-    let enum_str = if not is_toplevel then "owned_enum" else enum_str in
-    let enum_sym = Sym.fresh_pretty enum_str in
-    let rhs, bs, ss, _owned_ctype =
+    let rhs, bs, ss =
       match q.name with
       | Owned (sct, _) ->
         ownership_ctypes := Sctypes.to_ctype sct :: !ownership_ctypes;
-        let sct_str = str_of_ctype (Sctypes.to_ctype sct) in
-        let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
-        let owned_fn_name = "owned_" ^ sct_str in
+        let owned_fn_name = generate_owned_fn_name sct in
         let ptr_add_it = IT.(IT (Sym ptr_add_sym, BT.(Loc ()), Cerb_location.unknown)) in
         (* Hack with enum as sym *)
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
@@ -2681,7 +2676,7 @@ let cn_to_ail_resource_internal
               Cerb_location.unknown )
         in
         let bs', ss', e' = cn_to_ail_expr_internal dts globals fn_call_it PassBack in
-        (e', bs', ss', Some (Sctypes.to_ctype sct))
+        (e', bs', ss')
       | PName pname ->
         let bs, ss, es =
           list_split_three
@@ -2694,7 +2689,7 @@ let cn_to_ail_resource_internal
                 (mk_expr (AilEident ptr_add_sym) :: es) @ [ mk_expr (AilEident enum_sym) ]
               ))
         in
-        (mk_expr fcall, List.concat bs, List.concat ss (*@ error_msg_update_stats_*), None)
+        (mk_expr fcall, List.concat bs, List.concat ss)
     in
     let typedef_name = get_typedef_string (bt_to_ail_ctype i_bt) in
     let incr_func_name =
@@ -2912,8 +2907,12 @@ let cn_to_ail_function_internal
         Sym.equal cn_fun.cn_func_name fn_sym)
       cn_functions
   in
-  (* Unsafe - check if list has an element *)
-  let loc = (List.nth matched_cn_functions 0).cn_func_magic_loc in
+  let loc =
+    match matched_cn_functions with
+    | [] ->
+      failwith (__FUNCTION__ ^ ": No function found with name " ^ Sym.pp_string fn_sym)
+    | p :: _ -> p.cn_func_magic_loc
+  in
   (* Generating function declaration *)
   let decl =
     ( fn_sym,
@@ -2962,7 +2961,7 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
     let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
-    let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
+    let ss = upd_s @ s @ generate_cn_assert e @ pop_s in
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2, ss @ s2)
   | LAT.I it ->
@@ -3054,8 +3053,12 @@ let cn_to_ail_predicate_internal
         Sym.equal cn_pred.cn_pred_name pred_sym)
       cn_preds
   in
-  (* Unsafe - check if list has an element *)
-  let loc = (List.nth matched_cn_preds 0).cn_pred_magic_loc in
+  let loc =
+    match matched_cn_preds with
+    | [] ->
+      failwith (__FUNCTION__ ^ ": No predicate found with name " ^ Sym.pp_string pred_sym)
+    | p :: _ -> p.cn_pred_magic_loc
+  in
   (((loc, decl), def), ail_record_opt)
 
 
@@ -3385,6 +3388,8 @@ let cn_to_ail_pre_post_internal
     prepend_to_precondition ail_executable_spec ([], extra_stats_)
   | None -> empty_ail_executable_spec
 
+
+(* CN test generation *)
 
 let generate_assume_ownership_function ~without_ownership_checking ctype
   : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
