@@ -247,7 +247,7 @@ let main
   let ownership_function_defs, ownership_function_decls =
     generate_ownership_functions
       without_ownership_checking
-      Cn_internal_to_ail.ownership_ctypes
+      Cn_to_ail.ownership_ctypes
       sigm
   in
   let c_struct_defs, _c_struct_decls = print_c_structs sigm.tag_definitions in

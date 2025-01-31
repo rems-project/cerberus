@@ -70,7 +70,7 @@ let generate_c_pres_and_posts_internal
   in
   let globals = extract_global_variables prog5.globs in
   let ail_executable_spec =
-    Cn_internal_to_ail.cn_to_ail_pre_post_internal
+    Cn_to_ail.cn_to_ail_pre_post
       ~without_ownership_checking
       dts
       preds
@@ -167,7 +167,7 @@ let generate_c_assume_pres_internal
       | _ -> failwith ("unreachable @ " ^ __LOC__)
     in
     let globals = extract_global_variables prog5.globs in
-    Cn_internal_to_ail.cn_to_ail_assume_pre_internal
+    Cn_to_ail.cn_to_ail_assume_pre
       dts
       inst.fn
       args
@@ -250,8 +250,8 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
     match sigm.cn_datatypes with
     | [] -> []
     | d :: ds ->
-      let ail_dt1 = Cn_internal_to_ail.cn_to_ail_datatype ~first:true d in
-      let ail_dts = List.map Cn_internal_to_ail.cn_to_ail_datatype ds in
+      let ail_dt1 = Cn_to_ail.cn_to_ail_datatype ~first:true d in
+      let ail_dts = List.map Cn_to_ail.cn_to_ail_datatype ds in
       ail_dt1 :: ail_dts
   in
   let ail_datatype_decls =
@@ -270,7 +270,7 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   in
   (* Need to generate function prototype for corresponding equality function *)
   let datatype_equality_funs =
-    List.map Cn_internal_to_ail.generate_datatype_equality_function sigm.cn_datatypes
+    List.map Cn_to_ail.generate_datatype_equality_function sigm.cn_datatypes
   in
   let datatype_equality_funs = List.concat datatype_equality_funs in
   let dt_eq_decls, _ = List.split datatype_equality_funs in
@@ -293,9 +293,7 @@ let print_c_structs c_structs =
 
 
 let generate_cn_versions_of_structs c_structs =
-  let ail_structs =
-    List.concat (List.map Cn_internal_to_ail.cn_to_ail_struct c_structs)
-  in
+  let ail_structs = List.concat (List.map Cn_to_ail.cn_to_ail_struct c_structs) in
   let struct_decls = List.map generate_struct_decl_str ail_structs in
   ( "\n/* CN VERSIONS OF C STRUCTS */\n\n" ^ generate_str_from_ail_structs ail_structs,
     String.concat "" struct_decls )
@@ -310,12 +308,10 @@ let generate_struct_injs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
     | C.StructDef _ ->
       let c_struct_str = generate_str_from_ail_struct def in
       let cn_struct_str =
-        generate_str_from_ail_structs (Cn_internal_to_ail.cn_to_ail_struct def)
+        generate_str_from_ail_structs (Cn_to_ail.cn_to_ail_struct def)
       in
-      let xs = Cn_internal_to_ail.generate_struct_conversion_to_function def in
-      let ys =
-        Cn_internal_to_ail.generate_struct_equality_function sigm.cn_datatypes def
-      in
+      let xs = Cn_to_ail.generate_struct_conversion_to_function def in
+      let ys = Cn_to_ail.generate_struct_equality_function sigm.cn_datatypes def in
       let prototypes_str =
         match (xs, ys) with
         | ( ((sym1, (loc1, attrs1, conversion_decl)), _) :: _,
@@ -367,11 +363,7 @@ let generate_c_functions_internal
   =
   let ail_funs_and_records =
     List.map
-      (fun cn_f ->
-        Cn_internal_to_ail.cn_to_ail_function_internal
-          cn_f
-          sigm.cn_datatypes
-          sigm.cn_functions)
+      (fun cn_f -> Cn_to_ail.cn_to_ail_function cn_f sigm.cn_datatypes sigm.cn_functions)
       logical_predicates
   in
   let ail_funs, ail_records_opt = List.split ail_funs_and_records in
@@ -432,7 +424,7 @@ let generate_c_predicates_internal
   =
   (* TODO: Remove passing of resource_predicates argument twice - could use counter? *)
   let ail_funs, ail_records_opt =
-    Cn_internal_to_ail.cn_to_ail_predicates_internal
+    Cn_to_ail.cn_to_ail_predicates
       resource_predicates
       sigm.cn_datatypes
       []
@@ -485,9 +477,7 @@ let generate_ownership_functions
   let ail_funs =
     List.map
       (fun ctype ->
-        Cn_internal_to_ail.generate_get_or_put_ownership_function
-          ~without_ownership_checking
-          ctype)
+        Cn_to_ail.generate_get_or_put_ownership_function ~without_ownership_checking ctype)
       ctypes
   in
   let decls, defs = List.split ail_funs in
@@ -512,34 +502,30 @@ let generate_conversion_and_equality_functions
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   =
   let struct_conversion_funs =
-    List.map
-      Cn_internal_to_ail.generate_struct_conversion_to_function
-      sigm.tag_definitions
-    @ List.map
-        Cn_internal_to_ail.generate_struct_conversion_from_function
-        sigm.tag_definitions
+    List.map Cn_to_ail.generate_struct_conversion_to_function sigm.tag_definitions
+    @ List.map Cn_to_ail.generate_struct_conversion_from_function sigm.tag_definitions
   in
   let struct_equality_funs =
     List.map
-      (Cn_internal_to_ail.generate_struct_equality_function sigm.cn_datatypes)
+      (Cn_to_ail.generate_struct_equality_function sigm.cn_datatypes)
       sigm.tag_definitions
   in
   let datatype_equality_funs =
-    List.map Cn_internal_to_ail.generate_datatype_equality_function sigm.cn_datatypes
+    List.map Cn_to_ail.generate_datatype_equality_function sigm.cn_datatypes
   in
   let struct_map_get_funs =
-    List.map Cn_internal_to_ail.generate_struct_map_get sigm.tag_definitions
+    List.map Cn_to_ail.generate_struct_map_get sigm.tag_definitions
   in
   let struct_default_funs =
     List.map
-      (Cn_internal_to_ail.generate_struct_default_function sigm.cn_datatypes)
+      (Cn_to_ail.generate_struct_default_function sigm.cn_datatypes)
       sigm.tag_definitions
   in
   let datatype_map_get_funs =
-    List.map Cn_internal_to_ail.generate_datatype_map_get sigm.cn_datatypes
+    List.map Cn_to_ail.generate_datatype_map_get sigm.cn_datatypes
   in
   let datatype_default_funs =
-    List.map Cn_internal_to_ail.generate_datatype_default_function sigm.cn_datatypes
+    List.map Cn_to_ail.generate_datatype_default_function sigm.cn_datatypes
   in
   let ail_funs =
     List.fold_left

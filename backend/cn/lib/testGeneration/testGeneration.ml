@@ -3,7 +3,7 @@ module A = CF.AilSyntax
 module C = CF.Ctype
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
-module CtA = Fulminate.Cn_internal_to_ail
+module CtA = Fulminate.Cn_to_ail
 module ESpecInternal = Fulminate.Executable_spec_internal
 module FExtract = Fulminate.Executable_spec_extract
 module Config = TestGenConfig
@@ -47,7 +47,7 @@ let compile_assumes
             end)
           in
          !CtA.ownership_ctypes |> CtypeSet.of_list |> CtypeSet.to_seq |> List.of_seq)
-       @ CtA.cn_to_ail_assume_predicates_internal
+       @ CtA.cn_to_ail_assume_predicates
            prog5.resource_predicates
            sigma.cn_datatypes
            []

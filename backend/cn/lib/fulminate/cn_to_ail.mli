@@ -119,7 +119,7 @@ val generate_record_map_get
   :  Sym.t * 'a ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
-val cn_to_ail_expr
+val cn_to_ail_expr_toplevel
   :  A.sigma_cn_datatype list ->
   (C.union_tag * C.ctype) list ->
   Sym.t option ->
@@ -147,7 +147,7 @@ val cn_to_ail_records
   :  (MembersKey.t * A.ail_identifier) list ->
   A.sigma_tag_definition list
 
-val cn_to_ail_function_internal
+val cn_to_ail_function
   :  Sym.t * Definition.Function.t ->
   A.sigma_cn_datatype list ->
   A.sigma_cn_function list ->
@@ -155,7 +155,7 @@ val cn_to_ail_function_internal
   * CF.GenTypes.genTypeCategory A.sigma_function_definition option)
   * A.sigma_tag_definition option
 
-val cn_to_ail_predicates_internal
+val cn_to_ail_predicates
   :  (Sym.t * Definition.Predicate.t) list ->
   A.sigma_cn_datatype list ->
   (Sym.t * C.ctype) list ->
@@ -166,7 +166,7 @@ val cn_to_ail_predicates_internal
     list
   * A.sigma_tag_definition option list
 
-val cn_to_ail_pre_post_internal
+val cn_to_ail_pre_post
   :  without_ownership_checking:bool ->
   A.sigma_cn_datatype list ->
   (Sym.t * Definition.Predicate.t) list ->
@@ -175,14 +175,14 @@ val cn_to_ail_pre_post_internal
   Executable_spec_extract.fn_args_and_body option ->
   ail_executable_spec
 
-val cn_to_ail_assume_predicates_internal
+val cn_to_ail_assume_predicates
   :  (Sym.t * Definition.Predicate.t) list ->
   A.sigma_cn_datatype list ->
   (Sym.t * C.ctype) list ->
   (Sym.t * Definition.Predicate.t) list ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
-val cn_to_ail_assume_pre_internal
+val cn_to_ail_assume_pre
   :  A.sigma_cn_datatype list ->
   C.union_tag ->
   (C.union_tag * (BT.t * C.ctype)) list ->

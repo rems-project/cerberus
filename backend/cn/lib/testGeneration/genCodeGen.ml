@@ -1,7 +1,7 @@
 module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
-module CtA = Fulminate.Cn_internal_to_ail
+module CtA = Fulminate.Cn_to_ail
 module Utils = Fulminate.Executable_spec_utils
 module BT = BaseTypes
 module IT = IndexTerms
@@ -36,7 +36,7 @@ let _str_name_of_bt (pred_sym : Sym.t) (bt : BT.t) : string =
 
 
 let compile_it (sigma : CF.GenTypes.genTypeCategory A.sigma) (name : Sym.t) (it : IT.t) =
-  CtA.cn_to_ail_expr sigma.cn_datatypes [] (Some name) it
+  CtA.cn_to_ail_expr_toplevel sigma.cn_datatypes [] (Some name) it
 
 
 let compile_lc (sigma : CF.GenTypes.genTypeCategory A.sigma) (lc : LC.t) =
