@@ -268,11 +268,6 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
         (loc, CF.Pp_utils.to_plain_pretty_string (concat_map_newline ail_structs)))
       locs_and_structs
   in
-  (* let structs = List.map generate_doc_from_ail_struct ail_datatypes in *)
-  (* CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs) *)
-  (* let _ = List.map (fun (loc, _) -> Printf.printf "Datatype location: %s\n"
-     (Cerb_location.simple_location loc)) locs_and_struct_strs in *)
-
   (* Need to generate function prototype for corresponding equality function *)
   let datatype_equality_funs =
     List.map Cn_internal_to_ail.generate_datatype_equality_function sigm.cn_datatypes
@@ -409,10 +404,6 @@ let generate_c_functions_internal
     List.map (fun doc -> [ CF.Pp_utils.to_plain_pretty_string doc ]) inline_decl_docs
   in
   let locs_and_decls' = List.combine locs inline_decl_strs in
-  (* let modified_prog_2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with
-     declarations = decls; function_definitions = []} in *)
-  (* let doc_2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None,
-     modified_prog_2) in *)
   let ail_records =
     List.map
       (fun r -> match r with Some record -> [ record ] | None -> [])
@@ -420,7 +411,6 @@ let generate_c_functions_internal
   in
   let record_triple_str = generate_record_strs sigm (List.concat ail_records) in
   let funs_defs_str = CF.Pp_utils.to_plain_pretty_string doc_1 in
-  (* let funs_decls_str = CF.Pp_utils.to_plain_pretty_string doc_2 in *)
   ( funs_defs_str,
     "\n/* CN FUNCTIONS */\n\n" ^ decl_str,
     locs_and_decls',
@@ -440,9 +430,6 @@ let generate_c_predicates_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (resource_predicates : (Sym.t * Definition.Predicate.t) list)
   =
-  (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal
-     cn_f sigm.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates
-     in *)
   (* TODO: Remove passing of resource_predicates argument twice - could use counter? *)
   let ail_funs, ail_records_opt =
     Cn_internal_to_ail.cn_to_ail_predicates_internal

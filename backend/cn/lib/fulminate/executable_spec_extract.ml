@@ -56,35 +56,6 @@ let sym_subst (s_replace, bt, s_with) =
   IT.make_subst [ (s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown)) ]
 
 
-(*
-   let concat2 (x : 'a list * 'b list) (y : 'a list * 'b list) : 'a list * 'b list =
-  let a1, b1 = x in
-  let a2, b2 = y in
-  (a1 @ a2, b1 @ b2)
-
-
-let concat2_map (f : 'a -> 'b list * 'c list) (xs : 'a list) : 'b list * 'c list =
-  List.fold_right (fun x acc -> concat2 (f x) acc) xs ([], [])
-
-
-let rec stmts_in_expr (Mucore.Expr (loc, _, _, e_)) =
-  match e_ with
-  | Epure _ -> ([], [])
-  | Ememop _ -> ([], [])
-  | Eaction _ -> ([], [])
-  | Eskip -> ([], [])
-  | Eccall _ -> ([], [])
-  | Elet (_, _, e) -> stmts_in_expr e
-  | Eunseq es -> concat2_map stmts_in_expr es
-  | Ewseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | Esseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | Eif (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | Ebound e -> stmts_in_expr e
-  | End es -> concat2_map stmts_in_expr es
-  | Erun _ -> ([], [])
-  | CN_progs (stmts_s, stmts_i) -> ([ (loc, stmts_s) ], [ (loc, stmts_i) ])
-*)
-
 let rec stmts_in_expr (Mucore.Expr (loc, _, _, e_)) =
   match e_ with
   | Epure _ -> []

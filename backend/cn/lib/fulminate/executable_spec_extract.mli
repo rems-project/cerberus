@@ -13,9 +13,6 @@ type fn_args_and_body = (ReturnTypes.t * fn_body) ArgumentTypes.t
 
 type fn_largs_and_body = (ReturnTypes.t * fn_body) LogicalArgumentTypes.t
 
-(* type fn_spec_instrumentation = (ReturnTypes.t * statements) ArgumentTypes.t *)
-(* type fn_spec_instrumentation_lat = (ReturnTypes.t * statements) LogicalArgumentTypes.t *)
-
 val sym_subst
   :  Sym.t * BaseTypes.t * Sym.t ->
   [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t
