@@ -2907,12 +2907,22 @@ let cn_to_ail_function_internal
         Sym.equal cn_fun.cn_func_name fn_sym)
       cn_functions
   in
-  let loc =
+  let matched_cn_function =
     match matched_cn_functions with
     | [] ->
-      failwith (__FUNCTION__ ^ ": No function found with name " ^ Sym.pp_string fn_sym)
-    | p :: _ -> p.cn_func_magic_loc
+      Cerb_colour.with_colour
+        (fun () ->
+          print_endline
+            Pp.(
+              plain
+                (Pp.item
+                   "Function not found"
+                   (Sym.pp fn_sym ^^^ !^"at" ^^^ Locations.pp lf_def.loc))))
+        ();
+      exit 2
+    | p :: _ -> p
   in
+  let loc = matched_cn_function.cn_func_magic_loc in
   (* Generating function declaration *)
   let decl =
     ( fn_sym,
@@ -3053,12 +3063,22 @@ let cn_to_ail_predicate_internal
         Sym.equal cn_pred.cn_pred_name pred_sym)
       cn_preds
   in
-  let loc =
+  let matched_cn_pred =
     match matched_cn_preds with
     | [] ->
-      failwith (__FUNCTION__ ^ ": No predicate found with name " ^ Sym.pp_string pred_sym)
-    | p :: _ -> p.cn_pred_magic_loc
+      Cerb_colour.with_colour
+        (fun () ->
+          print_endline
+            Pp.(
+              plain
+                (Pp.item
+                   "Function not found"
+                   (Sym.pp pred_sym ^^^ !^"at" ^^^ Locations.pp rp_def.loc))))
+        ();
+      exit 2
+    | p :: _ -> p
   in
+  let loc = matched_cn_pred.cn_pred_magic_loc in
   (((loc, decl), def), ail_record_opt)
 
 
