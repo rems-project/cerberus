@@ -40,22 +40,29 @@ else
 fi
 
 FAILED=""
+TOTAL=$(echo "${SUCC}" | grep -c '^')
+CURRENT=1
+PASSED_COUNT=0
+FAILED_COUNT=0
 
 for TEST in ${SUCC}; do
     # Create temporary directory for this test run
     TMPDIR=$(mktemp -d /tmp/cn-verify.XXXXXX)
     # Create Coq export filename by replacing .c with .v
     COQ_EXPORT="${TEST%.c}.v"
+    printf "[%d/%d] %s:\n" "${CURRENT}" "${TOTAL}" "${TEST}"
+    
     if timeout 60 cn verify "${TEST}" --coq-export-file="${COQ_EXPORT}" > "${TMPDIR}/cn.log" 2>&1; then
-        printf "%s: CN verify \033[32mSUCCESS\033[0m\n" "${TEST}"
+        printf "  CN verify:    \033[32mSUCCESS\033[0m\n"
         
         # Copy Coq file to temp dir and try to compile it
         cp "${COQ_EXPORT}" "${TMPDIR}/"
         if (cd "${TMPDIR}" && coq_makefile -o Makefile "${COQ_EXPORT##*/}" && make) > "${TMPDIR}/coq.log" 2>&1; then
-            printf "%s: Coq compile \033[32mSUCCESS\033[0m\n" "${TEST}"
+            printf "  Coq compile:  \033[32mSUCCESS\033[0m\n"
             rm -rf "${TMPDIR}"
+            PASSED_COUNT=$((PASSED_COUNT + 1))
         else
-            printf "%s: Coq compile \033[31mFAIL\033[0m\n" "${TEST}"
+            printf "  Coq compile:  \033[31mFAIL\033[0m\n"
             printf "\nOutput from failed Coq compilation:\n"
             cat "${TMPDIR}/coq.log"
             printf "\n"
@@ -65,9 +72,10 @@ for TEST in ${SUCC}; do
             fi
             rm -rf "${TMPDIR}"
             FAILED+=" ${TEST}"
+            FAILED_COUNT=$((FAILED_COUNT + 1))
         fi
     else
-        printf "%s: CN verify \033[31mFAIL\033[0m\n" "${TEST}"
+        printf "  CN verify:    \033[31mFAIL\033[0m\n"
         printf "\nOutput from failed test:\n"
         cat "${TMPDIR}/cn.log"
         printf "\n"
@@ -77,11 +85,15 @@ for TEST in ${SUCC}; do
         fi
         rm -rf "${TMPDIR}"
         FAILED+=" ${TEST}"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
     fi
+    CURRENT=$((CURRENT + 1))
 done
 
 if [ -z "${FAILED}" ]; then
+    printf "\nAll %d tests passed!\n" "${TOTAL}"
     exit 0
 else
+    printf "\nOut of %d tests %d passed, %d tests failed\n" "${TOTAL}" "${PASSED_COUNT}" "${FAILED_COUNT}"
     exit 1
 fi 
