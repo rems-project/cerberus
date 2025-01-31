@@ -39,8 +39,8 @@ let rec cn_base_type_to_bt = function
   | CN_list typ -> cn_base_type_to_bt typ
   | CN_tuple ts -> BT.Tuple (List.map cn_base_type_to_bt ts)
   | CN_set typ -> cn_base_type_to_bt typ
-  | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
-  | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
+  | CN_user_type_name _ -> failwith (__LOC__ ^ ": TODO CN_user_type_name")
+  | CN_c_typedef_name _ -> failwith (__LOC__ ^ ": TODO CN_c_typedef_name")
 
 
 module MembersKey = struct
@@ -128,7 +128,7 @@ let generate_cn_pop_msg_info =
 
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
-let generate_cn_assert (*?(cn_source_loc_opt = None)*) ail_expr =
+let generate_cn_assert ail_expr =
   let assertion_expr_ = A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ ail_expr ])) in
   let assertion_stat = A.(AilSexpr (mk_expr assertion_expr_)) in
   [ assertion_stat ]
@@ -193,21 +193,31 @@ let lookup_records_map members =
 
 (* TODO: Complete *)
 let rec cn_to_ail_base_type ?pred_sym:(_ = None) cn_typ =
+  let typedef_string_opt =
+    match cn_typ with
+    | CN_bits (sign, size) -> Some ("cn_bits_" ^ str_of_cn_bitvector_type sign size)
+    | CN_integer -> Some "cn_integer"
+    | CN_bool -> Some "cn_bool"
+    | CN_map _ -> Some "cn_map"
+    | CN_loc -> Some "cn_pointer"
+    | CN_alloc_id -> Some "cn_alloc_id"
+    | _ -> None
+  in
+  let annots =
+    match typedef_string_opt with
+    | Some typedef_str -> [ CF.Annot.Atypedef (Sym.fresh_pretty typedef_str) ]
+    | None -> []
+  in
+  (* TODO: What is the optional second pair element for? Have just put None for now *)
   let generate_ail_array bt = C.(Array (cn_to_ail_base_type bt, None)) in
   let typ =
     match cn_typ with
+    (* C type for cases covered above doesn't matter as we pretty-print the typedef string provided above anyway. *)
+    (* Setting to C.(Integer Char) in these cases *)
+    | CN_bits _ | CN_integer | CN_bool | CN_map _ | CN_loc | CN_alloc_id ->
+      C.(Basic (Integer Char))
     | CN_unit -> C.Void
-    | CN_bool -> C.(Basic (Integer Bool))
-    | CN_integer -> C.(Basic (Integer (Signed Long)))
-    (* TODO: Discuss integers *)
-    | CN_bits (_sign, _size) -> C.(Basic (Integer (Signed Long)))
-    | CN_real -> failwith "TODO CN_real"
-    | CN_loc ->
-      C.(Pointer (empty_qualifiers, Ctype ([], Void)))
-      (* Casting all CN pointers to void star *)
-    | CN_alloc_id ->
-      C.(Basic (Integer (Signed Long)))
-      (* gets replaced with typedef anyway (TODO: clean up) *)
+    | CN_real -> failwith (__LOC__ ^ ": TODO CN_real")
     | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
     | CN_record members ->
       let sym =
@@ -217,33 +227,16 @@ let rec cn_to_ail_base_type ?pred_sym:(_ = None) cn_typ =
       Struct sym
     (* Every struct is converted into a struct pointer *)
     | CN_datatype sym -> Struct sym
-    | CN_map (_, cn_bt) -> generate_ail_array cn_bt
-    | CN_list bt ->
-      generate_ail_array bt
-      (* TODO: What is the optional second pair element for? Have just put None for now *)
-    | CN_tuple _ts -> failwith (__LOC__ ^ ":Tuples not yet supported")
+    | CN_list bt -> generate_ail_array bt
+    | CN_tuple _ts -> failwith (__LOC__ ^ ": Tuples not yet supported")
     | CN_set bt -> generate_ail_array bt
-    | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
-    | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
-  in
-  let annots =
-    match cn_typ with
-    | CN_bits (sign, size) ->
-      [ CF.Annot.Atypedef
-          (Sym.fresh_pretty ("cn_bits_" ^ str_of_cn_bitvector_type sign size))
-      ]
-    | CN_integer -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_integer") ]
-    | CN_bool -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_bool") ]
-    | CN_map _ -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_map") ]
-    | CN_loc -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer") ]
-    | CN_alloc_id -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_alloc_id") ]
-    | _ -> []
+    | CN_user_type_name _ -> failwith (__LOC__ ^ ": TODO CN_user_type_name")
+    | CN_c_typedef_name _ -> failwith (__LOC__ ^ ": TODO CN_c_typedef_name")
   in
   let ret = mk_ctype ~annots typ in
+  (* Make everything a pointer. TODO: Change *)
   match typ with C.Void -> ret | _ -> mk_ctype C.(Pointer (empty_qualifiers, ret))
 
-
-(* Make everything a pointer *)
 
 let bt_to_ail_ctype ?(pred_sym = None) t =
   cn_to_ail_base_type ~pred_sym (bt_to_cn_base_type t)
