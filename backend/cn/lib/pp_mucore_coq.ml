@@ -66,7 +66,6 @@ let pp_pmap
 
 let pp_bool b = if b then !^"true" else !^"false"
 
-
 (* Some user-defined names can clash with existing Coq identifiers so we need to quote them *)
 let quote_coq_name name = "_cn_" ^ name
 
@@ -431,8 +430,6 @@ let pp_linux_memory_order = function
 
 
 let pp_floating_value v = Impl_mem.pp_floating_value_for_coq v
-
-let pp_pointer_value v = Impl_mem.pp_pointer_value_for_coq v
 
 let pp_unit (_ : unit) = !^"tt"
 
@@ -1143,7 +1140,9 @@ and pp_object_value pp_type (OV (ty, ov)) =
        | OVfloating f ->
          pp_constructor "OVfloating" [ pp_underscore; pp_floating_value f ]
        | OVpointer p ->
-         pp_constructor "OVpointer" [ pp_underscore; pp_pointer_value pp_symbol p ]
+         pp_constructor
+           "OVpointer"
+           [ pp_underscore; Impl_mem.pp_pointer_value_for_coq pp_symbol p ]
        | OVarray vs ->
          pp_constructor "OVarray" [ pp_underscore; pp_list (pp_object_value pp_type) vs ]
        | OVstruct (sym, fields) ->
@@ -1397,14 +1396,19 @@ let pp_memop pp_type m =
     pp_constructor
       "MuCore.PtrMemberShift"
       [ pp_underscore; pp_triple pp_symbol pp_identifier pte e123 ]
-  | Memcpy e123 -> pp_constructor "MuCore.Memcpy" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Memcmp e123 -> pp_constructor "MuCore.Memcmp" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Realloc e123 -> pp_constructor "MuCore.Realloc" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Va_start e12 -> pp_constructor "MuCore.Va_start" [ pp_underscore; pp_pair pte pte e12 ]
+  | Memcpy e123 ->
+    pp_constructor "MuCore.Memcpy" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Memcmp e123 ->
+    pp_constructor "MuCore.Memcmp" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Realloc e123 ->
+    pp_constructor "MuCore.Realloc" [ pp_underscore; pp_triple pte pte pte e123 ]
+  | Va_start e12 ->
+    pp_constructor "MuCore.Va_start" [ pp_underscore; pp_pair pte pte e12 ]
   | Va_copy e -> pp_constructor "MuCore.Va_copy" [ pp_underscore; pte e ]
   | Va_arg e12 -> pp_constructor "MuCore.Va_arg" [ pp_underscore; pp_pair pte pp_act e12 ]
   | Va_end e -> pp_constructor "MuCore.Va_end" [ pp_underscore; pte e ]
-  | CopyAllocId e12 -> pp_constructor "MuCore.CopyAllocId" [ pp_underscore; pp_pair pte pte e12 ]
+  | CopyAllocId e12 ->
+    pp_constructor "MuCore.CopyAllocId" [ pp_underscore; pp_pair pte pte e12 ]
 
 
 let pp_pack_unpack = function
@@ -2214,7 +2218,9 @@ let pp_file pp_type pp_type_name file =
            coq_def
              (Pp_symbol.to_string sym)
              P.empty
-             (pp_constructor "GlobalDef" [ pp_underscore; pp_sctype ct; pp_expr pp_type e ])
+             (pp_constructor
+                "GlobalDef"
+                [ pp_underscore; pp_sctype ct; pp_expr pp_type e ])
            ^^ P.hardline
          | GlobalDecl ct ->
            coq_def
