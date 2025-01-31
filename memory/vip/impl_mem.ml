@@ -1166,6 +1166,7 @@ let pp_list_for_coq pp_elem xs =
         xs
   ^^^ !^"]"
 
+(* internal *)
 let pp_address_for_coq n = !^(N.to_string n)
 
 let pp_provenance_for_coq = function
@@ -1177,8 +1178,8 @@ let pp_location_for_coq (prov, addr) =
 
 let pp_integer_value_for_coq = function
   | IVloc loc -> 
-    !^"(IVloc" ^^^  pp_location_for_coq loc ^^ !^")"
-  | IVint n -> !^"(IVint" ^^^ (pp_address_for_coq n) ^^ !^")"
+    !^"(Mem.IVloc" ^^^  pp_location_for_coq loc ^^ !^")"
+  | IVint n -> !^"(Mem.IVint" ^^^ (pp_address_for_coq n) ^^ !^")"
 
 let pp_floating_value_for_coq (f:floating_value) = !^ (string_of_float f)
 
@@ -1190,21 +1191,21 @@ let pp_floating_value_for_coq (f:floating_value) = !^ (string_of_float f)
 
 let rec pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier = function
   | MVunspecified ct -> 
-    !^"(MVunspecified" ^^^ pp_ctype ct ^^ !^")"
+    !^"(Mem.MVunspecified" ^^^ pp_ctype ct ^^ !^")"
   | MVinteger (ity, ival) ->
-    !^"(MVinteger" ^^^ pp_pair_for_coq pp_integer_type pp_integer_value_for_coq (ity, ival) ^^ !^")"
+    !^"(Mem.MVinteger" ^^^ pp_pair_for_coq pp_integer_type pp_integer_value_for_coq (ity, ival) ^^ !^")"
   | MVfloating (fty, fval) ->
-    !^"(MVfloating" ^^^ pp_pair_for_coq pp_floating_type pp_floating_value_for_coq (fty, fval) ^^ !^")"
+    !^"(Mem.MVfloating" ^^^ pp_pair_for_coq pp_floating_type pp_floating_value_for_coq (fty, fval) ^^ !^")"
   | MVpointer (ct, pval) ->
-    !^"(MVpointer" ^^^ pp_pair_for_coq pp_ctype (pp_pointer_value_for_coq pp_symbol) (ct, pval) ^^ !^")"
+    !^"(Mem.MVpointer" ^^^ pp_pair_for_coq pp_ctype (pp_pointer_value_for_coq pp_symbol) (ct, pval) ^^ !^")"
   | MVarray vals ->
-    !^"(MVarray" ^^^ pp_list_for_coq (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) vals ^^ !^")"
+    !^"(Mem.MVarray" ^^^ pp_list_for_coq (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) vals ^^ !^")"
   | MVstruct (sym, fields) ->
-    !^"(MVstruct" ^^^ pp_symbol sym ^^^
+    !^"(Mem.MVstruct" ^^^ pp_symbol sym ^^^
     pp_list_for_coq (fun (id, ct, mv) -> 
       pp_triple_for_coq pp_identifier pp_ctype (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) (id, ct, mv)) fields ^^ !^")"
   | MVunion (sym, id, mv) ->
-    !^"(MVunion" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) mv ^^ !^")"
+    !^"(Mem.MVunion" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) mv ^^ !^")"
 
 (* Helper for triple printing *)
 and pp_triple p1 p2 p3 (a, b, c) = 
