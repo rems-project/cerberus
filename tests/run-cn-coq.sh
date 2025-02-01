@@ -48,16 +48,15 @@ FAILED_COUNT=0
 for TEST in ${SUCC}; do
     # Create temporary directory for this test run
     TMPDIR=$(mktemp -d /tmp/cn-verify.XXXXXX)
-    # Create Coq export filename by replacing .c with .v
-    COQ_EXPORT="${TEST%.c}.v"
+    # Create Coq export filename in TMPDIR by replacing .c with .v and taking basename
+    COQ_EXPORT="${TMPDIR}/$(basename "${TEST%.c}.v")"
     printf "[%d/%d] %s:\n" "${CURRENT}" "${TOTAL}" "${TEST}"
     
     if timeout 60 cn verify "${TEST}" --coq-export-file="${COQ_EXPORT}" > "${TMPDIR}/cn.log" 2>&1; then
         printf "  CN verify:    \033[32mSUCCESS\033[0m\n"
         
         # Copy Coq file to temp dir and try to compile it
-        cp "${COQ_EXPORT}" "${TMPDIR}/"
-        if (cd "${TMPDIR}" && coq_makefile -o Makefile "${COQ_EXPORT##*/}" && make) > "${TMPDIR}/coq.log" 2>&1; then
+        if (cd "${TMPDIR}" && coq_makefile -o Makefile "$(basename "${COQ_EXPORT}")" && make) > "${TMPDIR}/coq.log" 2>&1; then
             printf "  Coq compile:  \033[32mSUCCESS\033[0m\n"
             rm -rf "${TMPDIR}"
             PASSED_COUNT=$((PASSED_COUNT + 1))
