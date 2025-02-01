@@ -118,7 +118,7 @@ let pp_constructor0 name = pp_constructor name []
 let pp_constructor1 name args = pp_constructor name (pp_underscore :: args)
 
 (* Emits constrctor with implicit 1st and 2nd wildcard (underscore) arguments for 2 type parameters *)
-let pp_consturctor2 name args = pp_constructor1 name (pp_underscore :: args)
+let pp_constructor2 name args = pp_constructor1 name (pp_underscore :: args)
 
 let pp_option pp_elem = function
   | None -> pp_constructor0 "None"
@@ -822,24 +822,17 @@ let pp_core_iop = function
 
 let rec pp_pattern_ pp_type = function
   | CaseBase (sym_opt, bt) ->
-    pp_constructor
+    pp_constructor1
       "CaseBase"
-      [ pp_underscore; pp_tuple [ pp_option pp_symbol sym_opt; pp_core_base_type bt ] ]
+      [ pp_tuple [ pp_option pp_symbol sym_opt; pp_core_base_type bt ] ]
   | CaseCtor (ctor, pats) ->
-    pp_constructor
-      "CaseCtor"
-      [ pp_underscore; pp_ctor ctor; pp_list (pp_pattern pp_type) pats ]
+    pp_constructor1 "CaseCtor" [ pp_ctor ctor; pp_list (pp_pattern pp_type) pats ]
 
 
 and pp_pattern pp_type (Pattern (loc, annots, ty, pat)) =
-  pp_constructor
+  pp_constructor1
     "Pattern"
-    [ pp_underscore;
-      pp_location loc;
-      pp_list pp_annot_t annots;
-      pp_type ty;
-      pp_pattern_ pp_type pat
-    ]
+    [ pp_location loc; pp_list pp_annot_t annots; pp_type ty; pp_pattern_ pp_type pat ]
 
 
 let pp_mem_value v =
@@ -875,115 +868,87 @@ let rec pp_mem_constraint = function
 
 
 and pp_pexpr pp_type (Pexpr (loc, annots, ty, pe)) =
-  pp_constructor
+  pp_constructor1
     "Pexpr"
-    [ pp_underscore;
-      pp_location loc;
+    [ pp_location loc;
       pp_list pp_annot_t annots;
       pp_type ty;
       (match pe with
-       | PEsym s -> pp_constructor "PEsym" [ pp_underscore; pp_symbol s ]
-       | PEval v -> pp_constructor "PEval" [ pp_underscore; pp_value pp_type v ]
+       | PEsym s -> pp_constructor1 "PEsym" [ pp_symbol s ]
+       | PEval v -> pp_constructor1 "PEval" [ pp_value pp_type v ]
        | PEctor (c, es) ->
-         pp_constructor
-           "PEctor"
-           [ pp_underscore; pp_ctor c; pp_list (pp_pexpr pp_type) es ]
+         pp_constructor1 "PEctor" [ pp_ctor c; pp_list (pp_pexpr pp_type) es ]
        | PEop (op, e1, e2) ->
-         pp_constructor
+         pp_constructor1
            "PEop"
-           [ pp_underscore; pp_core_binop op; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+           [ pp_core_binop op; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
        | PEconstrained cs ->
-         pp_constructor
+         pp_constructor1
            "PEconstrained"
-           [ pp_underscore; pp_list (pp_pair pp_mem_constraint (pp_pexpr pp_type)) cs ]
+           [ pp_list (pp_pair pp_mem_constraint (pp_pexpr pp_type)) cs ]
        | PEbitwise_unop (op, e) ->
-         pp_constructor
-           "PEbitwise_unop"
-           [ pp_underscore; pp_bw_unop op; pp_pexpr pp_type e ]
+         pp_constructor1 "PEbitwise_unop" [ pp_bw_unop op; pp_pexpr pp_type e ]
        | PEbitwise_binop (op, e1, e2) ->
-         pp_constructor
+         pp_constructor1
            "PEbitwise_binop"
-           [ pp_underscore; pp_bw_binop op; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-       | Cfvfromint e -> pp_constructor "Cfvfromint" [ pp_underscore; pp_pexpr pp_type e ]
+           [ pp_bw_binop op; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+       | Cfvfromint e -> pp_constructor1 "Cfvfromint" [ pp_pexpr pp_type e ]
        | Civfromfloat (act, e) ->
-         pp_constructor "Civfromfloat" [ pp_underscore; pp_act act; pp_pexpr pp_type e ]
+         pp_constructor1 "Civfromfloat" [ pp_act act; pp_pexpr pp_type e ]
        | PEarray_shift (base, ct, idx) ->
-         pp_constructor
+         pp_constructor1
            "PEarray_shift"
-           [ pp_underscore; pp_pexpr pp_type base; pp_sctype ct; pp_pexpr pp_type idx ]
+           [ pp_pexpr pp_type base; pp_sctype ct; pp_pexpr pp_type idx ]
        | PEmember_shift (e, sym, id) ->
-         pp_constructor
+         pp_constructor1
            "PEmember_shift"
-           [ pp_underscore; pp_pexpr pp_type e; pp_symbol sym; pp_identifier id ]
-       | PEnot e -> pp_constructor "PEnot" [ pp_underscore; pp_pexpr pp_type e ]
+           [ pp_pexpr pp_type e; pp_symbol sym; pp_identifier id ]
+       | PEnot e -> pp_constructor1 "PEnot" [ pp_pexpr pp_type e ]
        | PEapply_fun (f, args) ->
-         pp_constructor
-           "PEapply_fun"
-           [ pp_underscore; pp_function f; pp_list (pp_pexpr pp_type) args ]
+         pp_constructor1 "PEapply_fun" [ pp_function f; pp_list (pp_pexpr pp_type) args ]
        | PEstruct (sym, fields) ->
-         pp_constructor
+         pp_constructor1
            "PEstruct"
-           [ pp_underscore;
-             pp_symbol sym;
-             pp_list (pp_pair pp_identifier (pp_pexpr pp_type)) fields
-           ]
+           [ pp_symbol sym; pp_list (pp_pair pp_identifier (pp_pexpr pp_type)) fields ]
        | PEunion (sym, id, e) ->
-         pp_constructor
-           "PEunion"
-           [ pp_underscore; pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
-       | PEcfunction e ->
-         pp_constructor "PEcfunction" [ pp_underscore; pp_pexpr pp_type e ]
+         pp_constructor1 "PEunion" [ pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
+       | PEcfunction e -> pp_constructor1 "PEcfunction" [ pp_pexpr pp_type e ]
        | PEmemberof (sym, id, e) ->
-         pp_constructor
+         pp_constructor1
            "PEmemberof"
-           [ pp_underscore; pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
-       | PEbool_to_integer e ->
-         pp_constructor "PEbool_to_integer" [ pp_underscore; pp_pexpr pp_type e ]
+           [ pp_symbol sym; pp_identifier id; pp_pexpr pp_type e ]
+       | PEbool_to_integer e -> pp_constructor1 "PEbool_to_integer" [ pp_pexpr pp_type e ]
        | PEconv_int (e1, e2) ->
-         pp_constructor
-           "PEconv_int"
-           [ pp_underscore; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+         pp_constructor1 "PEconv_int" [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
        | PEconv_loaded_int (e1, e2) ->
-         pp_constructor
-           "PEconv_loaded_int"
-           [ pp_underscore; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
-       | PEwrapI (act, e) ->
-         pp_constructor "PEwrapI" [ pp_underscore; pp_act act; pp_pexpr pp_type e ]
+         pp_constructor1 "PEconv_loaded_int" [ pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
+       | PEwrapI (act, e) -> pp_constructor1 "PEwrapI" [ pp_act act; pp_pexpr pp_type e ]
        | PEcatch_exceptional_condition (act, e) ->
-         pp_constructor
+         pp_constructor1
            "PEcatch_exceptional_condition"
-           [ pp_underscore; pp_act act; pp_pexpr pp_type e ]
+           [ pp_act act; pp_pexpr pp_type e ]
        | PEbounded_binop (kind, op, e1, e2) ->
-         pp_constructor
+         pp_constructor1
            "PEbounded_binop"
-           [ pp_underscore;
-             pp_bound_kind kind;
+           [ pp_bound_kind kind;
              pp_core_iop op;
              pp_pexpr pp_type e1;
              pp_pexpr pp_type e2
            ]
        | PEis_representable_integer (e, act) ->
-         pp_constructor
-           "PEis_representable_integer"
-           [ pp_underscore; pp_pexpr pp_type e; pp_act act ]
+         pp_constructor1 "PEis_representable_integer" [ pp_pexpr pp_type e; pp_act act ]
        | PEundef (loc, ub) ->
-         pp_constructor
-           "PEundef"
-           [ pp_underscore; pp_location loc; pp_undefined_behaviour ub ]
+         pp_constructor1 "PEundef" [ pp_location loc; pp_undefined_behaviour ub ]
        | PEerror (msg, e) ->
-         pp_constructor "PEerror" [ pp_underscore; pp_string msg; pp_pexpr pp_type e ]
+         pp_constructor1 "PEerror" [ pp_string msg; pp_pexpr pp_type e ]
        | PElet (pat, e1, e2) ->
-         pp_constructor
+         pp_constructor1
            "PElet"
-           [ pp_underscore;
-             pp_pattern pp_type pat;
-             pp_pexpr pp_type e1;
-             pp_pexpr pp_type e2
-           ]
+           [ pp_pattern pp_type pat; pp_pexpr pp_type e1; pp_pexpr pp_type e2 ]
        | PEif (c, t, e) ->
-         pp_constructor
+         pp_constructor1
            "PEif"
-           [ pp_underscore; pp_pexpr pp_type c; pp_pexpr pp_type t; pp_pexpr pp_type e ])
+           [ pp_pexpr pp_type c; pp_pexpr pp_type t; pp_pexpr pp_type e ])
     ]
 
 
@@ -1005,55 +970,42 @@ and pp_paction pp_type (Paction (pol, act)) =
 and pp_action_content pp_type act =
   match act with
   | Create (e, act, sym) ->
-    pp_constructor
-      "Create"
-      [ pp_underscore; pp_pexpr pp_type e; pp_act act; pp_symbol_prefix sym ]
+    pp_constructor1 "Create" [ pp_pexpr pp_type e; pp_act act; pp_symbol_prefix sym ]
   | CreateReadOnly (e1, act, e2, sym) ->
-    pp_constructor
+    pp_constructor1
       "CreateReadOnly"
-      [ pp_underscore;
-        pp_pexpr pp_type e1;
-        pp_act act;
-        pp_pexpr pp_type e2;
-        pp_symbol_prefix sym
-      ]
+      [ pp_pexpr pp_type e1; pp_act act; pp_pexpr pp_type e2; pp_symbol_prefix sym ]
   | Alloc (e1, e2, sym) ->
-    pp_constructor
+    pp_constructor1
       "Alloc"
-      [ pp_underscore; pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_symbol_prefix sym ]
-  | Kill (kind, e) ->
-    pp_constructor "Kill" [ pp_underscore; pp_kill_kind kind; pp_pexpr pp_type e ]
+      [ pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_symbol_prefix sym ]
+  | Kill (kind, e) -> pp_constructor1 "Kill" [ pp_kill_kind kind; pp_pexpr pp_type e ]
   | Store (b, act, e1, e2, mo) ->
-    pp_constructor
+    pp_constructor1
       "Store"
-      [ pp_underscore;
-        pp_bool b;
+      [ pp_bool b;
         pp_act act;
         pp_pexpr pp_type e1;
         pp_pexpr pp_type e2;
         pp_memory_order mo
       ]
   | Load (act, e, mo) ->
-    pp_constructor
-      "Load"
-      [ pp_underscore; pp_act act; pp_pexpr pp_type e; pp_memory_order mo ]
+    pp_constructor1 "Load" [ pp_act act; pp_pexpr pp_type e; pp_memory_order mo ]
   | RMW (act, e1, e2, e3, mo1, mo2) ->
-    pp_constructor
+    pp_constructor1
       "RMW"
-      [ pp_underscore;
-        pp_act act;
+      [ pp_act act;
         pp_pexpr pp_type e1;
         pp_pexpr pp_type e2;
         pp_pexpr pp_type e3;
         pp_memory_order mo1;
         pp_memory_order mo2
       ]
-  | Fence mo -> pp_constructor "Fence" [ pp_underscore; pp_memory_order mo ]
+  | Fence mo -> pp_constructor1 "Fence" [ pp_memory_order mo ]
   | CompareExchangeStrong (act, e1, e2, e3, mo1, mo2) ->
-    pp_constructor
+    pp_constructor1
       "CompareExchangeStrong"
-      [ pp_underscore;
-        pp_act act;
+      [ pp_act act;
         pp_pexpr pp_type e1;
         pp_pexpr pp_type e2;
         pp_pexpr pp_type e3;
@@ -1061,40 +1013,28 @@ and pp_action_content pp_type act =
         pp_memory_order mo2
       ]
   | CompareExchangeWeak (act, e1, e2, e3, mo1, mo2) ->
-    pp_constructor
+    pp_constructor1
       "CompareExchangeWeak"
-      [ pp_underscore;
-        pp_act act;
+      [ pp_act act;
         pp_pexpr pp_type e1;
         pp_pexpr pp_type e2;
         pp_pexpr pp_type e3;
         pp_memory_order mo1;
         pp_memory_order mo2
       ]
-  | LinuxFence lmo ->
-    pp_constructor "LinuxFence" [ pp_underscore; pp_linux_memory_order lmo ]
+  | LinuxFence lmo -> pp_constructor1 "LinuxFence" [ pp_linux_memory_order lmo ]
   | LinuxLoad (act, e, lmo) ->
-    pp_constructor
+    pp_constructor1
       "LinuxLoad"
       [ pp_act act; pp_pexpr pp_type e; pp_linux_memory_order lmo ]
   | LinuxStore (act, e1, e2, lmo) ->
-    pp_constructor
+    pp_constructor1
       "LinuxStore"
-      [ pp_underscore;
-        pp_act act;
-        pp_pexpr pp_type e1;
-        pp_pexpr pp_type e2;
-        pp_linux_memory_order lmo
-      ]
+      [ pp_act act; pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_linux_memory_order lmo ]
   | LinuxRMW (act, e1, e2, lmo) ->
-    pp_constructor
+    pp_constructor1
       "LinuxRMW"
-      [ pp_underscore;
-        pp_act act;
-        pp_pexpr pp_type e1;
-        pp_pexpr pp_type e2;
-        pp_linux_memory_order lmo
-      ]
+      [ pp_act act; pp_pexpr pp_type e1; pp_pexpr pp_type e2; pp_linux_memory_order lmo ]
 
 
 and pp_act { loc; annot; ct } =
@@ -1111,55 +1051,41 @@ and pp_kill_kind = function
 
 
 and pp_value pp_type (V (ty, v)) =
-  pp_constructor
+  pp_constructor1
     "V"
-    [ pp_underscore;
-      pp_type ty;
+    [ pp_type ty;
       (match v with
-       | Vobject ov ->
-         pp_constructor "Vobject" [ pp_underscore; pp_object_value pp_type ov ]
-       | Vctype t -> pp_constructor "Vctype" [ pp_underscore; pp_ctype t ]
-       | Vfunction_addr s ->
-         pp_constructor "Vfunction_addr" [ pp_underscore; pp_symbol s ]
-       | Vunit -> pp_constructor "Vunit" [ pp_underscore ]
-       | Vtrue -> pp_constructor "Vtrue" [ pp_underscore ]
-       | Vfalse -> pp_constructor "Vfalse" [ pp_underscore ]
+       | Vobject ov -> pp_constructor1 "Vobject" [ pp_object_value pp_type ov ]
+       | Vctype t -> pp_constructor1 "Vctype" [ pp_ctype t ]
+       | Vfunction_addr s -> pp_constructor1 "Vfunction_addr" [ pp_symbol s ]
+       | Vunit -> pp_constructor1 "Vunit" []
+       | Vtrue -> pp_constructor1 "Vtrue" []
+       | Vfalse -> pp_constructor1 "Vfalse" []
        | Vlist (bt, vs) ->
-         pp_constructor
-           "Vlist"
-           [ pp_underscore; pp_core_base_type bt; pp_list (pp_value pp_type) vs ]
-       | Vtuple vs ->
-         pp_constructor "Vtuple" [ pp_underscore; pp_list (pp_value pp_type) vs ])
+         pp_constructor1 "Vlist" [ pp_core_base_type bt; pp_list (pp_value pp_type) vs ]
+       | Vtuple vs -> pp_constructor1 "Vtuple" [ pp_list (pp_value pp_type) vs ])
     ]
 
 
 and pp_object_value pp_type (OV (ty, ov)) =
-  pp_constructor
+  pp_constructor1
     "OV"
-    [ pp_underscore;
-      pp_type ty;
+    [ pp_type ty;
       (match ov with
        | OVinteger i ->
-         pp_constructor "OVinteger" [ pp_underscore; Impl_mem.pp_integer_value_for_coq i ]
-       | OVfloating f ->
-         pp_constructor "OVfloating" [ pp_underscore; pp_floating_value f ]
+         pp_constructor1 "OVinteger" [ Impl_mem.pp_integer_value_for_coq i ]
+       | OVfloating f -> pp_constructor1 "OVfloating" [ pp_floating_value f ]
        | OVpointer p ->
-         pp_constructor
-           "OVpointer"
-           [ pp_underscore; Impl_mem.pp_pointer_value_for_coq pp_symbol p ]
-       | OVarray vs ->
-         pp_constructor "OVarray" [ pp_underscore; pp_list (pp_object_value pp_type) vs ]
+         pp_constructor1 "OVpointer" [ Impl_mem.pp_pointer_value_for_coq pp_symbol p ]
+       | OVarray vs -> pp_constructor1 "OVarray" [ pp_list (pp_object_value pp_type) vs ]
        | OVstruct (sym, fields) ->
-         pp_constructor
+         pp_constructor1
            "OVstruct"
-           [ pp_underscore;
-             pp_symbol sym;
+           [ pp_symbol sym;
              pp_list (pp_triple pp_identifier pp_sctype pp_mem_value) fields
            ]
        | OVunion (sym, id, v) ->
-         pp_constructor
-           "OVunion"
-           [ pp_underscore; pp_symbol sym; pp_identifier id; pp_mem_value v ])
+         pp_constructor1 "OVunion" [ pp_symbol sym; pp_identifier id; pp_mem_value v ])
     ]
 
 
@@ -1212,131 +1138,94 @@ let pp_const = function
 
 
 let rec pp_index_term (IndexTerms.IT (term, bt, loc)) =
-  pp_constructor
+  pp_constructor1
     "IT"
-    [ pp_underscore; pp_index_term_content term; pp_basetype pp_unit bt; pp_location loc ]
+    [ pp_index_term_content term; pp_basetype pp_unit bt; pp_location loc ]
 
 
 and pp_index_term_content = function
-  | IndexTerms.Const c -> pp_constructor "Const" [ pp_underscore; pp_const c ]
-  | Sym s -> pp_constructor "Sym" [ pp_underscore; pp_symbol s ]
-  | Unop (op, t) -> pp_constructor "Unop" [ pp_underscore; pp_unop op; pp_index_term t ]
+  | IndexTerms.Const c -> pp_constructor1 "Const" [ pp_const c ]
+  | Sym s -> pp_constructor1 "Sym" [ pp_symbol s ]
+  | Unop (op, t) -> pp_constructor1 "Unop" [ pp_unop op; pp_index_term t ]
   | Binop (op, t1, t2) ->
-    pp_constructor
-      "Binop"
-      [ pp_underscore; pp_binop op; pp_index_term t1; pp_index_term t2 ]
+    pp_constructor1 "Binop" [ pp_binop op; pp_index_term t1; pp_index_term t2 ]
   | ITE (c, t, e) ->
-    pp_constructor
-      "ITE"
-      [ pp_underscore; pp_index_term c; pp_index_term t; pp_index_term e ]
+    pp_constructor1 "ITE" [ pp_index_term c; pp_index_term t; pp_index_term e ]
   | EachI ((n1, (sym, bt), n2), t) ->
-    pp_constructor
+    pp_constructor1
       "EachI"
-      [ pp_underscore;
-        pp_tuple
+      [ pp_tuple
           [ pp_nat n1; pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt); pp_nat n2 ];
         pp_index_term t
       ]
-  | Tuple ts -> pp_constructor "Tuple" [ pp_underscore; pp_list pp_index_term ts ]
-  | NthTuple (n, t) ->
-    pp_constructor "NthTuple" [ pp_underscore; pp_nat n; pp_index_term t ]
+  | Tuple ts -> pp_constructor1 "Tuple" [ pp_list pp_index_term ts ]
+  | NthTuple (n, t) -> pp_constructor1 "NthTuple" [ pp_nat n; pp_index_term t ]
   | Struct (tag, members) ->
-    pp_constructor
+    pp_constructor1
       "Struct"
-      [ pp_underscore;
-        pp_symbol tag;
-        pp_list (pp_pair pp_identifier pp_index_term) members
-      ]
+      [ pp_symbol tag; pp_list (pp_pair pp_identifier pp_index_term) members ]
   | StructMember (t, member) ->
-    pp_constructor "StructMember" [ pp_underscore; pp_index_term t; pp_identifier member ]
+    pp_constructor1 "StructMember" [ pp_index_term t; pp_identifier member ]
   | StructUpdate ((t1, member), t2) ->
-    pp_constructor
+    pp_constructor1
       "StructUpdate"
-      [ pp_underscore;
-        pp_pair pp_index_term pp_identifier (t1, member);
-        pp_index_term t2
-      ]
+      [ pp_index_term t1; pp_identifier member; pp_index_term t2 ]
   | Record members ->
-    pp_constructor
-      "Record"
-      [ pp_underscore; pp_list (pp_pair pp_identifier pp_index_term) members ]
+    pp_constructor1 "Record" [ pp_list (pp_pair pp_identifier pp_index_term) members ]
   | RecordMember (t, member) ->
-    pp_constructor "RecordMember" [ pp_underscore; pp_index_term t; pp_identifier member ]
+    pp_constructor1 "RecordMember" [ pp_index_term t; pp_identifier member ]
   | RecordUpdate ((t1, member), t2) ->
-    pp_constructor
+    pp_constructor1
       "RecordUpdate"
-      [ pp_underscore;
-        pp_pair pp_index_term pp_identifier (t1, member);
-        pp_index_term t2
-      ]
+      [ pp_index_term t1; pp_identifier member; pp_index_term t2 ]
   | Constructor (sym, args) ->
-    pp_constructor
+    pp_constructor1
       "Constructor"
-      [ pp_underscore; pp_symbol sym; pp_list (pp_pair pp_identifier pp_index_term) args ]
+      [ pp_symbol sym; pp_list (pp_pair pp_identifier pp_index_term) args ]
   | MemberShift (t, tag, id) ->
-    pp_constructor
-      "MemberShift"
-      [ pp_underscore; pp_index_term t; pp_symbol tag; pp_identifier id ]
+    pp_constructor1 "MemberShift" [ pp_index_term t; pp_symbol tag; pp_identifier id ]
   | ArrayShift { base; ct; index } ->
-    pp_constructor
-      "ArrayShift"
-      [ pp_underscore; pp_index_term base; pp_sctype ct; pp_index_term index ]
+    pp_constructor1 "ArrayShift" [ pp_index_term base; pp_sctype ct; pp_index_term index ]
   | CopyAllocId { addr; loc } ->
-    pp_constructor "CopyAllocId" [ pp_underscore; pp_index_term addr; pp_index_term loc ]
-  | HasAllocId t -> pp_constructor "HasAllocId" [ pp_underscore; pp_index_term t ]
-  | SizeOf ct -> pp_constructor "SizeOf" [ pp_underscore; pp_sctype ct ]
+    pp_constructor1 "CopyAllocId" [ pp_index_term addr; pp_index_term loc ]
+  | HasAllocId t -> pp_constructor1 "HasAllocId" [ pp_index_term t ]
+  | SizeOf ct -> pp_constructor1 "SizeOf" [ pp_sctype ct ]
   | OffsetOf (tag, member) ->
-    pp_constructor "OffsetOf" [ pp_underscore; pp_symbol tag; pp_identifier member ]
-  | Nil bt -> pp_constructor "Nil" [ pp_underscore; pp_basetype pp_unit bt ]
-  | Cons (t1, t2) ->
-    pp_constructor "Cons" [ pp_underscore; pp_index_term t1; pp_index_term t2 ]
-  | Head t -> pp_constructor "Head" [ pp_underscore; pp_index_term t ]
-  | Tail t -> pp_constructor "Tail" [ pp_underscore; pp_index_term t ]
+    pp_constructor1 "OffsetOf" [ pp_symbol tag; pp_identifier member ]
+  | Nil bt -> pp_constructor1 "Nil" [ pp_basetype pp_unit bt ]
+  | Cons (t1, t2) -> pp_constructor1 "Cons" [ pp_index_term t1; pp_index_term t2 ]
+  | Head t -> pp_constructor1 "Head" [ pp_index_term t ]
+  | Tail t -> pp_constructor1 "Tail" [ pp_index_term t ]
   | NthList (i, xs, d) ->
-    pp_constructor
-      "NthList"
-      [ pp_underscore; pp_index_term i; pp_index_term xs; pp_index_term d ]
+    pp_constructor1 "NthList" [ pp_index_term i; pp_index_term xs; pp_index_term d ]
   | ArrayToList (arr, i, len) ->
-    pp_constructor
+    pp_constructor1
       "ArrayToList"
-      [ pp_underscore; pp_index_term arr; pp_index_term i; pp_index_term len ]
+      [ pp_index_term arr; pp_index_term i; pp_index_term len ]
   | Representable (ct, t) ->
-    pp_constructor "Representable" [ pp_underscore; pp_sctype ct; pp_index_term t ]
-  | Good (ct, t) -> pp_constructor "Good" [ pp_underscore; pp_sctype ct; pp_index_term t ]
+    pp_constructor1 "Representable" [ pp_sctype ct; pp_index_term t ]
+  | Good (ct, t) -> pp_constructor1 "Good" [ pp_sctype ct; pp_index_term t ]
   | Aligned { t; align } ->
-    pp_constructor "Aligned" [ pp_underscore; pp_index_term t; pp_index_term align ]
-  | WrapI (ct, t) ->
-    pp_constructor "WrapI" [ pp_underscore; pp_integer_type ct; pp_index_term t ]
+    pp_constructor1 "Aligned" [ pp_index_term t; pp_index_term align ]
+  | WrapI (ct, t) -> pp_constructor1 "WrapI" [ pp_integer_type ct; pp_index_term t ]
   | MapConst (bt, t) ->
-    pp_constructor "MapConst" [ pp_underscore; pp_basetype pp_unit bt; pp_index_term t ]
+    pp_constructor1 "MapConst" [ pp_basetype pp_unit bt; pp_index_term t ]
   | MapSet (m, k, v) ->
-    pp_constructor
-      "MapSet"
-      [ pp_underscore; pp_index_term m; pp_index_term k; pp_index_term v ]
-  | MapGet (m, k) ->
-    pp_constructor "MapGet" [ pp_underscore; pp_index_term m; pp_index_term k ]
+    pp_constructor1 "MapSet" [ pp_index_term m; pp_index_term k; pp_index_term v ]
+  | MapGet (m, k) -> pp_constructor1 "MapGet" [ pp_index_term m; pp_index_term k ]
   | MapDef ((sym, bt), t) ->
-    pp_constructor
+    pp_constructor1
       "MapDef"
-      [ pp_underscore;
-        pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt);
-        pp_index_term t
-      ]
+      [ pp_pair pp_symbol (pp_basetype pp_unit) (sym, bt); pp_index_term t ]
   | Apply (sym, args) ->
-    pp_constructor "Apply" [ pp_underscore; pp_symbol sym; pp_list pp_index_term args ]
+    pp_constructor1 "Apply" [ pp_symbol sym; pp_list pp_index_term args ]
   | Let ((sym, t1), t2) ->
-    pp_constructor
-      "TLet"
-      [ pp_underscore; pp_pair pp_symbol pp_index_term (sym, t1); pp_index_term t2 ]
+    pp_constructor1 "Let" [ pp_pair pp_symbol pp_index_term (sym, t1); pp_index_term t2 ]
   | Match (t, cases) ->
-    pp_constructor
+    pp_constructor1
       "Match"
-      [ pp_underscore;
-        pp_index_term t;
-        pp_list (pp_pair pp_terms_pattern pp_index_term) cases
-      ]
-  | Cast (bt, t) ->
-    pp_constructor "Cast" [ pp_underscore; pp_basetype pp_unit bt; pp_index_term t ]
+      [ pp_index_term t; pp_list (pp_pair pp_terms_pattern pp_index_term) cases ]
+  | Cast (bt, t) -> pp_constructor1 "Cast" [ pp_basetype pp_unit bt; pp_index_term t ]
 
 
 let pp_request_init = function
@@ -1378,41 +1267,29 @@ and pp_request_name = function
 let pp_memop pp_type m =
   let pte = pp_pexpr pp_type in
   match m with
-  | PtrEq e12 -> pp_constructor "MuCore.PtrEq" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrNe e12 -> pp_constructor "MuCore.PtrNe" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrLt e12 -> pp_constructor "MuCore.PtrLt" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrGt e12 -> pp_constructor "MuCore.PtrGt" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrLe e12 -> pp_constructor "MuCore.PtrLe" [ pp_underscore; pp_pair pte pte e12 ]
-  | PtrGe e12 -> pp_constructor "MuCore.PtrGe" [ pp_underscore; pp_pair pte pte e12 ]
-  | Ptrdiff e123 ->
-    pp_constructor "MuCore.Ptrdiff" [ pp_underscore; pp_triple pp_act pte pte e123 ]
-  | IntFromPtr e123 ->
-    pp_constructor "MuCore.IntFromPtr" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
-  | PtrFromInt e123 ->
-    pp_constructor "MuCore.PtrFromInt" [ pp_underscore; pp_triple pp_act pp_act pte e123 ]
-  | PtrValidForDeref e12 ->
-    pp_constructor "MuCore.PtrValidForDeref" [ pp_underscore; pp_pair pp_act pte e12 ]
-  | PtrWellAligned e12 ->
-    pp_constructor "MuCore.PtrWellAligned" [ pp_underscore; pp_pair pp_act pte e12 ]
+  | PtrEq e12 -> pp_constructor1 "PtrEq" [ pp_pair pte pte e12 ]
+  | PtrNe e12 -> pp_constructor1 "PtrNe" [ pp_pair pte pte e12 ]
+  | PtrLt e12 -> pp_constructor1 "PtrLt" [ pp_pair pte pte e12 ]
+  | PtrGt e12 -> pp_constructor1 "PtrGt" [ pp_pair pte pte e12 ]
+  | PtrLe e12 -> pp_constructor1 "PtrLe" [ pp_pair pte pte e12 ]
+  | PtrGe e12 -> pp_constructor1 "PtrGe" [ pp_pair pte pte e12 ]
+  | Ptrdiff e123 -> pp_constructor1 "Ptrdiff" [ pp_triple pp_act pte pte e123 ]
+  | IntFromPtr e123 -> pp_constructor1 "IntFromPtr" [ pp_triple pp_act pp_act pte e123 ]
+  | PtrFromInt e123 -> pp_constructor1 "PtrFromInt" [ pp_triple pp_act pp_act pte e123 ]
+  | PtrValidForDeref e12 -> pp_constructor1 "PtrValidForDeref" [ pp_pair pp_act pte e12 ]
+  | PtrWellAligned e12 -> pp_constructor1 "PtrWellAligned" [ pp_pair pp_act pte e12 ]
   | PtrArrayShift e123 ->
-    pp_constructor "MuCore.PtrArrayShift" [ pp_underscore; pp_triple pte pp_act pte e123 ]
+    pp_constructor1 "PtrArrayShift" [ pp_triple pte pp_act pte e123 ]
   | PtrMemberShift e123 ->
-    pp_constructor
-      "MuCore.PtrMemberShift"
-      [ pp_underscore; pp_triple pp_symbol pp_identifier pte e123 ]
-  | Memcpy e123 ->
-    pp_constructor "MuCore.Memcpy" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Memcmp e123 ->
-    pp_constructor "MuCore.Memcmp" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Realloc e123 ->
-    pp_constructor "MuCore.Realloc" [ pp_underscore; pp_triple pte pte pte e123 ]
-  | Va_start e12 ->
-    pp_constructor "MuCore.Va_start" [ pp_underscore; pp_pair pte pte e12 ]
-  | Va_copy e -> pp_constructor "MuCore.Va_copy" [ pp_underscore; pte e ]
-  | Va_arg e12 -> pp_constructor "MuCore.Va_arg" [ pp_underscore; pp_pair pte pp_act e12 ]
-  | Va_end e -> pp_constructor "MuCore.Va_end" [ pp_underscore; pte e ]
-  | CopyAllocId e12 ->
-    pp_constructor "MuCore.CopyAllocId" [ pp_underscore; pp_pair pte pte e12 ]
+    pp_constructor1 "PtrMemberShift" [ pp_triple pp_symbol pp_identifier pte e123 ]
+  | Memcpy e123 -> pp_constructor1 "Memcpy" [ pp_triple pte pte pte e123 ]
+  | Memcmp e123 -> pp_constructor1 "Memcmp" [ pp_triple pte pte pte e123 ]
+  | Realloc e123 -> pp_constructor1 "Realloc" [ pp_triple pte pte pte e123 ]
+  | Va_start e12 -> pp_constructor1 "Va_start" [ pp_pair pte pte e12 ]
+  | Va_copy e -> pp_constructor1 "Va_copy" [ pte e ]
+  | Va_arg e12 -> pp_constructor1 "Va_arg" [ pp_pair pte pp_act e12 ]
+  | Va_end e -> pp_constructor1 "Va_end" [ pte e ]
+  | CopyAllocId e12 -> pp_constructor1 "CopyAllocId" [ pp_pair pte pte e12 ]
 
 
 let pp_pack_unpack = function
@@ -1426,10 +1303,9 @@ let pp_to_from = function
 
 
 let pp_cn_to_instantiate ppfa ppfty = function
-  | CF.Cn.I_Function f ->
-    pp_constructor "I_Function" [ pp_underscore; pp_underscore; ppfa f ]
-  | CF.Cn.I_Good ty -> pp_constructor "I_Good" [ pp_underscore; pp_underscore; ppfty ty ]
-  | CF.Cn.I_Everything -> pp_constructor "I_Everything" [ pp_underscore; pp_underscore ]
+  | CF.Cn.I_Function f -> pp_constructor1 "I_Function" [ ppfa f ]
+  | CF.Cn.I_Good ty -> pp_constructor1 "I_Good" [ ppfty ty ]
+  | CF.Cn.I_Everything -> pp_constructor1 "I_Everything" []
 
 
 let pp_logical_constraint = function
@@ -1475,51 +1351,38 @@ and pp_logical_return_type = function
 
 let rec pp_logical_args ppf = function
   | Define (st, info, rest) ->
-    pp_constructor
-      "MuCore.Define"
-      [ pp_underscore;
-        pp_tuple
+    pp_constructor1
+      "Define"
+      [ pp_tuple
           [ pp_pair pp_symbol pp_index_term st;
             pp_location_info info;
             pp_logical_args ppf rest
           ]
       ]
   | Resource ((sym, rbt), info, rest) ->
-    pp_constructor
-      "MuCore.Resource"
-      [ pp_underscore;
-        pp_tuple
-          [ pp_symbol sym;
-            pp_pair pp_request (pp_basetype pp_unit) rbt;
-            pp_location_info info;
-            pp_logical_args ppf rest
-          ]
+    pp_constructor1
+      "Resource"
+      [ pp_symbol sym;
+        pp_pair pp_request (pp_basetype pp_unit) rbt;
+        pp_location_info info;
+        pp_logical_args ppf rest
       ]
   | Constraint (lc, info, rest) ->
-    pp_constructor
-      "MuCore.Constraint"
-      [ pp_underscore;
-        pp_triple
-          pp_logical_constraint
-          pp_location_info
-          (pp_logical_args ppf)
-          (lc, info, rest)
-      ]
-  | I i -> pp_constructor "MuCore.I" [ pp_underscore; ppf i ]
+    pp_constructor1
+      "Constraint"
+      [ pp_logical_constraint lc; pp_location_info info; pp_logical_args ppf rest ]
+  | I i -> pp_constructor1 "I" [ ppf i ]
 
 
 let rec pp_arguments ppf = function
-  | Mucore.Computational (sbt, loc, rest) ->
-    pp_constructor
-      "MuCore.Computational"
-      [ pp_underscore;
-        pp_tuple
-          [ pp_pair pp_symbol (pp_basetype pp_unit) sbt;
-            pp_location_info loc;
-            pp_arguments ppf rest
-          ]
+  | Computational (sbt, loc, rest) ->
+    pp_constructor1
+      "Computational"
+      [ pp_pair pp_symbol (pp_basetype pp_unit) sbt;
+        pp_location_info loc;
+        pp_arguments ppf rest
       ]
-  | L at -> pp_constructor "MuCore.L" [ pp_underscore; pp_logical_args ppf at ]
+  | L at -> pp_constructor1 "L" [ pp_logical_args ppf at ]
 
 
 let pp_cn_c_kind = function
@@ -1533,30 +1396,29 @@ let pp_cn_sign = function
 
 
 let rec pp_cn_basetype ppfa = function
-  | CF.Cn.CN_unit -> pp_constructor "CN_unit" [ pp_underscore ]
-  | CN_bool -> pp_constructor "CN_bool" [ pp_underscore ]
-  | CN_integer -> !^"(CN_integer" ^^^ pp_underscore ^^^ !^")"
+  | CF.Cn.CN_unit -> pp_constructor1 "CN_unit" []
+  | CN_bool -> pp_constructor1 "CN_bool" []
+  | CN_integer -> pp_constructor1 "CN_integer" []
   | CN_bits (sign, sz) ->
-    pp_constructor "CN_bits" [ pp_underscore; pp_pair pp_cn_sign pp_nat (sign, sz) ]
-  | CN_real -> pp_constructor "CN_real" [ pp_underscore ]
-  | CN_loc -> pp_constructor "CN_loc" [ pp_underscore ]
-  | CN_alloc_id -> pp_constructor "CN_alloc_id" [ pp_underscore ]
-  | CN_struct a -> pp_constructor "CN_struct" [ pp_underscore; ppfa a ]
+    pp_constructor1 "CN_bits" [ pp_pair pp_cn_sign pp_nat (sign, sz) ]
+  | CN_real -> pp_constructor1 "CN_real" []
+  | CN_loc -> pp_constructor1 "CN_loc" []
+  | CN_alloc_id -> pp_constructor1 "CN_alloc_id" []
+  | CN_struct a -> pp_constructor1 "CN_struct" [ ppfa a ]
   | CN_record fields ->
-    pp_constructor
+    pp_constructor1
       "CN_record"
-      [ pp_underscore; pp_list (pp_pair pp_identifier (pp_cn_basetype ppfa)) fields ]
-  | CN_datatype a -> pp_constructor "CN_datatype" [ pp_underscore; ppfa a ]
+      [ pp_list (pp_pair pp_identifier (pp_cn_basetype ppfa)) fields ]
+  | CN_datatype a -> pp_constructor1 "CN_datatype" [ ppfa a ]
   | CN_map (k, v) ->
-    pp_constructor
+    pp_constructor1
       "CN_map"
-      [ pp_underscore; pp_pair (pp_cn_basetype ppfa) (pp_cn_basetype ppfa) (k, v) ]
-  | CN_list t -> pp_constructor "CN_list" [ pp_underscore; pp_cn_basetype ppfa t ]
-  | CN_tuple ts ->
-    pp_constructor "CN_tuple" [ pp_underscore; pp_list (pp_cn_basetype ppfa) ts ]
-  | CN_set t -> pp_constructor "CN_set" [ pp_underscore; pp_cn_basetype ppfa t ]
-  | CN_user_type_name a -> pp_constructor "CN_user_type_name" [ pp_underscore; ppfa a ]
-  | CN_c_typedef_name a -> pp_constructor "CN_c_typedef_name" [ pp_underscore; ppfa a ]
+      [ pp_pair (pp_cn_basetype ppfa) (pp_cn_basetype ppfa) (k, v) ]
+  | CN_list t -> pp_constructor1 "CN_list" [ pp_cn_basetype ppfa t ]
+  | CN_tuple ts -> pp_constructor1 "CN_tuple" [ pp_list (pp_cn_basetype ppfa) ts ]
+  | CN_set t -> pp_constructor1 "CN_set" [ pp_cn_basetype ppfa t ]
+  | CN_user_type_name a -> pp_constructor1 "CN_user_type_name" [ ppfa a ]
+  | CN_c_typedef_name a -> pp_constructor1 "CN_c_typedef_name" [ ppfa a ]
 
 
 let pp_cn_const = function
@@ -1608,145 +1470,102 @@ let rec pp_cn_pat ppfa = function
 
 let rec pp_cn_expr ppfa ppfty = function
   | CF.Cn.CNExpr (loc, e) ->
-    pp_constructor
+    pp_constructor2
       "CNExpr"
-      [ pp_underscore;
-        pp_underscore;
-        pp_tuple
+      [ pp_tuple
           [ pp_location loc;
             (match e with
-             | CNExpr_const c ->
-               pp_constructor
-                 "CNExpr_const"
-                 [ pp_underscore; pp_underscore; pp_cn_const c ]
-             | CNExpr_var v ->
-               pp_constructor "CNExpr_var" [ pp_underscore; pp_underscore; ppfa v ]
+             | CNExpr_const c -> pp_constructor2 "CNExpr_const" [ pp_cn_const c ]
+             | CNExpr_var v -> pp_constructor2 "CNExpr_var" [ ppfa v ]
              | CNExpr_list es ->
-               pp_constructor
-                 "CNExpr_list"
-                 [ pp_underscore; pp_underscore; pp_list (pp_cn_expr ppfa ppfty) es ]
+               pp_constructor2 "CNExpr_list" [ pp_list (pp_cn_expr ppfa ppfty) es ]
              | CNExpr_memberof (e, id) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_memberof"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair (pp_cn_expr ppfa ppfty) pp_identifier (e, id)
-                 ]
+                 [ pp_pair (pp_cn_expr ppfa ppfty) pp_identifier (e, id) ]
              | CNExpr_arrow (e, id) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_arrow"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair (pp_cn_expr ppfa ppfty) pp_identifier (e, id)
-                 ]
+                 [ pp_pair (pp_cn_expr ppfa ppfty) pp_identifier (e, id) ]
              | CNExpr_record fs ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_record"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) fs
-                 ]
+                 [ pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)) fs ]
              | CNExpr_struct (id, fs) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_struct"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair
+                 [ pp_pair
                      ppfa
                      (pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)))
                      (id, fs)
                  ]
              | CNExpr_memberupdates (e, us) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_memberupdates"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair
+                 [ pp_pair
                      (pp_cn_expr ppfa ppfty)
                      (pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)))
                      (e, us)
                  ]
              | CNExpr_arrayindexupdates (e, us) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_arrayindexupdates"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair
+                 [ pp_pair
                      (pp_cn_expr ppfa ppfty)
                      (pp_list (pp_pair (pp_cn_expr ppfa ppfty) (pp_cn_expr ppfa ppfty)))
                      (e, us)
                  ]
              | CNExpr_binop (op, e1, e2) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_binop"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_triple
+                 [ pp_triple
                      pp_cn_binop
                      (pp_cn_expr ppfa ppfty)
                      (pp_cn_expr ppfa ppfty)
                      (op, e1, e2)
                  ]
-             | CNExpr_sizeof ty ->
-               pp_constructor "CNExpr_sizeof" [ pp_underscore; pp_underscore; ppfty ty ]
+             | CNExpr_sizeof ty -> pp_constructor2 "CNExpr_sizeof" [ ppfty ty ]
              | CNExpr_offsetof (a, id) ->
-               pp_constructor
-                 "CNExpr_offsetof"
-                 [ pp_underscore; pp_underscore; pp_pair ppfa pp_identifier (a, id) ]
+               pp_constructor2 "CNExpr_offsetof" [ pp_pair ppfa pp_identifier (a, id) ]
              | CNExpr_membershift (e, oa, id) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_membershift"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_triple
+                 [ pp_triple
                      (pp_cn_expr ppfa ppfty)
                      (pp_option ppfa)
                      pp_identifier
                      (e, oa, id)
                  ]
-             | CNExpr_addr a ->
-               pp_constructor "CNExpr_addr" [ pp_underscore; pp_underscore; ppfa a ]
+             | CNExpr_addr a -> pp_constructor2 "CNExpr_addr" [ ppfa a ]
              | CNExpr_cast (bt, e) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_cast"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair (pp_cn_basetype ppfa) (pp_cn_expr ppfa ppfty) (bt, e)
-                 ]
+                 [ pp_pair (pp_cn_basetype ppfa) (pp_cn_expr ppfa ppfty) (bt, e) ]
              | CNExpr_array_shift (e, ty, idx) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_array_shift"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_triple
+                 [ pp_triple
                      (pp_cn_expr ppfa ppfty)
                      (pp_option ppfty)
                      (pp_cn_expr ppfa ppfty)
                      (e, ty, idx)
                  ]
              | CNExpr_call (f, args) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_call"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair ppfa (pp_list (pp_cn_expr ppfa ppfty)) (f, args)
-                 ]
+                 [ pp_pair ppfa (pp_list (pp_cn_expr ppfa ppfty)) (f, args) ]
              | CNExpr_cons (id, e) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_cons"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair
+                 [ pp_pair
                      ppfa
                      (pp_list (pp_pair pp_identifier (pp_cn_expr ppfa ppfty)))
                      (id, e)
                  ]
              | CNExpr_each (a, bt, n12, e) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_each"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_tuple
+                 [ pp_tuple
                      [ ppfa a;
                        pp_cn_basetype ppfa bt;
                        pp_pair pp_Z pp_Z n12;
@@ -1754,99 +1573,69 @@ let rec pp_cn_expr ppfa ppfty = function
                      ]
                  ]
              | CNExpr_let (a, e1, e2) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_let"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_triple
+                 [ pp_triple
                      ppfa
                      (pp_cn_expr ppfa ppfty)
                      (pp_cn_expr ppfa ppfty)
                      (a, e1, e2)
                  ]
              | CNExpr_match (e, cases) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_match"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair
+                 [ pp_pair
                      (pp_cn_expr ppfa ppfty)
                      (pp_list (pp_pair (pp_cn_pat ppfa) (pp_cn_expr ppfa ppfty)))
                      (e, cases)
                  ]
              | CNExpr_ite (c, t, e) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_ite"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_triple
+                 [ pp_triple
                      (pp_cn_expr ppfa ppfty)
                      (pp_cn_expr ppfa ppfty)
                      (pp_cn_expr ppfa ppfty)
                      (c, t, e)
                  ]
              | CNExpr_good (ty, e) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_good"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair ppfty (pp_cn_expr ppfa ppfty) (ty, e)
-                 ]
+                 [ pp_pair ppfty (pp_cn_expr ppfa ppfty) (ty, e) ]
              | CNExpr_deref e ->
-               pp_constructor
-                 "CNExpr_deref"
-                 [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty e ]
+               pp_constructor2 "CNExpr_deref" [ pp_cn_expr ppfa ppfty e ]
              | CNExpr_value_of_c_atom (a, k) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_value_of_c_atom"
-                 [ pp_underscore; pp_underscore; pp_pair ppfa pp_cn_c_kind (a, k) ]
+                 [ pp_pair ppfa pp_cn_c_kind (a, k) ]
              | CNExpr_unchanged e ->
-               pp_constructor
-                 "CNExpr_unchanged"
-                 [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty e ]
+               pp_constructor2 "CNExpr_unchanged" [ pp_cn_expr ppfa ppfty e ]
              | CNExpr_at_env (e, s) ->
-               pp_constructor
+               pp_constructor2
                  "CNExpr_at_env"
-                 [ pp_underscore;
-                   pp_underscore;
-                   pp_pair (pp_cn_expr ppfa ppfty) pp_string (e, s)
-                 ]
-             | CNExpr_not e ->
-               pp_constructor
-                 "CNExpr_not"
-                 [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty e ]
+                 [ pp_pair (pp_cn_expr ppfa ppfty) pp_string (e, s) ]
+             | CNExpr_not e -> pp_constructor2 "CNExpr_not" [ pp_cn_expr ppfa ppfty e ]
              | CNExpr_negate e ->
-               pp_constructor
-                 "CNExpr_negate"
-                 [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty e ]
+               pp_constructor2 "CNExpr_negate" [ pp_cn_expr ppfa ppfty e ]
              | CNExpr_default bt ->
-               pp_constructor
-                 "CNExpr_default"
-                 [ pp_underscore; pp_underscore; pp_cn_basetype ppfa bt ]
-             | CNExpr_bnot e ->
-               pp_constructor
-                 "CNExpr_bnot"
-                 [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty e ])
+               pp_constructor2 "CNExpr_default" [ pp_cn_basetype ppfa bt ]
+             | CNExpr_bnot e -> pp_constructor "CNExpr_bnot" [ pp_cn_expr ppfa ppfty e ])
           ]
       ]
 
 
 let rec pp_cn_resource ppfa ppfty = function
   | CF.Cn.CN_pred (loc, pred, args) ->
-    pp_constructor
+    pp_constructor2
       "CN_pred"
-      [ pp_underscore;
-        pp_underscore;
-        pp_location loc;
+      [ pp_location loc;
         pp_cn_pred ppfa ppfty pred;
         pp_list (pp_cn_expr ppfa ppfty) args
       ]
   | CN_each (a, bt, e, loc, pred, args) ->
-    pp_constructor
+    pp_constructor2
       "CN_each"
-      [ pp_underscore;
-        pp_underscore;
-        ppfa a;
+      [ ppfa a;
         pp_cn_basetype ppfa bt;
         pp_cn_expr ppfa ppfty e;
         pp_location loc;
@@ -1856,30 +1645,22 @@ let rec pp_cn_resource ppfa ppfty = function
 
 
 and pp_cn_pred ppfa ppfty = function
-  | CF.Cn.CN_owned ty ->
-    pp_constructor "CN_owned" [ pp_underscore; pp_underscore; pp_option ppfty ty ]
-  | CN_block ty ->
-    pp_constructor "CN_block" [ pp_underscore; pp_underscore; pp_option ppfty ty ]
-  | CN_named a -> pp_constructor "CN_named" [ pp_underscore; pp_underscore; ppfa a ]
+  | CF.Cn.CN_owned ty -> pp_constructor2 "CN_owned" [ pp_option ppfty ty ]
+  | CN_block ty -> pp_constructor2 "CN_block" [ pp_option ppfty ty ]
+  | CN_named a -> pp_constructor2 "CN_named" [ ppfa a ]
 
 
 let pp_cn_to_extract ppfa ppfty = function
-  | CF.Cn.E_Pred pred ->
-    pp_constructor "E_Pred" [ pp_underscore; pp_underscore; pp_cn_pred ppfa ppfty pred ]
-  | CF.Cn.E_Everything -> pp_constructor "E_Everything" [ pp_underscore; pp_underscore ]
+  | CF.Cn.E_Pred pred -> pp_constructor2 "E_Pred" [ pp_cn_pred ppfa ppfty pred ]
+  | CF.Cn.E_Everything -> pp_constructor2 "E_Everything" []
 
 
 let pp_cn_assertion ppfa ppfty = function
-  | CF.Cn.CN_assert_exp ex ->
-    pp_constructor
-      "CN_assert_exp"
-      [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty ex ]
+  | CF.Cn.CN_assert_exp ex -> pp_constructor2 "CN_assert_exp" [ pp_cn_expr ppfa ppfty ex ]
   | CN_assert_qexp (sym, bt, it1, it2) ->
-    pp_constructor
+    pp_constructor2
       "CN_assert_qexp"
-      [ pp_underscore;
-        pp_underscore;
-        ppfa sym;
+      [ ppfa sym;
         pp_cn_basetype ppfa bt;
         pp_cn_expr ppfa ppfty it1;
         pp_cn_expr ppfa ppfty it2
@@ -1888,31 +1669,13 @@ let pp_cn_assertion ppfa ppfty = function
 
 let pp_cn_condition ppfa ppfty = function
   | CF.Cn.CN_cletResource (loc, sym, res) ->
-    pp_constructor
+    pp_constructor2
       "CN_cletResource"
-      [ pp_underscore;
-        pp_underscore;
-        pp_location loc;
-        ppfa sym;
-        pp_cn_resource ppfa ppfty res
-      ]
+      [ pp_location loc; ppfa sym; pp_cn_resource ppfa ppfty res ]
   | CN_cletExpr (loc, sym, ex) ->
-    pp_constructor
-      "CN_cletExpr"
-      [ pp_underscore;
-        pp_underscore;
-        pp_location loc;
-        ppfa sym;
-        pp_cn_expr ppfa ppfty ex
-      ]
+    pp_constructor2 "CN_cletExpr" [ pp_location loc; ppfa sym; pp_cn_expr ppfa ppfty ex ]
   | CN_cconstr (loc, assertion) ->
-    pp_constructor
-      "CN_cconstr"
-      [ pp_underscore;
-        pp_underscore;
-        pp_location loc;
-        pp_cn_assertion ppfa ppfty assertion
-      ]
+    pp_constructor2 "CN_cconstr" [ pp_location loc; pp_cn_assertion ppfa ppfty assertion ]
 
 
 let pp_cnprogs_extract (ids, extract, term) =
@@ -1959,148 +1722,110 @@ let rec pp_cn_prog = function
 
 
 let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
-  pp_constructor
+  pp_constructor2
     "CN_statement"
-    [ pp_underscore;
-      pp_underscore;
-      pp_location loc;
+    [ pp_location loc;
       (match stmt with
        | CN_pack_unpack (pu, pred, exprs) ->
-         pp_constructor
+         pp_constructor2
            "CN_pack_unpack"
-           [ pp_underscore;
-             pp_underscore;
-             pp_tuple
+           [ pp_tuple
                [ pp_pack_unpack pu;
                  pp_cn_pred ppfa ppfty pred;
                  pp_list (pp_cn_expr ppfa ppfty) exprs
                ]
            ]
        | CN_to_from_bytes (tf, pred, exprs) ->
-         pp_constructor
+         pp_constructor2
            "CN_to_from_bytes"
-           [ pp_underscore;
-             pp_underscore;
-             pp_tuple
+           [ pp_tuple
                [ pp_to_from tf;
                  pp_cn_pred ppfa ppfty pred;
                  pp_list (pp_cn_expr ppfa ppfty) exprs
                ]
            ]
        | CN_have assertion ->
-         pp_constructor
-           "CN_have"
-           [ pp_underscore; pp_underscore; pp_cn_assertion ppfa ppfty assertion ]
+         pp_constructor2 "CN_have" [ pp_cn_assertion ppfa ppfty assertion ]
        | CN_instantiate (inst, expr) ->
-         pp_constructor
+         pp_constructor2
            "CN_instantiate"
-           [ pp_underscore;
-             pp_underscore;
-             pp_tuple [ pp_cn_to_instantiate ppfa ppfty inst; pp_cn_expr ppfa ppfty expr ]
+           [ pp_tuple [ pp_cn_to_instantiate ppfa ppfty inst; pp_cn_expr ppfa ppfty expr ]
            ]
        | CN_split_case assertion ->
-         pp_constructor
-           "CN_split_case"
-           [ pp_underscore; pp_underscore; pp_cn_assertion ppfa ppfty assertion ]
+         pp_constructor2 "CN_split_case" [ pp_cn_assertion ppfa ppfty assertion ]
        | CN_extract (ids, extract, expr) ->
-         pp_constructor
+         pp_constructor2
            "CN_extract"
-           [ pp_underscore;
-             pp_underscore;
-             pp_tuple
+           [ pp_tuple
                [ pp_list pp_identifier ids;
                  pp_cn_to_extract ppfa ppfty extract;
                  pp_cn_expr ppfa ppfty expr
                ]
            ]
        | CN_unfold (sym, exprs) ->
-         pp_constructor
+         pp_constructor2
            "CN_unfold"
-           [ pp_underscore;
-             pp_underscore;
-             pp_tuple [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ]
-           ]
+           [ pp_tuple [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ] ]
        | CN_assert_stmt assertion ->
-         pp_constructor
-           "CN_assert_stmt"
-           [ pp_underscore; pp_underscore; pp_cn_assertion ppfa ppfty assertion ]
+         pp_constructor2 "CN_assert_stmt" [ pp_cn_assertion ppfa ppfty assertion ]
        | CN_apply (sym, exprs) ->
-         pp_constructor
+         pp_constructor2
            "CN_apply"
-           [ pp_underscore;
-             pp_underscore;
-             pp_tuple [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ]
-           ]
-       | CN_inline syms ->
-         pp_constructor "CN_inline" [ pp_underscore; pp_underscore; pp_list ppfa syms ]
-       | CN_print expr ->
-         pp_constructor
-           "CN_print"
-           [ pp_underscore; pp_underscore; pp_cn_expr ppfa ppfty expr ])
+           [ pp_tuple [ ppfa sym; pp_list (pp_cn_expr ppfa ppfty) exprs ] ]
+       | CN_inline syms -> pp_constructor2 "CN_inline" [ pp_list ppfa syms ]
+       | CN_print expr -> pp_constructor2 "CN_print" [ pp_cn_expr ppfa ppfty expr ])
     ]
 
 
 and pp_expr pp_type = function
   | Expr (loc, annots, ty, e) ->
-    pp_constructor
+    pp_constructor2
       "Expr"
-      [ pp_underscore;
-        pp_location loc;
+      [ pp_location loc;
         pp_list pp_annot_t annots;
         pp_type ty;
         (match e with
-         | Epure pe -> pp_constructor "Epure" [ pp_underscore; pp_pexpr pp_type pe ]
-         | Ememop m -> pp_constructor "Ememop" [ pp_underscore; pp_memop pp_type m ]
-         | Eaction pa -> pp_constructor "Eaction" [ pp_underscore; pp_paction pp_type pa ]
-         | Eskip -> pp_constructor "Eskip" [ pp_underscore ]
+         | Epure pe -> pp_constructor1 "Epure" [ pp_pexpr pp_type pe ]
+         | Ememop m -> pp_constructor1 "Ememop" [ pp_memop pp_type m ]
+         | Eaction pa -> pp_constructor1 "Eaction" [ pp_paction pp_type pa ]
+         | Eskip -> pp_constructor1 "Eskip" []
          | Eccall (act, f, args) ->
-           pp_constructor
+           pp_constructor1
              "Eccall"
-             [ pp_underscore;
-               pp_tuple
+             [ pp_tuple
                  [ pp_act act; pp_pexpr pp_type f; pp_list (pp_pexpr pp_type) args ]
              ]
          | Elet (pat, e1, e2) ->
-           pp_constructor
+           pp_constructor1
              "Elet"
-             [ pp_underscore;
-               pp_tuple
+             [ pp_tuple
                  [ pp_pattern pp_type pat; pp_pexpr pp_type e1; pp_expr pp_type e2 ]
              ]
-         | Eunseq exprs ->
-           pp_constructor "Eunseq" [ pp_underscore; pp_list (pp_expr pp_type) exprs ]
+         | Eunseq exprs -> pp_constructor1 "Eunseq" [ pp_list (pp_expr pp_type) exprs ]
          | Ewseq (pat, e1, e2) ->
-           pp_constructor
+           pp_constructor1
              "Ewseq"
-             [ pp_underscore;
-               pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
+             [ pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
              ]
          | Esseq (pat, e1, e2) ->
-           pp_constructor
+           pp_constructor1
              "Esseq"
-             [ pp_underscore;
-               pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
+             [ pp_tuple [ pp_pattern pp_type pat; pp_expr pp_type e1; pp_expr pp_type e2 ]
              ]
          | Eif (c, t, e) ->
-           pp_constructor
+           pp_constructor1
              "Eif"
-             [ pp_underscore;
-               pp_tuple [ pp_pexpr pp_type c; pp_expr pp_type t; pp_expr pp_type e ]
-             ]
-         | Ebound e -> pp_constructor "Ebound" [ pp_underscore; pp_expr pp_type e ]
-         | End exprs ->
-           pp_constructor "End" [ pp_underscore; pp_list (pp_expr pp_type) exprs ]
+             [ pp_tuple [ pp_pexpr pp_type c; pp_expr pp_type t; pp_expr pp_type e ] ]
+         | Ebound e -> pp_constructor1 "Ebound" [ pp_expr pp_type e ]
+         | End exprs -> pp_constructor1 "End" [ pp_list (pp_expr pp_type) exprs ]
          | Erun (sym, args) ->
-           pp_constructor
+           pp_constructor1
              "Erun"
-             [ pp_underscore;
-               pp_tuple [ pp_symbol sym; pp_list (pp_pexpr pp_type) args ]
-             ]
+             [ pp_tuple [ pp_symbol sym; pp_list (pp_pexpr pp_type) args ] ]
          | CN_progs (stmts, progs) ->
-           pp_constructor
+           pp_constructor1
              "CN_progs"
-             [ pp_underscore;
-               pp_tuple
+             [ pp_tuple
                  [ pp_list (pp_cn_statement pp_symbol pp_ctype) stmts;
                    pp_list pp_cn_prog progs
                  ]
@@ -2113,12 +1838,11 @@ let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
 
 
 let pp_label_def pp_type = function
-  | Return loc -> pp_constructor "Return" [ pp_underscore; pp_location loc ]
+  | Return loc -> pp_constructor1 "Return" [ pp_location loc ]
   | Label (loc, args, annots, spec, `Loop loop_locs) ->
-    pp_constructor
+    pp_constructor1
       "Label"
-      [ pp_underscore;
-        pp_location loc;
+      [ pp_location loc;
         pp_arguments (pp_expr pp_type) args;
         pp_list pp_annot_t annots;
         pp_parse_ast_label_spec spec;
@@ -2145,29 +1869,25 @@ let pp_desugared_spec { accesses; requires; ensures } =
 
 
 let rec pp_logical_argument_types pp_type = function
-  | LogicalArgumentTypes.I i ->
-    pp_constructor "LogicalArgumentTypes.I" [ pp_underscore; pp_type i ]
+  | LogicalArgumentTypes.I i -> pp_constructor1 "LogicalArgumentTypes.I" [ pp_type i ]
   | Resource ((sym, (req, bt)), info, at) ->
-    pp_constructor
+    pp_constructor1
       "LogicalArgumentTypes.Resource"
-      [ pp_underscore;
-        pp_tuple [ pp_symbol sym; pp_tuple [ pp_request req; pp_basetype pp_unit bt ] ];
+      [ pp_tuple [ pp_symbol sym; pp_tuple [ pp_request req; pp_basetype pp_unit bt ] ];
         pp_location_info info;
         pp_logical_argument_types pp_type at
       ]
   | Constraint (lc, info, at) ->
-    pp_constructor
+    pp_constructor1
       "LogicalArgumentTypes.Constraint"
-      [ pp_underscore;
-        pp_logical_constraint lc;
+      [ pp_logical_constraint lc;
         pp_location_info info;
         pp_logical_argument_types pp_type at
       ]
   | LogicalArgumentTypes.Define (si, info, at) ->
-    pp_constructor
+    pp_constructor1
       "LogicalArgumentTypes.Define"
-      [ pp_underscore;
-        pp_pair pp_symbol pp_index_term si;
+      [ pp_pair pp_symbol pp_index_term si;
         pp_location_info info;
         pp_logical_argument_types pp_type at
       ]
@@ -2175,17 +1895,13 @@ let rec pp_logical_argument_types pp_type = function
 
 let rec pp_argument_types pp_type = function
   | ArgumentTypes.Computational (sbt, info, at) ->
-    pp_constructor
+    pp_constructor1
       "ArgumentTypes.Computational"
-      [ pp_underscore;
-        pp_pair pp_symbol (pp_basetype pp_unit) sbt;
+      [ pp_pair pp_symbol (pp_basetype pp_unit) sbt;
         pp_location_info info;
         pp_argument_types pp_type at
       ]
-  | L at ->
-    pp_constructor
-      "ArgumentTypes.L"
-      [ pp_underscore; pp_logical_argument_types pp_type at ]
+  | L at -> pp_constructor1 "ArgumentTypes.L" [ pp_logical_argument_types pp_type at ]
 
 
 let coq_prologue =
@@ -2222,15 +1938,13 @@ let pp_file pp_type pp_type_name file =
            coq_def
              (Pp_symbol.to_string sym)
              P.empty
-             (pp_constructor
-                "GlobalDef"
-                [ pp_underscore; pp_sctype ct; pp_expr pp_type e ])
+             (pp_constructor1 "GlobalDef" [ pp_sctype ct; pp_expr pp_type e ])
            ^^ P.hardline
          | GlobalDecl ct ->
            coq_def
              (Pp_symbol.to_string sym)
              P.empty
-             (pp_constructor "GlobalDecl" [ pp_underscore; pp_sctype ct ])
+             (pp_constructor1 "GlobalDecl" [ pp_sctype ct ])
            ^^ P.hardline)
        P.empty
        file.globs
