@@ -111,20 +111,29 @@ let pp_constructor name args =
        ^^ !^")")
 
 
+(* Emits constrctor without arguments *)
+let pp_constructor0 name = pp_constructor name []
+
+(* Emits constrctor with implicit 1st wildcard (underscore) argument for type parameter *)
+let pp_constructor1 name args = pp_constructor name (pp_underscore :: args)
+
+(* Emits constrctor with implicit 1st and 2nd wildcard (underscore) arguments for 2 type parameters *)
+let pp_consturctor2 name args = pp_constructor1 name (pp_underscore :: args)
+
 let pp_option pp_elem = function
-  | None -> pp_constructor "None" []
+  | None -> pp_constructor0 "None"
   | Some x -> pp_constructor "Some" [ pp_elem x ]
 
 
 let pp_undefined_behaviour = function
   | Undefined.DUMMY str -> pp_constructor "DUMMY" [ pp_string str ]
-  | Undefined.UB_unspecified_lvalue -> pp_constructor "UB_unspecified_lvalue" []
+  | Undefined.UB_unspecified_lvalue -> pp_constructor0 "UB_unspecified_lvalue"
   | Undefined.UB_std_omission om ->
     pp_constructor
       "UB_std_omission"
       [ (match om with
-         | UB_OMIT_memcpy_non_object -> pp_constructor "UB_OMIT_memcpy_non_object" []
-         | UB_OMIT_memcpy_out_of_bound -> pp_constructor "UB_OMIT_memcpy_out_of_bound" [])
+         | UB_OMIT_memcpy_non_object -> pp_constructor0 "UB_OMIT_memcpy_non_object"
+         | UB_OMIT_memcpy_out_of_bound -> pp_constructor0 "UB_OMIT_memcpy_out_of_bound")
       ]
   | Undefined.Invalid_format str -> pp_constructor "Invalid_format" [ pp_string str ]
   | Undefined.UB_CERB004_unspecified ctx ->
@@ -132,299 +141,296 @@ let pp_undefined_behaviour = function
       "UB_CERB004_unspecified"
       [ (match ctx with
          | UB_unspec_equality_ptr_vs_NULL ->
-           pp_constructor "UB_unspec_equality_ptr_vs_NULL" []
+           pp_constructor0 "UB_unspec_equality_ptr_vs_NULL"
          | UB_unspec_equality_both_arith_or_ptr ->
-           pp_constructor "UB_unspec_equality_both_arith_or_ptr" []
-         | UB_unspec_pointer_add -> pp_constructor "UB_unspec_pointer_add" []
-         | UB_unspec_pointer_sub -> pp_constructor "UB_unspec_pointer_sub" []
-         | UB_unspec_conditional -> pp_constructor "UB_unspec_conditional" []
-         | UB_unspec_copy_alloc_id -> pp_constructor "UB_unspec_copy_alloc_id" []
-         | UB_unspec_rvalue_memberof -> pp_constructor "UB_unspec_rvalue_memberof" []
-         | UB_unspec_memberofptr -> pp_constructor "UB_unspec_memberofptr" []
-         | UB_unspec_do -> pp_constructor "UB_unspec_do" [])
+           pp_constructor0 "UB_unspec_equality_both_arith_or_ptr"
+         | UB_unspec_pointer_add -> pp_constructor0 "UB_unspec_pointer_add"
+         | UB_unspec_pointer_sub -> pp_constructor0 "UB_unspec_pointer_sub"
+         | UB_unspec_conditional -> pp_constructor0 "UB_unspec_conditional"
+         | UB_unspec_copy_alloc_id -> pp_constructor0 "UB_unspec_copy_alloc_id"
+         | UB_unspec_rvalue_memberof -> pp_constructor0 "UB_unspec_rvalue_memberof"
+         | UB_unspec_memberofptr -> pp_constructor0 "UB_unspec_memberofptr"
+         | UB_unspec_do -> pp_constructor0 "UB_unspec_do")
       ]
-  | Undefined.UB_CERB005_free_nullptr -> pp_constructor "UB_CERB005_free_nullptr" []
-  | UB001 -> pp_constructor "UB001" []
-  | UB002 -> pp_constructor "UB002" []
-  | UB003 -> pp_constructor "UB003" []
+  | Undefined.UB_CERB005_free_nullptr -> pp_constructor0 "UB_CERB005_free_nullptr"
+  | UB001 -> pp_constructor0 "UB001"
+  | UB002 -> pp_constructor0 "UB002"
+  | UB003 -> pp_constructor0 "UB003"
   | UB004a_incorrect_main_return_type ->
-    pp_constructor "UB004a_incorrect_main_return_type" []
-  | UB004b_incorrect_main_argument1 -> pp_constructor "UB004b_incorrect_main_argument1" []
-  | UB004c_incorrect_main_argument2 -> pp_constructor "UB004c_incorrect_main_argument2" []
-  | UB004d_main_not_function -> pp_constructor "UB004d_main_not_function" []
-  | UB005_data_race -> pp_constructor "UB005_data_race" []
-  | UB006 -> pp_constructor "UB006" []
-  | UB007 -> pp_constructor "UB007" []
-  | UB008_multiple_linkage -> pp_constructor "UB008_multiple_linkage" []
-  | UB009_outside_lifetime -> pp_constructor "UB009_outside_lifetime" []
-  | UB010_pointer_to_dead_object -> pp_constructor "UB010_pointer_to_dead_object" []
+    pp_constructor0 "UB004a_incorrect_main_return_type"
+  | UB004b_incorrect_main_argument1 -> pp_constructor0 "UB004b_incorrect_main_argument1"
+  | UB004c_incorrect_main_argument2 -> pp_constructor0 "UB004c_incorrect_main_argument2"
+  | UB004d_main_not_function -> pp_constructor0 "UB004d_main_not_function"
+  | UB005_data_race -> pp_constructor0 "UB005_data_race"
+  | UB006 -> pp_constructor0 "UB006"
+  | UB007 -> pp_constructor0 "UB007"
+  | UB008_multiple_linkage -> pp_constructor0 "UB008_multiple_linkage"
+  | UB009_outside_lifetime -> pp_constructor0 "UB009_outside_lifetime"
+  | UB010_pointer_to_dead_object -> pp_constructor0 "UB010_pointer_to_dead_object"
   | UB011_use_indeterminate_automatic_object ->
-    pp_constructor "UB011_use_indeterminate_automatic_object" []
-  | UB_modifying_temporary_lifetime -> pp_constructor "UB_modifying_temporary_lifetime" []
+    pp_constructor0 "UB011_use_indeterminate_automatic_object"
+  | UB_modifying_temporary_lifetime -> pp_constructor0 "UB_modifying_temporary_lifetime"
   | UB012_lvalue_read_trap_representation ->
-    pp_constructor "UB012_lvalue_read_trap_representation" []
+    pp_constructor0 "UB012_lvalue_read_trap_representation"
   | UB013_lvalue_side_effect_trap_representation ->
-    pp_constructor "UB013_lvalue_side_effect_trap_representation" []
-  | UB014_unsupported_negative_zero -> pp_constructor "UB014_unsupported_negative_zero" []
-  | UB015_incompatible_redeclaration ->
-    pp_constructor "UB015_incompatible_redeclaration" []
-  | UB016 -> pp_constructor "UB016" []
+    pp_constructor0 "UB013_lvalue_side_effect_trap_representation"
+  | UB014_unsupported_negative_zero -> pp_constructor0 "UB014_unsupported_negative_zero"
+  | UB015_incompatible_redeclaration -> pp_constructor0 "UB015_incompatible_redeclaration"
+  | UB016 -> pp_constructor0 "UB016"
   | UB017_out_of_range_floating_integer_conversion ->
-    pp_constructor "UB017_out_of_range_floating_integer_conversion" []
-  | UB018 -> pp_constructor "UB018" []
-  | UB019_lvalue_not_an_object -> pp_constructor "UB019_lvalue_not_an_object" []
+    pp_constructor0 "UB017_out_of_range_floating_integer_conversion"
+  | UB018 -> pp_constructor0 "UB018"
+  | UB019_lvalue_not_an_object -> pp_constructor0 "UB019_lvalue_not_an_object"
   | UB020_nonarray_incomplete_lvalue_conversion ->
-    pp_constructor "UB020_nonarray_incomplete_lvalue_conversion" []
-  | UB021 -> pp_constructor "UB021" []
-  | UB022_register_array_decay -> pp_constructor "UB022_register_array_decay" []
-  | UB023 -> pp_constructor "UB023" []
+    pp_constructor0 "UB020_nonarray_incomplete_lvalue_conversion"
+  | UB021 -> pp_constructor0 "UB021"
+  | UB022_register_array_decay -> pp_constructor0 "UB022_register_array_decay"
+  | UB023 -> pp_constructor0 "UB023"
   | UB024_out_of_range_pointer_to_integer_conversion ->
-    pp_constructor "UB024_out_of_range_pointer_to_integer_conversion" []
+    pp_constructor0 "UB024_out_of_range_pointer_to_integer_conversion"
   | UB025_misaligned_pointer_conversion ->
-    pp_constructor "UB025_misaligned_pointer_conversion" []
-  | UB026 -> pp_constructor "UB026" []
-  | UB027 -> pp_constructor "UB027" []
-  | UB028 -> pp_constructor "UB028" []
-  | UB029 -> pp_constructor "UB029" []
-  | UB030 -> pp_constructor "UB030" []
-  | UB031 -> pp_constructor "UB031" []
-  | UB032 -> pp_constructor "UB032" []
-  | UB033_modifying_string_literal -> pp_constructor "UB033_modifying_string_literal" []
-  | UB034 -> pp_constructor "UB034" []
-  | UB035_unsequenced_race -> pp_constructor "UB035_unsequenced_race" []
-  | UB036_exceptional_condition -> pp_constructor "UB036_exceptional_condition" []
-  | UB037_illtyped_load -> pp_constructor "UB037_illtyped_load" []
-  | UB038_number_of_args -> pp_constructor "UB038_number_of_args" []
-  | UB039 -> pp_constructor "UB039" []
-  | UB040 -> pp_constructor "UB040" []
-  | UB041_function_not_compatible -> pp_constructor "UB041_function_not_compatible" []
+    pp_constructor0 "UB025_misaligned_pointer_conversion"
+  | UB026 -> pp_constructor0 "UB026"
+  | UB027 -> pp_constructor0 "UB027"
+  | UB028 -> pp_constructor0 "UB028"
+  | UB029 -> pp_constructor0 "UB029"
+  | UB030 -> pp_constructor0 "UB030"
+  | UB031 -> pp_constructor0 "UB031"
+  | UB032 -> pp_constructor0 "UB032"
+  | UB033_modifying_string_literal -> pp_constructor0 "UB033_modifying_string_literal"
+  | UB034 -> pp_constructor0 "UB034"
+  | UB035_unsequenced_race -> pp_constructor0 "UB035_unsequenced_race"
+  | UB036_exceptional_condition -> pp_constructor0 "UB036_exceptional_condition"
+  | UB037_illtyped_load -> pp_constructor0 "UB037_illtyped_load"
+  | UB038_number_of_args -> pp_constructor0 "UB038_number_of_args"
+  | UB039 -> pp_constructor0 "UB039"
+  | UB040 -> pp_constructor0 "UB040"
+  | UB041_function_not_compatible -> pp_constructor0 "UB041_function_not_compatible"
   | UB042_access_atomic_structUnion_member ->
-    pp_constructor "UB042_access_atomic_structUnion_member" []
-  | UB043_indirection_invalid_value -> pp_constructor "UB043_indirection_invalid_value" []
-  | UB044 -> pp_constructor "UB044" []
-  | UB045a_division_by_zero -> pp_constructor "UB045a_division_by_zero" []
-  | UB045b_modulo_by_zero -> pp_constructor "UB045b_modulo_by_zero" []
+    pp_constructor0 "UB042_access_atomic_structUnion_member"
+  | UB043_indirection_invalid_value -> pp_constructor0 "UB043_indirection_invalid_value"
+  | UB044 -> pp_constructor0 "UB044"
+  | UB045a_division_by_zero -> pp_constructor0 "UB045a_division_by_zero"
+  | UB045b_modulo_by_zero -> pp_constructor0 "UB045b_modulo_by_zero"
   | UB045c_quotient_not_representable ->
-    pp_constructor "UB045c_quotient_not_representable" []
-  | UB046_array_pointer_outside -> pp_constructor "UB046_array_pointer_outside" []
+    pp_constructor0 "UB045c_quotient_not_representable"
+  | UB046_array_pointer_outside -> pp_constructor0 "UB046_array_pointer_outside"
   | UB047a_array_pointer_addition_beyond_indirection ->
-    pp_constructor "UB047a_array_pointer_addition_beyond_indirection" []
+    pp_constructor0 "UB047a_array_pointer_addition_beyond_indirection"
   | UB047b_array_pointer_subtraction_beyond_indirection ->
-    pp_constructor "UB047b_array_pointer_subtraction_beyond_indirection" []
+    pp_constructor0 "UB047b_array_pointer_subtraction_beyond_indirection"
   | UB048_disjoint_array_pointers_subtraction ->
-    pp_constructor "UB048_disjoint_array_pointers_subtraction" []
-  | UB049 -> pp_constructor "UB049" []
+    pp_constructor0 "UB048_disjoint_array_pointers_subtraction"
+  | UB049 -> pp_constructor0 "UB049"
   | UB050_pointers_subtraction_not_representable ->
-    pp_constructor "UB050_pointers_subtraction_not_representable" []
-  | UB051a_negative_shift -> pp_constructor "UB051a_negative_shift" []
-  | UB51b_shift_too_large -> pp_constructor "UB51b_shift_too_large" []
-  | UB052a_negative_left_shift -> pp_constructor "UB052a_negative_left_shift" []
+    pp_constructor0 "UB050_pointers_subtraction_not_representable"
+  | UB051a_negative_shift -> pp_constructor0 "UB051a_negative_shift"
+  | UB51b_shift_too_large -> pp_constructor0 "UB51b_shift_too_large"
+  | UB052a_negative_left_shift -> pp_constructor0 "UB052a_negative_left_shift"
   | UB052b_non_representable_left_shift ->
-    pp_constructor "UB052b_non_representable_left_shift" []
+    pp_constructor0 "UB052b_non_representable_left_shift"
   | UB053_distinct_aggregate_union_pointer_comparison ->
-    pp_constructor "UB053_distinct_aggregate_union_pointer_comparison" []
+    pp_constructor0 "UB053_distinct_aggregate_union_pointer_comparison"
   | UB054a_inexactly_overlapping_assignment ->
-    pp_constructor "UB054a_inexactly_overlapping_assignment" []
+    pp_constructor0 "UB054a_inexactly_overlapping_assignment"
   | UB054b_incompatible_overlapping_assignment ->
-    pp_constructor "UB054b_incompatible_overlapping_assignment" []
+    pp_constructor0 "UB054b_incompatible_overlapping_assignment"
   | UB055_invalid_integer_constant_expression ->
-    pp_constructor "UB055_invalid_integer_constant_expression" []
-  | UB056 -> pp_constructor "UB056" []
-  | UB057 -> pp_constructor "UB057" []
-  | UB058 -> pp_constructor "UB058" []
+    pp_constructor0 "UB055_invalid_integer_constant_expression"
+  | UB056 -> pp_constructor0 "UB056"
+  | UB057 -> pp_constructor0 "UB057"
+  | UB058 -> pp_constructor0 "UB058"
   | UB059_incomplete_no_linkage_identifier ->
-    pp_constructor "UB059_incomplete_no_linkage_identifier" []
+    pp_constructor0 "UB059_incomplete_no_linkage_identifier"
   | UB060_block_scope_function_with_storage_class ->
-    pp_constructor "UB060_block_scope_function_with_storage_class" []
-  | UB061_no_named_members -> pp_constructor "UB061_no_named_members" []
-  | UB062 -> pp_constructor "UB062" []
-  | UB063 -> pp_constructor "UB063" []
-  | UB064_modifying_const -> pp_constructor "UB064_modifying_const" []
-  | UB065 -> pp_constructor "UB065" []
+    pp_constructor0 "UB060_block_scope_function_with_storage_class"
+  | UB061_no_named_members -> pp_constructor0 "UB061_no_named_members"
+  | UB062 -> pp_constructor0 "UB062"
+  | UB063 -> pp_constructor0 "UB063"
+  | UB064_modifying_const -> pp_constructor0 "UB064_modifying_const"
+  | UB065 -> pp_constructor0 "UB065"
   | UB066_qualified_function_specification ->
-    pp_constructor "UB066_qualified_function_specification" []
-  | UB067 -> pp_constructor "UB067" []
-  | UB068 -> pp_constructor "UB068" []
-  | UB069 -> pp_constructor "UB069" []
-  | UB070_inline_not_defined -> pp_constructor "UB070_inline_not_defined" []
-  | UB071_noreturn -> pp_constructor "UB071_noreturn" []
+    pp_constructor0 "UB066_qualified_function_specification"
+  | UB067 -> pp_constructor0 "UB067"
+  | UB068 -> pp_constructor0 "UB068"
+  | UB069 -> pp_constructor0 "UB069"
+  | UB070_inline_not_defined -> pp_constructor0 "UB070_inline_not_defined"
+  | UB071_noreturn -> pp_constructor0 "UB071_noreturn"
   | UB072_incompatible_alignment_specifiers ->
-    pp_constructor "UB072_incompatible_alignment_specifiers" []
-  | UB073 -> pp_constructor "UB073" []
-  | UB074 -> pp_constructor "UB074" []
-  | UB075 -> pp_constructor "UB075" []
-  | UB076 -> pp_constructor "UB076" []
-  | UB077 -> pp_constructor "UB077" []
-  | UB078_modified_void_parameter -> pp_constructor "UB078_modified_void_parameter" []
-  | UB079 -> pp_constructor "UB079" []
-  | UB080 -> pp_constructor "UB080" []
+    pp_constructor0 "UB072_incompatible_alignment_specifiers"
+  | UB073 -> pp_constructor0 "UB073"
+  | UB074 -> pp_constructor0 "UB074"
+  | UB075 -> pp_constructor0 "UB075"
+  | UB076 -> pp_constructor0 "UB076"
+  | UB077 -> pp_constructor0 "UB077"
+  | UB078_modified_void_parameter -> pp_constructor0 "UB078_modified_void_parameter"
+  | UB079 -> pp_constructor0 "UB079"
+  | UB080 -> pp_constructor0 "UB080"
   | UB081_scalar_initializer_not_single_expression ->
-    pp_constructor "UB081_scalar_initializer_not_single_expression" []
-  | UB082 -> pp_constructor "UB082" []
-  | UB083 -> pp_constructor "UB083" []
-  | UB084 -> pp_constructor "UB084" []
-  | UB085 -> pp_constructor "UB085" []
+    pp_constructor0 "UB081_scalar_initializer_not_single_expression"
+  | UB082 -> pp_constructor0 "UB082"
+  | UB083 -> pp_constructor0 "UB083"
+  | UB084 -> pp_constructor0 "UB084"
+  | UB085 -> pp_constructor0 "UB085"
   | UB086_incomplete_adjusted_parameter ->
-    pp_constructor "UB086_incomplete_adjusted_parameter" []
-  | UB087 -> pp_constructor "UB087" []
-  | UB088_reached_end_of_function -> pp_constructor "UB088_reached_end_of_function" []
+    pp_constructor0 "UB086_incomplete_adjusted_parameter"
+  | UB087 -> pp_constructor0 "UB087"
+  | UB088_reached_end_of_function -> pp_constructor0 "UB088_reached_end_of_function"
   | UB089_tentative_definition_internal_linkage ->
-    pp_constructor "UB089_tentative_definition_internal_linkage" []
-  | UB090 -> pp_constructor "UB090" []
-  | UB091 -> pp_constructor "UB091" []
-  | UB092 -> pp_constructor "UB092" []
-  | UB093 -> pp_constructor "UB093" []
-  | UB094 -> pp_constructor "UB094" []
-  | UB095 -> pp_constructor "UB095" []
-  | UB096 -> pp_constructor "UB096" []
-  | UB097 -> pp_constructor "UB097" []
-  | UB098 -> pp_constructor "UB098" []
-  | UB099 -> pp_constructor "UB099" []
-  | UB100 -> pp_constructor "UB100" []
-  | UB101 -> pp_constructor "UB101" []
-  | UB102 -> pp_constructor "UB102" []
-  | UB103 -> pp_constructor "UB103" []
-  | UB104 -> pp_constructor "UB104" []
-  | UB105 -> pp_constructor "UB105" []
-  | UB106 -> pp_constructor "UB106" []
-  | UB107 -> pp_constructor "UB107" []
-  | UB108 -> pp_constructor "UB108" []
-  | UB109 -> pp_constructor "UB109" []
-  | UB110 -> pp_constructor "UB110" []
-  | UB111_illtyped_assert -> pp_constructor "UB111_illtyped_assert" []
-  | UB112 -> pp_constructor "UB112" []
-  | UB113 -> pp_constructor "UB113" []
-  | UB114 -> pp_constructor "UB114" []
-  | UB115 -> pp_constructor "UB115" []
-  | UB116 -> pp_constructor "UB116" []
-  | UB117 -> pp_constructor "UB117" []
-  | UB118 -> pp_constructor "UB118" []
-  | UB119 -> pp_constructor "UB119" []
-  | UB120 -> pp_constructor "UB120" []
-  | UB121 -> pp_constructor "UB121" []
-  | UB122 -> pp_constructor "UB122" []
-  | UB123 -> pp_constructor "UB123" []
-  | UB124 -> pp_constructor "UB124" []
-  | UB125 -> pp_constructor "UB125" []
-  | UB126 -> pp_constructor "UB126" []
-  | UB127 -> pp_constructor "UB127" []
-  | UB128 -> pp_constructor "UB128" []
-  | UB129 -> pp_constructor "UB129" []
-  | UB130 -> pp_constructor "UB130" []
-  | UB131 -> pp_constructor "UB131" []
-  | UB132 -> pp_constructor "UB132" []
-  | UB133 -> pp_constructor "UB133" []
-  | UB134 -> pp_constructor "UB134" []
-  | UB135 -> pp_constructor "UB135" []
-  | UB136 -> pp_constructor "UB136" []
-  | UB137 -> pp_constructor "UB137" []
-  | UB138 -> pp_constructor "UB138" []
-  | UB139 -> pp_constructor "UB139" []
-  | UB140 -> pp_constructor "UB140" []
-  | UB141 -> pp_constructor "UB141" []
-  | UB142 -> pp_constructor "UB142" []
-  | UB143 -> pp_constructor "UB143" []
-  | UB144 -> pp_constructor "UB144" []
-  | UB145 -> pp_constructor "UB145" []
-  | UB146 -> pp_constructor "UB146" []
-  | UB147 -> pp_constructor "UB147" []
-  | UB148 -> pp_constructor "UB148" []
-  | UB149 -> pp_constructor "UB149" []
-  | UB150 -> pp_constructor "UB150" []
-  | UB151 -> pp_constructor "UB151" []
-  | UB152 -> pp_constructor "UB152" []
+    pp_constructor0 "UB089_tentative_definition_internal_linkage"
+  | UB090 -> pp_constructor0 "UB090"
+  | UB091 -> pp_constructor0 "UB091"
+  | UB092 -> pp_constructor0 "UB092"
+  | UB093 -> pp_constructor0 "UB093"
+  | UB094 -> pp_constructor0 "UB094"
+  | UB095 -> pp_constructor0 "UB095"
+  | UB096 -> pp_constructor0 "UB096"
+  | UB097 -> pp_constructor0 "UB097"
+  | UB098 -> pp_constructor0 "UB098"
+  | UB099 -> pp_constructor0 "UB099"
+  | UB100 -> pp_constructor0 "UB100"
+  | UB101 -> pp_constructor0 "UB101"
+  | UB102 -> pp_constructor0 "UB102"
+  | UB103 -> pp_constructor0 "UB103"
+  | UB104 -> pp_constructor0 "UB104"
+  | UB105 -> pp_constructor0 "UB105"
+  | UB106 -> pp_constructor0 "UB106"
+  | UB107 -> pp_constructor0 "UB107"
+  | UB108 -> pp_constructor0 "UB108"
+  | UB109 -> pp_constructor0 "UB109"
+  | UB110 -> pp_constructor0 "UB110"
+  | UB111_illtyped_assert -> pp_constructor0 "UB111_illtyped_assert"
+  | UB112 -> pp_constructor0 "UB112"
+  | UB113 -> pp_constructor0 "UB113"
+  | UB114 -> pp_constructor0 "UB114"
+  | UB115 -> pp_constructor0 "UB115"
+  | UB116 -> pp_constructor0 "UB116"
+  | UB117 -> pp_constructor0 "UB117"
+  | UB118 -> pp_constructor0 "UB118"
+  | UB119 -> pp_constructor0 "UB119"
+  | UB120 -> pp_constructor0 "UB120"
+  | UB121 -> pp_constructor0 "UB121"
+  | UB122 -> pp_constructor0 "UB122"
+  | UB123 -> pp_constructor0 "UB123"
+  | UB124 -> pp_constructor0 "UB124"
+  | UB125 -> pp_constructor0 "UB125"
+  | UB126 -> pp_constructor0 "UB126"
+  | UB127 -> pp_constructor0 "UB127"
+  | UB128 -> pp_constructor0 "UB128"
+  | UB129 -> pp_constructor0 "UB129"
+  | UB130 -> pp_constructor0 "UB130"
+  | UB131 -> pp_constructor0 "UB131"
+  | UB132 -> pp_constructor0 "UB132"
+  | UB133 -> pp_constructor0 "UB133"
+  | UB134 -> pp_constructor0 "UB134"
+  | UB135 -> pp_constructor0 "UB135"
+  | UB136 -> pp_constructor0 "UB136"
+  | UB137 -> pp_constructor0 "UB137"
+  | UB138 -> pp_constructor0 "UB138"
+  | UB139 -> pp_constructor0 "UB139"
+  | UB140 -> pp_constructor0 "UB140"
+  | UB141 -> pp_constructor0 "UB141"
+  | UB142 -> pp_constructor0 "UB142"
+  | UB143 -> pp_constructor0 "UB143"
+  | UB144 -> pp_constructor0 "UB144"
+  | UB145 -> pp_constructor0 "UB145"
+  | UB146 -> pp_constructor0 "UB146"
+  | UB147 -> pp_constructor0 "UB147"
+  | UB148 -> pp_constructor0 "UB148"
+  | UB149 -> pp_constructor0 "UB149"
+  | UB150 -> pp_constructor0 "UB150"
+  | UB151 -> pp_constructor0 "UB151"
+  | UB152 -> pp_constructor0 "UB152"
   | UB153a_insufficient_arguments_for_format ->
-    pp_constructor "UB153a_insufficient_arguments_for_format" []
+    pp_constructor0 "UB153a_insufficient_arguments_for_format"
   | UB153b_illtyped_argument_for_format ->
-    pp_constructor "UB153b_illtyped_argument_for_format" []
-  | UB154 -> pp_constructor "UB154" []
-  | UB155 -> pp_constructor "UB155" []
-  | UB156 -> pp_constructor "UB156" []
-  | UB157 -> pp_constructor "UB157" []
-  | UB158_invalid_length_modifier -> pp_constructor "UB158_invalid_length_modifier" []
-  | UB159 -> pp_constructor "UB159" []
-  | UB160 -> pp_constructor "UB160" []
-  | UB161 -> pp_constructor "UB161" []
-  | UB162 -> pp_constructor "UB162" []
-  | UB163 -> pp_constructor "UB163" []
-  | UB164 -> pp_constructor "UB164" []
-  | UB165 -> pp_constructor "UB165" []
-  | UB166 -> pp_constructor "UB166" []
-  | UB167 -> pp_constructor "UB167" []
-  | UB168 -> pp_constructor "UB168" []
-  | UB169 -> pp_constructor "UB169" []
-  | UB170 -> pp_constructor "UB170" []
-  | UB171 -> pp_constructor "UB171" []
-  | UB172 -> pp_constructor "UB172" []
-  | UB173 -> pp_constructor "UB173" []
-  | UB174 -> pp_constructor "UB174" []
-  | UB175 -> pp_constructor "UB175" []
-  | UB176 -> pp_constructor "UB176" []
-  | UB177 -> pp_constructor "UB177" []
-  | UB178 -> pp_constructor "UB178" []
+    pp_constructor0 "UB153b_illtyped_argument_for_format"
+  | UB154 -> pp_constructor0 "UB154"
+  | UB155 -> pp_constructor0 "UB155"
+  | UB156 -> pp_constructor0 "UB156"
+  | UB157 -> pp_constructor0 "UB157"
+  | UB158_invalid_length_modifier -> pp_constructor0 "UB158_invalid_length_modifier"
+  | UB159 -> pp_constructor0 "UB159"
+  | UB160 -> pp_constructor0 "UB160"
+  | UB161 -> pp_constructor0 "UB161"
+  | UB162 -> pp_constructor0 "UB162"
+  | UB163 -> pp_constructor0 "UB163"
+  | UB164 -> pp_constructor0 "UB164"
+  | UB165 -> pp_constructor0 "UB165"
+  | UB166 -> pp_constructor0 "UB166"
+  | UB167 -> pp_constructor0 "UB167"
+  | UB168 -> pp_constructor0 "UB168"
+  | UB169 -> pp_constructor0 "UB169"
+  | UB170 -> pp_constructor0 "UB170"
+  | UB171 -> pp_constructor0 "UB171"
+  | UB172 -> pp_constructor0 "UB172"
+  | UB173 -> pp_constructor0 "UB173"
+  | UB174 -> pp_constructor0 "UB174"
+  | UB175 -> pp_constructor0 "UB175"
+  | UB176 -> pp_constructor0 "UB176"
+  | UB177 -> pp_constructor0 "UB177"
+  | UB178 -> pp_constructor0 "UB178"
   | UB179a_non_matching_allocation_free ->
-    pp_constructor "UB179a_non_matching_allocation_free" []
-  | UB179b_dead_allocation_free -> pp_constructor "UB179b_dead_allocation_free" []
+    pp_constructor0 "UB179a_non_matching_allocation_free"
+  | UB179b_dead_allocation_free -> pp_constructor0 "UB179b_dead_allocation_free"
   | UB179c_non_matching_allocation_realloc ->
-    pp_constructor "UB179c_non_matching_allocation_realloc" []
-  | UB179d_dead_allocation_realloc -> pp_constructor "UB179d_dead_allocation_realloc" []
-  | UB180 -> pp_constructor "UB180" []
-  | UB181 -> pp_constructor "UB181" []
-  | UB182 -> pp_constructor "UB182" []
-  | UB183 -> pp_constructor "UB183" []
-  | UB184 -> pp_constructor "UB184" []
-  | UB185 -> pp_constructor "UB185" []
-  | UB186 -> pp_constructor "UB186" []
-  | UB187 -> pp_constructor "UB187" []
-  | UB188 -> pp_constructor "UB188" []
-  | UB189 -> pp_constructor "UB189" []
-  | UB190 -> pp_constructor "UB190" []
-  | UB191 -> pp_constructor "UB191" []
-  | UB192 -> pp_constructor "UB192" []
-  | UB193 -> pp_constructor "UB193" []
-  | UB194 -> pp_constructor "UB194" []
-  | UB195 -> pp_constructor "UB195" []
-  | UB196 -> pp_constructor "UB196" []
-  | UB197 -> pp_constructor "UB197" []
-  | UB198 -> pp_constructor "UB198" []
-  | UB199 -> pp_constructor "UB199" []
-  | UB200 -> pp_constructor "UB200" []
-  | UB201 -> pp_constructor "UB201" []
-  | UB202 -> pp_constructor "UB202" []
-  | UB203 -> pp_constructor "UB203" []
-  | UB204_illtyped_Static_assert -> pp_constructor "UB204_illtyped_Static_assert" []
-  | UB205_atomic_store_memorder -> pp_constructor "UB205_atomic_store_memorder" []
-  | UB206_atomic_load_memorder -> pp_constructor "UB206_atomic_load_memorder" []
+    pp_constructor0 "UB179c_non_matching_allocation_realloc"
+  | UB179d_dead_allocation_realloc -> pp_constructor0 "UB179d_dead_allocation_realloc"
+  | UB180 -> pp_constructor0 "UB180"
+  | UB181 -> pp_constructor0 "UB181"
+  | UB182 -> pp_constructor0 "UB182"
+  | UB183 -> pp_constructor0 "UB183"
+  | UB184 -> pp_constructor0 "UB184"
+  | UB185 -> pp_constructor0 "UB185"
+  | UB186 -> pp_constructor0 "UB186"
+  | UB187 -> pp_constructor0 "UB187"
+  | UB188 -> pp_constructor0 "UB188"
+  | UB189 -> pp_constructor0 "UB189"
+  | UB190 -> pp_constructor0 "UB190"
+  | UB191 -> pp_constructor0 "UB191"
+  | UB192 -> pp_constructor0 "UB192"
+  | UB193 -> pp_constructor0 "UB193"
+  | UB194 -> pp_constructor0 "UB194"
+  | UB195 -> pp_constructor0 "UB195"
+  | UB196 -> pp_constructor0 "UB196"
+  | UB197 -> pp_constructor0 "UB197"
+  | UB198 -> pp_constructor0 "UB198"
+  | UB199 -> pp_constructor0 "UB199"
+  | UB200 -> pp_constructor0 "UB200"
+  | UB201 -> pp_constructor0 "UB201"
+  | UB202 -> pp_constructor0 "UB202"
+  | UB203 -> pp_constructor0 "UB203"
+  | UB204_illtyped_Static_assert -> pp_constructor0 "UB204_illtyped_Static_assert"
+  | UB205_atomic_store_memorder -> pp_constructor0 "UB205_atomic_store_memorder"
+  | UB206_atomic_load_memorder -> pp_constructor0 "UB206_atomic_load_memorder"
   | UB207_atomic_compare_exchange_memorder ->
-    pp_constructor "UB207_atomic_compare_exchange_memorder" []
+    pp_constructor0 "UB207_atomic_compare_exchange_memorder"
   | UB_CERB001_integer_to_dead_pointer ->
-    pp_constructor "UB_CERB001_integer_to_dead_pointer" []
-  | UB_CERB002a_out_of_bound_load -> pp_constructor "UB_CERB002a_out_of_bound_load" []
-  | UB_CERB002b_out_of_bound_store -> pp_constructor "UB_CERB002b_out_of_bound_store" []
-  | UB_CERB002c_out_of_bound_free -> pp_constructor "UB_CERB002c_out_of_bound_free" []
-  | UB_CERB002d_out_of_bound_realloc ->
-    pp_constructor "UB_CERB002d_out_of_bound_realloc" []
+    pp_constructor0 "UB_CERB001_integer_to_dead_pointer"
+  | UB_CERB002a_out_of_bound_load -> pp_constructor0 "UB_CERB002a_out_of_bound_load"
+  | UB_CERB002b_out_of_bound_store -> pp_constructor0 "UB_CERB002b_out_of_bound_store"
+  | UB_CERB002c_out_of_bound_free -> pp_constructor0 "UB_CERB002c_out_of_bound_free"
+  | UB_CERB002d_out_of_bound_realloc -> pp_constructor0 "UB_CERB002d_out_of_bound_realloc"
   | UB_CERB003_invalid_function_pointer ->
-    pp_constructor "UB_CERB003_invalid_function_pointer" []
-  | UB_CHERI_InvalidCap -> pp_constructor "UB_CHERI_InvalidCap" []
-  | UB_CHERI_InsufficientPermissions ->
-    pp_constructor "UB_CHERI_InsufficientPermissions" []
-  | UB_CHERI_BoundsViolation -> pp_constructor "UB_CHERI_BoundsViolation" []
-  | UB_CHERI_UndefinedTag -> pp_constructor "UB_CHERI_UndefinedTag" []
-  | UB_CHERI_ZeroLength -> pp_constructor "UB_CHERI_ZeroLength" []
+    pp_constructor0 "UB_CERB003_invalid_function_pointer"
+  | UB_CHERI_InvalidCap -> pp_constructor0 "UB_CHERI_InvalidCap"
+  | UB_CHERI_InsufficientPermissions -> pp_constructor0 "UB_CHERI_InsufficientPermissions"
+  | UB_CHERI_BoundsViolation -> pp_constructor0 "UB_CHERI_BoundsViolation"
+  | UB_CHERI_UndefinedTag -> pp_constructor0 "UB_CHERI_UndefinedTag"
+  | UB_CHERI_ZeroLength -> pp_constructor0 "UB_CHERI_ZeroLength"
 
 
 let pp_linux_memory_order = function
-  | CF.Linux.Once -> pp_constructor "Once" []
-  | LAcquire -> pp_constructor "LAcquire" []
-  | LRelease -> pp_constructor "LRelease" []
-  | Rmb -> pp_constructor "Rmb" []
-  | Wmb -> pp_constructor "Wmb" []
-  | Mb -> pp_constructor "Mb" []
-  | RbDep -> pp_constructor "RbDep" []
-  | RcuLock -> pp_constructor "RcuLock" []
-  | RcuUnlock -> pp_constructor "RcuUnlock" []
-  | SyncRcu -> pp_constructor "SyncRcu" []
+  | CF.Linux.Once -> pp_constructor0 "Once"
+  | LAcquire -> pp_constructor0 "LAcquire"
+  | LRelease -> pp_constructor0 "LRelease"
+  | Rmb -> pp_constructor0 "Rmb"
+  | Wmb -> pp_constructor0 "Wmb"
+  | Mb -> pp_constructor0 "Mb"
+  | RbDep -> pp_constructor0 "RbDep"
+  | RcuLock -> pp_constructor0 "RcuLock"
+  | RcuUnlock -> pp_constructor0 "RcuUnlock"
+  | SyncRcu -> pp_constructor0 "SyncRcu"
 
 
 let pp_floating_value v = Impl_mem.pp_floating_value_for_coq v
@@ -434,13 +440,13 @@ let pp_unit (_ : unit) = !^"tt"
 let pp_unit_type = !^"unit"
 
 let pp_memory_order = function
-  | Cerb_frontend.Cmm_csem.NA -> pp_constructor "NA" []
-  | Seq_cst -> pp_constructor "Seq_cst" []
-  | Relaxed -> pp_constructor "Relaxed" []
-  | Release -> pp_constructor "Release" []
-  | Acquire -> pp_constructor "Acquire" []
-  | Consume -> pp_constructor "Consume" []
-  | Acq_rel -> pp_constructor "Acq_rel" []
+  | Cerb_frontend.Cmm_csem.NA -> pp_constructor0 "NA"
+  | Seq_cst -> pp_constructor0 "Seq_cst"
+  | Relaxed -> pp_constructor0 "Relaxed"
+  | Release -> pp_constructor0 "Release"
+  | Acquire -> pp_constructor0 "Acquire"
+  | Consume -> pp_constructor0 "Consume"
+  | Acq_rel -> pp_constructor0 "Acq_rel"
 
 
 let pp_polarity = function Core.Pos -> !^"Pos" | Core.Neg -> !^"Neg"
@@ -455,7 +461,7 @@ let pp_lexing_position { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
 
 
 let pp_location_cursor = function
-  | Cerb_location.NoCursor -> pp_constructor "NoCursor" []
+  | Cerb_location.NoCursor -> pp_constructor0 "NoCursor"
   | Cerb_location.PointCursor pos ->
     pp_constructor "PointCursor" [ pp_lexing_position pos ]
   | Cerb_location.RegionCursor (start_pos, end_pos) ->
@@ -465,8 +471,8 @@ let pp_location_cursor = function
 
 
 let pp_location = function
-  | Cerb_location.Loc_unknown -> pp_constructor "Loc_unknown" []
-  | _ when not debug_print_locations -> pp_constructor "Loc_unknown" []
+  | Cerb_location.Loc_unknown -> pp_constructor0 "Loc_unknown"
+  | _ when not debug_print_locations -> pp_constructor0 "Loc_unknown"
   | Cerb_location.Loc_other s -> pp_constructor "Loc_other" [ pp_string s ]
   | Cerb_location.Loc_point pos -> pp_constructor "Loc_point" [ pp_lexing_position pos ]
   | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
@@ -497,12 +503,12 @@ let pp_digest (d : Digest.t) =
 
 
 let rec pp_symbol_description = function
-  | CF.Symbol.SD_None -> pp_constructor "SD_None" []
+  | CF.Symbol.SD_None -> pp_constructor0 "SD_None"
   | CF.Symbol.SD_unnamed_tag loc -> pp_constructor "SD_unnamed_tag" [ pp_location loc ]
   | CF.Symbol.SD_Id s -> pp_constructor "SD_Id" [ pp_string s ]
   | CF.Symbol.SD_CN_Id s -> pp_constructor "SD_CN_Id" [ pp_string s ]
   | CF.Symbol.SD_ObjectAddress s -> pp_constructor "SD_ObjectAddress" [ pp_string s ]
-  | CF.Symbol.SD_Return -> pp_constructor "SD_Return" []
+  | CF.Symbol.SD_Return -> pp_constructor0 "SD_Return"
   | CF.Symbol.SD_FunArgValue s -> pp_constructor "SD_FunArgValue" [ pp_string s ]
   | CF.Symbol.SD_FunArg (loc, n) ->
     pp_constructor "SD_FunArg" [ pp_location loc; pp_nat n ]
@@ -523,13 +529,13 @@ and pp_symbol_prefix = function
     pp_constructor "PrefTemporaryLifetime" [ pp_location loc; pp_digest d ]
   | CF.Symbol.PrefCompoundLiteral (loc, d) ->
     pp_constructor "PrefCompoundLiteral" [ pp_location loc; pp_digest d ]
-  | CF.Symbol.PrefMalloc -> pp_constructor "PrefMalloc" []
+  | CF.Symbol.PrefMalloc -> pp_constructor0 "PrefMalloc"
   | CF.Symbol.PrefOther s -> pp_constructor "PrefOther" [ !^s ]
 
 
 let pp_sign = function
-  | BaseTypes.Signed -> pp_constructor "BaseTypes.Signed" []
-  | BaseTypes.Unsigned -> pp_constructor "BaseTypes.Unsigned" []
+  | BaseTypes.Signed -> pp_constructor0 "BaseTypes.Signed"
+  | BaseTypes.Unsigned -> pp_constructor0 "BaseTypes.Unsigned"
 
 
 (* Unit type is hardcoded bacause `BaseTypes.t` is defined as `t_gen unit` *)
@@ -562,31 +568,31 @@ let rec pp_basetype pp_loc = function
 
 
 let pp_integer_base_type = function
-  | Sctypes.IntegerBaseTypes.Ichar -> pp_constructor "Ichar" []
-  | Sctypes.IntegerBaseTypes.Short -> pp_constructor "Short" []
-  | Sctypes.IntegerBaseTypes.Int_ -> pp_constructor "Int_" []
-  | Sctypes.IntegerBaseTypes.Long -> pp_constructor "Long" []
-  | Sctypes.IntegerBaseTypes.LongLong -> pp_constructor "LongLong" []
+  | Sctypes.IntegerBaseTypes.Ichar -> pp_constructor0 "Ichar"
+  | Sctypes.IntegerBaseTypes.Short -> pp_constructor0 "Short"
+  | Sctypes.IntegerBaseTypes.Int_ -> pp_constructor0 "Int_"
+  | Sctypes.IntegerBaseTypes.Long -> pp_constructor0 "Long"
+  | Sctypes.IntegerBaseTypes.LongLong -> pp_constructor0 "LongLong"
   | Sctypes.IntegerBaseTypes.IntN_t n -> pp_constructor "IntN_t" [ pp_nat n ]
   | Sctypes.IntegerBaseTypes.Int_leastN_t n -> pp_constructor "Int_leastN_t" [ pp_nat n ]
   | Sctypes.IntegerBaseTypes.Int_fastN_t n -> pp_constructor "Int_fastN_t" [ pp_nat n ]
-  | Sctypes.IntegerBaseTypes.Intmax_t -> pp_constructor "Intmax_t" []
-  | Sctypes.IntegerBaseTypes.Intptr_t -> pp_constructor "Intptr_t" []
+  | Sctypes.IntegerBaseTypes.Intmax_t -> pp_constructor0 "Intmax_t"
+  | Sctypes.IntegerBaseTypes.Intptr_t -> pp_constructor0 "Intptr_t"
 
 
 let pp_integer_type = function
-  | Sctypes.IntegerTypes.Char -> pp_constructor "IntegerType.Char" []
-  | Sctypes.IntegerTypes.Bool -> pp_constructor "IntegerType.Bool" []
+  | Sctypes.IntegerTypes.Char -> pp_constructor0 "IntegerType.Char"
+  | Sctypes.IntegerTypes.Bool -> pp_constructor0 "IntegerType.Bool"
   | Sctypes.IntegerTypes.Signed ibt ->
     pp_constructor "IntegerType.Signed" [ pp_integer_base_type ibt ]
   | Sctypes.IntegerTypes.Unsigned ibt ->
     pp_constructor "IntegerType.Unsigned" [ pp_integer_base_type ibt ]
   | Sctypes.IntegerTypes.Enum sym -> pp_constructor "IntegerType.Enum" [ pp_symbol sym ]
-  | Sctypes.IntegerTypes.Wchar_t -> pp_constructor "IntegerType.Wchar_t" []
-  | Sctypes.IntegerTypes.Wint_t -> pp_constructor "IntegerType.Wint_t" []
-  | Sctypes.IntegerTypes.Size_t -> pp_constructor "IntegerType.Size_t" []
-  | Sctypes.IntegerTypes.Ptrdiff_t -> pp_constructor "IntegerType.Ptrdiff_t" []
-  | Sctypes.IntegerTypes.Ptraddr_t -> pp_constructor "IntegerType.Ptraddr_t" []
+  | Sctypes.IntegerTypes.Wchar_t -> pp_constructor0 "IntegerType.Wchar_t"
+  | Sctypes.IntegerTypes.Wint_t -> pp_constructor0 "IntegerType.Wint_t"
+  | Sctypes.IntegerTypes.Size_t -> pp_constructor0 "IntegerType.Size_t"
+  | Sctypes.IntegerTypes.Ptrdiff_t -> pp_constructor0 "IntegerType.Ptrdiff_t"
+  | Sctypes.IntegerTypes.Ptraddr_t -> pp_constructor0 "IntegerType.Ptraddr_t"
 
 
 let rec pp_annot_t = function
@@ -598,14 +604,14 @@ let rec pp_annot_t = function
   | Annot.Abmc bmc -> pp_constructor "Abmc" [ pp_bmc_annot bmc ]
   | Annot.Aattrs attrs -> pp_constructor "Aattrs" [ pp_attributes attrs ]
   | Annot.Atypedef sym -> pp_constructor "Atypedef" [ pp_symbol sym ]
-  | Annot.Anot_explode -> pp_constructor "Anot_explode" []
+  | Annot.Anot_explode -> pp_constructor0 "Anot_explode"
   | Annot.Alabel la -> pp_constructor "Alabel" [ pp_label_annot la ]
   | Annot.Acerb ca -> pp_constructor "Acerb" [ pp_cerb_attribute ca ]
   | Annot.Avalue va -> pp_constructor "Avalue" [ pp_value_annot va ]
   | Annot.Ainlined_label (loc, sym, la) ->
     pp_constructor "Ainlined_label" [ pp_location loc; pp_symbol sym; pp_label_annot la ]
-  | Annot.Astmt -> pp_constructor "Astmt" []
-  | Annot.Aexpr -> pp_constructor "Aexpr" []
+  | Annot.Astmt -> pp_constructor0 "Astmt"
+  | Annot.Aexpr -> pp_constructor0 "Aexpr"
 
 
 and pp_bmc_annot = function Annot.Abmc_id n -> pp_constructor "Abmc_id" [ pp_nat n ]
@@ -630,16 +636,16 @@ and pp_label_annot = function
   | Annot.LAloop n -> pp_constructor "LAloop" [ pp_nat n ]
   | Annot.LAloop_continue n -> pp_constructor "LAloop_continue" [ pp_nat n ]
   | Annot.LAloop_break n -> pp_constructor "LAloop_break" [ pp_nat n ]
-  | Annot.LAreturn -> pp_constructor "LAreturn" []
-  | Annot.LAswitch -> pp_constructor "LAswitch" []
-  | Annot.LAcase -> pp_constructor "LAcase" []
-  | Annot.LAdefault -> pp_constructor "LAdefault" []
-  | Annot.LAactual_label -> pp_constructor "LAactual_label" []
+  | Annot.LAreturn -> pp_constructor0 "LAreturn"
+  | Annot.LAswitch -> pp_constructor0 "LAswitch"
+  | Annot.LAcase -> pp_constructor0 "LAcase"
+  | Annot.LAdefault -> pp_constructor0 "LAdefault"
+  | Annot.LAactual_label -> pp_constructor0 "LAactual_label"
 
 
 and pp_cerb_attribute = function
   | Annot.ACerb_with_address n -> pp_constructor "ACerb_with_address" [ pp_Z_as_nat n ]
-  | Annot.ACerb_hidden -> pp_constructor "ACerb_hidden" []
+  | Annot.ACerb_hidden -> pp_constructor0 "ACerb_hidden"
 
 
 and pp_value_annot = function
@@ -659,7 +665,7 @@ let rec pp_ctype (Ctype.Ctype (annots, ct)) =
     "Ctype"
     [ pp_list pp_annot_t annots;
       (match ct with
-       | Ctype.Void -> pp_constructor "Ctype.Void" []
+       | Ctype.Void -> pp_constructor0 "Ctype.Void"
        | Ctype.Basic bt -> pp_constructor "Ctype.Basic" [ pp_basic_type bt ]
        | Ctype.Array (ct, on) ->
          pp_constructor "Ctype.Array" [ pp_ctype ct; pp_option pp_Z_as_nat on ]
@@ -692,13 +698,13 @@ and pp_floating_type = function
 
 
 and pp_real_floating_type = function
-  | Ctype.Float -> pp_constructor "Float" []
-  | Ctype.Double -> pp_constructor "Double" []
-  | Ctype.LongDouble -> pp_constructor "LongDouble" []
+  | Ctype.Float -> pp_constructor0 "Float"
+  | Ctype.Double -> pp_constructor0 "Double"
+  | Ctype.LongDouble -> pp_constructor0 "LongDouble"
 
 
 let rec pp_sctype = function
-  | Sctypes.Void -> pp_constructor "SCtypes.Void" []
+  | Sctypes.Void -> pp_constructor0 "SCtypes.Void"
   | Sctypes.Integer it -> pp_constructor "SCtypes.Integer" [ pp_integer_type it ]
   | Sctypes.Array (ct, on) ->
     pp_constructor "SCtypes.Array" [ pp_tuple [ pp_sctype ct; pp_option pp_nat on ] ]
@@ -716,20 +722,20 @@ let rec pp_sctype = function
 
 
 let rec pp_core_base_type = function
-  | Core.BTy_unit -> pp_constructor "BTy_unit" []
-  | Core.BTy_boolean -> pp_constructor "BTy_boolean" []
-  | Core.BTy_ctype -> pp_constructor "BTy_ctype" []
+  | Core.BTy_unit -> pp_constructor0 "BTy_unit"
+  | Core.BTy_boolean -> pp_constructor0 "BTy_boolean"
+  | Core.BTy_ctype -> pp_constructor0 "BTy_ctype"
   | Core.BTy_list t -> pp_constructor "BTy_list" [ pp_core_base_type t ]
   | Core.BTy_tuple ts -> pp_constructor "BTy_tuple" [ pp_list pp_core_base_type ts ]
   | Core.BTy_object ot -> pp_constructor "BTy_object" [ pp_core_object_type ot ]
   | Core.BTy_loaded ot -> pp_constructor "BTy_loaded" [ pp_core_object_type ot ]
-  | Core.BTy_storable -> pp_constructor "BTy_storable" []
+  | Core.BTy_storable -> pp_constructor0 "BTy_storable"
 
 
 and pp_core_object_type = function
-  | Core.OTy_integer -> pp_constructor "OTy_integer" []
-  | Core.OTy_floating -> pp_constructor "OTy_floating" []
-  | Core.OTy_pointer -> pp_constructor "OTy_pointer" []
+  | Core.OTy_integer -> pp_constructor0 "OTy_integer"
+  | Core.OTy_floating -> pp_constructor0 "OTy_floating"
+  | Core.OTy_pointer -> pp_constructor0 "OTy_pointer"
   | Core.OTy_array t -> pp_constructor "OTy_array" [ pp_core_object_type t ]
   | Core.OTy_struct sym -> pp_constructor "OTy_struct" [ pp_symbol sym ]
   | Core.OTy_union sym -> pp_constructor "OTy_union" [ pp_symbol sym ]
@@ -737,81 +743,81 @@ and pp_core_object_type = function
 
 let pp_ctor = function
   | Mucore.Cnil bt -> pp_constructor "Cnil" [ pp_core_base_type bt ]
-  | Mucore.Ccons -> pp_constructor "Ccons" []
-  | Mucore.Ctuple -> pp_constructor "Ctuple" []
-  | Mucore.Carray -> pp_constructor "Carray" []
+  | Mucore.Ccons -> pp_constructor0 "Ccons"
+  | Mucore.Ctuple -> pp_constructor0 "Ctuple"
+  | Mucore.Carray -> pp_constructor0 "Carray"
 
 
 let pp_core_binop = function
-  | Core.OpAdd -> pp_constructor "Core.OpAdd" []
-  | Core.OpSub -> pp_constructor "Core.OpSub" []
-  | Core.OpMul -> pp_constructor "Core.OpMul" []
-  | Core.OpDiv -> pp_constructor "Core.OpDiv" []
-  | Core.OpRem_t -> pp_constructor "Core.OpRem_t" []
-  | Core.OpRem_f -> pp_constructor "Core.OpRem_f" []
-  | Core.OpExp -> pp_constructor "Core.OpExp" []
-  | Core.OpEq -> pp_constructor "Core.OpEq" []
-  | Core.OpGt -> pp_constructor "Core.OpGt" []
-  | Core.OpLt -> pp_constructor "Core.OpLt" []
-  | Core.OpGe -> pp_constructor "Core.OpGe" []
-  | Core.OpLe -> pp_constructor "Core.OpLe" []
-  | Core.OpAnd -> pp_constructor "Core.OpAnd" []
-  | Core.OpOr -> pp_constructor "Core.OpOr" []
+  | Core.OpAdd -> pp_constructor0 "Core.OpAdd"
+  | Core.OpSub -> pp_constructor0 "Core.OpSub"
+  | Core.OpMul -> pp_constructor0 "Core.OpMul"
+  | Core.OpDiv -> pp_constructor0 "Core.OpDiv"
+  | Core.OpRem_t -> pp_constructor0 "Core.OpRem_t"
+  | Core.OpRem_f -> pp_constructor0 "Core.OpRem_f"
+  | Core.OpExp -> pp_constructor0 "Core.OpExp"
+  | Core.OpEq -> pp_constructor0 "Core.OpEq"
+  | Core.OpGt -> pp_constructor0 "Core.OpGt"
+  | Core.OpLt -> pp_constructor0 "Core.OpLt"
+  | Core.OpGe -> pp_constructor0 "Core.OpGe"
+  | Core.OpLe -> pp_constructor0 "Core.OpLe"
+  | Core.OpAnd -> pp_constructor0 "Core.OpAnd"
+  | Core.OpOr -> pp_constructor0 "Core.OpOr"
 
 
 let pp_binop = function
-  | Terms.And -> pp_constructor "Terms.And" []
-  | Terms.Or -> pp_constructor "Terms.Or" []
-  | Terms.Implies -> pp_constructor "Terms.Implies" []
-  | Terms.Add -> pp_constructor "Terms.Add" []
-  | Terms.Sub -> pp_constructor "Terms.Sub" []
-  | Terms.Mul -> pp_constructor "Terms.Mul" []
-  | Terms.MulNoSMT -> pp_constructor "Terms.MulNoSMT" []
-  | Terms.Div -> pp_constructor "Terms.Div" []
-  | Terms.DivNoSMT -> pp_constructor "Terms.DivNoSMT" []
-  | Terms.Exp -> pp_constructor "Terms.Exp" []
-  | Terms.ExpNoSMT -> pp_constructor "Terms.ExpNoSMT" []
-  | Terms.Rem -> pp_constructor "Terms.Rem" []
-  | Terms.RemNoSMT -> pp_constructor "Terms.RemNoSMT" []
-  | Terms.Mod -> pp_constructor "Terms.Mod" []
-  | Terms.ModNoSMT -> pp_constructor "Terms.ModNoSMT" []
-  | Terms.BW_Xor -> pp_constructor "Terms.BW_Xor" []
-  | Terms.BW_And -> pp_constructor "Terms.BW_And" []
-  | Terms.BW_Or -> pp_constructor "Terms.BW_Or" []
-  | Terms.ShiftLeft -> pp_constructor "Terms.ShiftLeft" []
-  | Terms.ShiftRight -> pp_constructor "Terms.ShiftRight" []
-  | Terms.LT -> pp_constructor "Terms.LT" []
-  | Terms.LE -> pp_constructor "Terms.LE" []
-  | Terms.Min -> pp_constructor "Terms.Min" []
-  | Terms.Max -> pp_constructor "Terms.Max" []
-  | Terms.EQ -> pp_constructor "Terms.EQ" []
-  | Terms.LTPointer -> pp_constructor "Terms.LTPointer" []
-  | Terms.LEPointer -> pp_constructor "Terms.LEPointer" []
-  | Terms.SetUnion -> pp_constructor "Terms.SetUnion" []
-  | Terms.SetIntersection -> pp_constructor "Terms.SetIntersection" []
-  | Terms.SetDifference -> pp_constructor "Terms.SetDifference" []
-  | Terms.SetMember -> pp_constructor "Terms.SetMember" []
-  | Terms.Subset -> pp_constructor "Terms.Subset" []
+  | Terms.And -> pp_constructor0 "Terms.And"
+  | Terms.Or -> pp_constructor0 "Terms.Or"
+  | Terms.Implies -> pp_constructor0 "Terms.Implies"
+  | Terms.Add -> pp_constructor0 "Terms.Add"
+  | Terms.Sub -> pp_constructor0 "Terms.Sub"
+  | Terms.Mul -> pp_constructor0 "Terms.Mul"
+  | Terms.MulNoSMT -> pp_constructor0 "Terms.MulNoSMT"
+  | Terms.Div -> pp_constructor0 "Terms.Div"
+  | Terms.DivNoSMT -> pp_constructor0 "Terms.DivNoSMT"
+  | Terms.Exp -> pp_constructor0 "Terms.Exp"
+  | Terms.ExpNoSMT -> pp_constructor0 "Terms.ExpNoSMT"
+  | Terms.Rem -> pp_constructor0 "Terms.Rem"
+  | Terms.RemNoSMT -> pp_constructor0 "Terms.RemNoSMT"
+  | Terms.Mod -> pp_constructor0 "Terms.Mod"
+  | Terms.ModNoSMT -> pp_constructor0 "Terms.ModNoSMT"
+  | Terms.BW_Xor -> pp_constructor0 "Terms.BW_Xor"
+  | Terms.BW_And -> pp_constructor0 "Terms.BW_And"
+  | Terms.BW_Or -> pp_constructor0 "Terms.BW_Or"
+  | Terms.ShiftLeft -> pp_constructor0 "Terms.ShiftLeft"
+  | Terms.ShiftRight -> pp_constructor0 "Terms.ShiftRight"
+  | Terms.LT -> pp_constructor0 "Terms.LT"
+  | Terms.LE -> pp_constructor0 "Terms.LE"
+  | Terms.Min -> pp_constructor0 "Terms.Min"
+  | Terms.Max -> pp_constructor0 "Terms.Max"
+  | Terms.EQ -> pp_constructor0 "Terms.EQ"
+  | Terms.LTPointer -> pp_constructor0 "Terms.LTPointer"
+  | Terms.LEPointer -> pp_constructor0 "Terms.LEPointer"
+  | Terms.SetUnion -> pp_constructor0 "Terms.SetUnion"
+  | Terms.SetIntersection -> pp_constructor0 "Terms.SetIntersection"
+  | Terms.SetDifference -> pp_constructor0 "Terms.SetDifference"
+  | Terms.SetMember -> pp_constructor0 "Terms.SetMember"
+  | Terms.Subset -> pp_constructor0 "Terms.Subset"
 
 
 let pp_bw_binop = function
-  | BW_OR -> pp_constructor "BW_OR" []
-  | BW_AND -> pp_constructor "BW_AND" []
-  | BW_XOR -> pp_constructor "BW_XOR" []
+  | BW_OR -> pp_constructor0 "BW_OR"
+  | BW_AND -> pp_constructor0 "BW_AND"
+  | BW_XOR -> pp_constructor0 "BW_XOR"
 
 
 let pp_bw_unop = function
-  | BW_COMPL -> pp_constructor "BW_COMPL" []
-  | BW_CTZ -> pp_constructor "BW_CTZ" []
-  | BW_FFS -> pp_constructor "BW_FFS" []
+  | BW_COMPL -> pp_constructor0 "BW_COMPL"
+  | BW_CTZ -> pp_constructor0 "BW_CTZ"
+  | BW_FFS -> pp_constructor0 "BW_FFS"
 
 
 let pp_core_iop = function
-  | Core.IOpAdd -> pp_constructor "Core.IOpAdd" []
-  | Core.IOpSub -> pp_constructor "Core.IOpSub" []
-  | Core.IOpMul -> pp_constructor "Core.IOpMul" []
-  | Core.IOpShl -> pp_constructor "Core.IOpShl" []
-  | Core.IOpShr -> pp_constructor "Core.IOpShr" []
+  | Core.IOpAdd -> pp_constructor0 "Core.IOpAdd"
+  | Core.IOpSub -> pp_constructor0 "Core.IOpSub"
+  | Core.IOpMul -> pp_constructor0 "Core.IOpMul"
+  | Core.IOpShl -> pp_constructor0 "Core.IOpShl"
+  | Core.IOpShr -> pp_constructor0 "Core.IOpShr"
 
 
 let rec pp_pattern_ pp_type = function
@@ -847,7 +853,7 @@ let pp_mem_value v =
 
 
 let rec pp_mem_constraint = function
-  | Mem_common.MC_empty -> pp_constructor "MC_empty" []
+  | Mem_common.MC_empty -> pp_constructor0 "MC_empty"
   | Mem_common.MC_eq (x, y) ->
     pp_constructor
       "MC_eq"
@@ -1100,7 +1106,7 @@ and pp_act { loc; annot; ct } =
 
 
 and pp_kill_kind = function
-  | Dynamic -> pp_constructor "Dynamic" []
+  | Dynamic -> pp_constructor0 "Dynamic"
   | Static ct -> pp_constructor "Static" [ pp_sctype ct ]
 
 
@@ -1162,17 +1168,17 @@ let pp_location_info = pp_pair pp_location (fun _ -> !^"None")
 
 let pp_trusted = function
   | Trusted loc -> pp_constructor "Trusted" [ pp_location loc ]
-  | Checked -> pp_constructor "Checked" []
+  | Checked -> pp_constructor0 "Checked"
 
 
 let pp_unop = function
-  | Terms.Not -> pp_constructor "Not" []
-  | Negate -> pp_constructor "Negate" []
-  | BW_CLZ_NoSMT -> pp_constructor "BW_CLZ_NoSMT" []
-  | BW_CTZ_NoSMT -> pp_constructor "BW_CTZ_NoSMT" []
-  | BW_FFS_NoSMT -> pp_constructor "BW_FFS_NoSMT" []
-  | BW_FLS_NoSMT -> pp_constructor "BW_FLS_NoSMT" []
-  | BW_Compl -> pp_constructor "BW_Compl" []
+  | Terms.Not -> pp_constructor0 "Not"
+  | Negate -> pp_constructor0 "Negate"
+  | BW_CLZ_NoSMT -> pp_constructor0 "BW_CLZ_NoSMT"
+  | BW_CTZ_NoSMT -> pp_constructor0 "BW_CTZ_NoSMT"
+  | BW_FFS_NoSMT -> pp_constructor0 "BW_FFS_NoSMT"
+  | BW_FLS_NoSMT -> pp_constructor0 "BW_FLS_NoSMT"
+  | BW_Compl -> pp_constructor0 "BW_Compl"
 
 
 let rec pp_terms_pattern (Terms.Pat (pat, bt, loc)) =
@@ -1181,7 +1187,7 @@ let rec pp_terms_pattern (Terms.Pat (pat, bt, loc)) =
 
 and pp_terms_pattern_ = function
   | Terms.PSym s -> pp_constructor "PSym" [ pp_symbol s ]
-  | Terms.PWild -> pp_constructor "PWild" []
+  | Terms.PWild -> pp_constructor0 "PWild"
   | Terms.PConstructor (sym, args) ->
     pp_constructor
       "PConstructor"
@@ -1199,8 +1205,8 @@ let pp_const = function
     pp_constructor "Terms.Pointer" [ pp_Z alloc_id; pp_Z addr ]
   | Terms.Alloc_id z -> pp_constructor "Terms.Alloc_id" [ pp_Z z ]
   | Terms.Bool b -> pp_constructor "Terms.Bool" [ pp_bool b ]
-  | Terms.Unit -> pp_constructor "Terms.Unit" []
-  | Terms.Null -> pp_constructor "Terms.Null" []
+  | Terms.Unit -> pp_constructor0 "Terms.Unit"
+  | Terms.Null -> pp_constructor0 "Terms.Null"
   | Terms.CType_const t -> pp_constructor "Terms.CType_const" [ pp_sctype t ]
   | Terms.Default bt -> pp_constructor "Terms.Default" [ pp_basetype pp_unit bt ]
 
@@ -1334,8 +1340,8 @@ and pp_index_term_content = function
 
 
 let pp_request_init = function
-  | Request.Init -> pp_constructor "Init" []
-  | Request.Uninit -> pp_constructor "Uninit" []
+  | Request.Init -> pp_constructor0 "Init"
+  | Request.Uninit -> pp_constructor0 "Uninit"
 
 
 let rec pp_request = function
@@ -1410,13 +1416,13 @@ let pp_memop pp_type m =
 
 
 let pp_pack_unpack = function
-  | CF.Cn.Pack -> pp_constructor "Pack" []
-  | CF.Cn.Unpack -> pp_constructor "Unpack" []
+  | CF.Cn.Pack -> pp_constructor0 "Pack"
+  | CF.Cn.Unpack -> pp_constructor0 "Unpack"
 
 
 let pp_to_from = function
-  | CF.Cn.To -> pp_constructor "To" []
-  | CF.Cn.From -> pp_constructor "From" []
+  | CF.Cn.To -> pp_constructor0 "To"
+  | CF.Cn.From -> pp_constructor0 "From"
 
 
 let pp_cn_to_instantiate ppfa ppfty = function
@@ -1464,7 +1470,7 @@ and pp_logical_return_type = function
     pp_constructor
       "LogicalReturnTypes.Constraint"
       [ pp_logical_constraint lc; pp_location_info info; pp_logical_return_type lrt ]
-  | LogicalReturnTypes.I -> pp_constructor "LogicalReturnTypes.I" []
+  | LogicalReturnTypes.I -> pp_constructor0 "LogicalReturnTypes.I"
 
 
 let rec pp_logical_args ppf = function
@@ -1517,13 +1523,13 @@ let rec pp_arguments ppf = function
 
 
 let pp_cn_c_kind = function
-  | CF.Cn.C_kind_var -> pp_constructor "C_kind_var" []
-  | C_kind_enum -> pp_constructor "C_kind_enum" []
+  | CF.Cn.C_kind_var -> pp_constructor0 "C_kind_var"
+  | C_kind_enum -> pp_constructor0 "C_kind_enum"
 
 
 let pp_cn_sign = function
-  | CF.Cn.CN_unsigned -> pp_constructor "CN_unsigned" []
-  | CN_signed -> pp_constructor "CN_signed" []
+  | CF.Cn.CN_unsigned -> pp_constructor0 "CN_unsigned"
+  | CN_signed -> pp_constructor0 "CN_signed"
 
 
 let rec pp_cn_basetype ppfa = function
@@ -1554,35 +1560,35 @@ let rec pp_cn_basetype ppfa = function
 
 
 let pp_cn_const = function
-  | CF.Cn.CNConst_NULL -> pp_constructor "CNConst_NULL" []
+  | CF.Cn.CNConst_NULL -> pp_constructor0 "CNConst_NULL"
   | CNConst_integer n -> pp_constructor "CNConst_integer" [ pp_Z n ]
   | CNConst_bits (sign_sz, n) ->
     pp_constructor
       "CNConst_bits"
       [ pp_pair (pp_pair pp_cn_sign pp_nat) pp_Z (sign_sz, n) ]
   | CNConst_bool b -> pp_constructor "CNConst_bool" [ pp_bool b ]
-  | CNConst_unit -> pp_constructor "CNConst_unit" []
+  | CNConst_unit -> pp_constructor0 "CNConst_unit"
 
 
 let pp_cn_binop = function
-  | CF.Cn.CN_add -> pp_constructor "CN_add" []
-  | CN_sub -> pp_constructor "CN_sub" []
-  | CN_mul -> pp_constructor "CN_mul" []
-  | CN_div -> pp_constructor "CN_div" []
-  | CN_mod -> pp_constructor "CN_mod" []
-  | CN_equal -> pp_constructor "CN_equal" []
-  | CN_inequal -> pp_constructor "CN_inequal" []
-  | CN_lt -> pp_constructor "CN_lt" []
-  | CN_le -> pp_constructor "CN_le" []
-  | CN_gt -> pp_constructor "CN_gt" []
-  | CN_ge -> pp_constructor "CN_ge" []
-  | CN_or -> pp_constructor "CN_or" []
-  | CN_and -> pp_constructor "CN_and" []
-  | CN_implies -> pp_constructor "CN_implies" []
-  | CN_map_get -> pp_constructor "CN_map_get" []
-  | CN_band -> pp_constructor "CN_band" []
-  | CN_bor -> pp_constructor "CN_bor" []
-  | CN_bxor -> pp_constructor "CN_bxor" []
+  | CF.Cn.CN_add -> pp_constructor0 "CN_add"
+  | CN_sub -> pp_constructor0 "CN_sub"
+  | CN_mul -> pp_constructor0 "CN_mul"
+  | CN_div -> pp_constructor0 "CN_div"
+  | CN_mod -> pp_constructor0 "CN_mod"
+  | CN_equal -> pp_constructor0 "CN_equal"
+  | CN_inequal -> pp_constructor0 "CN_inequal"
+  | CN_lt -> pp_constructor0 "CN_lt"
+  | CN_le -> pp_constructor0 "CN_le"
+  | CN_gt -> pp_constructor0 "CN_gt"
+  | CN_ge -> pp_constructor0 "CN_ge"
+  | CN_or -> pp_constructor0 "CN_or"
+  | CN_and -> pp_constructor0 "CN_and"
+  | CN_implies -> pp_constructor0 "CN_implies"
+  | CN_map_get -> pp_constructor0 "CN_map_get"
+  | CN_band -> pp_constructor0 "CN_band"
+  | CN_bor -> pp_constructor0 "CN_bor"
+  | CN_bxor -> pp_constructor0 "CN_bxor"
 
 
 let rec pp_cn_pat ppfa = function
@@ -1592,7 +1598,7 @@ let rec pp_cn_pat ppfa = function
       [ pp_location loc;
         (match pat with
          | CNPat_sym s -> pp_constructor "CNPat_sym" [ ppfa s ]
-         | CNPat_wild -> pp_constructor "CNPat_wild" []
+         | CNPat_wild -> pp_constructor0 "CNPat_wild"
          | CNPat_constructor (s, args) ->
            pp_constructor
              "CNPat_constructor"
