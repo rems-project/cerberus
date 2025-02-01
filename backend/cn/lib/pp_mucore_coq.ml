@@ -1,5 +1,3 @@
-[@@@warning "-32-27-26"] (* Disable unused value warnings and unused variable warnings *)
-
 open Cerb_pp_prelude
 module CF = Cerb_frontend
 open CF
