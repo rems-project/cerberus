@@ -151,10 +151,6 @@ let run () =
           |> Option.map (fun level -> [ "--progress-level"; string_of_int level ])
           |> Option.to_list
           |> List.flatten)
-       @ (if Config.is_interactive () then
-            [ "--interactive" ]
-          else
-            [])
        @ (match Config.is_until_timeout () with
           | Some timeout -> [ "--until-timeout"; string_of_int timeout ]
           | None -> [])
@@ -187,7 +183,12 @@ let run () =
               string_of_int allowed_size_split_backtracks
             ])
           |> Option.to_list
-          |> List.flatten))
+          |> List.flatten)
+       @
+       if Config.is_trap () then
+         [ "--trap" ]
+       else
+         [])
   in
   string "# Run"
   ^^ hardline

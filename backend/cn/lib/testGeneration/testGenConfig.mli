@@ -12,7 +12,6 @@ type t =
     seed : string option;
     logging_level : int option;
     progress_level : int option;
-    interactive : bool;
     until_timeout : int option;
     exit_fast : bool;
     max_stack_depth : int option;
@@ -22,7 +21,8 @@ type t =
     allowed_size_split_backtracks : int option;
     sized_null : bool;
     coverage : bool;
-    disable_passes : string list
+    disable_passes : string list;
+    trap : bool
   }
 
 val default : t
@@ -51,8 +51,6 @@ val has_logging_level : unit -> int option
 
 val has_progress_level : unit -> int option
 
-val is_interactive : unit -> bool
-
 val is_until_timeout : unit -> int option
 
 val is_exit_fast : unit -> bool
@@ -72,3 +70,5 @@ val is_sized_null : unit -> bool
 val is_coverage : unit -> bool
 
 val has_pass : string -> bool
+
+val is_trap : unit -> bool

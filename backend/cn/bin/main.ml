@@ -467,7 +467,6 @@ let run_tests
   seed
   logging_level
   progress_level
-  interactive
   until_timeout
   exit_fast
   max_stack_depth
@@ -478,6 +477,7 @@ let run_tests
   sized_null
   coverage
   disable_passes
+  trap
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -513,7 +513,6 @@ let run_tests
           seed;
           logging_level;
           progress_level;
-          interactive;
           until_timeout;
           exit_fast;
           max_stack_depth;
@@ -523,7 +522,8 @@ let run_tests
           allowed_size_split_backtracks;
           sized_null;
           coverage;
-          disable_passes
+          disable_passes;
+          trap
         }
       in
       TestGeneration.set_config config;
@@ -901,7 +901,7 @@ let verify_cmd =
 module Testing_flags = struct
   let output_test_dir =
     let doc = "Place generated tests in the provided directory" in
-    Arg.(required & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
+    Arg.(value & opt string "." & info [ "output-dir" ] ~docv:"DIR" ~doc)
 
 
   let only =
@@ -1016,13 +1016,6 @@ module Testing_flags = struct
       & info [ "progress-level" ] ~doc)
 
 
-  let interactive =
-    let doc =
-      "Enable interactive features for testing, such as requesting more detailed logs"
-    in
-    Arg.(value & flag & info [ "interactive" ] ~doc)
-
-
   let until_timeout =
     let doc =
       "Keep rerunning tests until the given timeout (in seconds) has been reached"
@@ -1105,6 +1098,11 @@ module Testing_flags = struct
                 ]))
           []
       & info [ "disable" ] ~doc)
+
+
+  let trap =
+    let doc = "Raise SIGTRAP on test failure" in
+    Arg.(value & flag & info [ "trap" ] ~doc)
 end
 
 let testing_cmd =
@@ -1138,7 +1136,6 @@ let testing_cmd =
     $ Testing_flags.seed
     $ Testing_flags.logging_level
     $ Testing_flags.progress_level
-    $ Testing_flags.interactive
     $ Testing_flags.until_timeout
     $ Testing_flags.exit_fast
     $ Testing_flags.max_stack_depth
@@ -1149,6 +1146,7 @@ let testing_cmd =
     $ Testing_flags.sized_null
     $ Testing_flags.coverage
     $ Testing_flags.disable_passes
+    $ Testing_flags.trap
   in
   let doc =
     "Generates tests for all functions in [FILE] with CN specifications.\n\
