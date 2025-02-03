@@ -36,7 +36,7 @@ jobs:
       with:
         path: ~/.opam
         key: ${{ matrix.version }}
-        fail-on-cache-miss: true
+        fail-on-cache-miss: false
 
     - name: Install Coq
       run: |
