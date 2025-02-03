@@ -1267,29 +1267,29 @@ and pp_request_name = function
 let pp_memop pp_type m =
   let pte = pp_pexpr pp_type in
   match m with
-  | PtrEq e12 -> pp_constructor1 "PtrEq" [ pp_pair pte pte e12 ]
-  | PtrNe e12 -> pp_constructor1 "PtrNe" [ pp_pair pte pte e12 ]
-  | PtrLt e12 -> pp_constructor1 "PtrLt" [ pp_pair pte pte e12 ]
-  | PtrGt e12 -> pp_constructor1 "PtrGt" [ pp_pair pte pte e12 ]
-  | PtrLe e12 -> pp_constructor1 "PtrLe" [ pp_pair pte pte e12 ]
-  | PtrGe e12 -> pp_constructor1 "PtrGe" [ pp_pair pte pte e12 ]
-  | Ptrdiff e123 -> pp_constructor1 "Ptrdiff" [ pp_triple pp_act pte pte e123 ]
-  | IntFromPtr e123 -> pp_constructor1 "IntFromPtr" [ pp_triple pp_act pp_act pte e123 ]
-  | PtrFromInt e123 -> pp_constructor1 "PtrFromInt" [ pp_triple pp_act pp_act pte e123 ]
-  | PtrValidForDeref e12 -> pp_constructor1 "PtrValidForDeref" [ pp_pair pp_act pte e12 ]
-  | PtrWellAligned e12 -> pp_constructor1 "PtrWellAligned" [ pp_pair pp_act pte e12 ]
+  | PtrEq e12 -> pp_constructor1 "MuCore.PtrEq" [ pp_pair pte pte e12 ]
+  | PtrNe e12 -> pp_constructor1 "MuCore.PtrNe" [ pp_pair pte pte e12 ]
+  | PtrLt e12 -> pp_constructor1 "MuCore.PtrLt" [ pp_pair pte pte e12 ]
+  | PtrGt e12 -> pp_constructor1 "MuCore.PtrGt" [ pp_pair pte pte e12 ]
+  | PtrLe e12 -> pp_constructor1 "MuCore.PtrLe" [ pp_pair pte pte e12 ]
+  | PtrGe e12 -> pp_constructor1 "MuCore.PtrGe" [ pp_pair pte pte e12 ]
+  | Ptrdiff e123 -> pp_constructor1 "MuCore.Ptrdiff" [ pp_triple pp_act pte pte e123 ]
+  | IntFromPtr e123 -> pp_constructor1 "MuCore.IntFromPtr" [ pp_triple pp_act pp_act pte e123 ]
+  | PtrFromInt e123 -> pp_constructor1 "MuCore.PtrFromInt" [ pp_triple pp_act pp_act pte e123 ]
+  | PtrValidForDeref e12 -> pp_constructor1 "MuCore.PtrValidForDeref" [ pp_pair pp_act pte e12 ]
+  | PtrWellAligned e12 -> pp_constructor1 "MuCore.PtrWellAligned" [ pp_pair pp_act pte e12 ]
   | PtrArrayShift e123 ->
-    pp_constructor1 "PtrArrayShift" [ pp_triple pte pp_act pte e123 ]
+    pp_constructor1 "MuCore.PtrArrayShift" [ pp_triple pte pp_act pte e123 ]
   | PtrMemberShift e123 ->
-    pp_constructor1 "PtrMemberShift" [ pp_triple pp_symbol pp_identifier pte e123 ]
-  | Memcpy e123 -> pp_constructor1 "Memcpy" [ pp_triple pte pte pte e123 ]
-  | Memcmp e123 -> pp_constructor1 "Memcmp" [ pp_triple pte pte pte e123 ]
-  | Realloc e123 -> pp_constructor1 "Realloc" [ pp_triple pte pte pte e123 ]
-  | Va_start e12 -> pp_constructor1 "Va_start" [ pp_pair pte pte e12 ]
-  | Va_copy e -> pp_constructor1 "Va_copy" [ pte e ]
-  | Va_arg e12 -> pp_constructor1 "Va_arg" [ pp_pair pte pp_act e12 ]
-  | Va_end e -> pp_constructor1 "Va_end" [ pte e ]
-  | CopyAllocId e12 -> pp_constructor1 "CopyAllocId" [ pp_pair pte pte e12 ]
+    pp_constructor1 "MuCore.PtrMemberShift" [ pp_triple pp_symbol pp_identifier pte e123 ]
+  | Memcpy e123 -> pp_constructor1 "MuCore.Memcpy" [ pp_triple pte pte pte e123 ]
+  | Memcmp e123 -> pp_constructor1 "MuCore.Memcmp" [ pp_triple pte pte pte e123 ]
+  | Realloc e123 -> pp_constructor1 "MuCore.Realloc" [ pp_triple pte pte pte e123 ]
+  | Va_start e12 -> pp_constructor1 "MuCore.Va_start" [ pp_pair pte pte e12 ]
+  | Va_copy e -> pp_constructor1 "MuCore.Va_copy" [ pte e ]
+  | Va_arg e12 -> pp_constructor1 "MuCore.Va_arg" [ pp_pair pte pp_act e12 ]
+  | Va_end e -> pp_constructor1 "MuCore.Va_end" [ pte e ]
+  | CopyAllocId e12 -> pp_constructor1 "MuCore.CopyAllocId" [ pp_pair pte pte e12 ]
 
 
 let pp_pack_unpack = function
@@ -1303,9 +1303,9 @@ let pp_to_from = function
 
 
 let pp_cn_to_instantiate ppfa ppfty = function
-  | CF.Cn.I_Function f -> pp_constructor1 "I_Function" [ ppfa f ]
-  | CF.Cn.I_Good ty -> pp_constructor1 "I_Good" [ ppfty ty ]
-  | CF.Cn.I_Everything -> pp_constructor1 "I_Everything" []
+  | CF.Cn.I_Function f -> pp_constructor2 "I_Function" [ ppfa f ]
+  | CF.Cn.I_Good ty -> pp_constructor2 "I_Good" [ ppfty ty ]
+  | CF.Cn.I_Everything -> pp_constructor2 "I_Everything" []
 
 
 let pp_logical_constraint = function
@@ -1352,7 +1352,7 @@ and pp_logical_return_type = function
 let rec pp_logical_args ppf = function
   | Define (st, info, rest) ->
     pp_constructor1
-      "Define"
+      "MuCore.Define"
       [ pp_tuple
           [ pp_pair pp_symbol pp_index_term st;
             pp_location_info info;
@@ -1361,28 +1361,37 @@ let rec pp_logical_args ppf = function
       ]
   | Resource ((sym, rbt), info, rest) ->
     pp_constructor1
-      "Resource"
-      [ pp_symbol sym;
-        pp_pair pp_request (pp_basetype pp_unit) rbt;
-        pp_location_info info;
-        pp_logical_args ppf rest
+      "MuCore.Resource"
+      [ pp_tuple  
+          [ pp_symbol sym;
+            pp_pair pp_request (pp_basetype pp_unit) rbt;
+            pp_location_info info;
+            pp_logical_args ppf rest
+          ]
       ]
   | Constraint (lc, info, rest) ->
     pp_constructor1
-      "Constraint"
-      [ pp_logical_constraint lc; pp_location_info info; pp_logical_args ppf rest ]
-  | I i -> pp_constructor1 "I" [ ppf i ]
+      "MuCore.Constraint"
+      [ pp_tuple
+          [ pp_logical_constraint lc;
+            pp_location_info info;
+            pp_logical_args ppf rest
+          ]
+      ]
+  | I i -> pp_constructor1 "MuCore.I" [ ppf i ]
 
 
 let rec pp_arguments ppf = function
   | Computational (sbt, loc, rest) ->
     pp_constructor1
-      "Computational"
-      [ pp_pair pp_symbol (pp_basetype pp_unit) sbt;
-        pp_location_info loc;
-        pp_arguments ppf rest
+      "MuCore.Computational"
+      [ pp_tuple  
+          [ pp_pair pp_symbol (pp_basetype pp_unit) sbt;
+            pp_location_info loc;
+            pp_arguments ppf rest
+          ]
       ]
-  | L at -> pp_constructor1 "L" [ pp_logical_args ppf at ]
+  | L at -> pp_constructor1 "MuCore.L" [ pp_logical_args ppf at ]
 
 
 let pp_cn_c_kind = function
@@ -1619,7 +1628,7 @@ let rec pp_cn_expr ppfa ppfty = function
                pp_constructor2 "CNExpr_negate" [ pp_cn_expr ppfa ppfty e ]
              | CNExpr_default bt ->
                pp_constructor2 "CNExpr_default" [ pp_cn_basetype ppfa bt ]
-             | CNExpr_bnot e -> pp_constructor "CNExpr_bnot" [ pp_cn_expr ppfa ppfty e ])
+             | CNExpr_bnot e -> pp_constructor2 "CNExpr_bnot" [ pp_cn_expr ppfa ppfty e ])
           ]
       ]
 
@@ -1779,7 +1788,7 @@ let rec pp_cn_statement ppfa ppfty (CF.Cn.CN_statement (loc, stmt)) =
 
 and pp_expr pp_type = function
   | Expr (loc, annots, ty, e) ->
-    pp_constructor2
+    pp_constructor1
       "Expr"
       [ pp_location loc;
         pp_list pp_annot_t annots;
