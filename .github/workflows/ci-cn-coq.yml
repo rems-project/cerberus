@@ -26,7 +26,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: System dependencies (ubuntu)
+    - name: System dependencies (Ubuntu)
       run: |
         sudo apt-get install build-essential libgmp-dev z3 opam
 
@@ -35,34 +35,34 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.opam
-        key: ${{ matrix.version }}
-        fail-on-cache-miss: false
+        key: ${{ matrix.version }}-with-coq
 
-    - name: Install Coq
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
-        opam install --yes coq
-
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+        opam switch create ${{ matrix.version }}-with-coq ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }}-with-coq )
+        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+  
     - name: Install Cerberus
       run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
+        opam switch ${{ matrix.version }}-with-coq
+        eval $(opam env --switch=${{ matrix.version }}-with-coq )
         opam pin --yes --no-action add cerberus-lib .
         opam pin --yes --no-action add cerberus .
         opam install --yes cerberus
 
     - name: Install CN (with Coq)
       run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
+        opam switch ${{ matrix.version }}-with-coq
+        eval $(opam env --switch=${{ matrix.version }}-with-coq )
         opam pin --yes --no-action add cn .
         opam pin --yes --no-action add cn-coq .
         opam install --yes cn cn-coq ocamlformat.0.26.2
 
     - name: Run CN-Coq tests
       run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
+        opam switch ${{ matrix.version }}-with-coq
+        eval $(opam env --switch=${{ matrix.version }}-with-coq )
         ./tests/run-cn-coq-ci.sh
