@@ -2,7 +2,15 @@
  (name cerb_backend)
  (public_name cerberus-lib.backend_common)
  (synopsis "Cerberus backend utilities")
- (flags (:standard -w -27))
- (modules :standard \ smt smt_wrapper boot_pprint2 tests cerbcore
-   interactive_driver )
+ (flags
+  (:standard -w -27))
+ (modules
+  :standard
+  \
+  smt
+  smt_wrapper
+  boot_pprint2
+  tests
+  cerbcore
+  interactive_driver)
  (libraries cerb_frontend core_parser c_parser pprint cerb_util))

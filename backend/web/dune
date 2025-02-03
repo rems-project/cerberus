@@ -2,51 +2,92 @@
  (name instance_api)
  (modules instance_api)
  (wrapped false)
- (libraries cmdliner lwt
-  cerb_frontend bmc))
+ (libraries cmdliner lwt cerb_frontend bmc))
 
 (executable
  (name instance)
  (public_name instance-concrete)
  (package cerberus-web)
- (flags (:standard -w -27))
+ (flags
+  (:standard -w -27))
  (modules instance)
- (libraries str lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_concrete cerb_util instance_api))
+ (libraries
+  str
+  lwt
+  cohttp-lwt-unix
+  ezgzip
+  fpath
+  cerb_frontend
+  cerb_backend
+  mem_concrete
+  cerb_util
+  instance_api))
 
 (executable
  (name instance_vip)
  (public_name instance-vip)
  (package cerberus-web)
- (flags (:standard -w -27))
+ (flags
+  (:standard -w -27))
  (modules instance_vip)
- (libraries str lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_vip cerb_util instance_api))
+ (libraries
+  str
+  lwt
+  cohttp-lwt-unix
+  ezgzip
+  fpath
+  cerb_frontend
+  cerb_backend
+  mem_vip
+  cerb_util
+  instance_api))
 
 (executable
  (name instance_symbolic)
  (public_name instance-symbolic)
  (package cerberus-web)
- (flags (:standard -w -27))
+ (flags
+  (:standard -w -27))
  (modules instance_symbolic)
- (libraries str lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_symbolic cerb_util instance_api))
+ (libraries
+  str
+  lwt
+  cohttp-lwt-unix
+  ezgzip
+  fpath
+  cerb_frontend
+  cerb_backend
+  mem_symbolic
+  cerb_util
+  instance_api))
 
 (executable
  (name web)
  (public_name web)
  (package cerberus-web)
- (flags (:standard -w -27-69))
+ (flags
+  (:standard -w -27-69))
  (modules web)
- (libraries str lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_concrete cerb_util instance_api))
+ (libraries
+  str
+  lwt
+  cohttp-lwt-unix
+  ezgzip
+  fpath
+  cerb_frontend
+  cerb_backend
+  mem_concrete
+  cerb_util
+  instance_api))
 
 (rule
  (target instance_symbolic.ml)
  (deps instance.ml)
- (action (copy instance.ml instance_symbolic.ml)))
+ (action
+  (copy instance.ml instance_symbolic.ml)))
 
 (rule
  (target instance_vip.ml)
  (deps instance.ml)
- (action (copy instance.ml instance_vip.ml)))
+ (action
+  (copy instance.ml instance_vip.ml)))

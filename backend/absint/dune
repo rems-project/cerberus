@@ -4,6 +4,17 @@
  (name main)
  (public_name absint)
  (package cerberus-absint)
- (flags (:standard -w -27-32))
- (libraries result cmdliner str unix apron apron.boxD apron.octD apron.polkaMPQ
-  apron.t1pMPQ mem_concrete cerberus-lib.backend_common))
+ (flags
+  (:standard -w -27-32))
+ (libraries
+  result
+  cmdliner
+  str
+  unix
+  apron
+  apron.boxD
+  apron.octD
+  apron.polkaMPQ
+  apron.t1pMPQ
+  mem_concrete
+  cerberus-lib.backend_common))

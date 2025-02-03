@@ -213,7 +213,7 @@ let rec cn_to_ail_base_type ?pred_sym:(_ = None) cn_typ =
   let typ =
     match cn_typ with
     (* C type for cases covered above doesn't matter as we pretty-print the typedef string provided above anyway. *)
-    (* Setting to C.(Integer Char) in these cases *)
+    (* Setting to C.(Basic (Integer Char)) in these cases *)
     | CN_bits _ | CN_integer | CN_bool | CN_map _ | CN_loc | CN_alloc_id ->
       C.(Basic (Integer Char))
     | CN_unit -> C.Void
@@ -249,11 +249,13 @@ let cn_to_ail_unop bt =
   | Negate ->
     (match typedef_str_opt with
      | Some typedef_str -> (A.Bnot, Some (typedef_str ^ "_negate"))
-     | None -> failwith "BW_FLS_NoSMT unop translation: typedef string not found")
+     | None ->
+       failwith
+         (__LOC__ ^ ": typedef string not found in translation of BW_FLS_NoSMT unop"))
   | BW_FLS_NoSMT ->
     let failure_msg =
       Printf.sprintf
-        "FLS cannot be applied to index term of type %s"
+        ": FLS cannot be applied to index term of type %s"
         (Pp.plain (BT.pp bt))
     in
     (match bt with
@@ -263,11 +265,11 @@ let cn_to_ail_unop bt =
        else if n == 32 then
          (A.Bnot, Some "cn_bits_u32_fls")
        else
-         failwith failure_msg
-     | _ -> failwith failure_msg)
-  | BW_Compl -> failwith "TODO cn_to_ail_unop: Translation not implemented"
+         failwith (__LOC__ ^ failure_msg)
+     | _ -> failwith (__LOC__ ^ failure_msg))
+  | BW_Compl -> failwith (__LOC__ ^ ": Translation of BW_Compl not implemented")
   | BW_CLZ_NoSMT | BW_CTZ_NoSMT | BW_FFS_NoSMT ->
-    failwith "Failure: Trying to translate SMT-only unop from C source"
+    failwith (__LOC__ ^ ": Failure in trying to translate SMT-only unop from C source")
 
 
 (* TODO: Finish *)
@@ -281,7 +283,8 @@ let cn_to_ail_binop bt1 bt2 =
     | _, _ ->
       let bt1_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt1) in
       let bt2_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt2) in
-      failwith ("Incompatible CN integer types: " ^ bt1_str ^ " with " ^ bt2_str)
+      failwith
+        (__LOC__ ^ ": Incompatible CN integer types: " ^ bt1_str ^ " with " ^ bt2_str)
   in
   function
   | IT.And -> (A.And, Some "cn_bool_and")
