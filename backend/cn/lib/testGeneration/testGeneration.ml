@@ -390,6 +390,8 @@ let run_seq
   (prog5 : unit Mucore.file)
   : unit
   =
+  Cerb_debug.begin_csv_timing ();
   if Option.is_some prog5.main then
     failwith "Cannot test a file with a `main` function";
   SeqTests.generate ~output_dir ~filename num_samples max_retries sigma prog5 ;
+  Cerb_debug.end_csv_timing "specification test generation"

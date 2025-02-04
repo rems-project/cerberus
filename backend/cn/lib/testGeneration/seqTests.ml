@@ -1,16 +1,23 @@
 module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
-module BT = BaseTypes
-module AT = ArgumentTypes
-module LAT = LogicalArgumentTypes
-module CtA = Cn_internal_to_ail
 module Utils = Executable_spec_utils
-module ESpecInternal = Executable_spec_internal
-module Config = TestGenConfig
+(* module Config = TestGenConfig *)
 module SymSet = Set.Make (Sym)
 
 type test_stats = {successes : int; failures : int; skipped: int}
+
+let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.document)
+: unit
+=
+let oc =
+  Stdlib.open_out_gen
+    [ Open_wronly; Open_creat; Open_trunc; Open_text ]
+    perm
+    (Filename.concat output_dir filename)
+in
+output_string oc (Pp.plain ~width:80 doc);
+close_out oc
 
 let rec pick 
   (distribution : (int * (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) list) 
@@ -108,21 +115,21 @@ let stmt_to_doc
   : Pp.document
   =
   (CF.Pp_ail.pp_statement ~executable_spec:true ~bs:[] 
-      (Executable_spec_utils.mk_stmt 
+      (Utils.mk_stmt 
         (stmt))) 
 
 let create_test_file 
   (sequence : Pp.document) 
-  (filename_base : string) 
+  (fun_decls : Pp.document)
   : Pp.document
   =
   let open Pp in
   string "#include "
-  ^^ dquotes (string (filename_base ^ "-exec.c"))
-  ^^ hardline
-  ^^ string "#include "
-  ^^ dquotes (string "cn.c")
+  ^^ dquotes (string "cn.h")
   ^^ twice hardline
+  ^^ fun_decls
+  ^^ twice hardline
+  (* need to add function signatures ex. void push_queue (int x, struct queue *q); *)
   ^^ string "int main"
   ^^ parens (string "int argc, char* argv[]")
   ^^ break 1
@@ -162,6 +169,7 @@ let rec gen_sequence
   (output_dir : string)
   (filename_base : string)
   (src_code : string list)
+  (fun_decls : Pp.document)
   : (Pp.document * test_stats, Pp.document * test_stats) Either.either
   =           
     let open Pp 
@@ -203,7 +211,7 @@ let rec gen_sequence
                 ^^ hardline)
             ) 
           in
-          let _ = SpecTests.save output_dir (filename_base ^ "_test.c") (create_test_file (seq_so_far ^^ curr_test) filename_base) in
+          let _ = save output_dir (filename_base ^ "_test.c") (create_test_file (seq_so_far ^^ curr_test) fun_decls) in
           let (output, status) = out_to_list (output_dir ^ "/run_tests.sh") in
           match status with
           | WEXITED(0) -> ctx', prev, Either.Right(curr_test)
@@ -253,10 +261,10 @@ let rec gen_sequence
       | 0 -> Left(seq_so_far ^^ (string "/* unable to generate call at this point */"), {stats with failures = stats.failures + 1})
       | _ -> 
         (match gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) max_retries with
-        | ctx', prev, Either.Right(test) -> gen_sequence funcs (n - 1) max_retries {stats with successes = stats.successes + 1} ctx' prev (seq_so_far ^^ test) output_dir filename_base src_code
+        | ctx', prev, Either.Right(test) -> gen_sequence funcs (n - 1) max_retries {stats with successes = stats.successes + 1} ctx' prev (seq_so_far ^^ test) output_dir filename_base src_code fun_decls
         | _, prev, Either.Left(err) -> 
           (if is_empty err then 
-            gen_sequence funcs (n - 1) max_retries {stats with skipped = stats.skipped + 1} ctx prev seq_so_far output_dir filename_base src_code
+            gen_sequence funcs (n - 1) max_retries {stats with skipped = stats.skipped + 1} ctx prev seq_so_far output_dir filename_base src_code fun_decls
           else 
             Either.Left(seq_so_far ^^ err, {stats with failures = 1}))))
     )
@@ -269,6 +277,7 @@ let compile_sequence
   (output_dir : string)
   (filename_base : string)
   (src_code : string list)
+  (fun_decls : Pp.document)
   : (Pp.document * test_stats, Pp.document * test_stats) Either.either
   = 
   let fuel = num_samples in
@@ -294,7 +303,7 @@ let compile_sequence
                     "@";
                     __LOC__
                   ]) )) insts in
-      gen_sequence args_map fuel max_retries {successes = 0; failures = 0; skipped = 0} [] 0 Pp.empty output_dir filename_base src_code
+      gen_sequence args_map fuel max_retries {successes = 0; failures = 0; skipped = 0} [] 0 Pp.empty output_dir filename_base src_code fun_decls
 
 let generate
   ~(output_dir : string)
@@ -315,10 +324,19 @@ let generate
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in
   let test_file = filename_base ^ "_test.c" in
-  let script_doc = SpecTests.compile_script ~output_dir ~test_file in
+  let script_doc = BuildScript.generate ~output_dir ~filename_base in
   let src_code, _ = out_to_list ("cat " ^ filename) in
-  SpecTests.save ~perm:0o777 output_dir "run_tests.sh" script_doc;
-  let compiled_seq = compile_sequence sigma insts num_samples max_retries output_dir filename_base src_code in
+  save ~perm:0o777 output_dir "run_tests.sh" script_doc;
+  let fun_to_decl (inst : Executable_spec_extract.instrumentation) =
+    CF.Pp_ail.pp_function_prototype
+         ~executable_spec:true
+         inst.fn
+         (let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
+          decl)
+    in 
+    let open Pp in
+  let fun_decls = separate_map (hardline) fun_to_decl insts in
+  let compiled_seq = compile_sequence sigma insts num_samples max_retries output_dir filename_base src_code fun_decls in
   let seq, output_msg = match compiled_seq with
   | Left(seq, stats) -> 
       seq, (Printf.sprintf 
@@ -333,7 +351,7 @@ let generate
               passed: %d, failed: %d, skipped: %d" 
             stats.successes stats.failures stats.skipped)
   in
-  let tests_doc = create_test_file seq filename_base in
+  let tests_doc = create_test_file seq fun_decls in
   print_endline output_msg;
-  SpecTests.save output_dir test_file tests_doc;
+  save output_dir test_file tests_doc;
   ()

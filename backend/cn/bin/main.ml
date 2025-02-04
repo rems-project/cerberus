@@ -459,7 +459,7 @@ let run_seq_tests
   Cerb_debug.debug_level := debug_level;
   Pp.print_level := print_level;
   Sym.executable_spec_enabled := true;
-  let handle_error (e : TypeErrors.type_error) =
+  let handle_error (e : TypeErrors.t) =
     let report = TypeErrors.pp_message e.msg in
     Pp.error e.loc report.short (Option.to_list report.descr);
     match e.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
@@ -475,7 +475,7 @@ let run_seq_tests
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
           if
@@ -505,7 +505,7 @@ let run_seq_tests
             (Some output_dir)
             prog5
             statement_locs;
-          let _ = statement_locs in
+          let _ = statement_locs, cabs_tunit in
           TestGeneration.run_seq
             ~output_dir
             ~filename
@@ -514,7 +514,7 @@ let run_seq_tests
             sigma
             prog5;)
         ();
-      Resultat.return ())
+        Or_TypeError.return ())
 
 let run_tests
   (* Common *)
@@ -603,7 +603,8 @@ let run_tests
           sized_null;
           coverage;
           disable_passes;
-          trap
+          trap;
+          max_resets
         }
       in
       TestGeneration.set_config config;
@@ -1183,6 +1184,11 @@ module Testing_flags = struct
   let trap =
     let doc = "Raise SIGTRAP on test failure" in
     Arg.(value & flag & info [ "trap" ] ~doc)
+
+  let max_resets =
+    let doc = "Number of context resets for sequence testing" in
+    Arg.(
+      value & opt int TestGeneration.default_cfg.max_resets & info [ "max-resets" ] ~doc)
 end
 
 let testing_cmd =

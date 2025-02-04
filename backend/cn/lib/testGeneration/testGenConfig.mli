@@ -22,7 +22,8 @@ type t =
     sized_null : bool;
     coverage : bool;
     disable_passes : string list;
-    trap : bool
+    trap : bool;
+    max_resets : int
   }
 
 val default : t
@@ -72,3 +73,5 @@ val is_coverage : unit -> bool
 val has_pass : string -> bool
 
 val is_trap : unit -> bool
+
+val get_max_resets : unit -> int
