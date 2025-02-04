@@ -25,9 +25,14 @@ val get_conversion_to_fn_str : BT.t -> string option
 
 val get_conversion_from_fn_str : BT.t -> string option
 
-val wrap_with_convert
+val wrap_with_convert_from
   :  ?sct:Sctypes.t ->
-  convert_from:bool ->
+  CF.GenTypes.genTypeCategory A.expression_ ->
+  BT.t ->
+  CF.GenTypes.genTypeCategory A.expression_
+
+val wrap_with_convert_to
+  :  ?sct:Sctypes.t ->
   CF.GenTypes.genTypeCategory A.expression_ ->
   BT.t ->
   CF.GenTypes.genTypeCategory A.expression_

@@ -16,8 +16,8 @@ let rec add_records_to_map_from_it it =
   | Binop (_bop, t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | ITE (t1, t2, t3) -> List.iter add_records_to_map_from_it [ t1; t2; t3 ]
   | EachI ((_, (_, _), _), t) -> add_records_to_map_from_it t
-  | Tuple _ts -> failwith "TODO: Tuples not yet supported"
-  | NthTuple (_, _t) -> failwith "TODO: Tuples not yet supported"
+  | Tuple _ts -> failwith (__LOC__ ^ ": Tuples not yet supported")
+  | NthTuple (_, _t) -> failwith (__LOC__ ^ ": NthTuples not yet supported")
   | Struct (_tag, members) ->
     List.iter (fun (_, it') -> add_records_to_map_from_it it') members
   | StructMember (t, _member) -> add_records_to_map_from_it t

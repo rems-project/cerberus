@@ -8,6 +8,7 @@ module IT = IndexTerms
 module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
 module AT = ArgumentTypes
+
 (* Executable spec helper functions *)
 
 type executable_spec =
@@ -463,7 +464,6 @@ let generate_ownership_functions
   ownership_ctypes
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   =
-  (* let ctypes = List.map get_ctype_without_ptr ctypes in *)
   let rec remove_duplicates ret_list = function
     | [] -> []
     | x :: xs ->
