@@ -402,7 +402,6 @@ let wrap_with_convert ?sct ~convert_from ail_expr_ bt =
 
 let get_equality_fn_call bt e1 e2 _dts =
   match bt with
-  (* TODO (RB) Check if buggy: https://github.com/rems-project/cerberus/pull/652 *)
   | BT.Map (_, val_bt) ->
     let val_ctype_with_ptr = bt_to_ail_ctype val_bt in
     let val_ctype = get_ctype_without_ptr val_ctype_with_ptr in
@@ -524,14 +523,14 @@ let cn_to_ail_const const basetype =
         A.AilEconst (ConstantInteger (IConstant (z.addr, Decimal, None)))
       in
       wrap (A.AilEunary (Address, mk_expr ail_const'))
-    | Alloc_id _ -> failwith "TODO Alloc_id"
+    | Alloc_id _ -> failwith (__LOC__ ^ ": TODO Alloc_id")
     | Bool b ->
       wrap
         (A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse)))
     | Unit ->
       wrap (A.AilEconst ConstantNull) (* Gets overridden by dest_with_unit_check *)
     | Null -> wrap (A.AilEconst ConstantNull)
-    | CType_const _ -> failwith "TODO CType_const"
+    | CType_const _ -> failwith (__LOC__ ^ ": TODO CType_const")
     | Default bt -> cn_to_ail_default bt
   in
   let is_unit = const == Unit in
@@ -680,7 +679,8 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   let sct =
     match sct_opt with
     | Some sct -> sct
-    | None -> failwith "Bad sctype when trying to generate ownership checking function"
+    | None ->
+      failwith (__LOC__ ^ "Bad sctype when trying to generate ownership checking function")
   in
   let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
   let ret_type = bt_to_ail_ctype bt in
