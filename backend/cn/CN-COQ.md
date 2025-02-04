@@ -16,7 +16,6 @@ First set up additional repositories for Coq and Iris packages:
 ```shell
 opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
 opam pin -ny coq-struct-tact https://github.com/uwplse/StructTact.git
-opam repo add --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
 ```
 
 Install the remaining dependencies using opam:
@@ -31,12 +30,12 @@ opam install --deps-only ./cn-coq.opam
 Then to build Cn-Coq:
 
 ```shell
-make cn-coq
+make cn-with-coq
 ```
 
 To install:
 
 ```shell
-make install-cn-coq
+make cn-coq-install
 ```
 
