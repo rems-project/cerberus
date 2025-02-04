@@ -243,12 +243,12 @@ let bt_to_ail_ctype ?(pred_sym = None) t =
 
 
 let cn_to_ail_unop bt =
-  let typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in
+  let bt_typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in
   function
-  | IT.Not -> (A.Bnot, Some "cn_bool_not")
+  | IT.Not -> Some "cn_bool_not"
   | Negate ->
-    (match typedef_str_opt with
-     | Some typedef_str -> (A.Bnot, Some (typedef_str ^ "_negate"))
+    (match bt_typedef_str_opt with
+     | Some typedef_str -> Some (typedef_str ^ "_negate")
      | None ->
        failwith
          (__LOC__ ^ ": typedef string not found in translation of BW_FLS_NoSMT unop"))
@@ -261,9 +261,9 @@ let cn_to_ail_unop bt =
     (match bt with
      | Bits (Unsigned, n) ->
        if n == 64 then
-         (A.Bnot, Some "cn_bits_u64_flsl")
+         Some "cn_bits_u64_flsl"
        else if n == 32 then
-         (A.Bnot, Some "cn_bits_u32_fls")
+         Some "cn_bits_u32_fls"
        else
          failwith (__LOC__ ^ failure_msg)
      | _ -> failwith (__LOC__ ^ failure_msg))
@@ -287,9 +287,8 @@ let cn_to_ail_binop bt1 bt2 =
         (__LOC__ ^ ": Incompatible CN integer types: " ^ bt1_str ^ " with " ^ bt2_str)
   in
   function
-  | IT.And -> (A.And, Some "cn_bool_and")
-  | Or -> (A.Or, Some "cn_bool_or")
-  (* | Impl *)
+  | IT.And -> Some "cn_bool_and"
+  | Or -> Some "cn_bool_or"
   | Add ->
     let bt2_str =
       if BT.equal bt1 BT.(Loc ()) then (
@@ -300,36 +299,34 @@ let cn_to_ail_binop bt1 bt2 =
       else
         ""
     in
-    (A.(Arithmetic Add), Some (get_cn_int_type_str bt1 bt2 ^ "_add" ^ bt2_str))
-  | Sub -> (A.(Arithmetic Sub), Some (get_cn_int_type_str bt1 bt2 ^ "_sub"))
-  | Mul | MulNoSMT ->
-    (A.(Arithmetic Mul), Some (get_cn_int_type_str bt1 bt2 ^ "_multiply"))
-  | Div | DivNoSMT -> (A.(Arithmetic Div), Some (get_cn_int_type_str bt1 bt2 ^ "_divide"))
-  | Exp | ExpNoSMT -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_pow"))
-  | Rem | RemNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_rem"))
-  | Mod | ModNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_mod"))
-  | BW_Xor -> (A.(Arithmetic Bxor), Some (get_cn_int_type_str bt1 bt2 ^ "_xor"))
-  | BW_And -> (A.(Arithmetic Band), Some (get_cn_int_type_str bt1 bt2 ^ "_bwand"))
-  | BW_Or -> (A.(Arithmetic Bor), Some (get_cn_int_type_str bt1 bt2 ^ "_bwor"))
-  | ShiftLeft -> (A.(Arithmetic Shl), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left"))
-  | ShiftRight -> (A.(Arithmetic Shr), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right"))
-  | LT -> (A.Lt, Some (get_cn_int_type_str bt1 bt2 ^ "_lt"))
-  | LE -> (A.Le, Some (get_cn_int_type_str bt1 bt2 ^ "_le"))
-  | Min -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_min"))
-  | Max -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_max"))
-  | EQ -> (A.Eq, Some "eq") (* placeholder - equality dealt with in a special way *)
-  | LTPointer -> (A.And, Some "cn_pointer_lt")
-  | LEPointer -> (A.And, Some "cn_pointer_le")
-  | SetUnion -> failwith "TODO cn_to_ail_binop: SetUnion"
-  | SetIntersection -> failwith "TODO cn_to_ail_binop: SetIntersection"
-  | SetDifference -> failwith "TODO cn_to_ail_binop: SetDifference"
-  | SetMember -> failwith "TODO cn_to_ail_binop: SetMember"
-  | Subset -> failwith "TODO cn_to_ail_binop: Subset"
-  | Implies -> (A.Or, Some "cn_bool_implies")
+    Some (get_cn_int_type_str bt1 bt2 ^ "_add" ^ bt2_str)
+  | Sub -> Some (get_cn_int_type_str bt1 bt2 ^ "_sub")
+  | Mul | MulNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_multiply")
+  | Div | DivNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_divide")
+  | Exp | ExpNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_pow")
+  | Rem | RemNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_rem")
+  | Mod | ModNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_mod")
+  | BW_Xor -> Some (get_cn_int_type_str bt1 bt2 ^ "_xor")
+  | BW_And -> Some (get_cn_int_type_str bt1 bt2 ^ "_bwand")
+  | BW_Or -> Some (get_cn_int_type_str bt1 bt2 ^ "_bwor")
+  | ShiftLeft -> Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left")
+  | ShiftRight -> Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right")
+  | LT -> Some (get_cn_int_type_str bt1 bt2 ^ "_lt")
+  | LE -> Some (get_cn_int_type_str bt1 bt2 ^ "_le")
+  | Min -> Some (get_cn_int_type_str bt1 bt2 ^ "_min")
+  | Max -> Some (get_cn_int_type_str bt1 bt2 ^ "_max")
+  | EQ -> Some "eq" (* placeholder - equality dealt with in a special way in caller *)
+  | LTPointer -> Some "cn_pointer_lt"
+  | LEPointer -> Some "cn_pointer_le"
+  | Implies -> Some "cn_bool_implies"
+  | SetUnion -> failwith (__LOC__ ^ ": TODO SetUnion")
+  | SetIntersection -> failwith (__LOC__ ^ ": TODO SetIntersection")
+  | SetDifference -> failwith (__LOC__ ^ ": TODO SetDifference")
+  | SetMember -> failwith (__LOC__ ^ ": TODO SetMember")
+  | Subset -> failwith (__LOC__ ^ ": TODO Subset")
 
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
-
 let get_underscored_typedef_string_from_bt ?(is_record = false) bt =
   let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in
   match typedef_name with
@@ -351,82 +348,39 @@ let get_underscored_typedef_string_from_bt ?(is_record = false) bt =
      | _ -> None)
 
 
-let get_type_underscored_str (bt : BT.t) : string option =
-  let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in
-  match typedef_name with
-  | Some str -> Some (String.concat "_" (String.split_on_char ' ' str))
-  | None ->
-    (match bt with
-     | BT.Struct sym ->
-       Some ("struct_" ^ Sym.pp_string (generate_sym_with_suffix ~suffix:"_cn" sym))
-     | _ -> None)
-
-
 let get_conversion_to_fn_str (bt : BT.t) : string option =
   let open Option in
-  let@ ty_str = get_type_underscored_str bt in
+  let@ ty_str = get_underscored_typedef_string_from_bt bt in
   return ("convert_to_" ^ ty_str)
 
 
 let get_conversion_from_fn_str (bt : BT.t) : string option =
   let open Option in
-  let@ ty_str = get_type_underscored_str bt in
+  let@ ty_str = get_underscored_typedef_string_from_bt bt in
   return ("convert_from_" ^ ty_str)
 
 
-let wrap_with_convert_to ?sct ail_expr_ bt =
-  let conversion_fn_str_opt = get_conversion_to_fn_str bt in
+(* If convert_from is true, this is a conversion _from_ the CN type bt; otherwise it is a conversion _to_ bt *)
+let wrap_with_convert ?sct ~convert_from ail_expr_ bt =
+  let conversion_str_function =
+    if convert_from then get_conversion_from_fn_str else get_conversion_to_fn_str
+  in
+  let conversion_fn_str_opt = conversion_str_function bt in
   match conversion_fn_str_opt with
   | Some conversion_fn_str ->
     let args =
       match bt with
       | BT.Map (_bt1, bt2) ->
-        let cntype_conversion_fn_str_opt = get_conversion_to_fn_str bt2 in
+        let cntype_conversion_fn_str_opt = conversion_str_function bt2 in
         let cntype_conversion_fn_str =
           match cntype_conversion_fn_str_opt with
           | Some str -> str
-          | None -> failwith "No conversion function for map values"
+          | None -> failwith (__LOC__ ^ ": No conversion function for map values")
         in
         let num_elements' =
           match sct with
           | Some (Sctypes.Array (_, Some num_elements)) -> num_elements
-          | _ -> failwith "Need number of array elements to create CN map"
-        in
-        let converted_num_elements =
-          A.(
-            AilEconst
-              (ConstantInteger (IConstant (Z.of_int num_elements', Decimal, None))))
-        in
-        A.
-          [ ail_expr_;
-            AilEident (Sym.fresh_pretty cntype_conversion_fn_str);
-            converted_num_elements
-          ]
-      | _ -> [ ail_expr_ ]
-    in
-    A.(
-      AilEcall
-        (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), List.map mk_expr args))
-  | None -> ail_expr_
-
-
-let wrap_with_convert_from ?sct ail_expr_ bt =
-  let conversion_fn_str_opt = get_conversion_from_fn_str bt in
-  match conversion_fn_str_opt with
-  | Some conversion_fn_str ->
-    let args =
-      match bt with
-      | BT.Map (_bt1, bt2) ->
-        let cntype_conversion_fn_str_opt = get_conversion_from_fn_str bt2 in
-        let cntype_conversion_fn_str =
-          match cntype_conversion_fn_str_opt with
-          | Some str -> str
-          | None -> failwith "No conversion function for map values"
-        in
-        let num_elements' =
-          match sct with
-          | Some (Sctypes.Array (_, Some num_elements)) -> num_elements
-          | _ -> failwith "Need number of array elements to create CN map"
+          | _ -> failwith (__LOC__ ^ ": Need number of array elements to create CN map")
         in
         let converted_num_elements =
           A.(
@@ -487,11 +441,11 @@ let convert_from_cn_bool_sym =
 
 let wrap_with_convert_from_cn_bool expr =
   let (A.AnnotatedExpression (_, _, _, expr_)) = expr in
-  mk_expr (wrap_with_convert_from expr_ BT.Bool)
+  mk_expr (wrap_with_convert ~convert_from:true expr_ BT.Bool)
 
 
 let cn_bool_true_expr : CF.GenTypes.genTypeCategory A.expression =
-  mk_expr (wrap_with_convert_to true_const BT.Bool)
+  mk_expr (wrap_with_convert ~convert_from:false true_const BT.Bool)
 
 
 let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt = None) (bs, ss, e) =
@@ -558,7 +512,7 @@ let cn_to_ail_default bt =
 
 
 let cn_to_ail_const const basetype =
-  let wrap x = wrap_with_convert_to x basetype in
+  let wrap x = wrap_with_convert ~convert_from:false x basetype in
   let ail_const =
     match const with
     | IT.Z z -> wrap (A.AilEconst (ConstantInteger (IConstant (z, Decimal, None))))
@@ -730,7 +684,9 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   in
   let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
   let ret_type = bt_to_ail_ctype bt in
-  let return_stmt = A.(AilSreturn (mk_expr (wrap_with_convert_to ~sct deref_expr_ bt))) in
+  let return_stmt =
+    A.(AilSreturn (mk_expr (wrap_with_convert ~convert_from:false ~sct deref_expr_ bt)))
+  in
   (* Generating function declaration *)
   let decl =
     ( fn_sym,
@@ -814,7 +770,10 @@ let rec cn_to_ail_expr_aux
     in
     let ail_expr_ =
       if is_sym_obj_address sym then
-        wrap_with_convert_to A.(AilEunary (Address, mk_expr ail_expr_)) basetype
+        wrap_with_convert
+          ~convert_from:false
+          A.(AilEunary (Address, mk_expr ail_expr_))
+          basetype
       else
         ail_expr_
     in
@@ -822,7 +781,7 @@ let rec cn_to_ail_expr_aux
   | Binop (bop, t1, t2) ->
     let b1, s1, e1 = cn_to_ail_expr_aux const_prop pred_name dts globals t1 PassBack in
     let b2, s2, e2 = cn_to_ail_expr_aux const_prop pred_name dts globals t2 PassBack in
-    let ail_bop, annot = cn_to_ail_binop (IT.get_bt t1) (IT.get_bt t2) bop in
+    let annot = cn_to_ail_binop (IT.get_bt t1) (IT.get_bt t2) bop in
     let str =
       match annot with Some str -> str | None -> failwith "No CN binop function found"
     in
@@ -830,22 +789,24 @@ let rec cn_to_ail_expr_aux
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty str)), [ e1; e2 ]))
     in
     let ail_expr_ =
-      match ail_bop with
-      | Eq -> get_equality_fn_call (IT.get_bt t1) e1 e2 dts
+      match bop with
+      | EQ -> get_equality_fn_call (IT.get_bt t1) e1 e2 dts
       | _ -> default_ail_binop
     in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
   | Unop (unop, t) ->
     let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals t PassBack in
-    let _ail_unop, annot = cn_to_ail_unop (IT.get_bt t) unop in
+    let annot = cn_to_ail_unop (IT.get_bt t) unop in
     let str =
-      match annot with Some str -> str | None -> failwith "No CN unop function found"
+      match annot with
+      | Some str -> str
+      | None -> failwith (__LOC__ ^ ": No CN unop function found")
     in
     let ail_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty str)), [ e ])) in
     dest d (b, s, mk_expr ail_expr_)
   | SizeOf sct ->
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in
-    let ail_call_ = wrap_with_convert_to ~sct ail_expr_ basetype in
+    let ail_call_ = wrap_with_convert ~convert_from:false ~sct ail_expr_ basetype in
     dest d ([], [], mk_expr ail_call_)
   | OffsetOf _ -> failwith "TODO OffsetOf"
   | ITE (t1, t2, t3) ->
@@ -1399,7 +1360,7 @@ let rec cn_to_ail_expr_aux
         let ail_const_expr_ =
           A.AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None)))
         in
-        (wrap_with_convert_to ail_const_expr_ BT.Alloc_id, [], [])
+        (wrap_with_convert ~convert_from:false ail_const_expr_ BT.Alloc_id, [], [])
       | _ ->
         let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals t PassBack in
         let ail_expr_ =
@@ -2110,7 +2071,7 @@ let generate_struct_conversion_to_function
       let sct_opt = Sctypes.of_ctype ctype in
       let sct = match sct_opt with Some t -> t | None -> failwith "Bad sctype" in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
-      let rhs = wrap_with_convert_to ~sct rhs bt in
+      let rhs = wrap_with_convert ~convert_from:false ~sct rhs bt in
       let lhs = A.(AilEmemberofptr (mk_expr (AilEident res_sym), id)) in
       A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr rhs))))
     in
@@ -2186,13 +2147,14 @@ let generate_struct_conversion_from_function
                       [ lhs;
                         rhs;
                         AilEident
-                          (Sym.fresh_named (Option.get (get_type_underscored_str v_bt)));
+                          (Sym.fresh_named
+                             (Option.get (get_underscored_typedef_string_from_bt v_bt)));
                         AilEconst
                           (ConstantInteger (IConstant (Z.of_int sz, Decimal, None)))
                       ] ))))
       | BT.Map _, _ -> failwith "unsupported map types"
       | _ ->
-        let rhs = wrap_with_convert_from ~sct rhs bt in
+        let rhs = wrap_with_convert ~convert_from:true ~sct rhs bt in
         A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr rhs))))
     in
     let member_assignments = List.map generate_member_assignment members in
@@ -3100,7 +3062,10 @@ let rec cn_to_ail_cnprog_aux dts globals = function
     let ail_stat_ =
       A.(
         AilSdeclaration
-          [ (name, Some (mk_expr (wrap_with_convert_to cn_ptr_deref_fcall bt))) ])
+          [ ( name,
+              Some (mk_expr (wrap_with_convert ~convert_from:false cn_ptr_deref_fcall bt))
+            )
+          ])
     in
     let (b2, ss), no_op = cn_to_ail_cnprog_aux dts globals prog in
     if no_op then
@@ -3203,7 +3168,10 @@ let rec cn_to_ail_lat_2 without_ownership_checking dts globals preds c_return_ty
           A.(
             AilSdeclaration
               [ ( return_cn_sym,
-                  Some (mk_expr (wrap_with_convert_to ~sct cn_ret_ail_expr_ bt)) )
+                  Some
+                    (mk_expr
+                       (wrap_with_convert ~convert_from:false ~sct cn_ret_ail_expr_ bt))
+                )
               ])
         in
         ([ return_cn_binding ], [ mk_stmt return_cn_decl ])
@@ -3237,7 +3205,7 @@ let rec cn_to_ail_pre_post_aux without_ownership_checking dts preds globals c_re
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
     let cn_ctype = bt_to_ail_ctype bt in
     let binding = create_binding cn_sym cn_ctype in
-    let rhs = wrap_with_convert_to A.(AilEident sym) bt in
+    let rhs = wrap_with_convert ~convert_from:false A.(AilEident sym) bt in
     let decl = A.(AilSdeclaration [ (cn_sym, Some (mk_expr rhs)) ]) in
     let subst_at = ESE.fn_args_and_body_subst (ESE.sym_subst (sym, bt, cn_sym)) at in
     let ail_executable_spec =
@@ -3333,7 +3301,9 @@ let generate_assume_ownership_function ~without_ownership_checking ctype
   in
   let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
   let ret_type = bt_to_ail_ctype bt in
-  let return_stmt = A.(AilSreturn (mk_expr (wrap_with_convert_to ~sct deref_expr_ bt))) in
+  let return_stmt =
+    A.(AilSreturn (mk_expr (wrap_with_convert ~convert_from:false ~sct deref_expr_ bt)))
+  in
   (* Generating function declaration *)
   let decl =
     ( fn_sym,
@@ -3766,7 +3736,8 @@ let cn_to_ail_assume_pre dts sym args globals preds lat
           [ ( y,
               Some
                 (mk_expr
-                   (wrap_with_convert_to
+                   (wrap_with_convert
+                      ~convert_from:false
                       (A.AilEident x)
                       (fst (List.assoc Sym.equal x args)))) )
           ])

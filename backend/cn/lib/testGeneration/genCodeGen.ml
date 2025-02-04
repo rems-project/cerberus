@@ -230,7 +230,8 @@ let rec compile_term
                                     ~executable_spec:true
                                     C.no_qualifiers
                                     (Sctypes.to_ctype sct)))));
-                      mk_expr (CtA.wrap_with_convert_from e2_ (IT.get_bt value));
+                      mk_expr
+                        (CtA.wrap_with_convert ~convert_from:true e2_ (IT.get_bt value));
                       mk_expr (AilEident (Sym.fresh ()));
                       mk_expr
                         (AilEcast
