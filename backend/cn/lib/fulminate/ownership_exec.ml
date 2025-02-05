@@ -335,6 +335,7 @@ let rec remove_duplicates ds = function
       l :: remove_duplicates (l :: ds) ls
 
 
+(* TODO: Clean up this mess *)
 let get_c_block_local_ownership_checking_injs
   A.(AnnotatedStatement (_, _, fn_block) as statement)
   =

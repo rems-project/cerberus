@@ -9,8 +9,6 @@ module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
 module AT = ArgumentTypes
 
-(* Executable spec helper functions *)
-
 type executable_spec =
   { pre_post : (CF.Symbol.sym * (string list * string list)) list;
     in_stmt : (Cerb_location.t * string list) list;
@@ -59,7 +57,6 @@ let rec extract_global_variables = function
 let generate_c_pres_and_posts_internal
   without_ownership_checking
   (instrumentation : Executable_spec_extract.instrumentation)
-  _
   (sigm : _ CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
   =
@@ -68,7 +65,7 @@ let generate_c_pres_and_posts_internal
   let c_return_type =
     match List.assoc CF.Symbol.equal_sym instrumentation.fn sigm.A.declarations with
     | _, _, A.Decl_function (_, (_, ret_ty), _, _, _, _) -> ret_ty
-    | _ -> failwith "TODO"
+    | _ -> failwith (__LOC__ ^ ": C function to be instrumented not found in Ail AST")
   in
   let globals = extract_global_variables prog5.globs in
   let ail_executable_spec =
@@ -187,7 +184,6 @@ let generate_c_assume_pres_internal
 let generate_c_specs_internal
   without_ownership_checking
   instrumentation_list
-  type_map
   (_ : Cerb_location.t CStatements.LocMap.t)
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
@@ -196,7 +192,6 @@ let generate_c_specs_internal
     generate_c_pres_and_posts_internal
       without_ownership_checking
       instrumentation
-      type_map
       sigm
       prog5
   in
