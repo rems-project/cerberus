@@ -425,7 +425,7 @@ let generate_executable_specs
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
-    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
           (try
@@ -438,7 +438,6 @@ let generate_executable_specs
                output_decorated
                output_decorated_dir
                prog5
-               statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           Or_TypeError.return ())
@@ -510,7 +509,7 @@ let run_tests
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
       let config : TestGeneration.config =
         { num_samples;
           max_backtracks;
@@ -561,7 +560,6 @@ let run_tests
                None
                (Some output_dir)
                prog5
-               statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           (try

@@ -202,7 +202,6 @@ let main
   output_decorated
   output_decorated_dir
   prog5
-  statement_locs
   =
   let output_filename =
     match output_decorated with
@@ -219,7 +218,6 @@ let main
     generate_c_specs_internal
       without_ownership_checking
       instrumentation
-      statement_locs
       sigm
       prog5
   in

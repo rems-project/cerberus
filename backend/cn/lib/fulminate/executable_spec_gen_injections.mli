@@ -47,7 +47,6 @@ val generate_c_assume_pres_internal
 val generate_c_specs_internal
   :  bool ->
   Executable_spec_extract.instrumentation list ->
-  Cerb_location.t CStatements.LocMap.t ->
   Cerb_frontend.GenTypes.genTypeCategory Cn_to_ail.A.sigma ->
   unit Mucore.file ->
   executable_spec

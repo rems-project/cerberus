@@ -180,11 +180,9 @@ let generate_c_assume_pres_internal
   |> List.map aux
 
 
-(* Executable_spec_extract.instrumentation list -> executable_spec *)
 let generate_c_specs_internal
   without_ownership_checking
   instrumentation_list
-  (_ : Cerb_location.t CStatements.LocMap.t)
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
   =
@@ -242,7 +240,6 @@ let generate_str_from_ail_structs ail_structs =
   CF.Pp_utils.to_plain_pretty_string (concat_map_newline docs)
 
 
-(* TODO: Use Mucore datatypes instead of CN datatypes from Ail program *)
 let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let ail_datatypes =
     match sigm.cn_datatypes with
@@ -266,7 +263,7 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
         (loc, CF.Pp_utils.to_plain_pretty_string (concat_map_newline ail_structs)))
       locs_and_structs
   in
-  (* Need to generate function prototype for corresponding equality function *)
+  (* Generate function prototype for corresponding equality function *)
   let datatype_equality_funs =
     List.map Cn_to_ail.generate_datatype_equality_function sigm.cn_datatypes
   in
@@ -346,12 +343,12 @@ let fns_and_preds_with_record_rt (funs, preds) =
       (fun (_, (def : Definition.Function.t)) -> bt_is_record_or_tuple def.return_bt)
       funs
   in
-  let fun_syms = List.map (fun (fn_sym, _) -> fn_sym) funs' in
   let preds' =
     List.filter
-      (fun (_, (def : Definition.Predicate.t)) -> bt_is_record_or_tuple def.oarg_bt)
-      preds
+    (fun (_, (def : Definition.Predicate.t)) -> bt_is_record_or_tuple def.oarg_bt)
+    preds
   in
+  let fun_syms = List.map (fun (fn_sym, _) -> fn_sym) funs' in
   let pred_syms = List.map (fun (pred_sym, _) -> pred_sym) preds' in
   (fun_syms, pred_syms)
 

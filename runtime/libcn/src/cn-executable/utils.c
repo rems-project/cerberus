@@ -399,14 +399,6 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
     return cn_bool_and(cn_map_subset(m1, m2, value_equality_fun), cn_map_subset(m2, m1, value_equality_fun));
 }
 
-// TODO (RB) does this need to be in here, or should it be auto-generated?
-// See https://github.com/rems-project/cerberus/pull/652 for details
-cn_bool *void_pointer_equality(void *p1, void *p2) {
-    cn_bool *res = cn_alloc(sizeof(cn_bool));
-    res->val = (p1 == p2);
-    return res;
-}
-
 cn_pointer *convert_to_cn_pointer(void *ptr) {
     cn_pointer *res = (cn_pointer *) cn_alloc(sizeof(cn_pointer));
     res->ptr = ptr; // Carries around an address
