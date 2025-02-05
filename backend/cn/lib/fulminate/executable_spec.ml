@@ -1,32 +1,15 @@
 let rec group_toplevel_defs new_list = function
   | [] -> new_list
-  | (loc, strs) :: xs ->
-    let matching_elems =
-      List.filter (fun (toplevel_loc, _) -> loc == toplevel_loc) new_list
-    in
-    if List.is_empty matching_elems then
-      group_toplevel_defs ((loc, strs) :: new_list) xs
-    else (
-      (* Unsafe *)
-      let _, toplevel_strs = List.nth matching_elems 0 in
-      let non_matching_elems =
-        List.filter (fun (toplevel_loc, _) -> loc != toplevel_loc) new_list
-      in
-      group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs)
-
-
-let rec group_toplevel_defs_2 new_list = function
-  | [] -> new_list
   | loc :: ls ->
     let matching_elems = List.filter (fun toplevel_loc -> loc == toplevel_loc) new_list in
     if List.is_empty matching_elems then
-      group_toplevel_defs_2 (loc :: new_list) ls
+      group_toplevel_defs (loc :: new_list) ls
     else (
       (* Unsafe *)
       let non_matching_elems =
         List.filter (fun toplevel_loc -> loc != toplevel_loc) new_list
       in
-      group_toplevel_defs_2 (loc :: non_matching_elems) ls)
+      group_toplevel_defs (loc :: non_matching_elems) ls)
 
 
 let rec open_auxilliary_files
@@ -301,7 +284,7 @@ let main
   output_to_oc oc source_file_strs_list;
   let c_datatype_locs = List.map fst c_datatype_defs in
   let toplevel_locs =
-    group_toplevel_defs_2 [] (c_datatype_locs @ c_function_locs @ c_predicate_locs)
+    group_toplevel_defs [] (c_datatype_locs @ c_function_locs @ c_predicate_locs)
   in
   let toplevel_injections = List.map (fun loc -> (loc, [ "" ])) toplevel_locs in
   let accesses_stmt_injs =
