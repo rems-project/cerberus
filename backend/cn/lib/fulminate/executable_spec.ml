@@ -215,11 +215,7 @@ let main
   let instrumentation, _ = Executable_spec_extract.collect_instrumentation prog5 in
   Executable_spec_records.populate_record_map instrumentation prog5;
   let executable_spec =
-    generate_c_specs_internal
-      without_ownership_checking
-      instrumentation
-      sigm
-      prog5
+    generate_c_specs_internal without_ownership_checking instrumentation sigm prog5
   in
   let c_datatype_defs, _c_datatype_decls, c_datatype_equality_fun_decls =
     generate_c_datatypes sigm
@@ -245,8 +241,8 @@ let main
       Cn_to_ail.ownership_ctypes
       sigm
   in
-  let c_struct_defs, _c_struct_decls = print_c_structs sigm.tag_definitions in
-  let cn_converted_struct_defs, _cn_converted_struct_decls =
+  let c_struct_defs = generate_c_struct_strs sigm.tag_definitions in
+  let cn_converted_struct_defs =
     generate_cn_versions_of_structs sigm.tag_definitions
   in
   let record_fun_defs, record_fun_decls =

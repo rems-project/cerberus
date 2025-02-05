@@ -404,7 +404,7 @@ let wrap_with_convert_to ?sct ail_expr_ bt =
   wrap_with_convert ?sct ~convert_from:false ail_expr_ bt
 
 
-let get_equality_fn_call bt e1 e2 _dts =
+let get_equality_fn_call bt e1 e2 =
   match bt with
   | BT.Map (_, val_bt) ->
     let val_ctype_with_ptr = bt_to_ail_ctype val_bt in
@@ -792,7 +792,7 @@ let rec cn_to_ail_expr_aux
     in
     let ail_expr_ =
       match bop with
-      | EQ -> get_equality_fn_call (IT.get_bt t1) e1 e2 dts
+      | EQ -> get_equality_fn_call (IT.get_bt t1) e1 e2
       | _ -> default_ail_binop
     in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
@@ -1157,7 +1157,7 @@ let rec cn_to_ail_expr_aux
     let map_get_fcall =
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty map_get_str)), [ e1; e2 ]))
     in
-    let _key_bt, val_bt = BT.map_bt (IT.get_bt m) in
+    let _, val_bt = BT.map_bt (IT.get_bt m) in
     let ctype = bt_to_ail_ctype val_bt in
     let cast_expr_ = A.(AilEcast (empty_qualifiers, ctype, mk_expr map_get_fcall)) in
     dest d (b1 @ b2, s1 @ s2, mk_expr cast_expr_)
@@ -1752,7 +1752,7 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
       failwith
         (__LOC__ ^ ": Datatype default generation failure: datatype has no constructors")
     | ((_, members) as x) :: xs ->
-      let _ids, basetypes = List.split members in
+      let _, basetypes = List.split members in
       if List.mem BT.equal (Datatype cn_sym) (List.map cn_base_type_to_bt basetypes) then
         get_non_recursive_constr_and_ms xs
       else
@@ -1870,8 +1870,7 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
 (* STRUCTS *)
 let generate_struct_equality_function
   ?(is_record = false)
-  dts
-  ((sym, (_loc, _attrs, tag_def)) : A.sigma_tag_definition)
+  ((sym, (_, _, tag_def)) : A.sigma_tag_definition)
   : (A.sigma_declaration * 'a A.sigma_function_definition) list
   =
   match tag_def with
@@ -1919,7 +1918,7 @@ let generate_struct_equality_function
       (* List length of args guaranteed to be 2 by construction *)
       assert (List.length args == 2);
       let equality_fn_call =
-        get_equality_fn_call bt (List.nth args 0) (List.nth args 1) dts
+        get_equality_fn_call bt (List.nth args 0) (List.nth args 1)
       in
       mk_expr equality_fn_call
     in
@@ -1967,7 +1966,6 @@ let generate_struct_equality_function
 
 let generate_struct_default_function
   ?(is_record = false)
-  _dts
   ((sym, (_loc, _attrs, tag_def)) : A.sigma_tag_definition)
   : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
@@ -2197,7 +2195,7 @@ let generate_struct_conversion_from_function
 
 
 (* RECORDS *)
-let generate_record_equality_function dts (sym, (members : BT.member_types))
+let generate_record_equality_function (sym, (members : BT.member_types))
   : (A.sigma_declaration * 'a A.sigma_function_definition) list
   =
   let cn_sym = sym in
@@ -2238,7 +2236,7 @@ let generate_record_equality_function dts (sym, (members : BT.member_types))
     (* List length of args guaranteed to be 2 by construction *)
     assert (List.length args == 2);
     let equality_fn_call =
-      get_equality_fn_call bt (List.nth args 0) (List.nth args 1) dts
+      get_equality_fn_call bt (List.nth args 0) (List.nth args 1)
     in
     mk_expr equality_fn_call
   in
@@ -2895,7 +2893,7 @@ let cn_to_ail_predicate (pred_sym, (rp_def : Def.Predicate.t)) dts globals preds
          let bs'', ss'' = clause_translate cs in
          (bs @ bs'', ss @ ss'')
        | _ ->
-         let _b1, _s1, e =
+         let _, _, e =
            cn_to_ail_expr_with_pred_name (Some pred_sym) dts [] c.guard PassBack
          in
          let bs'', ss'' = clause_translate cs in
@@ -3634,7 +3632,7 @@ let cn_to_ail_assume_predicate (pred_sym, (rp_def : Def.Predicate.t)) dts global
          let bs'', ss'' = clause_translate cs in
          (bs @ bs'', ss @ ss'')
        | _ ->
-         let _b1, _s1, e =
+         let _, _, e =
            cn_to_ail_expr_with_pred_name (Some pred_sym) dts [] c.guard PassBack
          in
          let bs'', ss'' = clause_translate cs in

@@ -199,7 +199,7 @@ let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigm
   let record_equality_functions =
     List.concat
       (List.map
-         (Cn_to_ail.generate_record_equality_function sigm.cn_datatypes)
+         Cn_to_ail.generate_record_equality_function
          cn_record_info)
   in
   let record_default_functions =
