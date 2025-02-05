@@ -2235,9 +2235,7 @@ let generate_record_equality_function (sym, (members : BT.member_types))
     in
     (* List length of args guaranteed to be 2 by construction *)
     assert (List.length args == 2);
-    let equality_fn_call =
-      get_equality_fn_call bt (List.nth args 0) (List.nth args 1)
-    in
+    let equality_fn_call = get_equality_fn_call bt (List.nth args 0) (List.nth args 1) in
     mk_expr equality_fn_call
   in
   let member_equality_exprs = List.map generate_member_equality members in

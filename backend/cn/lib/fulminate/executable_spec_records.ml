@@ -197,10 +197,7 @@ let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigm
   let cn_record_info = Cn_to_ail.RecordMap.bindings !Cn_to_ail.records in
   let cn_record_info = List.map (fun (ms, sym) -> (sym, ms)) cn_record_info in
   let record_equality_functions =
-    List.concat
-      (List.map
-         Cn_to_ail.generate_record_equality_function
-         cn_record_info)
+    List.concat (List.map Cn_to_ail.generate_record_equality_function cn_record_info)
   in
   let record_default_functions =
     List.concat

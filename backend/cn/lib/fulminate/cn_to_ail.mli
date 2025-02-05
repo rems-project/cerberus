@@ -104,7 +104,7 @@ val generate_struct_default_function
 val generate_record_opt : Sym.t -> BT.t -> A.sigma_tag_definition option
 
 val generate_record_equality_function
-  : Sym.t * BT.member_types ->
+  :  Sym.t * BT.member_types ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
 val generate_record_default_function

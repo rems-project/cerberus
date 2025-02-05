@@ -220,10 +220,10 @@ let main
   let c_datatype_defs, _c_datatype_decls, c_datatype_equality_fun_decls =
     generate_c_datatypes sigm
   in
-  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, _c_records =
+  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls =
     generate_c_functions_internal sigm prog5.logical_predicates
   in
-  let c_predicate_defs, locs_and_c_predicate_decls, _c_records' =
+  let c_predicate_defs, locs_and_c_predicate_decls =
     generate_c_predicates_internal sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
@@ -236,15 +236,10 @@ let main
     Executable_spec_utils.generate_include_header cn_utils_header_pair
   in
   let ownership_function_defs, ownership_function_decls =
-    generate_ownership_functions
-      without_ownership_checking
-      Cn_to_ail.ownership_ctypes
-      sigm
+    generate_ownership_functions without_ownership_checking Cn_to_ail.ownership_ctypes
   in
   let c_struct_defs = generate_c_struct_strs sigm.tag_definitions in
-  let cn_converted_struct_defs =
-    generate_cn_versions_of_structs sigm.tag_definitions
-  in
+  let cn_converted_struct_defs = generate_cn_versions_of_structs sigm.tag_definitions in
   let record_fun_defs, record_fun_decls =
     Executable_spec_records.generate_c_record_funs sigm
   in
