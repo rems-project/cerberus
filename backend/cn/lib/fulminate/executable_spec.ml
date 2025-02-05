@@ -15,6 +15,20 @@ let rec group_toplevel_defs new_list = function
       group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs)
 
 
+let rec group_toplevel_defs_2 new_list = function
+  | [] -> new_list
+  | loc :: ls ->
+    let matching_elems = List.filter (fun toplevel_loc -> loc == toplevel_loc) new_list in
+    if List.is_empty matching_elems then
+      group_toplevel_defs_2 (loc :: new_list) ls
+    else (
+      (* Unsafe *)
+      let non_matching_elems =
+        List.filter (fun toplevel_loc -> loc != toplevel_loc) new_list
+      in
+      group_toplevel_defs_2 (loc :: non_matching_elems) ls)
+
+
 let rec open_auxilliary_files
   source_filename
   prefix
@@ -217,13 +231,11 @@ let main
   let executable_spec =
     generate_c_specs_internal without_ownership_checking instrumentation sigm prog5
   in
-  let c_datatype_defs, _c_datatype_decls, c_datatype_equality_fun_decls =
-    generate_c_datatypes sigm
-  in
-  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls =
+  let c_datatype_defs = generate_c_datatypes sigm in
+  let c_function_defs, c_function_decls, c_function_locs =
     generate_c_functions_internal sigm prog5.logical_predicates
   in
-  let c_predicate_defs, locs_and_c_predicate_decls =
+  let c_predicate_defs, c_predicate_decls, c_predicate_locs =
     generate_c_predicates_internal sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
@@ -244,9 +256,6 @@ let main
     Executable_spec_records.generate_c_record_funs sigm
   in
   let datatype_strs = String.concat "\n" (List.map snd c_datatype_defs) in
-  let predicate_decls =
-    String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls))
-  in
   let record_defs, _record_decls = Executable_spec_records.generate_all_record_strs () in
   let cn_header_decls_list =
     [ cn_utils_header;
@@ -263,7 +272,7 @@ let main
       record_fun_decls;
       c_function_decls;
       "\n";
-      predicate_decls
+      c_predicate_decls
     ]
   in
   let cn_header_oc_str =
@@ -290,39 +299,18 @@ let main
   let headers = List.map Executable_spec_utils.generate_include_header incls in
   let source_file_strs_list = [ cn_header; List.fold_left ( ^ ) "" headers; "\n" ] in
   output_to_oc oc source_file_strs_list;
-  let c_datatypes_with_fn_prots =
-    List.combine c_datatype_defs c_datatype_equality_fun_decls
+  let c_datatype_locs = List.map fst c_datatype_defs in
+  let toplevel_locs =
+    group_toplevel_defs_2 [] (c_datatype_locs @ c_function_locs @ c_predicate_locs)
   in
-  let c_datatypes_locs_and_strs =
-    List.map
-      (fun ((loc, dt_str), eq_prot_str) ->
-        (loc, [ String.concat "\n" [ dt_str; eq_prot_str ] ]))
-      c_datatypes_with_fn_prots
-  in
-  let toplevel_locs_and_defs =
-    group_toplevel_defs
-      []
-      (c_datatypes_locs_and_strs
-       @ locs_and_c_extern_function_decls
-       @ locs_and_c_predicate_decls)
-  in
-  let toplevel_locs_and_defs =
-    List.map (fun (loc, _) -> (loc, [ "" ])) toplevel_locs_and_defs
-  in
+  let toplevel_injections = List.map (fun loc -> (loc, [ "" ])) toplevel_locs in
   let accesses_stmt_injs =
     if without_ownership_checking then [] else memory_accesses_injections ail_prog
   in
-  let struct_injs_with_filenames =
-    Executable_spec_gen_injections.generate_struct_injs sigm
-  in
-  let struct_injs_with_filenames =
-    List.map (fun (loc, _) -> (loc, [ "" ])) struct_injs_with_filenames
-  in
+  let struct_locs = List.map (fun (_, (loc, _, _)) -> loc) sigm.tag_definitions in
+  let struct_injs = List.map (fun loc -> (loc, [ "" ])) struct_locs in
   let in_stmt_injs =
-    executable_spec.in_stmt
-    @ accesses_stmt_injs
-    @ toplevel_locs_and_defs
-    @ struct_injs_with_filenames
+    executable_spec.in_stmt @ accesses_stmt_injs @ toplevel_injections @ struct_injs
   in
   (* Treat source file separately from header files *)
   let source_file_in_stmt_injs = filter_injs_by_filename in_stmt_injs filename in
