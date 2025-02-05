@@ -53,11 +53,14 @@ let compile_constant_tests
             },
           let open Pp in
           (if not (Config.with_static_hack ()) then
-             CF.Pp_ail.pp_function_prototype
-               ~executable_spec:true
-               inst.fn
-               (let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
-                decl)
+             CF.Pp_ail.(
+               with_executable_spec
+                 (fun () ->
+                   pp_function_prototype
+                     inst.fn
+                     (let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
+                      decl))
+                 ())
              ^^ hardline
            else
              empty)
@@ -128,11 +131,14 @@ let compile_random_test_case
       global_syms
   in
   (if not (Config.with_static_hack ()) then
-     CF.Pp_ail.pp_function_prototype
-       ~executable_spec:true
-       inst.fn
-       (let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
-        decl)
+     CF.Pp_ail.(
+       with_executable_spec
+         (fun () ->
+           pp_function_prototype
+             inst.fn
+             (let _, _, decl = List.assoc Sym.equal inst.fn sigma.declarations in
+              decl))
+         ())
      ^^ hardline
    else
      empty)
@@ -159,11 +165,10 @@ let compile_random_test_case
                       hardline
                       (fun (sym, sct) ->
                         let ty =
-                          CF.Pp_ail.pp_ctype
-                            ~executable_spec:true
-                            ~is_human:false
-                            C.no_qualifiers
-                            (Sctypes.to_ctype sct)
+                          CF.Pp_ail.(
+                            with_executable_spec
+                              (pp_ctype ~is_human:false C.no_qualifiers)
+                              (Sctypes.to_ctype sct))
                         in
                         Sym.pp sym
                         ^^ space

@@ -1906,7 +1906,6 @@ let generate_struct_equality_function
     in
     (* Function body *)
     let generate_member_equality (id, (_, _, _, ctype)) =
-      let _doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
       let sct_opt = Sctypes.of_ctype ctype in
       let sct =
         match sct_opt with Some t -> t | None -> failwith (__LOC__ ^ ": Bad sctype")
@@ -3052,10 +3051,8 @@ let rec cn_to_ail_cnprog_aux dts globals = function
     let ctype_sym =
       Sym.fresh_pretty
         (Pp.plain
-           (CF.Pp_ail.pp_ctype
-              ~executable_spec:true
-              empty_qualifiers
-              (Sctypes.to_ctype ct)))
+           CF.Pp_ail.(
+             with_executable_spec (pp_ctype empty_qualifiers) (Sctypes.to_ctype ct)))
     in
     let cn_ptr_deref_fcall =
       A.(

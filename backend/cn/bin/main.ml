@@ -406,6 +406,7 @@ let generate_executable_specs
   Pp.print_level := print_level;
   CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
+  CF.Pp_ail.executable_spec := true;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   IndexTerms.use_vip := not dont_use_vip;
   Check.fail_fast := fail_fast;

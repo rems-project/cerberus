@@ -193,12 +193,18 @@ let inject st inj =
             else (
               let cn_ret_sym = Sym.fresh_pretty "__cn_ret" in
               let ret_type_doc =
-                Pp_ail.pp_ctype_declaration
-                  ~executable_spec:true
-                  (Pp_ail.pp_id_obj cn_ret_sym)
-                  Ctype.no_qualifiers
+                Pp_ail.with_executable_spec
+                  (Pp_ail.pp_ctype_declaration
+                     (Pp_ail.pp_id_obj cn_ret_sym)
+                     Ctype.no_qualifiers)
                   ret_ty
+                (* let ret_type_doc =
+                   Pp_ail.pp_ctype_declaration
+                   (Pp_ail.pp_id_obj cn_ret_sym)
+                   Ctype.no_qualifiers
+                   ret_ty *)
               in
+              (* Pp_ail.executable_spec := ex_spec; *)
               let initialisation_str = if is_main then " = 0" else "" in
               Pp_utils.to_plain_pretty_string ret_type_doc
               ^ initialisation_str

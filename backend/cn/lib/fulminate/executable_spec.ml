@@ -289,8 +289,6 @@ let main
   (* TODO: Topological sort *)
   let cn_defs_list =
     [ cn_header;
-      (* record_equality_fun_strs; *)
-      (* record_equality_fun_strs'; *)
       record_fun_defs;
       conversion_function_defs;
       ownership_function_defs;
@@ -332,9 +330,6 @@ let main
   let struct_injs_with_filenames =
     List.map (fun (loc, _) -> (loc, [ "" ])) struct_injs_with_filenames
   in
-  (* Printf.printf "Locations for injection of CN statements:\n"; let _ = List.map (fun
-     (loc, _) -> Printf.printf "%s: %s\n" (Option.get (Cerb_location.get_filename loc))
-     (Cerb_location.simple_location loc)) executable_spec.in_stmt in *)
   let in_stmt_injs =
     executable_spec.in_stmt
     @ accesses_stmt_injs

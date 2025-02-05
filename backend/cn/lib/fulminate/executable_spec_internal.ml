@@ -23,6 +23,7 @@ let generate_ail_stat_strs
   ?(with_newline = false)
   (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list))
   =
+  (* Filter out unneeded assert(true) statements *)
   let is_assert_true = function
     | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEassert expr))) ->
       (match rm_expr expr with
@@ -33,7 +34,7 @@ let generate_ail_stat_strs
   let ail_stats_ = List.filter (fun s -> not (is_assert_true s)) ail_stats_ in
   let doc =
     List.map
-      (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s))
+      (fun s -> CF.Pp_ail.(with_executable_spec (pp_statement ~bs) (mk_stmt s)))
       ail_stats_
   in
   let doc =
@@ -213,7 +214,8 @@ let generate_c_specs_internal
 let concat_map_newline docs = PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs
 
 let generate_doc_from_ail_struct ail_struct =
-  CF.Pp_ail.pp_tag_definition ~executable_spec:true ail_struct ^^ PPrint.hardline
+  CF.Pp_ail.(
+    with_executable_spec (fun () -> pp_tag_definition ail_struct ^^ PPrint.hardline) ())
 
 
 let generate_struct_decl_str (tag, (_, _, def)) =
@@ -278,7 +280,7 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   let decl_docs =
     List.map
       (fun (sym, (_, _, decl)) ->
-        CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+        CF.Pp_ail.(with_executable_spec (fun () -> pp_function_prototype sym decl) ()))
       dt_eq_decls
   in
   let decl_strs =
@@ -322,7 +324,8 @@ let generate_struct_injs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
           let decl_docs =
             List.map
               (fun (sym, (_, _, decl)) ->
-                CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+                CF.Pp_ail.(
+                  with_executable_spec (fun () -> pp_function_prototype sym decl) ()))
               [ conversion_def; equality_def ]
           in
           let decl_strs =
@@ -373,7 +376,7 @@ let generate_c_functions_internal
   let decl_docs =
     List.map
       (fun (sym, (_, _, decl)) ->
-        CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+        CF.Pp_ail.(with_executable_spec (fun () -> pp_function_prototype sym decl) ()))
       decls
   in
   let decl_strs =
@@ -385,12 +388,15 @@ let generate_c_functions_internal
     { sigm with declarations = decls; function_definitions = defs }
   in
   let doc_1 =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_1)
+    CF.Pp_ail.(
+      with_executable_spec
+        (fun () -> pp_program ~show_include:true (None, modified_prog_1))
+        ())
   in
   let inline_decl_docs =
     List.map
       (fun (sym, (_, _, decl)) ->
-        CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+        CF.Pp_ail.(with_executable_spec (fun () -> pp_function_prototype sym decl) ()))
       decls
   in
   let inline_decl_strs =
@@ -438,7 +444,10 @@ let generate_c_predicates_internal
     { sigm with declarations = decls; function_definitions = defs }
   in
   let doc1 =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1)
+    CF.Pp_ail.(
+      with_executable_spec
+        (fun () -> pp_program ~show_include:true (None, modified_prog1))
+        ())
   in
   let pred_defs_str = CF.Pp_utils.to_plain_pretty_string doc1 in
   let pred_locs_and_decls =
@@ -446,7 +455,8 @@ let generate_c_predicates_internal
       (fun (loc, (sym, (_, _, decl))) ->
         ( loc,
           [ CF.Pp_utils.to_plain_pretty_string
-              (CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+              (CF.Pp_ail.(with_executable_spec (fun () -> pp_function_prototype sym decl))
+                 ())
           ] ))
       (List.combine locs decls)
   in
@@ -485,13 +495,19 @@ let generate_ownership_functions
     { sigm with declarations = decls; function_definitions = defs }
   in
   let doc1 =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1)
+    CF.Pp_ail.(
+      with_executable_spec
+        (fun () -> pp_program ~show_include:true (None, modified_prog1))
+        ())
   in
   let modified_prog2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma =
     { sigm with declarations = decls; function_definitions = [] }
   in
   let doc2 =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog2)
+    CF.Pp_ail.(
+      with_executable_spec
+        (fun () -> pp_program ~show_include:true (None, modified_prog2))
+        ())
   in
   let comment = "\n/* OWNERSHIP FUNCTIONS */\n\n" in
   ( comment ^ CF.Pp_utils.to_plain_pretty_string doc1,
@@ -547,13 +563,19 @@ let generate_conversion_and_equality_functions
     { sigm with declarations = decls; function_definitions = defs }
   in
   let doc1 =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1)
+    CF.Pp_ail.(
+      with_executable_spec
+        (fun () -> pp_program ~show_include:true (None, modified_prog1))
+        ())
   in
   let modified_prog2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma =
     { sigm with declarations = decls; function_definitions = [] }
   in
   let doc2 =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog2)
+    CF.Pp_ail.(
+      with_executable_spec
+        (fun () -> pp_program ~show_include:true (None, modified_prog2))
+        ())
   in
   let comment = "\n/* GENERATED STRUCT FUNCTIONS */\n\n" in
   ( comment ^ CF.Pp_utils.to_plain_pretty_string doc1,
