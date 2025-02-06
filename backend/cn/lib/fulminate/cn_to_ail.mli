@@ -156,7 +156,6 @@ val cn_to_ail_predicates
   :  (Sym.t * Definition.Predicate.t) list ->
   A.sigma_cn_datatype list ->
   (Sym.t * C.ctype) list ->
-  (Sym.t * Definition.Predicate.t) list ->
   A.sigma_cn_predicate list ->
   ((Locations.t * A.sigma_declaration)
   * CF.GenTypes.genTypeCategory A.sigma_function_definition)

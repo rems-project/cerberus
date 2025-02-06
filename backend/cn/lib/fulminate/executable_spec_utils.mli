@@ -2,6 +2,7 @@ module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
 module Cn = CF.Cn
+open PPrint
 
 val empty_qualifiers : C.qualifiers
 
@@ -77,3 +78,5 @@ val find_ctype_from_bindings : (Sym.t * ('a * 'b * 'c * 'd)) list -> Sym.t -> 'd
 val create_decl_object : Cerb_frontend.Ctype.ctype -> A.declaration
 
 val create_declaration : 'a -> 'b -> 'a * (Cerb_location.t * CF.Annot.attributes * 'b)
+
+val concat_map_newline : document list -> document

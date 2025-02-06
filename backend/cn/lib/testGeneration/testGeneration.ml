@@ -4,7 +4,7 @@ module C = CF.Ctype
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module CtA = Fulminate.Cn_to_ail
-module ESpecInternal = Fulminate.Executable_spec_gen_injections
+module ESpecInternal = Fulminate.Executable_spec_internal
 module FExtract = Fulminate.Executable_spec_extract
 module Config = TestGenConfig
 

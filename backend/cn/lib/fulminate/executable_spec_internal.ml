@@ -204,8 +204,6 @@ let generate_c_specs_internal
   }
 
 
-let concat_map_newline docs = PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs
-
 let generate_doc_from_ail_struct ail_struct =
   CF.Pp_ail.(
     with_executable_spec (fun () -> pp_tag_definition ail_struct ^^ PPrint.hardline) ())
@@ -229,7 +227,7 @@ let generate_str_from_ail_struct ail_struct =
 
 let generate_str_from_ail_structs ail_structs =
   let docs = List.map generate_doc_from_ail_struct ail_structs in
-  doc_to_pretty_string (concat_map_newline docs)
+  doc_to_pretty_string (Executable_spec_utils.concat_map_newline docs)
 
 
 let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
@@ -244,7 +242,10 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   let locs_and_struct_strs =
     List.map
       (fun (loc, structs) ->
-        let doc = concat_map_newline (List.map generate_doc_from_ail_struct structs) in
+        let doc =
+          Executable_spec_utils.concat_map_newline
+            (List.map generate_doc_from_ail_struct structs)
+        in
         (loc, doc_to_pretty_string doc))
       ail_datatypes
   in
@@ -258,23 +259,6 @@ let generate_c_struct_strs c_structs =
 let generate_cn_versions_of_structs c_structs =
   let ail_structs = List.concat (List.map Cn_to_ail.cn_to_ail_struct c_structs) in
   "\n/* CN VERSIONS OF C STRUCTS */\n\n" ^ generate_str_from_ail_structs ail_structs
-
-
-let fns_and_preds_with_record_rt (funs, preds) =
-  let is_record_or_tuple = function BT.Record _ | BT.Tuple _ -> true | _ -> false in
-  let funs' =
-    List.filter
-      (fun (_, (def : Definition.Function.t)) -> is_record_or_tuple def.return_bt)
-      funs
-  in
-  let preds' =
-    List.filter
-      (fun (_, (def : Definition.Predicate.t)) -> is_record_or_tuple def.oarg_bt)
-      preds
-  in
-  let fun_syms = List.map (fun (fn_sym, _) -> fn_sym) funs' in
-  let pred_syms = List.map (fun (pred_sym, _) -> pred_sym) preds' in
-  (fun_syms, pred_syms)
 
 
 let generate_fun_def_and_decl_docs funs =
@@ -294,7 +278,7 @@ let generate_fun_def_and_decl_docs funs =
   (defs_doc, decls_doc)
 
 
-let generate_c_functions_internal
+let generate_c_functions
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (logical_predicates : (Sym.t * Definition.Function.t) list)
   =
@@ -321,17 +305,15 @@ let rec remove_duplicates eq_fun = function
       t :: remove_duplicates eq_fun ts
 
 
-let generate_c_predicates_internal
+let generate_c_predicates
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (resource_predicates : (Sym.t * Definition.Predicate.t) list)
   =
-  (* TODO: Remove passing of resource_predicates argument twice - could use counter? *)
   let ail_funs, _ =
     Cn_to_ail.cn_to_ail_predicates
       resource_predicates
       sigm.cn_datatypes
       []
-      resource_predicates
       sigm.cn_predicates
   in
   let locs_and_decls, defs = List.split ail_funs in

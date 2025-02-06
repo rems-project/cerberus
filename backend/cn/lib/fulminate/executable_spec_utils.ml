@@ -155,3 +155,5 @@ let create_decl_object ctype =
 
 (* declarations: list (ail_identifier * (Loc.t * Annot.attributes * declaration)) *)
 let create_declaration sym decl = (sym, (Cerb_location.unknown, CF.Annot.Attrs [], decl))
+
+let concat_map_newline docs = PPrint.(concat_map (fun doc -> doc ^^ hardline) docs)

@@ -188,7 +188,7 @@ let generate_all_record_strs () =
     Cn_to_ail.cn_to_ail_records (Cn_to_ail.RecordMap.bindings !Cn_to_ail.records)
   in
   let record_def_strs, record_decl_strs =
-    Executable_spec_gen_injections.generate_c_records ail_records
+    Executable_spec_internal.generate_c_records ail_records
   in
   (record_def_strs, record_decl_strs)
 

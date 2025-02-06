@@ -188,7 +188,7 @@ let memory_accesses_injections ail_prog =
 
 let output_to_oc oc str_list = List.iter (Stdlib.output_string oc) str_list
 
-open Executable_spec_gen_injections
+open Executable_spec_internal
 
 let main
   ?(without_ownership_checking = false)
@@ -216,10 +216,10 @@ let main
   in
   let c_datatype_defs = generate_c_datatypes sigm in
   let c_function_defs, c_function_decls, c_function_locs =
-    generate_c_functions_internal sigm prog5.logical_predicates
+    generate_c_functions sigm prog5.logical_predicates
   in
   let c_predicate_defs, c_predicate_decls, c_predicate_locs =
-    generate_c_predicates_internal sigm prog5.resource_predicates
+    generate_c_predicates sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
     generate_conversion_and_equality_functions sigm

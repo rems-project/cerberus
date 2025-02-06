@@ -2877,7 +2877,7 @@ let rec cn_to_ail_lat ?(is_toplevel = true) dts pred_sym_opt globals preds = fun
     (bs, ss)
 
 
-let cn_to_ail_predicate (pred_sym, (rp_def : Def.Predicate.t)) dts globals preds cn_preds =
+let cn_to_ail_predicate dts globals preds cn_preds (pred_sym, (rp_def : Def.Predicate.t)) =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
   let rec clause_translate (clauses : Def.Clause.t list) =
     match clauses with
@@ -2966,18 +2966,13 @@ let cn_to_ail_predicate (pred_sym, (rp_def : Def.Predicate.t)) dts globals preds
   (((loc, decl), def), ail_record_opt)
 
 
-let rec cn_to_ail_predicates pred_def_list dts globals preds cn_preds
+let cn_to_ail_predicates preds dts globals cn_preds
   : ((Locations.t * A.sigma_declaration)
     * CF.GenTypes.genTypeCategory A.sigma_function_definition)
       list
     * A.sigma_tag_definition option list
   =
-  match pred_def_list with
-  | [] -> ([], [])
-  | p :: ps ->
-    let d, r = cn_to_ail_predicate p dts globals preds cn_preds in
-    let ds, rs = cn_to_ail_predicates ps dts globals preds cn_preds in
-    (d :: ds, r :: rs)
+  List.split (List.map (cn_to_ail_predicate dts globals preds cn_preds) preds)
 
 
 (* TODO: Add destination passing? *)
