@@ -1274,10 +1274,14 @@ let pp_memop pp_type m =
   | PtrLe e12 -> pp_constructor1 "MuCore.PtrLe" [ pp_pair pte pte e12 ]
   | PtrGe e12 -> pp_constructor1 "MuCore.PtrGe" [ pp_pair pte pte e12 ]
   | Ptrdiff e123 -> pp_constructor1 "MuCore.Ptrdiff" [ pp_triple pp_act pte pte e123 ]
-  | IntFromPtr e123 -> pp_constructor1 "MuCore.IntFromPtr" [ pp_triple pp_act pp_act pte e123 ]
-  | PtrFromInt e123 -> pp_constructor1 "MuCore.PtrFromInt" [ pp_triple pp_act pp_act pte e123 ]
-  | PtrValidForDeref e12 -> pp_constructor1 "MuCore.PtrValidForDeref" [ pp_pair pp_act pte e12 ]
-  | PtrWellAligned e12 -> pp_constructor1 "MuCore.PtrWellAligned" [ pp_pair pp_act pte e12 ]
+  | IntFromPtr e123 ->
+    pp_constructor1 "MuCore.IntFromPtr" [ pp_triple pp_act pp_act pte e123 ]
+  | PtrFromInt e123 ->
+    pp_constructor1 "MuCore.PtrFromInt" [ pp_triple pp_act pp_act pte e123 ]
+  | PtrValidForDeref e12 ->
+    pp_constructor1 "MuCore.PtrValidForDeref" [ pp_pair pp_act pte e12 ]
+  | PtrWellAligned e12 ->
+    pp_constructor1 "MuCore.PtrWellAligned" [ pp_pair pp_act pte e12 ]
   | PtrArrayShift e123 ->
     pp_constructor1 "MuCore.PtrArrayShift" [ pp_triple pte pp_act pte e123 ]
   | PtrMemberShift e123 ->
@@ -1362,7 +1366,7 @@ let rec pp_logical_args ppf = function
   | Resource ((sym, rbt), info, rest) ->
     pp_constructor1
       "MuCore.Resource"
-      [ pp_tuple  
+      [ pp_tuple
           [ pp_symbol sym;
             pp_pair pp_request (pp_basetype pp_unit) rbt;
             pp_location_info info;
@@ -1373,10 +1377,7 @@ let rec pp_logical_args ppf = function
     pp_constructor1
       "MuCore.Constraint"
       [ pp_tuple
-          [ pp_logical_constraint lc;
-            pp_location_info info;
-            pp_logical_args ppf rest
-          ]
+          [ pp_logical_constraint lc; pp_location_info info; pp_logical_args ppf rest ]
       ]
   | I i -> pp_constructor1 "MuCore.I" [ ppf i ]
 
@@ -1385,7 +1386,7 @@ let rec pp_arguments ppf = function
   | Computational (sbt, loc, rest) ->
     pp_constructor1
       "MuCore.Computational"
-      [ pp_tuple  
+      [ pp_tuple
           [ pp_pair pp_symbol (pp_basetype pp_unit) sbt;
             pp_location_info loc;
             pp_arguments ppf rest

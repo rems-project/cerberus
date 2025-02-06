@@ -4,6 +4,31 @@
  (synopsis "Coq formalization of CN's Mucore intermediate language")
  (mode vo)
  (theories StructTact)
- (modules Memory ImplMem MuCore CN CNProgs Core Id Undefined Annot IntegerType Ctype SCtypes False Utils Symbol Sym Location Locations BaseTypes Terms IndexTerms LogicalConstraints LogicalReturnTypes Request ReturnTypes ArgumentTypes LogicalArgumentTypes)
-)
-
+ (modules
+  Memory
+  ImplMem
+  MuCore
+  CN
+  CNProgs
+  Core
+  Id
+  Undefined
+  Annot
+  IntegerType
+  Ctype
+  SCtypes
+  False
+  Utils
+  Symbol
+  Sym
+  Location
+  Locations
+  BaseTypes
+  Terms
+  IndexTerms
+  LogicalConstraints
+  LogicalReturnTypes
+  Request
+  ReturnTypes
+  ArgumentTypes
+  LogicalArgumentTypes))

@@ -21,6 +21,7 @@ let print_file filename file =
   | CORE file -> Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file)
   | MUCORE file -> Pp.print_file (filename ^ ".mucore") (Pp_mucore.pp_file file)
 
+
 module Log : sig
   val print_log_file : string * file -> unit
 end = struct
@@ -167,7 +168,9 @@ let with_well_formedness_check
           prog
       in
       print_log_file ("mucore", MUCORE prog5);
-      (Option.iter (fun path -> Pp.print_file path (Pp_mucore_coq.pp_unit_file prog5)) coq_export_file);
+      Option.iter
+        (fun path -> Pp.print_file path (Pp_mucore_coq.pp_unit_file prog5))
+        coq_export_file;
       let paused =
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
@@ -832,7 +835,7 @@ end
 module CoqExport_flags = struct
   let coq_export =
     let doc = "export to coq" in
-    Arg.(value & opt (some string) None & info ["coq-export-file"] ~docv:"FILE" ~doc)
+    Arg.(value & opt (some string) None & info [ "coq-export-file" ] ~docv:"FILE" ~doc)
 end
 
 let wf_cmd =
