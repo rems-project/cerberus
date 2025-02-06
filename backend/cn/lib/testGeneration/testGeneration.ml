@@ -384,8 +384,6 @@ let run
 let run_seq
   ~output_dir
   ~filename
-  (num_samples : int)
-  (max_retries : int)
   (sigma : Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
   : unit
@@ -393,5 +391,5 @@ let run_seq
   Cerb_debug.begin_csv_timing ();
   if Option.is_some prog5.main then
     failwith "Cannot test a file with a `main` function";
-  SeqTests.generate ~output_dir ~filename num_samples max_retries sigma prog5 ;
+  SeqTests.generate ~output_dir ~filename sigma prog5 ;
   Cerb_debug.end_csv_timing "specification test generation"

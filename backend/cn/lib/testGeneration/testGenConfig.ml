@@ -49,7 +49,7 @@ let default =
     coverage = false;
     disable_passes = [];
     trap = false;
-    max_resets = 5
+    max_resets = 0
   }
 
 

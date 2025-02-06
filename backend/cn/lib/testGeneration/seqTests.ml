@@ -2,10 +2,10 @@ module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
 module Utils = Executable_spec_utils
-(* module Config = TestGenConfig *)
+module Config = TestGenConfig
 module SymSet = Set.Make (Sym)
 
-type test_stats = {successes : int; failures : int; skipped: int}
+type test_stats = {successes : int; failures : int; skipped: int; distrib: (string * int) list}
 
 let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.document)
 : unit
@@ -161,7 +161,6 @@ let out_to_list
 let rec gen_sequence 
   (funcs : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list)) list)
   (fuel : int)
-  (max_retries : int)
   (stats : test_stats)
   (ctx : (Sym.t * C.ctype) list)
   (prev : int)
@@ -172,10 +171,15 @@ let rec gen_sequence
   (fun_decls : Pp.document)
   : (Pp.document * test_stats, Pp.document * test_stats) Either.either
   =           
+    let max_retries = Config.get_max_backtracks () in
+    let max_resets = Config.get_max_resets () in
+    let num_samples = Config.get_num_samples () in
+    let instr_per_test = (num_samples / (max_resets + 1)) in
+    let instr_per_test = if (num_samples mod (max_resets + 1) = 0) then instr_per_test else instr_per_test + 1 in
     let open Pp 
     in 
     (match fuel with
-    | 0 -> let unmap_stmts = List.map Ownership_exec.generate_c_local_ownership_exit ctx in
+    | 0 -> let unmap_stmts = List.map Ownership_exec.generate_c_local_ownership_exit ctx in 
            let unmap_str = hardline ^^ separate_map hardline stmt_to_doc unmap_stmts in Right(seq_so_far ^^ unmap_str, stats)
     | n -> 
       let fs = List.map 
@@ -184,7 +188,7 @@ let rec gen_sequence
       let rec gen_test 
         (args_map : (Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))) 
         (retries_left : int)
-        : (SymSet.elt * C.ctype) list * int * (document, document) Either.either
+        : (SymSet.elt * C.ctype) list * int * (document, string * document) Either.either
         =
         if retries_left = 0 then 
           ctx, prev, Either.Left(empty)
@@ -214,7 +218,7 @@ let rec gen_sequence
           let _ = save output_dir (filename_base ^ "_test.c") (create_test_file (seq_so_far ^^ curr_test) fun_decls) in
           let (output, status) = out_to_list (output_dir ^ "/run_tests.sh") in
           match status with
-          | WEXITED(0) -> ctx', prev, Either.Right(curr_test)
+          | WEXITED(0) -> ctx', prev, Either.Right(Sym.pp_string f, curr_test)
           | _ -> 
             let violation_regex = Str.regexp {| +\^~+ .+\.c:\([0-9]+\):[0-9]+-[0-9]+|} in
             let is_post_regex = Str.regexp {|\(/\*@\)?[ \t]*ensures|} in
@@ -258,13 +262,24 @@ let rec gen_sequence
         )
       in
       (match (List.length fs) with
-      | 0 -> Left(seq_so_far ^^ (string "/* unable to generate call at this point */"), {stats with failures = stats.failures + 1})
+      | 0 -> Right(seq_so_far ^^ (string "/* unable to generate call at this point */"), {stats with failures = stats.failures + 1})
       | _ -> 
         (match gen_test (pick fs (Random.int (List.fold_left (+) 1 (List.map fst fs)))) max_retries with
-        | ctx', prev, Either.Right(test) -> gen_sequence funcs (n - 1) max_retries {stats with successes = stats.successes + 1} ctx' prev (seq_so_far ^^ test) output_dir filename_base src_code fun_decls
+        | ctx', prev, Either.Right(name, test) -> 
+          let distrib =
+          match List.assoc_opt String.equal name stats.distrib with
+          | None -> (name, 1)::stats.distrib
+          | Some n -> (name, n + 1)::(List.remove_assoc name stats.distrib) in
+          let ctx', rest = 
+            if ((n - (num_samples mod instr_per_test) - 1) mod instr_per_test = 0 && n >= instr_per_test) then 
+              let unmap_stmts = List.map Ownership_exec.generate_c_local_ownership_exit ctx' in 
+              [], hardline ^^ separate_map hardline stmt_to_doc unmap_stmts ^^ (twice hardline)
+            else 
+              ctx', empty in
+          gen_sequence funcs (n - 1) {stats with successes = stats.successes + 1; distrib = distrib} ctx' prev (seq_so_far ^^ test ^^ rest) output_dir filename_base src_code fun_decls
         | _, prev, Either.Left(err) -> 
           (if is_empty err then 
-            gen_sequence funcs (n - 1) max_retries {stats with skipped = stats.skipped + 1} ctx prev seq_so_far output_dir filename_base src_code fun_decls
+            gen_sequence funcs (n - 1) {stats with skipped = stats.skipped + 1} ctx prev seq_so_far output_dir filename_base src_code fun_decls
           else 
             Either.Left(seq_so_far ^^ err, {stats with failures = 1}))))
     )
@@ -273,7 +288,6 @@ let compile_sequence
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (insts : Executable_spec_extract.instrumentation list)
   (num_samples : int)
-  (max_retries : int)
   (output_dir : string)
   (filename_base : string)
   (src_code : string list)
@@ -303,13 +317,11 @@ let compile_sequence
                     "@";
                     __LOC__
                   ]) )) insts in
-      gen_sequence args_map fuel max_retries {successes = 0; failures = 0; skipped = 0} [] 0 Pp.empty output_dir filename_base src_code fun_decls
+      gen_sequence args_map fuel {successes = 0; failures = 0; skipped = 0; distrib = []} [] 0 Pp.empty output_dir filename_base src_code fun_decls
 
 let generate
   ~(output_dir : string)
   ~(filename : string)
-  (num_samples : int)
-  (max_retries : int)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
   : unit
@@ -336,20 +348,30 @@ let generate
     in 
     let open Pp in
   let fun_decls = separate_map (hardline) fun_to_decl insts in
-  let compiled_seq = compile_sequence sigma insts num_samples max_retries output_dir filename_base src_code fun_decls in
+  let compiled_seq = compile_sequence sigma insts (Config.get_num_samples ()) output_dir filename_base src_code fun_decls in
   let seq, output_msg = match compiled_seq with
   | Left(seq, stats) -> 
       seq, (Printf.sprintf 
-              "Testing Summary:\n\
+              "Stats for nerds:\n\
               %d tests succeeded\n\
               POST-CONDITION VIOLATION DETECTED.\n\
               See %s/%s for details"
             stats.successes output_dir test_file)
   | Right(seq, stats) ->
+      let num_tests = List.fold_left (fun acc (_, num) -> acc + num) 0 stats.distrib in
+      let distrib_to_str = 
+        if List.length stats.distrib = 0 then
+          "No calls generated"
+        else
+          List.fold_left 
+            (fun acc (f, count) -> acc ^ Printf.sprintf "%s: %d calls (%.2f%% of calls)\n" f count (100.0 *. (float_of_int count /. float_of_int num_tests))) 
+          "" stats.distrib in
       seq, (Printf.sprintf 
-              "Testing Summary:\n\
-              passed: %d, failed: %d, skipped: %d" 
-            stats.successes stats.failures stats.skipped)
+              "Stats for nerds:\n\
+              passed: %d, failed: %d, skipped: %d\n\
+              Distribution of calls:\n\
+              %s"
+            stats.successes stats.failures stats.skipped distrib_to_str)
   in
   let tests_doc = create_test_file seq fun_decls in
   print_endline output_msg;

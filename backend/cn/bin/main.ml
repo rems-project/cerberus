@@ -454,6 +454,7 @@ let run_seq_tests
     output_dir
     num_samples
     backtrack_attempts
+    max_resets
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -505,14 +506,18 @@ let run_seq_tests
             (Some output_dir)
             prog5
             statement_locs;
+          let config : TestGeneration.config = 
+              {TestGeneration.default_cfg with 
+              num_samples = num_samples;
+              max_backtracks = backtrack_attempts;
+              max_resets = max_resets } in
+          TestGeneration.set_config config;
           let _ = statement_locs, cabs_tunit in
           TestGeneration.run_seq
             ~output_dir
             ~filename
-            num_samples
-            backtrack_attempts
             sigma
-            prog5;)
+            prog5)
         ();
         Or_TypeError.return ())
 
@@ -558,6 +563,7 @@ let run_tests
   coverage
   disable_passes
   trap
+  max_resets
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -1233,6 +1239,7 @@ let testing_cmd =
     $ Testing_flags.coverage
     $ Testing_flags.disable_passes
     $ Testing_flags.trap
+    $ Testing_flags.max_resets
   in
   let doc =
     "Generates tests for all functions in [FILE] with CN specifications.\n\
@@ -1263,6 +1270,7 @@ let testing_cmd =
       $ Testing_flags.output_test_dir
       $ Testing_flags.gen_num_samples
       $ Testing_flags.gen_backtrack_attempts
+      $ Testing_flags.max_resets
     in
     let doc =
       "Generates sequences of calls for the API in [FILE].\n\
