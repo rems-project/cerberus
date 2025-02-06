@@ -115,7 +115,7 @@ cn_pointer* cn_gen_alloc(cn_bits_u64* sz) {
         return convert_to_cn_pointer(NULL);
     }
     else {
-        void* p = cn_alloc(bytes);
+        void* p = cn_bump_malloc(bytes);
         update_alloc(p, bytes);
         return convert_to_cn_pointer(p);
     }

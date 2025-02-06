@@ -782,7 +782,7 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   (decl, def)
 
 
-let alloc_sym = Sym.fresh_pretty "cn_alloc"
+let alloc_sym = Sym.fresh_pretty "cn_bump_malloc"
 
 let mk_alloc_expr (ct_ : C.ctype_) : CF.GenTypes.genTypeCategory A.expression =
   A.(
@@ -1898,9 +1898,9 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
       ->
 
       struct tree * default_struct_tree(void) {
-        struct tree *res = cn_alloc(sizeof(struct tree));
+        struct tree *res = cn_bump_malloc(sizeof(struct tree));
         res->tag = TREE_EMPTY;
-        res->u.tree_empty = cn_alloc(sizeof(struct tree_empty));
+        res->u.tree_empty = cn_bump_malloc(sizeof(struct tree_empty));
         res->u.tree_empty->k = default_cn_bits_i32();
         return res;
       }
