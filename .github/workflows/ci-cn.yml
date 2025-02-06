@@ -44,7 +44,6 @@ jobs:
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-        opam switch create ${{ matrix.version }} ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
 
