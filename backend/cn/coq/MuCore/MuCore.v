@@ -153,14 +153,14 @@ with pattern (TY : Type) : Type :=
 
 (* Function types *)
 Inductive mu_function : Type :=
-  | F_params_length : mu_function
-  | F_params_nth : mu_function
-  | F_are_compatible : mu_function
-  | F_size_of : mu_function
-  | F_align_of : mu_function
-  | F_max_int : mu_function
-  | F_min_int : mu_function
-  | F_ctype_width : mu_function.
+  | params_length : mu_function
+  | params_nth : mu_function
+  | are_compatible : mu_function
+  | size_of : mu_function
+  | align_of : mu_function
+  | max_int : mu_function
+  | min_int : mu_function
+  | ctype_width : mu_function.
 
 (* Bitwise operations *)
 Inductive bw_binop : Type :=
