@@ -16,7 +16,14 @@ void* cn_gen_alloc_save(void) {
 }
 
 void cn_gen_alloc_restore(void* ptr) {
-    alloc_curr = ptr;
+    if (alloc_buf <= (char*)ptr && (char*)ptr < alloc_buf + MEM_SIZE) {
+        alloc_curr = ptr;
+        return;
+    }
+
+    fprintf(stderr, "Error: Tried to set allocation data pointer out of range (%p)\n",
+        ptr);
+    exit(1);
 }
 
 static char ownership_buf[MEM_SIZE];
@@ -31,7 +38,14 @@ void* cn_gen_ownership_save(void) {
 }
 
 void cn_gen_ownership_restore(void* ptr) {
-    ownership_curr = ptr;
+    if (ownership_buf <= (char*)ptr && (char*)ptr < ownership_buf + MEM_SIZE) {
+        ownership_curr = ptr;
+        return;
+    }
+
+    fprintf(stderr, "Error: Tried to set ownership data pointer out of range (%p)\n",
+        ptr);
+    exit(1);
 }
 
 struct pointer_data {
@@ -101,7 +115,7 @@ cn_pointer* cn_gen_alloc(cn_bits_u64* sz) {
         return convert_to_cn_pointer(NULL);
     }
     else {
-        void* p = alloc(bytes);
+        void* p = cn_alloc(bytes);
         update_alloc(p, bytes);
         return convert_to_cn_pointer(p);
     }

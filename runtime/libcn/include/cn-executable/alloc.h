@@ -1,40 +1,26 @@
 #ifndef CN_ALLOC
 #define CN_ALLOC
 
+#include <stddef.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// enum CNTYPE {
-//     NODE_CN,
-//     SEQ,
-//     HASH_TABLE,
-//     HT_ENTRY,
-//     UNSIGNED_INT,
-//     CN_BOOL,
-//     CN_POINTER,
-//     CNTYPE_SIZE
-// };
 
-void *alloc_(long nbytes, const char *, int);
 
-#define alloc(x)\
-    alloc_(x, __FILE__, __LINE__)
+void* cn_alloc(size_t nbytes);
 
-void *zalloc_(long nbytes, const char *, int);
+void* cn_zalloc(size_t nbytes);
 
-#define zalloc(x)\
-    zalloc_(x, __FILE__, __LINE__)
+void cn_free_all();
 
-void free_all(void);
+typedef uintptr_t cn_alloc_checkpoint;
 
-typedef void* alloc_checkpoint;
+cn_alloc_checkpoint cn_alloc_save_checkpoint(void);
 
-alloc_checkpoint alloc_save_checkpoint(void);
-
-void free_after(alloc_checkpoint ptr);
-
-// void *alloc_zeros(long nbytes);
+void cn_free_after(cn_alloc_checkpoint ptr);
 
 #ifdef __cplusplus
 }
