@@ -1,3 +1,4 @@
+# Builds CN with Coq and runs Coq tests
 name: CN-Coq
 
 on:
@@ -6,6 +7,7 @@ on:
     branches:
       - master
       - cn-logging
+      - cn-resource-logging
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
@@ -24,27 +26,35 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+
+    - name: Checkout Cerberus 
+      uses: actions/checkout@v4
 
     - name: System dependencies (Ubuntu)
       run: |
         sudo apt-get install build-essential libgmp-dev z3 opam
 
-    - name: Restore cached opam
+    - name: Restore OPAM cache
       id: cache-opam-restore
       uses: actions/cache/restore@v4
       with:
         path: ~/.opam
         key: ${{ matrix.version }}-with-coq
-
-    - name: Setup opam
+  
+    - name: Setup OPAM
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
         opam switch create ${{ matrix.version }}-with-coq ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }}-with-coq )
-        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
-        opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
+        eval $(opam env --switch=${{ matrix.version }}-with-coq)
+          opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+      
+    - name: Save OPAM cache
+      uses: actions/cache/save@v4
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      with:
+        path: ~/.opam
+        key: ${{ matrix.version }}-with-coq
   
     - name: Install Cerberus
       run: |

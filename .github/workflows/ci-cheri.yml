@@ -1,3 +1,5 @@
+# Builds cerberus-cheri and runs CHERI tests
+
 name: CHERI
 
 on:
@@ -5,7 +7,6 @@ on:
   push:
     branches:
       - master
-      - cheri-tests
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
@@ -26,25 +27,45 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+
+    - name: Checkout Cerberus 
+      uses: actions/checkout@v4
 
     - name: System dependencies (ubuntu)
       run: |
         sudo apt-get install build-essential libgmp-dev opam
 
-    - name: Restore cached opam
+    - name: Restore OPAM cache
       id: cache-opam-restore
       uses: actions/cache/restore@v4
       with:
         path: ~/.opam
-        key: ${{ matrix.version }}
-        fail-on-cache-miss: true
+        key: ${{ matrix.version }}-cheri
 
+    - name: Setup OPAM
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+        opam switch create ${{ matrix.version }}-cheri ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }}-cheri)
+        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+        opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
+        opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
+        opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
+        opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git#2f02c44ad061d4da30136dc9dbc06c142c94fdaf
+    
+    - name: Save OPAM cache
+      uses: actions/cache/save@v4
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      with:
+        path: ~/.opam
+        key: ${{ matrix.version }}-cheri
+  
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
       run: |
-        opam switch with_coq
-        eval $(opam env --switch=with_coq)
+        opam switch ${{ matrix.version }}-cheri
+        eval $(opam env --switch=${{ matrix.version }}-cheri )
         opam pin --yes --no-action add cerberus-lib .
         opam pin --yes --no-action add cerberus-cheri .
         opam install --yes cerberus-cheri
@@ -52,7 +73,7 @@ jobs:
     - name: Run Cerberus-CHERI CI tests
       if: ${{ matrix.version == '4.14.1' }}
       run: |
-        opam switch with_coq
-        eval $(opam env --switch=with_coq)
+        opam switch ${{ matrix.version }}-cheri
+        eval $(opam env --switch=${{ matrix.version }}-cheri )
         cd tests; USE_OPAM='' ./run-cheri.sh
         cd ..
