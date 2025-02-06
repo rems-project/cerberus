@@ -13,7 +13,7 @@ type executable_spec =
   { pre_post : (CF.Symbol.sym * (string list * string list)) list;
     in_stmt : (Cerb_location.t * string list) list;
     returns :
-      (Cerb_location.t * CF.GenTypes.genTypeCategory A.expression option * string list)
+      (Cerb_location.t * (CF.GenTypes.genTypeCategory A.expression option * string list))
         list
   }
 
@@ -198,10 +198,10 @@ let generate_c_specs_internal
   in
   let specs = List.map generate_c_spec instrumentation_list in
   let pre_post, in_stmt, returns = Executable_spec_utils.list_split_three specs in
-  { pre_post = List.concat pre_post;
-    in_stmt = List.concat in_stmt;
-    returns = List.concat returns
-  }
+  let returns =
+    List.map (fun (l, e_opt, strs) -> (l, (e_opt, strs))) (List.concat returns)
+  in
+  { pre_post = List.concat pre_post; in_stmt = List.concat in_stmt; returns }
 
 
 let generate_doc_from_ail_struct ail_struct =
@@ -217,8 +217,7 @@ let generate_struct_decl_str (tag, (_, _, def)) =
 
 let generate_c_records ail_structs =
   let struct_docs = List.map generate_doc_from_ail_struct ail_structs in
-  ( doc_to_pretty_string (PPrint.concat struct_docs),
-    String.concat "" (List.map generate_struct_decl_str ail_structs) )
+  doc_to_pretty_string (PPrint.concat struct_docs)
 
 
 let generate_str_from_ail_struct ail_struct =
@@ -333,8 +332,7 @@ let generate_ownership_functions without_ownership_checking ownership_ctypes =
       else
         x :: remove_duplicates (x :: ret_list) xs
   in
-  let ctypes = !ownership_ctypes in
-  let ctypes = remove_duplicates [] ctypes in
+  let ctypes = remove_duplicates [] ownership_ctypes in
   let ail_funs =
     List.map
       (fun ctype ->
@@ -391,25 +389,21 @@ let generate_conversion_and_equality_functions
   (comment ^ doc_to_pretty_string defs_doc, comment ^ doc_to_pretty_string decls_doc)
 
 
+let get_main (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
+  List.filter
+    (fun (fn_sym, _) -> String.equal "main" (Sym.pp_string fn_sym))
+    sigm.function_definitions
+
+
 let has_main (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
-  let main_fn_sym_list =
-    List.filter
-      (fun (fn_sym, _) -> String.equal "main" (Sym.pp_string fn_sym))
-      sigm.function_definitions
-  in
-  List.non_empty main_fn_sym_list
+  List.non_empty (get_main sigm)
 
 
 let generate_ownership_global_assignments
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
   =
-  let main_fn_sym_list =
-    List.filter
-      (fun (fn_sym, _) -> String.equal "main" (Sym.pp_string fn_sym))
-      sigm.function_definitions
-  in
-  match main_fn_sym_list with
+  match get_main sigm with
   | [] -> failwith "CN-exec: No main function so ownership globals cannot be initialised"
   | (main_sym, _) :: _ ->
     let globals = extract_global_variables prog5.globs in
