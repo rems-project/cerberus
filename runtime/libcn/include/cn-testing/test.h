@@ -134,7 +134,8 @@ void cn_trap(void);
 int cn_test_main(int argc, char* argv[]);
 
 #define CN_TEST_INIT()                                                                  \
-    cn_free_all();                                                                      \
+    cn_bump_free_all();                                                                 \
+    cn_fl_free_all();                                                                   \
     reset_error_msg_info();                                                             \
     initialise_ownership_ghost_state();                                                 \
     initialise_ghost_stack_depth();                                                     \
