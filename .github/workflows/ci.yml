@@ -1,5 +1,5 @@
 # Install Cerberus (without Coq or CHERI) and run tests
-name: CI
+name: Cerberus
 
 on:
   pull_request:

@@ -1,6 +1,6 @@
 # Builds cerberus-cheri and runs CHERI tests
 
-name: CHERI
+name: Cerberus-CHERI
 
 on:
   pull_request:
