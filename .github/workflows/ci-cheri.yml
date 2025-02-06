@@ -42,6 +42,9 @@ jobs:
         path: ~/.opam
         key: ${{ matrix.version }}-cheri
 
+    - name: Debug cache hit
+      run: echo "Cache hit value is ${{ steps.cache-opam-restore.outputs.cache-hit }}"
+
     - name: Setup OPAM
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
