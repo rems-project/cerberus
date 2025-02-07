@@ -119,49 +119,42 @@ let generate_c_pres_and_posts_internal
         (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss))
       ail_executable_spec.in_stmt
   in
-  let rec split_return_and_non_return_injs rs nrs = function
-    | [] -> (rs, nrs)
+  let rec get_return_and_non_return_injs return_ownership_stmts block_ownership_stmts
+    = function
+    | [] -> (return_ownership_stmts, block_ownership_stmts)
     | (inj : OE.ownership_injection) :: injs ->
       (match inj.injection_kind with
-       | OE.ReturnInj _ -> split_return_and_non_return_injs (inj :: rs) nrs injs
-       | NonReturnInj -> split_return_and_non_return_injs rs (inj :: nrs) injs)
+       | OE.ReturnInj return_kind ->
+         let return_inj_expr_opt =
+           match return_kind with ReturnExpr e -> Some e | ReturnVoid -> None
+         in
+         let return_ownership_stmt =
+           ( inj.loc,
+             ( return_inj_expr_opt,
+               [ String.concat
+                   "\n"
+                   (generate_ail_stat_strs ~with_newline:true inj.bs_and_ss)
+               ] ) )
+         in
+         get_return_and_non_return_injs
+           (return_ownership_stmt :: return_ownership_stmts)
+           block_ownership_stmts
+           injs
+       | NonReturnInj ->
+         let block_ownership_stmt =
+           ( inj.loc,
+             [ String.concat
+                 "\n"
+                 (generate_ail_stat_strs ~with_newline:true inj.bs_and_ss)
+             ] )
+         in
+         get_return_and_non_return_injs
+           return_ownership_stmts
+           (block_ownership_stmt :: block_ownership_stmts)
+           injs)
   in
-  let return_injs, non_return_injs =
-    split_return_and_non_return_injs [] [] block_ownership_injs
-  in
-  let block_ownership_stmts =
-    List.map
-      (fun (ownership_inj : OE.ownership_injection) ->
-        ( ownership_inj.loc,
-          generate_ail_stat_strs ~with_newline:true ownership_inj.bs_and_ss ))
-      non_return_injs
-  in
-  let block_ownership_stmts =
-    List.map (fun (loc, strs) -> (loc, [ String.concat "\n" strs ])) block_ownership_stmts
-  in
-  let return_ownership_stmts =
-    List.map
-      (fun (ownership_inj : OE.ownership_injection) ->
-        let return_kind =
-          match ownership_inj.injection_kind with
-          | OE.ReturnInj r -> r
-          | NonReturnInj ->
-            failwith
-              (__LOC__
-               ^ "Non-return injection should have been filtered out by this point")
-        in
-        let return_inj_expr_opt =
-          match return_kind with OE.ReturnExpr e -> Some e | ReturnVoid -> None
-        in
-        ( ownership_inj.loc,
-          return_inj_expr_opt,
-          generate_ail_stat_strs ~with_newline:true ownership_inj.bs_and_ss ))
-      return_injs
-  in
-  let return_ownership_stmts =
-    List.map
-      (fun (loc, e_opt, strs) -> (loc, (e_opt, [ String.concat "\n" strs ])))
-      return_ownership_stmts
+  let return_ownership_stmts, block_ownership_stmts =
+    get_return_and_non_return_injs [] [] block_ownership_injs
   in
   ( [ (instrumentation.fn, (pre_str, post_str)) ],
     in_stmt @ block_ownership_stmts,
