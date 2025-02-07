@@ -1873,7 +1873,7 @@ module BaseTyping = struct
       in
       let@ it = WIT.infer it in
       warn_when_not_quantifier_bt
-        "extract"
+        "focus"
         (IT.get_loc it)
         (IT.get_bt it)
         (Some (IndexTerms.pp it));

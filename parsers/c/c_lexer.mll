@@ -94,6 +94,7 @@ let lexicon: (string, token) Hashtbl.t =
 (* BEGIN CN *)
 
 type cn_keyword_kind =
+ | Deprecated of string (* string: what to use instead *)
  | Production
  | Experimental
  | Unimplemented
@@ -119,8 +120,10 @@ let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
     "map"           , (Production, CN_MAP);
     "let"           , (Production, CN_LET);
     "take"          , (Production, CN_TAKE);
-    "Owned"         , (Production, CN_OWNED);
-    "Block"         , (Production, CN_BLOCK);
+    "RW"            , (Production, CN_OWNED);
+    "Owned"         , (Deprecated "RW", CN_OWNED);
+    "W"             , (Production, CN_BLOCK);
+    "Block"         , (Deprecated "W", CN_BLOCK);
     "each"          , (Production, CN_EACH);
     "NULL"          , (Production, CN_NULL);
     "true"          , (Production, CN_TRUE);
@@ -134,7 +137,8 @@ let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
     "unchanged"     , (Production, CN_UNCHANGED);
     "instantiate"   , (Production, CN_INSTANTIATE);
     "split_case"    , (Production, CN_SPLIT_CASE);
-    "extract"       , (Production, CN_EXTRACT);
+    "focus"         , (Production, CN_EXTRACT);
+    "extract"       , (Deprecated "focus", CN_EXTRACT);
     "array_shift"   , (Production, CN_ARRAY_SHIFT);
     "member_shift"  , (Production, CN_MEMBER_SHIFT);
     "unfold"        , (Production, CN_UNFOLD);
@@ -201,6 +205,15 @@ let cn_lex_keyword id start_pos end_pos =
       (Pp_errors.make_message
         Cerb_location.(region (start_pos, end_pos) NoCursor)
         Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
+        Warning);
+    kw
+  | (Deprecated instead, kw) ->
+    (* Only want to warn once _per CN/Cerberus invocation_ *)
+    Hashtbl.replace cn_keywords id (Production, kw);
+    prerr_endline
+      (Pp_errors.make_message
+        Cerb_location.(region (start_pos, end_pos) NoCursor)
+        Errors.(CPARSER (Errors.Cparser_deprecated_keyword (id, instead)))
         Warning);
     kw
   | (Unimplemented, _) -> raise (Error (Errors.Cparser_unimplemented_keyword id))

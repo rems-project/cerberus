@@ -1994,7 +1994,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              List.equal Int.equal (List.map snd original_rs) (List.map snd upd_rs)
              && not quiet
            then
-             warn loc !^"extract: index added, no resources (yet) extracted."
+             warn loc !^"focus: index added, no effect on existing resources (yet)."
            else
              ();
            return ()
