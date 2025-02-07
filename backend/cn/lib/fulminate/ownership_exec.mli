@@ -2,6 +2,23 @@ module CF = Cerb_frontend
 module A = Executable_spec_utils.A
 module C = Executable_spec_utils.C
 
+type ail_bindings_and_statements =
+  A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
+
+type return_kind =
+  | ReturnVoid
+  | ReturnExpr of CF.GenTypes.genTypeCategory A.expression
+
+type injection_kind =
+  | ReturnInj of return_kind
+  | NonReturnInj
+
+type ownership_injection =
+  { loc : Cerb_location.t;
+    bs_and_ss : ail_bindings_and_statements;
+    injection_kind : injection_kind
+  }
+
 val cn_ghost_state_sym : Sym.t
 
 val cn_ghost_state_struct_type : Executable_spec_utils.C.ctype
@@ -90,20 +107,12 @@ val get_c_control_flow_block_unmaps_aux
     * Executable_spec_utils.C.qualifiers
     * Executable_spec_utils.C.ctype))
     list ->
-  'a A.statement ->
-  (Cerb_location.t
-  * 'a A.expression option option
-  * 'b list
-  * Cerb_frontend.GenTypes.genTypeCategory A.statement_ list)
-    list
+  Cerb_frontend.GenTypes.genTypeCategory A.statement ->
+  ownership_injection list
 
 val get_c_control_flow_block_unmaps
-  :  'a A.statement ->
-  (Cerb_location.t
-  * 'a A.expression option option
-  * 'b list
-  * Cerb_frontend.GenTypes.genTypeCategory A.statement_ list)
-    list
+  :  Cerb_frontend.GenTypes.genTypeCategory A.statement ->
+  ownership_injection list
 
 val get_c_block_entry_exit_injs_aux
   :  A.bindings ->
@@ -120,23 +129,7 @@ val get_c_block_entry_exit_injs_aux
 
 val get_c_block_entry_exit_injs
   :  Cerb_frontend.GenTypes.genTypeCategory A.statement ->
-  (Cerb_location.t
-  * 'a option
-  * (Sym.t
-    * ((Cerb_location.t * Executable_spec_utils.A.storageDuration * bool)
-      * 'b option
-      * Executable_spec_utils.C.qualifiers
-      * Executable_spec_utils.C.ctype))
-      list
-  * Cerb_frontend.GenTypes.genTypeCategory A.statement_ list)
-    list
-
-val combine_injs_over_location
-  :  Cerb_location.t ->
-  (Cerb_location.t * 'a * 'b * 'c) list ->
-  ('a * 'b * 'c) list
-
-val get_return_expr_opt : 'a option list -> 'a option
+  ownership_injection list
 
 val remove_duplicates
   :  Cerb_location.t list ->
@@ -145,16 +138,7 @@ val remove_duplicates
 
 val get_c_block_local_ownership_checking_injs
   :  Cerb_frontend.GenTypes.genTypeCategory A.statement ->
-  (Cerb_location.t
-  * Cerb_frontend.GenTypes.genTypeCategory A.expression option option
-  * (Sym.t
-    * ((Cerb_location.t * Executable_spec_utils.A.storageDuration * bool)
-      * 'a option
-      * Executable_spec_utils.C.qualifiers
-      * Executable_spec_utils.C.ctype))
-      list
-  * Cerb_frontend.GenTypes.genTypeCategory A.statement_ list)
-    list
+  ownership_injection list
 
 val get_c_fn_local_ownership_checking_injs
   :  Sym.t ->
@@ -162,13 +146,4 @@ val get_c_fn_local_ownership_checking_injs
   (Cerb_frontend.GenTypes.genTypeCategory A.statement_ list
   * Cerb_frontend.GenTypes.genTypeCategory A.statement_ list)
     option
-  * (Cerb_location.t
-    * Cerb_frontend.GenTypes.genTypeCategory A.expression option option
-    * (Sym.t
-      * ((Cerb_location.t * Executable_spec_utils.A.storageDuration * bool)
-        * 'a option
-        * Executable_spec_utils.C.qualifiers
-        * Executable_spec_utils.C.ctype))
-        list
-    * Cerb_frontend.GenTypes.genTypeCategory A.statement_ list)
-      list
+  * ownership_injection list

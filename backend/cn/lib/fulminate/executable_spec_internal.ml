@@ -8,6 +8,7 @@ module IT = IndexTerms
 module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
 module AT = ArgumentTypes
+module OE = Ownership_exec
 
 type executable_spec =
   { pre_post : (CF.Symbol.sym * (string list * string list)) list;
@@ -87,7 +88,7 @@ let generate_c_pres_and_posts_internal
       ((pre_str, post_str), [])
     else (
       let fn_ownership_stats_opt, block_ownership_injs =
-        Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm
+        OE.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm
       in
       match fn_ownership_stats_opt with
       | Some (entry_ownership_stats, exit_ownership_stats) ->
@@ -118,18 +119,21 @@ let generate_c_pres_and_posts_internal
         (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss))
       ail_executable_spec.in_stmt
   in
-  let return_injs =
-    List.filter_map
-      (fun (loc, e_opt, bs, ss) ->
-        match e_opt with Some e_opt' -> Some (loc, e_opt', bs, ss) | None -> None)
-      block_ownership_injs
+  let rec split_return_and_non_return_injs rs nrs = function
+    | [] -> (rs, nrs)
+    | (inj : OE.ownership_injection) :: injs ->
+      (match inj.injection_kind with
+       | OE.ReturnInj _ -> split_return_and_non_return_injs (inj :: rs) nrs injs
+       | NonReturnInj -> split_return_and_non_return_injs rs (inj :: nrs) injs)
   in
-  let non_return_injs =
-    List.filter (fun (_, e_opt, _, _) -> Option.is_none e_opt) block_ownership_injs
+  let return_injs, non_return_injs =
+    split_return_and_non_return_injs [] [] block_ownership_injs
   in
   let block_ownership_stmts =
     List.map
-      (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss)))
+      (fun (ownership_inj : OE.ownership_injection) ->
+        ( ownership_inj.loc,
+          generate_ail_stat_strs ~with_newline:true ownership_inj.bs_and_ss ))
       non_return_injs
   in
   let block_ownership_stmts =
@@ -137,13 +141,26 @@ let generate_c_pres_and_posts_internal
   in
   let return_ownership_stmts =
     List.map
-      (fun (loc, e_opt, bs, ss) ->
-        (loc, e_opt, generate_ail_stat_strs ~with_newline:true (bs, ss)))
+      (fun (ownership_inj : OE.ownership_injection) ->
+        let return_kind =
+          match ownership_inj.injection_kind with
+          | OE.ReturnInj r -> r
+          | NonReturnInj ->
+            failwith
+              (__LOC__
+               ^ "Non-return injection should have been filtered out by this point")
+        in
+        let return_inj_expr_opt =
+          match return_kind with OE.ReturnExpr e -> Some e | ReturnVoid -> None
+        in
+        ( ownership_inj.loc,
+          return_inj_expr_opt,
+          generate_ail_stat_strs ~with_newline:true ownership_inj.bs_and_ss ))
       return_injs
   in
   let return_ownership_stmts =
     List.map
-      (fun (loc, e_opt, strs) -> (loc, e_opt, [ String.concat "\n" strs ]))
+      (fun (loc, e_opt, strs) -> (loc, (e_opt, [ String.concat "\n" strs ])))
       return_ownership_stmts
   in
   ( [ (instrumentation.fn, (pre_str, post_str)) ],
@@ -198,10 +215,10 @@ let generate_c_specs_internal
   in
   let specs = List.map generate_c_spec instrumentation_list in
   let pre_post, in_stmt, returns = Executable_spec_utils.list_split_three specs in
-  let returns =
-    List.map (fun (l, e_opt, strs) -> (l, (e_opt, strs))) (List.concat returns)
-  in
-  { pre_post = List.concat pre_post; in_stmt = List.concat in_stmt; returns }
+  { pre_post = List.concat pre_post;
+    in_stmt = List.concat in_stmt;
+    returns = List.concat returns
+  }
 
 
 let generate_doc_from_ail_struct ail_struct =
@@ -407,16 +424,12 @@ let generate_ownership_global_assignments
   | [] -> failwith "CN-exec: No main function so ownership globals cannot be initialised"
   | (main_sym, _) :: _ ->
     let globals = extract_global_variables prog5.globs in
-    let global_map_fcalls =
-      List.map Ownership_exec.generate_c_local_ownership_entry_fcall globals
-    in
+    let global_map_fcalls = List.map OE.generate_c_local_ownership_entry_fcall globals in
     let global_map_stmts_ = List.map (fun e -> A.AilSexpr e) global_map_fcalls in
-    let assignments = Ownership_exec.get_ownership_global_init_stats () in
+    let assignments = OE.get_ownership_global_init_stats () in
     let init_and_global_mapping_str =
       generate_ail_stat_strs ([], assignments @ global_map_stmts_)
     in
-    let global_unmapping_stmts_ =
-      List.map Ownership_exec.generate_c_local_ownership_exit globals
-    in
+    let global_unmapping_stmts_ = List.map OE.generate_c_local_ownership_exit globals in
     let global_unmapping_str = generate_ail_stat_strs ([], global_unmapping_stmts_) in
     [ (main_sym, (init_and_global_mapping_str, global_unmapping_str)) ]

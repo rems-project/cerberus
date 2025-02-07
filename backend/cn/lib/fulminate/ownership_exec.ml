@@ -3,6 +3,25 @@ open Executable_spec_utils
 module A = CF.AilSyntax
 module C = CF.Ctype
 
+type ail_bindings_and_statements =
+  A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
+
+(* Differentiate between whether return statement carries an expression or not *)
+type return_kind =
+  | ReturnVoid
+  | ReturnExpr of CF.GenTypes.genTypeCategory A.expression
+
+(* Injections are treated differently depending on whether they involve returns or not *)
+type injection_kind =
+  | ReturnInj of return_kind
+  | NonReturnInj
+
+type ownership_injection =
+  { loc : Cerb_location.t;
+    bs_and_ss : ail_bindings_and_statements;
+    injection_kind : injection_kind
+  }
+
 let cn_ghost_state_sym = Sym.fresh_pretty "cn_ownership_global_ghost_state"
 
 let cn_ghost_state_struct_type =
@@ -166,9 +185,6 @@ let get_c_local_ownership_checking params =
 let rec collect_visibles bindings = function
   | [] -> []
   | A.(AnnotatedStatement (_, _, AilSdeclaration decls)) :: ss ->
-    (* Printf.printf "Bindings: \n" ; List.iter (fun (b_sym, _) -> Printf.printf "%s\n"
-       (Sym.pp_string b_sym)) bindings; Printf.printf "Decl syms: \n" ; List.iter (fun
-       (decl_sym, _) -> Printf.printf "%s\n" (Sym.pp_string decl_sym)) decls; *)
     let decl_syms_and_ctypes =
       List.map (fun (sym, _) -> (sym, find_ctype_from_bindings bindings sym)) decls
     in
@@ -192,6 +208,7 @@ let rec get_c_control_flow_block_unmaps_aux
   return_vars
   bindings
   A.(AnnotatedStatement (loc, _, s_))
+  : ownership_injection list
   =
   match s_ with
   | A.(AilSdeclaration _) -> []
@@ -231,19 +248,31 @@ let rec get_c_control_flow_block_unmaps_aux
     get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s
   | AilSgoto _ -> [] (* TODO *)
   | AilSreturnVoid ->
-    [ (loc, Some None, [], List.map generate_c_local_ownership_exit return_vars) ]
+    [ { loc;
+        bs_and_ss = ([], List.map generate_c_local_ownership_exit return_vars);
+        injection_kind = ReturnInj ReturnVoid
+      }
+    ]
   | AilSreturn e ->
-    [ (loc, Some (Some e), [], List.map generate_c_local_ownership_exit return_vars) ]
+    [ { loc;
+        bs_and_ss = ([], List.map generate_c_local_ownership_exit return_vars);
+        injection_kind = ReturnInj (ReturnExpr e)
+      }
+    ]
   | AilScontinue ->
     let loc_before_continue = get_start_loc loc in
-    [ ( loc_before_continue,
-        None,
-        [],
-        List.map generate_c_local_ownership_exit continue_vars )
+    [ { loc = loc_before_continue;
+        bs_and_ss = ([], List.map generate_c_local_ownership_exit continue_vars);
+        injection_kind = NonReturnInj
+      }
     ]
   | AilSbreak ->
     let loc_before_break = get_start_loc loc in
-    [ (loc_before_break, None, [], List.map generate_c_local_ownership_exit break_vars) ]
+    [ { loc = loc_before_break;
+        bs_and_ss = ([], List.map generate_c_local_ownership_exit break_vars);
+        injection_kind = NonReturnInj
+      }
+    ]
   | AilSskip | AilSexpr _ | AilSpar _ | AilSreg_store _ | AilSmarker _ -> []
 
 
@@ -293,31 +322,11 @@ let rec get_c_block_entry_exit_injs_aux bindings A.(AnnotatedStatement (loc, _, 
     []
 
 
-let get_c_block_entry_exit_injs stat =
+let get_c_block_entry_exit_injs stat : ownership_injection list =
   let injs = get_c_block_entry_exit_injs_aux [] stat in
-  List.map (fun (loc, bs, ss) -> (loc, None, bs, ss)) injs
-
-
-let rec combine_injs_over_location loc = function
-  | [] -> []
-  | (loc', expr_opt, bs, inj_stmt) :: injs' ->
-    let stmt =
-      if
-        String.equal
-          (Cerb_location.location_to_string loc)
-          (Cerb_location.location_to_string loc')
-      then
-        [ (expr_opt, bs, inj_stmt) ]
-      else
-        []
-    in
-    stmt @ combine_injs_over_location loc injs'
-
-
-let rec get_return_expr_opt = function
-  | [] -> None
-  | Some e :: _ -> Some e
-  | None :: xs -> get_return_expr_opt xs
+  List.map
+    (fun (loc, bs, ss) -> { loc; bs_and_ss = (bs, ss); injection_kind = NonReturnInj })
+    injs
 
 
 let rec remove_duplicates ds = function
@@ -334,7 +343,6 @@ let rec remove_duplicates ds = function
       l :: remove_duplicates (l :: ds) ls
 
 
-(* TODO: Clean up this mess *)
 let get_c_block_local_ownership_checking_injs
   A.(AnnotatedStatement (_, _, fn_block) as statement)
   =
@@ -343,17 +351,40 @@ let get_c_block_local_ownership_checking_injs
     let injs = get_c_block_entry_exit_injs statement in
     let injs' = get_c_control_flow_block_unmaps statement in
     let injs = injs @ injs' in
-    let locs = List.map (fun (l, _, _, _) -> l) injs in
+    let locs = List.map (fun o_inj -> o_inj.loc) injs in
     let locs = remove_duplicates [] locs in
+    let rec combine_injs_over_location loc = function
+      | [] -> []
+      | inj :: injs' ->
+        if
+          String.equal
+            (Cerb_location.location_to_string loc)
+            (Cerb_location.location_to_string inj.loc)
+        then (
+          let bs, ss = inj.bs_and_ss in
+          (bs, ss, inj.injection_kind) :: combine_injs_over_location loc injs')
+        else
+          combine_injs_over_location loc injs'
+    in
+    (* If any of the individual injections to be combined is a return injection, the entire combined injection becomes a return injection *)
+    let rec get_return_inj_kind = function
+      | [] -> NonReturnInj
+      | ReturnInj r :: _ -> ReturnInj r
+      | NonReturnInj :: xs -> get_return_inj_kind xs
+    in
+    (* Injections at the same location need to be grouped together *)
     let combined_injs =
       List.map
         (fun l ->
           let injs' = combine_injs_over_location l injs in
-          let expr_opt_list, bs_list, stats_list =
+          let bs_list, ss_list, inj_kind_list =
             Executable_spec_utils.list_split_three injs'
           in
-          let return_expr_opt = get_return_expr_opt expr_opt_list in
-          (l, return_expr_opt, List.concat bs_list, List.concat stats_list))
+          let inj_kind = get_return_inj_kind inj_kind_list in
+          { loc = l;
+            bs_and_ss = (List.concat bs_list, List.concat ss_list);
+            injection_kind = inj_kind
+          })
         locs
     in
     combined_injs
@@ -376,7 +407,6 @@ let get_c_fn_local_ownership_checking_injs
     let param_types = List.map (fun (_, ctype, _) -> ctype) param_types in
     let params = List.combine param_syms param_types in
     let ownership_stats_pair = get_c_local_ownership_checking params in
-    (* TODO: Separate return injections here since they are now done differently *)
     let block_ownership_injs = get_c_block_local_ownership_checking_injs fn_body in
     (Some ownership_stats_pair, block_ownership_injs)
   | _, _ -> (None, [])
