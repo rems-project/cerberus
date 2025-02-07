@@ -4,6 +4,5 @@
  (name main)
  ; (public_name playground)
  ; (package cerberus)
- (flags
-  (:standard -w -27))
+ (flags (:standard -w -27))
  (libraries cmdliner str unix mem_concrete cerberus-lib.backend_common))
