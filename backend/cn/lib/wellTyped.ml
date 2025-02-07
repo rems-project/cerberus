@@ -1061,7 +1061,14 @@ module WReq = struct
     Pp.debug 22 (lazy (Pp.item "WReq: checking" (Req.pp r)));
     let@ spec_iargs =
       match Req.get_name r with
-      | Owned (_ct, _init) -> return []
+      | Owned (ct, init) -> 
+        let@ () = WCT.is_ct loc ct in
+        let@ () = match ct, init with
+        | Void, Req.Uninit -> fail {loc; msg = Generic !^"Block<void> is not a valid resource, please supply another C-type (using `Block<YOURTYPE>`)."}
+        | Void, Req.Init -> fail {loc; msg = Generic !^"Owned<void> is not a valid resource, please supply another C-type (using `Owned<YOURTYPE>`)."}
+        | _ -> return ()
+        in
+        return []
       | PName name ->
         let@ def = get_resource_predicate_def loc name in
         return def.iargs
@@ -1108,35 +1115,10 @@ module WReq = struct
           let hint = "Only constant iteration steps are allowed." in
           fail { loc; msg = NIA { it = p.step; hint } }
       in
-      (*let@ () = match p.name with | (Owned (ct, _init)) -> let sz = Memory.size_of_ctype
-        ct in if IT.equal step (IT.int_lit_ sz (snd p.q)) then return () else fail (fun _
-        -> {loc; msg = Generic (!^"Iteration step" ^^^ IT.pp p.step ^^^ parens (IT.pp
-        step) ^^^ !^ "different to sizeof" ^^^ Sctypes.pp ct ^^^ parens (!^ (Int.to_string
-        sz)))}) | _ -> return () in*)
       let@ permission, iargs =
         pure
           (let@ () = add_l (fst p.q) (snd p.q) (loc, lazy (Pp.string "forall-var")) in
            let@ permission = WIT.check loc BT.Bool p.permission in
-           (* let@ provable = provable loc in *)
-           (* let here = Locations.other __LOC__ in *)
-           (* let only_nonnegative_indices = *)
-           (*   (\* It is important to use `permission` here and NOT `p.permission`. *)
-           (* If there is a record involved, `permission` is normalised but the
-              `p.permission` is not *)
-           (*      If there is a subsitution in `provable` then a type check *)
-           (*      assertion may fail if the non-normalised form is used *\) *)
-           (*   let sym_args = (fst p.q, snd p.q, p.q_loc) in *)
-           (* LC.forall_ p.q (impl_ (permission, ge_ (sym_ sym_args, int_lit_ 0 (snd p.q)
-              here) here) here) *)
-           (* in *)
-           (* let@ () = match provable only_nonnegative_indices with *)
-           (*   | `True -> *)
-           (*      return () *)
-           (*   | `False -> *)
-           (*      let model = Solver.model () in *)
-           (*      let msg = "Iterated resource gives ownership to negative indices." in *)
-           (*      fail (fun ctxt -> {loc; msg = Generic_with_model {err= !^msg; ctxt; model}}) *)
-           (* in *)
            let has_iargs, expect_iargs = (List.length p.iargs, List.length spec_iargs) in
            (* +1 because of pointer argument *)
            let@ () =
