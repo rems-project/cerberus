@@ -320,7 +320,6 @@ let rec get_return_expr_opt = function
   | None :: xs -> get_return_expr_opt xs
 
 
-(* TODO replace with Base.List: https://github.com/rems-project/cerberus/pull/347 *)
 let rec remove_duplicates ds = function
   | [] -> []
   | l :: ls ->
