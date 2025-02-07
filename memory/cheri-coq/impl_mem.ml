@@ -921,6 +921,11 @@ module CHERIMorello : Memory = struct
 
   let pp_integer_value_for_core = pp_integer_value
 
+  let pp_integer_value_for_coq _ = failwith "TODO: pp_integer_value_for_coq"
+  let pp_floating_value_for_coq _ = failwith "TODO: pp_floating_value_for_coq"
+  let pp_pointer_value_for_coq _ = failwith "TODO: pp_pointer_value_for_coq"
+  let pp_mem_value_for_coq _ _ _ _ _ _ = failwith "TODO: pp_mem_value_for_coq"
+  
   let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
   let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
 

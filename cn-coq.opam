@@ -1,8 +1,9 @@
 opam-version: "2.0"
-synopsis: "The CN type system"
-description: "The CN type system"
-maintainer: ["Christopher Pulte <cp526@cl.cam.ac.uk>"]
+synopsis: "The CN Coq formalization"
+description: "The CN Coq formalization"
+maintainer: ["Vadim Zaliva <vz231@cl.cam.ac.uk>"]
 authors: [
+  "Vadim Zaliva"
   "Christopher Pulte"
   "Thomas Sewell"
   "Dhruv Makwana"
@@ -14,14 +15,10 @@ license: "BSD-2-Clause"
 homepage: "https://rems-project.github.io/cn-tutorial"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
-  "cerberus-lib"
-  "monomorphic"
-  "ocaml" {>= "4.14.0"}
-  "ppx_deriving"
-  "ppx_deriving_yojson" {>= "3.8.0"}
-  "cmdliner"
-  "ocamlgraph"
-  "zarith" {>= "1.13"}
+  "cn"
+  "coq" {>= "8.18.0"}
+  "coq-ext-lib"
+  "coq-struct-tact"
 ]
 build: [
   ["dune" "subst"] {pinned}
