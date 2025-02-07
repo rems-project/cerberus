@@ -43,4 +43,3 @@
  (package cerberus-cheri)
  (deps main.ml)
  (action (copy main.ml main_cheri_coq.ml)))
- 

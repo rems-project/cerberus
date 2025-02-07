@@ -15,4 +15,3 @@
  (modules main)
  (libraries cmdliner str unix
   cerb_frontend cerb_backend mem_concrete cerb_util bmc))
-  
