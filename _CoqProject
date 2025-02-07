@@ -1,0 +1,11 @@
+# This is top-level _CoqProject file. It is needed for vscode-coq to work.
+# It is *not* used by the build system.
+#
+# CN:
+-R _build/default/backend/cn/coq/MuCore/ MuCore
+# CHERI memory model
+-R _build/default/coq/Common/ Common
+-R _build/default/coq/Morello/ Morello
+-R _build/default/coq/CheriMemory/ CheriMemory
+-R _build/default/coq/Proofs/ Proofs
+

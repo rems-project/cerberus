@@ -125,6 +125,7 @@ let with_well_formedness_check
   ~macros
   ~incl_dirs
   ~incl_files
+  ~coq_export_file
   ~csv_times
   ~log_times
   ~astprints
@@ -167,6 +168,9 @@ let with_well_formedness_check
           prog
       in
       print_log_file ("mucore", MUCORE prog5);
+      Option.iter
+        (fun path -> Pp.print_file path (Pp_mucore_coq.pp_unit_file prog5))
+        coq_export_file;
       let paused =
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
@@ -246,6 +250,7 @@ let well_formed
     ~macros
     ~incl_dirs
     ~incl_files
+    ~coq_export_file:None
     ~csv_times
     ~log_times
     ~astprints
@@ -271,6 +276,7 @@ let verify
   output_dir
   diag
   lemmata
+  coq_export_file
   only
   skip
   csv_times
@@ -318,6 +324,7 @@ let verify
     ~macros
     ~incl_dirs
     ~incl_files
+    ~coq_export_file
     ~csv_times
     ~log_times
     ~astprints
@@ -410,6 +417,7 @@ let generate_executable_specs
     ~macros
     ~incl_dirs
     ~incl_files
+    ~coq_export_file:None
     ~csv_times
     ~log_times
     ~astprints
@@ -581,6 +589,7 @@ let run_tests
     ~incl_dirs
     ~incl_files
     ~csv_times
+    ~coq_export_file:None
     ~log_times
     ~astprints
     ~no_inherit_loc
@@ -910,6 +919,12 @@ module Lemma_flags = struct
     Arg.(value & opt (some string) None & info [ "lemmata" ] ~docv:"FILE" ~doc)
 end
 
+module CoqExport_flags = struct
+  let coq_export =
+    let doc = "export to coq" in
+    Arg.(value & opt (some string) None & info [ "coq-export-file" ] ~docv:"FILE" ~doc)
+end
+
 let wf_cmd =
   let open Term in
   let wf_t =
@@ -957,6 +972,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.output_dir
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
+  $ CoqExport_flags.coq_export
   $ Verify_flags.only
   $ Verify_flags.skip
   $ Common_flags.csv_times
