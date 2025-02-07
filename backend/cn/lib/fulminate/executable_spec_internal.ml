@@ -123,31 +123,21 @@ let generate_c_pres_and_posts_internal
     = function
     | [] -> (return_ownership_stmts, block_ownership_stmts)
     | (inj : OE.ownership_injection) :: injs ->
+      let strs = generate_ail_stat_strs ~with_newline:true inj.bs_and_ss in
       (match inj.injection_kind with
        | OE.ReturnInj return_kind ->
          let return_inj_expr_opt =
            match return_kind with ReturnExpr e -> Some e | ReturnVoid -> None
          in
          let return_ownership_stmt =
-           ( inj.loc,
-             ( return_inj_expr_opt,
-               [ String.concat
-                   "\n"
-                   (generate_ail_stat_strs ~with_newline:true inj.bs_and_ss)
-               ] ) )
+           (inj.loc, (return_inj_expr_opt, [ String.concat "\n" strs ]))
          in
          get_return_and_non_return_injs
            (return_ownership_stmt :: return_ownership_stmts)
            block_ownership_stmts
            injs
        | NonReturnInj ->
-         let block_ownership_stmt =
-           ( inj.loc,
-             [ String.concat
-                 "\n"
-                 (generate_ail_stat_strs ~with_newline:true inj.bs_and_ss)
-             ] )
-         in
+         let block_ownership_stmt = (inj.loc, [ String.concat "\n" strs ]) in
          get_return_and_non_return_injs
            return_ownership_stmts
            (block_ownership_stmt :: block_ownership_stmts)
