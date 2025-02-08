@@ -6,7 +6,7 @@ val debug_constraint_failure_diagnostics
   unit
 
 module General : sig
-  type uiinfo = TypeErrors.situation * TypeErrors.RequestChain.t
+  type uiinfo = Error_common.situation * TypeErrors.RequestChain.t
 
   val ftyp_args_request_step
     :  ([ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> 'a -> 'a) ->
@@ -26,19 +26,19 @@ module Special : sig
 
   val predicate_request
     :  Locations.t ->
-    TypeErrors.situation ->
+    Error_common.situation ->
     Request.Predicate.t * (Locations.t * string) option ->
     (Resource.predicate * int list) Typing.m
 
   val has_predicate
     :  Locations.t ->
-    TypeErrors.situation ->
+    Error_common.situation ->
     Request.Predicate.t * (Locations.t * string) option ->
     bool Typing.m
 
   val qpredicate_request
     :  Locations.t ->
-    TypeErrors.situation ->
+    Error_common.situation ->
     Request.QPredicate.t * (Locations.t * string) option ->
     (Resource.qpredicate * int list) Typing.m
 end

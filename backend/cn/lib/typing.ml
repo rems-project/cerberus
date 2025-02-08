@@ -188,6 +188,15 @@ let record_action ((a : Explain.action), (loc : Loc.t)) : unit t =
   modify (fun s -> { s with log = Action (a, loc) :: s.log })
 
 
+let record_resource_inference_step
+  (c : Context.t)
+  (c' : Context.t)
+  (ri : Explain.resource_inference_type)
+  : unit t
+  =
+  modify (fun s -> { s with log = Explain.ResourceInferenceStep (c, ri, c') :: s.log })
+
+
 let modify_where (f : Where.t -> Where.t) : unit t =
   modify (fun s ->
     let log = Explain.State s.typing_context :: s.log in
