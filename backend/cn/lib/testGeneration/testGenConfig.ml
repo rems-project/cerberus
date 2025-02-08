@@ -23,7 +23,6 @@ type t =
     coverage : bool;
     disable_passes : string list;
     trap : bool;
-    max_resets : int
   }
 
 let default =
@@ -49,7 +48,6 @@ let default =
     coverage = false;
     disable_passes = [];
     trap = false;
-    max_resets = 0
   }
 
 
@@ -100,5 +98,3 @@ let is_coverage () = !instance.coverage
 let has_pass s = not (List.mem String.equal s !instance.disable_passes)
 
 let is_trap () = !instance.trap
-
-let get_max_resets () = !instance.max_resets

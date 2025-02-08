@@ -2,7 +2,7 @@ module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
 module Utils = Executable_spec_utils
-module Config = TestGenConfig
+module Config = SeqTestGenConfig
 module SymSet = Set.Make (Sym)
 
 type test_stats = {successes : int; failures : int; skipped: int; distrib: (string * int) list}
@@ -172,10 +172,10 @@ let rec gen_sequence
   : (Pp.document * test_stats, Pp.document * test_stats) Either.either
   =           
     let max_retries = Config.get_max_backtracks () in
-    let max_resets = Config.get_max_resets () in
+    let num_resets = Config.get_max_resets () in
     let num_samples = Config.get_num_samples () in
-    let instr_per_test = (num_samples / (max_resets + 1)) in
-    let instr_per_test = if (num_samples mod (max_resets + 1) = 0) then instr_per_test else instr_per_test + 1 in
+    let instr_per_test = (num_samples / (num_resets + 1)) in
+    let instr_per_test = if (num_samples mod (num_resets + 1) = 0) then instr_per_test else instr_per_test + 1 in
     let open Pp 
     in 
     (match fuel with

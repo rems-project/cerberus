@@ -8,10 +8,13 @@ module ESpecInternal = Executable_spec_internal
 module Config = TestGenConfig
 
 type config = Config.t
+type seq_config = SeqTestGenConfig.t
 
 let default_cfg : config = Config.default
+let default_seq_cfg : seq_config = SeqTestGenConfig.default
 
 let set_config = Config.initialize
+let set_seq_config = SeqTestGenConfig.initialize
 
 let is_constant_function
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
@@ -392,4 +395,4 @@ let run_seq
   if Option.is_some prog5.main then
     failwith "Cannot test a file with a `main` function";
   SeqTests.generate ~output_dir ~filename sigma prog5 ;
-  Cerb_debug.end_csv_timing "specification test generation"
+  Cerb_debug.end_csv_timing "sequence test generation"

@@ -462,7 +462,7 @@ let run_seq_tests
     output_dir
     num_samples
     backtrack_attempts
-    max_resets
+    num_resets
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -479,6 +479,7 @@ let run_seq_tests
     ~incl_dirs
     ~incl_files
     ~csv_times
+    ~coq_export_file:None
     ~log_times
     ~astprints
     ~no_inherit_loc
@@ -514,12 +515,13 @@ let run_seq_tests
             (Some output_dir)
             prog5
             statement_locs;
-          let config : TestGeneration.config = 
-              {TestGeneration.default_cfg with 
-              num_samples = num_samples;
-              max_backtracks = backtrack_attempts;
-              max_resets = max_resets } in
-          TestGeneration.set_config config;
+          let config : TestGeneration.seq_config = 
+              { 
+                num_samples = num_samples;
+                max_backtracks = backtrack_attempts;
+                num_resets = num_resets 
+              } in
+          TestGeneration.set_seq_config config;
           let _ = statement_locs, cabs_tunit in
           TestGeneration.run_seq
             ~output_dir
@@ -571,7 +573,6 @@ let run_tests
   coverage
   disable_passes
   trap
-  max_resets
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -618,8 +619,7 @@ let run_tests
           sized_null;
           coverage;
           disable_passes;
-          trap;
-          max_resets
+          trap
         }
       in
       TestGeneration.set_config config;
@@ -1206,11 +1206,34 @@ module Testing_flags = struct
   let trap =
     let doc = "Raise SIGTRAP on test failure" in
     Arg.(value & flag & info [ "trap" ] ~doc)
+end
 
-  let max_resets =
+module Seq_testing_flags = struct
+  let output_test_dir =
+    let doc = "Place generated tests in the provided directory" in
+    Arg.(value & opt string "." & info [ "output-dir" ] ~docv:"DIR" ~doc)
+
+
+  let gen_num_samples =
+    let doc = "Set the number of samples to test" in
+    Arg.(
+      value & opt int TestGeneration.default_cfg.num_samples & info [ "num-samples" ] ~doc)
+
+
+  let gen_backtrack_attempts =
+    let doc =
+      "Set the maximum attempts to satisfy a constraint before backtracking further, \
+       during input generation"
+    in
+    Arg.(
+      value
+      & opt int TestGeneration.default_cfg.max_backtracks
+      & info [ "max-backtrack-attempts" ] ~doc)
+
+  let num_resets =
     let doc = "Number of context resets for sequence testing" in
     Arg.(
-      value & opt int TestGeneration.default_cfg.max_resets & info [ "max-resets" ] ~doc)
+      value & opt int TestGeneration.default_seq_cfg.num_resets & info [ "max-resets" ] ~doc)
 end
 
 let testing_cmd =
@@ -1255,7 +1278,6 @@ let testing_cmd =
     $ Testing_flags.coverage
     $ Testing_flags.disable_passes
     $ Testing_flags.trap
-    $ Testing_flags.max_resets
   in
   let doc =
     "Generates tests for all functions in [FILE] with CN specifications.\n\
@@ -1283,10 +1305,10 @@ let testing_cmd =
       $ Common_flags.no_inherit_loc
       $ Common_flags.magic_comment_char_dollar
       $ Executable_spec_flags.without_ownership_checking
-      $ Testing_flags.output_test_dir
-      $ Testing_flags.gen_num_samples
-      $ Testing_flags.gen_backtrack_attempts
-      $ Testing_flags.max_resets
+      $ Seq_testing_flags.output_test_dir
+      $ Seq_testing_flags.gen_num_samples
+      $ Seq_testing_flags.gen_backtrack_attempts
+      $ Seq_testing_flags.num_resets
     in
     let doc =
       "Generates sequences of calls for the API in [FILE].\n\

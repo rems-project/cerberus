@@ -1,8 +1,14 @@
 type config = TestGenConfig.t
 
+type seq_config = SeqTestGenConfig.t
+
 val default_cfg : config
 
+val default_seq_cfg : seq_config
+
 val set_config : config -> unit
+
+val set_seq_config : seq_config -> unit
 
 val functions_under_test
   :  with_warning:bool ->
