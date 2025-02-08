@@ -87,75 +87,120 @@ void cn_bump_free_after(cn_bump_frame_id frame_id) {
 
 
 //////////////////////////////////
-// Implicit Free List Allocator //
+// Explicit Free List Allocator //
 //////////////////////////////////
 
-typedef struct free_list_node {
+typedef struct block_header {
     uint32_t size;
-} free_list_node;
+} block_header;
+
+typedef struct free_block_header {
+    block_header header;
+    uint32_t next;
+    uint32_t prev;
+} free_block_header;
+
 
 // Has to fit in `uint32_t`
 #define FL_MEM_SIZE (1024 * 1024 * 512)
 char free_list_mem[FL_MEM_SIZE];
-static free_list_node* free_list;
-static free_list_node* first_free;
+static block_header* block_list;
+static free_block_header* first_free;
 
-static inline int fl_is_used(free_list_node* fl) {
+#define BLOCK_LIST_PADDING \
+    ((alignof(max_align_t) - ((uintptr_t)free_list_mem + sizeof(block_header))\
+            % alignof(max_align_t))\
+        % alignof(max_align_t))
+#define MIN_BLOCK_SIZE (sizeof(free_block_header) + sizeof(block_header))
+#define MAX_BLOCK_INDEX (FL_MEM_SIZE - MIN_BLOCK_SIZE - BLOCK_LIST_PADDING)
+#define NULL_BLOCK_INDEX (MAX_BLOCK_INDEX + 1)
+
+static inline int fl_is_used(block_header* fl) {
     return fl->size & 1;
 }
 
-static inline uint32_t fl_size(free_list_node* fl) {
+static inline uint32_t fl_size(block_header* fl) {
     return fl->size & ~((uint32_t)1);
 }
 
-static inline free_list_node* fl_tag(void* p) {
-    return (free_list_node*)((uintptr_t)p - sizeof(free_list_node));
+static inline block_header* fl_tag(void* p) {
+    return (block_header*)((uintptr_t)p - sizeof(block_header));
 }
 
-static inline free_list_node* fl_boundary_tag(free_list_node* fl) {
-    return (free_list_node*)((uintptr_t)fl + sizeof(free_list_node) + fl_size(fl));
+static inline block_header* fl_boundary_tag(block_header* fl) {
+    return (block_header*)((uintptr_t)fl + sizeof(block_header) + fl_size(fl));
 }
 
-static inline void fl_set_size(free_list_node* fl, size_t size) {
+static inline int fl_is_valid_tag(block_header* fl) {
+    return (free_list_mem < (char*)fl)
+        && ((char*)fl <= free_list_mem + MAX_BLOCK_INDEX)
+        && (fl->size == fl_boundary_tag(fl)->size);
+}
+
+static inline void fl_set_size(block_header* fl, size_t size) {
     char used = fl_is_used(fl);
     fl->size = size | used;
     fl_boundary_tag(fl)->size = fl->size;
 }
 
-static inline void fl_set_taken(free_list_node* fl) {
+static inline void fl_set_taken(block_header* fl) {
     fl->size |= 1;
-    fl_boundary_tag(fl)->size |= 1;
+    fl_boundary_tag(fl)->size = fl->size;
 }
 
-static inline void fl_set_free(free_list_node* fl) {
+static inline void fl_set_free(block_header* fl) {
     fl->size &= ~((uint32_t)1);
-    fl_boundary_tag(fl)->size &= ~((uint32_t)1);
+    fl_boundary_tag(fl)->size = fl->size;
 }
 
-static inline free_list_node* fl_next_node(free_list_node* fl) {
-    uintptr_t possible_next = (uintptr_t)fl + fl_size(fl) + 2 * sizeof(free_list_node);
-    uintptr_t max = (uintptr_t)free_list_mem + FL_MEM_SIZE - 2 * sizeof(free_list_node);
+static inline block_header* fl_next_node(block_header* fl) {
+    uintptr_t possible_next = (uintptr_t)fl + fl_size(fl) + 2 * sizeof(block_header);
+    uintptr_t max = (uintptr_t)free_list_mem + FL_MEM_SIZE - MIN_BLOCK_SIZE;
     if (possible_next >= max) {
         return NULL;
     }
 
-    return (free_list_node*)possible_next;
+    return (block_header*)possible_next;
 }
 
-static inline free_list_node* fl_prev_node(free_list_node* fl) {
-    free_list_node* possible_boundary_tag = (free_list_node*)((uintptr_t)fl - sizeof(free_list_node));
-    uintptr_t possible_prev = (uintptr_t)possible_boundary_tag - fl_size(possible_boundary_tag) - sizeof(free_list_node);
-    uintptr_t min = (uintptr_t)free_list;
+static inline block_header* fl_prev_node(block_header* fl) {
+    block_header* possible_boundary_tag = (block_header*)((uintptr_t)fl - sizeof(block_header));
+    uintptr_t possible_prev = (uintptr_t)possible_boundary_tag - fl_size(possible_boundary_tag) - sizeof(block_header);
+    uintptr_t min = (uintptr_t)block_list;
     if (possible_prev < min) {
         return NULL;
     }
 
-    return (free_list_node*)possible_prev;
+    return (block_header*)possible_prev;
+}
+
+static inline uint32_t fl_offset(block_header* fl) {
+    return (uintptr_t)fl - (uintptr_t)block_list;
+}
+
+static inline free_block_header* fl_by_offset(uint32_t offset) {
+    return (free_block_header*)((uintptr_t)block_list + offset);
+}
+
+static inline free_block_header* fl_next_free_node(free_block_header* fl) {
+    if (fl->next > MAX_BLOCK_INDEX) {
+        return NULL;
+    }
+
+    return (free_block_header*)((uintptr_t)block_list + fl->next);
+}
+
+static inline free_block_header* fl_prev_free_node(free_block_header* fl) {
+    if (fl->prev > MAX_BLOCK_INDEX) {
+        return NULL;
+    }
+
+    return (free_block_header*)((uintptr_t)block_list + fl->prev);
 }
 
 #ifdef CN_DEBUG_PRINTING
 void cn_fl_fprint(FILE* file) {
-    free_list_node* curr = free_list;
+    block_header* curr = block_list;
 
     while (curr) {
         if (fl_is_used(curr)) {
@@ -180,46 +225,110 @@ void cn_fl_print() {}
 #endif
 
 void cn_fl_free_all() {
-    size_t padding =
-        (alignof(max_align_t) - ((uintptr_t)free_list_mem + sizeof(free_list_node))
-            % alignof(max_align_t))
-        % alignof(max_align_t);
-    if (!free_list) {
-        free_list = (free_list_node*)((uintptr_t)free_list_mem + padding);
+    if (!block_list) {
+        block_list = (block_header*)((uintptr_t)free_list_mem + BLOCK_LIST_PADDING);
     }
-    first_free = free_list;
-    fl_set_free(free_list);
-    fl_set_size(free_list, FL_MEM_SIZE - padding - 2 * sizeof(free_list_node));
+    first_free = (free_block_header*)block_list;
+    first_free->prev = NULL_BLOCK_INDEX;
+    first_free->next = NULL_BLOCK_INDEX;
+    fl_set_size(block_list, FL_MEM_SIZE - BLOCK_LIST_PADDING - 2 * sizeof(block_header));
+    fl_set_free(block_list);
 }
 
 void cn_fl_init(void) {
-    if (!free_list) {
+    if (!block_list) {
         cn_fl_free_all();
     }
 }
 
-static inline void fl_coalesce(free_list_node* fl) {
-    if (fl == NULL || fl_is_used(fl)) {
+// Takes a free block's header, where the `next` and `prev` pointers are valid
+static inline void fl_coalesce(free_block_header* fl) {
+    if (fl == NULL || fl_is_used(&fl->header)) {
         return;
     }
 
-    free_list_node* prev = fl_prev_node(fl);
-    free_list_node* next = fl_next_node(fl);
+    block_header* prev = fl_prev_node(&fl->header);
+    block_header* next = fl_next_node(&fl->header);
 
     int prev_used = prev == NULL || fl_is_used(prev);
     int next_used = next == NULL || fl_is_used(next);
 
+    free_block_header* prev_free = fl_prev_free_node(fl);
+
+    free_block_header* prev_free_prev = NULL;
+    if (prev_free) {
+        prev_free_prev = fl_prev_free_node((free_block_header*)prev);
+    }
+
+    free_block_header* next_free = fl_next_free_node(fl);
+
+    free_block_header* next_free_next = NULL;
+    if (next_free) {
+        next_free_next = fl_next_free_node((free_block_header*)next);
+    }
+
     if (!prev_used && !next_used)
     {
-        fl_set_size(prev, fl_size(prev) + fl_size(fl) + fl_size(next) + 4 * sizeof(free_list_node));
+        if (prev_free_prev) {
+            prev_free->prev = fl_offset(&prev_free_prev->header);
+            prev_free_prev->next = fl_offset(&prev_free->header);
+        }
+        else {
+            first_free = prev_free;
+            prev_free->prev = NULL_BLOCK_INDEX;
+        }
+
+        if (next_free_next) {
+            prev_free->next = fl_offset(&next_free_next->header);
+            next_free_next->prev = fl_offset(&prev_free->header);
+        }
+        else {
+            prev_free->next = NULL_BLOCK_INDEX;
+        }
+
+        fl_set_size(prev, fl_size(prev) + fl_size(&fl->header) + fl_size(next) + 4 * sizeof(block_header));
     }
     else if (prev_used && !next_used)
     {
-        fl_set_size(fl, fl_size(fl) + fl_size(next) + 2 * sizeof(free_list_node));
+        if (prev_free) {
+            fl->prev = fl_offset(&prev_free->header);
+            prev_free->next = fl_offset(&fl->header);
+        }
+        else {
+            first_free = fl;
+            fl->prev = NULL_BLOCK_INDEX;
+        }
+
+        if (next_free_next) {
+            fl->next = fl_offset(&next_free_next->header);
+            next_free_next->prev = fl_offset(&fl->header);
+        }
+        else {
+            fl->next = NULL_BLOCK_INDEX;
+        }
+
+        fl_set_size(&fl->header, fl_size(&fl->header) + fl_size(next) + 2 * sizeof(block_header));
     }
     else if (!prev_used && next_used)
     {
-        fl_set_size(prev, fl_size(prev) + fl_size(fl) + 2 * sizeof(free_list_node));
+        if (prev_free_prev) {
+            prev_free->prev = fl_offset(&prev_free_prev->header);
+            prev_free_prev->next = fl_offset(&prev_free->header);
+        }
+        else {
+            first_free = prev_free;
+            prev_free->prev = NULL_BLOCK_INDEX;
+        }
+
+        if (next_free) {
+            prev_free->next = fl_offset(&next_free->header);
+            next_free->prev = fl_offset(&prev_free->header);
+        }
+        else {
+            prev_free->next = NULL_BLOCK_INDEX;
+        }
+
+        fl_set_size(prev, fl_size(prev) + fl_size(&fl->header) + 2 * sizeof(block_header));
     }
 }
 
@@ -243,108 +352,133 @@ void* cn_fl_aligned_alloc(size_t alignment, size_t size) {
 
     cn_fl_init();
 
-    if (alignment % alignof(free_list_node) != 0) {
-        alignment = lcm(alignment, alignof(free_list_node));
+    if (alignment % alignof(free_block_header) != 0) {
+        alignment = lcm(alignment, alignof(free_block_header));
     }
 
-    free_list_node* curr = first_free;
-
-    while (curr && fl_is_used(curr)) {
-        curr = fl_next_node(curr);
-        first_free = curr;
+    if (size < MIN_BLOCK_SIZE) {
+        size = MIN_BLOCK_SIZE;
     }
+
+    free_block_header* curr = first_free;
+    int was_first_free = 1;
 
     while (curr) {
-        if (fl_is_used(curr)) {
-            curr = fl_next_node(curr);
-            continue;
-        }
+        block_header* prev = fl_prev_node(&curr->header);
 
-        free_list_node* prev = fl_prev_node(curr);
-
-        int was_first_free = curr == first_free;
-
-        // Calculate padding
         uintptr_t curr_addr = (uintptr_t)curr;
 
         size_t back_padding =
-            (alignof(free_list_node) - (size)
-                % alignof(free_list_node))
-            % alignof(free_list_node);
+            (alignof(block_header) - size
+                % alignof(block_header))
+            % alignof(block_header);
 
-        size_t padding = (alignment - (curr_addr + sizeof(free_list_node)) % alignment) % alignment;
+        size_t padding = (alignment - (curr_addr + sizeof(block_header)) % alignment) % alignment;
         if (padding != 0) {
-            free_list_node* next = fl_next_node(curr);
-            size_t memory_left = fl_size(curr) - (padding + size + back_padding);
+            block_header* next = fl_next_node(&curr->header);
+            size_t memory_left = fl_size(&curr->header) - (padding + size + back_padding);
             size_t memory_left_aligned = (memory_left / alignment) * alignment;
             if (next == NULL
                 || (fl_is_used(next)
                     && !fl_is_used(prev)
-                    && memory_left - memory_left_aligned >= 2 * sizeof(free_list_node))) {
+                    && memory_left - memory_left_aligned >= 2 * sizeof(block_header))) {
                 padding += memory_left_aligned;
             }
         }
 
         uintptr_t aligned_addr = curr_addr + padding;
 
-        if (fl_size(curr) >= padding + size + back_padding) {
-            fl_set_taken(curr);
+        // If allocation fits
+        if (fl_size(&curr->header) >= padding + size + back_padding) {
+            fl_set_taken(&curr->header);
+            if (was_first_free) {
+                first_free = NULL;
+            }
+
+            free_block_header* prev_free = fl_prev_free_node(curr);
+            free_block_header* next_free = fl_next_free_node(curr);
+
+            // Skip current block in free list
+            if (prev_free) {
+                prev_free->next = fl_offset(&next_free->header);
+            }
+            if (next_free) {
+                next_free->prev = fl_offset(&prev_free->header);
+
+                if (was_first_free) {
+                    first_free = next_free;
+                }
+            }
 
             if (padding != 0) {
-                if ((prev == NULL || fl_is_used(prev)) && padding >= 2 * sizeof(free_list_node)) {
-                    size_t orig_size = fl_size(curr);
+                size_t orig_size = fl_size(&curr->header);
 
-                    // Split padding into new block
-                    /// Make new block
-                    fl_set_size(curr, padding - 2 * sizeof(free_list_node));
-                    fl_set_free(curr);
-                    prev = curr;
+                // Split padding into new block
+                if ((prev == NULL || fl_is_used(prev)) && padding >= MIN_BLOCK_SIZE) {
+                    // Make new block
+                    fl_set_size(&curr->header, padding - 2 * sizeof(block_header));
+                    fl_set_free(&curr->header);
+                    prev = &curr->header;
 
-                    /// Shift current block
-                    curr = (free_list_node*)aligned_addr;
-                    fl_set_size(curr, orig_size - padding);
-                    fl_set_taken(curr);
+                    // Reinsert `curr` into free list
+                    if (prev_free) {
+                        prev_free->next = fl_offset(&curr->header);
+                    }
+                    if (next_free) {
+                        next_free->prev = fl_offset(&curr->header);
+                    }
 
-                    // `curr` (now `prev`) is still free
                     if (was_first_free) {
+                        first_free = curr;
                         was_first_free = 0;
                     }
                 }
-                else
-                {
-                    if (prev != NULL) {
-                        // Coalesce padding with previous block
-                        fl_set_size(prev, fl_size(prev) + padding);
-                    }
+                else if (prev != NULL) {
+                    // Coalesce padding with previous block
+                    fl_set_size(prev, fl_size(prev) + padding);
+                }
 
-                    /// Shift current block
-                    curr = (free_list_node*)aligned_addr;
-                    fl_set_size(curr, size - padding);
-                    fl_set_taken(curr);
+                // Shift current block
+                curr = (free_block_header*)aligned_addr;
+                fl_set_size(&curr->header, orig_size - padding);
+                fl_set_taken(&curr->header);
+            }
+
+            size_t memory_left = fl_size(&curr->header) - (size + back_padding);
+
+            if (memory_left >= MIN_BLOCK_SIZE) {
+                fl_set_size(&curr->header, size + back_padding);
+
+                free_block_header* next = (free_block_header*)fl_next_node(&curr->header);
+                fl_set_size(&next->header, memory_left - 2 * sizeof(block_header));
+                fl_set_free(&next->header);
+
+                if (prev_free) {
+                    prev_free->next = fl_offset(&next->header);
+                    next->prev = fl_offset(&prev_free->header);
+                }
+                else {
+                    next->prev = NULL_BLOCK_INDEX;
+                }
+
+                if (next_free) {
+                    next->next = fl_offset(&next_free->header);
+                    next_free->prev = fl_offset(&next->header);
+                }
+                else {
+                    next->next = NULL_BLOCK_INDEX;
+                }
+
+                if (was_first_free) {
+                    first_free = next;
                 }
             }
 
-            if (fl_size(curr) > size + back_padding) {
-                size_t memory_left = fl_size(curr) - (size + back_padding);
-                if (memory_left >= 2 * sizeof(free_list_node)) {
-                    fl_set_size(curr, size + back_padding);
-
-                    free_list_node* next = fl_next_node(curr);
-                    fl_set_size(next, memory_left - 2 * sizeof(free_list_node));
-                    fl_set_free(next);
-
-                    fl_coalesce(next);
-                }
-            }
-
-            if (was_first_free) {
-                first_free = fl_next_node(curr);
-            }
-
-            return (void*)(aligned_addr + sizeof(free_list_node));
+            return (void*)(aligned_addr + sizeof(block_header));
         }
 
-        curr = fl_next_node(curr);
+        curr = fl_next_free_node(curr);
+        was_first_free = 0;
     }
 
     cn_failure(CN_FAILURE_ALLOC); // Out of memory
@@ -370,29 +504,35 @@ void* cn_fl_realloc(void* p, size_t nbytes) {
         return cn_fl_malloc(nbytes);
     }
 
-    free_list_node* fl = fl_tag(p);
+    block_header* fl = fl_tag(p);
 
     if (fl_size(fl) >= nbytes) {
         return p;
     }
 
     // Steal some memory from the next block
-    free_list_node* next = fl_next_node(fl);
+    block_header* next = fl_next_node(fl);
     if (next != NULL && !fl_is_used(next)) {
         size_t back_padding =
-            (alignof(free_list_node) - nbytes
-                % alignof(free_list_node))
-            % alignof(free_list_node);
+            (alignof(free_block_header) - nbytes
+                % alignof(free_block_header))
+            % alignof(free_block_header);
 
-        size_t memory_available = fl_size(fl) + fl_size(next) + 2 * sizeof(free_list_node);
+        size_t memory_available = fl_size(fl) + fl_size(next) + 2 * sizeof(block_header);
         if (memory_available > nbytes + back_padding) {
             size_t memory_left = memory_available - (nbytes + back_padding);
-            if (memory_left >= 2 * sizeof(free_list_node)) {
+            if (memory_left >= MIN_BLOCK_SIZE) {
+                free_block_header* prev_free = fl_prev_free_node((free_block_header*)next);
+                free_block_header* next_free = fl_prev_free_node((free_block_header*)next);
+
                 fl_set_size(fl, nbytes + back_padding);
 
-                free_list_node* next = fl_next_node(fl);
-                fl_set_size(next, memory_left - 2 * sizeof(free_list_node));
-                fl_set_free(next);
+                block_header* new_next = fl_next_node(fl);
+                fl_set_size(new_next, memory_left - 2 * sizeof(block_header));
+                fl_set_free(new_next);
+
+                prev_free->next = fl_offset(new_next);
+                next_free->prev = fl_offset(new_next);
 
                 return p;
             }
@@ -403,9 +543,6 @@ void* cn_fl_realloc(void* p, size_t nbytes) {
         }
     }
 
-    // Could steal memory from previous block?
-    // Fuse the free + malloc?
-
     void* res = cn_fl_malloc(nbytes);
     size_t copy_size = (nbytes < fl_size(fl)) ? nbytes : fl_size(fl);
     memcpy(res, p, copy_size);
@@ -414,12 +551,61 @@ void* cn_fl_realloc(void* p, size_t nbytes) {
 }
 
 void cn_fl_free(void* p) {
-    free_list_node* tag = fl_tag(p);
-    fl_set_free(tag);
-
-    if (!first_free || tag < first_free) {
-        first_free = tag;
+    if (p == NULL) {
+        return;
     }
+
+    free_block_header* tag = (free_block_header*)fl_tag(p);
+
+    if (!fl_is_valid_tag(&tag->header)) {
+        fprintf(stderr, "Tried to free an invalid block");
+        exit(1);
+    }
+
+    if (!fl_is_used(&tag->header)) {
+        fprintf(stderr, "Tried to free already free block");
+        exit(1);
+    }
+
+    fl_set_free(&tag->header);
+
+    if (!first_free) {
+        first_free = tag;
+
+        tag->prev = NULL_BLOCK_INDEX;
+        tag->next = NULL_BLOCK_INDEX;
+
+        return;
+    }
+
+    struct free_block_header* prev = NULL;
+    struct free_block_header* curr = first_free;
+    while (curr) {
+        if (tag < curr) {
+            if (prev) {
+                tag->prev = fl_offset(&prev->header);
+                prev->next = fl_offset(&tag->header);
+            }
+            else {
+                first_free = tag;
+                tag->prev = NULL_BLOCK_INDEX;
+            }
+
+            tag->next = fl_offset(&curr->header);
+            curr->prev = fl_offset(&tag->header);
+
+            fl_coalesce(tag);
+
+            return;
+        }
+
+        prev = curr;
+        curr = fl_next_free_node(curr);
+    }
+
+    prev->next = fl_offset(&tag->header);
+    tag->prev = fl_offset(&prev->header);
+    tag->next = NULL_BLOCK_INDEX;
 
     fl_coalesce(tag);
 }

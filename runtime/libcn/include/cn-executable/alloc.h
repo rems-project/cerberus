@@ -29,7 +29,7 @@ extern "C" {
     void cn_bump_print();
 
     //////////////////////////////////
-    // Implicit Free List Allocator //
+    // Explicit Free List Allocator //
     //////////////////////////////////
 
     void* cn_fl_aligned_alloc(size_t alignment, size_t size);
