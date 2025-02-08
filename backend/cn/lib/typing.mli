@@ -188,6 +188,12 @@ val get_movable_indices : unit -> (Request.name * IndexTerms.t) list m
 
 val record_action : Explain.action * Locations.t -> unit m
 
+val record_resource_inference_step
+  :  Context.t ->
+  Context.t ->
+  Explain.resource_inference_type ->
+  unit m
+
 val modify_where : (Where.t -> Where.t) -> unit m
 
 (* val add_label_to_trace : (Locations.t * Context.label_kind) option -> unit m *)

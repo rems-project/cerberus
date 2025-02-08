@@ -20,9 +20,17 @@ type action =
   | Call of Sym.t * IndexTerms.t list
   | Return of IndexTerms.t
 
+type resource_inference_type =
+  | PredicateRequest of
+      Error_common.situation
+      * Request.Predicate.t
+      * (Locations.t * string) option
+      * (Resource.predicate * int list)
+
 type log_entry =
   | Action of action * Locations.t
   | State of Context.t
+  | ResourceInferenceStep of (Context.t * resource_inference_type * Context.t)
 
 type log = log_entry list (* most recent first *)
 
@@ -184,6 +192,7 @@ let state (ctxt : C.t) log model_with_q extras =
           let _, _, ps = C.not_given_to_solver ctxt in
           List.append ps acc
         | Action _ -> acc
+        | ResourceInferenceStep _ -> acc
       in
       List.fold_left log_comb [] log
     in
