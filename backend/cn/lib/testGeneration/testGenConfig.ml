@@ -22,7 +22,7 @@ type t =
     sized_null : bool;
     coverage : bool;
     disable_passes : string list;
-    trap : bool;
+    trap : bool
   }
 
 let default =
@@ -47,7 +47,7 @@ let default =
     sized_null = false;
     coverage = false;
     disable_passes = [];
-    trap = false;
+    trap = false
   }
 
 

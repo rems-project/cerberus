@@ -64,8 +64,8 @@ let pick_ (wgts : (Z.t * t) list) (loc : Locations.t) : t =
     let bt =
       List.fold_left
         (fun bt (_, gt) ->
-          assert (BT.equal bt (basetype gt));
-          bt)
+           assert (BT.equal bt (basetype gt));
+           bt)
         (basetype gt)
         wgts'
     in
@@ -166,7 +166,7 @@ let rec pp (gt : t) : Pp.document =
             (separate_map
                (semi ^^ break 1)
                (fun (w, gt) ->
-                 parens (z w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp gt))))
+                  parens (z w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp gt))))
                wgts))
   | GT (Alloc it, _bt, _here) -> string "alloc" ^^ parens (IT.pp it)
   | GT (Call (fsym, xits), _bt, _here) ->
@@ -279,8 +279,8 @@ let rec free_vars_bts_ (gt_ : t_) : BT.t Sym.Map.t =
   | Let (_, (x, gt1), gt2) ->
     Sym.Map.union
       (fun _ bt1 bt2 ->
-        assert (BT.equal bt1 bt2);
-        Some bt1)
+         assert (BT.equal bt1 bt2);
+         Some bt1)
       (free_vars_bts gt1)
       (Sym.Map.remove x (free_vars_bts gt2))
   | Return it -> IT.free_vars_bts it
@@ -302,12 +302,12 @@ and free_vars_bts_list : t list -> BT.t Sym.Map.t =
   fun xs ->
   List.fold_left
     (fun ss t ->
-      Sym.Map.union
-        (fun _ bt1 bt2 ->
-          assert (BT.equal bt1 bt2);
-          Some bt1)
-        ss
-        (free_vars_bts t))
+       Sym.Map.union
+         (fun _ bt1 bt2 ->
+            assert (BT.equal bt1 bt2);
+            Some bt1)
+         ss
+         (free_vars_bts t))
     Sym.Map.empty
     xs
 

@@ -103,10 +103,10 @@ module Fusion = struct
 
 
     let collect_constraints
-      (vars : Sym.Set.t)
-      (x : Sym.t)
-      ((it_min, it_max) : IT.t * IT.t)
-      (gt : GT.t)
+          (vars : Sym.Set.t)
+          (x : Sym.t)
+          ((it_min, it_max) : IT.t * IT.t)
+          (gt : GT.t)
       : GT.t * (Sym.t * IT.t) list
       =
       let rec aux (gt : GT.t) : GT.t * (Sym.t * IT.t) list =
@@ -201,13 +201,15 @@ module Fusion = struct
               let stmts'' =
                 List.map
                   (fun (j, lc) : GS.t ->
-                    Assert
-                      (LC.T
-                         (replace_index
-                            x
-                            sym_bt
-                            i
-                            (IT.subst (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ]) lc))))
+                     Assert
+                       (LC.T
+                          (replace_index
+                             x
+                             sym_bt
+                             i
+                             (IT.subst
+                                (IT.make_subst [ (j, IT.sym_ (i, i_bt, here)) ])
+                                lc))))
                   constraints
               in
               GS.gt_of_stmts (stmts @ stmts' @ stmts'') gt_last
@@ -436,13 +438,13 @@ module PartialEvaluation = struct
 
 
     let eval_num_binop
-      (eval : IT.t -> (IT.t, string) result)
-      (bt : BT.t)
-      (here : Locations.t)
-      (f : Z.t -> Z.t -> Z.t)
-      (it1 : IT.t)
-      (it2 : IT.t)
-      (loc : string)
+          (eval : IT.t -> (IT.t, string) result)
+          (bt : BT.t)
+          (here : Locations.t)
+          (f : Z.t -> Z.t -> Z.t)
+          (it1 : IT.t)
+          (it2 : IT.t)
+          (loc : string)
       : (IT.t, string) result
       =
       let ( let@ ) = Result.bind in
@@ -476,9 +478,9 @@ module PartialEvaluation = struct
 
 
     let eval_term_generic
-      (eval_aux : IT.t -> (IT.t, string) result)
-      (prog5 : unit Mucore.file)
-      (it : IT.t)
+          (eval_aux : IT.t -> (IT.t, string) result)
+          (prog5 : unit Mucore.file)
+          (it : IT.t)
       : (IT.t, string) result
       =
       let ( let@ ) = Result.bind in
@@ -747,9 +749,9 @@ module PartialEvaluation = struct
         let struct_decls =
           Pmap.fold
             (fun tag def decls ->
-              match def with
-              | Mucore.StructDef st -> Sym.Map.add tag st decls
-              | _ -> decls)
+               match def with
+               | Mucore.StructDef st -> Sym.Map.add tag st decls
+               | _ -> decls)
             prog5.tagDefs
             Sym.Map.empty
         in
@@ -758,9 +760,9 @@ module PartialEvaluation = struct
         let struct_decls =
           Pmap.fold
             (fun tag def decls ->
-              match def with
-              | Mucore.StructDef st -> Sym.Map.add tag st decls
-              | _ -> decls)
+               match def with
+               | Mucore.StructDef st -> Sym.Map.add tag st decls
+               | _ -> decls)
             prog5.tagDefs
             Sym.Map.empty
         in
@@ -843,7 +845,7 @@ module PartialEvaluation = struct
                      (List.flatten
                       @@ List.map
                            (fun ((_, it), (_, p)) ->
-                             List.flatten @@ Option.to_list @@ get_match it p)
+                              List.flatten @@ Option.to_list @@ get_match it p)
                            zipped))
                | _ -> None)
           in
@@ -852,9 +854,9 @@ module PartialEvaluation = struct
             ~none
             (List.find_map
                (fun (p, it_case) ->
-                 let open Option in
-                 let@ sub = get_match it' p in
-                 Some (IT.subst (IT.make_subst sub) it_case))
+                  let open Option in
+                  let@ sub = get_match it' p in
+                  Some (IT.subst (IT.make_subst sub) it_case))
                pits))
       | WrapI _ -> Error "todo: WrapI"
       | MapGet (it_m, it_k) ->
@@ -898,9 +900,9 @@ module PartialEvaluation = struct
           let@ its =
             List.fold_left
               (fun acc it ->
-                let@ it = eval_aux it in
-                let@ acc in
-                Ok (it :: acc))
+                 let@ it = eval_aux it in
+                 let@ acc in
+                 Ok (it :: acc))
               (Ok [])
               its
           in
@@ -909,9 +911,9 @@ module PartialEvaluation = struct
           let@ xits =
             List.fold_left
               (fun acc (x, it) ->
-                let@ it = eval_aux it in
-                let@ acc in
-                Ok ((x, it) :: acc))
+                 let@ it = eval_aux it in
+                 let@ acc in
+                 Ok ((x, it) :: acc))
               (Ok [])
               xits
           in
@@ -926,9 +928,9 @@ module PartialEvaluation = struct
           let@ xits =
             List.fold_left
               (fun acc (x, it) ->
-                let@ it = eval_aux it in
-                let@ acc in
-                Ok ((x, it) :: acc))
+                 let@ it = eval_aux it in
+                 let@ acc in
+                 Ok ((x, it) :: acc))
               (Ok [])
               xits
           in
@@ -943,9 +945,9 @@ module PartialEvaluation = struct
           let@ xits =
             List.fold_left
               (fun acc (x, it) ->
-                let@ it = eval_aux it in
-                let@ acc in
-                Ok ((x, it) :: acc))
+                 let@ it = eval_aux it in
+                 let@ acc in
+                 Ok ((x, it) :: acc))
               (Ok [])
               xits
           in
@@ -958,9 +960,9 @@ module PartialEvaluation = struct
           let@ its =
             List.fold_left
               (fun acc it ->
-                let@ it = eval_aux it in
-                let@ acc in
-                Ok (it :: acc))
+                 let@ it = eval_aux it in
+                 let@ acc in
+                 Ok (it :: acc))
               (Ok [])
               its
           in
@@ -1012,9 +1014,9 @@ module PartialEvaluation = struct
 
 
     let partial_eval
-      ?(mode = Strict)
-      ?(prog5 : unit Mucore.file = Mucore.empty_file)
-      (it : IT.t)
+          ?(mode = Strict)
+          ?(prog5 : unit Mucore.file = Mucore.empty_file)
+          (it : IT.t)
       : IT.t
       =
       let f ?(mode = mode) (it : IT.t) : IT.t =
@@ -1025,7 +1027,7 @@ module PartialEvaluation = struct
         | IT (Apply (fsym, _), _, _) ->
           (* If we lazily evaluate every sub-term, all applications will result in a
            * substitution, diverging. As such, we force strict evaluation of recursive calls
-           *)
+          *)
           (match List.assoc_opt Sym.equal fsym prog5.logical_predicates with
            | Some { body = Def _; _ } -> f it
            | Some { body = Rec_Def _; _ } -> f ~mode:Strict it
@@ -1037,9 +1039,9 @@ module PartialEvaluation = struct
 
   module LogicalConstraints = struct
     let partial_eval
-      ?(mode = Strict)
-      ?(prog5 : unit Mucore.file = Mucore.empty_file)
-      (lc : LC.t)
+          ?(mode = Strict)
+          ?(prog5 : unit Mucore.file = Mucore.empty_file)
+          (lc : LC.t)
       : LC.t
       =
       let partial_eval_it = IndexTerms.partial_eval ~mode ~prog5 in
@@ -1057,9 +1059,9 @@ module PartialEvaluation = struct
 
   module GenTerms = struct
     let partial_eval
-      ?(mode = Strict)
-      ?(prog5 : unit Mucore.file = Mucore.empty_file)
-      (gt : GT.t)
+          ?(mode = Strict)
+          ?(prog5 : unit Mucore.file = Mucore.empty_file)
+          (gt : GT.t)
       : GT.t
       =
       let partial_eval_it = IndexTerms.partial_eval ~mode ~prog5 in
@@ -1971,9 +1973,9 @@ module Reordering = struct
   module SymGraph = Graph.Persistent.Digraph.Concrete (Sym)
 
   let get_variable_ordering
-    (_rec_fsyms : Sym.Set.t)
-    (iargs : Sym.Set.t)
-    (stmts : GS.t list)
+        (_rec_fsyms : Sym.Set.t)
+        (iargs : Sym.Set.t)
+        (stmts : GS.t list)
     : Sym.t list
     =
     let module Oper = Graph.Oper.P (SymGraph) in
@@ -1986,10 +1988,10 @@ module Reordering = struct
         let g' =
           List.fold_left
             (fun g' y ->
-              if Sym.Set.mem y iargs || Sym.equal x y then
-                g'
-              else
-                SymGraph.add_edge_e g' (y, x))
+               if Sym.Set.mem y iargs || Sym.equal x y then
+                 g'
+               else
+                 SymGraph.add_edge_e g' (y, x))
             g
             (it |> IT.free_vars |> Sym.Set.to_seq |> List.of_seq)
         in
@@ -1998,10 +2000,10 @@ module Reordering = struct
         let g = consider_equalities stmts' in
         Seq.fold_left
           (fun g' y ->
-            if Sym.Set.mem y iargs || Sym.equal x y then
-              g'
-            else
-              SymGraph.add_edge_e g' (y, x))
+             if Sym.Set.mem y iargs || Sym.equal x y then
+               g'
+             else
+               SymGraph.add_edge_e g' (y, x))
           g
           (it |> IT.free_vars |> Sym.Set.to_seq)
       | _ :: stmts' -> consider_equalities stmts'
@@ -2009,9 +2011,9 @@ module Reordering = struct
     in
     (* Put calls before local variables they constrain *)
     let rec consider_constrained_calls
-      (from_calls : Sym.Set.t)
-      (g : SymGraph.t)
-      (stmts : GS.t list)
+              (from_calls : Sym.Set.t)
+              (g : SymGraph.t)
+              (stmts : GS.t list)
       : SymGraph.t
       =
       match stmts with
@@ -2047,10 +2049,10 @@ module Reordering = struct
           let g = SymGraph.add_vertex (aux stmts') x in
           Sym.Set.fold
             (fun y g' ->
-              if Sym.Set.mem y iargs then
-                g'
-              else
-                SymGraph.add_edge g' y x)
+               if Sym.Set.mem y iargs then
+                 g'
+               else
+                 SymGraph.add_edge g' y x)
             (GT.free_vars gt)
             g
         | _ :: stmts' -> aux stmts'
@@ -2075,14 +2077,14 @@ module Reordering = struct
       let syms =
         Sym.Set.fold
           (fun z acc ->
-            Sym.Set.union
-              acc
-              (SymGraph.fold_pred
-                 (fun y syms' ->
-                   if List.mem Sym.equal y ys then syms' else Sym.Set.add y syms')
-                 g_d
-                 z
-                 Sym.Set.empty))
+             Sym.Set.union
+               acc
+               (SymGraph.fold_pred
+                  (fun y syms' ->
+                     if List.mem Sym.equal y ys then syms' else Sym.Set.add y syms')
+                  g_d
+                  z
+                  Sym.Set.empty))
           syms_c
           syms_c
       in
@@ -2091,14 +2093,14 @@ module Reordering = struct
     let new_order : Sym.t list -> Sym.t list =
       List.fold_left
         (fun acc y ->
-          if List.mem Sym.equal y acc then
-            acc
-          else (
-            let zs = get_needs y acc in
-            if List.is_empty zs then
-              acc @ [ y ]
-            else
-              acc @ zs @ [ y ]))
+           if List.mem Sym.equal y acc then
+             acc
+           else (
+             let zs = get_needs y acc in
+             if List.is_empty zs then
+               acc @ [ y ]
+             else
+               acc @ zs @ [ y ]))
         []
     in
     let rec loop (ys : Sym.t list) : Sym.t list =
@@ -2110,20 +2112,20 @@ module Reordering = struct
 
 
   let get_statement_ordering
-    (rec_fsyms : Sym.Set.t)
-    (iargs : Sym.Set.t)
-    (stmts : GS.t list)
+        (rec_fsyms : Sym.Set.t)
+        (iargs : Sym.Set.t)
+        (stmts : GS.t list)
     : GS.t list
     =
     let rec loop (vars : Sym.Set.t) (syms : Sym.t list) (stmts : GS.t list) : GS.t list =
       let res, stmts' =
         List.partition
           (fun (stmt : GS.t) ->
-            match stmt with
-            | Asgn ((it_addr, _sct), it_val) ->
-              Sym.Set.subset (IT.free_vars_list [ it_addr; it_val ]) vars
-            | Assert lc -> Sym.Set.subset (LC.free_vars lc) vars
-            | _ -> false)
+             match stmt with
+             | Asgn ((it_addr, _sct), it_val) ->
+               Sym.Set.subset (IT.free_vars_list [ it_addr; it_val ]) vars
+             | Assert lc -> Sym.Set.subset (LC.free_vars lc) vars
+             | _ -> false)
           stmts
       in
       match syms with
@@ -2131,7 +2133,7 @@ module Reordering = struct
         let res', stmts'' =
           List.partition
             (fun (stmt : GS.t) ->
-              match stmt with Let (_, (x, _)) -> Sym.equal x sym | _ -> false)
+               match stmt with Let (_, (x, _)) -> Sym.equal x sym | _ -> false)
             stmts'
         in
         res @ res' @ loop (Sym.Set.add sym vars) syms' stmts''
@@ -2721,7 +2723,7 @@ module ConstraintPropagation = struct
       ( Sym.Map.update
           x
           (fun od ->
-            match od with Some d' -> Some (Domain.intersect d d') | None -> Some d)
+             match od with Some d' -> Some (Domain.intersect d d') | None -> Some d)
           ds,
         G.add_vertex g x )
 
@@ -2745,7 +2747,7 @@ module ConstraintPropagation = struct
       =
       G.fold_edges_e
         (fun (y, c, z) acc ->
-          if Sym.equal x y || Sym.equal x z then (y, c, z) :: acc else acc)
+           if Sym.equal x y || Sym.equal x z then (y, c, z) :: acc else acc)
         g
         []
   end
@@ -2858,8 +2860,8 @@ module ConstraintPropagation = struct
   (** AC-3 from https://doi.org/10.1016/0004-3702(77)90007-8 *)
   let ac3 (network : ConstraintNetwork.t) : ConstraintNetwork.t =
     let rec aux
-      (network : ConstraintNetwork.t)
-      (worklist : (Sym.t * Constraint.t * Sym.t) list)
+              (network : ConstraintNetwork.t)
+              (worklist : (Sym.t * Constraint.t * Sym.t) list)
       : ConstraintNetwork.t
       =
       match worklist with
@@ -2896,9 +2898,9 @@ module ConstraintPropagation = struct
 
   (** Adds new asserts encoding the domain information *)
   let add_refined_asserts
-    (iargs : BT.t Sym.Map.t)
-    (network : ConstraintNetwork.t)
-    (stmts : GS.t list)
+        (iargs : BT.t Sym.Map.t)
+        (network : ConstraintNetwork.t)
+        (stmts : GS.t list)
     : GS.t list
     =
     let rec aux (ds : Domain.t Sym.Map.t) (stmts : GS.t list) : GS.t list =
@@ -3072,8 +3074,8 @@ module Specialization = struct
 
 
       let intersect
-        ({ mult = mult1; min = min1; max = max1 } : t)
-        ({ mult = mult2; min = min2; max = max2 } : t)
+            ({ mult = mult1; min = min1; max = max1 } : t)
+            ({ mult = mult2; min = min2; max = max2 } : t)
         : t
         =
         let mult =
@@ -3259,18 +3261,20 @@ module Specialization = struct
         | Assert
             ( T
                 (IT
-                  ( Unop
-                      (Not, IT (Binop (EQ, IT (Sym y, _, _), IT (Const Null, _, _)), _, _)),
-                    _,
-                    _ )),
+                   ( Unop
+                       ( Not,
+                         IT (Binop (EQ, IT (Sym y, _, _), IT (Const Null, _, _)), _, _) ),
+                     _,
+                     _ )),
               gt_rest )
         | Assert
             ( T
                 (IT
-                  ( Unop
-                      (Not, IT (Binop (EQ, IT (Const Null, _, _), IT (Sym y, _, _)), _, _)),
-                    _,
-                    _ )),
+                   ( Unop
+                       ( Not,
+                         IT (Binop (EQ, IT (Const Null, _, _), IT (Sym y, _, _)), _, _) ),
+                     _,
+                     _ )),
               gt_rest )
           when Sym.equal x y ->
           (true, snd (aux gt_rest))
@@ -3402,9 +3406,9 @@ let optimize_gen_def (prog5 : unit Mucore.file) (passes : StringSet.t) (gd : GD.
 
 
 let optimize
-  (prog5 : unit Mucore.file)
-  ?(passes : StringSet.t option = None)
-  (ctx : GD.context)
+      (prog5 : unit Mucore.file)
+      ?(passes : StringSet.t option = None)
+      (ctx : GD.context)
   : GD.context
   =
   let default = all_passes prog5 |> List.map (fun p -> p.name) |> StringSet.of_list in

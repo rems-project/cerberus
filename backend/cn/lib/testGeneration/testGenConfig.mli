@@ -22,7 +22,7 @@ type t =
     sized_null : bool;
     coverage : bool;
     disable_passes : string list;
-    trap : bool;
+    trap : bool
   }
 
 val default : t

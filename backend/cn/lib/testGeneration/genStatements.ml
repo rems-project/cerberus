@@ -33,11 +33,11 @@ let stmts_of_gt (gt : GT.t) : t list * GT.t =
 let gt_of_stmts (stmts : t list) (gt_end : GT.t) : GT.t =
   List.fold_right
     (fun (stmt : t) gt_rest ->
-      let loc = Locations.other __LOC__ in
-      match stmt with
-      | Asgn ((it_addr, sct), it_val) -> GT.asgn_ ((it_addr, sct), it_val, gt_rest) loc
-      | Let (backtracks, (x, gt')) -> GT.let_ (backtracks, (x, gt'), gt_rest) loc
-      | Assert lc -> GT.assert_ (lc, gt_rest) loc)
+       let loc = Locations.other __LOC__ in
+       match stmt with
+       | Asgn ((it_addr, sct), it_val) -> GT.asgn_ ((it_addr, sct), it_val, gt_rest) loc
+       | Let (backtracks, (x, gt')) -> GT.let_ (backtracks, (x, gt'), gt_rest) loc
+       | Assert lc -> GT.assert_ (lc, gt_rest) loc)
     stmts
     gt_end
 

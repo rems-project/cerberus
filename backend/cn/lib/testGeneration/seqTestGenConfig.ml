@@ -5,11 +5,7 @@ type t =
     num_resets : int
   }
 
-let default =
-  { num_samples = 100;
-    max_backtracks = 25;
-    num_resets = 0
-  }
+let default = { num_samples = 100; max_backtracks = 25; num_resets = 0 }
 
 let instance = ref default
 

@@ -31,9 +31,9 @@ let compile_oargs (ret_bt : BT.t) (iargs : (Sym.t * BT.t) list) : (Sym.t * BT.t)
 
 
 let add_request
-  (recursive : Sym.Set.t)
-  (preds : (Sym.Map.key * Def.Predicate.t) list)
-  (fsym : Sym.t)
+      (recursive : Sym.Set.t)
+      (preds : (Sym.Map.key * Def.Predicate.t) list)
+      (fsym : Sym.t)
   : unit m
   =
   let pred = List.assoc Sym.equal fsym preds in
@@ -77,8 +77,8 @@ let compile_vars (generated : Sym.Set.t) (oargs : (Sym.t * GBT.t) list) (lat : I
       ( Sym.Set.empty,
         Sym.Map.union
           (fun _ bt1 bt2 ->
-            assert (BT.equal bt1 bt2);
-            Some bt1)
+             assert (BT.equal bt1 bt2);
+             Some bt1)
           (IT.free_vars_bts it)
           (oargs
            |> List.filter (fun (x, _) -> not (Sym.equal x cn_return))
@@ -96,13 +96,13 @@ let compile_vars (generated : Sym.Set.t) (oargs : (Sym.t * GBT.t) list) (lat : I
 
 
 let rec compile_it_lat
-  (filename : string)
-  (recursive : Sym.Set.t)
-  (preds : (Sym.t * Def.Predicate.t) list)
-  (name : Sym.t)
-  (generated : Sym.Set.t)
-  (oargs : (Sym.t * GBT.t) list)
-  (lat : IT.t LAT.t)
+          (filename : string)
+          (recursive : Sym.Set.t)
+          (preds : (Sym.t * Def.Predicate.t) list)
+          (name : Sym.t)
+          (generated : Sym.Set.t)
+          (oargs : (Sym.t * GBT.t) list)
+          (lat : IT.t LAT.t)
   : GT.t m
   =
   let backtrack_num = Config.get_max_backtracks () in
@@ -272,13 +272,13 @@ let rec compile_it_lat
 
 
 let rec compile_clauses
-  (filename : string)
-  (recursive : Sym.Set.t)
-  (preds : (Sym.t * Def.Predicate.t) list)
-  (name : Sym.t)
-  (iargs : Sym.Set.t)
-  (oargs : (Sym.t * GBT.t) list)
-  (cls : Def.Clause.t list)
+          (filename : string)
+          (recursive : Sym.Set.t)
+          (preds : (Sym.t * Def.Predicate.t) list)
+          (name : Sym.t)
+          (iargs : Sym.Set.t)
+          (oargs : (Sym.t * GBT.t) list)
+          (cls : Def.Clause.t list)
   : GT.t m
   =
   match cls with
@@ -296,9 +296,9 @@ let rec compile_clauses
 
 
 let compile_pred
-  (recursive_preds : Sym.Set.t)
-  (preds : (Sym.t * Def.Predicate.t) list)
-  ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
+      (recursive_preds : Sym.Set.t)
+      (preds : (Sym.t * Def.Predicate.t) list)
+      ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
   : unit m
   =
   assert (Option.is_none body);
@@ -318,11 +318,11 @@ let compile_pred
 
 
 let compile_spec
-  (filename : string)
-  (recursive : Sym.Set.t)
-  (preds : (Sym.t * Def.Predicate.t) list)
-  (name : Sym.t)
-  (at : 'a AT.t)
+      (filename : string)
+      (recursive : Sym.Set.t)
+      (preds : (Sym.t * Def.Predicate.t) list)
+      (name : Sym.t)
+      (at : 'a AT.t)
   : unit m
   =
   (* Necessary to avoid triggering special-cased logic in [CtA] w.r.t globals *)
@@ -377,9 +377,9 @@ let compile_spec
 
 
 let compile
-  ?(ctx : GD.context option)
-  (preds : (Sym.t * Def.Predicate.t) list)
-  (insts : Executable_spec_extract.instrumentation list)
+      ?(ctx : GD.context option)
+      (preds : (Sym.t * Def.Predicate.t) list)
+      (insts : Executable_spec_extract.instrumentation list)
   : GD.context
   =
   let recursive_preds = GenAnalysis.get_recursive_preds preds in
@@ -394,22 +394,22 @@ let compile
         (Option.get inst.internal))
     |> List.fold_left
          (fun ctx f ->
-           let (), ctx' = f ctx in
-           ctx')
+            let (), ctx' = f ctx in
+            ctx')
          GD.empty_context
   in
   let context_preds (ctx : GD.context) : GD.context =
     List.fold_left
       (fun ctx' (_, iargs_defs) ->
-        List.fold_left
-          (fun ctx'' ((_, gd) : _ * GD.t) ->
-            if Option.is_some gd.body then
-              ctx''
-            else (
-              let (), ctx''' = compile_pred recursive_preds preds gd ctx'' in
-              ctx'''))
-          ctx'
-          iargs_defs)
+         List.fold_left
+           (fun ctx'' ((_, gd) : _ * GD.t) ->
+              if Option.is_some gd.body then
+                ctx''
+              else (
+                let (), ctx''' = compile_pred recursive_preds preds gd ctx'' in
+                ctx'''))
+           ctx'
+           iargs_defs)
       ctx
       ctx
   in

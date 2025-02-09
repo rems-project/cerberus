@@ -137,8 +137,8 @@ let rec pp_term (tm : term) : Pp.document =
                    ^^ separate_map
                         (semi ^^ break 1)
                         (fun (w, gt) ->
-                          parens
-                            (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp_term gt))))
+                           parens
+                             (int w ^^ comma ^^ braces (nest 2 (break 1 ^^ pp_term gt))))
                         choices)))
   | Alloc { bytes; sized } ->
     (if sized then string "alloc_sized" else string "alloc") ^^ parens (IT.pp bytes)
@@ -291,8 +291,8 @@ let nice_names (inputs : Sym.Set.t) (gt : GT.t) : GT.t =
       let vars, wgts =
         List.fold_right
           (fun (w, gr') (vars', choices') ->
-            let vars'', gr'' = aux vars' gr' in
-            (vars'', (w, gr'') :: choices'))
+             let vars'', gr'' = aux vars' gr' in
+             (vars'', (w, gr'') :: choices'))
           wgts
           (vars, [])
       in
@@ -382,7 +382,7 @@ let elaborate_gt (inputs : Sym.Set.t) (gt : GT.t) : term =
              in
              List.map
                (fun (w, gt) ->
-                 (f w, aux (choice_var :: vars) (Sym.Set.add choice_var path_vars) gt))
+                  (f w, aux (choice_var :: vars) (Sym.Set.add choice_var path_vars) gt))
                wgts);
           last_var
         }
@@ -391,21 +391,21 @@ let elaborate_gt (inputs : Sym.Set.t) (gt : GT.t) : term =
       let (iargs : (Sym.t * Sym.t) list), (gt_lets : Sym.t -> term -> term) =
         List.fold_right
           (fun (y, it) (yzs, f) ->
-            let (IT.IT (it_, z_bt, _here)) = it in
-            match it_ with
-            | Sym z -> ((y, z) :: yzs, f)
-            | _ ->
-              let z = Sym.fresh () in
-              ( (y, z) :: yzs,
-                fun w gr ->
-                  Let
-                    { backtracks = 0;
-                      x = z;
-                      x_bt = z_bt;
-                      value = Return { value = it };
-                      last_var = w;
-                      rest = f z gr
-                    } ))
+             let (IT.IT (it_, z_bt, _here)) = it in
+             match it_ with
+             | Sym z -> ((y, z) :: yzs, f)
+             | _ ->
+               let z = Sym.fresh () in
+               ( (y, z) :: yzs,
+                 fun w gr ->
+                   Let
+                     { backtracks = 0;
+                       x = z;
+                       x_bt = z_bt;
+                       value = Return { value = it };
+                       last_var = w;
+                       rest = f z gr
+                     } ))
           xits
           ([], fun _ gr -> gr)
       in
@@ -549,10 +549,10 @@ module Sizing = struct
 
 
   let size_recursive_calls
-    (marker_var : Sym.t)
-    (syms : Sym.Set.t)
-    (size : int)
-    (gr : term)
+        (marker_var : Sym.t)
+        (syms : Sym.Set.t)
+        (size : int)
+        (gr : term)
     : term * Sym.Set.t
     =
     let rec aux (gr : term) : term * Sym.Set.t =
@@ -635,15 +635,15 @@ module Sizing = struct
 
 
   let transform_def
-    (cg : SymGraph.t)
-    ({ filename : string;
-       sized : bool;
-       name : Sym.Set.elt;
-       iargs : (Sym.Set.elt * BT.t) list;
-       oargs : (Sym.Set.elt * BT.t) list;
-       body : term
-     } :
-      definition)
+        (cg : SymGraph.t)
+        ({ filename : string;
+           sized : bool;
+           name : Sym.Set.elt;
+           iargs : (Sym.Set.elt * BT.t) list;
+           oargs : (Sym.Set.elt * BT.t) list;
+           body : term
+         } :
+          definition)
     : definition
     =
     { filename;
