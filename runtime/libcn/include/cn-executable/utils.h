@@ -8,6 +8,7 @@
 // #include <assert.h>
 // #include "stdint.h"
 #include <stdint.h>
+#include <stdalign.h>
 
 #include <cn-executable/alloc.h>
 #include <cn-executable/hash_table.h>
@@ -208,7 +209,7 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
 
 #define CN_GEN_CONVERT(CTYPE, CNTYPE)\
     static inline CNTYPE *convert_to_##CNTYPE(CTYPE i) {\
-        CNTYPE *ret = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *ret = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         ret->val = i;\
         return ret;\
     }
@@ -248,42 +249,42 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
 
 #define CN_GEN_ADD(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_add(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val + i2->val;\
         return res;\
     }
 
 #define CN_GEN_SUB(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_sub(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val - i2->val;\
         return res;\
     }
 
 #define CN_GEN_MUL(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_multiply(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val * i2->val;\
         return res;\
     }
 
 #define CN_GEN_DIV(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_divide(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val / i2->val;\
         return res;\
     }
 
 #define CN_GEN_SHIFT_LEFT(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_shift_left(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val << i2->val;\
         return res;\
     }
 
 #define CN_GEN_SHIFT_RIGHT(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_shift_right(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val >> i2->val;\
         return res;\
     }
@@ -301,7 +302,7 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
 /* TODO: Account for UB: https://stackoverflow.com/a/20638659 */
 #define CN_GEN_MOD(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_mod(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val % i2->val;\
         if (res->val < 0) {\
             res->val = (i2->val < 0) ? res->val - i2->val : res->val + i2->val;\
@@ -312,28 +313,28 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
 
 #define CN_GEN_REM(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_rem(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val % i2->val;\
         return res;\
     }
 
 #define CN_GEN_XOR(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_xor(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val ^ i2->val;\
         return res;\
     }
 
 #define CN_GEN_BWAND(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_bwand(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val & i2->val;\
         return res;\
     }
 
 #define CN_GEN_BWOR(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_bwor(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = i1->val | i2->val;\
         return res;\
     }
@@ -359,7 +360,7 @@ static inline int ipow(int base, int exp)
 
 #define CN_GEN_POW(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_pow(CNTYPE *i1, CNTYPE *i2) {\
-        CNTYPE *res = (CNTYPE *) cn_bump_malloc(sizeof(CNTYPE));\
+        CNTYPE *res = (CNTYPE *) cn_bump_aligned_alloc(alignof(CNTYPE), sizeof(CNTYPE));\
         res->val = ipow(i1->val, i2->val);\
         return res;\
     }
@@ -407,7 +408,7 @@ static inline int ipow(int base, int exp)
 
 #define CN_GEN_CAST_INT_TYPES(CNTYPE1, CTYPE2, CNTYPE2)\
     static inline CNTYPE2 *cast_##CNTYPE1##_to_##CNTYPE2(CNTYPE1 *i) {\
-        CNTYPE2 *res = (CNTYPE2 *) cn_bump_malloc(sizeof(CNTYPE2));\
+        CNTYPE2 *res = (CNTYPE2 *) cn_bump_aligned_alloc(alignof(CNTYPE2), sizeof(CNTYPE2));\
         res->val = (CTYPE2) i->val;\
         return res;\
     }
