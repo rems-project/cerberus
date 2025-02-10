@@ -20,7 +20,10 @@ extern "C" {
 
     void cn_bump_free_all();
 
-    typedef uintptr_t cn_bump_frame_id;
+    typedef struct {
+        uint16_t block;
+        char* pointer;
+    } cn_bump_frame_id;
 
     cn_bump_frame_id cn_bump_get_frame_id(void);
 
