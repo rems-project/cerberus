@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdalign.h>
 #include <string.h>
+#include <inttypes.h>
 
 #ifdef CN_DEBUG_PRINTING
 #   include <stdio.h>
@@ -14,14 +15,16 @@
 // Bump Allocator //
 ////////////////////
 
-#define BUMP_MEM_SIZE (1024 * 1024 * 512)
-char bump_mem[BUMP_MEM_SIZE];
-static char* bump_curr = bump_mem;
-
+#define BUMP_BLOCK_SIZE (1024 * 1024)
+#define BUMP_BLOCK_COUNT 1024
+static char* bump_blocks[BUMP_BLOCK_COUNT];
+static uint16_t bump_curr_block;
+static char* bump_curr;
 
 #ifdef CN_DEBUG_PRINTING
 void cn_bump_fprint(FILE* file) {
-    fprintf(file, "Start: %p, Next: %p\n", bump_mem, bump_curr);
+    fprintf(file, "Block: %" PRIu16 ", Start: %p, Next: %p\n",
+        bump_curr_block, bump_blocks[bump_curr_block], bump_curr);
 }
 
 void cn_bump_print() {
@@ -33,30 +36,58 @@ void cn_bump_fprint(FILE* file) {}
 void cn_bump_print() {}
 #endif
 
+void cn_bump_init() {
+    if (bump_curr == NULL) {
+        bump_blocks[0] = cn_fl_malloc(BUMP_BLOCK_SIZE);
+        bump_curr = bump_blocks[0];
+    }
+}
+
+void* bump_by(size_t nbytes) {
+    if (nbytes > BUMP_BLOCK_SIZE) {
+        fprintf(stderr, "Attempted to bump allocate larger than maximum allocation size %d.", BUMP_BLOCK_SIZE);
+        cn_failure(CN_FAILURE_ALLOC);
+        return 0;
+    }
+
+    // Expansion
+    if (bump_curr + nbytes >= bump_blocks[bump_curr_block] + BUMP_BLOCK_SIZE) {
+        if (bump_curr_block + 1 >= BUMP_BLOCK_COUNT) {
+            cn_failure(CN_FAILURE_ALLOC);
+            return NULL;
+        }
+
+        bump_curr_block++;
+
+        if (bump_blocks[bump_curr_block] == NULL) {
+            bump_blocks[bump_curr_block] = cn_fl_malloc(BUMP_BLOCK_SIZE);
+        }
+
+        bump_curr = bump_blocks[bump_curr_block];
+    }
+
+    void* res = bump_curr;
+    bump_curr += nbytes;
+
+    return res;
+}
+
 void* cn_bump_aligned_alloc(size_t alignment, size_t nbytes) {
     if (nbytes == 0) {
         return NULL;
     }
 
-    uintptr_t max = (uintptr_t)bump_mem + BUMP_MEM_SIZE;
+    cn_bump_init();
 
     if ((uintptr_t)bump_curr % alignment != 0) {
         size_t padding = (alignment - (uintptr_t)bump_curr % alignment) % alignment;
-        if ((uintptr_t)bump_curr + padding >= max) {
-            cn_failure(CN_FAILURE_ALLOC);
+        void* res = bump_by(padding);
+        if (res == NULL) {
             return NULL;
         }
-        bump_curr += padding;
     }
 
-    void* res = bump_curr;
-    if ((uintptr_t)bump_curr + nbytes >= max) {
-        cn_failure(CN_FAILURE_ALLOC);
-        return NULL;
-    }
-    bump_curr += nbytes;
-
-    return res;
+    return bump_by(nbytes);
 }
 
 void* cn_bump_malloc(size_t nbytes) {
@@ -74,15 +105,23 @@ void* cn_bump_calloc(size_t count, size_t size) {
 }
 
 void cn_bump_free_all(void) {
-    bump_curr = bump_mem;
+    for (uint16_t i = 0; bump_blocks[i] != NULL; i++) {
+        cn_fl_free(bump_blocks[i]);
+        bump_blocks[i] = NULL;
+    }
+    bump_curr_block = 0;
+    bump_curr = NULL;
 }
 
 cn_bump_frame_id cn_bump_get_frame_id(void) {
-    return (uintptr_t)bump_curr;
+    cn_bump_init();
+
+    return (cn_bump_frame_id) { .block = bump_curr_block, .pointer = bump_curr };
 }
 
 void cn_bump_free_after(cn_bump_frame_id frame_id) {
-    bump_curr = (char*)frame_id;
+    bump_curr = frame_id.pointer;
+    bump_curr_block = frame_id.block;
 }
 
 
