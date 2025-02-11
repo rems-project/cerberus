@@ -351,8 +351,8 @@ let verify
             errors;
         Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
         let@ _ = Check.generate_lemmas lemmas lemmata in
-        let@ steps = Typing.get_resource_inference_steps () in
-        return steps
+        let@ _ = Typing.log_inference_log_size __LOC__ "with_well_formedness_check:check:f" in
+        Typing.get_resource_inference_steps ()
       in
       Typing.run_from_pause check paused)
 
