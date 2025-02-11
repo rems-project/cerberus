@@ -48,6 +48,7 @@ void initialise_error_msg_info_(const char *function_name, char *file_name, int 
 #define initialise_error_msg_info() initialise_error_msg_info_(__func__, __FILE__, __LINE__)
 
 void reset_error_msg_info();
+void free_error_msg_info();
 
 /* TODO: Implement */
 /*struct cn_error_messages {
@@ -124,6 +125,7 @@ typedef struct cn_alloc_id {
 typedef hash_table cn_map;
 
 void initialise_ownership_ghost_state(void);
+void free_ownership_ghost_state(void);
 void initialise_ghost_stack_depth(void);
 signed long get_cn_stack_depth(void);
 void ghost_stack_depth_incr(void);

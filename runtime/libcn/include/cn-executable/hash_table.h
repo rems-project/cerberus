@@ -51,7 +51,7 @@ typedef struct hash_table hash_table;
 
 hash_table *ht_create(void);
 
-// void destroy_hash_table(hash_table *table);
+void ht_destroy(hash_table* table);
 
 void *ht_get(hash_table *table, signed long *key);
 

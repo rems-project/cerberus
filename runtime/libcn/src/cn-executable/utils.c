@@ -141,6 +141,11 @@ void initialise_ownership_ghost_state(void) {
   cn_ownership_global_ghost_state = ht_create();
 }
 
+void free_ownership_ghost_state(void) {
+  nr_owned_predicates = 0;
+  ht_destroy(cn_ownership_global_ghost_state);
+}
+
 void initialise_ghost_stack_depth(void) {
   cn_stack_depth = 0;
 }
@@ -424,7 +429,7 @@ struct cn_error_message_info* make_error_message_info_entry(const char* function
   char* cn_source_loc,
   struct cn_error_message_info* parent)
 {
-  struct cn_error_message_info* entry = (struct cn_error_message_info*)cn_bump_malloc(sizeof(struct cn_error_message_info));
+  struct cn_error_message_info* entry = (struct cn_error_message_info*)cn_fl_malloc(sizeof(struct cn_error_message_info));
   entry->function_name = function_name;
   entry->file_name = file_name;
   entry->line_number = line_number;
@@ -447,11 +452,17 @@ void reset_error_msg_info() {
   error_msg_info = NULL;
 }
 
+void free_error_msg_info() {
+  while (error_msg_info != NULL) {
+    cn_pop_msg_info();
+  }
+}
+
 void cn_pop_msg_info()
 {
   struct cn_error_message_info* old = error_msg_info;
   error_msg_info = old->parent;
-  //TODO: free(old);  
+  cn_fl_free(old);
 }
 
 

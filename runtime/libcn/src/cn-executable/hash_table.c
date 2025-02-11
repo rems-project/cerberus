@@ -52,6 +52,10 @@ hash_table* ht_create(void) {
 }
 
 void ht_destroy(hash_table* table) {
+    if (table == NULL) {
+        return;
+    }
+
     // First free allocated keys.
     for (size_t i = 0; i < table->capacity; i++) {
         cn_fl_free((void*)table->entries[i].key);
