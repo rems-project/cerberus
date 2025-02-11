@@ -196,6 +196,11 @@ let record_resource_inference_step
   =
   modify (fun s -> { s with log = Explain.ResourceInferenceStep (c, ri, c') :: s.log })
 
+let get_resource_inference_steps () : Explain.log t =
+  inspect (fun s -> 
+    List.filter (function 
+      | Explain.ResourceInferenceStep _ -> true 
+      | _ -> false) s.log)
 
 let modify_where (f : Where.t -> Where.t) : unit t =
   modify (fun s ->

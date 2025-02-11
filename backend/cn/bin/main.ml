@@ -139,7 +139,7 @@ let with_well_formedness_check
      ail_prog:CF.GenTypes.genTypeCategory A.ail_program ->
      statement_locs:Cerb_location.t CStatements.LocMap.t ->
      paused:_ Typing.pause ->
-     unit Or_TypeError.t)
+     Explain.log Or_TypeError.t)
   =
   check_input_file filename;
   let cabs_tunit, prog, (markers_env, ail_prog), statement_locs =
@@ -168,14 +168,18 @@ let with_well_formedness_check
           prog
       in
       print_log_file ("mucore", MUCORE prog5);
-      Option.iter
-        (fun path -> Pp.print_file path (Pp_mucore_coq.pp_unit_file prog5))
-        coq_export_file;
       let paused =
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
-      f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused
+      let@ steps = f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused in
+      Option.iter
+        (fun path ->
+          Pp.print_file
+            path
+            (Pp_mucore_coq.pp_unit_file_with_resource_inference prog5 steps))
+        coq_export_file;
+      return ()
     in
     Pp.maybe_close_times_channel ();
     Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
@@ -258,7 +262,7 @@ let well_formed
     ~magic_comment_char_dollar
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ ->
-      Or_TypeError.return ())
+      Or_TypeError.return [])
 
 
 let verify
@@ -346,7 +350,9 @@ let verify
                 err)
             errors;
         Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
-        Check.generate_lemmas lemmas lemmata
+        let@ _ = Check.generate_lemmas lemmas lemmata in
+        let@ steps = Typing.get_resource_inference_steps () in
+        return steps
       in
       Typing.run_from_pause check paused)
 
@@ -440,7 +446,7 @@ let generate_executable_specs
                statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
-          Or_TypeError.return ())
+          Or_TypeError.return [])
         ())
 
 
@@ -670,7 +676,7 @@ let run_tests
           if not dont_run then
             Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
-      Or_TypeError.return ())
+      Or_TypeError.return [])
 
 
 open Cmdliner

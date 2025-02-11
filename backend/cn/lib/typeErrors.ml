@@ -5,8 +5,6 @@ module LC = LogicalConstraints
 module Req = Request
 open Pp
 
-type label_kind = Where.label
-
 open Error_common
 
 let call_prefix = function

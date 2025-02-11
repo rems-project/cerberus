@@ -2,6 +2,8 @@
 
 module Loc = Locations
 
+type label_kind = Where.label
+
 type access =
   | Load
   | Store
@@ -14,10 +16,9 @@ type access =
 type call_situation =
   | FunctionCall of Sym.t
   | LemmaApplication of Sym.t
-  | LabelCall of Where.label
+  | LabelCall of label_kind
   | Subtyping
 
-(* Adjust this definition to match the one from TypeErrors *)
 type situation =
   | Access of access
   | Call of call_situation
