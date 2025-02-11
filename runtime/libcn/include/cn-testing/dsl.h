@@ -10,16 +10,16 @@
 #define CN_GEN_INIT() CN_GEN_INIT_SIZED(cn_gen_get_max_size())
 
 #define CN_GEN_INIT_SIZED(size)                                                         \
+    if (0) {                                                                            \
+    cn_label_bennet_backtrack:                                                          \
+        cn_gen_decrement_depth();                                                       \
+        return NULL;                                                                    \
+    }                                                                                   \
     if (cn_gen_get_input_timeout() != 0                                                 \
         && cn_gen_get_milliseconds() - cn_gen_get_input_timer()                         \
             > cn_gen_get_input_timeout()) {                                             \
         cn_gen_backtrack_assert_failure();                                              \
         goto cn_label_bennet_backtrack;                                                 \
-    }                                                                                   \
-    if (0) {                                                                            \
-    cn_label_bennet_backtrack:                                                          \
-        cn_gen_decrement_depth();                                                       \
-        return NULL;                                                                    \
     }                                                                                   \
     cn_gen_increment_depth();                                                           \
     if (size <= 0 || cn_gen_depth() == cn_gen_max_depth()) {                            \
