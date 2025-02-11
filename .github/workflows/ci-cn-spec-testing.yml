@@ -26,20 +26,33 @@ jobs:
 
     steps:
 
-    - name: Checkout cerberus 
+    - name: Checkout Cerberus 
       uses: actions/checkout@v4
 
     - name: System dependencies (ubuntu)
       run: |
         sudo apt-get install build-essential libgmp-dev z3 opam cmake lcov
 
-    - name: Restore cached opam
+    - name: Restore OPAM cache
       id: cache-opam-restore
       uses: actions/cache/restore@v4
       with:
         path: ~/.opam
         key: ${{ matrix.version }}
-        fail-on-cache-miss: true
+  
+    - name: Setup OPAM
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+  
+    - name: Save OPAM cache
+      uses: actions/cache/save@v4
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      with:
+        path: ~/.opam
+        key: ${{ matrix.version }}
 
     - name: Install Cerberus
       run: |

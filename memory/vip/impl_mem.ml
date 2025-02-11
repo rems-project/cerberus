@@ -1118,6 +1118,7 @@ let pp_integer_value_for_core = function
       (* TODO: should this not be an error? *)
       !^ "Loc" ^^ P.parens (P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string addr)))))
 
+
 let rec pp_mem_value = function
   | MVunspecified _ ->
       PPrint.string "UNSPEC"
@@ -1146,6 +1147,69 @@ let rec pp_mem_value = function
 let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
 let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
 let pp_pretty_mem_value ?basis ~use_upper = pp_mem_value
+
+(* Coq pretty printing *)
+
+let pp_pair_for_coq p1 p2 (a, b) = P.parens (p1 a ^^ !^"," ^^ p2 b)
+
+let pp_triple_for_coq p1 p2 p3 (a, b, c) = P.parens (p1 a ^^ !^"," ^^ p2 b ^^ !^"," ^^ p3 c)
+
+let pp_list_for_coq pp_elem xs =
+  !^"["
+  ^^^ List.fold_left
+        (fun acc x ->
+          if acc == P.empty then
+            pp_elem x
+          else
+            acc ^^ !^";" ^^^ pp_elem x)
+        P.empty
+        xs
+  ^^^ !^"]"
+
+(* internal *)
+let pp_address_for_coq n = !^(N.to_string n)
+
+let pp_provenance_for_coq = function
+  | Prov_empty -> !^"Prov_empty"
+  | Prov_some alloc_id -> !^"(Prov_some" ^^^ !^(Nat_big_num.to_string alloc_id) ^^ !^")"
+
+let pp_location_for_coq (prov, addr) =
+  pp_pair_for_coq pp_provenance_for_coq pp_address_for_coq (prov, addr) 
+
+let pp_integer_value_for_coq = function
+  | IVloc loc -> 
+    !^"(Mem.IVloc" ^^^  pp_location_for_coq loc ^^ !^")"
+  | IVint n -> !^"(Mem.IVint" ^^^ (pp_address_for_coq n) ^^ !^")"
+
+let pp_floating_value_for_coq (f:floating_value) = !^ (string_of_float f)
+
+ let pp_pointer_value_for_coq pp_symbol = function
+   | PVnull -> !^"PVnull"
+   | PVloc loc -> !^"(PVloc" ^^^ pp_location_for_coq loc ^^ !^")"
+   | PVfunptr sym -> !^"(PVfunptr" ^^^ pp_symbol sym ^^ !^")"
+
+
+let rec pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier = function
+  | MVunspecified ct -> 
+    !^"(Mem.MVunspecified" ^^^ pp_ctype ct ^^ !^")"
+  | MVinteger (ity, ival) ->
+    !^"(Mem.MVinteger" ^^^ pp_pair_for_coq pp_integer_type pp_integer_value_for_coq (ity, ival) ^^ !^")"
+  | MVfloating (fty, fval) ->
+    !^"(Mem.MVfloating" ^^^ pp_pair_for_coq pp_floating_type pp_floating_value_for_coq (fty, fval) ^^ !^")"
+  | MVpointer (ct, pval) ->
+    !^"(Mem.MVpointer" ^^^ pp_pair_for_coq pp_ctype (pp_pointer_value_for_coq pp_symbol) (ct, pval) ^^ !^")"
+  | MVarray vals ->
+    !^"(Mem.MVarray" ^^^ pp_list_for_coq (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) vals ^^ !^")"
+  | MVstruct (sym, fields) ->
+    !^"(Mem.MVstruct" ^^^ pp_symbol sym ^^^
+    pp_list_for_coq (fun (id, ct, mv) -> 
+      pp_triple_for_coq pp_identifier pp_ctype (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) (id, ct, mv)) fields ^^ !^")"
+  | MVunion (sym, id, mv) ->
+    !^"(Mem.MVunion" ^^^ pp_symbol sym ^^^ pp_identifier id ^^^ (pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier) mv ^^ !^")"
+
+(* Helper for triple printing *)
+and pp_triple p1 p2 p3 (a, b, c) = 
+  P.parens (p1 a ^^ !^"," ^^ p2 b ^^ !^"," ^^ p3 c)
 
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)

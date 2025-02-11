@@ -312,3 +312,25 @@ uninstall: cerberus
 uninstall_cn: cn
 	@echo "[DUNE] uninstall cn"
 	$(Q)dune uninstall cn
+
+.PHONY: cn-coq
+cn-coq:
+	@echo "[DUNE] cn-coq"
+	$(Q)dune build -p cn-coq
+
+.PHONY: cn-coq-install
+cn-coq-install: cn-coq
+	@echo "[DUNE] install cn-coq"
+	$(Q)dune install cn-coq
+
+.PHONY: cn-with-coq
+cn-with-coq:
+	@echo "[DUNE] cerberus-lib,cn,cn-coq"
+	$(Q)dune build -p cerberus-lib,cn,cn-coq
+
+# Developement target to watch for changes in cn/lib and rebuild
+# e.g. to be used with vscode IDE
+.PHONY: cn-dev-watch
+cn-dev-watch:
+	@echo "[DUNE] cn-dev-watch"
+	$(Q)dune build --watch -p cerberus-lib,cn,cn-coq

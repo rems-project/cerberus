@@ -113,7 +113,7 @@
 
 #define CN_GEN_LET_BEGIN(backtracks, var)                                               \
     int var##_backtracks = backtracks;                                                  \
-    alloc_checkpoint var##_checkpoint = alloc_save_checkpoint();                        \
+    cn_alloc_checkpoint var##_checkpoint = cn_alloc_save_checkpoint();                  \
     void *var##_alloc_checkpoint = cn_gen_alloc_save();                                 \
     void *var##_ownership_checkpoint = cn_gen_ownership_save();                         \
     cn_label_##var##_gen:                                                               \
@@ -126,7 +126,7 @@
 #define CN_GEN_LET_END(backtracks, var, last_var, ...)                                  \
         if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                         \
         cn_label_##var##_backtrack:                                                     \
-            free_after(var##_checkpoint);                                               \
+            cn_free_after(var##_checkpoint);                                            \
             cn_gen_alloc_restore(var##_alloc_checkpoint);                               \
             cn_gen_ownership_restore(var##_ownership_checkpoint);                       \
             if (cn_gen_backtrack_relevant_contains((char*)#var)) {                      \
@@ -199,7 +199,7 @@
     }                                                                                   \
     tmp##_num_choices /= 2;                                                             \
     struct cn_gen_int_urn* tmp##_urn = urn_from_array(tmp##_choices, tmp##_num_choices);\
-    alloc_checkpoint tmp##_checkpoint = alloc_save_checkpoint();                        \
+    cn_alloc_checkpoint tmp##_checkpoint = cn_alloc_save_checkpoint();                  \
     void *tmp##_alloc_checkpoint = cn_gen_alloc_save();                                 \
     void *tmp##_ownership_checkpoint = cn_gen_ownership_save();                         \
     cn_label_##tmp##_gen:                                                               \
@@ -207,7 +207,7 @@
     uint64_t tmp = urn_remove(tmp##_urn);                                               \
     if (0) {                                                                            \
     cn_label_##tmp##_backtrack:                                                         \
-        free_after(tmp##_checkpoint);                                                   \
+        cn_free_after(tmp##_checkpoint);                                                \
         cn_gen_alloc_restore(tmp##_alloc_checkpoint);                                   \
         cn_gen_ownership_restore(tmp##_ownership_checkpoint);                           \
         if ((cn_gen_backtrack_type() == CN_GEN_BACKTRACK_ASSERT                         \
@@ -237,7 +237,7 @@
 
 #define CN_GEN_SPLIT_BEGIN(tmp, size, ...)                                              \
     int tmp##_backtracks = cn_gen_get_size_split_backtracks_allowed();                  \
-    alloc_checkpoint tmp##_checkpoint = alloc_save_checkpoint();                        \
+    cn_alloc_checkpoint tmp##_checkpoint = cn_alloc_save_checkpoint();                  \
     void *tmp##_alloc_checkpoint = cn_gen_alloc_save();                                 \
     void *tmp##_ownership_checkpoint = cn_gen_ownership_save();                         \
     cn_label_##tmp##_gen:                                                               \
@@ -262,7 +262,7 @@
     }                                                                                   \
     if (0) {                                                                            \
     cn_label_##tmp##_backtrack:                                                         \
-        free_after(tmp##_checkpoint);                                                   \
+        cn_free_after(tmp##_checkpoint);                                                \
         cn_gen_alloc_restore(tmp##_alloc_checkpoint);                                   \
         cn_gen_ownership_restore(tmp##_ownership_checkpoint);                           \
         if (cn_gen_backtrack_relevant_contains(#tmp)) {                                 \

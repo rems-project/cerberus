@@ -26,8 +26,7 @@ while getopts "hnqu" flag; do
    ;;
    u)
    export UBSAN_OPTIONS=halt_on_error=1
-   # FIXME: https://github.com/rems-project/cerberus/issues/821
-   UBSAN="-fsanitize=undefined -fno-sanitize=alignment"
+   UBSAN="-fsanitize=undefined"
    ;;
    \?)
    echo_and_err "${USAGE}"
