@@ -483,6 +483,7 @@ module Special = struct
     | Some r -> 
         let@ c' = get_typing_context () in
         let@ () = Typing.record_resource_inference_step c c' (PredicateRequest (situation, request, oinfo, r)) in
+        let@ _ = Typing.log_inference_log_size __LOC__ "Special.predicate_request:Some" in
         return r 
     | None -> fail_missing_resource loc uiinfo
 
