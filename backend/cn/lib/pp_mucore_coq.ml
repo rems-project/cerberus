@@ -1992,4 +1992,110 @@ let pp_file pp_type pp_type_name file =
        P.empty
 
 
-let pp_unit_file (f : unit file) = pp_file pp_unit pp_unit_type f
+(* Functions to pretty print the Explain.log types *)
+
+let pp_access = function
+  | Error_common.Load -> pp_constructor "Access.Load" []
+  | Error_common.Store -> pp_constructor "Access.Store" []
+  | Error_common.Deref -> pp_constructor "Access.Deref" []
+  | Error_common.Kill -> pp_constructor "Access.Kill" []
+  | Error_common.Free -> pp_constructor "Access.Free" []
+  | Error_common.To_bytes -> pp_constructor "Access.To_bytes" []
+  | Error_common.From_bytes -> pp_constructor "Access.From_bytes" []
+
+
+let pp_call_situation = function
+  | Error_common.FunctionCall s -> pp_constructor "Call.FunctionCall" [ pp_symbol s ]
+  | Error_common.LemmaApplication s ->
+    pp_constructor "Call.LemmaApplication" [ pp_symbol s ]
+  | Error_common.LabelCall l -> pp_constructor "Call.LabelCall" [ pp_label_annot l ]
+  | Error_common.Subtyping -> pp_constructor "Call.Subtyping" []
+
+
+let pp_situation (s : Error_common.situation) =
+  match s with
+  | Error_common.Access a -> pp_constructor "Access" [ pp_access a ]
+  | Error_common.Call c -> pp_constructor "Call" [ pp_call_situation c ]
+
+
+let pp_init = function
+  | Request.Init -> pp_constructor "Init" []
+  | Request.Uninit -> pp_constructor "Uninit" []
+
+
+let pp_request_name = function
+  | Request.Owned (ct, init) ->
+    pp_constructor "Request.Owned" [ pp_sctype ct; pp_init init ]
+  | Request.PName s -> pp_constructor "Request.PName" [ pp_symbol s ]
+
+
+let pp_predicate (p : Request.Predicate.t) =
+  pp_record
+    [ ("name", pp_request_name p.name);
+      ("pointer", pp_index_term p.pointer);
+      ("iargs", pp_list pp_index_term p.iargs)
+    ]
+
+
+let pp_resource_predicate (p : Resource.predicate) = pp_predicate (fst p)
+(* TODO: omitting "output" *)
+
+let pp_sym_map (pp_value : 'a -> P.document) (m : 'a Sym.Map.t) =
+  P.parens
+    (!^"Sym.map_from_list" ^^^ pp_list (pp_pair pp_symbol pp_value) (Sym.Map.bindings m))
+
+
+let pp_basetype_or_value = function
+  | Context.BaseType bt ->
+    pp_constructor "BaseType" [ pp_basetype pp_unit bt ] (* TODO hardcoded unit? *)
+  | Context.Value v -> pp_constructor "Value" [ pp_index_term v ]
+
+
+let pp_context_l_info (_ : Context.l_info) = !^"TODO"
+
+let pp_resource (r : Resource.t) = pp_pair pp_request (fun _ -> !^"TODO: output") r
+
+let pp_context (c : Context.t) =
+  pp_record
+    [ ( "computational",
+        pp_sym_map (pp_pair pp_basetype_or_value pp_context_l_info) c.computational );
+      ("logical", pp_sym_map (pp_pair pp_basetype_or_value pp_context_l_info) c.logical);
+      ("resources", pp_pair (pp_list (pp_pair pp_resource pp_int)) pp_int c.resources);
+      (*      ("resource_history", pp_map pp_int pp_resource_history c.resource_history); TODO *)
+      ( "constraints",
+        let l = LogicalConstraints.Set.elements c.constraints in
+        pp_constructor "Set" [ pp_list pp_logical_constraint l ] )
+      (*      ("global", pp_global c.global); TODO *)
+      (*      ("where", pp_where c.where) TODO *)
+    ]
+
+
+let pp_resource_inference_type = function
+  | Explain.PredicateRequest (s, p, o, ri) ->
+    pp_constructor1
+      "PredicateRequest"
+      [ pp_situation s;
+        pp_predicate p;
+        pp_option (pp_pair pp_location pp_string) o;
+        pp_pair pp_resource_predicate (pp_list pp_int) ri
+      ]
+
+
+(* Add this definition before its use in `pp_unit_file_with_resource_inference` *)
+let pp_resource_inference_step = function
+  | Explain.ResourceInferenceStep (c1, ri, c2) ->
+    pp_constructor1
+      "ResourceInferenceStep"
+      [ pp_context c1; pp_resource_inference_type ri; pp_context c2 ]
+  | _ -> failwith "Unsupported resource inference step"
+
+
+let pp_unit_file_with_resource_inference (prog : unit file) (steps : Explain.log) =
+  pp_file pp_unit pp_unit_type prog
+  ^^ P.hardline
+  ^^ pp_comment "Resource Inference Steps"
+  ^^ P.hardline
+  ^^ coq_def
+       "ResourceInferenceSteps"
+       P.empty
+       (pp_list (fun step -> pp_resource_inference_step step) steps)

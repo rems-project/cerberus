@@ -194,6 +194,8 @@ val record_resource_inference_step
   Explain.resource_inference_type ->
   unit m
 
+val get_resource_inference_steps : unit -> Explain.log m
+
 val modify_where : (Where.t -> Where.t) -> unit m
 
 (* val add_label_to_trace : (Locations.t * Context.label_kind) option -> unit m *)
