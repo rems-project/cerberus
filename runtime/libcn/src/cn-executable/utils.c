@@ -14,6 +14,13 @@ signed long cn_stack_depth;
 
 signed long nr_owned_predicates;
 
+void reset_fulminate(void) {
+  cn_bump_free_all();
+  cn_fl_free_all();
+  reset_error_msg_info();
+  initialise_ownership_ghost_state();
+  initialise_ghost_stack_depth();
+}
 
 static enum cn_logging_level logging_level = CN_LOGGING_INFO;
 
