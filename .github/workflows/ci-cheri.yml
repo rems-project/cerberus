@@ -46,7 +46,7 @@ jobs:
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }}-cheri)
+        eval $(opam env --switch=${{ matrix.version }})
         opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
         opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
         opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
