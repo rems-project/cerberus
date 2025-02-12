@@ -105,8 +105,8 @@ let generate_c_pres_and_posts_internal
     match loc with
     | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
       Cerb_location.region
-          (Cerb_position.change_cnum start_pos (-3), Cerb_position.change_cnum end_pos 2)
-          cursor
+        (Cerb_position.change_cnum start_pos (-3), Cerb_position.change_cnum end_pos 2)
+        cursor
     | _ -> assert false (* loc should always be a region *)
   in
   let in_stmt =
