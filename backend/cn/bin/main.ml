@@ -139,7 +139,7 @@ let with_well_formedness_check
      ail_prog:CF.GenTypes.genTypeCategory A.ail_program ->
      statement_locs:Cerb_location.t CStatements.LocMap.t ->
      paused:_ Typing.pause ->
-     Explain.log Or_TypeError.t)
+     unit Or_TypeError.t)
   =
   check_input_file filename;
   let cabs_tunit, prog, (markers_env, ail_prog), statement_locs =
@@ -172,7 +172,8 @@ let with_well_formedness_check
         Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
-      let@ steps = f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused in
+      let@ _ = f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused in
+      let steps = Prooflog.get_proof_log () in
       Option.iter
         (fun path ->
           Pp.print_file
@@ -262,7 +263,7 @@ let well_formed
     ~magic_comment_char_dollar
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ ->
-      Or_TypeError.return [])
+      Or_TypeError.return ())
 
 
 let verify
@@ -350,9 +351,7 @@ let verify
                 err)
             errors;
         Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
-        let@ _ = Check.generate_lemmas lemmas lemmata in
-        let@ _ = Typing.log_inference_log_size __LOC__ "with_well_formedness_check:check:f" in
-        Typing.get_resource_inference_steps ()
+        Check.generate_lemmas lemmas lemmata
       in
       Typing.run_from_pause check paused)
 
@@ -446,7 +445,7 @@ let generate_executable_specs
                statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
-          Or_TypeError.return [])
+          Or_TypeError.return ())
         ())
 
 
@@ -676,7 +675,7 @@ let run_tests
           if not dont_run then
             Unix.execv (Filename.concat output_dir "run_tests.sh") (Array.of_list []))
         ();
-      Or_TypeError.return [])
+      Or_TypeError.return ())
 
 
 open Cmdliner

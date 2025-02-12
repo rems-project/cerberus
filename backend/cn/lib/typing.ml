@@ -188,32 +188,6 @@ let record_action ((a : Explain.action), (loc : Loc.t)) : unit t =
   modify (fun s -> { s with log = Action (a, loc) :: s.log })
 
 
-let record_resource_inference_step
-  (c : Context.t)
-  (c' : Context.t)
-  (ri : Explain.resource_inference_type)
-  : unit t
-  =
-  modify (fun s -> { s with log = Explain.ResourceInferenceStep (c, ri, c') :: s.log })
-
-
-let get_resource_inference_steps () : Explain.log t =
-  inspect (fun s ->
-    List.filter (function Explain.ResourceInferenceStep _ -> true | _ -> false) s.log)
-
-
-let log_inference_log_size loc prefix : unit t =
-  let@ steps = get_resource_inference_steps () in
-  return
-    (Pp.debug
-       7
-       (lazy
-         (Pp.item
-            loc
-            (Pp.string
-               (Printf.sprintf "%s (inf. log size: %d)" prefix (List.length steps))))))
-
-
 let modify_where (f : Where.t -> Where.t) : unit t =
   modify (fun s ->
     let log = Explain.State s.typing_context :: s.log in
