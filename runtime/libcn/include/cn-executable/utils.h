@@ -17,6 +17,8 @@
 extern "C" {
 #endif
 
+void reset_fulminate(void);
+
 enum cn_logging_level {
     CN_LOGGING_NONE = 0,
     CN_LOGGING_ERROR = 1,
