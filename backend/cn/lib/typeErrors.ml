@@ -4,7 +4,6 @@ module Res = Resource
 module LC = LogicalConstraints
 module Req = Request
 open Pp
-
 open Error_common
 
 let call_prefix = function

@@ -2071,7 +2071,7 @@ let pp_context (c : Context.t) =
 
 
 let pp_resource_inference_type = function
-  | Explain.PredicateRequest (s, p, o, ri) ->
+  | Prooflog.PredicateRequest (s, p, o, ri) ->
     pp_constructor1
       "PredicateRequest"
       [ pp_situation s;
@@ -2083,14 +2083,13 @@ let pp_resource_inference_type = function
 
 (* Add this definition before its use in `pp_unit_file_with_resource_inference` *)
 let pp_resource_inference_step = function
-  | Explain.ResourceInferenceStep (c1, ri, c2) ->
+  | Prooflog.ResourceInferenceStep (c1, ri, c2) ->
     pp_constructor1
       "ResourceInferenceStep"
       [ pp_context c1; pp_resource_inference_type ri; pp_context c2 ]
-  | _ -> failwith "Unsupported resource inference step"
 
 
-let pp_unit_file_with_resource_inference (prog : unit file) (steps : Explain.log) =
+let pp_unit_file_with_resource_inference (prog : unit file) (steps : Prooflog.log) =
   pp_file pp_unit pp_unit_type prog
   ^^ P.hardline
   ^^ pp_comment "Resource Inference Steps"

@@ -479,12 +479,14 @@ module Special = struct
     in
     let uiinfo = (situation, requests) in
     let@ result = General.predicate_request loc uiinfo request in
-    match result with 
-    | Some r -> 
-        let@ c' = get_typing_context () in
-        let@ () = Typing.record_resource_inference_step c c' (PredicateRequest (situation, request, oinfo, r)) in
-        let@ _ = Typing.log_inference_log_size __LOC__ "Special.predicate_request:Some" in
-        return r 
+    match result with
+    | Some r ->
+      let@ c' = get_typing_context () in
+      Prooflog.record_resource_inference_step
+        c
+        c'
+        (PredicateRequest (situation, request, oinfo, r));
+      return r
     | None -> fail_missing_resource loc uiinfo
 
 
