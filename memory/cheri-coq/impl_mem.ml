@@ -44,12 +44,13 @@ end
 
 module CerbTagDefs = struct
 
-  let toCoq_lexing_position (lp:Lexing.position): CoqLocation.lexing_position =
+  let toCoq_lexing_position (lp:Cerb_position.t): CoqLocation.lexing_position =
+    let f = Cerb_position.to_file_lexing lp in
     {
-      pos_fname = lp.pos_fname;
-      pos_lnum = Z.of_int lp.pos_lnum;
-      pos_bol = Z.of_int lp.pos_bol;
-      pos_cnum = Z.of_int lp.pos_cnum;
+      pos_fname = Cerb_position.file lp;
+      pos_lnum = Z.of_int (Cerb_position.line lp);
+      pos_bol = Z.of_int f.pos_bol;
+      pos_cnum = Z.of_int f.pos_cnum;
     }
 
   let toCoq_location_cursor: Cerb_location.cursor -> CoqLocation.location_cursor = function
@@ -339,13 +340,14 @@ module CHERIMorello : Memory = struct
     | Coq_inl errs -> failwith errs
     | Coq_inr v -> v
 
-  let fromCoq_lexing_position (lp:CoqLocation.lexing_position): Lexing.position =
+  let fromCoq_lexing_position (lp:CoqLocation.lexing_position): Cerb_position.t =
+    let pos: Lexing.position =
     {
       pos_fname = lp.pos_fname;
       pos_lnum = Z.to_int lp.pos_lnum;
       pos_bol = Z.to_int lp.pos_bol;
       pos_cnum = Z.to_int lp.pos_cnum;
-    }
+    } in Cerb_position.from_lexing pos
 
   let fromCoq_location_cursor: CoqLocation.location_cursor -> Cerb_location.cursor = function
     | NoCursor -> NoCursor
