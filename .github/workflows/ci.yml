@@ -47,8 +47,8 @@ jobs:
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        opam install --deps-only --yes ./cerberus-lib.opam
         opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+        opam install --deps-only --yes ./cerberus-lib.opam
     
     - name: Save OPAM cache
       uses: actions/cache/save@v4
