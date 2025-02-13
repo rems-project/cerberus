@@ -134,6 +134,10 @@ int cn_test_main(int argc, char* argv[]) {
             logging_level = strtol(argv[i + 1], NULL, 10);
             i++;
         }
+        else if (strcmp("--trace-granularity", arg) == 0) {
+            set_cn_trace_granularity(strtol(argv[i + 1], NULL, 10));
+            i++;
+        }
         else if (strcmp("--progress-level", arg) == 0) {
             progress_level = strtol(argv[i + 1], NULL, 10);
             i++;
@@ -221,11 +225,12 @@ int cn_test_main(int argc, char* argv[]) {
             case CN_TEST_FAIL:
                 printf("FAILED\n");
                 set_cn_logging_level(logging_level);
+                cn_printf(CN_LOGGING_ERROR, "\n");
                 cn_gen_rand_restore(checkpoints[i]);
                 cn_gen_set_input_timeout(0);
                 test_case->func(CN_TEST_GEN_PROGRESS_NONE, trap);
                 set_cn_logging_level(CN_LOGGING_NONE);
-                printf("\n\n");
+                printf("\n");
                 break;
             case CN_TEST_GEN_FAIL:
                 printf("FAILED TO GENERATE VALID INPUT\n");
