@@ -1,12 +1,11 @@
-#include <cn-executable/utils.h>
-#include <signal.h> // for SIGABRT
+#include <signal.h>  // for SIGABRT
 
+#include <cn-executable/utils.h>
 
 typedef hash_table ownership_ghost_state;
 
 /* Ownership globals */
 ownership_ghost_state* cn_ownership_global_ghost_state;
-
 
 struct cn_error_message_info* error_msg_info;
 
@@ -36,12 +35,12 @@ enum cn_logging_level set_cn_logging_level(enum cn_logging_level new_level) {
 
 void cn_failure_default(enum cn_failure_mode mode) {
   switch (mode) {
-  case CN_FAILURE_ALLOC:
-    printf("Out of memory!");
-  case CN_FAILURE_ASSERT:
-  case CN_FAILURE_CHECK_OWNERSHIP:
-  case CN_FAILURE_OWNERSHIP_LEAK:
-    exit(SIGABRT);
+    case CN_FAILURE_ALLOC:
+      printf("Out of memory!");
+    case CN_FAILURE_ASSERT:
+    case CN_FAILURE_CHECK_OWNERSHIP:
+    case CN_FAILURE_OWNERSHIP_LEAK:
+      exit(SIGABRT);
   }
 }
 
@@ -65,14 +64,19 @@ enum cn_trace_granularity get_cn_trace_granularity(void) {
   return trace_granularity;
 }
 
-enum cn_trace_granularity set_cn_trace_granularity(enum cn_trace_granularity new_granularity) {
+enum cn_trace_granularity set_cn_trace_granularity(
+    enum cn_trace_granularity new_granularity) {
   enum cn_trace_granularity old_granularity = trace_granularity;
   trace_granularity = new_granularity;
   return old_granularity;
 }
 
 void print_error_msg_info_single(struct cn_error_message_info* info) {
-  cn_printf(CN_LOGGING_ERROR, "function %s, file %s, line %d\n", info->function_name, info->file_name, info->line_number);
+  cn_printf(CN_LOGGING_ERROR,
+      "function %s, file %s, line %d\n",
+      info->function_name,
+      info->file_name,
+      info->line_number);
   if (info->cn_source_loc) {
     cn_printf(CN_LOGGING_ERROR, "original source location: \n%s\n", info->cn_source_loc);
   }
@@ -87,21 +91,23 @@ void print_error_msg_info(struct cn_error_message_info* info) {
         curr = curr->parent;
       }
 
-      cn_printf(CN_LOGGING_ERROR, "********************* Originated from **********************\n");
+      cn_printf(CN_LOGGING_ERROR,
+          "********************* Originated from **********************\n");
       print_error_msg_info_single(curr);
       curr = curr->child;
 
       while (granularity > CN_TRACE_ENDS && curr->child != NULL) {
-        cn_printf(CN_LOGGING_ERROR, "************************************************************\n");
+        cn_printf(CN_LOGGING_ERROR,
+            "************************************************************\n");
         print_error_msg_info_single(curr);
         curr = curr->child;
       }
     }
 
-    cn_printf(CN_LOGGING_ERROR, "************************ Failed at *************************\n");
+    cn_printf(CN_LOGGING_ERROR,
+        "************************ Failed at *************************\n");
     print_error_msg_info_single(info);
-  }
-  else {
+  } else {
     cn_printf(CN_LOGGING_ERROR, "Internal error: no error_msg_info available.");
     exit(SIGABRT);
   }
@@ -109,7 +115,8 @@ void print_error_msg_info(struct cn_error_message_info* info) {
 
 cn_bool* convert_to_cn_bool(_Bool b) {
   cn_bool* res = cn_bump_malloc(sizeof(cn_bool));
-  if (!res) exit(1);
+  if (!res)
+    exit(1);
   res->val = b;
   return res;
 }
@@ -168,7 +175,6 @@ void* cn_ite(cn_bool* b, void* e1, void* e2) {
   return b->val ? e1 : e2;
 }
 
-
 cn_map* map_create(void) {
   return ht_create();
 }
@@ -195,7 +201,6 @@ void ghost_stack_depth_incr(void) {
   cn_stack_depth++;
 }
 
-
 // TODO: one of these should maybe go away
 #define FMT_PTR "\x1b[33m%#lx\x1b[0m"
 // #define KMAG  "\x1B[35m"
@@ -213,7 +218,9 @@ void ghost_stack_depth_decr(void) {
     int* depth = it.value;
     if (*depth > cn_stack_depth) {
       print_error_msg_info(error_msg_info);
-      cn_printf(CN_LOGGING_ERROR, "Leak check failed, ownership leaked for pointer "FMT_PTR"\n", *key);
+      cn_printf(CN_LOGGING_ERROR,
+          "Leak check failed, ownership leaked for pointer " FMT_PTR "\n",
+          *key);
       cn_failure(CN_FAILURE_OWNERSHIP_LEAK);
       // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
     }
@@ -236,9 +243,7 @@ void ownership_ghost_state_remove(signed long* address_key) {
   ownership_ghost_state_set(address_key, -1);
 }
 
-
-void dump_ownership_state()
-{
+void dump_ownership_state() {
   hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
   // cn_printf(CN_LOGGING_INFO, "BEGIN ownership state\n");
   while (ht_next(&it)) {
@@ -248,18 +253,19 @@ void dump_ownership_state()
   // cn_printf(CN_LOGGING_INFO, "END\n");
 }
 
-
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
   // cn_printf(CN_LOGGING_INFO, "[CN: getting ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
   //// print_error_msg_info();
-  c_ownership_check("Precondition ownership check", generic_c_ptr, (int)size, cn_stack_depth - 1);
+  c_ownership_check(
+      "Precondition ownership check", generic_c_ptr, (int)size, cn_stack_depth - 1);
   c_add_to_ghost_state(generic_c_ptr, size, cn_stack_depth);
 }
 
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
   // cn_printf(CN_LOGGING_INFO, "[CN: returning ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
   //// print_error_msg_info();
-  c_ownership_check("Postcondition ownership check", generic_c_ptr, (int)size, cn_stack_depth);
+  c_ownership_check(
+      "Postcondition ownership check", generic_c_ptr, (int)size, cn_stack_depth);
   c_add_to_ghost_state(generic_c_ptr, size, cn_stack_depth - 1);
 }
 
@@ -275,24 +281,20 @@ void cn_assume_ownership(void* generic_c_ptr, unsigned long size, char* fun) {
   }
 }
 
-
-void cn_get_or_put_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size) {
+void cn_get_or_put_ownership(
+    enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size) {
   nr_owned_predicates++;
-  switch (owned_enum)
-  {
-  case GET:
-  {
-    cn_get_ownership(generic_c_ptr, size);
-    break;
-  }
-  case PUT:
-  {
-    cn_put_ownership(generic_c_ptr, size);
-    break;
-  }
+  switch (owned_enum) {
+    case GET: {
+      cn_get_ownership(generic_c_ptr, size);
+      break;
+    }
+    case PUT: {
+      cn_put_ownership(generic_c_ptr, size);
+      break;
+    }
   }
 }
-
 
 void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack_depth) {
   // cn_printf(CN_LOGGING_INFO, "[C access checking] add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
@@ -314,7 +316,10 @@ void c_remove_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
   }
 }
 
-void c_ownership_check(char* access_kind, uintptr_t generic_c_ptr, int offset, signed long expected_stack_depth) {
+void c_ownership_check(char* access_kind,
+    uintptr_t generic_c_ptr,
+    int offset,
+    signed long expected_stack_depth) {
   signed long address_key = 0;
   // cn_printf(CN_LOGGING_INFO, "C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " ] -- ", generic_c_ptr, generic_c_ptr + offset);
   for (int i = 0; i < offset; i++) {
@@ -324,10 +329,19 @@ void c_ownership_check(char* access_kind, uintptr_t generic_c_ptr, int offset, s
       print_error_msg_info(error_msg_info);
       cn_printf(CN_LOGGING_ERROR, "%s failed.\n", access_kind);
       if (curr_depth == -1) {
-        cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i));
-      }
-      else {
-        cn_printf(CN_LOGGING_ERROR, "  ==> "FMT_PTR"[%d] ("FMT_PTR") not owned at expected function call stack depth %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), expected_stack_depth);
+        cn_printf(CN_LOGGING_ERROR,
+            "  ==> " FMT_PTR "[%d] (" FMT_PTR ") not owned\n",
+            generic_c_ptr,
+            i,
+            (uintptr_t)((char*)generic_c_ptr + i));
+      } else {
+        cn_printf(CN_LOGGING_ERROR,
+            "  ==> " FMT_PTR "[%d] (" FMT_PTR
+            ") not owned at expected function call stack depth %ld\n",
+            generic_c_ptr,
+            i,
+            (uintptr_t)((char*)generic_c_ptr + i),
+            expected_stack_depth);
         cn_printf(CN_LOGGING_ERROR, "  ==> (owned at stack depth: %d)\n", curr_depth);
       }
       cn_failure(CN_FAILURE_CHECK_OWNERSHIP);
@@ -352,14 +366,12 @@ void c_ownership_check(char* access_kind, uintptr_t generic_c_ptr, int offset, s
 //     va_end(args);
 // }
 
-
 cn_map* cn_map_set(cn_map* m, cn_integer* key, void* value) {
   signed long* key_ptr = cn_bump_malloc(sizeof(signed long));
   *key_ptr = key->val;
   ht_set(m, key_ptr, value);
   return m;
 }
-
 
 cn_map* cn_map_deep_copy(cn_map* m1) {
   cn_map* m2 = map_create();
@@ -374,7 +386,6 @@ cn_map* cn_map_deep_copy(cn_map* m1) {
 
   return m2;
 }
-
 
 cn_map* default_cn_map(void) {
   return map_create();
@@ -409,15 +420,14 @@ cn_bool* cn_pointer_ge(cn_pointer* p1, cn_pointer* p2) {
 }
 
 cn_pointer* cast_cn_pointer_to_cn_pointer(cn_pointer* p) {
-  \
-    return p;
+  return p;
 }
 
-
-
 // Check if m2 is a subset of m1
-cn_bool* cn_map_subset(cn_map* m1, cn_map* m2, cn_bool* (value_equality_fun)(void*, void*)) {
-  if (ht_size(m1) != ht_size(m2)) return convert_to_cn_bool(0);
+cn_bool* cn_map_subset(
+    cn_map* m1, cn_map* m2, cn_bool*(value_equality_fun)(void*, void*)) {
+  if (ht_size(m1) != ht_size(m2))
+    return convert_to_cn_bool(0);
 
   hash_table_iterator hti1 = ht_iterator(m1);
 
@@ -427,7 +437,8 @@ cn_bool* cn_map_subset(cn_map* m1, cn_map* m2, cn_bool* (value_equality_fun)(voi
     void* val2 = ht_get(m2, curr_key);
 
     /* Check if other map has this key at all */
-    if (!val2) return convert_to_cn_bool(0);
+    if (!val2)
+      return convert_to_cn_bool(0);
 
     if (convert_from_cn_bool(cn_bool_not(value_equality_fun(val1, val2)))) {
       // cn_printf(CN_LOGGING_INFO, "Values not equal!\n");
@@ -438,8 +449,10 @@ cn_bool* cn_map_subset(cn_map* m1, cn_map* m2, cn_bool* (value_equality_fun)(voi
   return convert_to_cn_bool(1);
 }
 
-cn_bool* cn_map_equality(cn_map* m1, cn_map* m2, cn_bool* (value_equality_fun)(void*, void*)) {
-  return cn_bool_and(cn_map_subset(m1, m2, value_equality_fun), cn_map_subset(m2, m1, value_equality_fun));
+cn_bool* cn_map_equality(
+    cn_map* m1, cn_map* m2, cn_bool*(value_equality_fun)(void*, void*)) {
+  return cn_bool_and(cn_map_subset(m1, m2, value_equality_fun),
+      cn_map_subset(m2, m1, value_equality_fun));
 }
 
 // TODO (RB) does this need to be in here, or should it be auto-generated?
@@ -452,7 +465,7 @@ cn_bool* void_pointer_equality(void* p1, void* p2) {
 
 cn_pointer* convert_to_cn_pointer(void* ptr) {
   cn_pointer* res = (cn_pointer*)cn_bump_malloc(sizeof(cn_pointer));
-  res->ptr = ptr; // Carries around an address
+  res->ptr = ptr;  // Carries around an address
   return res;
 }
 
@@ -461,12 +474,12 @@ void* convert_from_cn_pointer(cn_pointer* cn_ptr) {
 }
 
 struct cn_error_message_info* make_error_message_info_entry(const char* function_name,
-  char* file_name,
-  int line_number,
-  char* cn_source_loc,
-  struct cn_error_message_info* parent)
-{
-  struct cn_error_message_info* entry = (struct cn_error_message_info*)cn_fl_malloc(sizeof(struct cn_error_message_info));
+    char* file_name,
+    int line_number,
+    char* cn_source_loc,
+    struct cn_error_message_info* parent) {
+  struct cn_error_message_info* entry =
+      (struct cn_error_message_info*)cn_fl_malloc(sizeof(struct cn_error_message_info));
   entry->function_name = function_name;
   entry->file_name = file_name;
   entry->line_number = line_number;
@@ -479,14 +492,17 @@ struct cn_error_message_info* make_error_message_info_entry(const char* function
   return entry;
 }
 
-void update_error_message_info_(const char* function_name, char* file_name, int line_number, char* cn_source_loc)
-{
-  error_msg_info = make_error_message_info_entry(function_name, file_name, line_number, cn_source_loc, error_msg_info);
+void update_error_message_info_(
+    const char* function_name, char* file_name, int line_number, char* cn_source_loc) {
+  error_msg_info = make_error_message_info_entry(
+      function_name, file_name, line_number, cn_source_loc, error_msg_info);
 }
 
-void initialise_error_msg_info_(const char* function_name, char* file_name, int line_number) {
+void initialise_error_msg_info_(
+    const char* function_name, char* file_name, int line_number) {
   // cn_printf(CN_LOGGING_INFO, "Initialising error message info\n");
-  error_msg_info = make_error_message_info_entry(function_name, file_name, line_number, 0, NULL);
+  error_msg_info =
+      make_error_message_info_entry(function_name, file_name, line_number, 0, NULL);
 }
 
 void reset_error_msg_info() {
@@ -499,8 +515,7 @@ void free_error_msg_info() {
   }
 }
 
-void cn_pop_msg_info()
-{
+void cn_pop_msg_info() {
   struct cn_error_message_info* old = error_msg_info;
   error_msg_info = old->parent;
   if (error_msg_info) {
@@ -509,17 +524,13 @@ void cn_pop_msg_info()
   cn_fl_free(old);
 }
 
-
-static uint32_t cn_fls(uint32_t x)
-{
+static uint32_t cn_fls(uint32_t x) {
   return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
 }
 
-static uint64_t cn_flsl(uint64_t x)
-{
+static uint64_t cn_flsl(uint64_t x) {
   return x ? sizeof(x) * 8 - __builtin_clzl(x) : 0;
 }
-
 
 cn_bits_u32* cn_bits_u32_fls(cn_bits_u32* i1) {
   cn_bits_u32* res = (cn_bits_u32*)cn_bump_malloc(sizeof(cn_bits_u32));
@@ -533,51 +544,43 @@ cn_bits_u64* cn_bits_u64_flsl(cn_bits_u64* i1) {
   return res;
 }
 
-
-void* cn_aligned_alloc(size_t align, size_t size)
-{
+void* cn_aligned_alloc(size_t align, size_t size) {
   void* p = aligned_alloc(align, size);
   char str[] = "cn_aligned_malloc";
   if (p) {
     cn_assume_ownership((void*)p, size, str);
     return p;
-  }
-  else {
+  } else {
     cn_printf(CN_LOGGING_INFO, "aligned_alloc failed\n");
     return p;
   }
 }
 
-void* cn_malloc(unsigned long size)
-{
+void* cn_malloc(unsigned long size) {
   void* p = malloc(size);
   char str[] = "cn_malloc";
   if (p) {
     cn_assume_ownership((void*)p, size, str);
     return p;
-  }
-  else {
+  } else {
     cn_printf(CN_LOGGING_INFO, "malloc failed\n");
     return p;
   }
 }
 
-void* cn_calloc(size_t num, size_t size)
-{
+void* cn_calloc(size_t num, size_t size) {
   void* p = calloc(num, size);
   char str[] = "cn_calloc";
   if (p) {
     cn_assume_ownership((void*)p, num * size, str);
     return p;
-  }
-  else {
+  } else {
     cn_printf(CN_LOGGING_INFO, "calloc failed\n");
     return p;
   }
 }
 
-void cn_free_sized(void* malloced_ptr, size_t size)
-{
+void cn_free_sized(void* malloced_ptr, size_t size) {
   // cn_printf(CN_LOGGING_INFO, "[CN: freeing ownership] " FMT_PTR ", size: %lu\n", (uintptr_t) malloced_ptr, size);
   c_ownership_check("Free", (uintptr_t)malloced_ptr, (int)size, cn_stack_depth);
   c_remove_from_ghost_state((uintptr_t)malloced_ptr, size);
@@ -587,13 +590,10 @@ void cn_print_nr_owned_predicates(void) {
   printf("Owned predicates £%lu\n", nr_owned_predicates);
 }
 
-void cn_print_u64(const char* str, unsigned long u)
-{
+void cn_print_u64(const char* str, unsigned long u) {
   // cn_printf(CN_LOGGING_INFO, "\n\nprint %s: %20lx,  %20lu\n\n", str, u, u);
 }
 
-void cn_print_nr_u64(int i, unsigned long u)
-{
+void cn_print_nr_u64(int i, unsigned long u) {
   // cn_printf(CN_LOGGING_INFO, "\n\nprint %d: %20lx,  %20lu\n", i, u, u);
 }
-
