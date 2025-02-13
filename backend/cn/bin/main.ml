@@ -474,6 +474,7 @@ let run_tests
   null_in_every
   seed
   logging_level
+  trace_granularity
   progress_level
   until_timeout
   exit_fast
@@ -521,6 +522,7 @@ let run_tests
           null_in_every;
           seed;
           logging_level;
+          trace_granularity;
           progress_level;
           until_timeout;
           exit_fast;
@@ -1021,6 +1023,14 @@ module Testing_flags = struct
       & info [ "logging-level" ] ~doc)
 
 
+  let trace_granularity =
+    let doc = "Set the trace granularity for failing inputs from tests" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.trace_granularity
+      & info [ "trace-granularity" ] ~doc)
+
+
   let progress_level =
     let doc =
       "Set the level of detail for progress updates (0 = Quiet, 1 = Per function, 2 = \
@@ -1151,6 +1161,7 @@ let testing_cmd =
     $ Testing_flags.null_in_every
     $ Testing_flags.seed
     $ Testing_flags.logging_level
+    $ Testing_flags.trace_granularity
     $ Testing_flags.progress_level
     $ Testing_flags.until_timeout
     $ Testing_flags.exit_fast

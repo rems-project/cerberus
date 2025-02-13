@@ -59,16 +59,47 @@ void reset_cn_failure_cb(void) {
   cn_failure_aux = &cn_failure_default;
 }
 
+static enum cn_trace_granularity trace_granularity = CN_TRACE_ALL;
+
+enum cn_trace_granularity get_cn_trace_granularity(void) {
+  return trace_granularity;
+}
+
+enum cn_trace_granularity set_cn_trace_granularity(enum cn_trace_granularity new_granularity) {
+  enum cn_trace_granularity old_granularity = trace_granularity;
+  trace_granularity = new_granularity;
+  return old_granularity;
+}
+
+void print_error_msg_info_single(struct cn_error_message_info* info) {
+  cn_printf(CN_LOGGING_ERROR, "function %s, file %s, line %d\n", info->function_name, info->file_name, info->line_number);
+  if (info->cn_source_loc) {
+    cn_printf(CN_LOGGING_ERROR, "original source location: \n%s\n", info->cn_source_loc);
+  }
+}
+
 void print_error_msg_info(struct cn_error_message_info* info) {
   if (info) {
-    if (info->parent != NULL) {
-      print_error_msg_info(info->parent);
-      cn_printf(CN_LOGGING_ERROR, "************************************************************\n");
+    enum cn_trace_granularity granularity = get_cn_trace_granularity();
+    if (granularity != CN_TRACE_NONE && info->parent != NULL) {
+      struct cn_error_message_info* curr = info;
+      while (curr->parent != NULL) {
+        curr = curr->parent;
+      }
+
+      cn_printf(CN_LOGGING_ERROR, "********************* Originated from **********************\n");
+      print_error_msg_info_single(curr);
+      curr = curr->child;
+
+      while (granularity > CN_TRACE_ENDS && curr->child != NULL) {
+        cn_printf(CN_LOGGING_ERROR, "************************************************************\n");
+        print_error_msg_info_single(curr);
+        curr = curr->child;
+      }
     }
-    cn_printf(CN_LOGGING_ERROR, "function %s, file %s, line %d\n", info->function_name, info->file_name, info->line_number);
-    if (info->cn_source_loc) {
-      cn_printf(CN_LOGGING_ERROR, "original source location: \n%s\n", info->cn_source_loc);
-    }
+
+    cn_printf(CN_LOGGING_ERROR, "************************ Failed at *************************\n");
+    print_error_msg_info_single(info);
   }
   else {
     cn_printf(CN_LOGGING_ERROR, "Internal error: no error_msg_info available.");
@@ -91,7 +122,6 @@ void cn_assert(cn_bool* cn_b) {
   // cn_printf(CN_LOGGING_INFO, "[CN: assertion] function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
   if (!(cn_b->val)) {
     print_error_msg_info(error_msg_info);
-    cn_printf(CN_LOGGING_ERROR, "CN assertion failed.");
     cn_failure(CN_FAILURE_ASSERT);
   }
 }
@@ -442,6 +472,10 @@ struct cn_error_message_info* make_error_message_info_entry(const char* function
   entry->line_number = line_number;
   entry->cn_source_loc = cn_source_loc;
   entry->parent = parent;
+  entry->child = NULL;
+  if (parent) {
+    parent->child = entry;
+  }
   return entry;
 }
 
@@ -469,6 +503,9 @@ void cn_pop_msg_info()
 {
   struct cn_error_message_info* old = error_msg_info;
   error_msg_info = old->parent;
+  if (error_msg_info) {
+    error_msg_info->child = NULL;
+  }
   cn_fl_free(old);
 }
 
