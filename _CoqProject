@@ -2,7 +2,8 @@
 # It is *not* used by the build system.
 #
 # CN:
--R _build/default/backend/cn/coq/MuCore/ MuCore
+-R _build/default/backend/cn/coq/Cerberus/ Cerberus
+-R _build/default/backend/cn/coq/Cn/ Cn
 # CHERI memory model
 -R _build/default/coq/Common/ Common
 -R _build/default/coq/Morello/ Morello

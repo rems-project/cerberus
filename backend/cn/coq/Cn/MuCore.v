@@ -9,22 +9,22 @@ Require Import Coq.FSets.FMapList.
 Require Import Coq.Structures.OrderedTypeEx.
 
 Require Import Sym.
-Require Import Location.
-Require Import Core.
+Require Import Cerberus.Location.
+Require Import Cerberus.Core.
 Require Import BaseTypes.
 Require Import IndexTerms.
 Require Import LogicalConstraints.
 Require Import Request.
 Require Import ReturnTypes.
 Require Import ArgumentTypes.
-Require Import Ctype.
-Require Import Annot.
-Require Import Undefined.
+Require Import Cerberus.Ctype.
+Require Import Cerberus.Annot.
+Require Import Cerberus.Undefined.
 Require Import CN.
 Require Import CNProgs.
 Require Import SCtypes.
 Require Import Id.
-Require Import ImplMem.
+Require Import Cerberus.ImplMem.
 
 Module Mem := CNMem.
 

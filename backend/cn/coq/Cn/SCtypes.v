@@ -1,6 +1,6 @@
-Require Import Symbol.
-Require Import IntegerType.
-Require Import Ctype.
+Require Import Cerberus.Symbol.
+Require Import Cerberus.IntegerType.
+Require Import Cerberus.Ctype.
 (* Qualifiers *)
 Definition qualifiers := Ctype.qualifiers.
 

@@ -1,4 +1,4 @@
-Require Import Symbol.
+Require Import Cerberus.Symbol.
 
 Inductive sign : Type :=
   | Signed

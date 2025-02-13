@@ -1,6 +1,6 @@
 Require Import String.
-Require Import Symbol.
-Require Import Location.
+Require Import Cerberus.Symbol.
+Require Import Cerberus.Location.
 
 (* Type definition for identifiers *)
 Definition t := Symbol.identifier.

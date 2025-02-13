@@ -1,27 +1,19 @@
 (coq.theory
- (name MuCore)
+ (name Cn)
  (package cn-coq)
- (synopsis "Coq formalization of CN's Mucore intermediate language")
+ (synopsis "Coq formalization of CN")
  (mode vo)
- (theories StructTact)
+ (theories StructTact Cerberus)
  (modules
-  Memory
-  ImplMem
+  Prooflog
+  ErrorCommon
   MuCore
   CN
   CNProgs
-  Core
-  Id
-  Undefined
-  Annot
-  IntegerType
-  Ctype
+  Id  
   SCtypes
   False
-  Utils
-  Symbol
   Sym
-  Location
   Locations
   BaseTypes
   Terms
@@ -29,6 +21,7 @@
   LogicalConstraints
   LogicalReturnTypes
   Request
+  Resource
   ReturnTypes
   ArgumentTypes
   LogicalArgumentTypes))
