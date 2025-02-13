@@ -1915,12 +1915,7 @@ let rec pp_argument_types pp_type = function
 
 
 let coq_prologue =
-  !^"From MuCore Require Import Annot ArgumentTypes Core BaseTypes CN CNProgs Ctype \
-     False Id ImplMem IndexTerms IntegerType Location Locations LogicalArgumentTypes \
-     LogicalConstraints LogicalReturnTypes Memory MuCore Request ReturnTypes SCtypes Sym \
-     Symbol Terms Undefined Utils."
-  ^^ P.hardline
-  ^^ !^"Require Import Coq.Lists.List."
+  !^"Require Import Coq.Lists.List."
   ^^ P.hardline
   ^^ !^"Import ListNotations."
   ^^ P.hardline
@@ -1929,6 +1924,13 @@ let coq_prologue =
   ^^ !^"Open Scope string_scope."
   ^^ P.hardline
   ^^ !^"Require Import ZArith."
+  ^^ P.hardline
+  ^^ !^"From Cerberus Require Import Annot Core Ctype ImplMem IntegerType Location \
+        Memory Symbol Undefined Utils."
+  ^^ P.hardline
+  ^^ !^"From Cn Require Import ArgumentTypes BaseTypes CN CNProgs ErrorCommon False Id \
+        IndexTerms Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes \
+        MuCore Prooflog Request ReturnTypes Resource SCtypes Sym Terms."
   ^^ P.hardline
 
 
@@ -2089,12 +2091,14 @@ let pp_resource_inference_step = function
       [ pp_context c1; pp_resource_inference_type ri; pp_context c2 ]
 
 
-let pp_unit_file_with_resource_inference (prog : unit file) (steps : Prooflog.log) =
+let pp_unit_file_with_resource_inference (prog : unit file) (_ : Prooflog.log) =
   pp_file pp_unit pp_unit_type prog
   ^^ P.hardline
   ^^ pp_comment "Resource Inference Steps"
   ^^ P.hardline
-  ^^ coq_def
-       "ResourceInferenceSteps"
-       P.empty
-       (pp_list (fun step -> pp_resource_inference_step step) steps)
+(* TODO: temporary disabled *)
+(*  ^^ coq_def
+    "ResourceInferenceSteps"
+    P.empty
+    (pp_list (fun step -> pp_resource_inference_step step) steps)
+*)

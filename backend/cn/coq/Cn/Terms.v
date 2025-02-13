@@ -2,11 +2,12 @@ Require Import ZArith.
 Require Import String.
 Require Import List.
 Require Import QArith.
-Require Import Symbol.
+Require Import Cerberus.Symbol.
 Require Import BaseTypes.
-Require Import Location.
+Require Import Cerberus.Location.
 Require Import SCtypes.
-Require Import IntegerType.
+Require Import Cerberus.IntegerType.
+
 (* Constants *)
 Inductive const : Type :=
   | Z : Z -> const

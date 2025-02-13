@@ -1,6 +1,6 @@
 Require Import BaseTypes.
 Require Import IndexTerms.
-Require Import Location.
+Require Import Cerberus.Location.
 Require Import Request.
 Require Import LogicalConstraints.
 Require Import CN.
