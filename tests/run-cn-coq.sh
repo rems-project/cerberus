@@ -8,8 +8,12 @@ set -uo pipefail
 # Parse command line options
 STOP_ON_ERROR=0
 SINGLE_FILE=""
-while getopts "ef:" opt; do
+USE_DUNE=0
+while getopts "def:" opt; do
     case ${opt} in
+        d)
+            USE_DUNE=1
+            ;;
         e)
             STOP_ON_ERROR=1
             ;;
@@ -21,6 +25,7 @@ while getopts "ef:" opt; do
             echo "Usage: $0 [-e] [-f file]"
             echo "  -e  Stop on error and preserve temporary directory"
             echo "  -f  Run single test file (implies -e)"
+            echo "  -d  Use dune to run CN"
             exit 1
             ;;
     esac
@@ -45,6 +50,16 @@ CURRENT=1
 PASSED_COUNT=0
 FAILED_COUNT=0
 
+if [ ${USE_DUNE} -eq 1 ]; then
+    CN="${WITH_CN:=dune exec cn --}"
+    CERB_RUNTIME="$(realpath "../runtime/")"
+    COQ_CN_THEORIES_DIR="$(realpath "../_build/default/backend/cn/coq")"
+    COQ_MAKEFILE_FLAGS="-R . Top -R ${COQ_CN_THEORIES_DIR}/Cerberus/ Cerberus -R ${COQ_CN_THEORIES_DIR}/Cn/ Cn"
+else
+    CN=cn
+    COQ_MAKEFILE_FLAGS=
+fi
+
 for TEST in ${SUCC}; do
     # Create temporary directory for this test run
     TMPDIR=$(mktemp -d /tmp/cn-verify.XXXXXX)
@@ -52,11 +67,11 @@ for TEST in ${SUCC}; do
     COQ_EXPORT="${TMPDIR}/$(basename "${TEST%.c}.v")"
     printf "[%d/%d] %s:\n" "${CURRENT}" "${TOTAL}" "${TEST}"
     
-    if timeout 60 cn verify "${TEST}" --coq-export-file="${COQ_EXPORT}" > "${TMPDIR}/cn.log" 2>&1; then
+    if timeout 60 env CERB_RUNTIME="${CERB_RUNTIME}" ${CN} verify "${TEST}" --coq-export-file="${COQ_EXPORT}" > "${TMPDIR}/cn.log" 2>&1; then
         printf "  CN verify:    \033[32mSUCCESS\033[0m\n"
         
         # Copy Coq file to temp dir and try to compile it
-        if (cd "${TMPDIR}" && coq_makefile -o Makefile "$(basename "${COQ_EXPORT}")" && make) > "${TMPDIR}/coq.log" 2>&1; then
+        if (cd "${TMPDIR}" && coq_makefile ${COQ_MAKEFILE_FLAGS} -o Makefile "$(basename "${COQ_EXPORT}")" && make) > "${TMPDIR}/coq.log" 2>&1; then
             printf "  Coq compile:  \033[32mSUCCESS\033[0m\n"
             rm -rf "${TMPDIR}"
             PASSED_COUNT=$((PASSED_COUNT + 1))
