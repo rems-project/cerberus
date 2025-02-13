@@ -87,7 +87,7 @@ jobs:
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         opam pin --yes --no-action add cn .
-        opam install --yes cn ocamlformat.0.26.2
+        opam install --yes cn
 
     - name: Run benchmarks
       run: |
