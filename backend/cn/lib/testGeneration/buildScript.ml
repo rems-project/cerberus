@@ -147,6 +147,11 @@ let run () =
           |> Option.map (fun level -> [ "--logging-level"; string_of_int level ])
           |> Option.to_list
           |> List.flatten)
+       @ (Config.has_trace_granularity ()
+          |> Option.map (fun granularity ->
+            [ "--trace-granularity"; string_of_int granularity ])
+          |> Option.to_list
+          |> List.flatten)
        @ (Config.has_progress_level ()
           |> Option.map (fun level -> [ "--progress-level"; string_of_int level ])
           |> Option.to_list

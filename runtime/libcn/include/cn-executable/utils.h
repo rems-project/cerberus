@@ -30,6 +30,18 @@ enum cn_logging_level get_cn_logging_level(void);
 /** Sets the logging level, returning the previous one */
 enum cn_logging_level set_cn_logging_level(enum cn_logging_level new_level);
 
+enum cn_trace_granularity {
+    CN_TRACE_NONE = 0,
+    CN_TRACE_ENDS = 1,
+    CN_TRACE_ALL = 2,
+};
+
+enum cn_trace_granularity get_cn_trace_granularity(void);
+
+/** Sets the trace granularity, returning the previous one */
+enum cn_trace_granularity set_cn_trace_granularity(enum cn_trace_granularity new_granularity);
+
+
 #define cn_printf(level, ...)\
     if (get_cn_logging_level() >= level) {\
         printf(__VA_ARGS__);\
@@ -43,6 +55,7 @@ struct cn_error_message_info {
     int line_number;
     char *cn_source_loc;
     struct cn_error_message_info *parent;
+    struct cn_error_message_info *child;
 };
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number);
