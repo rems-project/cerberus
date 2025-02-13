@@ -19,3 +19,4 @@ Definition t (i : Type) := logical_argument_type i.
 (* Additional type aliases *)
 Definition packing := logical_argument_type IndexTerms.t.
 Definition lft := logical_argument_type LogicalReturnTypes.t.
+Definition packing_ft := t IndexTerms.t.
