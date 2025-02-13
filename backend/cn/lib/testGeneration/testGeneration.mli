@@ -9,7 +9,7 @@ val functions_under_test
   Cerb_frontend.Cabs.translation_unit ->
   Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
   unit Mucore.file ->
-  Executable_spec_extract.instrumentation list
+  Fulminate.Executable_spec_extract.instrumentation list
 
 val run
   :  output_dir:string ->

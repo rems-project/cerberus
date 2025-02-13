@@ -193,10 +193,10 @@ let inject st inj =
             else (
               let cn_ret_sym = Sym.fresh_pretty "__cn_ret" in
               let ret_type_doc =
-                Pp_ail.pp_ctype_declaration
-                  ~executable_spec:true
-                  (Pp_ail.pp_id_obj cn_ret_sym)
-                  Ctype.no_qualifiers
+                Pp_ail.with_executable_spec
+                  (Pp_ail.pp_ctype_declaration
+                     (Pp_ail.pp_id_obj cn_ret_sym)
+                     Ctype.no_qualifiers)
                   ret_ty
               in
               let initialisation_str = if is_main then " = 0" else "" in
@@ -339,7 +339,7 @@ let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =
 let return_injs xs =
   let rec aux acc = function
     | [] -> acc
-    | (loc, e_opt, inj_strs) :: xs ->
+    | (loc, (e_opt, inj_strs)) :: xs ->
       (match acc with
        | Error _ -> acc
        | Ok acc ->
@@ -379,7 +379,7 @@ type 'a cn_injection =
     program : 'a A.ail_program;
     pre_post : (Symbol.sym * (string list * string list)) list;
     in_stmt : (Cerb_location.t * string list) list;
-    returns : (Cerb_location.t * 'a AilSyntax.expression option * string list) list
+    returns : (Cerb_location.t * ('a AilSyntax.expression option * string list)) list
   }
 
 let output_injections oc cn_inj =

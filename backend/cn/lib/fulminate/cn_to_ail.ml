@@ -1,8 +1,4 @@
 module CF = Cerb_frontend
-
-(* module CB=Cerb_backend
-   open CB.Pipeline
-   open Setup *)
 open CF.Cn
 open Compile
 open Executable_spec_utils
@@ -39,8 +35,8 @@ let rec cn_base_type_to_bt = function
   | CN_list typ -> cn_base_type_to_bt typ
   | CN_tuple ts -> BT.Tuple (List.map cn_base_type_to_bt ts)
   | CN_set typ -> cn_base_type_to_bt typ
-  | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
-  | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
+  | CN_user_type_name _ -> failwith (__LOC__ ^ ": TODO CN_user_type_name")
+  | CN_c_typedef_name _ -> failwith (__LOC__ ^ ": TODO CN_c_typedef_name")
 
 
 module MembersKey = struct
@@ -128,13 +124,9 @@ let generate_cn_pop_msg_info =
 
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
-let generate_cn_assert (*?(cn_source_loc_opt = None)*) ail_expr =
+let generate_cn_assert ail_expr =
   let assertion_expr_ = A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ ail_expr ])) in
   let assertion_stat = A.(AilSexpr (mk_expr assertion_expr_)) in
-  (*let error_msg_update_stats_ =
-    generate_error_msg_info_update_stats ~cn_source_loc_opt ()
-    in*)
-  (*error_msg_update_stats_ @*)
   [ assertion_stat ]
 
 
@@ -197,21 +189,31 @@ let lookup_records_map members =
 
 (* TODO: Complete *)
 let rec cn_to_ail_base_type ?pred_sym:(_ = None) cn_typ =
+  let typedef_string_opt =
+    match cn_typ with
+    | CN_bits (sign, size) -> Some ("cn_bits_" ^ str_of_cn_bitvector_type sign size)
+    | CN_integer -> Some "cn_integer"
+    | CN_bool -> Some "cn_bool"
+    | CN_map _ -> Some "cn_map"
+    | CN_loc -> Some "cn_pointer"
+    | CN_alloc_id -> Some "cn_alloc_id"
+    | _ -> None
+  in
+  let annots =
+    match typedef_string_opt with
+    | Some typedef_str -> [ CF.Annot.Atypedef (Sym.fresh_pretty typedef_str) ]
+    | None -> []
+  in
+  (* TODO: What is the optional second pair element for? Have just put None for now *)
   let generate_ail_array bt = C.(Array (cn_to_ail_base_type bt, None)) in
   let typ =
     match cn_typ with
+    (* C type for cases covered above doesn't matter as we pretty-print the typedef string provided above anyway. *)
+    (* Setting to C.(Basic (Integer Char)) in these cases *)
+    | CN_bits _ | CN_integer | CN_bool | CN_map _ | CN_loc | CN_alloc_id ->
+      C.(Basic (Integer Char))
     | CN_unit -> C.Void
-    | CN_bool -> C.(Basic (Integer Bool))
-    | CN_integer -> C.(Basic (Integer (Signed Long)))
-    (* TODO: Discuss integers *)
-    | CN_bits (_sign, _size) -> C.(Basic (Integer (Signed Long)))
-    | CN_real -> failwith "TODO CN_real"
-    | CN_loc ->
-      C.(Pointer (empty_qualifiers, Ctype ([], Void)))
-      (* Casting all CN pointers to void star *)
-    | CN_alloc_id ->
-      C.(Basic (Integer (Signed Long)))
-      (* gets replaced with typedef anyway (TODO: clean up) *)
+    | CN_real -> failwith (__LOC__ ^ ": TODO CN_real")
     | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
     | CN_record members ->
       let sym =
@@ -221,74 +223,53 @@ let rec cn_to_ail_base_type ?pred_sym:(_ = None) cn_typ =
       Struct sym
     (* Every struct is converted into a struct pointer *)
     | CN_datatype sym -> Struct sym
-    | CN_map (_, cn_bt) -> generate_ail_array cn_bt
-    | CN_list bt ->
-      generate_ail_array bt
-      (* TODO: What is the optional second pair element for? Have just put None for now *)
-    | CN_tuple _ts ->
-      failwith (__LOC__ ^ ":Tuples not yet supported")
-      (* Printf.printf "Entered CN_tuple case\n"; *)
-      (* let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
-         let members = List.map (fun t -> (some_id, t)) ts in
-         let sym = lookup_records_map members in
-         Struct sym *)
+    | CN_list bt -> generate_ail_array bt
+    | CN_tuple _ts -> failwith (__LOC__ ^ ": Tuples not yet supported")
     | CN_set bt -> generate_ail_array bt
-    | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
-    | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
-  in
-  let annots =
-    match cn_typ with
-    | CN_bits (sign, size) ->
-      [ CF.Annot.Atypedef
-          (Sym.fresh_pretty ("cn_bits_" ^ str_of_cn_bitvector_type sign size))
-      ]
-    | CN_integer -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_integer") ]
-    | CN_bool -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_bool") ]
-    | CN_map _ -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_map") ]
-    | CN_loc -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer") ]
-    | CN_alloc_id -> [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_alloc_id") ]
-    | _ -> []
+    | CN_user_type_name _ -> failwith (__LOC__ ^ ": TODO CN_user_type_name")
+    | CN_c_typedef_name _ -> failwith (__LOC__ ^ ": TODO CN_c_typedef_name")
   in
   let ret = mk_ctype ~annots typ in
+  (* Make everything a pointer. TODO: Change *)
   match typ with C.Void -> ret | _ -> mk_ctype C.(Pointer (empty_qualifiers, ret))
 
-
-(* Make everything a pointer *)
 
 let bt_to_ail_ctype ?(pred_sym = None) t =
   cn_to_ail_base_type ~pred_sym (bt_to_cn_base_type t)
 
 
-let cn_to_ail_unop_internal bt =
-  let typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in
+let cn_to_ail_unop bt =
+  let bt_typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in
   function
-  | IT.Not -> (A.Bnot, Some "cn_bool_not")
+  | IT.Not -> Some "cn_bool_not"
   | Negate ->
-    (match typedef_str_opt with
-     | Some typedef_str -> (A.Bnot, Some (typedef_str ^ "_negate"))
-     | None -> failwith "BW_FLS_NoSMT unop translation: typedef string not found")
+    (match bt_typedef_str_opt with
+     | Some typedef_str -> Some (typedef_str ^ "_negate")
+     | None ->
+       failwith
+         (__LOC__ ^ ": typedef string not found in translation of BW_FLS_NoSMT unop"))
   | BW_FLS_NoSMT ->
     let failure_msg =
       Printf.sprintf
-        "FLS cannot be applied to index term of type %s"
+        ": FLS cannot be applied to index term of type %s"
         (Pp.plain (BT.pp bt))
     in
     (match bt with
      | Bits (Unsigned, n) ->
        if n == 64 then
-         (A.Bnot, Some "cn_bits_u64_flsl")
+         Some "cn_bits_u64_flsl"
        else if n == 32 then
-         (A.Bnot, Some "cn_bits_u32_fls")
+         Some "cn_bits_u32_fls"
        else
-         failwith failure_msg
-     | _ -> failwith failure_msg)
-  | BW_Compl -> failwith "TODO cn_to_ail_unop: Translation not implemented"
+         failwith (__LOC__ ^ failure_msg)
+     | _ -> failwith (__LOC__ ^ failure_msg))
+  | BW_Compl -> failwith (__LOC__ ^ ": Translation of BW_Compl not implemented")
   | BW_CLZ_NoSMT | BW_CTZ_NoSMT | BW_FFS_NoSMT ->
-    failwith "Failure: Trying to translate SMT-only unop from C source"
+    failwith (__LOC__ ^ ": Failure in trying to translate SMT-only unop from C source")
 
 
 (* TODO: Finish *)
-let cn_to_ail_binop_internal bt1 bt2 =
+let cn_to_ail_binop bt1 bt2 =
   let get_cn_int_type_str bt1 bt2 =
     match (bt1, bt2) with
     | BT.Loc (), BT.Integer | BT.Loc (), BT.Bits _ -> "cn_pointer"
@@ -298,12 +279,12 @@ let cn_to_ail_binop_internal bt1 bt2 =
     | _, _ ->
       let bt1_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt1) in
       let bt2_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt2) in
-      failwith ("Incompatible CN integer types: " ^ bt1_str ^ " with " ^ bt2_str)
+      failwith
+        (__LOC__ ^ ": Incompatible CN integer types: " ^ bt1_str ^ " with " ^ bt2_str)
   in
   function
-  | IT.And -> (A.And, Some "cn_bool_and")
-  | Or -> (A.Or, Some "cn_bool_or")
-  (* | Impl *)
+  | IT.And -> Some "cn_bool_and"
+  | Or -> Some "cn_bool_or"
   | Add ->
     let bt2_str =
       if BT.equal bt1 BT.(Loc ()) then (
@@ -314,42 +295,34 @@ let cn_to_ail_binop_internal bt1 bt2 =
       else
         ""
     in
-    (A.(Arithmetic Add), Some (get_cn_int_type_str bt1 bt2 ^ "_add" ^ bt2_str))
-  | Sub -> (A.(Arithmetic Sub), Some (get_cn_int_type_str bt1 bt2 ^ "_sub"))
-  | Mul | MulNoSMT ->
-    (A.(Arithmetic Mul), Some (get_cn_int_type_str bt1 bt2 ^ "_multiply"))
-  | Div | DivNoSMT -> (A.(Arithmetic Div), Some (get_cn_int_type_str bt1 bt2 ^ "_divide"))
-  | Exp | ExpNoSMT -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_pow"))
-  | Rem | RemNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_rem"))
-  | Mod | ModNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_mod"))
-  | BW_Xor -> (A.(Arithmetic Bxor), Some (get_cn_int_type_str bt1 bt2 ^ "_xor"))
-  | BW_And -> (A.(Arithmetic Band), Some (get_cn_int_type_str bt1 bt2 ^ "_bwand"))
-  | BW_Or -> (A.(Arithmetic Bor), Some (get_cn_int_type_str bt1 bt2 ^ "_bwor"))
-  | ShiftLeft -> (A.(Arithmetic Shl), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left"))
-  | ShiftRight -> (A.(Arithmetic Shr), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right"))
-  | LT -> (A.Lt, Some (get_cn_int_type_str bt1 bt2 ^ "_lt"))
-  | LE -> (A.Le, Some (get_cn_int_type_str bt1 bt2 ^ "_le"))
-  | Min -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_min"))
-  | Max -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_max"))
-  | EQ -> (A.Eq, Some "eq") (* placeholder - equality dealt with in a special way *)
-  (* let fn_str = match get_typedef_string (bt_to_ail_ctype bt1) with
-     | Some str -> Some (str ^ "_equality")
-     | None -> None
-     in
-     (A.Eq, fn_str) *)
-  (* | _ -> failwith "TODO cn_to_ail_binop: Translation not implemented" *)
-  | LTPointer -> (A.And, Some "cn_pointer_lt")
-  | LEPointer -> (A.And, Some "cn_pointer_le")
-  | SetUnion -> failwith "TODO cn_to_ail_binop: SetUnion"
-  | SetIntersection -> failwith "TODO cn_to_ail_binop: SetIntersection"
-  | SetDifference -> failwith "TODO cn_to_ail_binop: SetDifference"
-  | SetMember -> failwith "TODO cn_to_ail_binop: SetMember"
-  | Subset -> failwith "TODO cn_to_ail_binop: Subset"
-  | Implies -> (A.Or, Some "cn_bool_implies")
+    Some (get_cn_int_type_str bt1 bt2 ^ "_add" ^ bt2_str)
+  | Sub -> Some (get_cn_int_type_str bt1 bt2 ^ "_sub")
+  | Mul | MulNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_multiply")
+  | Div | DivNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_divide")
+  | Exp | ExpNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_pow")
+  | Rem | RemNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_rem")
+  | Mod | ModNoSMT -> Some (get_cn_int_type_str bt1 bt2 ^ "_mod")
+  | BW_Xor -> Some (get_cn_int_type_str bt1 bt2 ^ "_xor")
+  | BW_And -> Some (get_cn_int_type_str bt1 bt2 ^ "_bwand")
+  | BW_Or -> Some (get_cn_int_type_str bt1 bt2 ^ "_bwor")
+  | ShiftLeft -> Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left")
+  | ShiftRight -> Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right")
+  | LT -> Some (get_cn_int_type_str bt1 bt2 ^ "_lt")
+  | LE -> Some (get_cn_int_type_str bt1 bt2 ^ "_le")
+  | Min -> Some (get_cn_int_type_str bt1 bt2 ^ "_min")
+  | Max -> Some (get_cn_int_type_str bt1 bt2 ^ "_max")
+  | EQ -> Some "eq" (* placeholder - equality dealt with in a special way in caller *)
+  | LTPointer -> Some "cn_pointer_lt"
+  | LEPointer -> Some "cn_pointer_le"
+  | Implies -> Some "cn_bool_implies"
+  | SetUnion -> failwith (__LOC__ ^ ": TODO SetUnion")
+  | SetIntersection -> failwith (__LOC__ ^ ": TODO SetIntersection")
+  | SetDifference -> failwith (__LOC__ ^ ": TODO SetDifference")
+  | SetMember -> failwith (__LOC__ ^ ": TODO SetMember")
+  | Subset -> failwith (__LOC__ ^ ": TODO Subset")
 
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
-
 let get_underscored_typedef_string_from_bt ?(is_record = false) bt =
   let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in
   match typedef_name with
@@ -371,46 +344,39 @@ let get_underscored_typedef_string_from_bt ?(is_record = false) bt =
      | _ -> None)
 
 
-let get_type_underscored_str (bt : BT.t) : string option =
-  let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in
-  match typedef_name with
-  | Some str -> Some (String.concat "_" (String.split_on_char ' ' str))
-  | None ->
-    (match bt with
-     | BT.Struct sym ->
-       Some ("struct_" ^ Sym.pp_string (generate_sym_with_suffix ~suffix:"_cn" sym))
-     | _ -> None)
-
-
 let get_conversion_to_fn_str (bt : BT.t) : string option =
   let open Option in
-  let@ ty_str = get_type_underscored_str bt in
+  let@ ty_str = get_underscored_typedef_string_from_bt bt in
   return ("convert_to_" ^ ty_str)
 
 
 let get_conversion_from_fn_str (bt : BT.t) : string option =
   let open Option in
-  let@ ty_str = get_type_underscored_str bt in
+  let@ ty_str = get_underscored_typedef_string_from_bt bt in
   return ("convert_from_" ^ ty_str)
 
 
-let wrap_with_convert_to ?sct ail_expr_ bt =
-  let conversion_fn_str_opt = get_conversion_to_fn_str bt in
+(* If convert_from is true, this is a conversion _from_ the CN type bt; otherwise it is a conversion _to_ bt *)
+let wrap_with_convert ?sct ~convert_from ail_expr_ bt =
+  let conversion_str_function =
+    if convert_from then get_conversion_from_fn_str else get_conversion_to_fn_str
+  in
+  let conversion_fn_str_opt = conversion_str_function bt in
   match conversion_fn_str_opt with
   | Some conversion_fn_str ->
     let args =
       match bt with
       | BT.Map (_bt1, bt2) ->
-        let cntype_conversion_fn_str_opt = get_conversion_to_fn_str bt2 in
+        let cntype_conversion_fn_str_opt = conversion_str_function bt2 in
         let cntype_conversion_fn_str =
           match cntype_conversion_fn_str_opt with
           | Some str -> str
-          | None -> failwith "No conversion function for map values"
+          | None -> failwith (__LOC__ ^ ": No conversion function for map values")
         in
         let num_elements' =
           match sct with
           | Some (Sctypes.Array (_, Some num_elements)) -> num_elements
-          | _ -> failwith "Need number of array elements to create CN map"
+          | _ -> failwith (__LOC__ ^ ": Need number of array elements to create CN map")
         in
         let converted_num_elements =
           A.(
@@ -431,44 +397,15 @@ let wrap_with_convert_to ?sct ail_expr_ bt =
 
 
 let wrap_with_convert_from ?sct ail_expr_ bt =
-  let conversion_fn_str_opt = get_conversion_from_fn_str bt in
-  match conversion_fn_str_opt with
-  | Some conversion_fn_str ->
-    let args =
-      match bt with
-      | BT.Map (_bt1, bt2) ->
-        let cntype_conversion_fn_str_opt = get_conversion_from_fn_str bt2 in
-        let cntype_conversion_fn_str =
-          match cntype_conversion_fn_str_opt with
-          | Some str -> str
-          | None -> failwith "No conversion function for map values"
-        in
-        let num_elements' =
-          match sct with
-          | Some (Sctypes.Array (_, Some num_elements)) -> num_elements
-          | _ -> failwith "Need number of array elements to create CN map"
-        in
-        let converted_num_elements =
-          A.(
-            AilEconst
-              (ConstantInteger (IConstant (Z.of_int num_elements', Decimal, None))))
-        in
-        A.
-          [ ail_expr_;
-            AilEident (Sym.fresh_pretty cntype_conversion_fn_str);
-            converted_num_elements
-          ]
-      | _ -> [ ail_expr_ ]
-    in
-    A.(
-      AilEcall
-        (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), List.map mk_expr args))
-  | None -> ail_expr_
+  wrap_with_convert ?sct ~convert_from:true ail_expr_ bt
 
 
-let get_equality_fn_call bt e1 e2 _dts =
+let wrap_with_convert_to ?sct ail_expr_ bt =
+  wrap_with_convert ?sct ~convert_from:false ail_expr_ bt
+
+
+let get_equality_fn_call bt e1 e2 =
   match bt with
-  (* TODO (RB) Check if buggy: https://github.com/rems-project/cerberus/pull/652 *)
   | BT.Map (_, val_bt) ->
     let val_ctype_with_ptr = bt_to_ail_ctype val_bt in
     let val_ctype = get_ctype_without_ptr val_ctype_with_ptr in
@@ -483,7 +420,6 @@ let get_equality_fn_call bt e1 e2 _dts =
     let ctype = bt_to_ail_ctype bt in
     (match get_typedef_string ctype with
      | Some str ->
-       (* Printf.printf "typedef string when producing equality function: %s\n" str; *)
        let fn_name = str ^ "_equality" in
        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [ e1; e2 ]))
      | None ->
@@ -520,7 +456,7 @@ let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt = None) (bs, 
      Input:
      each (bt sym; start_expr <= sym && while_cond) {t}
 
-     where (bs, ss, e) = cn_internal_to_ail called on t with PassBack
+     where (bs, ss, e) = cn_to_ail called on t with PassBack
   *)
   let b = Sym.fresh () in
   let b_ident = A.(AilEident b) in
@@ -540,7 +476,6 @@ let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt = None) (bs, 
   let b_assign =
     A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_))))
   in
-  (* let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in *)
   let incr_stat =
     A.(
       AilSexpr
@@ -579,7 +514,7 @@ let cn_to_ail_default bt =
   | None -> failwith ("[UNSUPPORTED] default<" ^ Pp.plain (BT.pp bt) ^ ">")
 
 
-let cn_to_ail_const_internal const basetype =
+let cn_to_ail_const const basetype =
   let wrap x = wrap_with_convert_to x basetype in
   let ail_const =
     match const with
@@ -588,19 +523,18 @@ let cn_to_ail_const_internal const basetype =
       wrap (A.AilEconst (ConstantInteger (IConstant (i, Decimal, None))))
     | Q q -> wrap (A.AilEconst (ConstantFloating (Q.to_string q, None)))
     | Pointer z ->
-      (* Printf.printf "In Pointer case; const\n"; *)
       let ail_const' =
         A.AilEconst (ConstantInteger (IConstant (z.addr, Decimal, None)))
       in
       wrap (A.AilEunary (Address, mk_expr ail_const'))
-    | Alloc_id _ -> failwith "TODO Alloc_id"
+    | Alloc_id _ -> failwith (__LOC__ ^ ": TODO Alloc_id")
     | Bool b ->
       wrap
         (A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse)))
     | Unit ->
       wrap (A.AilEconst ConstantNull) (* Gets overridden by dest_with_unit_check *)
     | Null -> wrap (A.AilEconst ConstantNull)
-    | CType_const _ -> failwith "TODO CType_const"
+    | CType_const _ -> failwith (__LOC__ ^ ": TODO CType_const")
     | Default bt -> cn_to_ail_default bt
   in
   let is_unit = const == Unit in
@@ -618,6 +552,7 @@ type ail_executable_spec =
 
 let empty_ail_executable_spec = { pre = ([], []); post = ([], []); in_stmt = [] }
 
+(* GADT for destination passing - keeps track of the final 'destination' of a translated CN expression *)
 type 'a dest =
   | Assert : Cerb_location.t -> ail_bindings_and_statements dest
   | Return : ail_bindings_and_statements dest
@@ -689,7 +624,6 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
   =
   let ctype_str = str_of_ctype ctype in
-  (* Printf.printf ("ctype_str: %s\n") ctype_str; *)
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
@@ -750,7 +684,8 @@ let generate_get_or_put_ownership_function ~without_ownership_checking ctype
   let sct =
     match sct_opt with
     | Some sct -> sct
-    | None -> failwith "Bad sctype when trying to generate ownership checking function"
+    | None ->
+      failwith (__LOC__ ^ "Bad sctype when trying to generate ownership checking function")
   in
   let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
   let ret_type = bt_to_ail_ctype bt in
@@ -800,10 +735,7 @@ let is_sym_obj_address sym =
   match Sym.symbol_description sym with SD_ObjectAddress _ -> true | _ -> false
 
 
-(* frontend/model/ail/ailSyntax.lem *)
-(* ocaml_frontend/generated/ailSyntax.ml *)
-(* TODO: Use mu_datatypes from Mucore program instead of cn_datatypes *)
-let rec cn_to_ail_expr_aux_internal
+let rec cn_to_ail_expr_aux
   : type a.
     _ option ->
     _ option ->
@@ -816,7 +748,7 @@ let rec cn_to_ail_expr_aux_internal
   fun const_prop pred_name dts globals (IT (term_, basetype, _loc)) d ->
   match term_ with
   | Const const ->
-    let ail_expr, is_unit = cn_to_ail_const_internal const basetype in
+    let ail_expr, is_unit = cn_to_ail_const const basetype in
     dest_with_unit_check d ([], [], mk_expr ail_expr, is_unit)
   | Sym sym ->
     let sym =
@@ -829,7 +761,7 @@ let rec cn_to_ail_expr_aux_internal
       match const_prop with
       | Some (sym2, cn_const) ->
         if CF.Symbol.equal_sym sym sym2 then (
-          let ail_const, _ = cn_to_ail_const_internal cn_const basetype in
+          let ail_const, _ = cn_to_ail_const cn_const basetype in
           ail_const)
         else
           A.(AilEident sym)
@@ -838,46 +770,39 @@ let rec cn_to_ail_expr_aux_internal
     in
     let ail_expr_ =
       if is_sym_obj_address sym then
-        wrap_with_convert_to A.(AilEunary (Address, mk_expr ail_expr_)) basetype
+        wrap_with_convert
+          ~convert_from:false
+          A.(AilEunary (Address, mk_expr ail_expr_))
+          basetype
       else
         ail_expr_
     in
     dest d ([], [], mk_expr ail_expr_)
   | Binop (bop, t1, t2) ->
-    let b1, s1, e1 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
-    in
-    let b2, s2, e2 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t2 PassBack
-    in
-    let ail_bop, annot = cn_to_ail_binop_internal (IT.get_bt t1) (IT.get_bt t2) bop in
+    let b1, s1, e1 = cn_to_ail_expr_aux const_prop pred_name dts globals t1 PassBack in
+    let b2, s2, e2 = cn_to_ail_expr_aux const_prop pred_name dts globals t2 PassBack in
+    let annot = cn_to_ail_binop (IT.get_bt t1) (IT.get_bt t2) bop in
     let str =
-      match annot with Some str -> str | None -> failwith "No CN binop function found"
+      match annot with
+      | Some str -> str
+      | None -> failwith (__LOC__ ^ ": No CN binop function found")
     in
     let default_ail_binop =
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty str)), [ e1; e2 ]))
     in
-    (*
-       let is_map it =
-       match IT.get_bt it with
-       | BT.Map (bt1, bt2) ->
-       Printf.printf "Type of %s: Map(%s, %s)\n" (str_of_it_ (IT.get_term it)) (str_of_ctype (bt_to_ail_ctype bt1)) (str_of_ctype (bt_to_ail_ctype bt2));
-       true
-       | _ -> false
-       in *)
     let ail_expr_ =
-      match ail_bop with
-      | Eq -> get_equality_fn_call (IT.get_bt t1) e1 e2 dts
+      match bop with
+      | EQ -> get_equality_fn_call (IT.get_bt t1) e1 e2
       | _ -> default_ail_binop
     in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
   | Unop (unop, t) ->
-    let b, s, e =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack
-    in
-    let _ail_unop, annot = cn_to_ail_unop_internal (IT.get_bt t) unop in
+    let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals t PassBack in
+    let annot = cn_to_ail_unop (IT.get_bt t) unop in
     let str =
-      match annot with Some str -> str | None -> failwith "No CN unop function found"
+      match annot with
+      | Some str -> str
+      | None -> failwith (__LOC__ ^ ": No CN unop function found")
     in
     let ail_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty str)), [ e ])) in
     dest d (b, s, mk_expr ail_expr_)
@@ -885,35 +810,21 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in
     let ail_call_ = wrap_with_convert_to ~sct ail_expr_ basetype in
     dest d ([], [], mk_expr ail_call_)
-  | OffsetOf _ -> failwith "TODO OffsetOf"
+  | OffsetOf _ -> failwith (__LOC__ ^ ": TODO OffsetOf")
   | ITE (t1, t2, t3) ->
     let result_sym = Sym.fresh () in
     let result_ident = A.(AilEident result_sym) in
     let result_binding = create_binding result_sym (bt_to_ail_ctype (IT.get_bt t2)) in
     let result_decl = A.(AilSdeclaration [ (result_sym, None) ]) in
-    let b1, s1, e1 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
-    in
+    let b1, s1, e1 = cn_to_ail_expr_aux const_prop pred_name dts globals t1 PassBack in
     let wrapped_cond =
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "convert_from_cn_bool")), [ e1 ]))
     in
     let b2, s2 =
-      cn_to_ail_expr_aux_internal
-        const_prop
-        pred_name
-        dts
-        globals
-        t2
-        (AssignVar result_sym)
+      cn_to_ail_expr_aux const_prop pred_name dts globals t2 (AssignVar result_sym)
     in
     let b3, s3 =
-      cn_to_ail_expr_aux_internal
-        const_prop
-        pred_name
-        dts
-        globals
-        t3
-        (AssignVar result_sym)
+      cn_to_ail_expr_aux const_prop pred_name dts globals t3 (AssignVar result_sym)
     in
     let ite_stat =
       A.(
@@ -950,32 +861,28 @@ let rec cn_to_ail_expr_aux_internal
     let end_const_it = mk_int_const r_end in
     let incr_var = IT.(IT (Sym sym, bt', Cerb_location.unknown)) in
     let _, _, start_int_const =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals start_const_it PassBack
+      cn_to_ail_expr_aux const_prop pred_name dts globals start_const_it PassBack
     in
     let while_cond_it =
       IT.(IT (Binop (LT, incr_var, end_const_it), bt', Cerb_location.unknown))
     in
     let _, _, while_cond =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals while_cond_it PassBack
+      cn_to_ail_expr_aux const_prop pred_name dts globals while_cond_it PassBack
     in
-    let translated_t =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack
-    in
+    let translated_t = cn_to_ail_expr_aux const_prop pred_name dts globals t PassBack in
     let bs, ss, e =
       gen_bool_while_loop sym bt' (rm_expr start_int_const) while_cond translated_t
     in
     dest d (bs, ss, e)
   (* add Z3's Distinct for separation facts *)
-  | Tuple _ts -> failwith "TODO1"
-  | NthTuple (_i, _t) -> failwith "TODO2"
+  | Tuple _ts -> failwith (__LOC__ ^ ": TODO Tuple")
+  | NthTuple (_i, _t) -> failwith (__LOC__ ^ ": TODO NthTuple")
   | Struct (tag, ms) ->
     let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
     let cn_struct_tag = generate_sym_with_suffix ~suffix:"_cn" tag in
     let generate_ail_stat (id, it) =
-      let b, s, e =
-        cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack
-      in
+      let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals it PassBack in
       let ail_memberof = A.(AilEmemberofptr (mk_expr res_ident, id)) in
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
@@ -989,25 +896,17 @@ let rec cn_to_ail_expr_aux_internal
     dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
   | RecordMember (t, m) ->
     (* Currently assuming records only exist *)
-    let b, s, e =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack
-    in
-    (* let ail_expr_ = match pred_name with
-       | Some sym -> A.(AilEmemberofptr (e, m))
-       | None -> A.(AilEmemberofptr (e, m))
-       in *)
+    let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals t PassBack in
     dest d (b, s, mk_expr A.(AilEmemberofptr (e, m)))
   | StructMember (t, m) ->
-    let b, s, e =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack
-    in
+    let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals t PassBack in
     let ail_expr_ = A.(AilEmemberofptr (e, m)) in
     dest d (b, s, mk_expr ail_expr_)
   | StructUpdate ((struct_term, m), new_val) ->
     let struct_tag =
       match IT.get_bt struct_term with
       | BT.Struct tag -> tag
-      | _ -> failwith "Cannot do StructUpdate on non-struct term"
+      | _ -> failwith (__LOC__ ^ ": Cannot do StructUpdate on non-struct term")
     in
     let tag_defs = Pmap.bindings_list (CF.Tags.tagDefs ()) in
     let matching_tag_defs =
@@ -1015,17 +914,17 @@ let rec cn_to_ail_expr_aux_internal
     in
     let _, (_, tag_def) =
       if List.is_empty matching_tag_defs then
-        failwith "Struct not found in tagDefs"
+        failwith (__LOC__ ^ ": Struct not found in tagDefs")
       else
         List.nth matching_tag_defs 0
     in
     (match tag_def with
      | C.StructDef (members, _) ->
        let b1, s1, e1 =
-         cn_to_ail_expr_aux_internal const_prop pred_name dts globals struct_term PassBack
+         cn_to_ail_expr_aux const_prop pred_name dts globals struct_term PassBack
        in
        let b2, s2, e2 =
-         cn_to_ail_expr_aux_internal const_prop pred_name dts globals new_val PassBack
+         cn_to_ail_expr_aux const_prop pred_name dts globals new_val PassBack
        in
        let res_sym = Sym.fresh () in
        let res_ident = mk_expr A.(AilEident res_sym) in
@@ -1051,7 +950,7 @@ let rec cn_to_ail_expr_aux_internal
        dest
          d
          (b1 @ b2 @ [ res_binding ], s1 @ s2 @ (res_decl :: member_assignments), res_ident)
-     | UnionDef _ -> failwith "Can't apply StructUpdate to a C union")
+     | UnionDef _ -> failwith (__LOC__ ^ ": Can't apply StructUpdate to a C union"))
     (* Allocation *)
   | Record ms ->
     (* Could either be (1) standalone record or (2) part of datatype. Case (2) may not exist soon *)
@@ -1059,9 +958,7 @@ let rec cn_to_ail_expr_aux_internal
     let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
     let generate_ail_stat (id, it) =
-      let b, s, e =
-        cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack
-      in
+      let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals it PassBack in
       let ail_memberof = A.(AilEmemberofptr (mk_expr res_ident, id)) in
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
@@ -1075,12 +972,18 @@ let rec cn_to_ail_expr_aux_internal
     let b, s = ([ res_binding ], [ alloc_stat ]) in
     let bs, ss, assign_stats = list_split_three (List.map generate_ail_stat ms) in
     dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
-  | RecordUpdate ((_t1, _m), _t2) -> failwith "TODO6"
+  | RecordUpdate ((_t1, _m), _t2) -> failwith (__LOC__ ^ ": TODO RecordUpdate")
   (* Allocation *)
   | Constructor (sym, ms) ->
     let rec find_dt_from_constructor constr_sym dts =
       match dts with
-      | [] -> failwith "Datatype not found" (* Not found *)
+      | [] ->
+        let failwith_msg =
+          Printf.sprintf
+            ": Datatype not found in translation of constructor %s"
+            (Sym.pp_string sym)
+        in
+        failwith (__LOC__ ^ failwith_msg)
       | dt :: dts' ->
         let matching_cases =
           List.filter (fun (c_sym, _members) -> Sym.equal c_sym constr_sym) dt.cn_dt_cases
@@ -1115,9 +1018,7 @@ let rec cn_to_ail_expr_aux_internal
     let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.make here "u")) in
     let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
     let generate_ail_stat (id, it) =
-      let b, s, e =
-        cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack
-      in
+      let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals it PassBack in
       let ail_memberof =
         if Id.equal id (Id.make here "tag") then
           e
@@ -1162,9 +1063,7 @@ let rec cn_to_ail_expr_aux_internal
         mk_expr res_ident )
   | MemberShift (it, tag, member) ->
     let membershift_macro_sym = Sym.fresh_pretty "cn_member_shift" in
-    let bs, ss, e =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack
-    in
+    let bs, ss, e = cn_to_ail_expr_aux const_prop pred_name dts globals it PassBack in
     let ail_fcall =
       A.(
         AilEcall
@@ -1174,15 +1073,10 @@ let rec cn_to_ail_expr_aux_internal
               mk_expr (AilEident (create_sym_from_id member))
             ] ))
     in
-    (* let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in *)
     dest d (bs, ss, mk_expr ail_fcall)
   | ArrayShift { base; ct; index } ->
-    let b1, s1, e1 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals base PassBack
-    in
-    let b2, s2, e2 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals index PassBack
-    in
+    let b1, s1, e1 = cn_to_ail_expr_aux const_prop pred_name dts globals base PassBack in
+    let b2, s2, e2 = cn_to_ail_expr_aux const_prop pred_name dts globals index PassBack in
     let sizeof_expr = mk_expr A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype ct)) in
     let ail_expr_ =
       A.(
@@ -1191,31 +1085,25 @@ let rec cn_to_ail_expr_aux_internal
             [ e1; sizeof_expr; e2 ] ))
     in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
-  | CopyAllocId _ -> failwith "TODO CopyAllocId"
-  | HasAllocId _ -> failwith "TODO HasAllocId"
-  | Nil _bt -> failwith "TODO8"
-  | Cons (_x, _xs) -> failwith "TODO9"
+  | CopyAllocId _ -> failwith (__LOC__ ^ ": TODO CopyAllocId")
+  | HasAllocId _ -> failwith (__LOC__ ^ ": TODO HasAllocId")
+  | Nil _bt -> failwith (__LOC__ ^ ": TODO Nil")
+  | Cons (_x, _xs) -> failwith (__LOC__ ^ ": TODO Cons")
   | Head xs ->
-    let b, s, e =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals xs PassBack
-    in
+    let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals xs PassBack in
     (* dereference to get first value, where xs is assumed to be a pointer *)
     let ail_expr_ = A.(AilEunary (Indirection, e)) in
     dest d (b, s, mk_expr ail_expr_)
-  | Tail _xs -> failwith "TODO11"
-  | NthList (_t1, _t2, _t3) -> failwith "TODO12"
-  | ArrayToList (_t1, _t2, _t3) -> failwith "TODO13"
-  | Representable (_ct, _t) -> failwith "TODO14"
-  | Good (_ct, _t) ->
-    dest d ([], [], cn_bool_true_expr)
-    (* cn_to_ail_expr_aux_internal const_prop pred_name dts globals t d *)
-  | Aligned _t_and_align -> failwith "TODO16"
-  | WrapI (_ct, t) -> cn_to_ail_expr_aux_internal const_prop pred_name dts globals t d
-  | MapConst (_bt, _t) -> failwith "TODO18"
+  | Tail _xs -> failwith (__LOC__ ^ ": TODO Tail")
+  | NthList (_t1, _t2, _t3) -> failwith (__LOC__ ^ ": TODO NthList")
+  | ArrayToList (_t1, _t2, _t3) -> failwith (__LOC__ ^ ": TODO ArrayToList")
+  | Representable (_ct, _t) -> failwith (__LOC__ ^ ": TODO Representable")
+  | Good (_ct, _t) -> dest d ([], [], cn_bool_true_expr)
+  | Aligned _t_and_align -> failwith (__LOC__ ^ ": TODO Aligned")
+  | WrapI (_ct, t) -> cn_to_ail_expr_aux const_prop pred_name dts globals t d
+  | MapConst (_bt, _t) -> failwith (__LOC__ ^ ": TODO MapConst")
   | MapSet (m, key, value) ->
-    let b1, s1, e1 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack
-    in
+    let b1, s1, e1 = cn_to_ail_expr_aux const_prop pred_name dts globals m PassBack in
     let key_term =
       if IT.get_bt key == BT.Integer then
         key
@@ -1223,11 +1111,9 @@ let rec cn_to_ail_expr_aux_internal
         IT.IT (Cast (BT.Integer, key), BT.Integer, Cerb_location.unknown)
     in
     let b2, s2, e2 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals key_term PassBack
+      cn_to_ail_expr_aux const_prop pred_name dts globals key_term PassBack
     in
-    let b3, s3, e3 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals value PassBack
-    in
+    let b3, s3, e3 = cn_to_ail_expr_aux const_prop pred_name dts globals value PassBack in
     let new_map_sym = Sym.fresh () in
     let new_map_binding = create_binding new_map_sym (bt_to_ail_ctype (IT.get_bt m)) in
     let map_deep_copy_fcall =
@@ -1249,9 +1135,7 @@ let rec cn_to_ail_expr_aux_internal
         mk_expr map_set_fcall )
   | MapGet (m, key) ->
     (* Only works when index is a cn_integer *)
-    let b1, s1, e1 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack
-    in
+    let b1, s1, e1 = cn_to_ail_expr_aux const_prop pred_name dts globals m PassBack in
     let key_term =
       if IT.get_bt key == BT.Integer then
         key
@@ -1259,7 +1143,7 @@ let rec cn_to_ail_expr_aux_internal
         IT.IT (Cast (BT.Integer, key), BT.Integer, Cerb_location.unknown)
     in
     let b2, s2, e2 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals key_term PassBack
+      cn_to_ail_expr_aux const_prop pred_name dts globals key_term PassBack
     in
     let is_record =
       match BT.map_bt (IT.get_bt m) with _, Record _ -> true | _ -> false
@@ -1268,42 +1152,35 @@ let rec cn_to_ail_expr_aux_internal
     let map_get_str =
       match cntype_str_opt with
       | Some str -> "cn_map_get_" ^ str
-      | None -> failwith "could not get cntype string in MapGet"
+      | None -> failwith (__LOC__ ^ ": Could not get cntype string in MapGet")
     in
     let map_get_fcall =
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty map_get_str)), [ e1; e2 ]))
     in
-    let _key_bt, val_bt = BT.map_bt (IT.get_bt m) in
+    let _, val_bt = BT.map_bt (IT.get_bt m) in
     let ctype = bt_to_ail_ctype val_bt in
     let cast_expr_ = A.(AilEcast (empty_qualifiers, ctype, mk_expr map_get_fcall)) in
     dest d (b1 @ b2, s1 @ s2, mk_expr cast_expr_)
-  | MapDef ((_sym, _bt), _t) -> failwith "TODO21"
+  | MapDef ((_sym, _bt), _t) -> failwith (__LOC__ ^ ": TODO MapDef")
   | Apply (sym, ts) ->
     let bs_ss_es =
       List.map
-        (fun e -> cn_to_ail_expr_aux_internal const_prop pred_name dts globals e PassBack)
+        (fun e -> cn_to_ail_expr_aux const_prop pred_name dts globals e PassBack)
         ts
     in
     let bs, ss, es = list_split_three bs_ss_es in
     let f = mk_expr A.(AilEident sym) in
     let ail_expr_ = A.AilEcall (f, es) in
-    (*let error_msg_update_stats_ =
-      generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-      in*)
-    dest
-      d
-      (List.concat bs, List.concat ss (*@ error_msg_update_stats_*), mk_expr ail_expr_)
+    dest d (List.concat bs, List.concat ss, mk_expr ail_expr_)
   | Let ((var, t1), body) ->
-    let b1, s1, e1 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
-    in
+    let b1, s1, e1 = cn_to_ail_expr_aux const_prop pred_name dts globals t1 PassBack in
     let ctype = bt_to_ail_ctype (IT.get_bt t1) in
     let binding = create_binding var ctype in
     let ail_assign = A.(AilSdeclaration [ (var, Some e1) ]) in
     prefix
       d
       (b1 @ [ binding ], s1 @ [ ail_assign ])
-      (cn_to_ail_expr_aux_internal const_prop pred_name dts globals body d)
+      (cn_to_ail_expr_aux const_prop pred_name dts globals body d)
   | Match (t, ps) ->
     (* PATTERN COMPILER *)
     let mk_pattern pattern_ bt loc = T.(Pat (pattern_, bt, loc)) in
@@ -1347,21 +1224,20 @@ let rec cn_to_ail_expr_aux_internal
          | ([], t) :: _rest ->
            (match d with
             | Assert loc ->
-              cn_to_ail_expr_aux_internal const_prop pred_name dts globals t (Assert loc)
-            | Return ->
-              cn_to_ail_expr_aux_internal const_prop pred_name dts globals t Return
+              cn_to_ail_expr_aux const_prop pred_name dts globals t (Assert loc)
+            | Return -> cn_to_ail_expr_aux const_prop pred_name dts globals t Return
             | AssignVar x ->
-              cn_to_ail_expr_aux_internal const_prop pred_name dts globals t (AssignVar x)
+              cn_to_ail_expr_aux const_prop pred_name dts globals t (AssignVar x)
             | PassBack ->
-              cn_to_ail_expr_aux_internal
+              cn_to_ail_expr_aux
                 const_prop
                 pred_name
                 dts
                 globals
                 t
                 (AssignVar (Option.get res_sym_opt)))
-         | [] -> failwith "Incomplete pattern match"
-         | (_ :: _, _e) :: _rest -> failwith "Redundant patterns")
+         | [] -> failwith (__LOC__ ^ ": Incomplete pattern match")
+         | (_ :: _, _e) :: _rest -> failwith (__LOC__ ^ ": Redundant patterns"))
       | term :: vs ->
         let cases = List.map (simplify_leading_variable term) cases in
         if List.for_all leading_wildcard cases then (
@@ -1373,16 +1249,10 @@ let rec cn_to_ail_expr_aux_internal
           | BT.Datatype sym ->
             let cn_dt = List.filter (fun dt -> Sym.equal sym dt.cn_dt_name) dts in
             (match cn_dt with
-             | [] -> failwith "Datatype not found"
+             | [] -> failwith (__LOC__ ^ ": Datatype not found")
              | dt :: _ ->
                let b1, s1, e1 =
-                 cn_to_ail_expr_aux_internal
-                   const_prop
-                   pred_name
-                   dts
-                   globals
-                   term
-                   PassBack
+                 cn_to_ail_expr_aux const_prop pred_name dts globals term PassBack
                in
                let build_case (constr_sym, members_with_types) =
                  let cases' = List.filter_map (expand_datatype constr_sym) cases in
@@ -1394,7 +1264,6 @@ let rec cn_to_ail_expr_aux_internal
                    generate_sym_with_suffix ~suffix ~lowercase:true constr_sym
                  in
                  let rhs_memberof_ptr = A.(AilEmemberofptr (e1, Id.make here "u")) in
-                 (* TODO: Remove hack *)
                  let rhs_memberof =
                    A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym))
                  in
@@ -1463,10 +1332,10 @@ let rec cn_to_ail_expr_aux_internal
             let bt_string =
               match bt_string_opt with
               | Some str -> str
-              | None -> failwith "no typedef string"
+              | None -> failwith (__LOC__ ^ "No typedef string found")
             in
-            let err_msg = "Unexpected pattern from term with type " ^ bt_string in
-            failwith err_msg)
+            let err_msg = ": Unexpected pattern from term with type " ^ bt_string in
+            failwith (__LOC__ ^ err_msg))
     in
     let translate_real
       : type a. IT.t list -> (BT.t IT.pattern list * IT.t) list -> a dest -> a
@@ -1495,9 +1364,7 @@ let rec cn_to_ail_expr_aux_internal
         in
         (wrap_with_convert_to ail_const_expr_ BT.Alloc_id, [], [])
       | _ ->
-        let b, s, e =
-          cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack
-        in
+        let b, s, e = cn_to_ail_expr_aux const_prop pred_name dts globals t PassBack in
         let ail_expr_ =
           match
             ( get_typedef_string (bt_to_ail_ctype bt),
@@ -1513,14 +1380,14 @@ let rec cn_to_ail_expr_aux_internal
     dest d (b, s, mk_expr ail_expr_)
 
 
-let cn_to_ail_expr_internal
+let cn_to_ail_expr
   : type a.
     _ CF.Cn.cn_datatype list -> (C.union_tag * C.ctype) list -> IT.t -> a dest -> a
   =
-  fun dts globals cn_expr d -> cn_to_ail_expr_aux_internal None None dts globals cn_expr d
+  fun dts globals cn_expr d -> cn_to_ail_expr_aux None None dts globals cn_expr d
 
 
-let cn_to_ail_expr
+let cn_to_ail_expr_toplevel
   (dts : _ CF.Cn.cn_datatype list)
   (globals : (C.union_tag * C.ctype) list)
   (pred_sym_opt : Sym.t option)
@@ -1529,10 +1396,10 @@ let cn_to_ail_expr
     * CF.GenTypes.genTypeCategory A.statement_ list
     * CF.GenTypes.genTypeCategory A.expression
   =
-  cn_to_ail_expr_aux_internal None pred_sym_opt dts globals it PassBack
+  cn_to_ail_expr_aux None pred_sym_opt dts globals it PassBack
 
 
-let cn_to_ail_expr_internal_with_pred_name
+let cn_to_ail_expr_with_pred_name
   : type a.
     Sym.sym option ->
     _ CF.Cn.cn_datatype list ->
@@ -1542,7 +1409,7 @@ let cn_to_ail_expr_internal_with_pred_name
     a
   =
   fun pred_name_opt dts globals cn_expr d ->
-  cn_to_ail_expr_aux_internal None pred_name_opt dts globals cn_expr d
+  cn_to_ail_expr_aux None pred_name_opt dts globals cn_expr d
 
 
 let create_member (ctype, id) = (id, (empty_attributes, None, empty_qualifiers, ctype))
@@ -1755,7 +1622,7 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype)
   in
   let false_it = IT.(IT (Const (Z (Z.of_int 0)), BT.Bool, Cerb_location.unknown)) in
   (* Adds conversion function *)
-  let _, _, e1 = cn_to_ail_expr_internal [] [] false_it PassBack in
+  let _, _, e1 = cn_to_ail_expr [] [] false_it PassBack in
   let return_false = A.(AilSreturn e1) in
   let rec generate_equality_expr members sym1 sym2 =
     match members with
@@ -1819,7 +1686,7 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype)
         (bindings, List.map mk_stmt decls)
     in
     let equality_expr = generate_equality_expr members x_constr_sym y_constr_sym in
-    let _, _, e = cn_to_ail_expr_internal [] [] equality_expr PassBack in
+    let _, _, e = cn_to_ail_expr [] [] equality_expr PassBack in
     let return_stat = mk_stmt A.(AilSreturn e) in
     let ail_case =
       A.(AilScase (Nat_big_num.zero, mk_stmt (AilSblock (bs, ss @ [ return_stat ]))))
@@ -1881,15 +1748,18 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
   let res_binding = create_binding res_sym cn_struct_ptr_ctype in
   let res_decl = A.(AilSdeclaration [ (res_sym, Some alloc_fcall) ]) in
   let rec get_non_recursive_constr_and_ms = function
-    | [] -> failwith "Datatype default generation failure: datatype has no constructors"
+    | [] ->
+      failwith
+        (__LOC__ ^ ": Datatype default generation failure: datatype has no constructors")
     | ((_, members) as x) :: xs ->
-      let _ids, basetypes = List.split members in
+      let _, basetypes = List.split members in
       if List.mem BT.equal (Datatype cn_sym) (List.map cn_base_type_to_bt basetypes) then
         get_non_recursive_constr_and_ms xs
       else
         x
   in
   (*
+     E.g.
      datatype Tree {
         Tree_Empty {i32 k (* for working out what to do with constructor members *)},
         Tree_Node {i32 k, datatype tree l, datatype tree r}
@@ -1948,7 +1818,8 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
           | Some member_ctype_str -> "default_" ^ member_ctype_str
           | None ->
             Printf.printf "%s\n" (Pp.plain (BT.pp bt));
-            failwith "Datatype default function: no underscored typedef string found"
+            failwith
+              (__LOC__ ^ "Datatype default function: no underscored typedef string found")
         in
         let fcall =
           A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), []))
@@ -1999,8 +1870,7 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
 (* STRUCTS *)
 let generate_struct_equality_function
   ?(is_record = false)
-  dts
-  ((sym, (_loc, _attrs, tag_def)) : A.sigma_tag_definition)
+  ((sym, (_, _, tag_def)) : A.sigma_tag_definition)
   : (A.sigma_declaration * 'a A.sigma_function_definition) list
   =
   match tag_def with
@@ -2035,15 +1905,9 @@ let generate_struct_equality_function
     in
     (* Function body *)
     let generate_member_equality (id, (_, _, _, ctype)) =
-      let _doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
-      (* Printf.printf "%s\n" (CF.Pp_utils.to_plain_pretty_string doc); *)
       let sct_opt = Sctypes.of_ctype ctype in
       let sct =
-        match sct_opt with
-        | Some t -> t
-        | None ->
-          (* Printf.printf "None case\n"; *)
-          failwith "Bad sctype"
+        match sct_opt with Some t -> t | None -> failwith (__LOC__ ^ ": Bad sctype")
       in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
       let args =
@@ -2054,7 +1918,7 @@ let generate_struct_equality_function
       (* List length of args guaranteed to be 2 by construction *)
       assert (List.length args == 2);
       let equality_fn_call =
-        get_equality_fn_call bt (List.nth args 0) (List.nth args 1) dts
+        get_equality_fn_call bt (List.nth args 0) (List.nth args 1)
       in
       mk_expr equality_fn_call
     in
@@ -2067,13 +1931,6 @@ let generate_struct_equality_function
         cn_bool_true_expr
         member_equality_exprs
     in
-    (* let rec remove_true_const ail_binop = match rm_expr ail_binop with
-       | A.(AilEbinary (e1, And, e2)) -> (match rm_expr e1 with
-       | A.AilEconst (ConstantInteger (IConstant (_, Decimal, Some B))) -> e2
-       | _ -> mk_expr A.(AilEbinary (remove_true_const e1, And, e2)))
-       | _ -> failwith "Incorrect form"
-       in
-       let ail_and_binop = remove_true_const ail_and_binop in *)
     let return_stmt = A.(AilSreturn ail_and_binop) in
     let ret_type = bt_to_ail_ctype BT.Bool in
     (* Generating function declaration *)
@@ -2109,7 +1966,6 @@ let generate_struct_equality_function
 
 let generate_struct_default_function
   ?(is_record = false)
-  _dts
   ((sym, (_loc, _attrs, tag_def)) : A.sigma_tag_definition)
   : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
@@ -2140,7 +1996,8 @@ let generate_struct_default_function
         | Some member_ctype_str -> "default_" ^ member_ctype_str
         | None ->
           Printf.printf "%s\n" (Pp.plain (BT.pp bt));
-          failwith "Struct default function: no underscored typedef string found"
+          failwith
+            (__LOC__ ^ ": Struct default function: no underscored typedef string found")
       in
       let fcall =
         A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), []))
@@ -2211,7 +2068,9 @@ let generate_struct_conversion_to_function
     let generate_member_assignment (id, (_, _, _, ctype)) =
       let rhs = A.(AilEmemberof (mk_expr (AilEident param_sym), id)) in
       let sct_opt = Sctypes.of_ctype ctype in
-      let sct = match sct_opt with Some t -> t | None -> failwith "Bad sctype" in
+      let sct =
+        match sct_opt with Some t -> t | None -> failwith (__LOC__ ^ "Bad sctype")
+      in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
       let rhs = wrap_with_convert_to ~sct rhs bt in
       let lhs = A.(AilEmemberofptr (mk_expr (AilEident res_sym), id)) in
@@ -2272,7 +2131,9 @@ let generate_struct_conversion_from_function
     let generate_member_assignment (id, (_, _, _, ctype)) =
       let rhs = A.(AilEmemberofptr (mk_expr (AilEident param_sym), id)) in
       let sct_opt = Sctypes.of_ctype ctype in
-      let sct = match sct_opt with Some t -> t | None -> failwith "Bad sctype" in
+      let sct =
+        match sct_opt with Some t -> t | None -> failwith (__LOC__ ^ "Bad sctype")
+      in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
       let lhs = A.(AilEmemberof (mk_expr (AilEident res_sym), id)) in
       match (bt, sct) with
@@ -2289,7 +2150,8 @@ let generate_struct_conversion_from_function
                       [ lhs;
                         rhs;
                         AilEident
-                          (Sym.fresh_named (Option.get (get_type_underscored_str v_bt)));
+                          (Sym.fresh_named
+                             (Option.get (get_underscored_typedef_string_from_bt v_bt)));
                         AilEconst
                           (ConstantInteger (IConstant (Z.of_int sz, Decimal, None)))
                       ] ))))
@@ -2333,7 +2195,7 @@ let generate_struct_conversion_from_function
 
 
 (* RECORDS *)
-let generate_record_equality_function dts (sym, (members : BT.member_types))
+let generate_record_equality_function (sym, (members : BT.member_types))
   : (A.sigma_declaration * 'a A.sigma_function_definition) list
   =
   let cn_sym = sym in
@@ -2373,9 +2235,7 @@ let generate_record_equality_function dts (sym, (members : BT.member_types))
     in
     (* List length of args guaranteed to be 2 by construction *)
     assert (List.length args == 2);
-    let equality_fn_call =
-      get_equality_fn_call bt (List.nth args 0) (List.nth args 1) dts
-    in
+    let equality_fn_call = get_equality_fn_call bt (List.nth args 0) (List.nth args 1) in
     mk_expr equality_fn_call
   in
   let member_equality_exprs = List.map generate_member_equality members in
@@ -2387,13 +2247,6 @@ let generate_record_equality_function dts (sym, (members : BT.member_types))
       cn_bool_true_expr
       member_equality_exprs
   in
-  (* let rec remove_true_const ail_binop = match rm_expr ail_binop with
-     | A.(AilEbinary (e1, And, e2)) -> (match rm_expr e1 with
-     | A.AilEconst (ConstantInteger (IConstant (_, Decimal, Some B))) -> e2
-     | _ -> mk_expr A.(AilEbinary (remove_true_const e1, And, e2)))
-     | _ -> failwith "Incorrect form"
-     in
-     let ail_and_binop = remove_true_const ail_and_binop in *)
   let return_stmt = A.(AilSreturn ail_and_binop) in
   let ret_type = bt_to_ail_ctype BT.Bool in
   (* Generating function declaration *)
@@ -2429,7 +2282,6 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
   : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
   let cn_sym = sym in
-  (* Printf.printf "Record sym: %s\n" (Sym.pp_string cn_sym); *)
   let fn_str = "default_struct_" ^ Sym.pp_string cn_sym in
   let cn_struct_ctype = C.(Struct cn_sym) in
   let cn_struct_ptr_ctype =
@@ -2443,7 +2295,6 @@ let generate_record_default_function _dts (sym, (members : BT.member_types))
   let ret_ident = A.(AilEident ret_sym) in
   (* Function body *)
   let generate_member_default_assign (id, bt) =
-    (* Printf.printf "Member: %s\n" (Id.get_string id); *)
     let lhs = A.(AilEmemberofptr (mk_expr ret_ident, id)) in
     let member_ctype_str_opt = get_underscored_typedef_string_from_bt bt in
     let default_fun_str =
@@ -2571,7 +2422,8 @@ let get_while_bounds_and_cond (i_sym, i_bt) it =
 
 
 (* is_pre used for ownership checking, to see if ownership needs to be taken or put back *)
-let cn_to_ail_resource_internal
+(* is_toplevel used to check whether GET/PUT enum should be pretty-printed or whether it's an inner call with the ownership enum parameter *)
+let cn_to_ail_resource
   ?(is_pre = true)
   ?(is_toplevel = true)
   sym
@@ -2580,7 +2432,8 @@ let cn_to_ail_resource_internal
   (preds : (Sym.t * Def.Predicate.t) list)
   loc
   =
-  let calculate_return_type = function
+  let calculate_resource_return_type (preds : (Sym.t * Def.Predicate.t) list) loc
+    = function
     | Request.Owned (sct, _) ->
       ( Sctypes.to_ctype sct,
         BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct )
@@ -2619,27 +2472,28 @@ let cn_to_ail_resource_internal
         match cn_bt with
         | CN_record _members ->
           let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_sym' in
-          (* records := RecordMap.add members pred_record_name !records; *)
           mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct pred_record_name)))
         | _ -> cn_to_ail_base_type ~pred_sym:(Some pred_sym') cn_bt
       in
       (ctype, pred_def'.oarg_bt)
   in
-  (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in *)
+  let generate_owned_fn_name sct =
+    let ct_str = str_of_ctype (Sctypes.to_ctype sct) in
+    let ct_str = String.concat "_" (String.split_on_char ' ' ct_str) in
+    "owned_" ^ ct_str
+  in
+  let enum_str = if is_pre then "GET" else "PUT" in
+  let enum_str = if not is_toplevel then "owned_enum" else enum_str in
+  let enum_sym = Sym.fresh_pretty enum_str in
   function
   | Request.P p ->
-    let ctype, bt = calculate_return_type p.name in
-    let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
-    let enum_str = if is_pre then "GET" else "PUT" in
-    let enum_str = if not is_toplevel then "owned_enum" else enum_str in
-    let enum_sym = Sym.fresh_pretty enum_str in
-    let rhs, bs, ss, _owned_ctype =
+    let ctype, bt = calculate_resource_return_type preds loc p.name in
+    let b, s, e = cn_to_ail_expr dts globals p.pointer PassBack in
+    let rhs, bs, ss =
       match p.name with
       | Owned (sct, _) ->
         ownership_ctypes := Sctypes.to_ctype sct :: !ownership_ctypes;
-        let ct_str = str_of_ctype (Sctypes.to_ctype sct) in
-        let ct_str = String.concat "_" (String.split_on_char ' ' ct_str) in
-        let owned_fn_name = "owned_" ^ ct_str in
+        let owned_fn_name = generate_owned_fn_name sct in
         (* Hack with enum as sym *)
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
         let fn_call_it =
@@ -2648,27 +2502,21 @@ let cn_to_ail_resource_internal
               BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct,
               Cerb_location.unknown )
         in
-        let bs', ss', e' = cn_to_ail_expr_internal dts globals fn_call_it PassBack in
+        let bs', ss', e' = cn_to_ail_expr dts globals fn_call_it PassBack in
         let binding = create_binding sym (bt_to_ail_ctype bt) in
-        (e', binding :: bs', ss', Some (Sctypes.to_ctype sct))
+        (e', binding :: bs', ss')
       | PName pname ->
         let bs, ss, es =
           list_split_three
-            (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) p.iargs)
+            (List.map (fun it -> cn_to_ail_expr dts globals it PassBack) p.iargs)
         in
-        (*let error_msg_update_stats_ =
-          generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-          in*)
         let fcall =
           A.(
             AilEcall
               (mk_expr (AilEident pname), (e :: es) @ [ mk_expr (AilEident enum_sym) ]))
         in
         let binding = create_binding sym (bt_to_ail_ctype ~pred_sym:(Some pname) bt) in
-        ( mk_expr fcall,
-          binding :: List.concat bs,
-          List.concat ss (*@ error_msg_update_stats_*),
-          None )
+        (mk_expr fcall, binding :: List.concat bs, List.concat ss)
     in
     let s_decl =
       match rm_ctype ctype with
@@ -2681,7 +2529,7 @@ let cn_to_ail_resource_internal
        Input is expr of the form:
       take sym = each (integer q.q; q.permission){ Owned(q.pointer + (q.q * q.step)) }
     *)
-    let b1, s1, _e1 = cn_to_ail_expr_internal dts globals q.pointer PassBack in
+    let b1, s1, _e1 = cn_to_ail_expr dts globals q.pointer PassBack in
     (*
        Generating a loop of the form:
     <set q.q to start value>
@@ -2692,28 +2540,15 @@ let cn_to_ail_resource_internal
     *)
     let i_sym, i_bt = q.q in
     let start_expr, _, while_loop_cond = get_while_bounds_and_cond q.q q.permission in
-    let _, _, e_start = cn_to_ail_expr_internal dts globals start_expr PassBack in
-    let _, _, while_cond_expr =
-      cn_to_ail_expr_internal dts globals while_loop_cond PassBack
-    in
-    let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals q.permission PassBack in
+    let _, _, e_start = cn_to_ail_expr dts globals start_expr PassBack in
+    let _, _, while_cond_expr = cn_to_ail_expr dts globals while_loop_cond PassBack in
+    let _, _, if_cond_expr = cn_to_ail_expr dts globals q.permission PassBack in
     let cn_integer_ptr_ctype = bt_to_ail_ctype i_bt in
-    (* let convert_to_cn_integer_sym =
-       Sym.fresh_pretty (Option.get (get_conversion_to_fn_str BT.Integer))
-       in *)
-    let b2, s2, _e2 = cn_to_ail_expr_internal dts globals q.permission PassBack in
-    let b3, s3, _e3 = cn_to_ail_expr_internal dts globals q.step PassBack in
-    (* let conversion_fcall = A.(AilEcall (mk_expr (AilEident convert_to_cn_integer_sym), [e_start])) in *)
+    let b2, s2, _e2 = cn_to_ail_expr dts globals q.permission PassBack in
+    let b3, s3, _e3 = cn_to_ail_expr dts globals q.step PassBack in
     let start_binding = create_binding i_sym cn_integer_ptr_ctype in
     let start_assign = A.(AilSdeclaration [ (i_sym, Some e_start) ]) in
-    (* let (end_binding, end_assign) = convert_to_cn_binop e_end in *)
-
-    (* let q_times_step = A.(AilEbinary (mk_expr (AilEident i_sym), Arithmetic Mul, e3)) in *)
-    (* let gen_add_expr_ e_ =
-       A.(AilEbinary (mk_expr e_, Arithmetic Add, mk_expr q_times_step))
-       in *)
-    (* let sym_add_expr = make_deref_expr_ (gen_add_expr_ A.(AilEident sym)) in *)
-    let return_ctype, _return_bt = calculate_return_type q.name in
+    let return_ctype, _return_bt = calculate_resource_return_type preds loc q.name in
     (* Translation of q.pointer *)
     let i_it = IT.IT (IT.(Sym i_sym), i_bt, Cerb_location.unknown) in
     let step_binop =
@@ -2722,21 +2557,16 @@ let cn_to_ail_resource_internal
     let value_it =
       IT.IT (IT.(Binop (Add, q.pointer, step_binop)), BT.(Loc ()), Cerb_location.unknown)
     in
-    let b4, s4, e4 = cn_to_ail_expr_internal dts globals value_it PassBack in
+    let b4, s4, e4 = cn_to_ail_expr dts globals value_it PassBack in
     let ptr_add_sym = Sym.fresh () in
     let cn_pointer_return_type = bt_to_ail_ctype BT.(Loc ()) in
     let ptr_add_binding = create_binding ptr_add_sym cn_pointer_return_type in
     let ptr_add_stat = A.(AilSdeclaration [ (ptr_add_sym, Some e4) ]) in
-    let enum_str = if is_pre then "GET" else "PUT" in
-    let enum_str = if not is_toplevel then "owned_enum" else enum_str in
-    let enum_sym = Sym.fresh_pretty enum_str in
-    let rhs, bs, ss, _owned_ctype =
+    let rhs, bs, ss =
       match q.name with
       | Owned (sct, _) ->
         ownership_ctypes := Sctypes.to_ctype sct :: !ownership_ctypes;
-        let sct_str = str_of_ctype (Sctypes.to_ctype sct) in
-        let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
-        let owned_fn_name = "owned_" ^ sct_str in
+        let owned_fn_name = generate_owned_fn_name sct in
         let ptr_add_it = IT.(IT (Sym ptr_add_sym, BT.(Loc ()), Cerb_location.unknown)) in
         (* Hack with enum as sym *)
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
@@ -2746,16 +2576,13 @@ let cn_to_ail_resource_internal
               BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct,
               Cerb_location.unknown )
         in
-        let bs', ss', e' = cn_to_ail_expr_internal dts globals fn_call_it PassBack in
-        (e', bs', ss', Some (Sctypes.to_ctype sct))
+        let bs', ss', e' = cn_to_ail_expr dts globals fn_call_it PassBack in
+        (e', bs', ss')
       | PName pname ->
         let bs, ss, es =
           list_split_three
-            (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) q.iargs)
+            (List.map (fun it -> cn_to_ail_expr dts globals it PassBack) q.iargs)
         in
-        (*let error_msg_update_stats_ =
-          generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
-          in*)
         let fcall =
           A.(
             AilEcall
@@ -2763,7 +2590,7 @@ let cn_to_ail_resource_internal
                 (mk_expr (AilEident ptr_add_sym) :: es) @ [ mk_expr (AilEident enum_sym) ]
               ))
         in
-        (mk_expr fcall, List.concat bs, List.concat ss (*@ error_msg_update_stats_*), None)
+        (mk_expr fcall, List.concat bs, List.concat ss)
     in
     let typedef_name = get_typedef_string (bt_to_ail_ctype i_bt) in
     let incr_func_name =
@@ -2803,7 +2630,7 @@ let cn_to_ail_resource_internal
         in
         ([], [ ail_block ])
       | _ ->
-        (* TODO: Change to mostly use index terms rather than Ail directly - avoids duplication between these functions and cn_internal_to_ail *)
+        (* TODO: Change to mostly use index terms rather than Ail directly - avoids duplication between these functions and cn_to_ail *)
         let cn_map_type =
           mk_ctype ~annots:[ CF.Annot.Atypedef (Sym.fresh_pretty "cn_map") ] C.Void
         in
@@ -2863,13 +2690,13 @@ let cn_to_ail_resource_internal
     (b1 @ b2 @ b3 @ [ start_binding ] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
 
 
-let cn_to_ail_logical_constraint_internal
+let cn_to_ail_logical_constraint_aux
   : type a.
     _ CF.Cn.cn_datatype list -> (C.union_tag * C.ctype) list -> a dest -> LC.t -> a
   =
   fun dts globals d lc ->
   match lc with
-  | LC.T it -> cn_to_ail_expr_internal dts globals it d
+  | LC.T it -> cn_to_ail_expr dts globals it d
   | LC.Forall ((sym, bt), it) ->
     let cond_it, t =
       match IT.get_term it with
@@ -2900,12 +2727,10 @@ let cn_to_ail_logical_constraint_internal
           assign/return/assert/passback b
        *)
        let start_expr, _, while_loop_cond = get_while_bounds_and_cond (sym, bt) cond_it in
-       let _, _, e_start = cn_to_ail_expr_internal dts globals start_expr PassBack in
-       let _, _, while_cond_expr =
-         cn_to_ail_expr_internal dts globals while_loop_cond PassBack
-       in
-       let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals cond_it PassBack in
-       let t_translated = cn_to_ail_expr_internal dts globals t PassBack in
+       let _, _, e_start = cn_to_ail_expr dts globals start_expr PassBack in
+       let _, _, while_cond_expr = cn_to_ail_expr dts globals while_loop_cond PassBack in
+       let _, _, if_cond_expr = cn_to_ail_expr dts globals cond_it PassBack in
+       let t_translated = cn_to_ail_expr dts globals t PassBack in
        let bs, ss, e =
          gen_bool_while_loop
            sym
@@ -2926,7 +2751,7 @@ let cn_to_ail_logical_constraint
     * CF.GenTypes.genTypeCategory A.statement_ list
     * CF.GenTypes.genTypeCategory A.expression
   =
-  cn_to_ail_logical_constraint_internal dts globals PassBack lc
+  cn_to_ail_logical_constraint_aux dts globals PassBack lc
 
 
 let rec generate_record_opt pred_sym = function
@@ -2940,7 +2765,7 @@ let rec generate_record_opt pred_sym = function
 
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
-let cn_to_ail_function_internal
+let cn_to_ail_function
   (fn_sym, (lf_def : Definition.Function.t))
   (cn_datatypes : A.sigma_cn_datatype list)
   (cn_functions : A.sigma_cn_function list)
@@ -2949,12 +2774,11 @@ let cn_to_ail_function_internal
     * A.sigma_tag_definition option
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) lf_def.return_bt in
-  (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
   let bs, ail_func_body_opt =
     match lf_def.body with
     | Def it | Rec_Def it ->
       let bs, ss =
-        cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return
+        cn_to_ail_expr_with_pred_name (Some fn_sym) cn_datatypes [] it Return
       in
       (bs, Some (List.map mk_stmt ss))
     | Uninterp ->
@@ -2982,8 +2806,22 @@ let cn_to_ail_function_internal
         Sym.equal cn_fun.cn_func_name fn_sym)
       cn_functions
   in
-  (* Unsafe - check if list has an element *)
-  let loc = (List.nth matched_cn_functions 0).cn_func_magic_loc in
+  let matched_cn_function =
+    match matched_cn_functions with
+    | [] ->
+      Cerb_colour.with_colour
+        (fun () ->
+          print_endline
+            Pp.(
+              plain
+                (Pp.item
+                   "Function not found"
+                   (Sym.pp fn_sym ^^^ !^"at" ^^^ Locations.pp lf_def.loc))))
+        ();
+      exit 2
+    | p :: _ -> p
+  in
+  let loc = matched_cn_function.cn_func_magic_loc in
   (* Generating function declaration *)
   let decl =
     ( fn_sym,
@@ -3009,74 +2847,52 @@ let cn_to_ail_function_internal
   (((loc, decl), def), ail_record_opt)
 
 
-let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals preds
-  = function
+let rec cn_to_ail_lat ?(is_toplevel = true) dts pred_sym_opt globals preds = function
   | LAT.Define ((name, it), _info, lat) ->
     let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let binding = create_binding name ctype in
     let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 =
-      cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it (AssignVar name)
+      cn_to_ail_expr_with_pred_name pred_sym_opt dts globals it (AssignVar name)
     in
-    let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
+    let b2, s2 = cn_to_ail_lat ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LAT.Resource ((name, (ret, _bt)), (loc, _str_opt), lat) ->
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
     let b1, s1 =
-      cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret
+      cn_to_ail_resource ~is_pre:true ~is_toplevel name dts globals preds loc ret
     in
-    let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
+    let b2, s2 = cn_to_ail_lat ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
   | LAT.Constraint (lc, (loc, _str_opt), lat) ->
-    let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
+    let b1, s, e = cn_to_ail_logical_constraint dts globals lc in
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
-    let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
-    let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
+    let ss = upd_s @ s @ generate_cn_assert e @ pop_s in
+    let b2, s2 = cn_to_ail_lat ~is_toplevel dts pred_sym_opt globals preds lat in
     (b1 @ b2, ss @ s2)
   | LAT.I it ->
-    let bs, ss =
-      cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it Return
-    in
+    let bs, ss = cn_to_ail_expr_with_pred_name pred_sym_opt dts globals it Return in
     (bs, ss)
 
 
-let cn_to_ail_predicate_internal
-  (pred_sym, (rp_def : Def.Predicate.t))
-  dts
-  globals
-  preds
-  cn_preds
-  =
+let cn_to_ail_predicate dts globals preds cn_preds (pred_sym, (rp_def : Def.Predicate.t)) =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
   let rec clause_translate (clauses : Def.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->
       let bs, ss =
-        cn_to_ail_lat_internal
-          ~is_toplevel:false
-          dts
-          (Some pred_sym)
-          globals
-          preds
-          c.packing_ft
-      in
-      let ss =
-        (*let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some rp_def.loc) () in
-          let pop_s = generate_cn_pop_msg_info in*)
-        (*upd_s @*)
-        ss
-        (*@ pop_s*)
+        cn_to_ail_lat ~is_toplevel:false dts (Some pred_sym) globals preds c.packing_ft
       in
       (match c.guard with
        | IT (Const (Bool true), _, _) ->
          let bs'', ss'' = clause_translate cs in
          (bs @ bs'', ss @ ss'')
        | _ ->
-         let _b1, _s1, e =
-           cn_to_ail_expr_internal_with_pred_name (Some pred_sym) dts [] c.guard PassBack
+         let _, _, e =
+           cn_to_ail_expr_with_pred_name (Some pred_sym) dts [] c.guard PassBack
          in
          let bs'', ss'' = clause_translate cs in
          let conversion_from_cn_bool =
@@ -3131,72 +2947,71 @@ let cn_to_ail_predicate_internal
         Sym.equal cn_pred.cn_pred_name pred_sym)
       cn_preds
   in
-  (* Unsafe - check if list has an element *)
-  let loc = (List.nth matched_cn_preds 0).cn_pred_magic_loc in
+  let matched_cn_pred =
+    match matched_cn_preds with
+    | [] ->
+      Cerb_colour.with_colour
+        (fun () ->
+          print_endline
+            Pp.(
+              plain
+                (Pp.item
+                   "Function not found"
+                   (Sym.pp pred_sym ^^^ !^"at" ^^^ Locations.pp rp_def.loc))))
+        ();
+      exit 2
+    | p :: _ -> p
+  in
+  let loc = matched_cn_pred.cn_pred_magic_loc in
   (((loc, decl), def), ail_record_opt)
 
 
-let rec cn_to_ail_predicates_internal pred_def_list dts globals preds cn_preds
+let cn_to_ail_predicates preds dts globals cn_preds
   : ((Locations.t * A.sigma_declaration)
     * CF.GenTypes.genTypeCategory A.sigma_function_definition)
       list
     * A.sigma_tag_definition option list
   =
-  match pred_def_list with
-  | [] -> ([], [])
-  | p :: ps ->
-    let d, r = cn_to_ail_predicate_internal p dts globals preds cn_preds in
-    let ds, rs = cn_to_ail_predicates_internal ps dts globals preds cn_preds in
-    (d :: ds, r :: rs)
+  List.split (List.map (cn_to_ail_predicate dts globals preds cn_preds) preds)
 
 
 (* TODO: Add destination passing? *)
-let rec cn_to_ail_post_aux_internal dts globals preds = function
+let rec cn_to_ail_post_aux dts globals preds = function
   | LRT.Define ((name, it), (_loc, _), t) ->
-    (* Printf.printf "LRT.Define\n"; *)
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let new_lrt =
       LogicalReturnTypes.subst (ESE.sym_subst (name, IT.get_bt it, new_name)) t
     in
     let binding = create_binding new_name (bt_to_ail_ctype (IT.get_bt it)) in
     let decl = A.(AilSdeclaration [ (new_name, None) ]) in
-    let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
-    let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
+    let b1, s1 = cn_to_ail_expr dts globals it (AssignVar new_name) in
+    let b2, s2 = cn_to_ail_post_aux dts globals preds new_lrt in
     (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LRT.Resource ((name, (re, bt)), (loc, _str_opt), t) ->
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
-    let b1, s1 =
-      cn_to_ail_resource_internal ~is_pre:false new_name dts globals preds loc re
-    in
+    let b1, s1 = cn_to_ail_resource ~is_pre:false new_name dts globals preds loc re in
     let new_lrt = LogicalReturnTypes.subst (ESE.sym_subst (name, bt, new_name)) t in
-    let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
+    let b2, s2 = cn_to_ail_post_aux dts globals preds new_lrt in
     (b1 @ b2, upd_s @ s1 @ pop_s @ s2)
   | LRT.Constraint (lc, (loc, _str_opt), t) ->
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
-    let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
+    let b1, s, e = cn_to_ail_logical_constraint dts globals lc in
     let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
-    let b2, s2 = cn_to_ail_post_aux_internal dts globals preds t in
+    let b2, s2 = cn_to_ail_post_aux dts globals preds t in
     (b1 @ b2, ss @ s2)
   | LRT.I -> ([], [])
 
 
-let cn_to_ail_post_internal
-  (*loc*) dts
-  globals
-  preds
-  (RT.Computational (_bound, _oinfo, t))
-  =
-  (*let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
-    let pop_s = generate_cn_pop_msg_info in*)
-  let bs, ss = cn_to_ail_post_aux_internal dts globals preds t in
-  (bs, List.map mk_stmt (*upd_s @*) ss (*@ pop_s*))
+let cn_to_ail_post (*loc*) dts globals preds (RT.Computational (_bound, _oinfo, t)) =
+  let bs, ss = cn_to_ail_post_aux dts globals preds t in
+  (bs, List.map mk_stmt ss)
 
 
 (* TODO: Add destination passing *)
-let cn_to_ail_cnstatement_internal
+let cn_to_ail_cnstatement
   : type a.
     _ CF.Cn.cn_datatype list ->
     (C.union_tag * C.ctype) list ->
@@ -3215,22 +3030,20 @@ let cn_to_ail_cnstatement_internal
   | Extract (_, _, _it) -> (default_res_for_dest, true)
   | Unfold (_fsym, _args) -> (default_res_for_dest, true) (* fsym is a function symbol *)
   | Apply (_fsym, _args) -> (default_res_for_dest, true) (* fsym is a lemma symbol *)
-  | Assert lc -> (cn_to_ail_logical_constraint_internal dts globals d lc, false)
+  | Assert lc -> (cn_to_ail_logical_constraint_aux dts globals d lc, false)
   | Inline _ -> failwith "TODO Inline"
   | Print _t -> (default_res_for_dest, true)
 
 
-let rec cn_to_ail_cnprog_internal_aux dts globals = function
+let rec cn_to_ail_cnprog_aux dts globals = function
   | Cnprog.Let (_loc, (name, { ct; pointer }), prog) ->
-    let b1, s, e = cn_to_ail_expr_internal dts globals pointer PassBack in
+    let b1, s, e = cn_to_ail_expr dts globals pointer PassBack in
     let cn_ptr_deref_sym = Sym.fresh_pretty "cn_pointer_deref" in
     let ctype_sym =
       Sym.fresh_pretty
         (Pp.plain
-           (CF.Pp_ail.pp_ctype
-              ~executable_spec:true
-              empty_qualifiers
-              (Sctypes.to_ctype ct)))
+           CF.Pp_ail.(
+             with_executable_spec (pp_ctype empty_qualifiers) (Sctypes.to_ctype ct)))
     in
     let cn_ptr_deref_fcall =
       A.(
@@ -3245,34 +3058,27 @@ let rec cn_to_ail_cnprog_internal_aux dts globals = function
         AilSdeclaration
           [ (name, Some (mk_expr (wrap_with_convert_to cn_ptr_deref_fcall bt))) ])
     in
-    let (b2, ss), no_op = cn_to_ail_cnprog_internal_aux dts globals prog in
-    (* let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in *)
+    let (b2, ss), no_op = cn_to_ail_cnprog_aux dts globals prog in
     if no_op then
       (([], []), true)
     else
       ((b1 @ (binding :: b2), s @ (ail_stat_ :: ss)), false)
-    (* if no_op then
-    ((loc', [], []), true)
-  else
-    ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), false) *)
   | Statement (loc, stmt) ->
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
-    let (bs, ss), no_op = cn_to_ail_cnstatement_internal dts globals (Assert loc) stmt in
+    let (bs, ss), no_op = cn_to_ail_cnstatement dts globals (Assert loc) stmt in
     ((bs, upd_s @ ss @ pop_s), no_op)
 
 
-let cn_to_ail_cnprog_internal dts globals cn_prog =
-  let (bs, ss), _ = cn_to_ail_cnprog_internal_aux dts globals cn_prog in
+let cn_to_ail_cnprog dts globals cn_prog =
+  let (bs, ss), _ = cn_to_ail_cnprog_aux dts globals cn_prog in
   (bs, ss)
 
 
 let cn_to_ail_statements dts globals (loc, cn_progs) =
   let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
   let pop_s = generate_cn_pop_msg_info in
-  let bs_and_ss =
-    List.map (fun prog -> cn_to_ail_cnprog_internal dts globals prog) cn_progs
-  in
+  let bs_and_ss = List.map (fun prog -> cn_to_ail_cnprog dts globals prog) cn_progs in
   let bs, ss = List.split bs_and_ss in
   (loc, (List.concat bs, upd_s @ List.concat ss @ pop_s))
 
@@ -3283,12 +3089,7 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
 
 
 (* Precondition and postcondition translation - LAT.I case means precondition translation finished *)
-let rec cn_to_ail_lat_internal_2
-  without_ownership_checking
-  dts
-  globals
-  preds
-  c_return_type
+let rec cn_to_ail_lat_2 without_ownership_checking dts globals preds c_return_type
   = function
   | LAT.Define ((name, it), _info, lat) ->
     let ctype = bt_to_ail_ctype (IT.get_bt it) in
@@ -3296,51 +3097,30 @@ let rec cn_to_ail_lat_internal_2
     let new_lat =
       ESE.fn_largs_and_body_subst (ESE.sym_subst (name, IT.get_bt it, new_name)) lat
     in
-    (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding new_name ctype in
     let decl = A.(AilSdeclaration [ (new_name, None) ]) in
-    let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
+    let b1, s1 = cn_to_ail_expr dts globals it (AssignVar new_name) in
     let ail_executable_spec =
-      cn_to_ail_lat_internal_2
-        without_ownership_checking
-        dts
-        globals
-        preds
-        c_return_type
-        new_lat
+      cn_to_ail_lat_2 without_ownership_checking dts globals preds c_return_type new_lat
     in
     prepend_to_precondition ail_executable_spec (binding :: b1, decl :: s1)
   | LAT.Resource ((name, (ret, bt)), (loc, _str_opt), lat) ->
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
-    let b1, s1 =
-      cn_to_ail_resource_internal ~is_pre:true new_name dts globals preds loc ret
-    in
+    let b1, s1 = cn_to_ail_resource ~is_pre:true new_name dts globals preds loc ret in
     let new_lat = ESE.fn_largs_and_body_subst (ESE.sym_subst (name, bt, new_name)) lat in
     let ail_executable_spec =
-      cn_to_ail_lat_internal_2
-        without_ownership_checking
-        dts
-        globals
-        preds
-        c_return_type
-        new_lat
+      cn_to_ail_lat_2 without_ownership_checking dts globals preds c_return_type new_lat
     in
     prepend_to_precondition ail_executable_spec (b1, upd_s @ s1 @ pop_s)
   | LAT.Constraint (lc, (loc, _str_opt), lat) ->
     let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in
-    let b1, s, e = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
-    let ss = upd_s @ s @ generate_cn_assert (*~cn_source_loc_opt:(Some loc)*) e @ pop_s in
+    let b1, s, e = cn_to_ail_logical_constraint dts globals lc in
+    let ss = upd_s @ s @ generate_cn_assert e @ pop_s in
     let ail_executable_spec =
-      cn_to_ail_lat_internal_2
-        without_ownership_checking
-        dts
-        globals
-        preds
-        c_return_type
-        lat
+      cn_to_ail_lat_2 without_ownership_checking dts globals preds c_return_type lat
     in
     prepend_to_precondition ail_executable_spec (b1, ss)
   (* Postcondition *)
@@ -3360,8 +3140,6 @@ let rec cn_to_ail_lat_internal_2
         else
           (loc, s) :: remove_duplicates (loc :: locs) ss
     in
-    (* let substitution : IT.t Subst.t = {replace = [(Sym.fresh_pretty "return", IT.(IT (Sym (Sym.fresh_pretty "__cn_ret"), BT.Unit)))]; relevant = Sym.Set.empty} in *)
-    (* let post_with_ret = RT.subst substitution post in *)
     let return_cn_binding, return_cn_decl =
       match rm_ctype c_return_type with
       | C.Void -> ([], [])
@@ -3390,7 +3168,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_statements =
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
-    let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
+    let post_bs, post_ss = cn_to_ail_post dts globals preds post in
     let ownership_stat_ =
       if without_ownership_checking then
         []
@@ -3409,12 +3187,7 @@ let rec cn_to_ail_lat_internal_2
     { pre = ([], []); post = ([], [ block ]); in_stmt = ail_statements }
 
 
-let rec cn_to_ail_pre_post_aux_internal
-  without_ownership_checking
-  dts
-  preds
-  globals
-  c_return_type
+let rec cn_to_ail_pre_post_aux without_ownership_checking dts preds globals c_return_type
   = function
   | AT.Computational ((sym, bt), _info, at) ->
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
@@ -3424,7 +3197,7 @@ let rec cn_to_ail_pre_post_aux_internal
     let decl = A.(AilSdeclaration [ (cn_sym, Some (mk_expr rhs)) ]) in
     let subst_at = ESE.fn_args_and_body_subst (ESE.sym_subst (sym, bt, cn_sym)) at in
     let ail_executable_spec =
-      cn_to_ail_pre_post_aux_internal
+      cn_to_ail_pre_post_aux
         without_ownership_checking
         dts
         preds
@@ -3434,25 +3207,14 @@ let rec cn_to_ail_pre_post_aux_internal
     in
     prepend_to_precondition ail_executable_spec ([ binding ], [ decl ])
   | AT.L lat ->
-    cn_to_ail_lat_internal_2
-      without_ownership_checking
-      dts
-      globals
-      preds
-      c_return_type
-      lat
+    cn_to_ail_lat_2 without_ownership_checking dts globals preds c_return_type lat
 
 
-let cn_to_ail_pre_post_internal
-  ~without_ownership_checking
-  dts
-  preds
-  globals
-  c_return_type
+let cn_to_ail_pre_post ~without_ownership_checking dts preds globals c_return_type
   = function
   | Some internal ->
     let ail_executable_spec =
-      cn_to_ail_pre_post_aux_internal
+      cn_to_ail_pre_post_aux
         without_ownership_checking
         dts
         preds
@@ -3474,11 +3236,12 @@ let cn_to_ail_pre_post_internal
   | None -> empty_ail_executable_spec
 
 
+(* CN test generation *)
+
 let generate_assume_ownership_function ~without_ownership_checking ctype
   : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
   =
   let ctype_str = str_of_ctype ctype in
-  (* Printf.printf ("ctype_str: %s\n") ctype_str; *)
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("assume_owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
@@ -3522,7 +3285,9 @@ let generate_assume_ownership_function ~without_ownership_checking ctype
   let sct =
     match sct_opt with
     | Some sct -> sct
-    | None -> failwith "Bad sctype when trying to generate ownership assuming function"
+    | None ->
+      failwith
+        (__LOC__ ^ ": Bad sctype when trying to generate ownership assuming function")
   in
   let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
   let ret_type = bt_to_ail_ctype bt in
@@ -3550,12 +3315,7 @@ let generate_assume_ownership_function ~without_ownership_checking ctype
   (decl, def)
 
 
-let cn_to_ail_assume_resource_internal
-  sym
-  dts
-  globals
-  (preds : (Sym.t * Def.Predicate.t) list)
-  loc
+let cn_to_ail_assume_resource sym dts globals (preds : (Sym.t * Def.Predicate.t) list) loc
   =
   let calculate_return_type = function
     | Request.Owned (sct, _) ->
@@ -3596,17 +3356,15 @@ let cn_to_ail_assume_resource_internal
         match cn_bt with
         | CN_record _members ->
           let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_sym' in
-          (* records := RecordMap.add members pred_record_name !records; *)
           mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct pred_record_name)))
         | _ -> cn_to_ail_base_type ~pred_sym:(Some pred_sym') cn_bt
       in
       (ctype, pred_def'.oarg_bt)
   in
-  (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in *)
   function
   | Request.P p ->
     let ctype, bt = calculate_return_type p.name in
-    let b, s, e = cn_to_ail_expr_internal dts globals p.pointer PassBack in
+    let b, s, e = cn_to_ail_expr dts globals p.pointer PassBack in
     let rhs, bs, ss, _owned_ctype =
       match p.name with
       | Owned (sct, _) ->
@@ -3628,13 +3386,13 @@ let cn_to_ail_assume_resource_internal
               BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct,
               Cerb_location.unknown )
         in
-        let bs', ss', e' = cn_to_ail_expr_internal dts globals fn_call_it PassBack in
+        let bs', ss', e' = cn_to_ail_expr dts globals fn_call_it PassBack in
         let binding = create_binding sym (bt_to_ail_ctype bt) in
         (e', binding :: bs', ss', Some (Sctypes.to_ctype sct))
       | PName pname ->
         let bs, ss, es =
           list_split_three
-            (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) p.iargs)
+            (List.map (fun it -> cn_to_ail_expr dts globals it PassBack) p.iargs)
         in
         let error_msg_update_stats_ =
           generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
@@ -3662,7 +3420,7 @@ let cn_to_ail_assume_resource_internal
        Input is expr of the form:
         take sym = each (integer q.q; q.permission){ Owned(q.pointer + (q.q * q.step)) }
     *)
-    let b1, s1, _e1 = cn_to_ail_expr_internal dts globals q.pointer PassBack in
+    let b1, s1, _e1 = cn_to_ail_expr dts globals q.pointer PassBack in
     (*
        Generating a loop of the form:
       <set q.q to start value>
@@ -3673,27 +3431,14 @@ let cn_to_ail_assume_resource_internal
     *)
     let i_sym, i_bt = q.q in
     let start_expr, _, while_loop_cond = get_while_bounds_and_cond q.q q.permission in
-    let _, _, e_start = cn_to_ail_expr_internal dts globals start_expr PassBack in
-    let _, _, while_cond_expr =
-      cn_to_ail_expr_internal dts globals while_loop_cond PassBack
-    in
-    let _, _, if_cond_expr = cn_to_ail_expr_internal dts globals q.permission PassBack in
+    let _, _, e_start = cn_to_ail_expr dts globals start_expr PassBack in
+    let _, _, while_cond_expr = cn_to_ail_expr dts globals while_loop_cond PassBack in
+    let _, _, if_cond_expr = cn_to_ail_expr dts globals q.permission PassBack in
     let cn_integer_ptr_ctype = bt_to_ail_ctype i_bt in
-    (* let convert_to_cn_integer_sym =
-       Sym.fresh_pretty (Option.get (get_conversion_to_fn_str BT.Integer))
-       in *)
-    let b2, s2, _e2 = cn_to_ail_expr_internal dts globals q.permission PassBack in
-    let b3, s3, _e3 = cn_to_ail_expr_internal dts globals q.step PassBack in
-    (* let conversion_fcall = A.(AilEcall (mk_expr (AilEident convert_to_cn_integer_sym), [e_start])) in *)
+    let b2, s2, _e2 = cn_to_ail_expr dts globals q.permission PassBack in
+    let b3, s3, _e3 = cn_to_ail_expr dts globals q.step PassBack in
     let start_binding = create_binding i_sym cn_integer_ptr_ctype in
     let start_assign = A.(AilSdeclaration [ (i_sym, Some e_start) ]) in
-    (* let (end_binding, end_assign) = convert_to_cn_binop e_end in *)
-
-    (* let q_times_step = A.(AilEbinary (mk_expr (AilEident i_sym), Arithmetic Mul, e3)) in *)
-    (* let gen_add_expr_ e_ =
-       A.(AilEbinary (mk_expr e_, Arithmetic Add, mk_expr q_times_step))
-       in *)
-    (* let sym_add_expr = make_deref_expr_ (gen_add_expr_ A.(AilEident sym)) in *)
     let return_ctype, _return_bt = calculate_return_type q.name in
     (* Translation of q.pointer *)
     let i_it = IT.IT (IT.(Sym i_sym), i_bt, Cerb_location.unknown) in
@@ -3703,7 +3448,7 @@ let cn_to_ail_assume_resource_internal
     let value_it =
       IT.IT (IT.(Binop (Add, q.pointer, step_binop)), BT.(Loc ()), Cerb_location.unknown)
     in
-    let b4, s4, e4 = cn_to_ail_expr_internal dts globals value_it PassBack in
+    let b4, s4, e4 = cn_to_ail_expr dts globals value_it PassBack in
     let ptr_add_sym = Sym.fresh () in
     let cn_pointer_return_type = bt_to_ail_ctype BT.(Loc ()) in
     let ptr_add_binding = create_binding ptr_add_sym cn_pointer_return_type in
@@ -3730,12 +3475,12 @@ let cn_to_ail_assume_resource_internal
               BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct,
               Cerb_location.unknown )
         in
-        let bs', ss', e' = cn_to_ail_expr_internal dts globals fn_call_it PassBack in
+        let bs', ss', e' = cn_to_ail_expr dts globals fn_call_it PassBack in
         (e', bs', ss', Some (Sctypes.to_ctype sct))
       | PName pname ->
         let bs, ss, es =
           list_split_three
-            (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) q.iargs)
+            (List.map (fun it -> cn_to_ail_expr dts globals it PassBack) q.iargs)
         in
         let error_msg_update_stats_ =
           generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) ()
@@ -3786,7 +3531,7 @@ let cn_to_ail_assume_resource_internal
         in
         ([], [ ail_block ])
       | _ ->
-        (* TODO: Change to mostly use index terms rather than Ail directly - avoids duplication between these functions and cn_internal_to_ail *)
+        (* TODO: Change to mostly use index terms rather than Ail directly - avoids duplication between these functions and cn_to_ail *)
         let cn_map_type =
           mk_ctype ~annots:[ CF.Annot.Atypedef (Sym.fresh_pretty "cn_map") ] C.Void
         in
@@ -3846,51 +3591,42 @@ let cn_to_ail_assume_resource_internal
     (b1 @ b2 @ b3 @ [ start_binding ] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
 
 
-let rec cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds = function
+let rec cn_to_ail_assume_lat dts pred_sym_opt globals preds = function
   | LAT.Define ((name, it), _info, lat) ->
     let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let binding = create_binding name ctype in
     let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 =
-      cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it (AssignVar name)
+      cn_to_ail_expr_with_pred_name pred_sym_opt dts globals it (AssignVar name)
     in
-    let b2, s2 = cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds lat in
+    let b2, s2 = cn_to_ail_assume_lat dts pred_sym_opt globals preds lat in
     (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LAT.Resource ((name, (ret, _bt)), (loc, _str_opt), lat) ->
-    let b1, s1 = cn_to_ail_assume_resource_internal name dts globals preds loc ret in
-    let b2, s2 = cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds lat in
+    let b1, s1 = cn_to_ail_assume_resource name dts globals preds loc ret in
+    let b2, s2 = cn_to_ail_assume_lat dts pred_sym_opt globals preds lat in
     (b1 @ b2, s1 @ s2)
   | LAT.Constraint (_lc, (_loc, _str_opt), lat) ->
-    let b2, s2 = cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds lat in
+    let b2, s2 = cn_to_ail_assume_lat dts pred_sym_opt globals preds lat in
     (b2, s2)
   | LAT.I it ->
-    let bs, ss =
-      cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it Return
-    in
+    let bs, ss = cn_to_ail_expr_with_pred_name pred_sym_opt dts globals it Return in
     (bs, ss)
 
 
-let cn_to_ail_assume_predicate_internal
-  (pred_sym, (rp_def : Def.Predicate.t))
-  dts
-  globals
-  preds
-  =
+let cn_to_ail_assume_predicate (pred_sym, (rp_def : Def.Predicate.t)) dts globals preds =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
   let rec clause_translate (clauses : Def.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->
-      let bs, ss =
-        cn_to_ail_assume_lat_internal dts (Some pred_sym) globals preds c.packing_ft
-      in
+      let bs, ss = cn_to_ail_assume_lat dts (Some pred_sym) globals preds c.packing_ft in
       (match c.guard with
        | IT (Const (Bool true), _, _) ->
          let bs'', ss'' = clause_translate cs in
          (bs @ bs'', ss @ ss'')
        | _ ->
-         let _b1, _s1, e =
-           cn_to_ail_expr_internal_with_pred_name (Some pred_sym) dts [] c.guard PassBack
+         let _, _, e =
+           cn_to_ail_expr_with_pred_name (Some pred_sym) dts [] c.guard PassBack
          in
          let bs'', ss'' = clause_translate cs in
          let conversion_from_cn_bool =
@@ -3935,38 +3671,38 @@ let cn_to_ail_assume_predicate_internal
   (decl, def)
 
 
-let rec cn_to_ail_assume_predicates_internal pred_def_list dts globals preds
+let rec cn_to_ail_assume_predicates pred_def_list dts globals preds
   : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
   match pred_def_list with
   | [] -> []
   | p :: ps ->
-    let d = cn_to_ail_assume_predicate_internal p dts globals preds in
-    let ds = cn_to_ail_assume_predicates_internal ps dts globals preds in
+    let d = cn_to_ail_assume_predicate p dts globals preds in
+    let ds = cn_to_ail_assume_predicates ps dts globals preds in
     d :: ds
 
 
-let rec cn_to_ail_assume_lat_internal_2 dts pred_sym_opt globals preds = function
+let rec cn_to_ail_assume_lat_2 dts pred_sym_opt globals preds = function
   | LAT.Define ((name, it), _info, lat) ->
     let ctype = bt_to_ail_ctype (IT.get_bt it) in
     let binding = create_binding name ctype in
     let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 =
-      cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it (AssignVar name)
+      cn_to_ail_expr_with_pred_name pred_sym_opt dts globals it (AssignVar name)
     in
-    let b2, s2 = cn_to_ail_assume_lat_internal_2 dts pred_sym_opt globals preds lat in
+    let b2, s2 = cn_to_ail_assume_lat_2 dts pred_sym_opt globals preds lat in
     (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LAT.Resource ((name, (ret, _bt)), (loc, _str_opt), lat) ->
-    let b1, s1 = cn_to_ail_assume_resource_internal name dts globals preds loc ret in
-    let b2, s2 = cn_to_ail_assume_lat_internal_2 dts pred_sym_opt globals preds lat in
+    let b1, s1 = cn_to_ail_assume_resource name dts globals preds loc ret in
+    let b2, s2 = cn_to_ail_assume_lat_2 dts pred_sym_opt globals preds lat in
     (b1 @ b2, s1 @ s2)
   | LAT.Constraint (_lc, (_loc, _str_opt), lat) ->
-    let b2, s2 = cn_to_ail_assume_lat_internal_2 dts pred_sym_opt globals preds lat in
+    let b2, s2 = cn_to_ail_assume_lat_2 dts pred_sym_opt globals preds lat in
     (b2, s2)
   | LAT.I _ -> ([], [ A.AilSreturnVoid ])
 
 
-let cn_to_ail_assume_pre_internal dts sym args globals preds lat
+let cn_to_ail_assume_pre dts sym args globals preds lat
   : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
   =
   let open Option in
@@ -3988,7 +3724,8 @@ let cn_to_ail_assume_pre_internal dts sym args globals preds lat
           [ ( y,
               Some
                 (mk_expr
-                   (wrap_with_convert_to
+                   (wrap_with_convert
+                      ~convert_from:false
                       (A.AilEident x)
                       (fst (List.assoc Sym.equal x args)))) )
           ])
@@ -4005,7 +3742,7 @@ let cn_to_ail_assume_pre_internal dts sym args globals preds lat
       lat
   in
   (* Generate function *)
-  let bs', ss' = cn_to_ail_assume_lat_internal_2 dts (Some sym) globals preds lat in
+  let bs', ss' = cn_to_ail_assume_lat_2 dts (Some sym) globals preds lat in
   let decl : A.sigma_declaration =
     ( fsym,
       ( Locations.other __LOC__,

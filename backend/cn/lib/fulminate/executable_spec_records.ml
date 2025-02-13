@@ -11,21 +11,20 @@ module AT = ArgumentTypes
 let rec add_records_to_map_from_it it =
   match IT.get_term it with
   | IT.Sym _s -> ()
-  | Const c ->
-    (match c with Default bt -> Cn_internal_to_ail.augment_record_map bt | _ -> ())
+  | Const c -> (match c with Default bt -> Cn_to_ail.augment_record_map bt | _ -> ())
   | Unop (_uop, t1) -> add_records_to_map_from_it t1
   | Binop (_bop, t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | ITE (t1, t2, t3) -> List.iter add_records_to_map_from_it [ t1; t2; t3 ]
   | EachI ((_, (_, _), _), t) -> add_records_to_map_from_it t
-  | Tuple _ts -> failwith "TODO: Tuples not yet supported"
-  | NthTuple (_, _t) -> failwith "TODO: Tuples not yet supported"
+  | Tuple _ts -> failwith (__LOC__ ^ ": Tuples not yet supported")
+  | NthTuple (_, _t) -> failwith (__LOC__ ^ ": NthTuples not yet supported")
   | Struct (_tag, members) ->
     List.iter (fun (_, it') -> add_records_to_map_from_it it') members
   | StructMember (t, _member) -> add_records_to_map_from_it t
   | StructUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | Record members ->
     (* Anonymous record instantiation -> add to records map *)
-    Cn_internal_to_ail.augment_record_map (IT.get_bt it);
+    Cn_to_ail.augment_record_map (IT.get_bt it);
     List.iter (fun (_, it') -> add_records_to_map_from_it it') members
   | RecordMember (t, _member) -> add_records_to_map_from_it t
   | RecordUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
@@ -133,8 +132,8 @@ let rec populate ?cn_sym bt =
   | BT.Record members ->
     (match cn_sym with
      (* Naming convention only needed for top-level records returned from CN functions and predicates *)
-     | Some cn_sym' -> Cn_internal_to_ail.augment_record_map ~cn_sym:cn_sym' bt
-     | None -> Cn_internal_to_ail.augment_record_map bt);
+     | Some cn_sym' -> Cn_to_ail.augment_record_map ~cn_sym:cn_sym' bt
+     | None -> Cn_to_ail.augment_record_map bt);
     List.iter (fun bt' -> populate bt') (List.map snd members)
   | _ -> ()
 
@@ -186,34 +185,25 @@ let populate_record_map
 
 let generate_all_record_strs () =
   let ail_records =
-    Cn_internal_to_ail.cn_to_ail_records
-      (Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records)
+    Cn_to_ail.cn_to_ail_records (Cn_to_ail.RecordMap.bindings !Cn_to_ail.records)
   in
-  let record_def_strs, record_decl_strs =
-    Executable_spec_internal.generate_c_records ail_records
-  in
-  (record_def_strs, record_decl_strs)
+  Executable_spec_internal.generate_c_records ail_records
 
 
 let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
-  let cn_record_info =
-    Cn_internal_to_ail.RecordMap.bindings !Cn_internal_to_ail.records
-  in
+  let cn_record_info = Cn_to_ail.RecordMap.bindings !Cn_to_ail.records in
   let cn_record_info = List.map (fun (ms, sym) -> (sym, ms)) cn_record_info in
   let record_equality_functions =
-    List.concat
-      (List.map
-         (Cn_internal_to_ail.generate_record_equality_function sigm.cn_datatypes)
-         cn_record_info)
+    List.concat (List.map Cn_to_ail.generate_record_equality_function cn_record_info)
   in
   let record_default_functions =
     List.concat
       (List.map
-         (Cn_internal_to_ail.generate_record_default_function sigm.cn_datatypes)
+         (Cn_to_ail.generate_record_default_function sigm.cn_datatypes)
          cn_record_info)
   in
   let record_map_get_functions =
-    List.concat (List.map Cn_internal_to_ail.generate_record_map_get cn_record_info)
+    List.concat (List.map Cn_to_ail.generate_record_map_get cn_record_info)
   in
   let eq_decls, eq_defs = List.split record_equality_functions in
   let default_decls, default_defs = List.split record_default_functions in
@@ -225,13 +215,16 @@ let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigm
     }
   in
   let fun_doc =
-    CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1)
+    CF.Pp_ail.(
+      with_executable_spec
+        (fun () -> pp_program ~show_include:true (None, modified_prog1))
+        ())
   in
   let fun_strs = CF.Pp_utils.to_plain_pretty_string fun_doc in
   let decl_docs =
     List.map
       (fun (sym, (_, _, decl)) ->
-        CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)
+        CF.Pp_ail.(with_executable_spec (fun () -> pp_function_prototype sym decl)) ())
       (eq_decls @ default_decls @ mapget_decls)
   in
   let fun_prot_strs =

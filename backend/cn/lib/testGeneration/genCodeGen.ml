@@ -1,8 +1,8 @@
 module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
-module CtA = Cn_internal_to_ail
-module Utils = Executable_spec_utils
+module CtA = Fulminate.Cn_to_ail
+module Utils = Fulminate.Executable_spec_utils
 module BT = BaseTypes
 module IT = IndexTerms
 module LC = LogicalConstraints
@@ -26,7 +26,7 @@ let name_of_bt (pred_sym : Sym.t) (bt : BT.t) : string =
   in
   let default =
     CF.Pp_utils.to_plain_string
-      (CF.Pp_ail.pp_ctype ~executable_spec:true C.no_qualifiers ct')
+      CF.Pp_ail.(with_executable_spec (pp_ctype C.no_qualifiers) ct')
   in
   Utils.get_typedef_string ct |> Option.value ~default
 
@@ -36,7 +36,7 @@ let _str_name_of_bt (pred_sym : Sym.t) (bt : BT.t) : string =
 
 
 let compile_it (sigma : CF.GenTypes.genTypeCategory A.sigma) (name : Sym.t) (it : IT.t) =
-  CtA.cn_to_ail_expr sigma.cn_datatypes [] (Some name) it
+  CtA.cn_to_ail_expr_toplevel sigma.cn_datatypes [] (Some name) it
 
 
 let compile_lc (sigma : CF.GenTypes.genTypeCategory A.sigma) (lc : LC.t) =
@@ -226,10 +226,10 @@ let rec compile_term
                         (AilEident
                            (Sym.fresh_named
                               (CF.Pp_utils.to_plain_string
-                                 (CF.Pp_ail.pp_ctype
-                                    ~executable_spec:true
-                                    C.no_qualifiers
-                                    (Sctypes.to_ctype sct)))));
+                                 CF.Pp_ail.(
+                                   with_executable_spec
+                                     (pp_ctype C.no_qualifiers)
+                                     (Sctypes.to_ctype sct)))));
                       mk_expr (CtA.wrap_with_convert_from e2_ (IT.get_bt value));
                       mk_expr (AilEident (Sym.fresh ()));
                       mk_expr
@@ -605,16 +605,16 @@ let compile (sigma : CF.GenTypes.genTypeCategory A.sigma) (ctx : GR.context) : P
   ^^ twice hardline
   ^^ separate_map
        (twice hardline)
-       (CF.Pp_ail.pp_tag_definition ~executable_spec:true)
+       CF.Pp_ail.(with_executable_spec pp_tag_definition)
        tag_definitions
   ^^ twice hardline
   ^^ separate_map
        (twice hardline)
        (fun (tag, (_, _, decl)) ->
-         CF.Pp_ail.pp_function_prototype ~executable_spec:true tag decl)
+         CF.Pp_ail.(with_executable_spec (fun () -> pp_function_prototype tag decl)) ())
        declarations
   ^^ twice hardline
-  ^^ CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, sigma)
+  ^^ CF.Pp_ail.(with_executable_spec (pp_program ~show_include:true) (None, sigma))
   ^^ hardline
   ^^ string "#endif // CN_GEN_H"
   ^^ hardline

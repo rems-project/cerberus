@@ -1,18 +1,15 @@
 let rec group_toplevel_defs new_list = function
   | [] -> new_list
-  | (loc, strs) :: xs ->
-    let matching_elems =
-      List.filter (fun (toplevel_loc, _) -> loc == toplevel_loc) new_list
-    in
+  | loc :: ls ->
+    let matching_elems = List.filter (fun toplevel_loc -> loc == toplevel_loc) new_list in
     if List.is_empty matching_elems then
-      group_toplevel_defs ((loc, strs) :: new_list) xs
+      group_toplevel_defs (loc :: new_list) ls
     else (
       (* Unsafe *)
-      let _, toplevel_strs = List.nth matching_elems 0 in
       let non_matching_elems =
-        List.filter (fun (toplevel_loc, _) -> loc != toplevel_loc) new_list
+        List.filter (fun toplevel_loc -> loc != toplevel_loc) new_list
       in
-      group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs)
+      group_toplevel_defs (loc :: non_matching_elems) ls)
 
 
 let rec open_auxilliary_files
@@ -61,14 +58,7 @@ let rec inject_injs_to_multiple_files ail_prog in_stmt_injs block_return_injs cn
   | (fn', oc') :: xs ->
     Stdlib.output_string oc' (cn_header ^ "\n");
     let in_stmt_injs_for_fn' = filter_injs_by_filename in_stmt_injs fn' in
-    let squashed_return_injs_for_fn' = filter_injs_by_filename block_return_injs fn' in
-    let return_injs_for_fn' =
-      List.map
-        (fun (loc, (e_opt, strs)) -> (loc, e_opt, strs))
-        squashed_return_injs_for_fn'
-    in
-    (* let injs_for_fn' = List.map (fun (loc, (_, strs)) -> (loc, strs)) injs_with_syms
-       in *)
+    let return_injs_for_fn' = filter_injs_by_filename block_return_injs fn' in
     (match
        Source_injection.(
          output_injections
@@ -202,7 +192,6 @@ let main
   output_decorated
   output_decorated_dir
   prog5
-  statement_locs
   =
   let output_filename =
     match output_decorated with
@@ -213,27 +202,17 @@ let main
   let oc = Stdlib.open_out (Filename.concat prefix output_filename) in
   let cn_oc = Stdlib.open_out (Filename.concat prefix "cn.c") in
   let cn_header_oc = Stdlib.open_out (Filename.concat prefix "cn.h") in
-  let instrumentation, symbol_table =
-    Executable_spec_extract.collect_instrumentation prog5
-  in
+  let instrumentation, _ = Executable_spec_extract.collect_instrumentation prog5 in
   Executable_spec_records.populate_record_map instrumentation prog5;
   let executable_spec =
-    generate_c_specs_internal
-      without_ownership_checking
-      instrumentation
-      symbol_table
-      statement_locs
-      sigm
-      prog5
+    generate_c_specs_internal without_ownership_checking instrumentation sigm prog5
   in
-  let c_datatype_defs, _c_datatype_decls, c_datatype_equality_fun_decls =
-    generate_c_datatypes sigm
+  let c_datatype_defs = generate_c_datatypes sigm in
+  let c_function_defs, c_function_decls, c_function_locs =
+    generate_c_functions sigm prog5.logical_predicates
   in
-  let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, _c_records =
-    generate_c_functions_internal sigm prog5.logical_predicates
-  in
-  let c_predicate_defs, locs_and_c_predicate_decls, _c_records' =
-    generate_c_predicates_internal sigm prog5.resource_predicates
+  let c_predicate_defs, c_predicate_decls, c_predicate_locs =
+    generate_c_predicates sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
     generate_conversion_and_equality_functions sigm
@@ -245,23 +224,15 @@ let main
     Executable_spec_utils.generate_include_header cn_utils_header_pair
   in
   let ownership_function_defs, ownership_function_decls =
-    generate_ownership_functions
-      without_ownership_checking
-      Cn_internal_to_ail.ownership_ctypes
-      sigm
+    generate_ownership_functions without_ownership_checking !Cn_to_ail.ownership_ctypes
   in
-  let c_struct_defs, _c_struct_decls = print_c_structs sigm.tag_definitions in
-  let cn_converted_struct_defs, _cn_converted_struct_decls =
-    generate_cn_versions_of_structs sigm.tag_definitions
-  in
+  let c_struct_defs = generate_c_struct_strs sigm.tag_definitions in
+  let cn_converted_struct_defs = generate_cn_versions_of_structs sigm.tag_definitions in
   let record_fun_defs, record_fun_decls =
     Executable_spec_records.generate_c_record_funs sigm
   in
   let datatype_strs = String.concat "\n" (List.map snd c_datatype_defs) in
-  let predicate_decls =
-    String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls))
-  in
-  let record_defs, _record_decls = Executable_spec_records.generate_all_record_strs () in
+  let record_defs = Executable_spec_records.generate_all_record_strs () in
   let cn_header_decls_list =
     [ cn_utils_header;
       "\n";
@@ -275,11 +246,9 @@ let main
       ownership_function_decls;
       conversion_function_decls;
       record_fun_decls;
-      (* record_equality_fun_prot_strs; *)
-      (* record_equality_fun_prot_strs'; *)
       c_function_decls;
       "\n";
-      predicate_decls
+      c_predicate_decls
     ]
   in
   let cn_header_oc_str =
@@ -291,8 +260,6 @@ let main
   (* TODO: Topological sort *)
   let cn_defs_list =
     [ cn_header;
-      (* record_equality_fun_strs; *)
-      (* record_equality_fun_strs'; *)
       record_fun_defs;
       conversion_function_defs;
       ownership_function_defs;
@@ -308,63 +275,30 @@ let main
   let headers = List.map Executable_spec_utils.generate_include_header incls in
   let source_file_strs_list = [ cn_header; List.fold_left ( ^ ) "" headers; "\n" ] in
   output_to_oc oc source_file_strs_list;
-  let c_datatypes_with_fn_prots =
-    List.combine c_datatype_defs c_datatype_equality_fun_decls
+  let c_datatype_locs = List.map fst c_datatype_defs in
+  let toplevel_locs =
+    group_toplevel_defs [] (c_datatype_locs @ c_function_locs @ c_predicate_locs)
   in
-  let c_datatypes_locs_and_strs =
-    List.map
-      (fun ((loc, dt_str), eq_prot_str) ->
-        (loc, [ String.concat "\n" [ dt_str; eq_prot_str ] ]))
-      c_datatypes_with_fn_prots
-  in
-  let toplevel_locs_and_defs =
-    group_toplevel_defs
-      []
-      (c_datatypes_locs_and_strs
-       @ locs_and_c_extern_function_decls
-       @ locs_and_c_predicate_decls)
-  in
-  let toplevel_locs_and_defs =
-    List.map (fun (loc, _) -> (loc, [ "" ])) toplevel_locs_and_defs
-  in
+  let toplevel_injections = List.map (fun loc -> (loc, [ "" ])) toplevel_locs in
   let accesses_stmt_injs =
     if without_ownership_checking then [] else memory_accesses_injections ail_prog
   in
-  let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
-  let struct_injs_with_filenames =
-    List.map (fun (loc, _) -> (loc, [ "" ])) struct_injs_with_filenames
-  in
-  (* Printf.printf "Locations for injection of CN statements:\n"; let _ = List.map (fun
-     (loc, _) -> Printf.printf "%s: %s\n" (Option.get (Cerb_location.get_filename loc))
-     (Cerb_location.simple_location loc)) executable_spec.in_stmt in *)
+  let struct_locs = List.map (fun (_, (loc, _, _)) -> loc) sigm.tag_definitions in
+  let struct_injs = List.map (fun loc -> (loc, [ "" ])) struct_locs in
   let in_stmt_injs =
-    executable_spec.in_stmt
-    @ accesses_stmt_injs
-    @ toplevel_locs_and_defs
-    @ struct_injs_with_filenames
+    executable_spec.in_stmt @ accesses_stmt_injs @ toplevel_injections @ struct_injs
   in
   (* Treat source file separately from header files *)
   let source_file_in_stmt_injs = filter_injs_by_filename in_stmt_injs filename in
   (* Return injections *)
   let block_return_injs = executable_spec.returns in
-  let squashed_block_return_injs =
-    List.map (fun (l, e_opt, strs) -> (l, (e_opt, strs))) block_return_injs
-  in
-  let source_file_return_injs_squashed =
-    filter_injs_by_filename squashed_block_return_injs filename
-  in
-  let source_file_return_injs =
-    List.map (fun (l, (e_opt, strs)) -> (l, e_opt, strs)) source_file_return_injs_squashed
-  in
+  let source_file_return_injs = filter_injs_by_filename block_return_injs filename in
   let included_filenames =
     List.map (fun (loc, _) -> Cerb_location.get_filename loc) in_stmt_injs
-  in
-  let included_filenames' =
-    included_filenames
-    @ List.map (fun (loc, _) -> Cerb_location.get_filename loc) squashed_block_return_injs
+    @ List.map (fun (loc, _) -> Cerb_location.get_filename loc) block_return_injs
   in
   let remaining_fns_and_ocs =
-    open_auxilliary_files filename prefix included_filenames' []
+    open_auxilliary_files filename prefix included_filenames []
   in
   let pre_post_pairs =
     if with_test_gen then
@@ -401,7 +335,7 @@ let main
   inject_injs_to_multiple_files
     ail_prog
     in_stmt_injs
-    squashed_block_return_injs
+    block_return_injs
     cn_header
     remaining_fns_and_ocs;
   close_out oc;

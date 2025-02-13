@@ -109,7 +109,7 @@ let rec str_of_ctype ctype =
        str_of_ctype ctype ^ " " ^ string_of_int (Z.to_int num_elements)
      | None -> str_of_ctype (mk_ctype C.(Pointer (empty_qualifiers, ctype))))
   | _ ->
-    let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
+    let doc = CF.Pp_ail.(with_executable_spec (pp_ctype empty_qualifiers) ctype) in
     CF.Pp_utils.to_plain_pretty_string doc
 
 
@@ -155,3 +155,5 @@ let create_decl_object ctype =
 
 (* declarations: list (ail_identifier * (Loc.t * Annot.attributes * declaration)) *)
 let create_declaration sym decl = (sym, (Cerb_location.unknown, CF.Annot.Attrs [], decl))
+
+let concat_map_newline docs = PPrint.(concat_map (fun doc -> doc ^^ hardline) docs)

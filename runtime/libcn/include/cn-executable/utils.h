@@ -1,3 +1,4 @@
+
 #ifndef CN_UTILS
 #define CN_UTILS 
 
@@ -167,9 +168,6 @@ cn_map *map_create(void);
 cn_map *cn_map_set(cn_map *m, cn_integer *key, void *value);
 cn_map *cn_map_deep_copy(cn_map *m1);
 cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
-// TODO (RB) does this need to be in here, or should it be auto-generated?
-// See https://github.com/rems-project/cerberus/pull/652 for details
-cn_bool *void_pointer_equality(void *p1, void *p2);
 
 #define convert_to_cn_map(c_ptr, cntype_conversion_fn, num_elements)({\
     cn_map *m = map_create();\

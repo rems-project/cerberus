@@ -406,6 +406,7 @@ let generate_executable_specs
   Pp.print_level := print_level;
   CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
+  CF.Pp_ail.executable_spec := true;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   IndexTerms.use_vip := not dont_use_vip;
   Check.fail_fast := fail_fast;
@@ -424,11 +425,11 @@ let generate_executable_specs
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
-    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
           (try
-             Executable_spec.main
+             Fulminate.Executable_spec.main
                ~without_ownership_checking
                ~with_test_gen
                ~copy_source_dir
@@ -437,7 +438,6 @@ let generate_executable_specs
                output_decorated
                output_decorated_dir
                prog5
-               statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           Or_TypeError.return ())
@@ -509,7 +509,7 @@ let run_tests
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
       let config : TestGeneration.config =
         { num_samples;
           max_backtracks;
@@ -549,9 +549,9 @@ let run_tests
         print_endline ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
       Cerb_colour.without_colour
         (fun () ->
-          Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
+          Fulminate.Cn_to_ail.augment_record_map (BaseTypes.Record []);
           (try
-             Executable_spec.main
+             Fulminate.Executable_spec.main
                ~without_ownership_checking
                ~with_test_gen:true
                ~copy_source_dir:false
@@ -560,7 +560,6 @@ let run_tests
                None
                (Some output_dir)
                prog5
-               statement_locs
            with
            | e -> handle_error_with_user_guidance ~label:"CN-Exec" e);
           (try
