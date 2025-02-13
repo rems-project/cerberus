@@ -1,4 +1,3 @@
-
 (* Simplified memory model inteface for CN *)
 
 Module Type Memory.

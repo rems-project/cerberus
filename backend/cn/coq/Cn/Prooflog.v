@@ -7,9 +7,7 @@ From Cerberus Require Import Location.
 Require Import ErrorCommon.
 Require Import Request.
 Require Import Resource.
-
-
-Definition Context_t := unit. (* TODO: placeholder *)
+Require Import Context.
 
 Inductive resource_inference_type : Type :=
   | PredicateRequest : ErrorCommon.situation ->
@@ -19,7 +17,7 @@ Inductive resource_inference_type : Type :=
                        resource_inference_type.
 
 Inductive log_entry : Type :=
-  | ResourceInferenceStep : Context_t -> resource_inference_type -> Context_t -> log_entry.
+  | ResourceInferenceStep : Context.t -> resource_inference_type -> Context.t -> log_entry.
 
 Definition log : Type := list log_entry.
 

@@ -2063,12 +2063,12 @@ let pp_context (c : Context.t) =
         pp_sym_map (pp_pair pp_basetype_or_value pp_context_l_info) c.computational );
       ("logical", pp_sym_map (pp_pair pp_basetype_or_value pp_context_l_info) c.logical);
       ("resources", pp_pair (pp_list (pp_pair pp_resource pp_int)) pp_int c.resources);
-      (*      ("resource_history", pp_map pp_int pp_resource_history c.resource_history); TODO *)
+      (*      ("resource_history", pp_map pp_int pp_resource_history c.resource_history); Ignore for now *)
       ( "constraints",
         let l = LogicalConstraints.Set.elements c.constraints in
-        pp_constructor "Set" [ pp_list pp_logical_constraint l ] )
+        pp_constructor "set_of" [ pp_list pp_logical_constraint l ] )
       (*      ("global", pp_global c.global); TODO *)
-      (*      ("where", pp_where c.where) TODO *)
+      (*      ("where", pp_where c.where) Ignore for now *)
     ]
 
 

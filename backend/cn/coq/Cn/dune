@@ -5,6 +5,11 @@
  (mode vo)
  (theories StructTact Cerberus)
  (modules
+  Sym
+  Memory
+  CNDefinition
+  Context
+  Global
   Prooflog
   ErrorCommon
   MuCore
@@ -13,7 +18,6 @@
   Id  
   SCtypes
   False
-  Sym
   Locations
   BaseTypes
   Terms
