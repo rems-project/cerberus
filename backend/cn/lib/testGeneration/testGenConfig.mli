@@ -18,6 +18,7 @@ type t =
     max_stack_depth : int option;
     allowed_depth_failures : int option;
     max_generator_size : int option;
+    sizing_strategy : int option;
     random_size_splits : bool;
     allowed_size_split_backtracks : int option;
     sized_null : bool;
@@ -63,6 +64,8 @@ val has_max_stack_depth : unit -> int option
 val has_allowed_depth_failures : unit -> int option
 
 val has_max_generator_size : unit -> int option
+
+val has_sizing_strategy : unit -> int option
 
 val is_random_size_splits : unit -> bool
 
