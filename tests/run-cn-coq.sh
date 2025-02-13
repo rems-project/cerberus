@@ -51,12 +51,12 @@ PASSED_COUNT=0
 FAILED_COUNT=0
 
 if [ ${USE_DUNE} -eq 1 ]; then
-    CN="${WITH_CN:=dune exec cn --}"
     CERB_RUNTIME="$(realpath "../runtime/")"
+    CN=(env CERB_RUNTIME="${CERB_RUNTIME}" ${WITH_CN:=dune exec cn --})
     COQ_CN_THEORIES_DIR="$(realpath "../_build/default/backend/cn/coq")"
     COQ_MAKEFILE_FLAGS="-R . Top -R ${COQ_CN_THEORIES_DIR}/Cerberus/ Cerberus -R ${COQ_CN_THEORIES_DIR}/Cn/ Cn"
 else
-    CN=cn
+    CN=(cn)
     COQ_MAKEFILE_FLAGS=
 fi
 
@@ -67,7 +67,7 @@ for TEST in ${SUCC}; do
     COQ_EXPORT="${TMPDIR}/$(basename "${TEST%.c}.v")"
     printf "[%d/%d] %s:\n" "${CURRENT}" "${TOTAL}" "${TEST}"
     
-    if timeout 60 env CERB_RUNTIME="${CERB_RUNTIME}" ${CN} verify "${TEST}" --coq-export-file="${COQ_EXPORT}" > "${TMPDIR}/cn.log" 2>&1; then
+    if timeout 60 "${CN[@]}" verify "${TEST}" --coq-export-file="${COQ_EXPORT}" > "${TMPDIR}/cn.log" 2>&1; then
         printf "  CN verify:    \033[32mSUCCESS\033[0m\n"
         
         # Copy Coq file to temp dir and try to compile it
