@@ -18,6 +18,7 @@ type t =
     max_stack_depth : int option;
     allowed_depth_failures : int option;
     max_generator_size : int option;
+    sizing_strategy : int option;
     random_size_splits : bool;
     allowed_size_split_backtracks : int option;
     sized_null : bool;
@@ -44,6 +45,7 @@ let default =
     max_stack_depth = None;
     allowed_depth_failures = None;
     max_generator_size = None;
+    sizing_strategy = None;
     random_size_splits = false;
     allowed_size_split_backtracks = None;
     sized_null = false;
@@ -90,6 +92,8 @@ let has_max_stack_depth () = !instance.max_stack_depth
 let has_allowed_depth_failures () = !instance.allowed_depth_failures
 
 let has_max_generator_size () = !instance.max_generator_size
+
+let has_sizing_strategy () = !instance.sizing_strategy
 
 let is_random_size_splits () = !instance.random_size_splits
 
