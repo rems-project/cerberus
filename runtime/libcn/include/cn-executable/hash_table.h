@@ -28,6 +28,7 @@ SOFTWARE.
 */
 
 #include <stdbool.h>
+
 #include <cn-executable/alloc.h>
 
 #ifdef __cplusplus
@@ -36,37 +37,36 @@ extern "C" {
 
 // Hash table entry (slot may be filled or empty).
 typedef struct {
-    signed long *key;  // key is NULL if this slot is empty
-    void* value;
+  signed long* key;  // key is NULL if this slot is empty
+  void* value;
 } ht_entry;
 
 // Hash table structure: create with ht_create, free with ht_destroy.
 struct hash_table {
-    ht_entry* entries;  // hash slots
-    int capacity;    // size of _entries array
-    int length;      // number of items in hash table
+  ht_entry* entries;  // hash slots
+  int capacity;       // size of _entries array
+  int length;         // number of items in hash table
 };
 
 typedef struct hash_table hash_table;
 
-hash_table *ht_create(void);
+hash_table* ht_create(void);
 
 void ht_destroy(hash_table* table);
 
-void *ht_get(hash_table *table, signed long *key);
+void* ht_get(hash_table* table, signed long* key);
 
-signed long* ht_set(hash_table* table, signed long *key, void* value);
+signed long* ht_set(hash_table* table, signed long* key, void* value);
 
-int ht_size(hash_table *table);
-
+int ht_size(hash_table* table);
 
 typedef struct {
-    signed long *key;  // current key
-    void* value;      // current value
+  signed long* key;  // current key
+  void* value;       // current value
 
-    // Dont use these fields directly.
-    hash_table* _table;       // reference to hash table being iterated
-    int _index;    // current index into ht._entries
+  // Dont use these fields directly.
+  hash_table* _table;  // reference to hash table being iterated
+  int _index;          // current index into ht._entries
 } hash_table_iterator;
 
 hash_table_iterator ht_iterator(hash_table* table);
@@ -77,4 +77,4 @@ _Bool ht_next(hash_table_iterator* it);
 }
 #endif
 
-#endif // CN_HASH_TABLE
+#endif  // CN_HASH_TABLE
