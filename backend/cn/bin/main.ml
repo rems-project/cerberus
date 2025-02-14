@@ -126,6 +126,7 @@ let with_well_formedness_check
   ~incl_dirs
   ~incl_files
   ~coq_export_file
+  ~coq_proof_log
   ~csv_times
   ~log_times
   ~astprints
@@ -173,12 +174,14 @@ let with_well_formedness_check
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
       let@ _ = f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused in
-      let _ = Prooflog.get_proof_log () in (* TODO: enable resource inference steps printing *)
+      let steps = Prooflog.get_proof_log () in 
       Option.iter
         (fun path ->
           Pp.print_file
             path
-            (Pp_mucore_coq.pp_unit_file_with_resource_inference prog5 None))
+            (Pp_mucore_coq.pp_unit_file_with_resource_inference prog5 
+            (if coq_proof_log then Some steps else None)
+            ))
         coq_export_file;
       return ()
     in
@@ -256,6 +259,7 @@ let well_formed
     ~incl_dirs
     ~incl_files
     ~coq_export_file:None
+    ~coq_proof_log:false
     ~csv_times
     ~log_times
     ~astprints
@@ -282,6 +286,7 @@ let verify
   diag
   lemmata
   coq_export_file
+  coq_proof_log
   only
   skip
   csv_times
@@ -330,6 +335,7 @@ let verify
     ~incl_dirs
     ~incl_files
     ~coq_export_file
+    ~coq_proof_log
     ~csv_times
     ~log_times
     ~astprints
@@ -423,6 +429,7 @@ let generate_executable_specs
     ~incl_dirs
     ~incl_files
     ~coq_export_file:None
+    ~coq_proof_log:false
     ~csv_times
     ~log_times
     ~astprints
@@ -600,6 +607,7 @@ let run_tests
     ~incl_files
     ~csv_times
     ~coq_export_file:None
+    ~coq_proof_log:false
     ~log_times
     ~astprints
     ~no_inherit_loc
@@ -937,6 +945,12 @@ module CoqExport_flags = struct
     Arg.(value & opt (some string) None & info [ "coq-export-file" ] ~docv:"FILE" ~doc)
 end
 
+module CoqProofLog_flags = struct
+  let coq_proof_log =
+    let doc = "include proof log in coq export" in
+    Arg.(value & flag & info [ "coq-proof-log" ] ~docv:"FILE" ~doc)
+end
+
 let wf_cmd =
   let open Term in
   let wf_t =
@@ -985,6 +999,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
   $ CoqExport_flags.coq_export
+  $ CoqProofLog_flags.coq_proof_log
   $ Verify_flags.only
   $ Verify_flags.skip
   $ Common_flags.csv_times
