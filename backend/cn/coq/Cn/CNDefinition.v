@@ -23,9 +23,9 @@ Module Function.
 End Function.
 
 Record Clause_t := mkClause {
-  loc : Locations.t;
-  guard : IndexTerms.t;
-  packing_ft : LogicalArgumentTypes.packing_ft
+  clause_loc : Locations.t;
+  clause_guard : IndexTerms.t;
+  clause_packing_ft : LogicalArgumentTypes.packing_ft
 }.
 
 (* All field name prefix with `def_predicate_` to avoid name clashes *)

@@ -19,7 +19,7 @@ Inductive const : Type :=
   | Bool : bool -> const
   | Unit : const
   | Null : const
-  | CType_const : Type -> const  (* simplified from ctype *)
+  | CType_const : SCtypes.ctype -> const
   | Default : BaseTypes.t -> const.
 
 (* Unary operators *)
@@ -115,7 +115,7 @@ Inductive term (bt : Type) : Type :=
   | MapDef : (sym * BaseTypes.t) -> annot bt -> term bt
   | Apply : sym -> (list  (annot bt)) -> term bt
   | TLet : (sym * annot bt) -> annot bt -> term bt
-  | _Match : annot bt -> list (pattern bt * annot bt) -> term bt
+  | TMatch : annot bt -> list (pattern bt * annot bt) -> term bt
   | Cast : BaseTypes.t -> annot bt -> term bt
 
 with annot (bt : Type) : Type :=

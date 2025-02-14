@@ -1,4 +1,5 @@
 Require Import Coq.Strings.String.
+Require Import Coq.ZArith.ZArith.
 
 Require Import Locations.
 Require Import BaseTypes.
@@ -17,7 +18,7 @@ Inductive basetype_or_value : Type :=
 Record t := mk_context {
   computational : SymMap.t (basetype_or_value * l_info);
   logical : SymMap.t (basetype_or_value * l_info);
-  resources : (list (Resource.t * nat) * nat)%type;
+  resources : ((list (Resource.t * Z)) * Z)%type;
   constraints : LogicalConstraints.LCSet.t;
   global : Global.t
 }.
