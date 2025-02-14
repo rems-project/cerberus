@@ -1089,8 +1089,7 @@ and pp_object_value pp_type (OV (ty, ov)) =
     ]
 
 
-(* TODO: hardcoded None. pass `pp_type` *)
-let pp_location_info = pp_pair pp_location (fun _ -> !^"None")
+let pp_location_info = pp_pair pp_location (pp_option pp_string)
 
 let pp_trusted = function
   | Trusted loc -> pp_constructor "Trusted" [ pp_location loc ]
@@ -2039,23 +2038,128 @@ let pp_predicate (p : Request.Predicate.t) =
     ]
 
 
-let pp_resource_predicate (p : Resource.predicate) = pp_predicate (fst p)
-(* TODO: omitting "output" *)
-
 let pp_sym_map (pp_value : 'a -> P.document) (m : 'a Sym.Map.t) =
   P.parens
     (!^"Sym.map_from_list" ^^^ pp_list (pp_pair pp_symbol pp_value) (Sym.Map.bindings m))
 
 
 let pp_basetype_or_value = function
-  | Context.BaseType bt ->
-    pp_constructor "BaseType" [ pp_basetype pp_unit bt ] (* TODO hardcoded unit? *)
+  | Context.BaseType bt -> pp_constructor "BaseType" [ pp_basetype pp_unit bt ]
   | Context.Value v -> pp_constructor "Value" [ pp_index_term v ]
 
 
-let pp_context_l_info (_ : Context.l_info) = !^"TODO"
+let pp_output (o : Resource.output) =
+  match o with Resource.O i -> pp_constructor "Output" [ pp_index_term i ]
 
-let pp_resource (r : Resource.t) = pp_pair pp_request (fun _ -> !^"TODO: output") r
+
+let pp_resource_predicate (p : Resource.predicate) = pp_pair pp_predicate pp_output p
+
+let pp_lazy_document_as_string (x : P.document Lazy.t) = !^"\"" ^^ Lazy.force x ^^ !^"\""
+
+let pp_context_l_info (x : Context.l_info) =
+  pp_pair pp_location pp_lazy_document_as_string x
+
+
+let pp_resource (r : Resource.t) = pp_pair pp_request pp_output r
+
+let pp_struct_piece (p : Memory.struct_piece) =
+  pp_record
+    [ ("piece_offset", pp_int p.offset);
+      ("piece_size", pp_int p.size);
+      ( "piece_member_or_padding",
+        pp_option (pp_pair pp_identifier pp_sctype) p.member_or_padding )
+    ]
+
+
+let pp_struct_layout (l : Memory.struct_layout) = pp_list pp_struct_piece l
+
+let pp_struct_decls (s : Memory.struct_decls) = pp_sym_map pp_struct_layout s
+
+let pp_member_types_gen (mt : unit BaseTypes.member_types_gen) =
+  pp_list (pp_pair pp_identifier (pp_basetype pp_unit)) mt
+
+
+let pp_basetype_dt_info (dt : BaseTypes.dt_info) =
+  pp_record
+    [ ("constrs", pp_list pp_symbol dt.constrs);
+      ("all_params", pp_member_types_gen dt.all_params)
+    ]
+
+
+let pp_basetype_constr_info (ci : BaseTypes.constr_info) =
+  pp_record
+    [ ("params", pp_member_types_gen ci.params);
+      ("datatype_tag", pp_symbol ci.datatype_tag)
+    ]
+
+
+let pp_argument_types_ft (ft : ArgumentTypes.ft) = pp_argument_types pp_return_type ft
+
+let pp_c_concrete_sig (c : Sctypes.c_concrete_sig) =
+  pp_record
+    [ ("sig_return_ty", pp_ctype c.sig_return_ty);
+      ("sig_arg_tys", pp_list pp_ctype c.sig_arg_tys);
+      ("sig_variadic", pp_bool c.sig_variadic);
+      ("sig_has_proto", pp_bool c.sig_has_proto)
+    ]
+
+
+let pp_clause (c : Definition.Clause.t) =
+  pp_record
+    [ ("clause_loc", pp_location c.loc);
+      ("clause_guard", pp_index_term c.guard);
+      ("clause_packing_ft", pp_logical_argument_types pp_index_term c.packing_ft)
+    ]
+
+
+let pp_definition_predicate (p : Definition.Predicate.t) =
+  pp_record
+    [ ("def_predicate_loc", pp_location p.loc);
+      ("def_predicate_pointer", pp_symbol p.pointer);
+      ("def_predicate_iargs", pp_list (pp_pair pp_symbol (pp_basetype pp_unit)) p.iargs);
+      ("def_predicate_oarg_bt", pp_basetype pp_unit p.oarg_bt);
+      ("def_predicate_clauses", pp_option (pp_list pp_clause) p.clauses)
+    ]
+
+
+let pp_definition_function_body (b : Definition.Function.body) =
+  match b with
+  | Def i -> pp_constructor "Definition.Function.Def" [ pp_index_term i ]
+  | Rec_Def i -> pp_constructor "Definition.Function.Rec_Def" [ pp_index_term i ]
+  | Uninterp -> pp_constructor "Definition.Function.Uninterp" []
+
+
+let pp_definition_function (f : Definition.Function.t) =
+  pp_record
+    [ ("def_function_loc", pp_location f.loc);
+      ("def_function_args", pp_list (pp_pair pp_symbol (pp_basetype pp_unit)) f.args);
+      ("def_function_return_bt", pp_basetype pp_unit f.return_bt);
+      ("def_function_emit_coq", pp_bool f.emit_coq);
+      ("def_function_body", pp_definition_function_body f.body)
+    ]
+
+
+let pp_global (g : Global.t) =
+  pp_record
+    [ ("struct_decls", pp_struct_decls g.struct_decls);
+      ("datatypes", pp_sym_map pp_basetype_dt_info g.datatypes);
+      ("datatype_constrs", pp_sym_map pp_basetype_constr_info g.datatype_constrs);
+      ("datatype_order", pp_option (pp_list (pp_list pp_symbol)) g.datatype_order);
+      ( "fun_decls",
+        pp_sym_map
+          (fun (l, a, s) ->
+            pp_tuple
+              [ pp_location l; pp_option pp_argument_types_ft a; pp_c_concrete_sig s ])
+          g.fun_decls );
+      ("resource_predicates", pp_sym_map pp_definition_predicate g.resource_predicates);
+      ( "resource_predicate_order",
+        pp_option (pp_list (pp_list pp_symbol)) g.resource_predicate_order );
+      ("logical_functions", pp_sym_map pp_definition_function g.logical_functions);
+      ( "logical_function_order",
+        pp_option (pp_list (pp_list pp_symbol)) g.logical_function_order )
+      (* TODO: add lemmata *)
+    ]
+
 
 let pp_context (c : Context.t) =
   pp_record
@@ -2066,9 +2170,8 @@ let pp_context (c : Context.t) =
       (*      ("resource_history", pp_map pp_int pp_resource_history c.resource_history); Ignore for now *)
       ( "constraints",
         let l = LogicalConstraints.Set.elements c.constraints in
-        pp_constructor "set_of" [ pp_list pp_logical_constraint l ] )
-      (*      ("global", pp_global c.global); TODO *)
-      (*      ("where", pp_where c.where) Ignore for now *)
+        pp_constructor "set_of" [ pp_list pp_logical_constraint l ] );
+      ("global", pp_global c.global) (*      ("where", pp_where c.where) Ignore for now *)
     ]
 
 
@@ -2097,9 +2200,8 @@ let pp_unit_file_with_resource_inference (prog : unit file) (osteps : Prooflog.l
   ^^ P.hardline
   ^^ pp_comment "Resource Inference Steps"
   ^^ P.hardline
-(* TODO: temporary disabled *)
-(*  ^^ coq_def
-    "ResourceInferenceSteps"
-    P.empty
-    (pp_list (fun step -> pp_resource_inference_step step) steps)
-*)
+  ^^
+  match osteps with
+  | Some steps ->
+    coq_def "ResourceInferenceSteps" P.empty (pp_list pp_resource_inference_step steps)
+  | None -> P.empty
