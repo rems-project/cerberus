@@ -9,10 +9,14 @@ set -uo pipefail
 STOP_ON_ERROR=0
 SINGLE_FILE=""
 USE_DUNE=0
-while getopts "def:" opt; do
+COQ_PROOF_LOG=0
+while getopts "dpef:" opt; do
     case ${opt} in
         d)
             USE_DUNE=1
+            ;;
+        p)
+            COQ_PROOF_LOG=1
             ;;
         e)
             STOP_ON_ERROR=1
@@ -26,6 +30,7 @@ while getopts "def:" opt; do
             echo "  -e  Stop on error and preserve temporary directory"
             echo "  -f  Run single test file (implies -e)"
             echo "  -d  Use dune to run CN"
+            echo "  -p  Include proof log in Coq export"
             exit 1
             ;;
     esac
@@ -67,7 +72,13 @@ for TEST in ${SUCC}; do
     COQ_EXPORT="${TMPDIR}/$(basename "${TEST%.c}.v")"
     printf "[%d/%d] %s:\n" "${CURRENT}" "${TOTAL}" "${TEST}"
     
-    if timeout 60 "${CN[@]}" verify "${TEST}" --coq-export-file="${COQ_EXPORT}" > "${TMPDIR}/cn.log" 2>&1; then
+    # Build the verify command with optional proof log flag
+    VERIFY_CMD=("${CN[@]}" verify "${TEST}" --coq-export-file="${COQ_EXPORT}")
+    if [ ${COQ_PROOF_LOG} -eq 1 ]; then
+        VERIFY_CMD+=("--coq-proof-log")
+    fi
+    
+    if timeout 60 "${VERIFY_CMD[@]}" > "${TMPDIR}/cn.log" 2>&1; then
         printf "  CN verify:    \033[32mSUCCESS\033[0m\n"
         
         # Copy Coq file to temp dir and try to compile it
