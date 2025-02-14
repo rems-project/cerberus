@@ -47,3 +47,5 @@ End LogicalConstraint_as_OrderedType.
 
 Module LCSet := FSetAVL.Make(LogicalConstraint_as_OrderedType).
 
+Definition set_from_list (l : list t) : LCSet.t.
+Proof. Admitted. (* TODO *)

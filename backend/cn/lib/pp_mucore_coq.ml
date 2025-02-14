@@ -1107,14 +1107,14 @@ let pp_unop = function
 
 
 let rec pp_terms_pattern (Terms.Pat (pat, bt, loc)) =
-  pp_constructor "Pat" [ pp_terms_pattern_ pat; pp_basetype pp_unit bt; pp_location loc ]
+  pp_constructor1 "Pat" [ pp_terms_pattern_ pat; pp_basetype pp_unit bt; pp_location loc ]
 
 
 and pp_terms_pattern_ = function
-  | Terms.PSym s -> pp_constructor "PSym" [ pp_symbol s ]
+  | Terms.PSym s -> pp_constructor1 "PSym" [ pp_symbol s ]
   | Terms.PWild -> pp_constructor0 "PWild"
   | Terms.PConstructor (sym, args) ->
-    pp_constructor
+    pp_constructor1
       "PConstructor"
       [ pp_symbol sym; pp_list (pp_pair pp_identifier pp_terms_pattern) args ]
 
@@ -1222,7 +1222,7 @@ and pp_index_term_content = function
     pp_constructor1 "Let" [ pp_pair pp_symbol pp_index_term (sym, t1); pp_index_term t2 ]
   | Match (t, cases) ->
     pp_constructor1
-      "Match"
+      "TMatch"
       [ pp_index_term t; pp_list (pp_pair pp_terms_pattern pp_index_term) cases ]
   | Cast (bt, t) -> pp_constructor1 "Cast" [ pp_basetype pp_unit bt; pp_index_term t ]
 
@@ -1996,27 +1996,29 @@ let pp_file pp_type pp_type_name file =
 (* Functions to pretty print the Explain.log types *)
 
 let pp_access = function
-  | Error_common.Load -> pp_constructor "Access.Load" []
-  | Error_common.Store -> pp_constructor "Access.Store" []
-  | Error_common.Deref -> pp_constructor "Access.Deref" []
-  | Error_common.Kill -> pp_constructor "Access.Kill" []
-  | Error_common.Free -> pp_constructor "Access.Free" []
-  | Error_common.To_bytes -> pp_constructor "Access.To_bytes" []
-  | Error_common.From_bytes -> pp_constructor "Access.From_bytes" []
+  | Error_common.Load -> pp_constructor "ErrorCommon.Load" []
+  | Error_common.Store -> pp_constructor "ErrorCommon.Store" []
+  | Error_common.Deref -> pp_constructor "ErrorCommon.Deref" []
+  | Error_common.Kill -> pp_constructor "ErrorCommon.Kill" []
+  | Error_common.Free -> pp_constructor "ErrorCommon.Free" []
+  | Error_common.To_bytes -> pp_constructor "ErrorCommon.To_bytes" []
+  | Error_common.From_bytes -> pp_constructor "ErrorCommon.From_bytes" []
 
 
 let pp_call_situation = function
-  | Error_common.FunctionCall s -> pp_constructor "Call.FunctionCall" [ pp_symbol s ]
+  | Error_common.FunctionCall s ->
+    pp_constructor "ErrorCommon.FunctionCall" [ pp_symbol s ]
   | Error_common.LemmaApplication s ->
-    pp_constructor "Call.LemmaApplication" [ pp_symbol s ]
-  | Error_common.LabelCall l -> pp_constructor "Call.LabelCall" [ pp_label_annot l ]
-  | Error_common.Subtyping -> pp_constructor "Call.Subtyping" []
+    pp_constructor "ErrorCommon.LemmaApplication" [ pp_symbol s ]
+  | Error_common.LabelCall l ->
+    pp_constructor "ErrorCommon.LabelCall" [ pp_label_annot l ]
+  | Error_common.Subtyping -> pp_constructor "ErrorCommon.Subtyping" []
 
 
 let pp_situation (s : Error_common.situation) =
   match s with
-  | Error_common.Access a -> pp_constructor "Access" [ pp_access a ]
-  | Error_common.Call c -> pp_constructor "Call" [ pp_call_situation c ]
+  | Error_common.Access a -> pp_constructor "ErrorCommon.Access" [ pp_access a ]
+  | Error_common.Call c -> pp_constructor "ErrorCommon.Call" [ pp_call_situation c ]
 
 
 let pp_init = function
@@ -2032,9 +2034,9 @@ let pp_request_name = function
 
 let pp_predicate (p : Request.Predicate.t) =
   pp_record
-    [ ("name", pp_request_name p.name);
-      ("pointer", pp_index_term p.pointer);
-      ("iargs", pp_list pp_index_term p.iargs)
+    [ ("Request.Predicate.name", pp_request_name p.name);
+      ("Request.Predicate.pointer", pp_index_term p.pointer);
+      ("Request.Predicate.iargs", pp_list pp_index_term p.iargs)
     ]
 
 
@@ -2044,12 +2046,12 @@ let pp_sym_map (pp_value : 'a -> P.document) (m : 'a Sym.Map.t) =
 
 
 let pp_basetype_or_value = function
-  | Context.BaseType bt -> pp_constructor "BaseType" [ pp_basetype pp_unit bt ]
-  | Context.Value v -> pp_constructor "Value" [ pp_index_term v ]
+  | Context.BaseType bt -> pp_constructor "Context.BaseType" [ pp_basetype pp_unit bt ]
+  | Context.Value v -> pp_constructor "Context.Value" [ pp_index_term v ]
 
 
 let pp_output (o : Resource.output) =
-  match o with Resource.O i -> pp_constructor "Output" [ pp_index_term i ]
+  match o with Resource.O i -> pp_constructor "Resource.O" [ pp_index_term i ]
 
 
 let pp_resource_predicate (p : Resource.predicate) = pp_pair pp_predicate pp_output p
@@ -2064,9 +2066,9 @@ let pp_resource (r : Resource.t) = pp_pair pp_request pp_output r
 
 let pp_struct_piece (p : Memory.struct_piece) =
   pp_record
-    [ ("piece_offset", pp_int p.offset);
-      ("piece_size", pp_int p.size);
-      ( "piece_member_or_padding",
+    [ ("Cn.Memory.piece_offset", pp_int p.offset);
+      ("Cn.Memory.piece_size", pp_int p.size);
+      ( "Cn.Memory.piece_member_or_padding",
         pp_option (pp_pair pp_identifier pp_sctype) p.member_or_padding )
     ]
 
@@ -2081,15 +2083,15 @@ let pp_member_types_gen (mt : unit BaseTypes.member_types_gen) =
 
 let pp_basetype_dt_info (dt : BaseTypes.dt_info) =
   pp_record
-    [ ("constrs", pp_list pp_symbol dt.constrs);
-      ("all_params", pp_member_types_gen dt.all_params)
+    [ ("BaseTypes.Datatype.constrs", pp_list pp_symbol dt.constrs);
+      ("BaseTypes.Datatype.all_params", pp_member_types_gen dt.all_params)
     ]
 
 
 let pp_basetype_constr_info (ci : BaseTypes.constr_info) =
   pp_record
-    [ ("params", pp_member_types_gen ci.params);
-      ("datatype_tag", pp_symbol ci.datatype_tag)
+    [ ("BaseTypes.Datatype.params", pp_member_types_gen ci.params);
+      ("BaseTypes.Datatype.datatype_tag", pp_symbol ci.datatype_tag)
     ]
 
 
@@ -2097,65 +2099,69 @@ let pp_argument_types_ft (ft : ArgumentTypes.ft) = pp_argument_types pp_return_t
 
 let pp_c_concrete_sig (c : Sctypes.c_concrete_sig) =
   pp_record
-    [ ("sig_return_ty", pp_ctype c.sig_return_ty);
-      ("sig_arg_tys", pp_list pp_ctype c.sig_arg_tys);
-      ("sig_variadic", pp_bool c.sig_variadic);
-      ("sig_has_proto", pp_bool c.sig_has_proto)
+    [ ("SCtypes.sig_return_ty", pp_ctype c.sig_return_ty);
+      ("SCtypes.sig_arg_tys", pp_list pp_ctype c.sig_arg_tys);
+      ("SCtypes.sig_variadic", pp_bool c.sig_variadic);
+      ("SCtypes.sig_has_proto", pp_bool c.sig_has_proto)
     ]
 
 
 let pp_clause (c : Definition.Clause.t) =
   pp_record
-    [ ("clause_loc", pp_location c.loc);
-      ("clause_guard", pp_index_term c.guard);
-      ("clause_packing_ft", pp_logical_argument_types pp_index_term c.packing_ft)
+    [ ("CNDefinition.clause_loc", pp_location c.loc);
+      ("CNDefinition.clause_guard", pp_index_term c.guard);
+      ( "CNDefinition.clause_packing_ft",
+        pp_logical_argument_types pp_index_term c.packing_ft )
     ]
 
 
 let pp_definition_predicate (p : Definition.Predicate.t) =
   pp_record
-    [ ("def_predicate_loc", pp_location p.loc);
-      ("def_predicate_pointer", pp_symbol p.pointer);
-      ("def_predicate_iargs", pp_list (pp_pair pp_symbol (pp_basetype pp_unit)) p.iargs);
-      ("def_predicate_oarg_bt", pp_basetype pp_unit p.oarg_bt);
-      ("def_predicate_clauses", pp_option (pp_list pp_clause) p.clauses)
+    [ ("CNDefinition.def_predicate_loc", pp_location p.loc);
+      ("CNDefinition.def_predicate_pointer", pp_symbol p.pointer);
+      ( "CNDefinition.def_predicate_iargs",
+        pp_list (pp_pair pp_symbol (pp_basetype pp_unit)) p.iargs );
+      ("CNDefinition.def_predicate_oarg_bt", pp_basetype pp_unit p.oarg_bt);
+      ("CNDefinition.def_predicate_clauses", pp_option (pp_list pp_clause) p.clauses)
     ]
 
 
 let pp_definition_function_body (b : Definition.Function.body) =
   match b with
-  | Def i -> pp_constructor "Definition.Function.Def" [ pp_index_term i ]
-  | Rec_Def i -> pp_constructor "Definition.Function.Rec_Def" [ pp_index_term i ]
-  | Uninterp -> pp_constructor "Definition.Function.Uninterp" []
+  | Def i -> pp_constructor "CNDefinition.Function.Def" [ pp_index_term i ]
+  | Rec_Def i -> pp_constructor "CNDefinition.Function.Rec_Def" [ pp_index_term i ]
+  | Uninterp -> pp_constructor "CNDefinition.Function.Uninterp" []
 
 
 let pp_definition_function (f : Definition.Function.t) =
   pp_record
-    [ ("def_function_loc", pp_location f.loc);
-      ("def_function_args", pp_list (pp_pair pp_symbol (pp_basetype pp_unit)) f.args);
-      ("def_function_return_bt", pp_basetype pp_unit f.return_bt);
-      ("def_function_emit_coq", pp_bool f.emit_coq);
-      ("def_function_body", pp_definition_function_body f.body)
+    [ ("CNDefinition.Function.def_function_loc", pp_location f.loc);
+      ( "CNDefinition.Function.def_function_args",
+        pp_list (pp_pair pp_symbol (pp_basetype pp_unit)) f.args );
+      ("CNDefinition.Function.def_function_return_bt", pp_basetype pp_unit f.return_bt);
+      ("CNDefinition.Function.def_function_emit_coq", pp_bool f.emit_coq);
+      ("CNDefinition.Function.def_function_body", pp_definition_function_body f.body)
     ]
 
 
 let pp_global (g : Global.t) =
   pp_record
-    [ ("struct_decls", pp_struct_decls g.struct_decls);
-      ("datatypes", pp_sym_map pp_basetype_dt_info g.datatypes);
-      ("datatype_constrs", pp_sym_map pp_basetype_constr_info g.datatype_constrs);
-      ("datatype_order", pp_option (pp_list (pp_list pp_symbol)) g.datatype_order);
-      ( "fun_decls",
+    [ ("Global.struct_decls", pp_struct_decls g.struct_decls);
+      ("Global.datatypes", pp_sym_map pp_basetype_dt_info g.datatypes);
+      ("Global.datatype_constrs", pp_sym_map pp_basetype_constr_info g.datatype_constrs);
+      ("Global.datatype_order", pp_option (pp_list (pp_list pp_symbol)) g.datatype_order);
+      ( "Global.fun_decls",
         pp_sym_map
           (fun (l, a, s) ->
             pp_tuple
               [ pp_location l; pp_option pp_argument_types_ft a; pp_c_concrete_sig s ])
           g.fun_decls );
-      ("resource_predicates", pp_sym_map pp_definition_predicate g.resource_predicates);
-      ( "resource_predicate_order",
+      ( "Global.resource_predicates",
+        pp_sym_map pp_definition_predicate g.resource_predicates );
+      ( "Global.resource_predicate_order",
         pp_option (pp_list (pp_list pp_symbol)) g.resource_predicate_order );
-      ("logical_functions", pp_sym_map pp_definition_function g.logical_functions);
-      ( "logical_function_order",
+      ("Global.logical_functions", pp_sym_map pp_definition_function g.logical_functions);
+      ( "Global.logical_function_order",
         pp_option (pp_list (pp_list pp_symbol)) g.logical_function_order )
       (* TODO: add lemmata *)
     ]
@@ -2163,21 +2169,26 @@ let pp_global (g : Global.t) =
 
 let pp_context (c : Context.t) =
   pp_record
-    [ ( "computational",
+    [ ( "Context.computational",
         pp_sym_map (pp_pair pp_basetype_or_value pp_context_l_info) c.computational );
-      ("logical", pp_sym_map (pp_pair pp_basetype_or_value pp_context_l_info) c.logical);
-      ("resources", pp_pair (pp_list (pp_pair pp_resource pp_int)) pp_int c.resources);
+      ( "Context.logical",
+        pp_sym_map (pp_pair pp_basetype_or_value pp_context_l_info) c.logical );
+      ( "Context.resources",
+        pp_pair (pp_list (pp_pair pp_resource pp_int)) pp_int c.resources );
       (*      ("resource_history", pp_map pp_int pp_resource_history c.resource_history); Ignore for now *)
-      ( "constraints",
+      ( "Context.constraints",
         let l = LogicalConstraints.Set.elements c.constraints in
-        pp_constructor "set_of" [ pp_list pp_logical_constraint l ] );
-      ("global", pp_global c.global) (*      ("where", pp_where c.where) Ignore for now *)
+        pp_constructor
+          "LogicalConstraints.set_from_list"
+          [ pp_list pp_logical_constraint l ] );
+      ("Context.global", pp_global c.global)
+      (*      ("where", pp_where c.where) Ignore for now *)
     ]
 
 
 let pp_resource_inference_type = function
   | Prooflog.PredicateRequest (s, p, o, ri) ->
-    pp_constructor1
+    pp_constructor
       "PredicateRequest"
       [ pp_situation s;
         pp_predicate p;
@@ -2189,7 +2200,7 @@ let pp_resource_inference_type = function
 (* Add this definition before its use in `pp_unit_file_with_resource_inference` *)
 let pp_resource_inference_step = function
   | Prooflog.ResourceInferenceStep (c1, ri, c2) ->
-    pp_constructor1
+    pp_constructor
       "ResourceInferenceStep"
       [ pp_context c1; pp_resource_inference_type ri; pp_context c2 ]
 
@@ -2198,10 +2209,13 @@ let pp_unit_file_with_resource_inference (prog : unit file) (osteps : Prooflog.l
   =
   pp_file pp_unit pp_unit_type prog
   ^^ P.hardline
-  ^^ pp_comment "Resource Inference Steps"
-  ^^ P.hardline
   ^^
   match osteps with
   | Some steps ->
-    coq_def "ResourceInferenceSteps" P.empty (pp_list pp_resource_inference_step steps)
+    pp_comment "Resource Inference Steps"
+    ^^ P.hardline
+    ^^ coq_def
+         "ResourceInferenceSteps:Prooflog.log"
+         P.empty
+         (pp_list pp_resource_inference_step steps)
   | None -> P.empty
