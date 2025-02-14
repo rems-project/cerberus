@@ -173,12 +173,12 @@ let with_well_formedness_check
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
       let@ _ = f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused in
-      let steps = Prooflog.get_proof_log () in
+      let _ = Prooflog.get_proof_log () in (* TODO: enable resource inference steps printing *)
       Option.iter
         (fun path ->
           Pp.print_file
             path
-            (Pp_mucore_coq.pp_unit_file_with_resource_inference prog5 steps))
+            (Pp_mucore_coq.pp_unit_file_with_resource_inference prog5 None))
         coq_export_file;
       return ()
     in
