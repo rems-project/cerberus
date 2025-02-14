@@ -78,4 +78,4 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}-with-coq
         eval $(opam env --switch=${{ matrix.version }}-with-coq )
-        ./tests/run-cn-coq.sh
+        ./tests/run-cn-coq.sh -p

@@ -5,6 +5,17 @@
 
 set -uo pipefail
 
+
+# List of blacklisted files that are known to run out of memory in Coq.
+# Paths must be relative to the 'tests/cn' directory.
+BLACKLISTED_FILES=(
+    "tree16/as_partial_map/tree16.c"
+    tree16/as_mutual_dt/tree16.c
+    mergesort.c
+    mergesort_alt.c
+    mutual_rec/mutual_rec2.c
+)
+
 # Parse command line options
 STOP_ON_ERROR=0
 SINGLE_FILE=""
@@ -48,6 +59,11 @@ if [ -n "${SINGLE_FILE}" ]; then
 else
     SUCC=$(find "${DIRNAME}"/cn -name '*.c' | grep -v '\.error\.c')
 fi
+
+# Filter out blacklisted files
+for blacklisted in "${BLACKLISTED_FILES[@]}"; do
+    SUCC=$(echo "${SUCC}" | grep -v "/${blacklisted}$")
+done
 
 FAILED=""
 TOTAL=$(echo "${SUCC}" | grep -c '^')
