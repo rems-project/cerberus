@@ -1112,7 +1112,7 @@ let rec pp_terms_pattern (Terms.Pat (pat, bt, loc)) =
 
 and pp_terms_pattern_ = function
   | Terms.PSym s -> pp_constructor1 "PSym" [ pp_symbol s ]
-  | Terms.PWild -> pp_constructor0 "PWild"
+  | Terms.PWild -> pp_constructor1 "PWild" []
   | Terms.PConstructor (sym, args) ->
     pp_constructor1
       "PConstructor"
@@ -1219,7 +1219,7 @@ and pp_index_term_content = function
   | Apply (sym, args) ->
     pp_constructor1 "Apply" [ pp_symbol sym; pp_list pp_index_term args ]
   | Let ((sym, t1), t2) ->
-    pp_constructor1 "Let" [ pp_pair pp_symbol pp_index_term (sym, t1); pp_index_term t2 ]
+    pp_constructor1 "TLet" [ pp_pair pp_symbol pp_index_term (sym, t1); pp_index_term t2 ]
   | Match (t, cases) ->
     pp_constructor1
       "TMatch"
