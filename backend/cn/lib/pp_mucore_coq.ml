@@ -2091,7 +2091,8 @@ let pp_resource_inference_step = function
       [ pp_context c1; pp_resource_inference_type ri; pp_context c2 ]
 
 
-let pp_unit_file_with_resource_inference (prog : unit file) (_ : Prooflog.log) =
+let pp_unit_file_with_resource_inference (prog : unit file) (osteps : Prooflog.log option)
+  =
   pp_file pp_unit pp_unit_type prog
   ^^ P.hardline
   ^^ pp_comment "Resource Inference Steps"
