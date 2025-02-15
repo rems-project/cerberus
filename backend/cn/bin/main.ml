@@ -568,6 +568,7 @@ let run_tests
   max_stack_depth
   allowed_depth_failures
   max_generator_size
+  sizing_strategy
   random_size_splits
   allowed_size_split_backtracks
   sized_null
@@ -616,6 +617,7 @@ let run_tests
           max_stack_depth;
           allowed_depth_failures;
           max_generator_size;
+          sizing_strategy;
           random_size_splits;
           allowed_size_split_backtracks;
           sized_null;
@@ -1168,6 +1170,16 @@ module Testing_flags = struct
       & info [ "max-generator-size" ] ~doc)
 
 
+  let sizing_strategy =
+    let doc =
+      "Strategy for deciding test case size (0 = Uniform, 1 = Quartile, 2 = QuickCheck)"
+    in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.sizing_strategy
+      & info [ "sizing-strategy" ] ~doc)
+
+
   let random_size_splits =
     let doc = "Randomly split sizes between recursive generator calls" in
     Arg.(value & flag & info [ "random-size-splits" ] ~doc)
@@ -1283,6 +1295,7 @@ let testing_cmd =
     $ Testing_flags.max_stack_depth
     $ Testing_flags.allowed_depth_failures
     $ Testing_flags.max_generator_size
+    $ Testing_flags.sizing_strategy
     $ Testing_flags.random_size_splits
     $ Testing_flags.allowed_size_split_backtracks
     $ Testing_flags.sized_null

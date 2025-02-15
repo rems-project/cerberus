@@ -173,6 +173,11 @@ let run () =
             [ "--max-generator-size"; string_of_int max_generator_size ])
           |> Option.to_list
           |> List.flatten)
+       @ (Config.has_sizing_strategy ()
+          |> Option.map (fun sizing_strategy ->
+            [ "--sizing-strategy"; string_of_int sizing_strategy ])
+          |> Option.to_list
+          |> List.flatten)
        @ (if Config.is_sized_null () then
             [ "--sized-null" ]
           else
