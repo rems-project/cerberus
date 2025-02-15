@@ -60,6 +60,8 @@ let string_of_cparser_cause = function
       "experimental keyword '" ^ str ^ "' (use of experimental features is discouraged)"
   | Cparser_unimplemented_keyword str -> 
       "unimplemented keyword '" ^ str ^ "'"
+  | Cparser_deprecated_keyword (str, instead) -> 
+      "deprecated keyword '" ^ str ^ "', use '" ^ instead ^ "' instead"
 
 
 let string_of_constraint_violation = function
