@@ -171,12 +171,19 @@ let with_regions_and_cursor locs loc_opt =
   | None -> Loc_unknown
 
 
-let to_cartesian loc =
-  let point_of_pos pos = (Cerb_position.line pos - 1, Cerb_position.column pos - 1) in
+let to_cartesian_gen get_line loc =
+  let point_of_pos pos = (get_line pos - 1, Cerb_position.column pos - 1) in
   match loc with
     | Loc_point p -> Some (point_of_pos p, point_of_pos p)
     | Loc_region (p1, p2, _) -> Some (point_of_pos p1, point_of_pos p2)
     | _ -> None
+  
+
+let to_cartesian_user = to_cartesian_gen Cerb_position.line
+let to_cartesian_raw =
+  to_cartesian_gen (fun pos -> (Cerb_position.to_file_lexing pos).pos_lnum)
+
+
 
 let location_to_string ?(charon=false) loc =
   let string_of_pos ?(shrink=false) pos =

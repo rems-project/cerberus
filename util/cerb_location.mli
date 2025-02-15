@@ -30,9 +30,17 @@ val location_to_string: ?charon:bool -> t -> string
 
 val to_json: t -> Cerb_json.json
 
-(** The range corresponding to this location, in the original source.
+(** The range corresponding to this location, in the user visible source.
 Returns ((start_line, start_col), (end_line, end_col)) *)
-val to_cartesian: t -> ((int * int) * (int * int)) option
+val to_cartesian_user: t -> ((int * int) * (int * int)) option
+
+
+(** The range corresponding to this location,
+in the actual (pre-processed) source.
+Returns ((start_line, start_col), (end_line, end_col)) *)
+val to_cartesian_raw: t -> ((int * int) * (int * int)) option
+
+
 
 val print_location: t -> PPrint.document
 val pp_location: ?clever:bool -> t -> PPrint.document

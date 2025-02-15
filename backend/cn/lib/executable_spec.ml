@@ -77,7 +77,8 @@ let rec inject_injs_to_multiple_files ail_prog in_stmt_injs block_return_injs cn
              program = ail_prog;
              pre_post = [];
              in_stmt = in_stmt_injs_for_fn';
-             returns = return_injs_for_fn'
+             returns = return_injs_for_fn';
+             inject_in_preproc = false
            })
      with
      | Ok () -> ()
@@ -198,6 +199,7 @@ let main
   ?(with_test_gen = false)
   ?(copy_source_dir = false)
   filename
+  ~use_preproc
   ((_, sigm) as ail_prog)
   output_decorated
   output_decorated_dir
@@ -389,7 +391,8 @@ let main
            program = ail_prog;
            pre_post = pre_post_pairs;
            in_stmt = source_file_in_stmt_injs;
-           returns = source_file_return_injs
+           returns = source_file_return_injs;
+           inject_in_preproc = use_preproc
          })
    with
    | Ok () -> ()
