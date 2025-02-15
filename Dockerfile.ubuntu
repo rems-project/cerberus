@@ -2,20 +2,19 @@
 FROM ubuntu:22.04
 
 # Install system packages
-RUN apt-get update
-RUN apt-get upgrade -y
-RUN apt-get install -y opam libgmp-dev libmpfr-dev
+RUN apt-get update && apt-get upgrade -y
+# System dependencies (ubuntu)
+RUN apt-get install -y build-essential libgmp-dev opam
 
+ENV OPAM_VERSION=4.14.1
 ENV OPAMCONFIRMLEVEL=unsafe-yes
-RUN opam init --disable-sandboxing
+RUN opam init --disable-sandboxing --yes --compiler=5.2.0
 
 ADD . /opt/cerberus
 WORKDIR /opt/cerberus
-RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
-RUN opam install z3
 
-RUN eval `opam env` \
-  && make install_cn
+# Install CN
+RUN opam install --yes ./cerberus.opam ./cerberus-lib.opam ./cn.opam z3
 
 WORKDIR /opt
 
