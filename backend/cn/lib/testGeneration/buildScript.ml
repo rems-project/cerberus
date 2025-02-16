@@ -147,6 +147,11 @@ let run () =
           |> Option.map (fun level -> [ "--logging-level"; string_of_int level ])
           |> Option.to_list
           |> List.flatten)
+       @ (Config.has_trace_granularity ()
+          |> Option.map (fun granularity ->
+            [ "--trace-granularity"; string_of_int granularity ])
+          |> Option.to_list
+          |> List.flatten)
        @ (Config.has_progress_level ()
           |> Option.map (fun level -> [ "--progress-level"; string_of_int level ])
           |> Option.to_list
@@ -166,6 +171,11 @@ let run () =
        @ (Config.has_max_generator_size ()
           |> Option.map (fun max_generator_size ->
             [ "--max-generator-size"; string_of_int max_generator_size ])
+          |> Option.to_list
+          |> List.flatten)
+       @ (Config.has_sizing_strategy ()
+          |> Option.map (fun sizing_strategy ->
+            [ "--sizing-strategy"; string_of_int sizing_strategy ])
           |> Option.to_list
           |> List.flatten)
        @ (if Config.is_sized_null () then

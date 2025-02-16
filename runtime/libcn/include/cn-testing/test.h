@@ -2,6 +2,7 @@
 #define CN_TEST_H
 
 #include <setjmp.h>
+#include <stdbool.h>
 #include <cn-executable/utils.h>
 #include <cn-testing/uniform.h>
 #include <cn-testing/result.h>
@@ -12,7 +13,13 @@ enum cn_test_gen_progress {
     CN_TEST_GEN_PROGRESS_ALL = 2
 };
 
-typedef enum cn_test_result cn_test_case_fn(enum cn_test_gen_progress, int);
+enum cn_gen_size_strategy {
+    CN_GEN_SIZE_UNIFORM = 0,
+    CN_GEN_SIZE_QUARTILE = 1,
+    CN_GEN_SIZE_QUICKCHECK = 2
+};
+
+typedef enum cn_test_result cn_test_case_fn(bool replay, enum cn_test_gen_progress, enum cn_gen_size_strategy, bool trap);
 
 void cn_register_test_case(const char* suite, const char* name, cn_test_case_fn* func);
 
@@ -20,6 +27,8 @@ void print_test_info(const char* suite, const char* name, int tests, int discard
 
 /** This function is called right before rerunning a failing test case. */
 void cn_trap(void);
+
+size_t cn_gen_compute_size(enum cn_gen_size_strategy strategy, int max_tests, size_t max_size, int max_discard_ratio, int successes, int recent_discards);
 
 #define CN_UNIT_TEST_CASE_NAME(FuncName) cn_test_const_##FuncName
 
@@ -30,7 +39,12 @@ void cn_trap(void);
         longjmp(buf_##FuncName, 1);                                                     \
     }                                                                                   \
                                                                                         \
-    enum cn_test_result cn_test_const_##FuncName () {                                   \
+    enum cn_test_result cn_test_const_##FuncName (                                      \
+        bool replay,                                                                    \
+        enum cn_test_gen_progress progress_level,                                       \
+        enum cn_gen_size_strategy size_strategy,                                        \
+        bool trap                                                                       \
+    ) {                                                                                 \
         if (setjmp(buf_##FuncName)) {                                                   \
             return CN_TEST_FAIL;                                                        \
         }                                                                               \
@@ -56,11 +70,13 @@ void cn_trap(void);
     }                                                                                   \
                                                                                         \
     enum cn_test_result cn_test_gen_##Name (                                            \
+        bool replay,                                                                    \
         enum cn_test_gen_progress progress_level,                                       \
-        int trap                                                                        \
+        enum cn_gen_size_strategy size_strategy,                                        \
+        bool trap                                                                       \
     ) {                                                                                 \
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
-        int i = 0, d = 0;                                                               \
+        int i = 0, d = 0, recentDiscards = 0;                                           \
         set_cn_failure_cb(&cn_test_gen_##Name##_fail);                                  \
         switch (setjmp(buf_##Name)) {                                                   \
             case CN_FAILURE_ASSERT:                                                     \
@@ -73,6 +89,7 @@ void cn_trap(void);
             case CN_FAILURE_ALLOC:                                                      \
                 cn_gen_rand_replace(checkpoint);                                        \
                 d++;                                                                    \
+                recentDiscards++;                                                       \
                 break;                                                                  \
         }                                                                               \
         for (; i < Samples; i++) {                                                      \
@@ -86,15 +103,28 @@ void cn_trap(void);
                 }                                                                       \
                 return CN_TEST_GEN_FAIL;                                                \
             }                                                                           \
-            size_t sz = cn_gen_uniform_cn_bits_u16(cn_gen_get_max_size())->val + 1;     \
-            cn_gen_set_size(sz);                                                        \
+            if (!replay) {                                                              \
+                cn_gen_set_size(cn_gen_compute_size(                                    \
+                    size_strategy,                                                      \
+                    Samples,                                                            \
+                    cn_gen_get_max_size(),                                              \
+                    10,                                                                 \
+                    i,                                                                  \
+                    recentDiscards                                                      \
+                ));                                                                     \
+            }                                                                           \
             CN_TEST_INIT();                                                             \
-            cn_gen_set_input_timer(cn_gen_get_milliseconds());                          \
+            if (!replay) {                                                              \
+                cn_gen_set_input_timer(cn_gen_get_milliseconds());                      \
+            } else {                                                                    \
+                cn_gen_set_input_timer(0);                                              \
+            }                                                                           \
             struct cn_gen_##Name##_record *res = cn_gen_##Name();                       \
             if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                     \
                 cn_gen_rand_replace(checkpoint);                                        \
                 i--;                                                                    \
                 d++;                                                                    \
+                recentDiscards++;                                                       \
                 continue;                                                               \
             }                                                                           \
             assume_##Name(__VA_ARGS__);                                                 \
@@ -104,6 +134,7 @@ void cn_trap(void);
             }                                                                           \
             Name(__VA_ARGS__);                                                          \
             cn_gen_rand_replace(checkpoint);                                            \
+            recentDiscards = 0;                                                         \
         }                                                                               \
                                                                                         \
         if (progress_level != CN_TEST_GEN_PROGRESS_NONE) {                              \
@@ -134,10 +165,7 @@ void cn_trap(void);
 int cn_test_main(int argc, char* argv[]);
 
 #define CN_TEST_INIT()                                                                  \
-    cn_free_all();                                                                      \
-    reset_error_msg_info();                                                             \
-    initialise_ownership_ghost_state();                                                 \
-    initialise_ghost_stack_depth();                                                     \
+    reset_fulminate();                                                                  \
     cn_gen_backtrack_reset();                                                           \
     cn_gen_alloc_reset();                                                               \
     cn_gen_ownership_reset();

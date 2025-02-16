@@ -35,7 +35,7 @@ SOFTWARE.
 
 hash_table* ht_create(void) {
     // Allocate space for hash table struct.
-    hash_table* table = cn_alloc(sizeof(hash_table));
+    hash_table* table = cn_fl_malloc(sizeof(hash_table));
     if (table == NULL) {
         return NULL;
     }
@@ -43,32 +43,35 @@ hash_table* ht_create(void) {
     table->capacity = INITIAL_CAPACITY;
 
     // Allocate (zero'd) space for entry buckets.
-    table->entries = cn_zalloc(table->capacity * sizeof(ht_entry));
+    table->entries = cn_fl_calloc(table->capacity, sizeof(ht_entry));
     if (table->entries == NULL) {
-        // free(table); // error, free table before we return!
+        cn_fl_free(table); // error, free table before we return!
         return NULL;
     }
     return table;
 }
 
-// No freeing yet
-// void ht_destroy(ht* table) {
-//     // First free allocated keys.
-//     for (size_t i = 0; i < table->capacity; i++) {
-//         free((void*)table->entries[i].key);
-//     }
+void ht_destroy(hash_table* table) {
+    if (table == NULL) {
+        return;
+    }
 
-//     // Then free entries array and table itself.
-//     free(table->entries);
-//     free(table);
-// }
+    // First free allocated keys.
+    for (size_t i = 0; i < table->capacity; i++) {
+        cn_fl_free((void*)table->entries[i].key);
+    }
+
+    // Then free entries array and table itself.
+    cn_fl_free(table->entries);
+    cn_fl_free(table);
+}
 
 #define FNV_OFFSET 14695981039346656037U
 #define FNV_PRIME 1099511628211U
 
 // Return 64-bit FNV-1a hash for key (NUL-terminated). See description:
 // https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
-static uint64_t hash_key(signed long *key) {
+static uint64_t hash_key(signed long* key) {
     uint64_t hash = FNV_OFFSET;
     hash ^= *key;
     hash *= FNV_PRIME;
@@ -76,7 +79,7 @@ static uint64_t hash_key(signed long *key) {
 }
 
 
-void* ht_get(hash_table* table, signed long *key) {
+void* ht_get(hash_table* table, signed long* key) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(table->capacity - 1));
@@ -99,15 +102,15 @@ void* ht_get(hash_table* table, signed long *key) {
     return NULL;
 }
 
-signed long *duplicate_key(signed long *key) {
-    signed long *new_key = cn_alloc(sizeof(signed long));
+signed long* duplicate_key(signed long* key) {
+    signed long* new_key = cn_fl_malloc(sizeof(signed long));
     *new_key = *key;
     return new_key;
 }
 
 // Internal function to set an entry (without expanding table).
 static signed long* ht_set_entry(ht_entry* entries, size_t capacity,
-        signed long *key, void* value, int* plength) {
+    signed long* key, void* value, int* plength) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(capacity - 1));
@@ -148,7 +151,7 @@ static _Bool ht_expand(hash_table* table) {
     if (new_capacity < table->capacity) {
         return 0;  // overflow (capacity would be too big)
     }
-    ht_entry* new_entries = cn_zalloc(new_capacity * sizeof(ht_entry));
+    ht_entry* new_entries = cn_fl_calloc(new_capacity, sizeof(ht_entry));
     if (new_entries == NULL) {
         return 0;
     }
@@ -158,12 +161,12 @@ static _Bool ht_expand(hash_table* table) {
         ht_entry entry = table->entries[i];
         if (entry.key != NULL) {
             ht_set_entry(new_entries, new_capacity, entry.key,
-                         entry.value, NULL);
+                entry.value, NULL);
         }
     }
 
     // Free old entries array and update this table's details.
-    // free(table->entries);'
+    cn_fl_free(table->entries);
     table->entries = new_entries;
     table->capacity = new_capacity;
     return 1;
@@ -185,7 +188,7 @@ signed long* ht_set(hash_table* table, signed long* key, void* value) {
 
     // Set entry and update length.
     return ht_set_entry(table->entries, table->capacity, key, value,
-                        &table->length);
+        &table->length);
 }
 
 int ht_size(hash_table* table) {

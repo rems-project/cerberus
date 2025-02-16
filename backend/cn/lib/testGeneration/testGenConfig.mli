@@ -11,12 +11,14 @@ type t =
     null_in_every : int option;
     seed : string option;
     logging_level : int option;
+    trace_granularity : int option;
     progress_level : int option;
     until_timeout : int option;
     exit_fast : bool;
     max_stack_depth : int option;
     allowed_depth_failures : int option;
     max_generator_size : int option;
+    sizing_strategy : int option;
     random_size_splits : bool;
     allowed_size_split_backtracks : int option;
     sized_null : bool;
@@ -49,6 +51,8 @@ val has_seed : unit -> string option
 
 val has_logging_level : unit -> int option
 
+val has_trace_granularity : unit -> int option
+
 val has_progress_level : unit -> int option
 
 val is_until_timeout : unit -> int option
@@ -60,6 +64,8 @@ val has_max_stack_depth : unit -> int option
 val has_allowed_depth_failures : unit -> int option
 
 val has_max_generator_size : unit -> int option
+
+val has_sizing_strategy : unit -> int option
 
 val is_random_size_splits : unit -> bool
 
