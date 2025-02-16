@@ -213,6 +213,8 @@ let run () =
 let coverage ~filename_base =
   string "# Coverage"
   ^^ hardline
+  ^^ string "echo"
+  ^^ hardline
   ^^ attempt
        ("gcov \"" ^ filename_base ^ "_test.c\"")
        "Recorded coverage via gcov."

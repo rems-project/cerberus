@@ -303,7 +303,6 @@ int cn_test_main(int argc, char* argv[]) {
                 test_case->func(true, CN_TEST_GEN_PROGRESS_NONE, sizing_strategy, trap);
 
                 set_cn_logging_level(CN_LOGGING_NONE);
-                printf("\n");
 
                 break;
             case CN_TEST_GEN_FAIL:
