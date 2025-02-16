@@ -485,7 +485,7 @@ let run_seq_tests
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
           if
@@ -522,7 +522,6 @@ let run_seq_tests
                 num_resets = num_resets 
               } in
           TestGeneration.set_seq_config config;
-          let _ = statement_locs, cabs_tunit in
           TestGeneration.run_seq
             ~output_dir
             ~filename
@@ -1217,7 +1216,7 @@ module Seq_testing_flags = struct
   let gen_num_samples =
     let doc = "Set the number of samples to test" in
     Arg.(
-      value & opt int TestGeneration.default_cfg.num_samples & info [ "num-samples" ] ~doc)
+      value & opt int TestGeneration.default_seq_cfg.num_samples & info [ "num-samples" ] ~doc)
 
 
   let gen_backtrack_attempts =
@@ -1227,7 +1226,7 @@ module Seq_testing_flags = struct
     in
     Arg.(
       value
-      & opt int TestGeneration.default_cfg.max_backtracks
+      & opt int TestGeneration.default_seq_cfg.max_backtracks
       & info [ "max-backtrack-attempts" ] ~doc)
 
   let num_resets =
