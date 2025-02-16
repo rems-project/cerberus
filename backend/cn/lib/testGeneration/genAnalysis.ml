@@ -93,7 +93,7 @@ let get_recursive_preds (preds : (Sym.t * Def.Predicate.t) list) : Sym.Set.t =
   let g =
     List.fold_left
       (fun g (fsym, pred) ->
-         Sym.Set.fold (fun gsym g' -> G.add_edge g' fsym gsym) (get_calls pred) g)
+        Sym.Set.fold (fun gsym g' -> G.add_edge g' fsym gsym) (get_calls pred) g)
       G.empty
       preds
   in
@@ -133,6 +133,6 @@ let get_call_graph (ctx : GD.context) : SymGraph.t =
   |> List.map_snd get_calls
   |> List.fold_left
        (fun cg (fsym, calls) ->
-          Sym.Set.fold (fun fsym' cg' -> SymGraph.add_edge cg' fsym fsym') calls cg)
+         Sym.Set.fold (fun fsym' cg' -> SymGraph.add_edge cg' fsym fsym') calls cg)
        SymGraph.empty
   |> Oper.transitive_closure

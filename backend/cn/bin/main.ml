@@ -443,6 +443,7 @@ let generate_executable_specs
           Or_TypeError.return ())
         ())
 
+
 let run_seq_tests
   (* Common *)
     filename
@@ -457,12 +458,12 @@ let run_seq_tests
   no_inherit_loc
   magic_comment_char_dollar
   (* Executable spec *)
-  without_ownership_checking
+    without_ownership_checking
   (* Test Generation *)
     output_dir
-    num_samples
-    backtrack_attempts
-    num_resets
+  num_samples
+  backtrack_attempts
+  num_resets
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -515,20 +516,14 @@ let run_seq_tests
             (Some output_dir)
             prog5
             statement_locs;
-          let config : TestGeneration.seq_config = 
-              { 
-                num_samples = num_samples;
-                max_backtracks = backtrack_attempts;
-                num_resets = num_resets 
-              } in
+          let config : TestGeneration.seq_config =
+            { num_samples; max_backtracks = backtrack_attempts; num_resets }
+          in
           TestGeneration.set_seq_config config;
-          TestGeneration.run_seq
-            ~output_dir
-            ~filename
-            sigma
-            prog5)
+          TestGeneration.run_seq ~output_dir ~filename sigma prog5)
         ();
-        Or_TypeError.return ())
+      Or_TypeError.return ())
+
 
 let run_tests
   (* Common *)
@@ -1238,7 +1233,9 @@ module Seq_testing_flags = struct
   let gen_num_samples =
     let doc = "Set the number of samples to test" in
     Arg.(
-      value & opt int TestGeneration.default_seq_cfg.num_samples & info [ "num-samples" ] ~doc)
+      value
+      & opt int TestGeneration.default_seq_cfg.num_samples
+      & info [ "num-samples" ] ~doc)
 
 
   let gen_backtrack_attempts =
@@ -1251,10 +1248,13 @@ module Seq_testing_flags = struct
       & opt int TestGeneration.default_seq_cfg.max_backtracks
       & info [ "max-backtrack-attempts" ] ~doc)
 
+
   let num_resets =
     let doc = "Number of context resets for sequence testing" in
     Arg.(
-      value & opt int TestGeneration.default_seq_cfg.num_resets & info [ "max-resets" ] ~doc)
+      value
+      & opt int TestGeneration.default_seq_cfg.num_resets
+      & info [ "max-resets" ] ~doc)
 end
 
 let testing_cmd =
@@ -1312,34 +1312,36 @@ let testing_cmd =
   let info = Cmd.info "test" ~doc in
   Cmd.v info test_t
 
-  let seq_test_cmd =
-    let open Term in
-    let test_t =
-      const run_seq_tests
-      $ Common_flags.file
-      $ Common_flags.macros
-      $ Common_flags.incl_dirs
-      $ Common_flags.incl_files
-      $ Common_flags.debug_level
-      $ Common_flags.print_level
-      $ Common_flags.csv_times
-      $ Common_flags.log_times
-      $ Common_flags.astprints
-      $ Common_flags.no_inherit_loc
-      $ Common_flags.magic_comment_char_dollar
-      $ Executable_spec_flags.without_ownership_checking
-      $ Seq_testing_flags.output_test_dir
-      $ Seq_testing_flags.gen_num_samples
-      $ Seq_testing_flags.gen_backtrack_attempts
-      $ Seq_testing_flags.num_resets
-    in
-    let doc =
-      "Generates sequences of calls for the API in [FILE].\n\
-      \    The tests use randomized inputs or previous calls.\n\
-      \    A [.c] file containing the test harnesses will be placed in [output-dir]."
-    in
-    let info = Cmd.info "seq_test" ~doc in
-    Cmd.v info test_t
+
+let seq_test_cmd =
+  let open Term in
+  let test_t =
+    const run_seq_tests
+    $ Common_flags.file
+    $ Common_flags.macros
+    $ Common_flags.incl_dirs
+    $ Common_flags.incl_files
+    $ Common_flags.debug_level
+    $ Common_flags.print_level
+    $ Common_flags.csv_times
+    $ Common_flags.log_times
+    $ Common_flags.astprints
+    $ Common_flags.no_inherit_loc
+    $ Common_flags.magic_comment_char_dollar
+    $ Executable_spec_flags.without_ownership_checking
+    $ Seq_testing_flags.output_test_dir
+    $ Seq_testing_flags.gen_num_samples
+    $ Seq_testing_flags.gen_backtrack_attempts
+    $ Seq_testing_flags.num_resets
+  in
+  let doc =
+    "Generates sequences of calls for the API in [FILE].\n\
+    \    The tests use randomized inputs or previous calls.\n\
+    \    A [.c] file containing the test harnesses will be placed in [output-dir]."
+  in
+  let info = Cmd.info "seq_test" ~doc in
+  Cmd.v info test_t
+
 
 let instrument_cmd =
   let open Term in

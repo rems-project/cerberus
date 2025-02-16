@@ -10,10 +10,10 @@ module MemberIndirection = struct
     | Record
 
   let rec replace_memberof_it
-            (k : kind)
-            (sym : Sym.t)
-            (dict : (Id.t * Sym.t) list)
-            (it : IT.t)
+    (k : kind)
+    (sym : Sym.t)
+    (dict : (Id.t * Sym.t) list)
+    (it : IT.t)
     : IT.t
     =
     let repl = replace_memberof_it k sym dict in
@@ -72,10 +72,10 @@ module MemberIndirection = struct
 
 
   let replace_memberof_gt
-        (k : kind)
-        (sym : Sym.t)
-        (dict : (Id.t * Sym.t) list)
-        (gt : GT.t)
+    (k : kind)
+    (sym : Sym.t)
+    (dict : (Id.t * Sym.t) list)
+    (gt : GT.t)
     : GT.t
     =
     let repl = replace_memberof_it k sym dict in
@@ -155,9 +155,9 @@ module MemberIndirection = struct
         members_to_indirect
         |> List.fold_left
              (fun gt'' (y, it) ->
-                GT.let_
-                  (0, (List.assoc Id.equal y indirect_map, GT.return_ it here), gt'')
-                  here)
+               GT.let_
+                 (0, (List.assoc Id.equal y indirect_map, GT.return_ it here), gt'')
+                 here)
              gt_main
       | _ -> gt
     in
@@ -217,7 +217,7 @@ let destruct_struct_arbitrary (prog5 : unit Mucore.file) (gt : GT.t) : GT.t =
              ( tag,
                List.map
                  (fun (y, (member, ct)) ->
-                    (member, IT.sym_ (y, Memory.bt_of_sct ct, loc_arb)))
+                   (member, IT.sym_ (y, Memory.bt_of_sct ct, loc_arb)))
                  members )
              loc_arb)
           loc_arb
@@ -225,9 +225,9 @@ let destruct_struct_arbitrary (prog5 : unit Mucore.file) (gt : GT.t) : GT.t =
       (* Generate appropriate generators for the members *)
       List.fold_left
         (fun gt'' (y, (_, sct)) ->
-           let gt_arb = arbitrary_of_sctype sct loc_arb in
-           (* NOTE: By construction, this should only be inside maps, so it'll never get backtracked to *)
-           GT.let_ (0, (y, gt_arb), gt'') loc_arb)
+          let gt_arb = arbitrary_of_sctype sct loc_arb in
+          (* NOTE: By construction, this should only be inside maps, so it'll never get backtracked to *)
+          GT.let_ (0, (y, gt_arb), gt'') loc_arb)
         gt_struct
         members
     | GT (Let (backtracks, (x, GT (Arbitrary, Struct tag, loc_arb)), gt'), _, _) ->
@@ -251,7 +251,7 @@ let destruct_struct_arbitrary (prog5 : unit Mucore.file) (gt : GT.t) : GT.t =
                    ( tag,
                      List.map
                        (fun (y, (member, ct)) ->
-                          (member, IT.sym_ (y, Memory.bt_of_sct ct, loc_arb)))
+                         (member, IT.sym_ (y, Memory.bt_of_sct ct, loc_arb)))
                        members )
                    loc_arb)
                 loc_arb ),
@@ -261,8 +261,8 @@ let destruct_struct_arbitrary (prog5 : unit Mucore.file) (gt : GT.t) : GT.t =
       (* Generate appropriate generators for the members *)
       List.fold_left
         (fun gt'' (y, (_, sct)) ->
-           let gt_arb = arbitrary_of_sctype sct loc_arb in
-           GT.let_ (backtracks, (y, gt_arb), gt'') loc_arb)
+          let gt_arb = arbitrary_of_sctype sct loc_arb in
+          GT.let_ (backtracks, (y, gt_arb), gt'') loc_arb)
         gt_struct
         members
     | _ -> gt
@@ -280,8 +280,8 @@ let normalize_gen (prog5 : unit Mucore.file) (gt : GT.t) : GT.t =
 
 
 let normalize_gen_def
-      (prog5 : unit Mucore.file)
-      ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
+  (prog5 : unit Mucore.file)
+  ({ filename; recursive; spec; name; iargs; oargs; body } : GD.t)
   : GD.t
   =
   { filename;

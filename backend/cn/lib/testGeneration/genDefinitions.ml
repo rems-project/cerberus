@@ -13,7 +13,7 @@ type t =
 [@@deriving eq, ord]
 
 let mangled_name
-      { filename = _; recursive = _; spec = _; name; iargs; oargs = _; body = _ }
+  { filename = _; recursive = _; spec = _; name; iargs; oargs = _; body = _ }
   : Sym.t
   =
   GenUtils.get_mangled_name (name :: List.map fst iargs)
@@ -53,8 +53,8 @@ let pp_context (ctx : context) : Pp.document =
 
 
 let add_context
-      ({ filename; recursive; spec; name; iargs; oargs; body } : t)
-      (ctx : context)
+  ({ filename; recursive; spec; name; iargs; oargs; body } : t)
+  (ctx : context)
   : context
   =
   let desired_iargs = List.map fst iargs in

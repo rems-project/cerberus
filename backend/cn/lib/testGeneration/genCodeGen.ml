@@ -44,10 +44,10 @@ let compile_lc (sigma : CF.GenTypes.genTypeCategory A.sigma) (lc : LC.t) =
 
 
 let rec compile_term
-          (sigma : CF.GenTypes.genTypeCategory A.sigma)
-          (ctx : GR.context)
-          (name : Sym.t)
-          (tm : GR.term)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (ctx : GR.context)
+  (name : Sym.t)
+  (tm : GR.term)
   : A.bindings
     * CF.GenTypes.genTypeCategory A.statement_ list
     * CF.GenTypes.genTypeCategory A.expression
@@ -69,29 +69,27 @@ let rec compile_term
       List.split
         (List.mapi
            (fun i (_, gr) ->
-              let bs, ss, e = compile_term sigma ctx name gr in
-              ( bs,
-                A.(
-                  [ AilSexpr
-                      (mk_expr
-                         (AilEcall
-                            ( mk_expr
-                                (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_BEGIN")),
-                              List.map
-                                mk_expr
-                                [ AilEconst
-                                    (ConstantInteger
-                                       (IConstant (Z.of_int i, Decimal, None)))
-                                ] )))
-                  ]
-                  @ ss
-                  @ [ AilSexpr
-                        (mk_expr
-                           (AilEcall
-                              ( mk_expr
-                                  (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_END")),
-                                [ mk_expr (AilEident var); e ] )))
-                    ]) ))
+             let bs, ss, e = compile_term sigma ctx name gr in
+             ( bs,
+               A.(
+                 [ AilSexpr
+                     (mk_expr
+                        (AilEcall
+                           ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_BEGIN")),
+                             List.map
+                               mk_expr
+                               [ AilEconst
+                                   (ConstantInteger
+                                      (IConstant (Z.of_int i, Decimal, None)))
+                               ] )))
+                 ]
+                 @ ss
+                 @ [ AilSexpr
+                       (mk_expr
+                          (AilEcall
+                             ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_PICK_CASE_END")),
+                               [ mk_expr (AilEident var); e ] )))
+                   ]) ))
            choices)
     in
     ( List.flatten bs,
@@ -110,15 +108,15 @@ let rec compile_term
                     @ List.flatten
                         (List.mapi
                            (fun i (w, _) ->
-                              List.map
-                                mk_expr
-                                [ AilEconst
-                                    (ConstantInteger
-                                       (IConstant (Z.of_int w, Decimal, None)));
-                                  AilEconst
-                                    (ConstantInteger
-                                       (IConstant (Z.of_int i, Decimal, None)))
-                                ])
+                             List.map
+                               mk_expr
+                               [ AilEconst
+                                   (ConstantInteger
+                                      (IConstant (Z.of_int w, Decimal, None)));
+                                 AilEconst
+                                   (ConstantInteger
+                                      (IConstant (Z.of_int i, Decimal, None)))
+                               ])
                            choices) )))
         ]
       @ List.flatten ss
@@ -244,15 +242,15 @@ let rec compile_term
                     ]
                     @ List.map
                         (fun x ->
-                           mk_expr
-                             (AilEcast
-                                ( C.no_qualifiers,
-                                  C.pointer_to_char,
-                                  mk_expr
-                                    (AilEstr
-                                       ( None,
-                                         [ (Locations.other __LOC__, [ Sym.pp_string x ])
-                                         ] )) )))
+                          mk_expr
+                            (AilEcast
+                               ( C.no_qualifiers,
+                                 C.pointer_to_char,
+                                 mk_expr
+                                   (AilEstr
+                                      ( None,
+                                        [ (Locations.other __LOC__, [ Sym.pp_string x ]) ]
+                                      )) )))
                         (List.of_seq (Sym.Set.to_seq (IT.free_vars addr)))
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
@@ -320,15 +318,15 @@ let rec compile_term
                         ]
                       @ List.map
                           (fun x ->
-                             mk_expr
-                               (AilEcast
-                                  ( C.no_qualifiers,
-                                    C.pointer_to_char,
-                                    mk_expr
-                                      (AilEstr
-                                         ( None,
-                                           [ (Locations.other __LOC__, [ Sym.pp_string x ])
-                                           ] )) )))
+                            mk_expr
+                              (AilEcast
+                                 ( C.no_qualifiers,
+                                   C.pointer_to_char,
+                                   mk_expr
+                                     (AilEstr
+                                        ( None,
+                                          [ (Locations.other __LOC__, [ Sym.pp_string x ])
+                                          ] )) )))
                           (List.of_seq (Sym.Set.to_seq (GR.free_vars_term value)))
                       @ [ mk_expr (AilEconst ConstantNull) ] )))
           ])
@@ -350,15 +348,15 @@ let rec compile_term
                     @ [ mk_expr (AilEident last_var) ]
                     @ List.map
                         (fun x ->
-                           mk_expr
-                             (AilEcast
-                                ( C.no_qualifiers,
-                                  C.pointer_to_char,
-                                  mk_expr
-                                    (AilEstr
-                                       ( None,
-                                         [ (Locations.other __LOC__, [ Sym.pp_string x ])
-                                         ] )) )))
+                          mk_expr
+                            (AilEcast
+                               ( C.no_qualifiers,
+                                 C.pointer_to_char,
+                                 mk_expr
+                                   (AilEstr
+                                      ( None,
+                                        [ (Locations.other __LOC__, [ Sym.pp_string x ]) ]
+                                      )) )))
                         (List.of_seq (Sym.Set.to_seq (LC.free_vars prop)))
                     @ [ mk_expr (AilEconst ConstantNull) ] )))
         ]
@@ -414,15 +412,15 @@ let rec compile_term
                       @ [ e_perm; e_max; mk_expr (AilEident last_var) ]
                       @ List.map
                           (fun x ->
-                             mk_expr
-                               (AilEcast
-                                  ( C.no_qualifiers,
-                                    C.pointer_to_char,
-                                    mk_expr
-                                      (AilEstr
-                                         ( None,
-                                           [ (Locations.other __LOC__, [ Sym.pp_string x ])
-                                           ] )) )))
+                            mk_expr
+                              (AilEcast
+                                 ( C.no_qualifiers,
+                                   C.pointer_to_char,
+                                   mk_expr
+                                     (AilEstr
+                                        ( None,
+                                          [ (Locations.other __LOC__, [ Sym.pp_string x ])
+                                          ] )) )))
                           (List.of_seq
                              (Sym.Set.to_seq (Sym.Set.remove i (IT.free_vars perm))))
                       @ [ mk_expr (AilEconst ConstantNull) ] )))
@@ -494,9 +492,9 @@ let rec compile_term
 
 
 let compile_gen_def
-      (sigma : CF.GenTypes.genTypeCategory A.sigma)
-      (ctx : GR.context)
-      ((name, gr) : Sym.t * GR.definition)
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (ctx : GR.context)
+  ((name, gr) : Sym.t * GR.definition)
   : A.sigma_tag_definition * (A.sigma_declaration * 'a A.sigma_function_definition)
   =
   let loc = Locations.other __LOC__ in
@@ -580,7 +578,7 @@ let compile (sigma : CF.GenTypes.genTypeCategory A.sigma) (ctx : GR.context) : P
     |> List.map (fun (_, defs) ->
       List.map
         (fun ((_, gr) : _ * GR.definition) ->
-           (GenUtils.get_mangled_name (gr.name :: List.map fst gr.iargs), gr))
+          (GenUtils.get_mangled_name (gr.name :: List.map fst gr.iargs), gr))
         defs)
     |> List.flatten
   in
@@ -613,7 +611,7 @@ let compile (sigma : CF.GenTypes.genTypeCategory A.sigma) (ctx : GR.context) : P
   ^^ separate_map
        (twice hardline)
        (fun (tag, (_, _, decl)) ->
-          CF.Pp_ail.pp_function_prototype ~executable_spec:true tag decl)
+         CF.Pp_ail.pp_function_prototype ~executable_spec:true tag decl)
        declarations
   ^^ twice hardline
   ^^ CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, sigma)
