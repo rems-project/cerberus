@@ -188,7 +188,7 @@ int cn_test_main(int argc, char* argv[]) {
     int input_timeout = 5000;
     int exit_fast = 0;
     int trap = 0;
-    enum cn_gen_sizing_strategy sizing_strategy = 0;
+    enum cn_gen_sizing_strategy sizing_strategy = CN_GEN_SIZE_QUICKCHECK;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
 
