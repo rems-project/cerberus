@@ -13,13 +13,13 @@ enum cn_test_gen_progress {
     CN_TEST_GEN_PROGRESS_ALL = 2
 };
 
-enum cn_gen_size_strategy {
+enum cn_gen_sizing_strategy {
     CN_GEN_SIZE_UNIFORM = 0,
     CN_GEN_SIZE_QUARTILE = 1,
     CN_GEN_SIZE_QUICKCHECK = 2
 };
 
-typedef enum cn_test_result cn_test_case_fn(bool replay, enum cn_test_gen_progress, enum cn_gen_size_strategy, bool trap);
+typedef enum cn_test_result cn_test_case_fn(bool replay, enum cn_test_gen_progress, enum cn_gen_sizing_strategy, bool trap);
 
 void cn_register_test_case(const char* suite, const char* name, cn_test_case_fn* func);
 
@@ -28,7 +28,7 @@ void print_test_info(const char* suite, const char* name, int tests, int discard
 /** This function is called right before rerunning a failing test case. */
 void cn_trap(void);
 
-size_t cn_gen_compute_size(enum cn_gen_size_strategy strategy, int max_tests, size_t max_size, int max_discard_ratio, int successes, int recent_discards);
+size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy, int max_tests, size_t max_size, int max_discard_ratio, int successes, int recent_discards);
 
 #define CN_UNIT_TEST_CASE_NAME(FuncName) cn_test_const_##FuncName
 
@@ -42,7 +42,7 @@ size_t cn_gen_compute_size(enum cn_gen_size_strategy strategy, int max_tests, si
     enum cn_test_result cn_test_const_##FuncName (                                      \
         bool replay,                                                                    \
         enum cn_test_gen_progress progress_level,                                       \
-        enum cn_gen_size_strategy size_strategy,                                        \
+        enum cn_gen_sizing_strategy sizing_strategy,                                    \
         bool trap                                                                       \
     ) {                                                                                 \
         if (setjmp(buf_##FuncName)) {                                                   \
@@ -72,7 +72,7 @@ size_t cn_gen_compute_size(enum cn_gen_size_strategy strategy, int max_tests, si
     enum cn_test_result cn_test_gen_##Name (                                            \
         bool replay,                                                                    \
         enum cn_test_gen_progress progress_level,                                       \
-        enum cn_gen_size_strategy size_strategy,                                        \
+        enum cn_gen_sizing_strategy sizing_strategy,                                    \
         bool trap                                                                       \
     ) {                                                                                 \
         cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
@@ -105,7 +105,7 @@ size_t cn_gen_compute_size(enum cn_gen_size_strategy strategy, int max_tests, si
             }                                                                           \
             if (!replay) {                                                              \
                 cn_gen_set_size(cn_gen_compute_size(                                    \
-                    size_strategy,                                                      \
+                    sizing_strategy,                                                    \
                     Samples,                                                            \
                     cn_gen_get_max_size(),                                              \
                     10,                                                                 \

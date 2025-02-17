@@ -112,7 +112,7 @@ static inline void _cn_trap(void) { __asm__ __volatile__("NOP\n .word 0x10000000
 
 void cn_trap(void) { _cn_trap(); }
 
-size_t cn_gen_compute_size(enum cn_gen_size_strategy strategy, int max_tests, size_t max_size, int max_discard_ratio, int successes, int recent_discards) {
+size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy, int max_tests, size_t max_size, int max_discard_ratio, int successes, int recent_discards) {
     switch (strategy) {
     case CN_GEN_SIZE_QUARTILE:
         if (successes < max_tests / 4) {
@@ -188,7 +188,7 @@ int cn_test_main(int argc, char* argv[]) {
     int input_timeout = 5000;
     int exit_fast = 0;
     int trap = 0;
-    enum cn_gen_size_strategy sizing_strategy = 0;
+    enum cn_gen_sizing_strategy sizing_strategy = CN_GEN_SIZE_QUICKCHECK;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
 
@@ -197,15 +197,60 @@ int cn_test_main(int argc, char* argv[]) {
             i++;
         }
         else if (strcmp("--logging-level", arg) == 0) {
-            logging_level = strtol(argv[i + 1], NULL, 10);
+            char* next = argv[i + 1];
+            if (strcmp("none", next) == 0) {
+                logging_level = CN_LOGGING_NONE;
+            }
+            else if (strcmp("error", next) == 0) {
+                logging_level = CN_LOGGING_ERROR;
+            }
+            else if (strcmp("info", next) == 0) {
+                logging_level = CN_LOGGING_INFO;
+            }
+            else
+            {
+                logging_level = strtol(next, NULL, 10);
+            }
+
             i++;
         }
         else if (strcmp("--trace-granularity", arg) == 0) {
-            set_cn_trace_granularity(strtol(argv[i + 1], NULL, 10));
+            enum cn_trace_granularity granularity;
+
+            char* next = argv[i + 1];
+            if (strcmp("none", next) == 0) {
+                granularity = CN_TRACE_NONE;
+            }
+            else if (strcmp("ends", next) == 0) {
+                granularity = CN_TRACE_ENDS;
+            }
+            else if (strcmp("all", next) == 0) {
+                granularity = CN_TRACE_ALL;
+            }
+            else
+            {
+                granularity = strtol(next, NULL, 10);
+            }
+
+            set_cn_trace_granularity(granularity);
             i++;
         }
         else if (strcmp("--progress-level", arg) == 0) {
-            progress_level = strtol(argv[i + 1], NULL, 10);
+            char* next = argv[i + 1];
+            if (strcmp("silent", next) == 0) {
+                progress_level = CN_TEST_GEN_PROGRESS_NONE;
+            }
+            else if (strcmp("function", next) == 0) {
+                progress_level = CN_TEST_GEN_PROGRESS_FINAL;
+            }
+            else if (strcmp("testcase", next) == 0) {
+                progress_level = CN_TEST_GEN_PROGRESS_ALL;
+            }
+            else
+            {
+                progress_level = strtol(next, NULL, 10);
+            }
+
             i++;
         }
         else if (strcmp("--input-timeout", arg) == 0) {
@@ -248,7 +293,21 @@ int cn_test_main(int argc, char* argv[]) {
             trap = 1;
         }
         else if (strcmp("--sizing-strategy", arg) == 0) {
-            sizing_strategy = strtoul(argv[i + 1], NULL, 10);
+            char* next = argv[i + 1];
+            if (strcmp("uniform", next) == 0) {
+                sizing_strategy = CN_GEN_SIZE_UNIFORM;
+            }
+            else if (strcmp("quartile", next) == 0) {
+                sizing_strategy = CN_GEN_SIZE_QUARTILE;
+            }
+            else if (strcmp("quickcheck", next) == 0) {
+                sizing_strategy = CN_GEN_SIZE_QUICKCHECK;
+            }
+            else
+            {
+                sizing_strategy = strtoul(next, NULL, 10);
+            }
+
             i++;
         }
     }

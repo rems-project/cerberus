@@ -6,6 +6,7 @@ module LAT = LogicalArgumentTypes
 module CtA = Cn_internal_to_ail
 module ESpecInternal = Executable_spec_internal
 module Config = TestGenConfig
+module Options = Config.Options
 
 type config = Config.t
 
