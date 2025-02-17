@@ -15,6 +15,10 @@ module Cmm = Cmm_csem
 
 open Ctype
 
+let pos = Cerb_position.from_lexing
+let region (x,y) = Cerb_location.region (pos x, pos y)
+let pointCursor x = Cerb_location.PointCursor (pos x)
+
 let sym_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
 
@@ -243,7 +247,9 @@ let symbolify_sym _sym =
 let rec symbolify_ctype (Ctype (annots, ty)) =
   let symbolify_symbol = function
     | Symbol.Symbol (_, _, SD_Id str) ->
-      begin lookup_sym (str, (Lexing.dummy_pos, Lexing.dummy_pos)) >>= function
+      (*begin lookup_sym (str, (Lexing.dummy_pos, Lexing.dummy_pos)) >>= function*)
+      let dummy = Cerb_position.dummy in
+      begin lookup_sym (str, (dummy, dummy)) >>= function
         | Some (sym, _) ->
             Eff.return sym
         | None ->
@@ -1325,7 +1331,7 @@ ctype:
         | Some ty ->
             ty
         | None ->
-            let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
+            let loc = region ($startpos, $endpos) NoCursor in
             raise (Core_parser_util.Core_error (loc, Errors.Core_parser_unknown_ctype (fst str)))
     }
 | STRUCT tag= SYM
@@ -1475,26 +1481,26 @@ ctor:
 
 list_pattern:
 | BRACKETS COLON bTy= core_base_type
-  { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
+  { let loc = region ($startpos, $endpos) NoCursor in
     Pattern ([Aloc loc], CaseCtor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pat1= pattern COLON_COLON _pat2= pattern
-  { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ccons, [_pat1; _pat2])) }
+  { Pattern ([Aloc (region ($startpos, $endpos) NoCursor)], CaseCtor (Ccons, [_pat1; _pat2])) }
 | _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET) COLON bTy= core_base_type
-    { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
+    { let loc = (region ($startpos, $endpos) NoCursor) in
       mk_list_pat (ensure_list_core_base_type loc bTy) _pats }
 
 pattern:
 | _sym= SYM COLON bTy= core_base_type
-    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseBase (Some _sym, bTy)) }
+    { Pattern ([Aloc (region ($startpos, $endpos) NoCursor)], CaseBase (Some _sym, bTy)) }
 | UNDERSCORE COLON bTy= core_base_type
-    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseBase (None, bTy)) }
+    { Pattern ([Aloc (region ($startpos, $endpos) NoCursor)], CaseBase (None, bTy)) }
 (* Syntactic sugar for tuples and lists *)
 | _pat= list_pattern
     { _pat }
 | LPAREN _pat= pattern COMMA _pats= separated_nonempty_list(COMMA, pattern) RPAREN
-    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ctuple, _pat :: _pats)) }
+    { Pattern ([Aloc (region ($startpos, $endpos) NoCursor)], CaseCtor (Ctuple, _pat :: _pats)) }
 | ctor=ctor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
-    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (ctor, _pats)) }
+    { Pattern ([Aloc (region ($startpos, $endpos) NoCursor)], CaseCtor (ctor, _pats)) }
 ;
 
 pattern_pair(X):
@@ -1543,12 +1549,12 @@ value:
 
 list_pexpr:
 | BRACKETS COLON bTy= core_base_type
-    { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
+    { let loc = (region ($startpos, $endpos) NoCursor) in
       Pexpr ([Aloc loc], (), PEctor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pe1= pexpr COLON_COLON _pe2= pexpr
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEctor (Ccons, [_pe1; _pe2])) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEctor (Ccons, [_pe1; _pe2])) }
 | _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET) COLON bTy= core_base_type
-    { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
+    { let loc = (region ($startpos, $endpos) NoCursor) in
       mk_list_pe (ensure_list_core_base_type loc bTy) _pes }
 
 member:
@@ -1560,65 +1566,65 @@ pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
 | UNDEF LPAREN ub= UB RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEundef (Cerb_location.(region ($startpos, $endpos) NoCursor), ub)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEundef (region ($startpos, $endpos) NoCursor, ub)) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEerror (str, _pe))  }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEerror (str, _pe))  }
 | _cval= value
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEval _cval) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEval _cval) }
 | _sym= SYM
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEsym _sym) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEsym _sym) }
 | iCst= IMPL
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEimpl iCst) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEimpl iCst) }
 (* Syntactic sugar for tuples and lists *)
 | LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEctor (Ctuple, _pe :: _pes)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEctor (Ctuple, _pe :: _pes)) }
 | _pe= list_pexpr
   { _pe }
 | ctor= ctor _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEctor (ctor, _pes)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEctor (ctor, _pes)) }
 | CASE _pe= pexpr OF _pat_pes= list(pattern_pair(pexpr)) END
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PEcase (_pe, _pat_pes)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor($startpos($1))))], (), PEcase (_pe, _pat_pes)) }
 | ARRAY_SHIFT LPAREN _pe1= pexpr COMMA ty= core_ctype COMMA _pe2= pexpr RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEarray_shift (_pe1, ty, _pe2)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEarray_shift (_pe1, ty, _pe2)) }
 | MEMBER_SHIFT LPAREN _pe1= pexpr COMMA _sym= SYM COMMA DOT cid= cabs_id RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEmember_shift (_pe1, _sym, cid)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEmember_shift (_pe1, _sym, cid)) }
 | NOT _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEnot _pe) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor $startpos($1)))], (), PEnot _pe) }
 | MINUS _pe= pexpr
-    { let loc = Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))) in
+    { let loc = region ($startpos, $endpos) (pointCursor $startpos($1)) in
       Pexpr ([Aloc loc], (), PEop (OpSub, Pexpr ([Aloc loc], (), PEval (Vobject (OVinteger (Impl_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
 | CFUNCTION _pe = delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEcfunction _pe) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor $startpos($1)))], (), PEcfunction _pe) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(bop))))], (), PEop (bop, _pe1, _pe2)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor $startpos(bop)))], (), PEop (bop, _pe1, _pe2)) }
 | CONV_INT LPAREN ity= core_integer_type COMMA _pe= pexpr RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEconv_int (ity, _pe)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEconv_int (ity, _pe)) }
 | iop= WRAPI LPAREN ity= core_integer_type COMMA _pe1= pexpr COMMA _pe2= pexpr RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEwrapI (ity, iop, _pe1, _pe2)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEwrapI (ity, iop, _pe1, _pe2)) }
 | iop= CATCH_EXCEPTIONAL_CONDITION LPAREN ity= core_integer_type COMMA _pe1= pexpr COMMA _pe2= pexpr RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEcatch_exceptional_condition (ity, iop, _pe1, _pe2)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEcatch_exceptional_condition (ity, iop, _pe1, _pe2)) }
 | MEMOP LPAREN memop= PURE_MEMOP_OP COMMA _pes= separated_list(COMMA, pexpr) RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEmemop (memop, _pes)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor $startpos($1)))], (), PEmemop (memop, _pes)) }
 | LPAREN STRUCT _sym=SYM RPAREN _mems= delimited(LBRACE,separated_list (COMMA, member), RBRACE)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEstruct (_sym, _mems)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEstruct (_sym, _mems)) }
 | LPAREN UNION _sym=SYM RPAREN LBRACE m=member RBRACE
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEunion (_sym, fst m, snd m)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEunion (_sym, fst m, snd m)) }
 | nm= name _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEcall (nm, _pes)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEcall (nm, _pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _pe2= pexpr
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PElet (_pat, _pe1, _pe2)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor($startpos($1))))], (), PElet (_pat, _pe1, _pe2)) }
 | IF _pe1= pexpr THEN _pe2= pexpr ELSE _pe3= pexpr
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PEif (_pe1, _pe2, _pe3)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor($startpos($1))))], (), PEif (_pe1, _pe2, _pe3)) }
 | IS_SCALAR _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_scalar _pe) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEis_scalar _pe) }
 | IS_INTEGER _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_integer _pe) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEis_integer _pe) }
 | IS_SIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_signed _pe) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEis_signed _pe) }
 | IS_UNSIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_unsigned _pe) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEis_unsigned _pe) }
 | ARE_COMPATIBLE LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
-    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEare_compatible (_pe1, _pe2)) }
+    { Pexpr ([Aloc (region ($startpos, $endpos) NoCursor)], (), PEare_compatible (_pe1, _pe2)) }
 ;
 
 memop_op:
@@ -1631,65 +1637,65 @@ memop_op:
 expr:
 | e_= delimited(LPAREN, expr, RPAREN)
     { let Expr (annot, expr_) = e_ in
-      Expr (Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor)) :: annot, expr_) }
+      Expr (Aloc (region ($startpos, $endpos) NoCursor) :: annot, expr_) }
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
-    { Expr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], Epure pe_) }
+    { Expr ([Aloc (region ($startpos, $endpos) NoCursor)], Epure pe_) }
 | MEMOP LPAREN memop= memop_op COMMA pes= separated_list(COMMA, pexpr) RPAREN
-    { Expr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], Ememop (memop, pes)) }
+    { Expr ([Aloc (region ($startpos, $endpos) NoCursor)], Ememop (memop, pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Elet (_pat, _pe1, _e2) ) }
 | IF _pe1= pexpr THEN _e2= expr ELSE _e3= expr
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Eif (_pe1, _e2, _e3) ) }
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Ecase (_pe, _pat_es) ) }
 | PCALL LPAREN _nm= name RPAREN
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Eproc ((), _nm, []) ) }
 | PCALL LPAREN _nm= name COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Eproc ((), _nm, _pes) ) }
 | CCALL LPAREN  _pe_ty= pexpr COMMA _pe= pexpr RPAREN
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Eccall ((), _pe_ty, _pe, []) ) }
 | CCALL LPAREN  _pe_ty= pexpr COMMA _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Eccall ((), _pe_ty, _pe, _pes) ) }
 | _pact= paction
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Eaction _pact ) }
 | UNSEQ _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Eunseq _es ) }
 | LET WEAK _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Ewseq (_pat, _e1, _e2) ) }
 | _e1= expr SEMICOLON _e2= expr
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Esseq (Pattern ([], CaseBase (None, BTy_unit)), _e1, _e2)) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Esseq (_pat, _e1, _e2) ) }
 | BOUND _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Ebound _e ) }
 | SAVE _sym= SYM COLON bTy= core_base_type
        _xs= delimited(LPAREN,
               separated_list(COMMA,
                 separated_pair(SYM, COLON, separated_pair(core_base_type, COLON_EQ, pexpr))),
             RPAREN) IN _e= expr
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Esave ((_sym, bTy), map do_esave_arg _xs, _e) ) }
 | RUN _sym= SYM _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Erun ((), _sym, _pes) ) }
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , End _es ) }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Epar _es ) }
 ;
 
@@ -1733,9 +1739,9 @@ action:
 
 paction:
 | _act= action
-    { Paction (Pos, Action (Cerb_location.(region ($startpos, $endpos) NoCursor), (), _act)) }
+    { Paction (Pos, Action (region ($startpos, $endpos) NoCursor, (), _act)) }
 | NEG _act= delimited(LPAREN, action, RPAREN)
-    { Paction (Neg, Action (Cerb_location.(region ($startpos, $endpos) NoCursor), (), _act)) }
+    { Paction (Neg, Action (region ($startpos, $endpos) NoCursor, (), _act)) }
 ;
 
 def_declaration:

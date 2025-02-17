@@ -202,7 +202,8 @@ let scan_sym lexbuf =
   try
     Pmap.find id keywords
   with Not_found ->
-    T.SYM (id, (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf))
+    let get_pos f = Cerb_position.from_lexing (f lexbuf) in
+    T.SYM (id, (get_pos Lexing.lexeme_start_p, get_pos Lexing.lexeme_end_p))
 
 
 let scan_impl lexbuf =

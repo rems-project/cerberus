@@ -2,16 +2,16 @@ open Lexing
 
 type cursor =
   | NoCursor
-  | PointCursor of Lexing.position
-  | RegionCursor of Lexing.position * Lexing.position
+  | PointCursor of Cerb_position.t
+  | RegionCursor of Cerb_position.t * Cerb_position.t
 
 type t =
   | Loc_unknown
   | Loc_other of string
-  | Loc_point of Lexing.position
+  | Loc_point of Cerb_position.t
     (* start, end, cursor *)
-  | Loc_region of Lexing.position * Lexing.position * cursor
-  | Loc_regions of (Lexing.position * Lexing.position) list * cursor
+  | Loc_region of Cerb_position.t * Cerb_position.t * cursor
+  | Loc_regions of (Cerb_position.t * Cerb_position.t) list * cursor
 
 
 let unknown =
@@ -96,7 +96,7 @@ let from_main_file = function
   | Loc_point pos
   | Loc_region (pos, _, _)
   | Loc_regions ((pos,_)::_, _) ->
-    let ext = Filename.extension pos.pos_fname in
+    let ext = Filename.extension (Cerb_position.file pos) in
     ext = ".c" || ext = ".core"
 
 
@@ -108,10 +108,10 @@ let outer_bbox xs =
         (b,e) in
   let pos_lt pos1 pos2 =
     (* assuming pos_fname are the same *)
-    if pos1.pos_lnum = pos2.pos_lnum then
-      pos1.pos_cnum < pos2.pos_cnum
+    if Cerb_position.line pos1 = Cerb_position.line pos2 then
+      (Cerb_position.to_file_lexing pos1).pos_cnum < (Cerb_position.to_file_lexing pos2).pos_cnum
     else
-      pos1.pos_lnum < pos2.pos_lnum in
+      Cerb_position.line pos1 < Cerb_position.line pos2 in
   List.fold_left (fun (bAcc, eAcc) (b, e) ->
     ((if pos_lt b bAcc then b else bAcc), (if pos_lt e eAcc then eAcc else e))
   ) (b0, e0) xs
@@ -171,19 +171,26 @@ let with_regions_and_cursor locs loc_opt =
   | None -> Loc_unknown
 
 
-let to_cartesian loc =
-  let point_of_pos pos = Lexing.(pos.pos_lnum-1, pos.pos_cnum-pos.pos_bol) in
+let to_cartesian_gen get_line loc =
+  let point_of_pos pos = (get_line pos - 1, Cerb_position.column pos - 1) in
   match loc with
     | Loc_point p -> Some (point_of_pos p, point_of_pos p)
     | Loc_region (p1, p2, _) -> Some (point_of_pos p1, point_of_pos p2)
     | _ -> None
+  
+
+let to_cartesian_user = to_cartesian_gen Cerb_position.line
+let to_cartesian_raw =
+  to_cartesian_gen (fun pos -> (Cerb_position.to_file_lexing pos).pos_lnum)
+
+
 
 let location_to_string ?(charon=false) loc =
   let string_of_pos ?(shrink=false) pos =
     if shrink || (charon && from_main_file loc) then
-      Printf.sprintf "%d:%d" pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol)
+      Printf.sprintf "%d:%d" (Cerb_position.line pos) (Cerb_position.column pos)
     else
-      Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+      Printf.sprintf "%s:%d:%d" (Cerb_position.file pos) (Cerb_position.line pos) (Cerb_position.column pos) in
   let shrink z =
     if charon && from_main_file loc then
       ""
@@ -198,17 +205,17 @@ let location_to_string ?(charon=false) loc =
         string_of_pos pos ^ ":"
     | Loc_region (pos1, pos2, pos_opt) ->
         string_of_pos pos1 ^ "-" ^
-        begin if pos1.pos_fname = pos2.pos_fname then
+        begin if Cerb_position.file pos1 = Cerb_position.file pos2 then
           ""
         else
-          shrink pos2.pos_fname
+          shrink (Cerb_position.file pos2)
         end ^
-        begin if pos1.pos_lnum = pos2.pos_lnum then
+        begin if (Cerb_position.line pos1) = (Cerb_position.line pos2) then
           ""
         else
-          string_of_int pos2.pos_lnum ^ ":"
+          string_of_int (Cerb_position.line pos2) ^ ":"
         end ^
-        string_of_int (1+pos2.pos_cnum-pos2.pos_bol)
+        string_of_int (Cerb_position.column pos2)
         ^ begin match pos_opt with
           | NoCursor -> ""
           | PointCursor pos -> " (cursor: " ^ string_of_pos ~shrink:true pos ^ ")"
@@ -217,17 +224,17 @@ let location_to_string ?(charon=false) loc =
     | Loc_regions (xs, _) ->
         let (pos1, pos2) = outer_bbox xs in
         string_of_pos pos1 ^ "-" ^
-        begin if pos1.pos_fname = pos2.pos_fname then
+        begin if Cerb_position.file pos1 = Cerb_position.file pos2 then
           ""
         else
-          shrink pos2.pos_fname
+          shrink (Cerb_position.file pos2)
         end ^
-        begin if pos1.pos_lnum = pos2.pos_lnum then
+        begin if Cerb_position.line pos1 = Cerb_position.line pos2 then
           ""
         else
-          string_of_int pos2.pos_lnum ^ ":"
+          string_of_int (Cerb_position.line pos2) ^ ":"
         end ^
-        string_of_int (1+pos2.pos_cnum-pos2.pos_bol)
+        string_of_int (Cerb_position.column pos2)
 
 
 
@@ -236,10 +243,12 @@ open Cerb_pp_prelude
 
 let print_location loc =
   let print_lex pos =
-    !^"RT.position" ^^^ P.dquotes !^(pos.Lexing.pos_fname)
-    ^^^ !^(string_of_int pos.Lexing.pos_lnum)
-    ^^^ !^(string_of_int pos.Lexing.pos_bol)
-    ^^^ !^(string_of_int pos.Lexing.pos_cnum)
+    let f = Cerb_position.to_file_lexing pos in
+    !^"RT.position"
+    ^^^ P.dquotes !^(Cerb_position.file pos)
+    ^^^ !^(string_of_int (Cerb_position.line pos))
+    ^^^ !^(string_of_int f.pos_bol)
+    ^^^ !^(string_of_int f.pos_cnum)
   in
   let print_cursor = function
     | NoCursor ->
@@ -270,13 +279,10 @@ let print_location loc =
       ^^^ P.parens (print_list (print_pair print_lex) xs)
       ^^^ P.parens (print_cursor cur)
 
-
-open Lexing
-
 let to_json loc =
   let of_pos p =
-    `Assoc [("line", `Int (p.pos_lnum-1));
-            ("ch", `Int (p.pos_cnum-p.pos_bol))] in
+    `Assoc [("line", `Int (Cerb_position.line p - 1));
+            ("ch", `Int (Cerb_position.column p - 1))] in
   match loc with
     | Loc_unknown ->
         `Null
@@ -294,17 +300,16 @@ let to_json loc =
 open Cerb_colour
 
 let pp_location =
-  let last_pos = ref Lexing.dummy_pos in
+  let last_pos = ref Cerb_position.dummy in
   fun ?(clever = false) loc ->
   let string_of_pos p =
-    let open Lexing in
     let ret =
-      if !last_pos.pos_fname <> p.pos_fname then
-        p.pos_fname ^ ":" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
-      else if !last_pos.pos_lnum <> p.pos_lnum then
-        "line:" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
+      if Cerb_position.file !last_pos <> Cerb_position.file p then
+        Cerb_position.file p ^ ":" ^ string_of_int (Cerb_position.line p) ^ ":" ^ string_of_int (Cerb_position.column p - 1)
+      else if Cerb_position.line !last_pos <> Cerb_position.line p then
+        "line:" ^ string_of_int (Cerb_position.line p) ^ ":" ^ string_of_int (Cerb_position.column p - 1)
       else
-        "col:" ^ string_of_int (p.pos_cnum - p.pos_bol) in
+        "col:" ^ string_of_int (Cerb_position.column p - 1) in
     begin if clever then last_pos := p end;
     ret in
   let aux_region start_p end_p cur =
@@ -313,13 +318,13 @@ let pp_location =
         | NoCursor -> ""
         | PointCursor cursor_p -> " " ^ string_of_pos cursor_p
         | RegionCursor (b, e) -> " " ^ string_of_pos b ^ " - " ^ string_of_pos e in
-    if !last_pos.pos_fname = start_p.pos_fname &&
-       start_p.pos_fname = end_p.pos_fname &&
-       start_p.pos_lnum = end_p.pos_lnum
+    if Cerb_position.file !last_pos = Cerb_position.file start_p &&
+       Cerb_position.file start_p = Cerb_position.file end_p &&
+       Cerb_position.line start_p = Cerb_position.line end_p
     then
       let start_p_str = string_of_pos start_p in
       P.angles (
-        !^ (ansi_format ~err:true [Yellow] (start_p_str ^ " - " ^ string_of_int (end_p.pos_cnum - end_p.pos_bol)))
+        !^ (ansi_format ~err:true [Yellow] (start_p_str ^ " - " ^ string_of_int (Cerb_position.column end_p - 1)))
       ) ^^ !^ (ansi_format ~err:true [Yellow] (mk_cursor_str ()))
     else
       let start_p_str = string_of_pos start_p in
@@ -345,7 +350,7 @@ let pp_location =
 
 let string_of_pos pos =
   ansi_format ~err:true [Bold] (
-    Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
+    Printf.sprintf "%s:%d:%d:" (Cerb_position.file pos) (Cerb_position.line pos) (Cerb_position.column pos)
   )
 
 let get_line n ic =
@@ -357,7 +362,11 @@ let get_line n ic =
   aux n
 
 
-
+(* Try to get the part of a line in the file that contains the given column.
+The column position is 0 based.
+If the column is outside what's visible on the terminal we drop part of the
+line and return a new position to display.
+*)
 let string_at_line fname lnum cpos =
   try
     if Sys.file_exists fname then
@@ -410,8 +419,8 @@ let head_pos_of_location = function
       , "" )
   | Loc_point pos ->
       ( string_of_pos pos
-      , let cpos = pos.pos_cnum - pos.pos_bol in
-        match string_at_line pos.pos_fname pos.pos_lnum cpos with
+      , let cpos = Cerb_position.column pos - 1 in
+        match string_at_line (Cerb_position.file pos) (Cerb_position.line pos) cpos with
           | Some (cpos'_opt, l) ->
               let cpos = match cpos'_opt with
                 | Some cpos' -> cpos'
@@ -422,18 +431,18 @@ let head_pos_of_location = function
               "" )
   | Loc_region (start_p, end_p, cursor) ->
       ( string_of_pos start_p
-      , let cpos1 = start_p.pos_cnum - start_p.pos_bol in
-        match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
+      , let cpos1 = Cerb_position.column start_p - 1 in
+        match string_at_line (Cerb_position.file start_p) (Cerb_position.line start_p) cpos1 with
           | Some (_, l) ->
               let cpos2 =
-                if start_p.pos_lnum = end_p.pos_lnum then
-                  end_p.pos_cnum - end_p.pos_bol
+                if Cerb_position.line start_p = Cerb_position.line end_p then
+                  Cerb_position.column end_p - 1
                 else
                   String.length l in
               let cursor_n = match cursor with
                 | PointCursor cursor_p
                 | RegionCursor (cursor_p, _) ->
-                    cursor_p.pos_cnum - cursor_p.pos_bol 
+                    Cerb_position.column cursor_p - 1
                 | NoCursor ->
                     cpos1 in
               l ^ "\n" ^
@@ -450,10 +459,10 @@ let head_pos_of_location = function
         | RegionCursor (p, _) -> p
       in
       ( string_of_pos pos
-      , let cursor_p = pos.pos_cnum - pos.pos_bol in
-        match string_at_line pos.pos_fname pos.pos_lnum cursor_p with
+      , let cursor_p = Cerb_position.column pos - 1 in
+        match string_at_line (Cerb_position.file pos) (Cerb_position.line pos) cursor_p with
         | Some (_, l) ->
-          let ps = List.map (fun (s, e) -> (s.pos_cnum - s.pos_bol, e.pos_cnum - e.pos_bol)) xs in
+          let ps = List.map (fun (s, e) -> (Cerb_position.column s - 1, Cerb_position.column e - 1)) xs in
           l ^ "\n" ^ ansi_format ~err:true [Bold; Green]
             (String.init (String.length l)
                (fun n -> if n = cursor_p then '^'
@@ -466,7 +475,7 @@ let head_pos_of_location = function
 
 let simple_location = 
   let string_of_pos pos =
-    Printf.sprintf "%d:%d" pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
+    Printf.sprintf "%d:%d" (Cerb_position.line pos) (Cerb_position.column pos)
   in
   function
   | Loc_unknown -> 
@@ -490,7 +499,7 @@ let get_filename = function
   | Loc_point pos 
   | Loc_region (pos, _, _)
   | Loc_regions ((pos, _) :: _, _) ->
-      Some pos.pos_fname
+      Some (Cerb_position.file pos)
 
 let is_unknown = function
   | Loc_unknown -> true 
@@ -519,7 +528,7 @@ let is_library_location loc =
 let line_numbers = function
   | Loc_unknown -> None
   | Loc_other _ -> None
-  | Loc_point p -> Some (p.pos_lnum, p.pos_lnum)
-  | Loc_region (p1, p2, _) -> Some (p1.pos_lnum, p2.pos_lnum)
-  | Loc_regions ((p1,p2) :: _, _) -> Some (p1.pos_lnum, p2.pos_lnum)
+  | Loc_point p -> Some (Cerb_position.line p, Cerb_position.line p)
+  | Loc_region (p1, p2, _) -> Some (Cerb_position.line p1, Cerb_position.line p2)
+  | Loc_regions ((p1,p2) :: _, _) -> Some (Cerb_position.line p1, Cerb_position.line p2)
   | Loc_regions ([], _) -> None

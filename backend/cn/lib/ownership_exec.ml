@@ -29,17 +29,17 @@ let c_declare_init_and_map_local_sym = Sym.fresh_pretty "c_declare_init_and_map_
 
 let get_start_loc ?(offset = 0) = function
   | Cerb_location.Loc_region (start_pos, _, _) ->
-    let new_start_pos = { start_pos with pos_cnum = start_pos.pos_cnum + offset } in
+    let new_start_pos = Cerb_position.change_cnum start_pos offset in
     Cerb_location.point new_start_pos
   | Loc_regions (pos_list, _) ->
     (match List.last pos_list with
      | Some (_, start_pos) ->
-       let new_start_pos = { start_pos with pos_cnum = start_pos.pos_cnum + offset } in
+       let new_start_pos = Cerb_position.change_cnum start_pos offset in
        Cerb_location.point new_start_pos
      | None ->
        failwith
          "get_start_loc: Loc_regions has empty list of positions (should be non-empty)")
-  | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
+  | Loc_point pos -> Cerb_location.point (Cerb_position.change_cnum pos offset)
   | Loc_unknown | Loc_other _ ->
     failwith
       "get_start_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
@@ -47,17 +47,17 @@ let get_start_loc ?(offset = 0) = function
 
 let get_end_loc ?(offset = 0) = function
   | Cerb_location.Loc_region (_, end_pos, _) ->
-    let new_end_pos = { end_pos with pos_cnum = end_pos.pos_cnum + offset } in
+    let new_end_pos = Cerb_position.change_cnum end_pos offset in
     Cerb_location.point new_end_pos
   | Loc_regions (pos_list, _) ->
     (match List.last pos_list with
      | Some (_, end_pos) ->
-       let new_end_pos = { end_pos with pos_cnum = end_pos.pos_cnum + offset } in
+       let new_end_pos = Cerb_position.change_cnum end_pos offset in
        Cerb_location.point new_end_pos
      | None ->
        failwith
          "get_end_loc: Loc_regions has empty list of positions (should be non-empty)")
-  | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
+  | Loc_point pos -> Cerb_location.point (Cerb_position.change_cnum pos offset)
   | Loc_unknown | Loc_other _ ->
     failwith
       "get_end_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
