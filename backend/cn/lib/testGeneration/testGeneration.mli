@@ -4,6 +4,8 @@ val default_cfg : config
 
 val set_config : config -> unit
 
+module Options = TestGenConfig.Options
+
 val functions_under_test
   :  with_warning:bool ->
   Cerb_frontend.Cabs.translation_unit ->

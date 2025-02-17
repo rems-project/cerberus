@@ -29,7 +29,7 @@ function separator() {
   OUTPUT="${OUTPUT}\n\n"
 }
 
-CONFIGS=("--sized-null --sizing-strategy 0" "--coverage --sizing-strategy 1" "--with-static-hack --coverage --sizing-strategy 2" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
+CONFIGS=("--sized-null --sizing-strategy=uniform" "--coverage --sizing-strategy=quartile" "--with-static-hack --coverage --sizing-strategy=quickcheck" "--random-size-splits" "--random-size-splits --allowed-size-split-backtracks=10")
 
 OUTPUT=""
 
@@ -39,7 +39,7 @@ for CONFIG in "${CONFIGS[@]}"; do
   OUTPUT="${OUTPUT}Running CI with CLI config \"$CONFIG\"\n"
   separator
 
-  FULL_CONFIG="$CONFIG --input-timeout=1000 --progress-level=1 --sanitize=undefined"
+  FULL_CONFIG="$CONFIG --input-timeout=1000 --progress-level=function --sanitize=undefined"
 
   if [[ $TEST == *.pass.c ]]; then
     CLEANUP="rm -rf ${DIR} run_tests.sh;separator"
