@@ -153,8 +153,7 @@ let create_test_file (sequence : Pp.document) (fun_decls : Pp.document) : Pp.doc
            separate_map hardline stmt_to_doc init_ghost
            ^^ hardline
            ^^ sequence
-           ^^ hardline
-           ^^ string "return 0;")
+           )
         ^^ hardline)
 
 
@@ -197,7 +196,7 @@ let rec gen_sequence
   | 0 ->
     let unmap_stmts = List.map Ownership_exec.generate_c_local_ownership_exit ctx in
     let unmap_str = hardline ^^ separate_map hardline stmt_to_doc unmap_stmts in
-    Right (seq_so_far ^^ unmap_str, stats)
+    Right (seq_so_far ^^ unmap_str ^^ hardline ^^ string "return 0;", stats)
   | n ->
     let fs =
       List.map
@@ -257,8 +256,8 @@ let rec gen_sequence
            | WEXITED 0 -> (ctx', prev, Either.Right (Sym.pp_string f, curr_test))
            | _ ->
              let violation_regex = Str.regexp {| +\^~+ .+\.c:\([0-9]+\):[0-9]+-[0-9]+|} in
-             let is_post_regex = Str.regexp {|\(/\*@\)?[ \t]*ensures|} in
-             let is_pre_regex = Str.regexp {|\(/\*@\)?[ \t]*requires|} in
+             let is_post_regex = Str.regexp {|[ \t]*\(/\*@\)?[ \t]*ensures|} in
+             let is_pre_regex = Str.regexp {|[ \t]*\(/\*@\)?[ \t]*requires|} in
              let rec get_violation_line test_output =
                match test_output with
                | [] -> 0
@@ -307,7 +306,9 @@ let rec gen_sequence
                          violation_line_num
                          (filename_base ^ ".c"))
                     ^^ hardline
-                    ^^ curr_test) )))
+                    ^^ curr_test
+                    ^^ hardline
+                    ^^ string "return 123;") )))
     in
     (match List.length fs with
      | 0 ->
