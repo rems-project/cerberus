@@ -461,6 +461,7 @@ let run_seq_tests
     without_ownership_checking
   (* Test Generation *)
     output_dir
+  with_static_hack
   num_samples
   backtrack_attempts
   num_resets
@@ -486,19 +487,20 @@ let run_seq_tests
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+    ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
+          (let _, sigma = ail_prog in
           if
-            prog5
-            |> Executable_spec_extract.collect_instrumentation
-            |> fst
-            |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
-              Option.is_some inst.internal)
-            |> List.is_empty
+            List.is_empty
+              (TestGeneration.functions_under_test
+                 ~with_warning:true
+                 cabs_tunit
+                 sigma
+                 prog5)
           then (
-            print_endline "No testable functions, aborting";
-            exit 1);
+            print_endline "No testable functions, trivially passing";
+            exit 0);
           if not (Sys.file_exists output_dir) then (
             print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
             Sys.mkdir output_dir 0o777;
@@ -517,10 +519,15 @@ let run_seq_tests
             prog5
             statement_locs;
           let config : TestGeneration.seq_config =
-            { num_samples; max_backtracks = backtrack_attempts; num_resets }
+            { with_static_hack;
+              num_samples;
+              max_backtracks = backtrack_attempts;
+              num_resets
+            }
           in
           TestGeneration.set_seq_config config;
-          TestGeneration.run_seq ~output_dir ~filename sigma prog5)
+          if TestGeneration.run_seq ~output_dir ~filename cabs_tunit sigma prog5 <> 0 then 
+            exit 123))
         ();
       Or_TypeError.return ())
 
@@ -1230,6 +1237,14 @@ module Seq_testing_flags = struct
     Arg.(value & opt string "." & info [ "output-dir" ] ~docv:"DIR" ~doc)
 
 
+  let with_static_hack =
+    let doc =
+      "(HACK) Use an `#include` instead of linking to build testing. Necessary until \
+       https://github.com/rems-project/cerberus/issues/784 or equivalent."
+    in
+    Arg.(value & flag & info [ "with-static-hack" ] ~doc)
+
+
   let gen_num_samples =
     let doc = "Set the number of samples to test" in
     Arg.(
@@ -1330,6 +1345,7 @@ let seq_test_cmd =
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.without_ownership_checking
     $ Seq_testing_flags.output_test_dir
+    $ Seq_testing_flags.with_static_hack
     $ Seq_testing_flags.gen_num_samples
     $ Seq_testing_flags.gen_backtrack_attempts
     $ Seq_testing_flags.num_resets

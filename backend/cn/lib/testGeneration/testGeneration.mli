@@ -29,6 +29,7 @@ val run
 val run_seq
   :  output_dir:string ->
   filename:string ->
+  Cerb_frontend.Cabs.translation_unit ->
   Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
   unit Mucore.file ->
-  unit
+  int

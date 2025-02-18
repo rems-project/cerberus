@@ -133,14 +133,22 @@ let stmt_to_doc (stmt : CF.GenTypes.genTypeCategory A.statement_) : Pp.document 
   CF.Pp_ail.pp_statement ~executable_spec:true ~bs:[] (Utils.mk_stmt stmt)
 
 
-let create_test_file (sequence : Pp.document) (fun_decls : Pp.document) : Pp.document =
+let create_test_file
+  (sequence : Pp.document)
+  (filename_base : string)
+  (fun_decls : Pp.document)
+  : Pp.document
+  =
   let open Pp in
-  string "#include "
-  ^^ dquotes (string "cn.h")
+  (if Config.with_static_hack () then
+     string "#include "
+     ^^ dquotes (string (filename_base ^ "-exec.c"))
+     ^^ hardline
+     ^^ string "#include "
+     ^^ dquotes (string "cn.c")
+   else
+     string "#include " ^^ dquotes (string "cn.h") ^^ twice hardline ^^ fun_decls)
   ^^ twice hardline
-  ^^ fun_decls
-  ^^ twice hardline
-  (* need to add function signatures ex. void push_queue (int x, struct queue *q); *)
   ^^ string "int main"
   ^^ parens (string "int argc, char* argv[]")
   ^^ break 1
@@ -150,10 +158,7 @@ let create_test_file (sequence : Pp.document) (fun_decls : Pp.document) : Pp.doc
           (hardline
            ^^
            let init_ghost = Ownership_exec.get_ownership_global_init_stats () in
-           separate_map hardline stmt_to_doc init_ghost
-           ^^ hardline
-           ^^ sequence
-           )
+           separate_map hardline stmt_to_doc init_ghost ^^ hardline ^^ sequence)
         ^^ hardline)
 
 
@@ -249,7 +254,7 @@ let rec gen_sequence
             save
               output_dir
               (filename_base ^ "_test.c")
-              (create_test_file (seq_so_far ^^ curr_test) fun_decls)
+              (create_test_file (seq_so_far ^^ curr_test) filename_base fun_decls)
           in
           let output, status = out_to_list (output_dir ^ "/run_tests.sh") in
           (match status with
@@ -422,16 +427,9 @@ let generate
   ~(output_dir : string)
   ~(filename : string)
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
-  (prog5 : unit Mucore.file)
-  : unit
+  (insts : Executable_spec_extract.instrumentation list)
+  : int
   =
-  let insts =
-    prog5
-    |> Executable_spec_extract.collect_instrumentation
-    |> fst
-    |> List.filter (fun (inst : Executable_spec_extract.instrumentation) ->
-      Option.is_some inst.internal)
-  in
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in
   let test_file = filename_base ^ "_test.c" in
@@ -457,10 +455,11 @@ let generate
       src_code
       fun_decls
   in
-  let seq, output_msg =
+  let exit_code, seq, output_msg =
     match compiled_seq with
     | Left (seq, stats) ->
-      ( seq,
+      ( 123,
+        seq,
         Printf.sprintf
           "Stats for nerds:\n\
            %d tests succeeded\n\
@@ -486,7 +485,8 @@ let generate
             ""
             stats.distrib
       in
-      ( seq,
+      ( 0,
+        seq,
         Printf.sprintf
           "Stats for nerds:\n\
            passed: %d, failed: %d, skipped: %d\n\
@@ -497,7 +497,7 @@ let generate
           stats.skipped
           distrib_to_str )
   in
-  let tests_doc = create_test_file seq fun_decls in
+  let tests_doc = create_test_file seq filename_base fun_decls in
   print_endline output_msg;
   save output_dir test_file tests_doc;
-  ()
+  exit_code

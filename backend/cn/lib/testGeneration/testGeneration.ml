@@ -391,12 +391,15 @@ let run
 let run_seq
   ~output_dir
   ~filename
+  (cabs_tunit : CF.Cabs.translation_unit)
   (sigma : Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma)
   (prog5 : unit Mucore.file)
-  : unit
+  : int
   =
   Cerb_debug.begin_csv_timing ();
+  let insts = functions_under_test ~with_warning:false cabs_tunit sigma prog5 in
   if Option.is_some prog5.main then
     failwith "Cannot test a file with a `main` function";
-  SeqTests.generate ~output_dir ~filename sigma prog5;
-  Cerb_debug.end_csv_timing "sequence test generation"
+  let exit_code = SeqTests.generate ~output_dir ~filename sigma insts in
+  Cerb_debug.end_csv_timing "sequence test generation";
+  exit_code
