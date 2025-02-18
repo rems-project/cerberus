@@ -4,15 +4,14 @@
  (synopsis "Coq formalization of some Cerberus types")
  (mode vo)
  (theories StructTact)
- (modules 
-  Annot 
-  IntegerType 
-  Memory 
-  ImplMem 
-  Ctype 
-  Location 
-  Symbol 
-  Undefined 
-  Core 
-  Utils
- ))
+ (modules
+  Annot
+  IntegerType
+  Memory
+  ImplMem
+  Ctype
+  Location
+  Symbol
+  Undefined
+  Core
+  Utils))
