@@ -10,6 +10,8 @@ type log_entry =
 
 type log = log_entry list
 
+val set_enabled : bool -> unit
+
 val add_log_entry : log_entry -> unit
 
 val get_proof_log : unit -> log_entry list
