@@ -7,6 +7,7 @@ type action =
   | Call of Sym.t * IndexTerms.t list
   | Return of IndexTerms.t
 
+(** Info about what happened *)
 type log_entry =
   | Action of action * Locations.t (** We did this. *)
   | State of Context.t (** Various things we know about. *)
