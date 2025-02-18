@@ -57,4 +57,4 @@ val model : unit -> model_with_q
     case we ask for the value of a "don't care" value in the (minimal) model. *)
 val eval : model -> IndexTerms.t -> IndexTerms.t option
 
-val ask_solver : Global.t -> LogicalConstraints.t list -> Simple_smt.result
+val ask_solver : solver -> LogicalConstraints.t list -> Simple_smt.result

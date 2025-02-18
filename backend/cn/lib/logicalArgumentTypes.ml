@@ -234,7 +234,9 @@ open ResultWithData
 
 type check_result = (LC.t list, Pp.document) result_with_data
 
-let pp_check_result = pp_result_with_data (Pp.list LC.pp) (fun d -> d)
+let pp_check_result = pp_result_with_data
+  (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc))
+  (fun d -> d)
 
 let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
   List.fold_left
@@ -451,7 +453,7 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
 (* Get the free variables from an expression *)
 let get_fvs (exp : IT.t) : Sym.t list = Sym.Set.elements (IT.free_vars exp)
 
-(*TODO: what if lcs mention vars not examined in the algorithm*)
+(*TODO: lcs may mention vars not examined in the algorithm*)
 let rec organize_lines_aux
   (lines : packing_ft)
   (defs : def_line Sym.Map.t)

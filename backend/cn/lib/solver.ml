@@ -1455,12 +1455,11 @@ let and_bool_constraints (constraints : LC.t list) : BaseTypes.t annot =
   List.fold_left it_and it_true no_foralls
 
 
-let ask_solver (g : Global.t) (lcs : LC.t list) : Simple_smt.result =
-  let solver = make g in
-  let smt_term = translate_term solver (and_bool_constraints lcs) in
-  let simp_solver = solver.smt_solver in
-  debug_ack_command solver (SMT.push 1);
-  debug_ack_command solver (SMT.assume smt_term);
+let ask_solver (s : solver) (lcs : LC.t list) : Simple_smt.result =
+  let smt_term = translate_term s (and_bool_constraints lcs) in
+  let simp_solver = s.smt_solver in
+  debug_ack_command s (SMT.push 1);
+  debug_ack_command s (SMT.assume smt_term);
   let res = SMT.check simp_solver in
-  debug_ack_command solver (SMT.pop 1);
+  debug_ack_command s (SMT.pop 1);
   res
