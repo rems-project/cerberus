@@ -36,6 +36,12 @@ let rec pick
   | (score, f) :: fs -> if i <= score then f else pick fs (i - score)
 
 
+let rec ty_eq (ty1 : C.ctype) (ty2 : C.ctype) : bool =
+  match (ty1, ty2) with
+  | Ctype (_, Pointer (_, ty1)), Ctype (_, Pointer (_, ty2)) -> ty_eq ty1 ty2
+  | _, _ -> C.ctypeEqual ty1 ty2
+
+
 let callable
   (ctx : (Sym.t * C.ctype) list)
   ((_, (_, args)) : Sym.t * ((C.qualifiers * C.ctype) * (Sym.t * C.ctype) list))
@@ -55,16 +61,16 @@ let callable
              | Basic (Floating _)
              | Void ->
                true
-             | Pointer (_, ty) -> List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx
+             | Pointer (_, ty) -> List.exists (fun (_, ct) -> ty_eq ty ct) ctx
              | _ -> false))
-         || List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx)
+         || List.exists (fun (_, ct) -> ty_eq ty ct) ctx)
        args)
 
 
 let calc_score (ctx : (Sym.t * C.ctype) list) (args : (Sym.t * C.ctype) list) : int =
   List.fold_left
     (fun acc (_, ty) ->
-      if List.exists (fun (_, ct) -> C.ctypeEqual ty ct) ctx then
+      if List.exists (fun (_, ct) -> ty_eq ty ct) ctx then
         acc + 10
       else
         acc)
@@ -104,16 +110,15 @@ let gen_arg (ctx : (Sym.t * C.ctype) list) ((name, ty) : Sym.t * C.ctype) : Pp.d
     let prev_calls =
       List.filter
         (fun (_, ct) ->
-          C.ctypeEqual ty ct
-          || match ty with Ctype (_, Pointer (_, ty)) -> C.ctypeEqual ty ct | _ -> false)
+          ty_eq ty ct
+          || match ty with Ctype (_, Pointer (_, ty)) -> ty_eq ty ct | _ -> false)
         ctx
     in
     match List.length prev_calls with
     | 0 -> []
     | n ->
       let name, ty' = List.nth prev_calls (Random.int n) in
-      if not (C.ctypeEqual ty' ty) then
-        (* only way they're not directly equal is if pointer*)
+      if not (ty_eq ty' ty) then (* only way they're not directly equal is if pointer*)
         [ string "&" ^^ Sym.pp name ]
       else
         [ Sym.pp name ]
