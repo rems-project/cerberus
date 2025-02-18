@@ -10,6 +10,7 @@ module IdSet = Set.Make (Id)
 module Loc = Locations
 module RI = ResourceInference
 open IT
+open Error_common
 open TypeErrors
 open Pp
 module Mu = Mucore

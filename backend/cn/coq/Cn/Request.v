@@ -1,8 +1,9 @@
 Require Import List.
 Require Import String.
+
 Require Import BaseTypes.
 Require Import IndexTerms.
-Require Import Symbol.
+Require Import Cerberus.Symbol.
 Require Import Locations.
 Require Import SCtypes.
 
@@ -39,3 +40,4 @@ Inductive request_t : Type :=
   | Q : QPredicate.t -> request_t.
 
 Definition t := request_t. 
+

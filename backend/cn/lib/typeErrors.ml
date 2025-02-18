@@ -1,27 +1,10 @@
 module IT = IndexTerms
 module CF = Cerb_frontend
-module Loc = Locations
 module Res = Resource
 module LC = LogicalConstraints
 module Req = Request
 open Pp
-
-type label_kind = Where.label
-
-type access =
-  | Load
-  | Store
-  | Deref
-  | Kill
-  | Free
-  | To_bytes
-  | From_bytes
-
-type call_situation =
-  | FunctionCall of Sym.t
-  | LemmaApplication of Sym.t
-  | LabelCall of label_kind
-  | Subtyping
+open Error_common
 
 let call_prefix = function
   | FunctionCall fsym -> "call_" ^ Sym.pp_string fsym
@@ -29,10 +12,6 @@ let call_prefix = function
   | LabelCall la -> Where.label_prefix la
   | Subtyping -> "return"
 
-
-type situation =
-  | Access of access
-  | Call of call_situation
 
 let call_situation = function
   | FunctionCall fsym -> !^"checking call of function" ^^^ Sym.pp fsym
