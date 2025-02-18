@@ -496,6 +496,7 @@ let run_seq_tests
     ~incl_files
     ~csv_times
     ~coq_export_file:None
+    ~coq_proof_log:false
     ~log_times
     ~astprints
     ~no_inherit_loc
