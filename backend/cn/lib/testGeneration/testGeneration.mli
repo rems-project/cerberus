@@ -10,6 +10,8 @@ val set_config : config -> unit
 
 val set_seq_config : seq_config -> unit
 
+module Options = TestGenConfig.Options
+
 val functions_under_test
   :  with_warning:bool ->
   Cerb_frontend.Cabs.translation_unit ->

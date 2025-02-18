@@ -143,17 +143,16 @@ let run () =
           |> Option.map (fun seed -> [ "--seed"; seed ])
           |> Option.to_list
           |> List.flatten)
-       @ (Config.has_logging_level ()
-          |> Option.map (fun level -> [ "--logging-level"; string_of_int level ])
+       @ (Config.has_logging_level_str ()
+          |> Option.map (fun level -> [ "--logging-level"; level ])
           |> Option.to_list
           |> List.flatten)
-       @ (Config.has_trace_granularity ()
-          |> Option.map (fun granularity ->
-            [ "--trace-granularity"; string_of_int granularity ])
+       @ (Config.has_trace_granularity_str ()
+          |> Option.map (fun granularity -> [ "--trace-granularity"; granularity ])
           |> Option.to_list
           |> List.flatten)
-       @ (Config.has_progress_level ()
-          |> Option.map (fun level -> [ "--progress-level"; string_of_int level ])
+       @ (Config.has_progress_level_str ()
+          |> Option.map (fun level -> [ "--progress-level"; level ])
           |> Option.to_list
           |> List.flatten)
        @ (match Config.is_until_timeout () with
@@ -173,9 +172,8 @@ let run () =
             [ "--max-generator-size"; string_of_int max_generator_size ])
           |> Option.to_list
           |> List.flatten)
-       @ (Config.has_sizing_strategy ()
-          |> Option.map (fun sizing_strategy ->
-            [ "--sizing-strategy"; string_of_int sizing_strategy ])
+       @ (Config.has_sizing_strategy_str ()
+          |> Option.map (fun sizing_strategy -> [ "--sizing-strategy"; sizing_strategy ])
           |> Option.to_list
           |> List.flatten)
        @ (if Config.is_sized_null () then
