@@ -95,4 +95,10 @@ jobs:
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         cd tests; ./run-cn-test-gen.sh
+    
+    - name: Run CN-Seq-Test-Gen CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; ./run-cn-seq-test-gen.sh
 

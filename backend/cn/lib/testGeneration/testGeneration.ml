@@ -10,9 +10,15 @@ module Options = Config.Options
 
 type config = Config.t
 
+type seq_config = SeqTestGenConfig.t
+
 let default_cfg : config = Config.default
 
+let default_seq_cfg : seq_config = SeqTestGenConfig.default
+
 let set_config = Config.initialize
+
+let set_seq_config = SeqTestGenConfig.initialize
 
 let is_constant_function
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
@@ -381,3 +387,20 @@ let run
   save_tests ~output_dir ~filename_base ~without_ownership_checking sigma prog5 insts;
   save_build_script ~output_dir ~filename_base;
   Cerb_debug.end_csv_timing "specification test generation"
+
+
+let run_seq
+  ~output_dir
+  ~filename
+  (cabs_tunit : CF.Cabs.translation_unit)
+  (sigma : Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma)
+  (prog5 : unit Mucore.file)
+  : int
+  =
+  Cerb_debug.begin_csv_timing ();
+  let insts = functions_under_test ~with_warning:false cabs_tunit sigma prog5 in
+  if Option.is_some prog5.main then
+    failwith "Cannot test a file with a `main` function";
+  let exit_code = SeqTests.generate ~output_dir ~filename sigma insts in
+  Cerb_debug.end_csv_timing "sequence test generation";
+  exit_code
