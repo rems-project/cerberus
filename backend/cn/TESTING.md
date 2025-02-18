@@ -12,6 +12,9 @@ This script compiles the C files and runs the tests.
 By default, running `cn test` will automatically run `run_tests.sh`, which produces a test executable `tests.out`.
 This can be disabled by using the `--no-run` flag.
 
+The default behavior of testing is to rely on Fulminate for checking, which does not detect undefined behavior.
+If you would like to also check for undefined behavior, you can use a sanitizer via `--sanitize=undefined`.
+
 The output directory for these files can be set by using `--output-dir=<DIR>`.
 If the directory does not already exist, it is created.
 

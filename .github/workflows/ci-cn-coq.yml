@@ -47,8 +47,9 @@ jobs:
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
         opam switch create ${{ matrix.version }}-with-coq ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }}-with-coq)
-          opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
-          opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
+        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+        opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
+        opam install --deps-only --yes ./cerberus-lib.opam
       
     - name: Save OPAM cache
       uses: actions/cache/save@v4

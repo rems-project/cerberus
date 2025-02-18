@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #include <cn-executable/utils.h>
 
@@ -111,6 +112,70 @@ static inline void _cn_trap(void) { __asm__ __volatile__("NOP\n .word 0x10000000
 
 void cn_trap(void) { _cn_trap(); }
 
+size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy, int max_tests, size_t max_size, int max_discard_ratio, int successes, int recent_discards) {
+    switch (strategy) {
+    case CN_GEN_SIZE_QUARTILE:
+        if (successes < max_tests / 4) {
+            max_size /= 4;
+        }
+        else if (successes < max_tests / 2) {
+            max_size /= 2;
+        }
+        else if (successes < 3 * (max_tests / 4)) {
+            max_size /= 4;
+            max_size *= 3;
+        }
+
+    case CN_GEN_SIZE_UNIFORM:
+        ;
+        size_t sz = cn_gen_uniform_cn_bits_u16(max_size + 1)->val + 1;
+        return sz;
+
+    case CN_GEN_SIZE_QUICKCHECK:
+        ;
+        size_t discard_divisor;
+        if (max_discard_ratio > 0) {
+            discard_divisor = (successes * max_discard_ratio / 3);
+            if (discard_divisor < 1) {
+                discard_divisor = 1;
+            }
+            else if (discard_divisor > 10) {
+                discard_divisor = 10;
+            }
+        }
+        else {
+            discard_divisor = 1;
+        }
+
+        size_t potential_size;
+        if ((successes / max_size) * max_size + max_size <= max_tests
+            || successes >= max_tests
+            || max_tests % max_size == 0) {
+            potential_size = (successes % max_tests + recent_discards / discard_divisor);
+        }
+        else {
+            potential_size = (successes % max_size) * max_size
+                / (successes % max_size) + recent_discards / discard_divisor;
+        }
+
+        if (potential_size < max_size) {
+            return potential_size + 1;
+        }
+
+        return max_size + 1;
+    }
+}
+
+struct cn_test_reproduction {
+    size_t size;
+    cn_gen_rand_checkpoint checkpoint;
+};
+
+void cn_test_reproduce(struct cn_test_reproduction* repro) {
+    cn_gen_set_size(repro->size);
+    cn_gen_rand_restore(repro->checkpoint);
+}
+
 int cn_test_main(int argc, char* argv[]) {
     int begin_time = cn_gen_get_milliseconds();
     set_cn_logging_level(CN_LOGGING_NONE);
@@ -123,6 +188,7 @@ int cn_test_main(int argc, char* argv[]) {
     int input_timeout = 5000;
     int exit_fast = 0;
     int trap = 0;
+    enum cn_gen_sizing_strategy sizing_strategy = CN_GEN_SIZE_QUICKCHECK;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
 
@@ -131,11 +197,60 @@ int cn_test_main(int argc, char* argv[]) {
             i++;
         }
         else if (strcmp("--logging-level", arg) == 0) {
-            logging_level = strtol(argv[i + 1], NULL, 10);
+            char* next = argv[i + 1];
+            if (strcmp("none", next) == 0) {
+                logging_level = CN_LOGGING_NONE;
+            }
+            else if (strcmp("error", next) == 0) {
+                logging_level = CN_LOGGING_ERROR;
+            }
+            else if (strcmp("info", next) == 0) {
+                logging_level = CN_LOGGING_INFO;
+            }
+            else
+            {
+                logging_level = strtol(next, NULL, 10);
+            }
+
+            i++;
+        }
+        else if (strcmp("--trace-granularity", arg) == 0) {
+            enum cn_trace_granularity granularity;
+
+            char* next = argv[i + 1];
+            if (strcmp("none", next) == 0) {
+                granularity = CN_TRACE_NONE;
+            }
+            else if (strcmp("ends", next) == 0) {
+                granularity = CN_TRACE_ENDS;
+            }
+            else if (strcmp("all", next) == 0) {
+                granularity = CN_TRACE_ALL;
+            }
+            else
+            {
+                granularity = strtol(next, NULL, 10);
+            }
+
+            set_cn_trace_granularity(granularity);
             i++;
         }
         else if (strcmp("--progress-level", arg) == 0) {
-            progress_level = strtol(argv[i + 1], NULL, 10);
+            char* next = argv[i + 1];
+            if (strcmp("silent", next) == 0) {
+                progress_level = CN_TEST_GEN_PROGRESS_NONE;
+            }
+            else if (strcmp("function", next) == 0) {
+                progress_level = CN_TEST_GEN_PROGRESS_FINAL;
+            }
+            else if (strcmp("testcase", next) == 0) {
+                progress_level = CN_TEST_GEN_PROGRESS_ALL;
+            }
+            else
+            {
+                progress_level = strtol(next, NULL, 10);
+            }
+
             i++;
         }
         else if (strcmp("--input-timeout", arg) == 0) {
@@ -177,6 +292,24 @@ int cn_test_main(int argc, char* argv[]) {
         else if (strcmp("--trap", arg) == 0) {
             trap = 1;
         }
+        else if (strcmp("--sizing-strategy", arg) == 0) {
+            char* next = argv[i + 1];
+            if (strcmp("uniform", next) == 0) {
+                sizing_strategy = CN_GEN_SIZE_UNIFORM;
+            }
+            else if (strcmp("quartile", next) == 0) {
+                sizing_strategy = CN_GEN_SIZE_QUARTILE;
+            }
+            else if (strcmp("quickcheck", next) == 0) {
+                sizing_strategy = CN_GEN_SIZE_QUICKCHECK;
+            }
+            else
+            {
+                sizing_strategy = strtoul(next, NULL, 10);
+            }
+
+            i++;
+        }
     }
 
     if (timeout != 0) {
@@ -187,7 +320,7 @@ int cn_test_main(int argc, char* argv[]) {
     cn_gen_srand(seed);
     cn_gen_rand(); // Junk to get something to make a checkpoint from
 
-    cn_gen_rand_checkpoint checkpoints[CN_TEST_MAX_TEST_CASES];
+    struct cn_test_reproduction repros[CN_TEST_MAX_TEST_CASES];
     enum cn_test_result results[CN_TEST_MAX_TEST_CASES];
     memset(results, CN_TEST_SKIP, CN_TEST_MAX_TEST_CASES * sizeof(enum cn_test_result));
 
@@ -203,9 +336,10 @@ int cn_test_main(int argc, char* argv[]) {
             if (progress_level == CN_TEST_GEN_PROGRESS_ALL) {
                 print_test_info(test_case->suite, test_case->name, 0, 0);
             }
-            checkpoints[i] = cn_gen_rand_save();
+            repros[i].size = cn_gen_get_size();
+            repros[i].checkpoint = cn_gen_rand_save();
             cn_gen_set_input_timeout(input_timeout);
-            enum cn_test_result result = test_case->func(progress_level, 0);
+            enum cn_test_result result = test_case->func(false, progress_level, sizing_strategy, 0);
             if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {
                 results[i] = result;
             }
@@ -220,12 +354,15 @@ int cn_test_main(int argc, char* argv[]) {
                 break;
             case CN_TEST_FAIL:
                 printf("FAILED\n");
+
                 set_cn_logging_level(logging_level);
-                cn_gen_rand_restore(checkpoints[i]);
-                cn_gen_set_input_timeout(0);
-                test_case->func(CN_TEST_GEN_PROGRESS_NONE, trap);
+                cn_printf(CN_LOGGING_ERROR, "\n");
+
+                cn_test_reproduce(&repros[i]);
+                test_case->func(true, CN_TEST_GEN_PROGRESS_NONE, sizing_strategy, trap);
+
                 set_cn_logging_level(CN_LOGGING_NONE);
-                printf("\n\n");
+
                 break;
             case CN_TEST_GEN_FAIL:
                 printf("FAILED TO GENERATE VALID INPUT\n");

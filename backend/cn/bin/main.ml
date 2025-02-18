@@ -469,17 +469,20 @@ let run_tests
   max_unfolds
   max_array_length
   with_static_hack
+  build_tool
   sanitizers
   input_timeout
   null_in_every
   seed
   logging_level
+  trace_granularity
   progress_level
   until_timeout
   exit_fast
   max_stack_depth
   allowed_depth_failures
   max_generator_size
+  sizing_strategy
   random_size_splits
   allowed_size_split_backtracks
   sized_null
@@ -516,17 +519,20 @@ let run_tests
           max_unfolds;
           max_array_length;
           with_static_hack;
+          build_tool;
           sanitizers;
           input_timeout;
           null_in_every;
           seed;
           logging_level;
+          trace_granularity;
           progress_level;
           until_timeout;
           exit_fast;
           max_stack_depth;
           allowed_depth_failures;
           max_generator_size;
+          sizing_strategy;
           random_size_splits;
           allowed_size_split_backtracks;
           sized_null;
@@ -976,6 +982,14 @@ module Testing_flags = struct
     Arg.(value & flag & info [ "with-static-hack" ] ~doc)
 
 
+  let build_tool =
+    let doc = "Set which build tool to use." in
+    Arg.(
+      value
+      & opt (enum TestGeneration.Options.build_tool) TestGeneration.default_cfg.build_tool
+      & info [ "build-tool" ] ~doc)
+
+
   let sanitize =
     let doc = "Forwarded to the '-fsanitize' argument of the C compiler" in
     Arg.(
@@ -1017,18 +1031,29 @@ module Testing_flags = struct
     let doc = "Set the logging level for failing inputs from tests" in
     Arg.(
       value
-      & opt (some int) TestGeneration.default_cfg.logging_level
+      & opt
+          (some (enum TestGeneration.Options.logging_level))
+          TestGeneration.default_cfg.logging_level
       & info [ "logging-level" ] ~doc)
 
 
-  let progress_level =
-    let doc =
-      "Set the level of detail for progress updates (0 = Quiet, 1 = Per function, 2 = \
-       Per test case)"
-    in
+  let trace_granularity =
+    let doc = "Set the trace granularity for failing inputs from tests" in
     Arg.(
       value
-      & opt (some int) TestGeneration.default_cfg.progress_level
+      & opt
+          (some (enum TestGeneration.Options.trace_granularity))
+          TestGeneration.default_cfg.trace_granularity
+      & info [ "trace-granularity" ] ~doc)
+
+
+  let progress_level =
+    let doc = "Set the frequency of progress updates." in
+    Arg.(
+      value
+      & opt
+          (some (enum TestGeneration.Options.progress_level))
+          TestGeneration.default_cfg.progress_level
       & info [ "progress-level" ] ~doc)
 
 
@@ -1069,6 +1094,16 @@ module Testing_flags = struct
       value
       & opt (some int) TestGeneration.default_cfg.max_generator_size
       & info [ "max-generator-size" ] ~doc)
+
+
+  let sizing_strategy =
+    let doc = "Strategy for deciding test case size." in
+    Arg.(
+      value
+      & opt
+          (some (enum TestGeneration.Options.sizing_strategy))
+          TestGeneration.default_cfg.sizing_strategy
+      & info [ "sizing-strategy" ] ~doc)
 
 
   let random_size_splits =
@@ -1146,17 +1181,20 @@ let testing_cmd =
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.max_array_length
     $ Testing_flags.with_static_hack
+    $ Testing_flags.build_tool
     $ Term.product Testing_flags.sanitize Testing_flags.no_sanitize
     $ Testing_flags.input_timeout
     $ Testing_flags.null_in_every
     $ Testing_flags.seed
     $ Testing_flags.logging_level
+    $ Testing_flags.trace_granularity
     $ Testing_flags.progress_level
     $ Testing_flags.until_timeout
     $ Testing_flags.exit_fast
     $ Testing_flags.max_stack_depth
     $ Testing_flags.allowed_depth_failures
     $ Testing_flags.max_generator_size
+    $ Testing_flags.sizing_strategy
     $ Testing_flags.random_size_splits
     $ Testing_flags.allowed_size_split_backtracks
     $ Testing_flags.sized_null
