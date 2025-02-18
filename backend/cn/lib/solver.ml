@@ -1444,3 +1444,22 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
 let eval mo t =
   let model_fn = Hashtbl.find models_tbl mo in
   model_fn t
+
+
+let and_bool_constraints (constraints : LC.t list) : BaseTypes.t annot =
+  (* assumes all constraints are bools*)
+  let not_forall acc lc = match lc with LC.T it -> it :: acc | _ -> acc in
+  let no_foralls = List.fold_left not_forall [] constraints in
+  let it_true = IT (Const (Bool true), BT.Bool, Cerb_location.unknown) in
+  let it_and acc lc = IT (Binop (And, acc, lc), BT.Bool, Cerb_location.unknown) in
+  List.fold_left it_and it_true no_foralls
+
+
+let ask_solver (s : solver) (lcs : LC.t list) : Simple_smt.result =
+  let smt_term = translate_term s (and_bool_constraints lcs) in
+  let simp_solver = s.smt_solver in
+  debug_ack_command s (SMT.push 1);
+  debug_ack_command s (SMT.assume smt_term);
+  let res = SMT.check simp_solver in
+  debug_ack_command s (SMT.pop 1);
+  res

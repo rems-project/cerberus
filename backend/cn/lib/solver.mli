@@ -56,3 +56,5 @@ val model : unit -> model_with_q
     counter-example model (e.g. for evaluating sub-terms). Might return None in
     case we ask for the value of a "don't care" value in the (minimal) model. *)
 val eval : model -> IndexTerms.t -> IndexTerms.t option
+
+val ask_solver : solver -> LogicalConstraints.t list -> Simple_smt.result
