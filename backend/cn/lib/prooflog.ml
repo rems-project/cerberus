@@ -24,7 +24,8 @@ let add_log_entry entry =
   if !proof_log_enabled then
     proof_log := entry :: !proof_log
   else
-    ()  (* No logging if disabled *)
+    () (* No logging if disabled *)
+
 
 let get_proof_log () = !proof_log
 
