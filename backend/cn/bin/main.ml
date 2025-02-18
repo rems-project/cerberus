@@ -490,7 +490,7 @@ let run_seq_tests
     ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
-          (let _, sigma = ail_prog in
+          let _, sigma = ail_prog in
           if
             List.is_empty
               (TestGeneration.functions_under_test
@@ -526,8 +526,8 @@ let run_seq_tests
             }
           in
           TestGeneration.set_seq_config config;
-          if TestGeneration.run_seq ~output_dir ~filename cabs_tunit sigma prog5 <> 0 then 
-            exit 123))
+          if TestGeneration.run_seq ~output_dir ~filename cabs_tunit sigma prog5 <> 0 then
+            exit 123)
         ();
       Or_TypeError.return ())
 
