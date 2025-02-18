@@ -329,6 +329,8 @@ let verify
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
   Resource.disable_resource_derived_constraints := disable_resource_derived_constraints;
+  (* Set the prooflog flag based on --coq-proof-log *)
+  Prooflog.set_enabled coq_proof_log;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -340,7 +342,7 @@ let verify
     ~log_times
     ~astprints
     ~no_inherit_loc
-    ~magic_comment_char_dollar (* Callbacks *)
+    ~magic_comment_char_dollar
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
       let check (functions, global_var_constraints, lemmas) =
