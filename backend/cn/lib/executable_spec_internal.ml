@@ -85,13 +85,13 @@ let generate_c_pres_and_posts_internal
     if without_ownership_checking then
       ((pre_str, post_str), [])
     else (
-      let fn_ownership_stats_opt, block_ownership_injs =
+      let fn_ownership_bs_and_ss_opt, block_ownership_injs =
         Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm
       in
-      match fn_ownership_stats_opt with
-      | Some (entry_ownership_stats, exit_ownership_stats) ->
-        let entry_ownership_str = generate_ail_stat_strs ([], entry_ownership_stats) in
-        let exit_ownership_str = generate_ail_stat_strs ([], exit_ownership_stats) in
+      match fn_ownership_bs_and_ss_opt with
+      | Some (entry_ownership_bs_and_ss, exit_ownership_bs_and_ss) ->
+        let entry_ownership_str = generate_ail_stat_strs entry_ownership_bs_and_ss in
+        let exit_ownership_str = generate_ail_stat_strs exit_ownership_bs_and_ss in
         let pre_post_pair =
           ( pre_str @ ("\n\t/* C OWNERSHIP */\n\n" :: entry_ownership_str),
             (* NOTE - the nesting pre - entry - exit - post *)
