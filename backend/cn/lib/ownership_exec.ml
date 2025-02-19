@@ -87,6 +87,13 @@ let generate_c_local_cn_addr_var sym =
   (binding, decl)
 
 
+let generate_c_local_ownership_entry_bs_and_ss (sym, ctype) =
+  let entry_fcall = generate_c_local_ownership_entry_fcall (sym, ctype) in
+  let entry_fcall_stat = A.(AilSexpr entry_fcall) in
+  let addr_cn_binding, addr_cn_decl = generate_c_local_cn_addr_var sym in
+  ([ addr_cn_binding ], [ entry_fcall_stat; addr_cn_decl ])
+
+
 (* int x = 0, y = 5;
 
    ->
@@ -111,7 +118,6 @@ let rec gen_loop_ownership_entry_decls bindings = function
     (new_bindings @ bindings', (sym, expr_opt) :: (dummy_sym, Some dummy_rhs) :: decls')
 
 
-
 let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
   if dest_is_loop then (
     let new_bindings, new_decls = gen_loop_ownership_entry_decls bindings decls in
@@ -121,10 +127,7 @@ let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
       List.map
         (fun (sym, _) ->
           let ctype = find_ctype_from_bindings bindings sym in
-          let entry_fcall = generate_c_local_ownership_entry_fcall (sym, ctype) in
-          let entry_fcall_stat = A.(AilSexpr entry_fcall) in
-          let addr_cn_binding, addr_cn_decl = generate_c_local_cn_addr_var sym in
-          ([ addr_cn_binding ], [ entry_fcall_stat; addr_cn_decl ]))
+          generate_c_local_ownership_entry_bs_and_ss (sym, ctype))
         decls
     in
     let bs, ss = List.split ownership_bs_and_ss in
@@ -150,13 +153,13 @@ let generate_c_local_ownership_exit (local_sym, local_ctype) =
 
 
 let get_c_local_ownership_checking params =
-  let entry_ownership_stats =
-    List.map
-      (fun param -> A.(AilSexpr (generate_c_local_ownership_entry_fcall param)))
-      params
+  let entry_ownership_bs_and_ss =
+    List.map (fun param -> generate_c_local_ownership_entry_bs_and_ss param) params
   in
+  let entry_ownership_bs, entry_ownership_ss = List.split entry_ownership_bs_and_ss in
   let exit_ownership_stats = List.map generate_c_local_ownership_exit params in
-  (entry_ownership_stats, exit_ownership_stats)
+  ( (List.concat entry_ownership_bs, List.concat entry_ownership_ss),
+    ([], exit_ownership_stats) )
 
 
 let rec collect_visibles bindings = function
@@ -371,8 +374,8 @@ let get_c_fn_local_ownership_checking_injs
       Some (_, _, Decl_function (_, _, param_types, _, _, _)) ) ->
     let param_types = List.map (fun (_, ctype, _) -> ctype) param_types in
     let params = List.combine param_syms param_types in
-    let ownership_stats_pair = get_c_local_ownership_checking params in
+    let ownership_bs_and_ss_pair = get_c_local_ownership_checking params in
     (* TODO: Separate return injections here since they are now done differently *)
     let block_ownership_injs = get_c_block_local_ownership_checking_injs fn_body in
-    (Some ownership_stats_pair, block_ownership_injs)
+    (Some ownership_bs_and_ss_pair, block_ownership_injs)
   | _, _ -> (None, [])
