@@ -8,7 +8,7 @@ Require Import Coq.Structures.OrderedTypeEx.
 Require Import StructTact.StructTactics.
 Require Import Lia.
 
-Require Import Location Utils Symbol.
+From Cerberus Require Import Location Utils Symbol.
 
 
 Definition t := Symbol.t.

@@ -3,11 +3,10 @@ Require Import List.
 Require Import ZArith.
 
 Require Import BaseTypes.
-Require Import Symbol.
-Require Import Location.
+Require Import Cerberus.Symbol.
+Require Import Cerberus.Location.
 Require Import IndexTerms.
-Require Import Ctype.
-Require Import Location.   
+Require Import Cerberus.Ctype.
 
 (* C-specific kinds *)
 Inductive cn_c_kind : Type :=

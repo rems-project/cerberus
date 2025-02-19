@@ -3,38 +3,19 @@
 (** TODO Cleanly factor out all pretty printing from all error gathering.
     Pp.document, string to actual types (including polymorphic variants if need be) *)
 
-type access =
-  | Load
-  | Store
-  | Deref
-  | Kill
-  | Free
-  | To_bytes
-  | From_bytes
-
-type call_situation =
-  | FunctionCall of Sym.t
-  | LemmaApplication of Sym.t
-  | LabelCall of Where.label
-  | Subtyping
-
-val call_prefix : call_situation -> string
-
-type situation =
-  | Access of access
-  | Call of call_situation
+val call_prefix : Error_common.call_situation -> string
 
 (** TODO move *)
-val call_situation : call_situation -> Pp.document
+val call_situation : Error_common.call_situation -> Pp.document
 
 (** TODO move *)
-val checking_situation : situation -> Pp.document
+val checking_situation : Error_common.situation -> Pp.document
 
 (** TODO move *)
-val for_access : access -> Pp.document
+val for_access : Error_common.access -> Pp.document
 
 (** TODO move *)
-val for_situation : situation -> Pp.document
+val for_situation : Error_common.situation -> Pp.document
 
 module RequestChain : sig
   type elem =
@@ -59,13 +40,13 @@ type message =
       }
   | Missing_resource of
       { requests : RequestChain.t;
-        situation : situation;
+        situation : Error_common.situation;
         ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
   | Merging_multiple_arrays of
       { requests : RequestChain.t;
-        situation : situation;
+        situation : Error_common.situation;
         ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
