@@ -4,9 +4,6 @@
 Require Import String.
 Require Import List.
 Require Import ZArith.
-Require Import Coq.FSets.FMapInterface.
-Require Import Coq.FSets.FMapList.
-Require Import Coq.Structures.OrderedTypeEx.
 
 Require Import Sym.
 Require Import Cerberus.Location.
