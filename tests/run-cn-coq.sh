@@ -82,7 +82,7 @@ if [ ${USE_DUNE} -eq 1 ]; then
     CERB_RUNTIME="$(realpath "../runtime/")"
     CN=(env CERB_RUNTIME="${CERB_RUNTIME}" ${WITH_CN:=dune exec cn --})
     COQ_CN_THEORIES_DIR="$(realpath "../_build/default/backend/cn/coq")"
-    COQ_MAKEFILE_FLAGS="-R . Top -R ${COQ_CN_THEORIES_DIR}/Cerberus/ Cerberus -R ${COQ_CN_THEORIES_DIR}/Cn/ Cn"
+    COQ_MAKEFILE_FLAGS="-R . Top -R ${COQ_CN_THEORIES_DIR}/Cerberus/ Cerberus -R ${COQ_CN_THEORIES_DIR}/Cn/ Cn -R ${COQ_CN_THEORIES_DIR}/Reasoning/ Reasoning"
 else
     CN=(cn)
     COQ_MAKEFILE_FLAGS=
