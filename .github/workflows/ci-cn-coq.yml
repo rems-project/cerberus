@@ -6,8 +6,7 @@ on:
   push:
     branches:
       - master
-      - cn-logging
-      - cn-resource-logging
+      - resource-reasoning
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
