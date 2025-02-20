@@ -89,7 +89,7 @@ Inductive term (bt : Type) : Type :=
   | Struct : sym -> list (Symbol.identifier * annot bt) -> term bt
   | StructMember : annot bt -> Symbol.identifier -> term bt
   | StructUpdate :  (annot bt * Symbol.identifier) -> annot bt -> term bt
-  | Record : list (Symbol.identifier * annot bt) -> term bt
+  | TRecord : list (Symbol.identifier * annot bt) -> term bt
   | RecordMember : annot bt -> Symbol.identifier -> term bt
   | RecordUpdate :  (annot bt * Symbol.identifier) -> annot bt -> term bt
   | Constructor : sym -> list (Symbol.identifier * annot bt) -> term bt

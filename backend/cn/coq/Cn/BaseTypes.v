@@ -17,7 +17,7 @@ Inductive t_gen (A:Type) : Type :=
   | CType : t_gen A
   | Struct : Symbol.t -> t_gen A
   | Datatype : Symbol.t -> t_gen A
-  | Record : list (Symbol.identifier * t_gen A) -> t_gen A
+  | TRecord : list (Symbol.identifier * t_gen A) -> t_gen A
   | Map : t_gen A -> t_gen A -> t_gen A
   | List : t_gen A -> t_gen A
   | Tuple : list (t_gen A) -> t_gen A

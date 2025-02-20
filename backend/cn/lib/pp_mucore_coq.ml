@@ -562,7 +562,7 @@ let rec pp_basetype pp_loc = function
     pp_constructor "BaseTypes.Datatype" [ !^"unit"; pp_symbol sym ]
   | BaseTypes.Record fields ->
     pp_constructor
-      "BaseTypes.Record"
+      "BaseTypes.TRecord"
       [ !^"unit"; pp_list (pp_pair pp_identifier (pp_basetype pp_loc)) fields ]
   | BaseTypes.Map (t1, t2) ->
     pp_constructor
@@ -1178,7 +1178,7 @@ and pp_index_term_content = function
       "StructUpdate"
       [ pp_index_term t1; pp_identifier member; pp_index_term t2 ]
   | Record members ->
-    pp_constructor1 "Record" [ pp_list (pp_pair pp_identifier pp_index_term) members ]
+    pp_constructor1 "TRecord" [ pp_list (pp_pair pp_identifier pp_index_term) members ]
   | RecordMember (t, member) ->
     pp_constructor1 "RecordMember" [ pp_index_term t; pp_identifier member ]
   | RecordUpdate ((t1, member), t2) ->
