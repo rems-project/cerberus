@@ -19,6 +19,7 @@ type executable_spec =
   }
 
 let generate_ail_stat_strs
+  ?(with_newline = false)
   (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list))
   =
   let is_assert_true = function
@@ -34,7 +35,13 @@ let generate_ail_stat_strs
       (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s))
       ail_stats_
   in
-  let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
+  let doc =
+    List.map
+      (fun d ->
+        let newline = if with_newline then PPrint.hardline else PPrint.empty in
+        newline ^^ d ^^ PPrint.hardline)
+      doc
+  in
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
@@ -47,8 +54,9 @@ let rec extract_global_variables = function
      | GlobalDecl ctype -> (sym, Sctypes.to_ctype ctype) :: extract_global_variables ds)
 
 
-let generate_c_pres_and_posts_internal
+let generate_c_specs_internal
   without_ownership_checking
+  without_loop_invariants
   (instrumentation : Executable_spec_extract.instrumentation)
   _
   (sigm : _ CF.AilSyntax.sigma)
@@ -121,7 +129,7 @@ let generate_c_pres_and_posts_internal
   in
   let block_ownership_stmts =
     List.map
-      (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs (bs, ss)))
+      (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss)))
       non_return_injs
   in
   let block_ownership_stmts =
@@ -129,7 +137,8 @@ let generate_c_pres_and_posts_internal
   in
   let return_ownership_stmts =
     List.map
-      (fun (loc, e_opt, bs, ss) -> (loc, e_opt, generate_ail_stat_strs (bs, ss)))
+      (fun (loc, e_opt, bs, ss) ->
+        (loc, e_opt, generate_ail_stat_strs ~with_newline:true (bs, ss)))
       return_injs
   in
   let return_ownership_stmts =
@@ -137,45 +146,47 @@ let generate_c_pres_and_posts_internal
       (fun (loc, e_opt, strs) -> (loc, e_opt, [ String.concat "\n" strs ]))
       return_ownership_stmts
   in
-  let ail_loop_invariants = ail_executable_spec.loops in
-  let ail_cond_stats, ail_loop_decls = List.split ail_loop_invariants in
-  (* A bit of a hack *)
-  let rec remove_last = function
-    | [] -> []
-    | [ _ ] -> []
-    | x :: xs -> x :: remove_last xs
-  in
-  let rec remove_last_semicolon = function
-    | [] -> []
-    | [ x ] ->
-      let split_x = String.split_on_char ';' x in
-      let without_whitespace_x = remove_last split_x in
-      let res = String.concat ";" without_whitespace_x in
-      [ res ]
-    | x :: xs -> x :: remove_last_semicolon xs
-  in
-  let ail_cond_injs =
-    List.map
-      (fun (loc, bs_and_ss) ->
-        ( get_start_loc loc,
-          remove_last_semicolon (generate_ail_stat_strs bs_and_ss) @ [ ", " ] ))
-      ail_cond_stats
-  in
-  let ail_loop_decl_injs =
-    List.map
-      (fun (loc, bs_and_ss) ->
-        (get_start_loc loc, "{" :: generate_ail_stat_strs bs_and_ss))
-      ail_loop_decls
-  in
-  let ail_loop_close_block_injs =
-    List.map (fun (loc, _) -> (get_end_loc loc, [ "}" ])) ail_loop_decls
+  let loop_invariant_injs =
+    if without_loop_invariants then
+      []
+    else (
+      let ail_loop_invariants = ail_executable_spec.loops in
+      let ail_cond_stats, ail_loop_decls = List.split ail_loop_invariants in
+      (* A bit of a hack *)
+      let rec remove_last = function
+        | [] -> []
+        | [ _ ] -> []
+        | x :: xs -> x :: remove_last xs
+      in
+      let rec remove_last_semicolon = function
+        | [] -> []
+        | [ x ] ->
+          let split_x = String.split_on_char ';' x in
+          let without_whitespace_x = remove_last split_x in
+          let res = String.concat ";" without_whitespace_x in
+          [ res ]
+        | x :: xs -> x :: remove_last_semicolon xs
+      in
+      let ail_cond_injs =
+        List.map
+          (fun (loc, bs_and_ss) ->
+            ( get_start_loc loc,
+              remove_last_semicolon (generate_ail_stat_strs bs_and_ss) @ [ ", " ] ))
+          ail_cond_stats
+      in
+      let ail_loop_decl_injs =
+        List.map
+          (fun (loc, bs_and_ss) ->
+            (get_start_loc loc, "{" :: generate_ail_stat_strs bs_and_ss))
+          ail_loop_decls
+      in
+      let ail_loop_close_block_injs =
+        List.map (fun (loc, _) -> (get_end_loc loc, [ "}" ])) ail_loop_decls
+      in
+      ail_cond_injs @ ail_loop_decl_injs @ ail_loop_close_block_injs)
   in
   ( [ (instrumentation.fn, (pre_str, post_str)) ],
-    in_stmt
-    @ block_ownership_stmts
-    @ ail_cond_injs
-    @ ail_loop_decl_injs
-    @ ail_loop_close_block_injs,
+    in_stmt @ block_ownership_stmts @ loop_invariant_injs,
     return_ownership_stmts )
 
 
@@ -211,8 +222,9 @@ let generate_c_assume_pres_internal
 
 
 (* Executable_spec_extract.instrumentation list -> executable_spec *)
-let generate_c_specs_internal
+let generate_c_specs
   without_ownership_checking
+  without_loop_invariants
   instrumentation_list
   type_map
   (_ : Cerb_location.t CStatements.LocMap.t)
@@ -220,8 +232,9 @@ let generate_c_specs_internal
   (prog5 : unit Mucore.file)
   =
   let generate_c_spec (instrumentation : Executable_spec_extract.instrumentation) =
-    generate_c_pres_and_posts_internal
+    generate_c_specs_internal
       without_ownership_checking
+      without_loop_invariants
       instrumentation
       type_map
       sigm
