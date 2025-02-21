@@ -19,7 +19,6 @@ type executable_spec =
   }
 
 let generate_ail_stat_strs
-  ?(with_newline = false)
   (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list))
   =
   let is_assert_true = function
@@ -35,13 +34,7 @@ let generate_ail_stat_strs
       (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s))
       ail_stats_
   in
-  let doc =
-    List.map
-      (fun d ->
-        let newline = if with_newline then PPrint.hardline else PPrint.empty in
-        newline ^^ d ^^ PPrint.hardline)
-      doc
-  in
+  let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
@@ -128,7 +121,7 @@ let generate_c_pres_and_posts_internal
   in
   let block_ownership_stmts =
     List.map
-      (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss)))
+      (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs (bs, ss)))
       non_return_injs
   in
   let block_ownership_stmts =
@@ -136,8 +129,7 @@ let generate_c_pres_and_posts_internal
   in
   let return_ownership_stmts =
     List.map
-      (fun (loc, e_opt, bs, ss) ->
-        (loc, e_opt, generate_ail_stat_strs ~with_newline:true (bs, ss)))
+      (fun (loc, e_opt, bs, ss) -> (loc, e_opt, generate_ail_stat_strs (bs, ss)))
       return_injs
   in
   let return_ownership_stmts =
@@ -171,11 +163,19 @@ let generate_c_pres_and_posts_internal
   in
   let ail_loop_decl_injs =
     List.map
-      (fun (loc, bs_and_ss) -> (get_start_loc loc, generate_ail_stat_strs bs_and_ss))
+      (fun (loc, bs_and_ss) ->
+        (get_start_loc loc, "{" :: generate_ail_stat_strs bs_and_ss))
       ail_loop_decls
   in
+  let ail_loop_close_block_injs =
+    List.map (fun (loc, _) -> (get_end_loc loc, [ "}" ])) ail_loop_decls
+  in
   ( [ (instrumentation.fn, (pre_str, post_str)) ],
-    in_stmt @ block_ownership_stmts @ ail_cond_injs @ ail_loop_decl_injs,
+    in_stmt
+    @ block_ownership_stmts
+    @ ail_cond_injs
+    @ ail_loop_decl_injs
+    @ ail_loop_close_block_injs,
     return_ownership_stmts )
 
 
