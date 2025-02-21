@@ -475,7 +475,7 @@ let run_seq_tests
   magic_comment_char_dollar
   (* Executable spec *)
     without_ownership_checking
-  without_loop_invariants
+  (* without_loop_invariants *)
   (* Test Generation *)
     output_dir
   with_static_hack
@@ -527,8 +527,8 @@ let run_seq_tests
           let _, sigma = ail_prog in
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           Executable_spec.main
-            ~without_ownership_checking
-            ~without_loop_invariants
+            ~without_ownership_checking (* TODO: Zain *)
+            ~without_loop_invariants:true
             ~with_test_gen:true
             ~copy_source_dir:false
             filename
@@ -566,7 +566,7 @@ let run_tests
   magic_comment_char_dollar
   (* Executable spec *)
     without_ownership_checking
-  without_loop_invariants
+  (* without_loop_invariants *)
   (* Test Generation *)
     output_dir
   only
@@ -667,8 +667,8 @@ let run_tests
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           (try
              Executable_spec.main
-               ~without_ownership_checking
-               ~without_loop_invariants
+               ~without_ownership_checking (* TODO: Zain *)
+               ~without_loop_invariants:true
                ~with_test_gen:true
                ~copy_source_dir:false
                filename
@@ -1335,7 +1335,6 @@ let testing_cmd =
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.without_ownership_checking
-    $ Executable_spec_flags.without_loop_invariants
     $ Testing_flags.output_test_dir
     $ Testing_flags.only
     $ Testing_flags.skip
@@ -1393,7 +1392,6 @@ let seq_test_cmd =
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
     $ Executable_spec_flags.without_ownership_checking
-    $ Executable_spec_flags.without_loop_invariants
     $ Seq_testing_flags.output_test_dir
     $ Seq_testing_flags.with_static_hack
     $ Seq_testing_flags.gen_num_samples
