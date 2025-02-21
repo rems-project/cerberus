@@ -4,6 +4,8 @@ From Coq Require Import Arith Bool List String.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedType.
 Require Import Coq.Structures.OrderedTypeEx.
+Require Import Coq.Structures.DecidableType.
+Require Import Coq.Structures.DecidableTypeEx.
 
 Require Import StructTact.StructTactics.
 Require Import Lia.
@@ -14,7 +16,7 @@ From Cerberus Require Import Location Utils Symbol.
 Definition t := Symbol.t.
 
 Module Symbol_sym_as_OT <: OrderedType.
-  Definition t := Symbol.t.
+  Definition t := t.
 
   Definition eq: t -> t -> Prop := fun a b => is_true (symbolEquality a b).
   Definition lt (a b: t): Prop := match symbol_compare a b with
@@ -424,6 +426,26 @@ Module Symbol_sym_as_OT <: OrderedType.
   Defined.
 
 End Symbol_sym_as_OT.
+
+Module Symbol_identifier_as_MiniDecidableType <: MiniDecidableType.
+  Definition t := Symbol.identifier.
+  Definition eq := @eq t.
+  Lemma eq_dec : forall (x y : t), { eq x y } + { ~ eq x y }.
+  Proof.
+    unfold eq.
+    repeat decide equality.
+  Qed.
+End Symbol_identifier_as_MiniDecidableType.
+
+Module Sym_t_as_MiniDecidableType <: MiniDecidableType.
+  Definition t := t.
+  Definition eq := @eq t.
+  Lemma eq_dec : forall (x y : t), { eq x y } + { ~ eq x y }.
+  Proof.
+    unfold eq.
+    repeat decide equality.
+  Qed.
+End Sym_t_as_MiniDecidableType.
 
 Module SymMap := FMapAVL.Make(Symbol_sym_as_OT).
 
