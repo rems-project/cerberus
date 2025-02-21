@@ -18,8 +18,19 @@ Module LogicalConstraint_as_MiniDecidableType <: MiniDecidableType.
   Definition eq := @eq t.
   Lemma eq_dec : forall (x y : t), { eq x y } + { ~ eq x y }.
   Proof.
-    (* TODO: to prove this we need define a decidable equality for all involved types and their sub-types. *)
-    Admitted. (* TODO *)
+    unfold eq.
+    decide equality.
+    -
+      apply IndexTerm_as_MiniDecidableType.eq_dec.
+    -
+      apply IndexTerm_as_MiniDecidableType.eq_dec.
+    -
+      decide equality; subst.
+      +
+        apply BasetTypes_t_as_MiniDecidableType.eq_dec.
+      +
+        apply Sym_t_as_MiniDecidableType.eq_dec.
+  Qed.
 End LogicalConstraint_as_MiniDecidableType.
 
 Module LogicalConstraints_as_DecidableType := Make_UDT LogicalConstraint_as_MiniDecidableType.

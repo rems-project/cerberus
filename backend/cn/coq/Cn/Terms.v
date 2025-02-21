@@ -6,6 +6,7 @@ Require Import Cerberus.Symbol.
 Require Import BaseTypes.
 Require Import Cerberus.Location.
 Require Import SCtypes.
+Require Import Locations.
 Require Import Cerberus.IntegerType.
 
 (* Constants *)
@@ -74,7 +75,7 @@ Inductive pattern_ (bt : Type) : Type :=
   | PConstructor : sym -> list (Symbol.identifier * pattern bt) -> pattern_ bt
 
 with pattern (bt : Type) : Type :=
-  | Pat : pattern_ bt -> bt -> Location_t -> pattern bt.
+  | Pat : pattern_ bt -> bt -> Locations.t -> pattern bt.
 
 (* Terms *)
 Inductive term (bt : Type) : Type :=
@@ -119,4 +120,4 @@ Inductive term (bt : Type) : Type :=
   | Cast : BaseTypes.t -> annot bt -> term bt
 
 with annot (bt : Type) : Type :=
-  | IT : term bt -> bt -> Location_t -> annot bt. 
+  | IT : term bt -> bt -> Locations.t -> annot bt.
