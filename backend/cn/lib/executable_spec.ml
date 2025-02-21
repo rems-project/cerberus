@@ -195,6 +195,7 @@ open Executable_spec_internal
 
 let main
   ?(without_ownership_checking = false)
+  ?(without_loop_invariants = false)
   ?(with_test_gen = false)
   ?(copy_source_dir = false)
   filename
@@ -218,8 +219,9 @@ let main
   in
   Executable_spec_records.populate_record_map instrumentation prog5;
   let executable_spec =
-    generate_c_specs_internal
+    generate_c_specs
       without_ownership_checking
+      without_loop_invariants
       instrumentation
       symbol_table
       statement_locs

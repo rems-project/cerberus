@@ -951,13 +951,15 @@ let make_label_args f_i loc env st args (accesses, inv) =
       let env = C.add_logical oa_name oa_bt env in
       let st = C.LocalState.add_c_variable_state s (CVS_Pointer_pointing_to value) st in
       let owned_res = ((oa_name, (pt_ret, SBT.proj oa_bt)), (loc, None)) in
-      let alloc_res = C.allocation_token loc s in
+      let resources' =
+        if !Sym.executable_spec_enabled then
+          [ owned_res ]
+        else (
+          let alloc_res = C.allocation_token loc s in
+          [ alloc_res; owned_res ])
+      in
       let@ at =
-        aux
-          (resources @ [ alloc_res; owned_res ], good_lcs @ (* good_pointer_lc :: *) lcs)
-          env
-          st
-          rest
+        aux (resources @ resources', good_lcs @ (* good_pointer_lc :: *) lcs) env st rest
       in
       return (Mu.mComputational ((s, Loc ()), (loc, None)) at)
     | [] ->
