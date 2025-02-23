@@ -1,4 +1,4 @@
-Require Import Location.
+Require Import Cerberus.Location.
 Require Import String.
 Require Import List.
 

@@ -43,27 +43,46 @@ void cn_bump_init() {
     }
 }
 
-void* bump_by(size_t nbytes) {
+bool bump_can_fit(size_t nbytes) {
     if (nbytes > BUMP_BLOCK_SIZE) {
-        fprintf(stderr, "Attempted to bump allocate larger than maximum allocation size %d.", BUMP_BLOCK_SIZE);
+        return 0;
+    }
+
+    if (bump_curr + nbytes > bump_blocks[bump_curr_block] + BUMP_BLOCK_SIZE) {
+        return 0;
+    }
+
+    return 1;
+}
+
+bool bump_expand() {
+    if (bump_curr_block + 1 >= BUMP_BLOCK_COUNT) {
         cn_failure(CN_FAILURE_ALLOC);
         return 0;
     }
 
-    // Expansion
-    if (bump_curr + nbytes >= bump_blocks[bump_curr_block] + BUMP_BLOCK_SIZE) {
-        if (bump_curr_block + 1 >= BUMP_BLOCK_COUNT) {
-            cn_failure(CN_FAILURE_ALLOC);
+    bump_curr_block++;
+
+    if (bump_blocks[bump_curr_block] == NULL) {
+        bump_blocks[bump_curr_block] = cn_fl_malloc(BUMP_BLOCK_SIZE);
+    }
+
+    bump_curr = bump_blocks[bump_curr_block];
+
+    return 1;
+}
+
+void* bump_by(size_t nbytes) {
+    if (nbytes > BUMP_BLOCK_SIZE) {
+        fprintf(stderr, "Attempted to bump allocate larger than maximum allocation size %d.\n", BUMP_BLOCK_SIZE);
+        cn_failure(CN_FAILURE_ALLOC);
+        return 0;
+    }
+
+    if (!bump_can_fit(nbytes)) {
+        if (!bump_expand()) {
             return NULL;
         }
-
-        bump_curr_block++;
-
-        if (bump_blocks[bump_curr_block] == NULL) {
-            bump_blocks[bump_curr_block] = cn_fl_malloc(BUMP_BLOCK_SIZE);
-        }
-
-        bump_curr = bump_blocks[bump_curr_block];
     }
 
     void* res = bump_curr;
@@ -81,8 +100,17 @@ void* cn_bump_aligned_alloc(size_t alignment, size_t nbytes) {
 
     if ((uintptr_t)bump_curr % alignment != 0) {
         size_t padding = (alignment - (uintptr_t)bump_curr % alignment) % alignment;
+        if (!bump_can_fit(padding + nbytes)) {
+            if (!bump_expand()) {
+                return NULL;
+            }
+            padding = (alignment - (uintptr_t)bump_curr % alignment) % alignment;
+        }
+
+        void* prev = bump_curr;
         void* res = bump_by(padding);
         if (res == NULL) {
+            bump_curr = prev;
             return NULL;
         }
     }

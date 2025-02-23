@@ -1,9 +1,9 @@
 From Coq Require Import Arith Bool List String.
 Require Import Coq.Numbers.BinNums.
 
-Require Import Symbol.
-Require Import Location.
-Require Import IntegerType.
+Require Import Cerberus.Symbol.
+Require Import Cerberus.Location.
+Require Import Cerberus.IntegerType.
 
 Import ListNotations.
 

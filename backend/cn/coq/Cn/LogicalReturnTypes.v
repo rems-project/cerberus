@@ -1,7 +1,7 @@
 Require Import BaseTypes.
 Require Import IndexTerms.
 Require Import LogicalConstraints.
-Require Import Symbol.
+Require Import Cerberus.Symbol.
 Require Import Locations.
 Require Import Request.
 

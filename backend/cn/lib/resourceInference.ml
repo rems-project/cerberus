@@ -47,7 +47,7 @@ module General = struct
       value : IT.t
     }
 
-  type uiinfo = TypeErrors.situation * TypeErrors.RequestChain.t
+  type uiinfo = Error_common.situation * TypeErrors.RequestChain.t
 
   type case =
     | One of one
@@ -468,6 +468,7 @@ module Special = struct
 
 
   let predicate_request loc situation (request, oinfo) =
+    let@ c = get_typing_context () in
     let requests =
       [ TypeErrors.RequestChain.
           { resource = P request;
@@ -478,7 +479,15 @@ module Special = struct
     in
     let uiinfo = (situation, requests) in
     let@ result = General.predicate_request loc uiinfo request in
-    match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
+    match result with
+    | Some r ->
+      let@ c' = get_typing_context () in
+      Prooflog.record_resource_inference_step
+        c
+        c'
+        (PredicateRequest (situation, request, oinfo, r));
+      return r
+    | None -> fail_missing_resource loc uiinfo
 
 
   let has_predicate loc situation (request, oinfo) =
