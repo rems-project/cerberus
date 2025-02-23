@@ -1,14 +1,14 @@
 #ifndef CN_GEN_BACKTRACK_H
 #define CN_GEN_BACKTRACK_H
 
-#include <stdlib.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 enum cn_gen_backtrack_request {
-    CN_GEN_BACKTRACK_NONE,
-    CN_GEN_BACKTRACK_ASSERT,
-    CN_GEN_BACKTRACK_ALLOC,
-    CN_GEN_BACKTRACK_DEPTH
+  CN_GEN_BACKTRACK_NONE,
+  CN_GEN_BACKTRACK_ASSERT,
+  CN_GEN_BACKTRACK_ALLOC,
+  CN_GEN_BACKTRACK_DEPTH
 };
 
 enum cn_gen_backtrack_request cn_gen_backtrack_type(void);
@@ -47,4 +47,4 @@ void cn_gen_backtrack_alloc_set(size_t sz);
 
 size_t cn_gen_backtrack_alloc_get();
 
-#endif // CN_GEN_BACKTRACK_H
+#endif  // CN_GEN_BACKTRACK_H
