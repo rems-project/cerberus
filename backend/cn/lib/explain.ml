@@ -91,7 +91,7 @@ and check_clause
   | Unequal_lengths -> Unknown !^"Wrong number of predicate arguments provided"
   | Ok zipped ->
     (* get constraints on iarg values *)
-    let ics = convert_symmap_to_lcs (Sym.Map.of_list zipped) in
+    let ics = convert_symmap_to_lcs (Sym.Map.of_seq (List.to_seq zipped)) in
     (* get other constraints on terms *)
     let tcs = List.map pair_to_lc term_vals in
     (* get returned expression of c and variable dependency graph *)
@@ -110,11 +110,6 @@ and check_clause
     in
     (* query solver *)
     let res = ask_solver ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs') in
-    (* let () = Pp.debug 0 (lazy (
-      !^"Candidate: " ^^^ (IT.pp candidate) ^^^
-      !^"\nConstraints:" ^^^ (Pp.list LC.pp cs') ^^^
-      !^"\nResult: " ^^^ (LAT.pp_check_result res)
-      )) in *)
     res
 
 (* get a list of constraints that are satisfiable iff candidate could have come from this clause body *)
