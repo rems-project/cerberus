@@ -1,2 +1,4 @@
 # CN: Format code according to .ocamlformat file
 ce8b6186fde296e05532b05783de36e814cbf465
+# LibCN: Format code according to .clang-format file
+2a96149dc2a7e1af5c8c488501c9aaafb852f9fc
