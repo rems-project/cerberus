@@ -1,0 +1,53 @@
+(rule
+ (target libcn_exec.a)
+ (deps
+  (:headers
+   (glob_files ../include/cn-executable/*.h))
+  (:src
+   (glob_files ../src/cn-executable/*.c)))
+ (action
+  (progn
+   (run mkdir -p cn-executable)
+   (chdir
+    cn-executable
+    (run cc -I ../../include/ -c -g %{src}))
+   (run
+    ar
+    -rcs
+    %{target}
+    cn-executable/alloc.o
+    cn-executable/hash_table.o
+    cn-executable/utils.o))))
+
+(rule
+ (target libcn_test.a)
+ (deps
+  (:headers
+   (glob_files ../include/cn-executable/*.h)
+   (glob_files ../include/cn-testing/*.h))
+  (:src
+   (glob_files ../src/cn-testing/*.c)))
+ (action
+  (progn
+   (run mkdir -p cn-testing)
+   (chdir
+    cn-testing
+    (run cc -I../../include/ -c -g %{src}))
+   (run
+    ar
+    -rcs
+    %{target}
+    cn-testing/alloc.o
+    cn-testing/backtrack.o
+    cn-testing/rand.o
+    cn-testing/size.o
+    cn-testing/test.o
+    cn-testing/uniform.o
+    cn-testing/urn.o))))
+
+(install
+ (files
+  (libcn_exec.a as runtime/libcn_exec.a)
+  (libcn_test.a as runtime/libcn_test.a))
+ (section lib)
+ (package cn))

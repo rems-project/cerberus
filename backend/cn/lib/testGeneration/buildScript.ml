@@ -115,7 +115,8 @@ let link ~filename_base =
                 ""
               else
                 " " ^ filename_base ^ "-exec.o cn.o");
-             "\"${RUNTIME_PREFIX}/libcn.a\""
+             "\"${RUNTIME_PREFIX}/libcn_exec.a\"";
+             "\"${RUNTIME_PREFIX}/libcn_test.a\""
            ]
            @ cc_flags ()))
        "Linked C *.o files."

@@ -112,7 +112,7 @@ def gen_link_cmd(input_basename, instrumented):
         link_cmd += "-I " + "cn_uninstr_defs.h "
     link_cmd += "-o " + bin_file + o_files
     if instrumented:
-        link_cmd += runtime_prefix + "/libcn.a"
+        link_cmd += runtime_prefix + "/libcn_exec.a"
     return link_cmd
 
 def gen_exec_cmd(input_basename, instrumented):
