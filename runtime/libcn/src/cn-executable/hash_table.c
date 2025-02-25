@@ -70,17 +70,17 @@ void ht_destroy(hash_table* table) {
 
 // Return 64-bit FNV-1a hash for key (NUL-terminated). See description:
 // https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
-static uint64_t hash_key(signed long* key) {
+static uint64_t hash_key(int64_t* key) {
   uint64_t hash = FNV_OFFSET;
   hash ^= *key;
   hash *= FNV_PRIME;
   return hash;
 }
 
-void* ht_get(hash_table* table, signed long* key) {
+void* ht_get(hash_table* table, int64_t* key) {
   // AND hash with capacity-1 to ensure it's within entries array.
-  unsigned long hash = hash_key(key);
-  size_t index = (size_t)(hash & (unsigned long)(table->capacity - 1));
+  uint64_t hash = hash_key(key);
+  size_t index = (size_t)(hash & (uint64_t)(table->capacity - 1));
 
   // Loop till we find an empty entry.
   while (table->entries[index].key != NULL) {
@@ -100,18 +100,18 @@ void* ht_get(hash_table* table, signed long* key) {
   return NULL;
 }
 
-signed long* duplicate_key(signed long* key) {
-  signed long* new_key = cn_fl_malloc(sizeof(signed long));
+int64_t* duplicate_key(int64_t* key) {
+  int64_t* new_key = cn_fl_malloc(sizeof(int64_t));
   *new_key = *key;
   return new_key;
 }
 
 // Internal function to set an entry (without expanding table).
-static signed long* ht_set_entry(
-    ht_entry* entries, size_t capacity, signed long* key, void* value, int* plength) {
+static int64_t* ht_set_entry(
+    ht_entry* entries, size_t capacity, int64_t* key, void* value, int* plength) {
   // AND hash with capacity-1 to ensure it's within entries array.
-  unsigned long hash = hash_key(key);
-  size_t index = (size_t)(hash & (unsigned long)(capacity - 1));
+  uint64_t hash = hash_key(key);
+  size_t index = (size_t)(hash & (uint64_t)(capacity - 1));
 
   // Loop till we find an empty entry.
   while (entries[index].key != NULL) {
@@ -169,7 +169,7 @@ static _Bool ht_expand(hash_table* table) {
   return 1;
 }
 
-signed long* ht_set(hash_table* table, signed long* key, void* value) {
+int64_t* ht_set(hash_table* table, int64_t* key, void* value) {
   assert(value != NULL);
   if (value == NULL) {
     return NULL;

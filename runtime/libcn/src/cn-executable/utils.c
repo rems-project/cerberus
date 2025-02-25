@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <signal.h>  // for SIGABRT
 
 #include <cn-executable/utils.h>
@@ -202,9 +203,9 @@ void ghost_stack_depth_incr(void) {
 }
 
 // TODO: one of these should maybe go away
-#define FMT_PTR "\x1b[33m%#lx\x1b[0m"
+#define FMT_PTR "\x1b[33m%#" PRIxPTR "\x1b[0m"
 // #define KMAG  "\x1B[35m"
-#define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
+#define FMT_PTR_2 "\x1B[35m%#" PRIxPTR "\x1B[0m"
 
 void ghost_stack_depth_decr(void) {
   cn_stack_depth--;
@@ -219,13 +220,13 @@ void cn_postcondition_leak_check(void) {
   hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
   // cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
   while (ht_next(&it)) {
-    uintptr_t* key = (uintptr_t*)it.key;
+    int64_t* key = it.key;
     int* depth = it.value;
     if (*depth > cn_stack_depth) {
       print_error_msg_info(error_msg_info);
       cn_printf(CN_LOGGING_ERROR,
           "Postcondition leak check failed, ownership leaked for pointer " FMT_PTR "\n",
-          *key);
+          (uintptr_t)*key);
       cn_failure(CN_FAILURE_OWNERSHIP_LEAK);
       // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
     }
@@ -236,14 +237,14 @@ void cn_loop_leak_check(void) {
   hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
 
   while (ht_next(&it)) {
-    uintptr_t* key = (uintptr_t*)it.key;
+    int64_t* key = it.key;
     int* depth = it.value;
     /* Everything mapped to the function stack depth should have been bumped up by calls to Owned in invariant */
     if (*depth == cn_stack_depth - 1) {
       print_error_msg_info(error_msg_info);
       cn_printf(CN_LOGGING_ERROR,
           "Loop invariant leak check failed, ownership leaked for pointer " FMT_PTR "\n",
-          *key);
+          (uintptr_t)*key);
       cn_failure(CN_FAILURE_OWNERSHIP_LEAK);
       // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
     }
@@ -254,11 +255,11 @@ void cn_loop_put_back_ownership(void) {
   hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
 
   while (ht_next(&it)) {
-    uintptr_t* key = (uintptr_t*)it.key;
+    int64_t* key = it.key;
     int* depth = it.value;
     /* Bump down everything that was bumped up in loop invariant */
     if (*depth == cn_stack_depth) {
-      ownership_ghost_state_set((signed long*)key, cn_stack_depth - 1);
+      ownership_ghost_state_set(key, cn_stack_depth - 1);
     }
   }
 }
@@ -268,18 +269,18 @@ void cn_loop_leak_check_and_put_back_ownership(void) {
   cn_loop_put_back_ownership();
 }
 
-int ownership_ghost_state_get(signed long* address_key) {
+int ownership_ghost_state_get(int64_t* address_key) {
   int* curr_depth_maybe = (int*)ht_get(cn_ownership_global_ghost_state, address_key);
   return curr_depth_maybe ? *curr_depth_maybe : -1;
 }
 
-void ownership_ghost_state_set(signed long* address_key, int stack_depth_val) {
+void ownership_ghost_state_set(int64_t* address_key, int stack_depth_val) {
   int* new_depth = cn_bump_malloc(sizeof(int));
   *new_depth = stack_depth_val;
   ht_set(cn_ownership_global_ghost_state, address_key, new_depth);
 }
 
-void ownership_ghost_state_remove(signed long* address_key) {
+void ownership_ghost_state_remove(int64_t* address_key) {
   ownership_ghost_state_set(address_key, -1);
 }
 
@@ -311,7 +312,7 @@ void cn_assume_ownership(void* generic_c_ptr, unsigned long size, char* fun) {
   // cn_printf(CN_LOGGING_INFO, "[CN: assuming ownership (%s)] " FMT_PTR_2 ", size: %lu\n", fun, (uintptr_t) generic_c_ptr, size);
   //// print_error_msg_info();
   for (int i = 0; i < size; i++) {
-    signed long* address_key = cn_bump_malloc(sizeof(long));
+    int64_t* address_key = cn_bump_malloc(sizeof(int64_t));
     *address_key = ((uintptr_t)generic_c_ptr) + i;
     /* // cn_printf(CN_LOGGING_INFO, "CN: Assuming ownership for %lu (function: %s)\n",  */
     /*        ((uintptr_t) generic_c_ptr) + i, fun); */
@@ -340,7 +341,7 @@ void cn_get_or_put_ownership(
 void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack_depth) {
   // cn_printf(CN_LOGGING_INFO, "[C access checking] add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) {
-    signed long* address_key = cn_bump_malloc(sizeof(long));
+    int64_t* address_key = cn_bump_malloc(sizeof(int64_t));
     *address_key = ptr_to_local + i;
     /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
     ownership_ghost_state_set(address_key, stack_depth);
@@ -350,7 +351,7 @@ void c_add_to_ghost_state(uintptr_t ptr_to_local, size_t size, signed long stack
 void c_remove_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
   // cn_printf(CN_LOGGING_INFO, "[C access checking] remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) {
-    signed long* address_key = cn_bump_malloc(sizeof(long));
+    int64_t* address_key = cn_bump_malloc(sizeof(int64_t));
     *address_key = ptr_to_local + i;
     /* // cn_printf(CN_LOGGING_INFO, " off: %d [" FMT_PTR "]\n", i, *address_key); */
     ownership_ghost_state_remove(address_key);
@@ -361,7 +362,7 @@ void c_ownership_check(char* access_kind,
     uintptr_t generic_c_ptr,
     int offset,
     signed long expected_stack_depth) {
-  signed long address_key = 0;
+  int64_t address_key = 0;
   // cn_printf(CN_LOGGING_INFO, "C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " ] -- ", generic_c_ptr, generic_c_ptr + offset);
   for (int i = 0; i < offset; i++) {
     address_key = generic_c_ptr + i;
@@ -408,7 +409,7 @@ void c_ownership_check(char* access_kind,
 // }
 
 cn_map* cn_map_set(cn_map* m, cn_integer* key, void* value) {
-  signed long* key_ptr = cn_bump_malloc(sizeof(signed long));
+  int64_t* key_ptr = cn_bump_malloc(sizeof(int64_t));
   *key_ptr = key->val;
   ht_set(m, key_ptr, value);
   return m;
@@ -420,7 +421,7 @@ cn_map* cn_map_deep_copy(cn_map* m1) {
   hash_table_iterator hti = ht_iterator(m1);
 
   while (ht_next(&hti)) {
-    signed long* curr_key = hti.key;
+    int64_t* curr_key = hti.key;
     void* val = ht_get(m1, curr_key);
     ht_set(m2, curr_key, val);
   }
@@ -473,7 +474,7 @@ cn_bool* cn_map_subset(
   hash_table_iterator hti1 = ht_iterator(m1);
 
   while (ht_next(&hti1)) {
-    signed long* curr_key = hti1.key;
+    int64_t* curr_key = hti1.key;
     void* val1 = ht_get(m1, curr_key);
     void* val2 = ht_get(m2, curr_key);
 
