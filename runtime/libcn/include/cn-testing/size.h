@@ -1,5 +1,5 @@
-#include <stdlib.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 size_t cn_gen_get_size(void);
 void cn_gen_set_size(size_t sz);

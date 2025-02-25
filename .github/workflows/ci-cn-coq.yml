@@ -72,7 +72,7 @@ jobs:
         eval $(opam env --switch=${{ matrix.version }}-with-coq )
         opam pin --yes --no-action add cn .
         opam pin --yes --no-action add cn-coq .
-        opam install --yes cn cn-coq ocamlformat.0.26.2
+        opam install --yes cn cn-coq
 
     - name: Run CN-Coq tests
       run: |
