@@ -36,9 +36,11 @@ let ask_solver g lcs =
   | Unknown -> Unknown !^"Solver returned Unknown."
   | Sat -> Yes lcs
 
-let pair_to_lc (ps : (IT.t * IT.t)) : LogicalConstraints.t  =
+
+let pair_to_lc (ps : IT.t * IT.t) : LogicalConstraints.t  =
   let loc = Cerb_location.unknown in
-  LC.T (IT.eq_ ( fst ps, snd ps) loc)
+  LC.T (IT.eq_ (fst ps, snd ps) loc)
+
 
 (* convert a list of variable assignments to equality constraints *)
 let convert_symmap_to_lcs (m : IT.t Sym.Map.t) : LogicalConstraints.t list =
@@ -46,13 +48,19 @@ let convert_symmap_to_lcs (m : IT.t Sym.Map.t) : LogicalConstraints.t list =
   let kvs = Sym.Map.bindings m in
   List.map (fun (k, v) -> pair_to_lc (IT.IT (IT.Sym k, IT.get_bt v, loc), v)) kvs
 
+
 (* let model_to_var_cands (m : Solver.model) (e : IT.t) =
-  let vs = LAT.get_fvs e in
-  LAT.filter_map_some (fun v -> Solver.eval m (IT.sym_ v Cerb_location.unknown)) vs *)
+   let vs = LAT.get_fvs e in
+   LAT.filter_map_some (fun v -> Solver.eval m (IT.sym_ v Cerb_location.unknown)) vs *)
 
 (* check if a candidate term could have been the output of a given predicate *)
-let rec check_pred (name : Sym.t) (def : Def.Predicate.t) (candidate : IT.t)
-  (ctxt : C.t) (iarg_vals : IT.t list) (term_vals : (IT.t * IT.t) list)
+let rec check_pred
+  (name : Sym.t)
+  (def : Def.Predicate.t)
+  (candidate : IT.t)
+  (ctxt : C.t)
+  (iarg_vals : IT.t list)
+  (term_vals : (IT.t * IT.t) list)
   : LAT.check_result
   =
   (* ensure candidate type matches output type of predicate *)
@@ -73,7 +81,9 @@ let rec check_pred (name : Sym.t) (def : Def.Predicate.t) (candidate : IT.t)
       let clauses_with_guards = Def.Clause.explicit_negative_guards clauses in
       (* for each clause, check if candidate could have been its output *)
       let checked =
-        List.map (fun c -> check_clause c candidate ctxt def.iargs iarg_vals term_vals) clauses_with_guards
+        List.map
+          (fun c -> check_clause c candidate ctxt def.iargs iarg_vals term_vals)
+          clauses_with_guards
       in
       LAT.combine_results checked)
 
@@ -87,12 +97,14 @@ and check_clause
   (iarg_vals : IT.t list)
   (term_vals : (IT.t * IT.t) list)
   =
-  match (Base.List.zip (List.map fst iargs) iarg_vals) with
+  match Base.List.zip (List.map fst iargs) iarg_vals with
   | Unequal_lengths -> Unknown !^"Wrong number of predicate arguments provided"
   | Ok zipped ->
     (* get constraints on iarg values *)
-    let toMap xs = List.fold_left (fun acc (k,v) -> Sym.Map.add k v acc) Sym.Map.empty xs in
-    let ics = convert_symmap_to_lcs (toMap zipped)in
+    let toMap xs =
+      List.fold_left (fun acc (k,v) -> Sym.Map.add k v acc) Sym.Map.empty xs
+    in
+    let ics = convert_symmap_to_lcs (toMap zipped) in
     (* (Sym.Map.of_seq (List.to_seq zipped)) in *)
     (* get other constraints on terms *)
     let tcs = List.map pair_to_lc term_vals in
@@ -101,18 +113,21 @@ and check_clause
     (* get constraints on whether candidate could have come from this clause *)
     let@ cs, vs = get_body_constraints exp var_def_locs candidate ctxt iargs term_vals in
     (* add guard and variable assignments to constraints list *)
-    let cs' = List.concat
-      [ LC.Set.elements ctxt.constraints;
-        lcs;
-        cs;
-        ics;
-        tcs;
-        convert_symmap_to_lcs vs;
-        [ LC.T c.guard ] ]
+    let cs' =
+      List.concat
+        [ LC.Set.elements ctxt.constraints;
+          lcs;
+          cs;
+          ics;
+          tcs;
+          convert_symmap_to_lcs vs;
+          [ LC.T c.guard ]
+        ]
     in
     (* query solver *)
     let res = ask_solver ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs') in
     res
+
 
 (* get a list of constraints that are satisfiable iff candidate could have come from this clause body *)
 and get_body_constraints
@@ -124,28 +139,31 @@ and get_body_constraints
   (term_vals : (IT.t * IT.t) list)
   =
   let f var_cands =
-        (* find constraints from checking each variable one at a time *)
-        let accumulate_results acc (v, v_cand) =
-          let@ acc_lcs, acc_var_cands = acc in
-          let@ v_lcs, v_var_cands =
-            get_var_constraints v v_cand acc_var_cands var_def_locs ctxt iargs term_vals
-          in
-          Yes (List.append v_lcs acc_lcs, v_var_cands)
-        in
-        List.fold_left accumulate_results (Yes ([], var_cands)) (Sym.Map.bindings var_cands) in
+    (* find constraints from checking each variable one at a time *)
+    let accumulate_results acc (v, v_cand) =
+      let@ acc_lcs, acc_var_cands = acc in
+      let@ v_lcs, v_var_cands =
+        get_var_constraints v v_cand acc_var_cands var_def_locs ctxt iargs term_vals
+      in
+      Yes (List.append v_lcs acc_lcs, v_var_cands)
+    in
+    List.fold_left accumulate_results (Yes ([], var_cands)) (Sym.Map.bindings var_cands)
+  in
   (* use candidate to get terms for FVs in exp *)
   match LAT.get_var_cands exp candidate with
-  | Yes var_cands ->
-      f var_cands
+  | Yes var_cands -> f var_cands
   | No e -> No e
   | Error e -> Error e
-  | Unknown e -> let s = Solver.make (ctxt.global) in
+  | Unknown e ->
+    let s = Solver.make (ctxt.global) in
     let loc = Cerb_location.unknown in
     let _ = Solver.try_hard := true in
-    match (Solver.ask_solver s [LC.T (IT.eq_ (exp, candidate) loc)]) with
-    | Sat -> Yes ([], Sym.Map.empty) (* not using model to get var cands because it may overconstrain *)
-    | Unsat -> No !^"Solver returned no at variable assignment stage."
-    | Unknown -> Unknown e
+    (match Solver.ask_solver s [LC.T (IT.eq_ (exp, candidate) loc)] with
+     | Sat ->
+       (* not using model to get var cands because it may overconstrain *)
+       Yes ([], Sym.Map.empty)
+     | Unsat -> No !^"Solver returned no at variable assignment stage."
+     | Unknown -> Unknown e)
 
 
 
@@ -163,15 +181,17 @@ and get_var_constraints
   match Sym.Map.find_opt v var_def_locs with
   | None ->
     (match (Sym.Map.find_opt v ctxt.logical, Sym.Map.find_opt v ctxt.computational) with
-     | Some (Value it, _), _ -> get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
-     | _, Some (Value it, _) -> get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
+     | Some (Value it, _), _ ->
+       get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
+     | _, Some (Value it, _) ->
+       get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
      (* TODO: logical vs computational *)
      (* TODO: BaseType case *)
      | _ ->
        let f (s, _) = Sym.equal s v in
-       match List.find_opt f iargs with
-        | Some _ -> Yes ([], var_cands)
-        | _ -> Unknown (!^"Could not find variable definition line for" ^^^ Sym.pp v))
+       (match List.find_opt f iargs with
+         | Some _ -> Yes ([], var_cands)
+         | _ -> Unknown (!^"Could not find variable definition line for" ^^^ Sym.pp v)))
   | Some line ->
     (match line with
      (* recurse with x's definition *)
@@ -435,24 +455,29 @@ let state (ctxt : C.t) log model_with_q extras =
       List.filter_map
         (fun it ->
           match evaluate it with
-          | Some value when not (IT.equal value it) ->
-            Some (it, value)
+          | Some value when not (IT.equal value it) -> Some (it, value)
           | Some _ -> None
           | None -> None)
         (ITSet.elements subterms)
     in
-    let pretty_printed = List.map
-      (fun (it, value) -> (it, Rp.{ term = IT.pp it; value = IT.pp value })) filtered in
+    let pretty_printed =
+      List.map
+        (fun (it, value) -> (it, Rp.{ term = IT.pp it; value = IT.pp value }))
+        filtered
+      in
     let interesting, uninteresting =
       List.partition
         (fun (it, _entry) ->
           match IT.get_bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
         pretty_printed
     in
-    (Rp.add_labeled
-      Rp.lab_interesting
-      (List.map snd interesting)
-      (Rp.add_labeled Rp.lab_uninteresting (List.map snd uninteresting) Rp.labeled_empty),
+    ( Rp.add_labeled
+        Rp.lab_interesting
+        (List.map snd interesting)
+        (Rp.add_labeled
+          Rp.lab_uninteresting
+          (List.map snd uninteresting)
+          Rp.labeled_empty),
       filtered)
   in
   let constraints =
@@ -505,9 +530,11 @@ let state (ctxt : C.t) log model_with_q extras =
       | PName s, Resource.O it ->
         (match (Sym.Map.find_opt s defs, evaluate it) with
          | Some def, Some cand ->
-            let ptr_val = Req.get_pointer rt in
-            let ptr_def = (IT.sym_ (def.pointer, IT.get_bt ptr_val, Cerb_location.unknown), ptr_val) in
-            Some (check_pred s def cand ctxt (Req.get_iargs rt) (ptr_def :: vals), rt, it)
+           let ptr_val = Req.get_pointer rt in
+           let ptr_def =
+             (IT.sym_ (def.pointer, IT.get_bt ptr_val, Cerb_location.unknown), ptr_val)
+           in
+           Some (check_pred s def cand ctxt (Req.get_iargs rt) (ptr_def :: vals), rt, it)
          | Some _, None ->
            Some (Error (!^"Could not locate definition of variable" ^^^ IT.pp it), rt, it)
          | None, _ ->
@@ -525,15 +552,12 @@ let state (ctxt : C.t) log model_with_q extras =
           simplified = [ rslt ]
         }
     in
-    Rp.add_labeled
-      Rp.lab_invalid
-      (List.map pp_checked_res nos)
-      Rp.labeled_empty
-      (* Currently only displays invalid predicates *)
-      (* (Rp.add_labeled
-         Rp.lab_unknown
-         (List.map pp_checked_res unknown)
-         (Rp.add_labeled Rp.lab_valid (List.map pp_checked_res yeses) Rp.labeled_empty)) *)
+    Rp.add_labeled Rp.lab_invalid (List.map pp_checked_res nos) Rp.labeled_empty
+    (* Currently only displays invalid predicates *)
+    (* (Rp.add_labeled
+        Rp.lab_unknown
+        (List.map pp_checked_res unknown)
+        (Rp.add_labeled Rp.lab_valid (List.map pp_checked_res yeses) Rp.labeled_empty)) *)
   in
   Rp.{ where; invalid_resources; not_given_to_solver; terms; resources; constraints }
 

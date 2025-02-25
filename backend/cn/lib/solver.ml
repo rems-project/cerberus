@@ -1396,57 +1396,59 @@ let model_evaluator, reset_model_evaluator_state =
 
 module TryHard = struct
 
-  let translate_forall solver qs body = 
-    let rec alpha_rename qs body = 
+  let translate_forall solver qs body =
+    let rec alpha_rename qs body =
       match qs with
-      | [] -> ([],body)
+      | [] -> ([], body)
       | (s, bt) :: qs' ->
-        let qs',body = alpha_rename qs' body in
+        let qs', body = alpha_rename qs' body in
         let s, body = IT.alpha_rename s body in
-        (((s, bt) :: qs'), body)
+        ((s, bt) :: qs', body)
     in
     let qs, body = alpha_rename qs body in
     let body_ = translate_term solver body in
-    let qs_ = 
-      List.map (fun (s, bt) ->
-        let name = CN_Names.var_name s in
-        let sort = translate_base_type bt in
-        (SMT.atom name, sort)
-        ) qs
+    let qs_ =
+      List.map
+        (fun (s, bt) ->
+          let name = CN_Names.var_name s in
+          let sort = translate_base_type bt in
+          (SMT.atom name, sort))
+        qs
     in
     SMT.forall qs_ body_
 
+
   let translate_lc solver = function
     | LC.T it -> translate_term solver it
-    | LC.Forall ((s, bt), body) -> translate_forall solver [(s, bt)] body
+    | LC.Forall ((s, bt), body) -> translate_forall solver [ (s, bt) ] body
 
 
   let translate_function solver f args rbt body =
     let loc = Locations.other __LOC__ in
-    let arg_exprs = List.map (fun (s,bt) -> IT.sym_ (s, bt, loc)) args in
+    let arg_exprs = List.map (fun (s, bt) -> IT.sym_ (s, bt, loc)) args in
     translate_forall solver args (eq_ (apply_ f arg_exprs rbt loc, body) loc)
+
 
   let translate_functions solver =
     let open Definition.Function in
-    List.filter_map (fun (f, def) ->
-      match def.body with
-      | Rec_Def body -> 
+    List.filter_map
+      (fun (f, def) ->
+        match def.body with
+        | Rec_Def body ->
           (* Normally this would require the relevant functions,
-             including `f`, to already have been declared. Here this
-             happens lazily (in the `Apply` case), including for `f`. *)
+            including `f`, to already have been declared. Here this
+            happens lazily (in the `Apply` case), including for `f`. *)
           Some (translate_function solver f def.args def.return_bt body)
-      | Def _ -> None
-      | Uninterp -> None
-      ) (Sym.Map.bindings solver.globals.logical_functions)
+        | Def _ -> None
+        | Uninterp -> None)
+      (Sym.Map.bindings solver.globals.logical_functions)
 
 
   let translate_foralls solver assumptions =
     List.map (translate_lc solver) (List.filter LC.is_forall assumptions)
-
 end
 
 let try_hard = ref false
-
 
 (** The main way to query the solver. *)
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
@@ -1458,7 +1460,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
     model_state := Model (model, qs)
   in
   match shortcut simp_ctxt lc with
-  | `True -> 
+  | `True ->
     model_state := No_model;
     `True
   | `No_shortcut lc ->
@@ -1478,24 +1480,26 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
        let foralls = TryHard.translate_foralls solver assumptions in
        let functions = TryHard.translate_functions solver in
        debug_ack_command solver (SMT.push 1);
-       debug_ack_command solver (SMT.assume (SMT.bool_ands (nexpr :: foralls @ functions)));
+       debug_ack_command
+         solver
+         (SMT.assume (SMT.bool_ands (nexpr :: foralls @ functions)));
        Pp.(debug 3 (lazy !^"***** try-hard *****"));
        (match SMT.check inc with
         | SMT.Unsat ->
-            debug_ack_command solver (SMT.pop 1);
-            model_state := No_model;
-            Pp.(debug 3 (lazy !^"***** try-hard: provable *****"));
-            `True
+          debug_ack_command solver (SMT.pop 1);
+          model_state := No_model;
+          Pp.(debug 3 (lazy !^"***** try-hard: provable *****"));
+          `True
         | SMT.Sat ->
-            set_model inc qs;
-            debug_ack_command solver (SMT.pop 1);
-            Pp.(debug 3 (lazy !^"***** try-hard: unprovable *****"));
-            `False
+          set_model inc qs;
+          debug_ack_command solver (SMT.pop 1);
+          Pp.(debug 3 (lazy !^"***** try-hard: unprovable *****"));
+          `False
         | SMT.Unknown ->
-            set_model inc qs;
-            debug_ack_command solver (SMT.pop 1);
-            Pp.(debug 3 (lazy !^"***** try-hard: unknown *****"));
-            `False)
+          set_model inc qs;
+          debug_ack_command solver (SMT.pop 1);
+          Pp.(debug 3 (lazy !^"***** try-hard: unknown *****"));
+          `False)
      | SMT.Sat ->
        set_model inc qs;
        debug_ack_command solver (SMT.pop 1);
@@ -1503,11 +1507,6 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
      | SMT.Unknown ->
        debug_ack_command solver (SMT.pop 1);
        failwith "Unknown")
-
-
-
-
-
 
 
 (* ISD: Could these globs be different from the saved ones? *)

@@ -259,9 +259,7 @@ let make_invalid_resources rs =
        simp_view
        rs
        lab_invalid
-       []
-       (* [ lab_unknown; lab_valid ] *)
-       )
+       [] (* [ lab_unknown; lab_valid ] *))
 
 
 let make_not_given_to_solver ds =

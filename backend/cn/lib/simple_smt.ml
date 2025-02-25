@@ -384,9 +384,10 @@ let set_subset ext xs ys =
 (** {1 Quantifiers} *)
 
 (** A command to construct a universal quantification. *)
-let forall (qs : (sexp * sexp) list) (p : sexp) = 
-  let pair (x, y) = list [x;y] in
-  app_ "forall" [list (List.map pair qs); p]
+let forall (qs : (sexp * sexp) list) (p : sexp) =
+  let pair (x, y) = list [ x; y ] in
+  app_ "forall" [ list (List.map pair qs); p ]
+
 
 (** {1 Commands}
     The S-Expressions in this section define commands to the SMT solver.
