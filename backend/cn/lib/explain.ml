@@ -37,7 +37,7 @@ let ask_solver g lcs =
   | Sat -> Yes lcs
 
 
-let pair_to_lc (ps : IT.t * IT.t) : LogicalConstraints.t  =
+let pair_to_lc (ps : IT.t * IT.t) : LogicalConstraints.t =
   let loc = Cerb_location.unknown in
   LC.T (IT.eq_ (fst ps, snd ps) loc)
 
@@ -102,7 +102,7 @@ and check_clause
   | Ok zipped ->
     (* get constraints on iarg values *)
     let toMap xs =
-      List.fold_left (fun acc (k,v) -> Sym.Map.add k v acc) Sym.Map.empty xs
+      List.fold_left (fun acc (k, v) -> Sym.Map.add k v acc) Sym.Map.empty xs
     in
     let ics = convert_symmap_to_lcs (toMap zipped) in
     (* (Sym.Map.of_seq (List.to_seq zipped)) in *)
@@ -155,16 +155,15 @@ and get_body_constraints
   | No e -> No e
   | Error e -> Error e
   | Unknown e ->
-    let s = Solver.make (ctxt.global) in
+    let s = Solver.make ctxt.global in
     let loc = Cerb_location.unknown in
     let _ = Solver.try_hard := true in
-    (match Solver.ask_solver s [LC.T (IT.eq_ (exp, candidate) loc)] with
+    (match Solver.ask_solver s [ LC.T (IT.eq_ (exp, candidate) loc) ] with
      | Sat ->
        (* not using model to get var cands because it may overconstrain *)
        Yes ([], Sym.Map.empty)
      | Unsat -> No !^"Solver returned no at variable assignment stage."
      | Unknown -> Unknown e)
-
 
 
 and get_var_constraints
@@ -190,8 +189,8 @@ and get_var_constraints
      | _ ->
        let f (s, _) = Sym.equal s v in
        (match List.find_opt f iargs with
-         | Some _ -> Yes ([], var_cands)
-         | _ -> Unknown (!^"Could not find variable definition line for" ^^^ Sym.pp v)))
+        | Some _ -> Yes ([], var_cands)
+        | _ -> Unknown (!^"Could not find variable definition line for" ^^^ Sym.pp v)))
   | Some line ->
     (match line with
      (* recurse with x's definition *)
@@ -464,7 +463,7 @@ let state (ctxt : C.t) log model_with_q extras =
       List.map
         (fun (it, value) -> (it, Rp.{ term = IT.pp it; value = IT.pp value }))
         filtered
-      in
+    in
     let interesting, uninteresting =
       List.partition
         (fun (it, _entry) ->
@@ -475,10 +474,10 @@ let state (ctxt : C.t) log model_with_q extras =
         Rp.lab_interesting
         (List.map snd interesting)
         (Rp.add_labeled
-          Rp.lab_uninteresting
-          (List.map snd uninteresting)
-          Rp.labeled_empty),
-      filtered)
+           Rp.lab_uninteresting
+           (List.map snd uninteresting)
+           Rp.labeled_empty),
+      filtered )
   in
   let constraints =
     Rp.add_labeled
@@ -555,9 +554,9 @@ let state (ctxt : C.t) log model_with_q extras =
     Rp.add_labeled Rp.lab_invalid (List.map pp_checked_res nos) Rp.labeled_empty
     (* Currently only displays invalid predicates *)
     (* (Rp.add_labeled
-        Rp.lab_unknown
-        (List.map pp_checked_res unknown)
-        (Rp.add_labeled Rp.lab_valid (List.map pp_checked_res yeses) Rp.labeled_empty)) *)
+       Rp.lab_unknown
+       (List.map pp_checked_res unknown)
+       (Rp.add_labeled Rp.lab_valid (List.map pp_checked_res yeses) Rp.labeled_empty)) *)
   in
   Rp.{ where; invalid_resources; not_given_to_solver; terms; resources; constraints }
 

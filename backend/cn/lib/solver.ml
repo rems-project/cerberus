@@ -1395,7 +1395,6 @@ let model_evaluator, reset_model_evaluator_state =
 (* ---------------------------------------------------------------------------*)
 
 module TryHard = struct
-
   let translate_forall solver qs body =
     let rec alpha_rename qs body =
       match qs with
@@ -1436,8 +1435,8 @@ module TryHard = struct
         match def.body with
         | Rec_Def body ->
           (* Normally this would require the relevant functions,
-            including `f`, to already have been declared. Here this
-            happens lazily (in the `Apply` case), including for `f`. *)
+             including `f`, to already have been declared. Here this
+             happens lazily (in the `Apply` case), including for `f`. *)
           Some (translate_function solver f def.args def.return_bt body)
         | Def _ -> None
         | Uninterp -> None)
@@ -1482,7 +1481,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
        debug_ack_command solver (SMT.push 1);
        debug_ack_command
          solver
-         (SMT.assume (SMT.bool_ands (nexpr :: foralls @ functions)));
+         (SMT.assume (SMT.bool_ands ((nexpr :: foralls) @ functions)));
        Pp.(debug 3 (lazy !^"***** try-hard *****"));
        (match SMT.check inc with
         | SMT.Unsat ->

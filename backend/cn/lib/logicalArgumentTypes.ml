@@ -237,6 +237,7 @@ type check_result = (LC.t list, Pp.document) result_with_data
 let pp_check_result =
   pp_result_with_data (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc)) (fun d -> d)
 
+
 let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
   List.fold_left
     (fun acc elem -> match f elem with None -> acc | Some x -> x :: acc)
