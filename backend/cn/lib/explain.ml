@@ -514,22 +514,26 @@ let state (ctxt : C.t) log model_with_q extras =
            Some (Error (!^"Could not locate definition of predicate" ^^^ Sym.pp s), rt, it))
     in
     let checked = LAT.filter_map_some check (C.get_rs ctxt) in
-    let nos, rest = List.partition (fun (r, _, _) -> is_no r) checked in
-    let yeses, unknown = List.partition (fun (r, _, _) -> is_yes r) rest in
+    let nos, _ = List.partition (fun (r, _, _) -> is_no r) checked in
+    (* let yeses, unknown = List.partition (fun (r, _, _) -> is_yes r) rest in *)
     let pp_checked_res (p, req, cand) =
+      let _ = p in
       let rslt = Req.pp req ^^^ !^"(" ^^^ IT.pp cand ^^^ !^")" in
       Rp.
-        { original = rslt ^^^ !^"\n"^^^ LAT.pp_check_result p;
+        { original = rslt;
+          (*original = ^^^ !^"\n"^^^ LAT.pp_check_result p; *)
           simplified = [ rslt ]
         }
     in
     Rp.add_labeled
       Rp.lab_invalid
       (List.map pp_checked_res nos)
-      (Rp.add_labeled
+      Rp.labeled_empty
+      (* Currently only displays invalid predicates *)
+      (* (Rp.add_labeled
          Rp.lab_unknown
          (List.map pp_checked_res unknown)
-         (Rp.add_labeled Rp.lab_valid (List.map pp_checked_res yeses) Rp.labeled_empty))
+         (Rp.add_labeled Rp.lab_valid (List.map pp_checked_res yeses) Rp.labeled_empty)) *)
   in
   Rp.{ where; invalid_resources; not_given_to_solver; terms; resources; constraints }
 
