@@ -2,7 +2,7 @@ type statement = Locations.t * Cnprog.t list
 
 type statements = statement list
 
-type loop = Locations.t * Locations.t * statements ArgumentTypes.t
+type loop = bool * Locations.t * Locations.t * statements ArgumentTypes.t
 (* first location is for the loop condition; second is for the entire loop *)
 
 type loops = loop list

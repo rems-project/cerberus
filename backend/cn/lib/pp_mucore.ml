@@ -704,7 +704,8 @@ module Make (Config : CONFIG) = struct
                                           label_args_and_body,
                                           _annots,
                                           _,
-                                          _loop_condition_loc ) ->
+                                          _loop_condition_loc,
+                                          _contains_user_spec ) ->
                                       P.break 1
                                       ^^ !^"label"
                                       ^^^ pp_symbol sym

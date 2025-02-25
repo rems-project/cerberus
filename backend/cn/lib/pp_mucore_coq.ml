@@ -1848,7 +1848,7 @@ let pp_parse_ast_label_spec (s : parse_ast_label_spec) =
 
 let pp_label_def pp_type = function
   | Return loc -> pp_constructor1 "Return" [ pp_location loc ]
-  | Label (loc, args, annots, spec, `Loop loop_locs) ->
+  | Label (loc, args, annots, spec, `Loop loop_locs, _contains_user_spec) ->
     pp_constructor1
       "Label"
       [ pp_location loc;

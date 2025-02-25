@@ -3302,19 +3302,26 @@ let rec cn_to_ail_lat_internal_loop ?(is_toplevel = true) dts globals preds = fu
     (List.concat bs, List.concat ss)
 
 
-let rec cn_to_ail_loop_inv_aux dts globals preds (cond_loc, loop_loc, at) =
+let rec cn_to_ail_loop_inv_aux
+  dts
+  globals
+  preds
+  (contains_user_spec, cond_loc, loop_loc, at)
+  =
   match at with
   | AT.Computational ((sym, bt), _, at') ->
     let cn_sym = generate_sym_with_suffix ~suffix:"_addr_cn" sym in
     let subst_loop =
-      ESE.loop_subst (ESE.sym_subst (sym, bt, cn_sym)) (cond_loc, loop_loc, at')
+      ESE.loop_subst
+        (ESE.sym_subst (sym, bt, cn_sym))
+        (contains_user_spec, cond_loc, loop_loc, at')
     in
     let (_, (cond_bs, cond_ss)), (_, (loop_bs, loop_ss)) =
       cn_to_ail_loop_inv_aux dts globals preds subst_loop
     in
-    ( (cond_loc, (cond_bs, (* assign :: *) cond_ss)),
-      (loop_loc, ((* binding :: *) loop_bs, (* decl :: *) loop_ss)) )
+    ((cond_loc, (cond_bs, cond_ss)), (loop_loc, (loop_bs, loop_ss)))
   | L lat ->
+    Printf.printf "Reached AT.L\n";
     let rec modify_decls_for_loop decls modified_stats =
       let rec collect_initialised_syms_and_exprs = function
         | [] -> []
@@ -3351,32 +3358,40 @@ let rec cn_to_ail_loop_inv_aux dts globals preds (cond_loc, loop_loc, at) =
     ((cond_loc, (bs, modified_stats)), (loop_loc, (bs, decls)))
 
 
-let cn_to_ail_loop_inv dts globals preds ((cond_loc, loop_loc, _) as loop) =
-  let (_, (cond_bs, cond_ss)), (_, loop_bs_and_ss) =
-    cn_to_ail_loop_inv_aux dts globals preds loop
-  in
-  let cn_stack_depth_incr_call =
-    A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_incr_sym), [])))
-  in
-  let cn_loop_leak_check_and_decr_call =
-    A.AilSexpr
-      (mk_expr (AilEcall (mk_expr (AilEident OE.cn_loop_leak_check_and_decr_sym), [])))
-  in
-  let cn_stack_depth_decr_call =
-    A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_decr_sym), [])))
-  in
-  let dummy_expr_as_stat =
-    A.(
-      AilSexpr
-        (mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))
-  in
-  let stats =
-    (cn_stack_depth_incr_call :: cond_ss)
-    @ [ cn_loop_leak_check_and_decr_call; cn_stack_depth_decr_call; dummy_expr_as_stat ]
-  in
-  let ail_gcc_stat_as_expr = A.(AilEgcc_statement ([], List.map mk_stmt stats)) in
-  let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
-  ((cond_loc, (cond_bs, [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss))
+let cn_to_ail_loop_inv
+  dts
+  globals
+  preds
+  ((contains_user_spec, cond_loc, loop_loc, _) as loop)
+  =
+  if contains_user_spec then (
+    let (_, (cond_bs, cond_ss)), (_, loop_bs_and_ss) =
+      cn_to_ail_loop_inv_aux dts globals preds loop
+    in
+    let cn_stack_depth_incr_call =
+      A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_incr_sym), [])))
+    in
+    let cn_loop_leak_check_and_decr_call =
+      A.AilSexpr
+        (mk_expr (AilEcall (mk_expr (AilEident OE.cn_loop_leak_check_and_decr_sym), [])))
+    in
+    let cn_stack_depth_decr_call =
+      A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_decr_sym), [])))
+    in
+    let dummy_expr_as_stat =
+      A.(
+        AilSexpr
+          (mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))
+    in
+    let stats =
+      (cn_stack_depth_incr_call :: cond_ss)
+      @ [ cn_loop_leak_check_and_decr_call; cn_stack_depth_decr_call; dummy_expr_as_stat ]
+    in
+    let ail_gcc_stat_as_expr = A.(AilEgcc_statement ([], List.map mk_stmt stats)) in
+    let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
+    Some ((cond_loc, (cond_bs, [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss)))
+  else
+    None
 
 
 let prepend_to_precondition ail_executable_spec (b1, s1) =
@@ -3490,6 +3505,7 @@ let rec cn_to_ail_lat_internal_2
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
     let ail_loop_invariants = List.map (cn_to_ail_loop_inv dts globals preds) loop in
+    let ail_loop_invariants = List.filter_map Fun.id ail_loop_invariants in 
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stats_ =
       if without_ownership_checking then

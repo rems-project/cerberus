@@ -2202,7 +2202,13 @@ module WProc = struct
           match def with
           | Return loc ->
             (AT.of_rt function_rt (LAT.I False.False), CF.Annot.LAreturn, loc)
-          | Label (loc, label_args_and_body, annots, _parsed_spec, _loop_condition_loc) ->
+          | Label
+              ( loc,
+                label_args_and_body,
+                annots,
+                _parsed_spec,
+                _loop_condition_loc,
+                _contains_user_spec ) ->
             let lt = WLabel.typ label_args_and_body in
             let kind = Option.get (CF.Annot.get_label_annot annots) in
             (lt, kind, loc)
@@ -2227,7 +2233,13 @@ module WProc = struct
             (fun _sym def ->
               match def with
               | Return loc -> return (Return loc)
-              | Label (loc, label_args_and_body, annots, parsed_spec, loop_info) ->
+              | Label
+                  ( loc,
+                    label_args_and_body,
+                    annots,
+                    parsed_spec,
+                    loop_info,
+                    contains_user_spec ) ->
                 let@ label_args_and_body =
                   pure
                     (WArgs.welltyped
@@ -2237,7 +2249,14 @@ module WProc = struct
                        loc
                        label_args_and_body)
                 in
-                return (Label (loc, label_args_and_body, annots, parsed_spec, loop_info)))
+                return
+                  (Label
+                     ( loc,
+                       label_args_and_body,
+                       annots,
+                       parsed_spec,
+                       loop_info,
+                       contains_user_spec )))
             labels
             Sym.compare
         in
