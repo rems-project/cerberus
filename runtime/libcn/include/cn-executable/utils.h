@@ -120,7 +120,7 @@ typedef struct cn_bits_u64 {
 } cn_bits_u64;
 
 typedef struct cn_integer {
-  signed long val;
+  int64_t val;
 } cn_integer;
 
 typedef struct cn_pointer {
@@ -427,7 +427,7 @@ cn_bool *default_cn_bool(void);
 
 #define CN_GEN_MAP_GET(CNTYPE)                                                           \
   static inline void *cn_map_get_##CNTYPE(cn_map *m, cn_integer *key) {                  \
-    signed long *key_ptr = cn_bump_malloc(sizeof(signed long));                          \
+    int64_t *key_ptr = cn_bump_malloc(sizeof(int64_t));                                  \
     *key_ptr = key->val;                                                                 \
     void *res = ht_get(m, key_ptr);                                                      \
     if (!res) {                                                                          \
@@ -525,9 +525,9 @@ enum OWNERSHIP {
   LOOP
 };
 
-int ownership_ghost_state_get(signed long *address_key);
-void ownership_ghost_state_set(signed long *address_key, int stack_depth_val);
-void ownership_ghost_state_remove(signed long *address_key);
+int ownership_ghost_state_get(int64_t *address_key);
+void ownership_ghost_state_set(int64_t *address_key, int stack_depth_val);
+void ownership_ghost_state_remove(int64_t *address_key);
 
 /* CN ownership checking */
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size, char *check_msg);
