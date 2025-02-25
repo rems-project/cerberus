@@ -282,12 +282,10 @@ type 'TY label_def =
       * 'TY expr arguments
       * Cerb_frontend.Annot.annot list
       * parse_ast_label_spec
-      * [ `Loop of Locations.t * Locations.t ]
-      * bool
-(* whether any loop invariant was provided by the user, for executable checking *)
-
-(*first loc is condition, second is whole loop*)
-(*loop condition location, for executable checking *)
+      * [ `Loop of Locations.t * Locations.t * bool ]
+(* first loc is condition, second is whole loop *)
+(* loop condition location, for executable checking *)
+(* bool signifies whether any loop invariant was provided by the user, for executable checking *)
 
 type trusted =
   | Trusted of Locations.t

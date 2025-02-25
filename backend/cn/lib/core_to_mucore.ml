@@ -1142,7 +1142,7 @@ let normalise_label
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
     (match CF.Annot.get_label_annot annots with
      | Some (LAloop loop_id) ->
-       let@ desugared_inv, cn_desugaring_state, loop_condition_loc, contains_user_spec =
+       let@ desugared_inv, cn_desugaring_state, loop_info =
          match Pmap.lookup loop_id loop_attributes with
          | Some { marker_id; attributes = attrs; loc_condition; loc_loop } ->
            let@ inv = Parse.loop_spec attrs in
@@ -1157,7 +1157,7 @@ let normalise_label
                }
            in
            let@ inv, d_st = desugar_conds d_st inv in
-           return (inv, d_st.inner.cn_state, (loc_condition, loc_loop), contains_user_spec)
+           return (inv, d_st.inner.cn_state, (loc_condition, loc_loop, contains_user_spec))
          | None -> assert false
          (* return ([], precondition_cn_desugaring_state) *)
        in
@@ -1189,8 +1189,7 @@ let normalise_label
               label_args_and_body,
               annots,
               { label_spec = desugared_inv },
-              `Loop loop_condition_loc,
-              contains_user_spec ))
+              `Loop loop_info ))
      (* | Some (LAloop_body _loop_id) -> *)
      (*    assert_error loc !^"body label has not been inlined" *)
      | Some (LAloop_continue _loop_id) ->

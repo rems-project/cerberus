@@ -3321,7 +3321,6 @@ let rec cn_to_ail_loop_inv_aux
     in
     ((cond_loc, (cond_bs, cond_ss)), (loop_loc, (loop_bs, loop_ss)))
   | L lat ->
-    Printf.printf "Reached AT.L\n";
     let rec modify_decls_for_loop decls modified_stats =
       let rec collect_initialised_syms_and_exprs = function
         | [] -> []
@@ -3391,6 +3390,7 @@ let cn_to_ail_loop_inv
     let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
     Some ((cond_loc, (cond_bs, [ ail_stat_as_expr_stat ])), (loop_loc, loop_bs_and_ss)))
   else
+    (* Produce no runtime loop invariant statements if the user has not written any spec for this loop*)
     None
 
 

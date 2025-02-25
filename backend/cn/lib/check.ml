@@ -2208,9 +2208,7 @@ let check_procedure
            pure
              (match def with
               | Mu.Return _loc -> return ()
-              | Label
-                  (loc, label_args_and_body, _annots, _, _loop_info, _contains_user_spec)
-                ->
+              | Label (loc, label_args_and_body, _annots, _, _loop_info) ->
                 debug
                   2
                   (lazy
