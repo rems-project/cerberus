@@ -1,0 +1,29 @@
+; With Dune >= 3.11
+; (install
+;  (files
+;   (glob_files
+;    (cn-executable/*.h with_prefix runtime/include/cn-executable))
+;   (glob_files
+;    (cn-testing/*.h with_prefix runtime/include/cn-testing)))
+;  (section lib)
+;  (package cn))
+
+(install
+ (files
+  ;
+  (cn-executable/alloc.h as runtime/include/cn-executable/alloc.h)
+  (cn-executable/hash_table.h as runtime/include/cn-executable/hash_table.h)
+  (cn-executable/utils.h as runtime/include/cn-executable/utils.h)
+  ;
+  (cn-testing/alloc.h as runtime/include/cn-testing/alloc.h)
+  (cn-testing/backtrack.h as runtime/include/cn-testing/backtrack.h)
+  (cn-testing/dsl.h as runtime/include/cn-testing/dsl.h)
+  (cn-testing/prelude.h as runtime/include/cn-testing/prelude.h)
+  (cn-testing/rand.h as runtime/include/cn-testing/rand.h)
+  (cn-testing/result.h as runtime/include/cn-testing/result.h)
+  (cn-testing/size.h as runtime/include/cn-testing/size.h)
+  (cn-testing/test.h as runtime/include/cn-testing/test.h)
+  (cn-testing/uniform.h as runtime/include/cn-testing/uniform.h)
+  (cn-testing/urn.h as runtime/include/cn-testing/urn.h))
+ (section lib)
+ (package cn))

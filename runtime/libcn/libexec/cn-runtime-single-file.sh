@@ -77,7 +77,7 @@ else
 fi
 
 # Link
-if cc ${UBSAN} "-I${RUNTIME_PREFIX}/include" -o "${INPUT_BASENAME}-exec-output.bin" ./*.o "${RUNTIME_PREFIX}/libcn.a"; then
+if cc ${UBSAN} "-I${RUNTIME_PREFIX}/include" -o "${INPUT_BASENAME}-exec-output.bin" ./*.o "${RUNTIME_PREFIX}/libcn_exec.a"; then
     [ "${QUIET}" ] || echo "Linked C .o files." 
 else
     echo_and_err "Failed to link .o files in ${EXEC_DIR}."
