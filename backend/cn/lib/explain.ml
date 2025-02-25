@@ -91,7 +91,9 @@ and check_clause
   | Unequal_lengths -> Unknown !^"Wrong number of predicate arguments provided"
   | Ok zipped ->
     (* get constraints on iarg values *)
-    let ics = convert_symmap_to_lcs (Sym.Map.of_seq (List.to_seq zipped)) in
+    let toMap xs = List.fold_left (fun acc (k,v) -> Sym.Map.add k v acc) Sym.Map.empty xs in
+    let ics = convert_symmap_to_lcs (toMap zipped)in
+    (* (Sym.Map.of_seq (List.to_seq zipped)) in *)
     (* get other constraints on terms *)
     let tcs = List.map pair_to_lc term_vals in
     (* get returned expression of c and variable dependency graph *)
@@ -100,7 +102,7 @@ and check_clause
     let@ cs, vs = get_body_constraints exp var_def_locs candidate ctxt iargs term_vals in
     (* add guard and variable assignments to constraints list *)
     let cs' = List.concat
-      [ LC.Set.to_list ctxt.constraints;
+      [ LC.Set.elements ctxt.constraints;
         lcs;
         cs;
         ics;
@@ -139,9 +141,9 @@ and get_body_constraints
   | Error e -> Error e
   | Unknown e -> let s = Solver.make (ctxt.global) in
     let loc = Cerb_location.unknown in
+    let _ = Solver.try_hard := true in
     match (Solver.ask_solver s [LC.T (IT.eq_ (exp, candidate) loc)]) with
-    | Sat ->
-      Unknown e (*TODO: requires try-hard mode to be correct*)
+    | Sat -> Yes ([], Sym.Map.empty) (* not using model to get var cands because it may overconstrain *)
     | Unsat -> No !^"Solver returned no at variable assignment stage."
     | Unknown -> Unknown e
 
