@@ -3505,7 +3505,7 @@ let rec cn_to_ail_lat_internal_2
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
     let ail_loop_invariants = List.map (cn_to_ail_loop_inv dts globals preds) loop in
-    let ail_loop_invariants = List.filter_map Fun.id ail_loop_invariants in 
+    let ail_loop_invariants = List.filter_map Fun.id ail_loop_invariants in
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stats_ =
       if without_ownership_checking then

@@ -527,7 +527,7 @@ let run_seq_tests
           let _, sigma = ail_prog in
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           Executable_spec.main
-            ~without_ownership_checking (* TODO: Zain *)
+            ~without_ownership_checking (* TODO: Ethan *)
             ~without_loop_invariants:true
             ~with_test_gen:true
             ~copy_source_dir:false
@@ -667,7 +667,7 @@ let run_tests
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           (try
              Executable_spec.main
-               ~without_ownership_checking (* TODO: Zain *)
+               ~without_ownership_checking (* TODO: Ethan *)
                ~without_loop_invariants:true
                ~with_test_gen:true
                ~copy_source_dir:false
