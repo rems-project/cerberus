@@ -156,7 +156,12 @@ match! goal with
         (* debug *)
         (* Message.print (Message.of_constr req); *)
         let p := predicate_of_request req in
-        exists $p
+        exists $p;
+        Std.split false NoBindings;
+        (* TODO: ResSet quality, for example, usig [fsetdec] *)
+        Std.admit ();
+        (* Second subgoal - subsumed *)
+        Std.constructor false; Std.reflexivity ()
     | _ =>
         Control.throw (Tactic_failure (Some (Message.of_string "Zero or more than one resource change between the input and output")))
     end
