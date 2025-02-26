@@ -230,12 +230,12 @@ void cn_postcondition_leak_check(void) {
   }
 }
 
-void cn_loop_leak_check_and_decr(void) {
-  hash_table_iterator it1 = ht_iterator(cn_ownership_global_ghost_state);
+void cn_loop_leak_check(void) {
+  hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
 
-  while (ht_next(&it1)) {
-      uintptr_t *key = (uintptr_t *) it1.key;
-      int *depth = it1.value;
+  while (ht_next(&it)) {
+      uintptr_t *key = (uintptr_t *) it.key;
+      int *depth = it.value;
       /* Everything mapped to the function stack depth should have been bumped up by calls to Owned in invariant */
       if (*depth == cn_stack_depth - 1) {
         print_error_msg_info(error_msg_info);
@@ -244,17 +244,25 @@ void cn_loop_leak_check_and_decr(void) {
           // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
       }
   }
+}
 
-  hash_table_iterator it2 = ht_iterator(cn_ownership_global_ghost_state);
+void cn_loop_put_back_ownership(void) {
+  hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
 
-  while (ht_next(&it2)) {
-      uintptr_t *key = (uintptr_t *) it2.key;
-      int *depth = it2.value;
+  while (ht_next(&it)) {
+      uintptr_t *key = (uintptr_t *) it.key;
+      int *depth = it.value;
       /* Bump down everything that was bumped up in loop invariant */
       if (*depth == cn_stack_depth) {
         ownership_ghost_state_set((signed long *) key, cn_stack_depth - 1);
       }
   }
+}
+
+
+void cn_loop_leak_check_and_put_back_ownership(void) {
+  cn_loop_leak_check();
+  cn_loop_put_back_ownership();
 }
 
 int ownership_ghost_state_get(signed long *address_key) {

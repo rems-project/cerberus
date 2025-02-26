@@ -165,6 +165,7 @@ val cn_to_ail_predicates_internal
 
 val cn_to_ail_pre_post_internal
   :  without_ownership_checking:bool ->
+  with_loop_leak_checks:bool ->
   A.sigma_cn_datatype list ->
   (Sym.t * Definition.Predicate.t) list ->
   (Sym.t * C.ctype) list ->

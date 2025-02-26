@@ -144,7 +144,8 @@ signed long get_cn_stack_depth(void);
 void ghost_stack_depth_incr(void);
 void ghost_stack_depth_decr(void);
 void cn_postcondition_leak_check(void);
-void cn_loop_leak_check_and_decr(void);
+void cn_loop_put_back_ownership(void);
+void cn_loop_leak_check_and_put_back_ownership(void);
 
 
 /* malloc, free */

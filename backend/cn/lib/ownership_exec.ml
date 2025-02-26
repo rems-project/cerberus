@@ -26,7 +26,11 @@ let cn_stack_depth_decr_sym = Sym.fresh_pretty "ghost_stack_depth_decr"
 
 let cn_postcondition_leak_check_sym = Sym.fresh_pretty "cn_postcondition_leak_check"
 
-let cn_loop_leak_check_and_decr_sym = Sym.fresh_pretty "cn_loop_leak_check_and_decr"
+let cn_loop_put_back_ownership_sym = Sym.fresh_pretty "cn_loop_put_back_ownership"
+
+let cn_loop_leak_check_and_put_back_ownership_sym =
+  Sym.fresh_pretty "cn_loop_leak_check_and_put_back_ownership"
+
 
 let c_add_ownership_fn_sym = Sym.fresh_pretty "c_add_to_ghost_state"
 

@@ -3361,6 +3361,7 @@ let cn_to_ail_loop_inv
   dts
   globals
   preds
+  with_loop_leak_checks
   ((contains_user_spec, cond_loc, loop_loc, _) as loop)
   =
   if contains_user_spec then (
@@ -3370,9 +3371,14 @@ let cn_to_ail_loop_inv
     let cn_stack_depth_incr_call =
       A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_incr_sym), [])))
     in
-    let cn_loop_leak_check_and_decr_call =
-      A.AilSexpr
-        (mk_expr (AilEcall (mk_expr (AilEident OE.cn_loop_leak_check_and_decr_sym), [])))
+    let cn_ownership_put_sym =
+      if with_loop_leak_checks then
+        OE.cn_loop_leak_check_and_put_back_ownership_sym
+      else
+        OE.cn_loop_put_back_ownership_sym
+    in
+    let cn_loop_put_call =
+      A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident cn_ownership_put_sym), [])))
     in
     let cn_stack_depth_decr_call =
       A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_decr_sym), [])))
@@ -3384,7 +3390,7 @@ let cn_to_ail_loop_inv
     in
     let stats =
       (cn_stack_depth_incr_call :: cond_ss)
-      @ [ cn_loop_leak_check_and_decr_call; cn_stack_depth_decr_call; dummy_expr_as_stat ]
+      @ [ cn_loop_put_call; cn_stack_depth_decr_call; dummy_expr_as_stat ]
     in
     let ail_gcc_stat_as_expr = A.(AilEgcc_statement ([], List.map mk_stmt stats)) in
     let ail_stat_as_expr_stat = A.(AilSexpr (mk_expr ail_gcc_stat_as_expr)) in
@@ -3402,6 +3408,7 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
 (* Precondition and postcondition translation - LAT.I case means precondition translation finished *)
 let rec cn_to_ail_lat_internal_2
   without_ownership_checking
+  with_loop_leak_checks
   dts
   globals
   preds
@@ -3420,6 +3427,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
         without_ownership_checking
+        with_loop_leak_checks
         dts
         globals
         preds
@@ -3436,6 +3444,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
         without_ownership_checking
+        with_loop_leak_checks
         dts
         globals
         preds
@@ -3451,6 +3460,7 @@ let rec cn_to_ail_lat_internal_2
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
         without_ownership_checking
+        with_loop_leak_checks
         dts
         globals
         preds
@@ -3504,7 +3514,9 @@ let rec cn_to_ail_lat_internal_2
     let ail_statements =
       List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats
     in
-    let ail_loop_invariants = List.map (cn_to_ail_loop_inv dts globals preds) loop in
+    let ail_loop_invariants =
+      List.map (cn_to_ail_loop_inv dts globals preds with_loop_leak_checks) loop
+    in
     let ail_loop_invariants = List.filter_map Fun.id ail_loop_invariants in
     let post_bs, post_ss = cn_to_ail_post_internal dts globals preds post in
     let ownership_stats_ =
@@ -3530,6 +3542,7 @@ let rec cn_to_ail_lat_internal_2
 
 let rec cn_to_ail_pre_post_aux_internal
   without_ownership_checking
+  with_loop_leak_checks
   dts
   preds
   globals
@@ -3545,6 +3558,7 @@ let rec cn_to_ail_pre_post_aux_internal
     let ail_executable_spec =
       cn_to_ail_pre_post_aux_internal
         without_ownership_checking
+        with_loop_leak_checks
         dts
         preds
         globals
@@ -3555,6 +3569,7 @@ let rec cn_to_ail_pre_post_aux_internal
   | AT.L lat ->
     cn_to_ail_lat_internal_2
       without_ownership_checking
+      with_loop_leak_checks
       dts
       globals
       preds
@@ -3564,6 +3579,7 @@ let rec cn_to_ail_pre_post_aux_internal
 
 let cn_to_ail_pre_post_internal
   ~without_ownership_checking
+  ~with_loop_leak_checks
   dts
   preds
   globals
@@ -3573,6 +3589,7 @@ let cn_to_ail_pre_post_internal
     let ail_executable_spec =
       cn_to_ail_pre_post_aux_internal
         without_ownership_checking
+        with_loop_leak_checks
         dts
         preds
         globals

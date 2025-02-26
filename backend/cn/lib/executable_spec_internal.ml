@@ -57,6 +57,7 @@ let rec extract_global_variables = function
 let generate_c_specs_internal
   without_ownership_checking
   without_loop_invariants
+  with_loop_leak_checks
   (instrumentation : Executable_spec_extract.instrumentation)
   _
   (sigm : _ CF.AilSyntax.sigma)
@@ -73,6 +74,7 @@ let generate_c_specs_internal
   let ail_executable_spec =
     Cn_internal_to_ail.cn_to_ail_pre_post_internal
       ~without_ownership_checking
+      ~with_loop_leak_checks
       dts
       preds
       globals
@@ -225,6 +227,7 @@ let generate_c_assume_pres_internal
 let generate_c_specs
   without_ownership_checking
   without_loop_invariants
+  with_loop_leak_checks
   instrumentation_list
   type_map
   (_ : Cerb_location.t CStatements.LocMap.t)
@@ -235,6 +238,7 @@ let generate_c_specs
     generate_c_specs_internal
       without_ownership_checking
       without_loop_invariants
+      with_loop_leak_checks
       instrumentation
       type_map
       sigm
