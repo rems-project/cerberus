@@ -4,7 +4,7 @@ Require Import Sym.
 
 Require Import Coq.Structures.DecidableType.
 Require Import Coq.Structures.DecidableTypeEx.
-Require Import Coq.MSets.MSetWeakList.
+Require Import Coq.FSets.FSetWeakList.
 
 (* Define the logical constraint type *)
 Inductive logical_constraint : Type :=
@@ -34,7 +34,7 @@ Module LogicalConstraint_as_MiniDecidableType <: MiniDecidableType.
 End LogicalConstraint_as_MiniDecidableType.
 
 Module LogicalConstraints_as_DecidableType := Make_UDT LogicalConstraint_as_MiniDecidableType.
-Module LCSet := MSetWeakList.Make LogicalConstraints_as_DecidableType.
+Module LCSet := FSetWeakList.Make LogicalConstraints_as_DecidableType.
 
 Definition set_from_list (l : list t) : LCSet.t :=
   List.fold_left (fun s c => LCSet.add c s) l LCSet.empty.

@@ -1,6 +1,6 @@
 Require Import Coq.Structures.DecidableType.
 Require Import Coq.Structures.DecidableTypeEx.
-Require Import Coq.MSets.MSetWeakList.
+Require Import Coq.FSets.FSetWeakList.
 
 Require Import Request.
 Require Import IndexTerms.
@@ -30,7 +30,7 @@ Module Resource_as_MiniDecidableType <: MiniDecidableType.
 End Resource_as_MiniDecidableType.
 
 Module Resource_as_DecidableType := Make_UDT Resource_as_MiniDecidableType.
-Module ResSet := MSetWeakList.Make Resource_as_DecidableType.
+Module ResSet := FSetWeakList.Make Resource_as_DecidableType.
 
 Definition set_from_list (l : list t) : ResSet.t :=
   List.fold_left (fun s c => ResSet.add c s) l ResSet.empty.
