@@ -405,6 +405,8 @@ let generate_executable_specs
     output_decorated
   output_decorated_dir
   without_ownership_checking
+  without_loop_invariants
+  with_loop_leak_checks
   with_test_gen
   copy_source_dir
   =
@@ -444,6 +446,8 @@ let generate_executable_specs
           (try
              Executable_spec.main
                ~without_ownership_checking
+               ~without_loop_invariants
+               ~with_loop_leak_checks
                ~with_test_gen
                ~copy_source_dir
                filename
@@ -473,6 +477,7 @@ let run_seq_tests
   magic_comment_char_dollar
   (* Executable spec *)
     without_ownership_checking
+  (* without_loop_invariants *)
   (* Test Generation *)
     output_dir
   with_static_hack
@@ -525,6 +530,8 @@ let run_seq_tests
           Cn_internal_to_ail.augment_record_map (BaseTypes.Record []);
           Executable_spec.main
             ~without_ownership_checking
+            ~without_loop_invariants:true
+            ~with_loop_leak_checks:false
             ~with_test_gen:true
             ~copy_source_dir:false
             filename
@@ -562,6 +569,7 @@ let run_tests
   magic_comment_char_dollar
   (* Executable spec *)
     without_ownership_checking
+  (* without_loop_invariants *)
   (* Test Generation *)
     output_dir
   only
@@ -663,6 +671,8 @@ let run_tests
           (try
              Executable_spec.main
                ~without_ownership_checking
+               ~without_loop_invariants:true
+               ~with_loop_leak_checks:false
                ~with_test_gen:true
                ~copy_source_dir:false
                filename
@@ -919,6 +929,16 @@ module Executable_spec_flags = struct
   let without_ownership_checking =
     let doc = "Disable ownership checking within CN runtime testing" in
     Arg.(value & flag & info [ "without-ownership-checking" ] ~doc)
+
+
+  let without_loop_invariants =
+    let doc = "Disable checking of loop invariants within CN runtime testing" in
+    Arg.(value & flag & info [ "without-loop-invariants" ] ~doc)
+
+
+  let with_loop_leak_checks =
+    let doc = "Enable leak checking across all runtime loop invariants" in
+    Arg.(value & flag & info [ "with-loop-leak-checks" ] ~doc)
 
 
   let with_test_gen =
@@ -1426,6 +1446,8 @@ let instrument_cmd =
     $ Executable_spec_flags.output_decorated
     $ Executable_spec_flags.output_decorated_dir
     $ Executable_spec_flags.without_ownership_checking
+    $ Executable_spec_flags.without_loop_invariants
+    $ Executable_spec_flags.with_loop_leak_checks
     $ Executable_spec_flags.with_test_gen
     $ Executable_spec_flags.copy_source_dir
   in

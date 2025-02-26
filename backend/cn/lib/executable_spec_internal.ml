@@ -54,8 +54,10 @@ let rec extract_global_variables = function
      | GlobalDecl ctype -> (sym, Sctypes.to_ctype ctype) :: extract_global_variables ds)
 
 
-let generate_c_pres_and_posts_internal
+let generate_c_specs_internal
   without_ownership_checking
+  without_loop_invariants
+  with_loop_leak_checks
   (instrumentation : Executable_spec_extract.instrumentation)
   _
   (sigm : _ CF.AilSyntax.sigma)
@@ -72,6 +74,7 @@ let generate_c_pres_and_posts_internal
   let ail_executable_spec =
     Cn_internal_to_ail.cn_to_ail_pre_post_internal
       ~without_ownership_checking
+      ~with_loop_leak_checks
       dts
       preds
       globals
@@ -85,13 +88,13 @@ let generate_c_pres_and_posts_internal
     if without_ownership_checking then
       ((pre_str, post_str), [])
     else (
-      let fn_ownership_stats_opt, block_ownership_injs =
+      let fn_ownership_bs_and_ss_opt, block_ownership_injs =
         Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm
       in
-      match fn_ownership_stats_opt with
-      | Some (entry_ownership_stats, exit_ownership_stats) ->
-        let entry_ownership_str = generate_ail_stat_strs ([], entry_ownership_stats) in
-        let exit_ownership_str = generate_ail_stat_strs ([], exit_ownership_stats) in
+      match fn_ownership_bs_and_ss_opt with
+      | Some (entry_ownership_bs_and_ss, exit_ownership_bs_and_ss) ->
+        let entry_ownership_str = generate_ail_stat_strs entry_ownership_bs_and_ss in
+        let exit_ownership_str = generate_ail_stat_strs exit_ownership_bs_and_ss in
         let pre_post_pair =
           ( pre_str @ ("\n\t/* C OWNERSHIP */\n\n" :: entry_ownership_str),
             (* NOTE - the nesting pre - entry - exit - post *)
@@ -145,8 +148,47 @@ let generate_c_pres_and_posts_internal
       (fun (loc, e_opt, strs) -> (loc, e_opt, [ String.concat "\n" strs ]))
       return_ownership_stmts
   in
+  let loop_invariant_injs =
+    if without_loop_invariants then
+      []
+    else (
+      let ail_loop_invariants = ail_executable_spec.loops in
+      let ail_cond_stats, ail_loop_decls = List.split ail_loop_invariants in
+      (* A bit of a hack *)
+      let rec remove_last = function
+        | [] -> []
+        | [ _ ] -> []
+        | x :: xs -> x :: remove_last xs
+      in
+      let rec remove_last_semicolon = function
+        | [] -> []
+        | [ x ] ->
+          let split_x = String.split_on_char ';' x in
+          let without_whitespace_x = remove_last split_x in
+          let res = String.concat ";" without_whitespace_x in
+          [ res ]
+        | x :: xs -> x :: remove_last_semicolon xs
+      in
+      let ail_cond_injs =
+        List.map
+          (fun (loc, bs_and_ss) ->
+            ( get_start_loc loc,
+              remove_last_semicolon (generate_ail_stat_strs bs_and_ss) @ [ ", " ] ))
+          ail_cond_stats
+      in
+      let ail_loop_decl_injs =
+        List.map
+          (fun (loc, bs_and_ss) ->
+            (get_start_loc loc, "{" :: generate_ail_stat_strs bs_and_ss))
+          ail_loop_decls
+      in
+      let ail_loop_close_block_injs =
+        List.map (fun (loc, _) -> (get_end_loc loc, [ "}" ])) ail_loop_decls
+      in
+      ail_cond_injs @ ail_loop_decl_injs @ ail_loop_close_block_injs)
+  in
   ( [ (instrumentation.fn, (pre_str, post_str)) ],
-    in_stmt @ block_ownership_stmts,
+    in_stmt @ block_ownership_stmts @ loop_invariant_injs,
     return_ownership_stmts )
 
 
@@ -182,8 +224,10 @@ let generate_c_assume_pres_internal
 
 
 (* Executable_spec_extract.instrumentation list -> executable_spec *)
-let generate_c_specs_internal
+let generate_c_specs
   without_ownership_checking
+  without_loop_invariants
+  with_loop_leak_checks
   instrumentation_list
   type_map
   (_ : Cerb_location.t CStatements.LocMap.t)
@@ -191,8 +235,10 @@ let generate_c_specs_internal
   (prog5 : unit Mucore.file)
   =
   let generate_c_spec (instrumentation : Executable_spec_extract.instrumentation) =
-    generate_c_pres_and_posts_internal
+    generate_c_specs_internal
       without_ownership_checking
+      without_loop_invariants
+      with_loop_leak_checks
       instrumentation
       type_map
       sigm

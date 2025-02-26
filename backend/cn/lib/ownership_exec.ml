@@ -3,6 +3,13 @@ open Executable_spec_utils
 module A = CF.AilSyntax
 module C = CF.Ctype
 
+type ownership_mode =
+  | Pre
+  | Post
+  | Loop
+
+let ownership_mode_to_enum_str = function Pre -> "GET" | Post -> "PUT" | Loop -> "LOOP"
+
 let cn_ghost_state_sym = Sym.fresh_pretty "cn_ownership_global_ghost_state"
 
 let cn_ghost_state_struct_type =
@@ -17,6 +24,14 @@ let cn_stack_depth_incr_sym = Sym.fresh_pretty "ghost_stack_depth_incr"
 
 let cn_stack_depth_decr_sym = Sym.fresh_pretty "ghost_stack_depth_decr"
 
+let cn_postcondition_leak_check_sym = Sym.fresh_pretty "cn_postcondition_leak_check"
+
+let cn_loop_put_back_ownership_sym = Sym.fresh_pretty "cn_loop_put_back_ownership"
+
+let cn_loop_leak_check_and_put_back_ownership_sym =
+  Sym.fresh_pretty "cn_loop_leak_check_and_put_back_ownership"
+
+
 let c_add_ownership_fn_sym = Sym.fresh_pretty "c_add_to_ghost_state"
 
 let c_remove_ownership_fn_sym = Sym.fresh_pretty "c_remove_from_ghost_state"
@@ -26,42 +41,6 @@ let c_remove_ownership_fn_sym = Sym.fresh_pretty "c_remove_from_ghost_state"
 let c_declare_and_map_local_sym = Sym.fresh_pretty "c_declare_and_map_local"
 
 let c_declare_init_and_map_local_sym = Sym.fresh_pretty "c_declare_init_and_map_local"
-
-let get_start_loc ?(offset = 0) = function
-  | Cerb_location.Loc_region (start_pos, _, _) ->
-    let new_start_pos = { start_pos with pos_cnum = start_pos.pos_cnum + offset } in
-    Cerb_location.point new_start_pos
-  | Loc_regions (pos_list, _) ->
-    (match List.last pos_list with
-     | Some (_, start_pos) ->
-       let new_start_pos = { start_pos with pos_cnum = start_pos.pos_cnum + offset } in
-       Cerb_location.point new_start_pos
-     | None ->
-       failwith
-         "get_start_loc: Loc_regions has empty list of positions (should be non-empty)")
-  | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
-  | Loc_unknown | Loc_other _ ->
-    failwith
-      "get_start_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
-
-
-let get_end_loc ?(offset = 0) = function
-  | Cerb_location.Loc_region (_, end_pos, _) ->
-    let new_end_pos = { end_pos with pos_cnum = end_pos.pos_cnum + offset } in
-    Cerb_location.point new_end_pos
-  | Loc_regions (pos_list, _) ->
-    (match List.last pos_list with
-     | Some (_, end_pos) ->
-       let new_end_pos = { end_pos with pos_cnum = end_pos.pos_cnum + offset } in
-       Cerb_location.point new_end_pos
-     | None ->
-       failwith
-         "get_end_loc: Loc_regions has empty list of positions (should be non-empty)")
-  | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
-  | Loc_unknown | Loc_other _ ->
-    failwith
-      "get_end_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
-
 
 let get_ownership_global_init_stats () =
   let cn_ghost_state_init_fcall =
@@ -96,12 +75,36 @@ let generate_c_local_ownership_entry_fcall (local_sym, local_ctype) =
        (mk_expr (AilEident c_add_ownership_fn_sym), List.map mk_expr [ arg1; arg2; arg3 ]))
 
 
+let generate_c_local_cn_addr_var sym =
+  (* Hardcoding parts of cn_to_ail_base_type to prevent circular dependency between
+     this module and Cn_internal_to_ail, which includes Ownership_exec already. *)
+  let cn_addr_sym = generate_sym_with_suffix ~suffix:"_addr_cn" sym in
+  let annots = [ CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer") ] in
+  (* Ctype_ doesn't matter to pretty-printer when typedef annotations are present *)
+  let inner_ctype = mk_ctype ~annots C.Void in
+  let cn_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, inner_ctype)) in
+  let binding = create_binding cn_addr_sym cn_ptr_ctype in
+  let addr_of_sym = mk_expr A.(AilEunary (Address, mk_expr (AilEident sym))) in
+  let fcall_sym = Sym.fresh_pretty "convert_to_cn_pointer" in
+  let conversion_fcall = A.(AilEcall (mk_expr (AilEident fcall_sym), [ addr_of_sym ])) in
+  let decl = A.(AilSdeclaration [ (cn_addr_sym, Some (mk_expr conversion_fcall)) ]) in
+  (binding, decl)
+
+
+let generate_c_local_ownership_entry_bs_and_ss (sym, ctype) =
+  let entry_fcall = generate_c_local_ownership_entry_fcall (sym, ctype) in
+  let entry_fcall_stat = A.(AilSexpr entry_fcall) in
+  let addr_cn_binding, addr_cn_decl = generate_c_local_cn_addr_var sym in
+  ([ addr_cn_binding ], [ entry_fcall_stat; addr_cn_decl ])
+
+
 (* int x = 0, y = 5;
 
    ->
 
    int x = 0, _dummy = (c_map_local(&x), 0), y = 5, _dummy2 = (c_map_local(&y), 0); *)
 
+(* TODO: Include binding + declaration of <sym>_addr_cn via generate_c_local_cn_addr_var function *)
 let rec gen_loop_ownership_entry_decls bindings = function
   | [] -> ([], [])
   | (sym, expr_opt) :: xs ->
@@ -124,15 +127,15 @@ let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
     let new_bindings, new_decls = gen_loop_ownership_entry_decls bindings decls in
     [ (loc, new_bindings, [ A.AilSdeclaration new_decls ]) ])
   else (
-    let stats_ =
+    let ownership_bs_and_ss =
       List.map
         (fun (sym, _) ->
           let ctype = find_ctype_from_bindings bindings sym in
-          let entry_fcall = generate_c_local_ownership_entry_fcall (sym, ctype) in
-          A.(AilSexpr entry_fcall))
+          generate_c_local_ownership_entry_bs_and_ss (sym, ctype))
         decls
     in
-    [ (get_end_loc loc, [], stats_) ])
+    let bs, ss = List.split ownership_bs_and_ss in
+    [ (get_end_loc loc, List.concat bs, List.concat ss) ])
 
 
 (* c_remove_local_footprint((uintptr_t) &xs, cn_ownership_global_ghost_state,
@@ -154,13 +157,13 @@ let generate_c_local_ownership_exit (local_sym, local_ctype) =
 
 
 let get_c_local_ownership_checking params =
-  let entry_ownership_stats =
-    List.map
-      (fun param -> A.(AilSexpr (generate_c_local_ownership_entry_fcall param)))
-      params
+  let entry_ownership_bs_and_ss =
+    List.map (fun param -> generate_c_local_ownership_entry_bs_and_ss param) params
   in
+  let entry_ownership_bs, entry_ownership_ss = List.split entry_ownership_bs_and_ss in
   let exit_ownership_stats = List.map generate_c_local_ownership_exit params in
-  (entry_ownership_stats, exit_ownership_stats)
+  ( (List.concat entry_ownership_bs, List.concat entry_ownership_ss),
+    ([], exit_ownership_stats) )
 
 
 let rec collect_visibles bindings = function
@@ -375,8 +378,8 @@ let get_c_fn_local_ownership_checking_injs
       Some (_, _, Decl_function (_, _, param_types, _, _, _)) ) ->
     let param_types = List.map (fun (_, ctype, _) -> ctype) param_types in
     let params = List.combine param_syms param_types in
-    let ownership_stats_pair = get_c_local_ownership_checking params in
+    let ownership_bs_and_ss_pair = get_c_local_ownership_checking params in
     (* TODO: Separate return injections here since they are now done differently *)
     let block_ownership_injs = get_c_block_local_ownership_checking_injs fn_body in
-    (Some ownership_stats_pair, block_ownership_injs)
+    (Some ownership_bs_and_ss_pair, block_ownership_injs)
   | _, _ -> (None, [])
