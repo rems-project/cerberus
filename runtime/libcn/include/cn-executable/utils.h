@@ -562,7 +562,7 @@ static inline void cn_load(void *ptr, size_t size) {
 static inline void cn_store(void *ptr, size_t size) {
   //   cn_printf(CN_LOGGING_INFO, "  \x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
-static inline void cn_postfix(void *ptr, size_t size){
+static inline void cn_postfix(void *ptr, size_t size) {
     //   cn_printf(CN_LOGGING_INFO, "  \x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 
