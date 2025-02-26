@@ -96,16 +96,37 @@ let compile_generators
   ctx |> GenCodeGen.compile sigma
 
 
+let convert_from ((x, ct) : Sym.t * C.ctype) =
+  CF.Pp_ail.pp_expression
+    (Utils.mk_expr
+       (CtA.wrap_with_convert_from
+          A.(
+            AilEmemberofptr
+              ( Utils.mk_expr (AilEident (Sym.fresh_named "res")),
+                Sym.Identifier
+                  ( Locations.other __LOC__,
+                    Sym.pp_string (GenUtils.get_mangled_name [ x ]) ) ))
+          (Memory.bt_of_sct (Sctypes.of_ctype_unsafe (Locations.other __LOC__) ct))))
+
+
 let compile_random_test_case
   (sigma : CF.GenTypes.genTypeCategory A.sigma)
   (prog5 : unit Mucore.file)
-  (args_map : (Sym.t * (Sym.t * C.ctype) list) list)
-  (convert_from : Sym.t * C.ctype -> Pp.document)
   ((test, inst) : Test.t * Executable_spec_extract.instrumentation)
   : Pp.document
   =
   let open Pp in
-  let args = List.assoc Sym.equal inst.fn args_map in
+  let args =
+    let _, _, _, xs, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
+    match List.assoc Sym.equal inst.fn sigma.declarations with
+    | _, _, Decl_function (_, _, cts, _, _, _) ->
+      List.combine xs (List.map (fun (_, ct, _) -> ct) cts)
+    | _ ->
+      failwith
+        (String.concat
+           " "
+           [ "Function declaration not found for"; Sym.pp_string inst.fn; "@"; __LOC__ ])
+  in
   let globals =
     let global_syms =
       let args = args |> List.map fst in
@@ -206,42 +227,6 @@ let compile_generator_tests
   (insts : Executable_spec_extract.instrumentation list)
   : Test.t list * Pp.document
   =
-  let declarations : A.sigma_declaration list =
-    insts
-    |> List.map (fun (inst : Executable_spec_extract.instrumentation) ->
-      (inst.fn, List.assoc Sym.equal inst.fn sigma.declarations))
-  in
-  let args_map : (Sym.t * (Sym.t * C.ctype) list) list =
-    List.map
-      (fun (inst : Executable_spec_extract.instrumentation) ->
-        ( inst.fn,
-          let _, _, _, xs, _ = List.assoc Sym.equal inst.fn sigma.function_definitions in
-          match List.assoc Sym.equal inst.fn declarations with
-          | _, _, Decl_function (_, _, cts, _, _, _) ->
-            List.combine xs (List.map (fun (_, ct, _) -> ct) cts)
-          | _ ->
-            failwith
-              (String.concat
-                 " "
-                 [ "Function declaration not found for";
-                   Sym.pp_string inst.fn;
-                   "@";
-                   __LOC__
-                 ]) ))
-      insts
-  in
-  let convert_from ((x, ct) : Sym.t * C.ctype) =
-    CF.Pp_ail.pp_expression
-      (Utils.mk_expr
-         (CtA.wrap_with_convert_from
-            A.(
-              AilEmemberofptr
-                ( Utils.mk_expr (AilEident (Sym.fresh_named "res")),
-                  Sym.Identifier
-                    ( Locations.other __LOC__,
-                      Sym.pp_string (GenUtils.get_mangled_name [ x ]) ) ))
-            (Memory.bt_of_sct (Sctypes.of_ctype_unsafe (Locations.other __LOC__) ct))))
-  in
   let tests =
     List.map
       (fun (inst : Executable_spec_extract.instrumentation) ->
@@ -259,7 +244,4 @@ let compile_generator_tests
       insts
   in
   let open Pp in
-  ( tests,
-    concat_map
-      (compile_random_test_case sigma prog5 args_map convert_from)
-      (List.combine tests insts) )
+  (tests, concat_map (compile_random_test_case sigma prog5) (List.combine tests insts))
