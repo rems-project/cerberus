@@ -311,8 +311,6 @@ let map_from_lists f eq exps exps' =
 
 (* Match an expression with free variables against a candidate returned by the solver to
    get candidates for each of those free variables *)
-(* TODO: this is very naive right now;
-   it assumes candidate and exp have *exactly* the same structure, modulo free variables in exp *)
 let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   : (IT.t Sym.Map.t, Pp.document) result_with_data
   =

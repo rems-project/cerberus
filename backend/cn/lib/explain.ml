@@ -64,28 +64,19 @@ let rec check_pred
   : LAT.check_result
   =
   (* ensure candidate type matches output type of predicate *)
-  if not (BT.equal (IT.get_bt candidate) def.oarg_bt) then
-    No
-      (!^"Candidate"
-       ^^^ IT.pp candidate
-       ^^^ !^"has different type from predicate output:"
-       ^^^ BT.pp (IT.get_bt candidate)
-       ^^^ !^" versus"
-       ^^^ BT.pp def.oarg_bt
-       ^^^ !^".")
-  else (
-    match def.clauses with
-    | None -> Unknown (!^"Predicate" ^^^ Sym.pp name ^^^ !^"is uninterpreted. ")
-    | Some clauses ->
-      (* add negation of previous clauses' guards into each clause's guard*)
-      let clauses_with_guards = Def.Clause.explicit_negative_guards clauses in
-      (* for each clause, check if candidate could have been its output *)
-      let checked =
-        List.map
-          (fun c -> check_clause c candidate ctxt def.iargs iarg_vals term_vals)
-          clauses_with_guards
-      in
-      LAT.combine_results checked)
+  assert (BT.equal (IT.get_bt candidate) def.oarg_bt);
+  match def.clauses with
+  | None -> Unknown (!^"Predicate" ^^^ Sym.pp name ^^^ !^"is uninterpreted. ")
+  | Some clauses ->
+    (* add negation of previous clauses' guards into each clause's guard*)
+    let clauses_with_guards = Def.Clause.explicit_negative_guards clauses in
+    (* for each clause, check if candidate could have been its output *)
+    let checked =
+      List.map
+        (fun c -> check_clause c candidate ctxt def.iargs iarg_vals term_vals)
+        clauses_with_guards
+    in
+    LAT.combine_results checked
 
 
 (* check if a candidate term could have been the output of a predicate clause *)
@@ -157,13 +148,16 @@ and get_body_constraints
   | Unknown e ->
     let s = Solver.make ctxt.global in
     let loc = Cerb_location.unknown in
+    let th = !Solver.try_hard in
     let _ = Solver.try_hard := true in
-    (match Solver.ask_solver s [ LC.T (IT.eq_ (exp, candidate) loc) ] with
+    let res = (match Solver.ask_solver s [ LC.T (IT.eq_ (exp, candidate) loc) ] with
      | Sat ->
        (* not using model to get var cands because it may overconstrain *)
        Yes ([], Sym.Map.empty)
      | Unsat -> No !^"Solver returned no at variable assignment stage."
-     | Unknown -> Unknown e)
+     | Unknown -> Unknown e) in
+    let _ = Solver.try_hard := th in
+    res
 
 
 and get_var_constraints
@@ -524,16 +518,17 @@ let state (ctxt : C.t) log model_with_q extras =
     let g = ctxt.global in
     let defs = g.resource_predicates in
     let check (rt, o) =
-      match (Request.get_name rt, o) with
-      | Owned _, _ -> None
-      | PName s, Resource.O it ->
+      match (rt, o) with
+      | Req.Q _, _ -> None
+      | Req.P {name = Owned _; pointer = _; iargs = _}, _ -> None
+      | Req.P {name = PName s; pointer = _; iargs}, Resource.O it ->
         (match (Sym.Map.find_opt s defs, evaluate it) with
          | Some def, Some cand ->
            let ptr_val = Req.get_pointer rt in
            let ptr_def =
              (IT.sym_ (def.pointer, IT.get_bt ptr_val, Cerb_location.unknown), ptr_val)
            in
-           Some (check_pred s def cand ctxt (Req.get_iargs rt) (ptr_def :: vals), rt, it)
+           Some (check_pred s def cand ctxt iargs (ptr_def :: vals), rt, it)
          | Some _, None ->
            Some (Error (!^"Could not locate definition of variable" ^^^ IT.pp it), rt, it)
          | None, _ ->

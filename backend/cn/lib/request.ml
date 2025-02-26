@@ -211,6 +211,4 @@ let steps_constant = function Q qp -> Option.is_some (IT.is_const qp.step) | _ -
 
 let dtree = function P pred -> Predicate.dtree pred | Q qpred -> QPredicate.dtree qpred
 
-let get_iargs = function P pred -> pred.iargs | Q qpred -> qpred.iargs
-
 let get_pointer = function P pred -> pred.pointer | Q qpred -> qpred.pointer
