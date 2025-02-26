@@ -4,4 +4,4 @@
  (synopsis "CN Reasoning in Coq")
  (mode vo)
  (theories StructTact Cerberus Cn Ltac2)
- (modules ResourceInference))
+ (modules Ltac2Utils ResourceInference))
