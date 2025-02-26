@@ -1530,14 +1530,12 @@ let assume_constraints (constraints : LC.t list) (s : solver) : solver =
   let terms = List.filter_map get_term constraints in
   let add_term term = debug_ack_command s (SMT.assume term); in
   let _ = List.iter add_term terms in
-
+  s
 
 let ask_solver (s : solver) (lcs : LC.t list) : Simple_smt.result =
-  let lcs' = List.map (translate_term s) lcs
-  let smt_term = translate_term s (and_bool_constraints lcs) in
-  let simp_solver = s.smt_solver in
+  let s' = assume_constraints lcs s in
   debug_ack_command s (SMT.push 1);
-
+  let simp_solver = s'.smt_solver in
   let res = SMT.check simp_solver in
-  debug_ack_command s (SMT.pop 1);
+  debug_ack_command s' (SMT.pop 1);
   res
