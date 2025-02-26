@@ -652,6 +652,11 @@ let sequencePoint = Defacto_memory.impl_sequencePoint
 
 include Pp_defacto_memory
 
+let pp_integer_value_for_coq _ = PPrint.string "DON'T USE SYMBOLIC FROM COQ"
+let pp_pointer_value_for_coq _ _ = PPrint.string "DON'T USE SYMBOLIC FROM COQ"
+let pp_mem_value_for_coq _ _ _ _ _ _ = PPrint.string "DON'T USE SYMBOLIC FROM COQ"
+let pp_floating_value_for_coq _ = PPrint.string "DON'T USE SYMBOLIC FROM COQ"
+
 (* JSON serialisation *)
 
 let serialise_prov = function
