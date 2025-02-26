@@ -198,6 +198,10 @@ hash_table_iterator ht_iterator(hash_table* table) {
 }
 
 _Bool ht_next(hash_table_iterator* it) {
+  if (it == NULL || it->_table == NULL) {
+    return 0;
+  }
+
   // Loop till we've hit end of entries array.
   hash_table* table = it->_table;
   while (it->_index < table->capacity) {
