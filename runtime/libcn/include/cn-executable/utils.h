@@ -147,7 +147,6 @@ void cn_postcondition_leak_check(void);
 void cn_loop_put_back_ownership(void);
 void cn_loop_leak_check_and_put_back_ownership(void);
 
-
 /* malloc, free */
 void *cn_aligned_alloc(size_t align, size_t size);
 void *cn_malloc(unsigned long size);
@@ -521,9 +520,9 @@ CN_GEN_MAP_GET(cn_map)
 /* OWNERSHIP */
 
 enum OWNERSHIP {
-    GET,
-    PUT,
-    LOOP
+  GET,
+  PUT,
+  LOOP
 };
 
 int ownership_ghost_state_get(signed long *address_key);
@@ -563,8 +562,8 @@ static inline void cn_load(void *ptr, size_t size) {
 static inline void cn_store(void *ptr, size_t size) {
   //   cn_printf(CN_LOGGING_INFO, "  \x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
-static inline void cn_postfix(void *ptr, size_t size) {
-  //   cn_printf(CN_LOGGING_INFO, "  \x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+static inline void cn_postfix(void *ptr, size_t size){
+    //   cn_printf(CN_LOGGING_INFO, "  \x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 
 // use this macro to wrap an argument to another macro that contains commas
