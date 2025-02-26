@@ -1,7 +1,6 @@
 open Cerb_frontend
 open Cerb_backend
 open Cerb_global
-open Cerb_runtime
 open Pipeline
 
 let (>>=) = Exception.except_bind
@@ -28,7 +27,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
-  let libc_dirs = [in_runtime "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
+  let libc_dirs = Cerb_runtime.[in_runtime "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
   String.concat " " begin
@@ -43,7 +42,7 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
   end
 
 let core_libraries incl lib_paths libs =
-  let lib_paths = if incl then in_runtime "libc" :: lib_paths else lib_paths in
+  let lib_paths = if incl then Cerb_runtime.in_runtime "libc" :: lib_paths else lib_paths in
   let libs = if incl then "c" :: libs else libs in
   List.map (fun lib ->
       match List.fold_left (fun acc path ->
