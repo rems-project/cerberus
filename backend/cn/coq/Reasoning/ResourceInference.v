@@ -1,6 +1,6 @@
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.ZArith.
-Require Import Coq.MSets.MSetInterface.
+Require Import Coq.FSets.FSetInterface.
 
 From Cn Require Import Prooflog Request Resource Context.
 
@@ -40,7 +40,7 @@ Inductive log_entry_valid : log_entry -> Prop :=
 
   (* [out_res] is a subset of [in_res] with exactly one element [used] removed. *)
   (exists (upred: Request.Predicate.t),
-      Resource.ResSet.remove (P upred, out) in_res = out_res /\
+      ResSet.eq (Resource.ResSet.remove (P upred, out) in_res) out_res /\
       Request.subsumed iname upred.(Request.Predicate.name)
   )
   ->
@@ -135,7 +135,7 @@ end.
 Ltac2 res_set_remove_step () :=
 match! goal with
 | [ |- exists upred,
-      ResSet.remove (P upred, ?out) (set_from_list ?in_res) = set_from_list ?out_res /\ subsumed _ (Predicate.name upred) ] =>
+      ResSet.eq (ResSet.remove (P upred, ?out) (set_from_list ?in_res)) (set_from_list ?out_res) /\ subsumed _ (Predicate.name upred) ] =>
     (* break down goal into components *)
     let outname   := Fresh.in_goal @out in
     let inresname := Fresh.in_goal @in_res in
