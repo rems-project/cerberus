@@ -29,8 +29,8 @@ predicate {i32 k} Tagged_Pointer (pointer p, i32 k) {
 
 int
 f (void *p, int k)
-/*@ requires take X = Tagged_Pointer (p, k); @*/
-/*@ ensures take X2 = Tagged_Pointer (p, k); @*/
+/*@ requires take X = Tagged_Pointer (p, k);
+    ensures take X2 = Tagged_Pointer (p, k); @*/
 {
   int *p2;
   struct two_ints *p3;

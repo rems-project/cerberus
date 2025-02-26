@@ -1619,17 +1619,6 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE DEFAULT COLON VOLATILE
 
 parsing "labeled_statement": seen "option(attribute_specifier_sequence) DEFAULT COLON", expecting "statement"
 
-translation_unit: BOOL LNAME TYPE LBRACES LNAME TYPE WHILE
-##
-## Ends in an error in state: 624.
-##
-## labeled_statement -> general_identifier . COLON statement [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
-##
-## The known suffix of the stack is as follows:
-## general_identifier
-##
-
-parsing "labeled_statement": seen "general_identifier", expecting "COLON statement"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE LNAME VARIABLE COLON VOLATILE
 ##
@@ -1643,17 +1632,6 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE LNAME VARIABLE COLON VOLATILE
 
 parsing "labeled_statement": seen "general_identifier COLON", expecting "statement"
 
-translation_unit: BOOL LNAME TYPE LBRACES LBRACK_LBRACK ALIGNAS RBRACK RBRACK LNAME TYPE WHILE
-##
-## Ends in an error in state: 629.
-##
-## labeled_statement -> attribute_specifier_sequence general_identifier . COLON statement [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
-##
-## The known suffix of the stack is as follows:
-## attribute_specifier_sequence general_identifier
-##
-
-parsing "labeled_statement": seen "attribute_specifier_sequence general_identifier", expecting "COLON statement"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE LBRACK_LBRACK ALIGNAS RBRACK RBRACK LNAME VARIABLE COLON VOLATILE
 ##
@@ -1788,41 +1766,8 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE SWITCH LPAREN WHILE
 
 parsing "selection_statement": seen "SWITCH LPAREN", expecting "full_expression RPAREN scoped(statement)"
 
-translation_unit: BOOL LNAME TYPE LBRACES VOLATILE
-##
-## Ends in an error in state: 665.
-##
-## compound_statement -> LBRACES . separated_nonempty_list(PIPES,statement) RBRACES [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN EOF ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
-##
-## The known suffix of the stack is as follows:
-## LBRACES
-##
 
-parsing "compound_statement": seen "LBRACES", expecting "separated_nonempty_list(PIPES,statement) RBRACES"
 
-translation_unit: BOOL LNAME TYPE LBRACES SEMICOLON PIPES VOLATILE
-##
-## Ends in an error in state: 667.
-##
-## separated_nonempty_list(PIPES,statement) -> statement PIPES . separated_nonempty_list(PIPES,statement) [ RBRACES ]
-##
-## The known suffix of the stack is as follows:
-## statement PIPES
-##
-
-parsing "separated_nonempty_list(PIPES,statement)": seen "statement PIPES", expecting "separated_nonempty_list(PIPES,statement)"
-
-translation_unit: BOOL LNAME TYPE LBRACE VARIABLE
-##
-## Ends in an error in state: 671.
-##
-## compound_statement -> LBRACE . option(block_item_list) RBRACE [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN EOF ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
-##
-## The known suffix of the stack is as follows:
-## LBRACE
-##
-
-parsing "compound_statement": seen "LBRACE", expecting "option(block_item_list) RBRACE"
 
 translation_unit: BOOL TYPEDEF LNAME TYPE COMMA WHILE
 ##
@@ -5109,545 +5054,50 @@ cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN RPAREN SEMICOLON CN_REQUIRES WHILE
 
 parsing "cn_fun_spec": seen "CN_SPEC UNAME VARIABLE LPAREN cn_args RPAREN SEMICOLON CN_REQUIRES", expecting "nonempty_list(condition) CN_ENSURES nonempty_list(condition)"
 
-function_spec: CN_ENSURES CN_TAKE UNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1627.
-##
-## condition -> CN_TAKE UNAME VARIABLE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE UNAME VARIABLE
-##
-
-parsing "condition": seen "CN_TAKE UNAME VARIABLE", expecting "EQ resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE UNAME VARIABLE EQ WHILE
-##
-## Ends in an error in state: 1628.
-##
-## condition -> CN_TAKE UNAME VARIABLE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE UNAME VARIABLE EQ
-##
-
-parsing "condition": seen "CN_TAKE UNAME VARIABLE EQ", expecting "resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1633.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON WHILE
-##
-## Ends in an error in state: 1634.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
-##
-## Ends in an error in state: 1636.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
-##
-## Ends in an error in state: 1637.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
-##
-## Ends in an error in state: 1639.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1641.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE WHILE
-##
-## Ends in an error in state: 1643.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON WHILE
-##
-## Ends in an error in state: 1644.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
-##
-## Ends in an error in state: 1646.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
-##
-## Ends in an error in state: 1647.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
-##
-## Ends in an error in state: 1649.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1651.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1654.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON WHILE
-##
-## Ends in an error in state: 1655.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
-##
-## Ends in an error in state: 1657.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
-##
-## Ends in an error in state: 1658.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
-##
-## Ends in an error in state: 1660.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1662.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE WHILE
-##
-## Ends in an error in state: 1664.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON WHILE
-##
-## Ends in an error in state: 1665.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
-##
-## Ends in an error in state: 1667.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
-##
-## Ends in an error in state: 1668.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
-##
-## Ends in an error in state: 1670.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1672.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
-##
-
-parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
-
-function_spec: CN_ENSURES CN_TAKE UNAME VARIABLE EQ CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1674.
-##
-## condition -> CN_TAKE UNAME VARIABLE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE UNAME VARIABLE EQ resource
-##
-
-parsing "condition": seen "CN_TAKE UNAME VARIABLE EQ resource", expecting "SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_OWNED LPAREN WHILE
-##
-## Ends in an error in state: 1677.
-##
-## resource -> pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## pred LPAREN
-##
-
-parsing "resource": seen "pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN"
-
-function_spec: CN_ENSURES CN_TAKE UNAME TYPE WHILE
-##
-## Ends in an error in state: 1680.
-##
-## condition -> CN_TAKE UNAME TYPE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE UNAME TYPE
-##
-
-parsing "condition": seen "CN_TAKE UNAME TYPE", expecting "EQ resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE UNAME TYPE EQ WHILE
-##
-## Ends in an error in state: 1681.
-##
-## condition -> CN_TAKE UNAME TYPE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE UNAME TYPE EQ
-##
-
-parsing "condition": seen "CN_TAKE UNAME TYPE EQ", expecting "resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE UNAME TYPE EQ CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1682.
-##
-## condition -> CN_TAKE UNAME TYPE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE UNAME TYPE EQ resource
-##
-
-parsing "condition": seen "CN_TAKE UNAME TYPE EQ resource", expecting "SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1685.
-##
-## condition -> CN_TAKE LNAME VARIABLE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE LNAME VARIABLE
-##
-
-parsing "condition": seen "CN_TAKE LNAME VARIABLE", expecting "EQ resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME VARIABLE EQ WHILE
-##
-## Ends in an error in state: 1686.
-##
-## condition -> CN_TAKE LNAME VARIABLE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE LNAME VARIABLE EQ
-##
-
-parsing "condition": seen "CN_TAKE LNAME VARIABLE EQ", expecting "resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME VARIABLE EQ CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1687.
-##
-## condition -> CN_TAKE LNAME VARIABLE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE LNAME VARIABLE EQ resource
-##
-
-parsing "condition": seen "CN_TAKE LNAME VARIABLE EQ resource", expecting "SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE WHILE
-##
-## Ends in an error in state: 1689.
-##
-## condition -> CN_TAKE LNAME TYPE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE LNAME TYPE
-##
-
-parsing "condition": seen "CN_TAKE LNAME TYPE", expecting "EQ resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ WHILE
-##
-## Ends in an error in state: 1690.
-##
-## condition -> CN_TAKE LNAME TYPE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE LNAME TYPE EQ
-##
-
-parsing "condition": seen "CN_TAKE LNAME TYPE EQ", expecting "resource SEMICOLON"
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_OWNED LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1691.
-##
-## condition -> CN_TAKE LNAME TYPE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_TAKE LNAME TYPE EQ resource
-##
-
-parsing "condition": seen "CN_TAKE LNAME TYPE EQ resource", expecting "SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET UNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1695.
-##
-## condition -> CN_LET UNAME VARIABLE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET UNAME VARIABLE
-##
-
-parsing "condition": seen "CN_LET UNAME VARIABLE", expecting "EQ expr SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET UNAME VARIABLE EQ WHILE
-##
-## Ends in an error in state: 1696.
-##
-## condition -> CN_LET UNAME VARIABLE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET UNAME VARIABLE EQ
-##
-
-parsing "condition": seen "CN_LET UNAME VARIABLE EQ", expecting "expr SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET UNAME TYPE WHILE
-##
-## Ends in an error in state: 1699.
-##
-## condition -> CN_LET UNAME TYPE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET UNAME TYPE
-##
-
-parsing "condition": seen "CN_LET UNAME TYPE", expecting "EQ expr SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET UNAME TYPE EQ WHILE
-##
-## Ends in an error in state: 1700.
-##
-## condition -> CN_LET UNAME TYPE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET UNAME TYPE EQ
-##
-
-parsing "condition": seen "CN_LET UNAME TYPE EQ", expecting "expr SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET LNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1704.
-##
-## condition -> CN_LET LNAME VARIABLE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET LNAME VARIABLE
-##
-
-parsing "condition": seen "CN_LET LNAME VARIABLE", expecting "EQ expr SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET LNAME VARIABLE EQ WHILE
-##
-## Ends in an error in state: 1705.
-##
-## condition -> CN_LET LNAME VARIABLE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET LNAME VARIABLE EQ
-##
-
-parsing "condition": seen "CN_LET LNAME VARIABLE EQ", expecting "expr SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET LNAME TYPE WHILE
-##
-## Ends in an error in state: 1708.
-##
-## condition -> CN_LET LNAME TYPE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET LNAME TYPE
-##
-
-parsing "condition": seen "CN_LET LNAME TYPE", expecting "EQ expr SEMICOLON"
-
-function_spec: CN_ENSURES CN_LET LNAME TYPE EQ WHILE
-##
-## Ends in an error in state: 1709.
-##
-## condition -> CN_LET LNAME TYPE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## CN_LET LNAME TYPE EQ
-##
-
-parsing "condition": seen "CN_LET LNAME TYPE EQ", expecting "expr SEMICOLON"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN RPAREN SEMICOLON CN_REQUIRES CN_CONSTANT SEMICOLON CN_ENSURES WHILE
 ##
@@ -7101,129 +6551,19 @@ cn_toplevel: CN_DATATYPE LNAME TYPE LBRACE RBRACE WHILE
 
 parsing "list(cn_toplevel_elem)": seen "cn_toplevel_elem", expecting "list(cn_toplevel_elem)"
 
-function_spec: WHILE
-##
-## Ends in an error in state: 1949.
-##
-## function_spec' -> . function_spec [ # ]
-##
-## The known suffix of the stack is as follows:
-##
-##
 
-parsing "function_spec'": expected "function_spec"
 
-function_spec: CN_TRUSTED WHILE
-##
-## Ends in an error in state: 1950.
-##
-## function_spec_item -> CN_TRUSTED . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_TRUSTED
-##
 
-parsing "function_spec_item": seen "CN_TRUSTED", expecting "SEMICOLON"
 
-function_spec: CN_REQUIRES WHILE
-##
-## Ends in an error in state: 1952.
-##
-## function_spec_item -> CN_REQUIRES . nonempty_list(condition) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_REQUIRES
-##
 
-parsing "function_spec_item": seen "CN_REQUIRES", expecting "nonempty_list(condition)"
 
-function_spec: CN_FUNCTION UNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1956.
-##
-## function_spec_item -> CN_FUNCTION UNAME VARIABLE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_FUNCTION UNAME VARIABLE
-##
 
-parsing "function_spec_item": seen "CN_FUNCTION UNAME VARIABLE", expecting "SEMICOLON"
 
-function_spec: CN_FUNCTION UNAME TYPE WHILE
-##
-## Ends in an error in state: 1958.
-##
-## function_spec_item -> CN_FUNCTION UNAME TYPE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_FUNCTION UNAME TYPE
-##
 
-parsing "function_spec_item": seen "CN_FUNCTION UNAME TYPE", expecting "SEMICOLON"
-
-function_spec: CN_FUNCTION LNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1961.
-##
-## function_spec_item -> CN_FUNCTION LNAME VARIABLE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_FUNCTION LNAME VARIABLE
-##
-
-parsing "function_spec_item": seen "CN_FUNCTION LNAME VARIABLE", expecting "SEMICOLON"
-
-function_spec: CN_FUNCTION LNAME TYPE WHILE
-##
-## Ends in an error in state: 1963.
-##
-## function_spec_item -> CN_FUNCTION LNAME TYPE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_FUNCTION LNAME TYPE
-##
-
-parsing "function_spec_item": seen "CN_FUNCTION LNAME TYPE", expecting "SEMICOLON"
-
-function_spec: CN_ENSURES WHILE
-##
-## Ends in an error in state: 1965.
-##
-## function_spec_item -> CN_ENSURES . nonempty_list(condition) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_ENSURES
-##
-
-parsing "function_spec_item": seen "CN_ENSURES", expecting "nonempty_list(condition)"
-
-function_spec: CN_ACCESSES WHILE
-##
-## Ends in an error in state: 1967.
-##
-## function_spec_item -> CN_ACCESSES . nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## CN_ACCESSES
-##
-
-parsing "function_spec_item": seen "CN_ACCESSES", expecting "nonempty_list(terminated(cn_variable,SEMICOLON))"
-
-function_spec: CN_TRUSTED SEMICOLON WHILE
-##
-## Ends in an error in state: 1985.
-##
-## list(function_spec_item) -> function_spec_item . list(function_spec_item) [ EOF ]
-##
-## The known suffix of the stack is as follows:
-## function_spec_item
-##
-
-parsing "list(function_spec_item)": seen "function_spec_item", expecting "list(function_spec_item)"
 
 loop_spec: WHILE
 ##
-## Ends in an error in state: 1988.
+## Ends in an error in state: 1979.
 ##
 ## loop_spec' -> . loop_spec [ # ]
 ##
@@ -7235,7 +6575,7 @@ parsing "loop_spec'": expected "loop_spec"
 
 loop_spec: CN_INV WHILE
 ##
-## Ends in an error in state: 1989.
+## Ends in an error in state: 1980.
 ##
 ## loop_spec -> CN_INV . nonempty_list(condition) EOF [ # ]
 ##
@@ -7247,7 +6587,7 @@ parsing "loop_spec": seen "CN_INV", expecting "nonempty_list(condition) EOF"
 
 translation_unit: WHILE
 ##
-## Ends in an error in state: 1993.
+## Ends in an error in state: 1984.
 ##
 ## translation_unit' -> . translation_unit [ # ]
 ##
@@ -7257,17 +6597,6 @@ translation_unit: WHILE
 
 parsing "translation_unit'": expected "translation_unit"
 
-translation_unit: BOOL LNAME TYPE LBRACE RBRACE WHILE
-##
-## Ends in an error in state: 2000.
-##
-## function_definition -> function_definition1 option(declaration_list) magic_comment_list compound_statement . boption(SEMICOLON) [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACK_LBRACK INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
-##
-## The known suffix of the stack is as follows:
-## function_definition1 option(declaration_list) magic_comment_list compound_statement
-##
-
-parsing "function_definition": seen "function_definition1 option(declaration_list) magic_comment_list compound_statement", expecting "boption(SEMICOLON)"
 
 cn_statements: CN_EXTRACT AMPERSAND LPAREN LPAREN WHILE
 ##
@@ -7583,6 +6912,850 @@ cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN WHILE
 ##
 
 parsing "cn_statement": seen "CN_FROM_BYTES pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+loop_spec: CN_INV CN_TAKE UNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1627.
+##
+## condition -> CN_TAKE UNAME VARIABLE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE UNAME VARIABLE
+##
+
+parsing "condition": seen "CN_TAKE UNAME VARIABLE", expecting "EQ resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE UNAME VARIABLE EQ WHILE
+##
+## Ends in an error in state: 1628.
+##
+## condition -> CN_TAKE UNAME VARIABLE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE UNAME VARIABLE EQ
+##
+
+parsing "condition": seen "CN_TAKE UNAME VARIABLE EQ", expecting "resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1633.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON WHILE
+##
+## Ends in an error in state: 1634.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
+##
+## Ends in an error in state: 1636.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
+##
+## Ends in an error in state: 1637.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN WHILE
+##
+## Ends in an error in state: 1639.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1641.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE WHILE
+##
+## Ends in an error in state: 1643.
+##
+## resource -> CN_EACH LPAREN base_type UNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME TYPE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON WHILE
+##
+## Ends in an error in state: 1644.
+##
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
+##
+## Ends in an error in state: 1646.
+##
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
+##
+## Ends in an error in state: 1647.
+##
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN WHILE
+##
+## Ends in an error in state: 1649.
+##
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1651.
+##
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1654.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON WHILE
+##
+## Ends in an error in state: 1655.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
+##
+## Ends in an error in state: 1657.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
+##
+## Ends in an error in state: 1658.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN WHILE
+##
+## Ends in an error in state: 1660.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1662.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE WHILE
+##
+## Ends in an error in state: 1664.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE", expecting "SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON WHILE
+##
+## Ends in an error in state: 1665.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON", expecting "expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
+##
+## Ends in an error in state: 1667.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN", expecting "LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
+##
+## Ends in an error in state: 1668.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN WHILE
+##
+## Ends in an error in state: 1670.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1672.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
+##
+
+parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "RBRACE"
+
+loop_spec: CN_INV CN_TAKE UNAME VARIABLE EQ CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1674.
+##
+## condition -> CN_TAKE UNAME VARIABLE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE UNAME VARIABLE EQ resource
+##
+
+parsing "condition": seen "CN_TAKE UNAME VARIABLE EQ resource", expecting "SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_BLOCK LPAREN WHILE
+##
+## Ends in an error in state: 1677.
+##
+## resource -> pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN [ SEMICOLON ]
+##
+## The known suffix of the stack is as follows:
+## pred LPAREN
+##
+
+parsing "resource": seen "pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN"
+
+loop_spec: CN_INV CN_TAKE UNAME TYPE WHILE
+##
+## Ends in an error in state: 1680.
+##
+## condition -> CN_TAKE UNAME TYPE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE UNAME TYPE
+##
+
+parsing "condition": seen "CN_TAKE UNAME TYPE", expecting "EQ resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE UNAME TYPE EQ WHILE
+##
+## Ends in an error in state: 1681.
+##
+## condition -> CN_TAKE UNAME TYPE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE UNAME TYPE EQ
+##
+
+parsing "condition": seen "CN_TAKE UNAME TYPE EQ", expecting "resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE UNAME TYPE EQ CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1682.
+##
+## condition -> CN_TAKE UNAME TYPE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE UNAME TYPE EQ resource
+##
+
+parsing "condition": seen "CN_TAKE UNAME TYPE EQ resource", expecting "SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1685.
+##
+## condition -> CN_TAKE LNAME VARIABLE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE LNAME VARIABLE
+##
+
+parsing "condition": seen "CN_TAKE LNAME VARIABLE", expecting "EQ resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME VARIABLE EQ WHILE
+##
+## Ends in an error in state: 1686.
+##
+## condition -> CN_TAKE LNAME VARIABLE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE LNAME VARIABLE EQ
+##
+
+parsing "condition": seen "CN_TAKE LNAME VARIABLE EQ", expecting "resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME VARIABLE EQ CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1687.
+##
+## condition -> CN_TAKE LNAME VARIABLE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE LNAME VARIABLE EQ resource
+##
+
+parsing "condition": seen "CN_TAKE LNAME VARIABLE EQ resource", expecting "SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE WHILE
+##
+## Ends in an error in state: 1689.
+##
+## condition -> CN_TAKE LNAME TYPE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE LNAME TYPE
+##
+
+parsing "condition": seen "CN_TAKE LNAME TYPE", expecting "EQ resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ WHILE
+##
+## Ends in an error in state: 1690.
+##
+## condition -> CN_TAKE LNAME TYPE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE LNAME TYPE EQ
+##
+
+parsing "condition": seen "CN_TAKE LNAME TYPE EQ", expecting "resource SEMICOLON"
+
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1691.
+##
+## condition -> CN_TAKE LNAME TYPE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_TAKE LNAME TYPE EQ resource
+##
+
+parsing "condition": seen "CN_TAKE LNAME TYPE EQ resource", expecting "SEMICOLON"
+
+loop_spec: CN_INV CN_LET UNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1695.
+##
+## condition -> CN_LET UNAME VARIABLE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET UNAME VARIABLE
+##
+
+parsing "condition": seen "CN_LET UNAME VARIABLE", expecting "EQ expr SEMICOLON"
+
+loop_spec: CN_INV CN_LET UNAME VARIABLE EQ WHILE
+##
+## Ends in an error in state: 1696.
+##
+## condition -> CN_LET UNAME VARIABLE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET UNAME VARIABLE EQ
+##
+
+parsing "condition": seen "CN_LET UNAME VARIABLE EQ", expecting "expr SEMICOLON"
+
+loop_spec: CN_INV CN_LET UNAME TYPE WHILE
+##
+## Ends in an error in state: 1699.
+##
+## condition -> CN_LET UNAME TYPE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET UNAME TYPE
+##
+
+parsing "condition": seen "CN_LET UNAME TYPE", expecting "EQ expr SEMICOLON"
+
+loop_spec: CN_INV CN_LET UNAME TYPE EQ WHILE
+##
+## Ends in an error in state: 1700.
+##
+## condition -> CN_LET UNAME TYPE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET UNAME TYPE EQ
+##
+
+parsing "condition": seen "CN_LET UNAME TYPE EQ", expecting "expr SEMICOLON"
+
+loop_spec: CN_INV CN_LET LNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1704.
+##
+## condition -> CN_LET LNAME VARIABLE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET LNAME VARIABLE
+##
+
+parsing "condition": seen "CN_LET LNAME VARIABLE", expecting "EQ expr SEMICOLON"
+
+loop_spec: CN_INV CN_LET LNAME VARIABLE EQ WHILE
+##
+## Ends in an error in state: 1705.
+##
+## condition -> CN_LET LNAME VARIABLE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET LNAME VARIABLE EQ
+##
+
+parsing "condition": seen "CN_LET LNAME VARIABLE EQ", expecting "expr SEMICOLON"
+
+loop_spec: CN_INV CN_LET LNAME TYPE WHILE
+##
+## Ends in an error in state: 1708.
+##
+## condition -> CN_LET LNAME TYPE . EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET LNAME TYPE
+##
+
+parsing "condition": seen "CN_LET LNAME TYPE", expecting "EQ expr SEMICOLON"
+
+loop_spec: CN_INV CN_LET LNAME TYPE EQ WHILE
+##
+## Ends in an error in state: 1709.
+##
+## condition -> CN_LET LNAME TYPE EQ . expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## CN_LET LNAME TYPE EQ
+##
+
+parsing "condition": seen "CN_LET LNAME TYPE EQ", expecting "expr SEMICOLON"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+translation_unit: BOOL LNAME TYPE CERB_MAGIC LBRACES LNAME TYPE WHILE
+##
+## Ends in an error in state: 624.
+##
+## labeled_statement -> general_identifier . COLON statement [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## general_identifier
+##
+
+parsing "labeled_statement": seen "general_identifier", expecting "COLON statement"
+
+translation_unit: BOOL LNAME TYPE CERB_MAGIC LBRACES LBRACK_LBRACK ALIGNAS RBRACK RBRACK LNAME TYPE WHILE
+##
+## Ends in an error in state: 629.
+##
+## labeled_statement -> attribute_specifier_sequence general_identifier . COLON statement [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## attribute_specifier_sequence general_identifier
+##
+
+parsing "labeled_statement": seen "attribute_specifier_sequence general_identifier", expecting "COLON statement"
+
+translation_unit: BOOL LNAME TYPE CERB_MAGIC LBRACES VOLATILE
+##
+## Ends in an error in state: 665.
+##
+## compound_statement -> LBRACES . separated_nonempty_list(PIPES,statement) RBRACES [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN EOF ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## LBRACES
+##
+
+parsing "compound_statement": seen "LBRACES", expecting "separated_nonempty_list(PIPES,statement) RBRACES"
+
+translation_unit: BOOL LNAME TYPE CERB_MAGIC LBRACES SEMICOLON PIPES VOLATILE
+##
+## Ends in an error in state: 667.
+##
+## separated_nonempty_list(PIPES,statement) -> statement PIPES . separated_nonempty_list(PIPES,statement) [ RBRACES ]
+##
+## The known suffix of the stack is as follows:
+## statement PIPES
+##
+
+parsing "separated_nonempty_list(PIPES,statement)": seen "statement PIPES", expecting "separated_nonempty_list(PIPES,statement)"
+
+translation_unit: BOOL LNAME TYPE CERB_MAGIC LBRACE VARIABLE
+##
+## Ends in an error in state: 671.
+##
+## compound_statement -> LBRACE . option(block_item_list) RBRACE [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN EOF ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## LBRACE
+##
+
+parsing "compound_statement": seen "LBRACE", expecting "option(block_item_list) RBRACE"
+
+translation_unit: BOOL LNAME TYPE CERB_MAGIC WHILE
+##
+## Ends in an error in state: 1990.
+##
+## function_definition -> function_definition1 option(declaration_list) magic_comment_list . compound_statement boption(SEMICOLON) [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACK_LBRACK INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
+## magic_comment_list -> magic_comment_list . CERB_MAGIC [ LBRACES LBRACE CERB_MAGIC ]
+##
+## The known suffix of the stack is as follows:
+## function_definition1 option(declaration_list) magic_comment_list
+##
+
+parsing "function_definition": seen "function_definition1 option(declaration_list) CERB_MAGIC", expecting "compound_statement boption(SEMICOLON)"
+
+translation_unit: BOOL LNAME TYPE CERB_MAGIC LBRACE RBRACE WHILE
+##
+## Ends in an error in state: 1991.
+##
+## function_definition -> function_definition1 option(declaration_list) magic_comment_list compound_statement . boption(SEMICOLON) [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACK_LBRACK INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## function_definition1 option(declaration_list) magic_comment_list compound_statement
+##
+
+parsing "function_definition": seen "function_definition1 option(declaration_list) CERB_MAGIC compound_statement", expecting "boption(SEMICOLON)"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+fundef_spec: WHILE
+##
+## Ends in an error in state: 1949.
+##
+## fundef_spec' -> . fundef_spec [ # ]
+##
+## The known suffix of the stack is as follows:
+##
+##
+
+parsing "fundef_spec'": expected "fundef_spec"
+
+fundef_spec: CN_TRUSTED WHILE
+##
+## Ends in an error in state: 1950.
+##
+## option(__anonymous_1) -> CN_TRUSTED . SEMICOLON [ EOF CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
+##
+## The known suffix of the stack is as follows:
+## CN_TRUSTED
+##
+
+parsing "option(__anonymous_1)": seen "CN_TRUSTED", expecting "SEMICOLON"
+
+fundef_spec: CN_TRUSTED SEMICOLON WHILE
+##
+## Ends in an error in state: 1952.
+##
+## fundef_spec -> option(__anonymous_1) . option(__anonymous_2) option(__anonymous_3) option(__anonymous_4) EOF [ # ]
+##
+## The known suffix of the stack is as follows:
+## option(__anonymous_1)
+##
+
+parsing "fundef_spec": seen "option(__anonymous_1)", expecting "option(accesses_or_function) option(__anonymous_2) option(__anonymous_3) EOF"
+
+fundef_spec: CN_FUNCTION UNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1955.
+##
+## accesses_or_function -> CN_FUNCTION UNAME VARIABLE . SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+##
+## The known suffix of the stack is as follows:
+## CN_FUNCTION UNAME VARIABLE
+##
+
+parsing "accesses_or_function": seen "CN_FUNCTION UNAME VARIABLE", expecting "SEMICOLON"
+
+fundef_spec: CN_ACCESSES WHILE
+##
+## Ends in an error in state: 1964.
+##
+## nonempty_list(__anonymous_0) -> CN_ACCESSES . separated_nonempty_list(COMMA,cn_variable) SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+## nonempty_list(__anonymous_0) -> CN_ACCESSES . separated_nonempty_list(COMMA,cn_variable) SEMICOLON nonempty_list(__anonymous_0) [ EOF CN_REQUIRES CN_ENSURES ]
+##
+## The known suffix of the stack is as follows:
+## CN_ACCESSES
+##
+
+parsing "list(__anonymous_0)": seen "CN_ACCESSES", expecting "separated_nonempty_list(COMMA,cn_variable) SEMICOLON list(__anonymous_0)"
+
+fundef_spec: CN_ACCESSES UNAME TYPE SEMICOLON WHILE
+##
+## Ends in an error in state: 1966.
+##
+## nonempty_list(__anonymous_0) -> CN_ACCESSES separated_nonempty_list(COMMA,cn_variable) SEMICOLON . [ EOF CN_REQUIRES CN_ENSURES ]
+## nonempty_list(__anonymous_0) -> CN_ACCESSES separated_nonempty_list(COMMA,cn_variable) SEMICOLON . nonempty_list(__anonymous_0) [ EOF CN_REQUIRES CN_ENSURES ]
+##
+## The known suffix of the stack is as follows:
+## CN_ACCESSES separated_nonempty_list(COMMA,cn_variable) SEMICOLON
+##
+
+parsing "list(__anonymous_0)": seen "CN_ACCESSES separated_nonempty_list(COMMA,cn_variable) SEMICOLON", expecting "list(__anonymous_0)"
+
+fundef_spec: CN_REQUIRES WHILE
+##
+## Ends in an error in state: 1969.
+##
+## option(__anonymous_3) -> CN_REQUIRES . nonempty_list(condition) [ EOF CN_ENSURES ]
+##
+## The known suffix of the stack is as follows:
+## CN_REQUIRES
+##
+
+parsing "option(__anonymous_2)": seen "CN_REQUIRES", expecting "nonempty_list(condition)"
+
+fundef_spec: CN_ENSURES WHILE
+##
+## Ends in an error in state: 1972.
+##
+## option(__anonymous_4) -> CN_ENSURES . nonempty_list(condition) [ EOF ]
+##
+## The known suffix of the stack is as follows:
+## CN_ENSURES
+##
+
+parsing "option(__anonymous_3)": seen "CN_ENSURES", expecting "nonempty_list(condition)"
+
+
+
+
+fundef_spec: CN_FUNCTION UNAME TYPE WHILE
+##
+## Ends in an error in state: 1957.
+##
+## accesses_or_function -> CN_FUNCTION UNAME TYPE . SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+##
+## The known suffix of the stack is as follows:
+## CN_FUNCTION UNAME TYPE
+##
+
+parsing "accesses_or_function": seen "CN_FUNCTION UNAME TYPE", expecting "SEMICOLON"
+
+fundef_spec: CN_FUNCTION LNAME VARIABLE WHILE
+##
+## Ends in an error in state: 1960.
+##
+## accesses_or_function -> CN_FUNCTION LNAME VARIABLE . SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+##
+## The known suffix of the stack is as follows:
+## CN_FUNCTION LNAME VARIABLE
+##
+
+parsing "accesses_or_function": seen "CN_FUNCTION LNAME VARIABLE", expecting "SEMICOLON"
+
+fundef_spec: CN_FUNCTION LNAME TYPE WHILE
+##
+## Ends in an error in state: 1962.
+##
+## accesses_or_function -> CN_FUNCTION LNAME TYPE . SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+##
+## The known suffix of the stack is as follows:
+## CN_FUNCTION LNAME TYPE
+##
+
+parsing "accesses_or_function": seen "CN_FUNCTION LNAME TYPE", expecting "SEMICOLON"
+
+fundef_spec: CN_FUNCTION LNAME TYPE SEMICOLON WHILE
+##
+## Ends in an error in state: 1968.
+##
+## fundef_spec -> option(__anonymous_1) option(__anonymous_2) . option(__anonymous_3) option(__anonymous_4) EOF [ # ]
+##
+## The known suffix of the stack is as follows:
+## option(__anonymous_1) option(__anonymous_2)
+##
+
+parsing "fundef_spec": seen "option(__anonymous_1) option(__anonymous_2)", expecting "option(__anonymous_3) option(__anonymous_4) EOF"
 
 cn_statements: INLINE UNAME WHILE
 ##
@@ -17191,14 +17364,14 @@ cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE WHILE
+loop_spec: CN_INV CN_TAKE WHILE
 ##
 ## Ends in an error in state: 1625.
 ##
-## condition -> CN_TAKE . UNAME VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_TAKE . LNAME VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_TAKE . UNAME TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_TAKE . LNAME TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_TAKE . UNAME VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_TAKE . LNAME VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_TAKE . UNAME TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_TAKE . LNAME TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_TAKE
@@ -17206,12 +17379,12 @@ function_spec: CN_ENSURES CN_TAKE WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE UNAME WHILE
+loop_spec: CN_INV CN_TAKE UNAME WHILE
 ##
 ## Ends in an error in state: 1626.
 ##
-## condition -> CN_TAKE UNAME . VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_TAKE UNAME . TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_TAKE UNAME . VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_TAKE UNAME . TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_TAKE UNAME
@@ -17219,7 +17392,7 @@ function_spec: CN_ENSURES CN_TAKE UNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH WHILE
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH WHILE
 ##
 ## Ends in an error in state: 1629.
 ##
@@ -17234,7 +17407,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN WHILE
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN WHILE
 ##
 ## Ends in an error in state: 1630.
 ##
@@ -17249,7 +17422,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID WHILE
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID WHILE
 ##
 ## Ends in an error in state: 1631.
 ##
@@ -17264,7 +17437,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME WHILE
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME WHILE
 ##
 ## Ends in an error in state: 1632.
 ##
@@ -17277,7 +17450,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
 ##
 ## Ends in an error in state: 1635.
 ##
@@ -17304,7 +17477,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
 ##
 ## Ends in an error in state: 1638.
 ##
@@ -17322,7 +17495,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT COMMA
 ##
 ## Ends in an error in state: 1645.
 ##
@@ -17349,7 +17522,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
 ##
 ## Ends in an error in state: 1648.
 ##
@@ -17367,7 +17540,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME WHILE
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME WHILE
 ##
 ## Ends in an error in state: 1653.
 ##
@@ -17380,7 +17553,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
 ##
 ## Ends in an error in state: 1656.
 ##
@@ -17407,7 +17580,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
 ##
 ## Ends in an error in state: 1659.
 ##
@@ -17425,7 +17598,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT COMMA
 ##
 ## Ends in an error in state: 1666.
 ##
@@ -17452,7 +17625,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
 ##
 ## Ends in an error in state: 1669.
 ##
@@ -17470,7 +17643,7 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_BLOCK COMMA
+loop_spec: CN_INV CN_TAKE LNAME TYPE EQ CN_BLOCK COMMA
 ##
 ## Ends in an error in state: 1676.
 ##
@@ -17488,12 +17661,12 @@ function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_BLOCK COMMA
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_TAKE LNAME WHILE
+loop_spec: CN_INV CN_TAKE LNAME WHILE
 ##
 ## Ends in an error in state: 1684.
 ##
-## condition -> CN_TAKE LNAME . VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_TAKE LNAME . TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_TAKE LNAME . VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_TAKE LNAME . TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_TAKE LNAME
@@ -17501,14 +17674,14 @@ function_spec: CN_ENSURES CN_TAKE LNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_LET WHILE
+loop_spec: CN_INV CN_LET WHILE
 ##
 ## Ends in an error in state: 1693.
 ##
-## condition -> CN_LET . UNAME VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_LET . LNAME VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_LET . UNAME TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_LET . LNAME TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_LET . UNAME VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_LET . LNAME VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_LET . UNAME TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_LET . LNAME TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_LET
@@ -17516,12 +17689,12 @@ function_spec: CN_ENSURES CN_LET WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_LET UNAME WHILE
+loop_spec: CN_INV CN_LET UNAME WHILE
 ##
 ## Ends in an error in state: 1694.
 ##
-## condition -> CN_LET UNAME . VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_LET UNAME . TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_LET UNAME . VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_LET UNAME . TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_LET UNAME
@@ -17529,11 +17702,11 @@ function_spec: CN_ENSURES CN_LET UNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_LET UNAME VARIABLE EQ CN_CONSTANT RPAREN
+loop_spec: CN_INV CN_LET UNAME VARIABLE EQ CN_CONSTANT RPAREN
 ##
 ## Ends in an error in state: 1697.
 ##
-## condition -> CN_LET UNAME VARIABLE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_LET UNAME VARIABLE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_LET UNAME VARIABLE EQ expr
@@ -17556,11 +17729,11 @@ function_spec: CN_ENSURES CN_LET UNAME VARIABLE EQ CN_CONSTANT RPAREN
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_LET UNAME TYPE EQ CN_CONSTANT RPAREN
+loop_spec: CN_INV CN_LET UNAME TYPE EQ CN_CONSTANT RPAREN
 ##
 ## Ends in an error in state: 1701.
 ##
-## condition -> CN_LET UNAME TYPE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_LET UNAME TYPE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_LET UNAME TYPE EQ expr
@@ -17583,12 +17756,12 @@ function_spec: CN_ENSURES CN_LET UNAME TYPE EQ CN_CONSTANT RPAREN
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_LET LNAME WHILE
+loop_spec: CN_INV CN_LET LNAME WHILE
 ##
 ## Ends in an error in state: 1703.
 ##
-## condition -> CN_LET LNAME . VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
-## condition -> CN_LET LNAME . TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_LET LNAME . VARIABLE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
+## condition -> CN_LET LNAME . TYPE EQ expr SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_LET LNAME
@@ -17596,11 +17769,11 @@ function_spec: CN_ENSURES CN_LET LNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_LET LNAME VARIABLE EQ CN_CONSTANT RPAREN
+loop_spec: CN_INV CN_LET LNAME VARIABLE EQ CN_CONSTANT RPAREN
 ##
 ## Ends in an error in state: 1706.
 ##
-## condition -> CN_LET LNAME VARIABLE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_LET LNAME VARIABLE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_LET LNAME VARIABLE EQ expr
@@ -17623,11 +17796,11 @@ function_spec: CN_ENSURES CN_LET LNAME VARIABLE EQ CN_CONSTANT RPAREN
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_LET LNAME TYPE EQ CN_CONSTANT RPAREN
+loop_spec: CN_INV CN_LET LNAME TYPE EQ CN_CONSTANT RPAREN
 ##
 ## Ends in an error in state: 1710.
 ##
-## condition -> CN_LET LNAME TYPE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> CN_LET LNAME TYPE EQ expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_LET LNAME TYPE EQ expr
@@ -17668,12 +17841,12 @@ cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN RPAREN SEMICOLON CN_REQUIRES CN_CONST
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_CONSTANT SEMICOLON WHILE
+loop_spec: CN_INV CN_CONSTANT SEMICOLON WHILE
 ##
 ## Ends in an error in state: 1715.
 ##
-## nonempty_list(condition) -> condition . [ EOF CN_TYPE_SYNONYM CN_TRUSTED CN_SPEC CN_REQUIRES CN_PREDICATE CN_LEMMA CN_FUNCTION CN_ENSURES CN_DATATYPE CN_ACCESSES ]
-## nonempty_list(condition) -> condition . nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_TRUSTED CN_SPEC CN_REQUIRES CN_PREDICATE CN_LEMMA CN_FUNCTION CN_ENSURES CN_DATATYPE CN_ACCESSES ]
+## nonempty_list(condition) -> condition . [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_ENSURES CN_DATATYPE ]
+## nonempty_list(condition) -> condition . nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_ENSURES CN_DATATYPE ]
 ##
 ## The known suffix of the stack is as follows:
 ## condition
@@ -17681,11 +17854,11 @@ function_spec: CN_ENSURES CN_CONSTANT SEMICOLON WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ENSURES CN_CONSTANT RPAREN
+loop_spec: CN_INV CN_CONSTANT RPAREN
 ##
 ## Ends in an error in state: 1717.
 ##
-## condition -> assert_expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
+## condition -> assert_expr . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUE CN_TAKE CN_SPEC CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## assert_expr
@@ -18748,14 +18921,14 @@ cn_toplevel: CN_DATATYPE LNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_FUNCTION WHILE
+fundef_spec: CN_FUNCTION WHILE
 ##
-## Ends in an error in state: 1954.
+## Ends in an error in state: 1953.
 ##
-## function_spec_item -> CN_FUNCTION . UNAME VARIABLE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## function_spec_item -> CN_FUNCTION . LNAME VARIABLE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## function_spec_item -> CN_FUNCTION . UNAME TYPE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## function_spec_item -> CN_FUNCTION . LNAME TYPE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
+## accesses_or_function -> CN_FUNCTION . UNAME VARIABLE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+## accesses_or_function -> CN_FUNCTION . LNAME VARIABLE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+## accesses_or_function -> CN_FUNCTION . UNAME TYPE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+## accesses_or_function -> CN_FUNCTION . LNAME TYPE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_FUNCTION
@@ -18763,12 +18936,12 @@ function_spec: CN_FUNCTION WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_FUNCTION UNAME WHILE
+fundef_spec: CN_FUNCTION UNAME WHILE
 ##
-## Ends in an error in state: 1955.
+## Ends in an error in state: 1954.
 ##
-## function_spec_item -> CN_FUNCTION UNAME . VARIABLE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## function_spec_item -> CN_FUNCTION UNAME . TYPE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
+## accesses_or_function -> CN_FUNCTION UNAME . VARIABLE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+## accesses_or_function -> CN_FUNCTION UNAME . TYPE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_FUNCTION UNAME
@@ -18776,12 +18949,12 @@ function_spec: CN_FUNCTION UNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_FUNCTION LNAME WHILE
+fundef_spec: CN_FUNCTION LNAME WHILE
 ##
-## Ends in an error in state: 1960.
+## Ends in an error in state: 1959.
 ##
-## function_spec_item -> CN_FUNCTION LNAME . VARIABLE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## function_spec_item -> CN_FUNCTION LNAME . TYPE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
+## accesses_or_function -> CN_FUNCTION LNAME . VARIABLE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+## accesses_or_function -> CN_FUNCTION LNAME . TYPE SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_FUNCTION LNAME
@@ -18789,143 +18962,66 @@ function_spec: CN_FUNCTION LNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ACCESSES UNAME WHILE
+fundef_spec: CN_ACCESSES UNAME TYPE RBRACK
 ##
-## Ends in an error in state: 1968.
+## Ends in an error in state: 1965.
 ##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME . VARIABLE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME . TYPE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME . VARIABLE SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME . TYPE SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
+## nonempty_list(__anonymous_0) -> CN_ACCESSES separated_nonempty_list(COMMA,cn_variable) . SEMICOLON [ EOF CN_REQUIRES CN_ENSURES ]
+## nonempty_list(__anonymous_0) -> CN_ACCESSES separated_nonempty_list(COMMA,cn_variable) . SEMICOLON nonempty_list(__anonymous_0) [ EOF CN_REQUIRES CN_ENSURES ]
 ##
 ## The known suffix of the stack is as follows:
-## UNAME
+## CN_ACCESSES separated_nonempty_list(COMMA,cn_variable)
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 13, spurious reduction of production separated_nonempty_list(COMMA,cn_variable) -> UNAME TYPE
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ACCESSES UNAME VARIABLE WHILE
-##
-## Ends in an error in state: 1969.
-##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME VARIABLE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME VARIABLE . SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## UNAME VARIABLE
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ACCESSES UNAME VARIABLE SEMICOLON WHILE
-##
-## Ends in an error in state: 1970.
-##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME VARIABLE SEMICOLON . [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME VARIABLE SEMICOLON . nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## UNAME VARIABLE SEMICOLON
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ACCESSES LNAME WHILE
+fundef_spec: CN_REQUIRES CN_CONSTANT SEMICOLON CN_TYPE_SYNONYM
 ##
 ## Ends in an error in state: 1971.
 ##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME . VARIABLE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME . TYPE SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME . VARIABLE SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME . TYPE SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
+## fundef_spec -> option(__anonymous_1) option(__anonymous_2) option(__anonymous_3) . option(__anonymous_4) EOF [ # ]
 ##
 ## The known suffix of the stack is as follows:
-## LNAME
+## option(__anonymous_1) option(__anonymous_2) option(__anonymous_3)
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 1715, spurious reduction of production nonempty_list(condition) -> condition
+## In state 1970, spurious reduction of production option(__anonymous_3) -> CN_REQUIRES nonempty_list(condition)
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-function_spec: CN_ACCESSES LNAME VARIABLE WHILE
+fundef_spec: CN_ENSURES CN_CONSTANT SEMICOLON CN_TYPE_SYNONYM
 ##
-## Ends in an error in state: 1972.
+## Ends in an error in state: 1974.
 ##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME VARIABLE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME VARIABLE . SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## LNAME VARIABLE
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ACCESSES LNAME VARIABLE SEMICOLON WHILE
-##
-## Ends in an error in state: 1973.
-##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME VARIABLE SEMICOLON . [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME VARIABLE SEMICOLON . nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
+## fundef_spec -> option(__anonymous_1) option(__anonymous_2) option(__anonymous_3) option(__anonymous_4) . EOF [ # ]
 ##
 ## The known suffix of the stack is as follows:
-## LNAME VARIABLE SEMICOLON
+## option(__anonymous_1) option(__anonymous_2) option(__anonymous_3) option(__anonymous_4)
 ##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ACCESSES LNAME TYPE WHILE
-##
-## Ends in an error in state: 1975.
-##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME TYPE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME TYPE . SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## LNAME TYPE
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ACCESSES LNAME TYPE SEMICOLON WHILE
-##
-## Ends in an error in state: 1976.
-##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME TYPE SEMICOLON . [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> LNAME TYPE SEMICOLON . nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## LNAME TYPE SEMICOLON
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ACCESSES UNAME TYPE WHILE
-##
-## Ends in an error in state: 1979.
-##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME TYPE . SEMICOLON [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME TYPE . SEMICOLON nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## UNAME TYPE
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ACCESSES UNAME TYPE SEMICOLON WHILE
-##
-## Ends in an error in state: 1980.
-##
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME TYPE SEMICOLON . [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-## nonempty_list(terminated(cn_variable,SEMICOLON)) -> UNAME TYPE SEMICOLON . nonempty_list(terminated(cn_variable,SEMICOLON)) [ EOF CN_TRUSTED CN_REQUIRES CN_FUNCTION CN_ENSURES CN_ACCESSES ]
-##
-## The known suffix of the stack is as follows:
-## UNAME TYPE SEMICOLON
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 1715, spurious reduction of production nonempty_list(condition) -> condition
+## In state 1973, spurious reduction of production option(__anonymous_4) -> CN_ENSURES nonempty_list(condition)
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 loop_spec: CN_INV CN_CONSTANT SEMICOLON CN_TYPE_SYNONYM
 ##
-## Ends in an error in state: 1990.
+## Ends in an error in state: 1981.
 ##
 ## loop_spec -> CN_INV nonempty_list(condition) . EOF [ # ]
 ##
@@ -18941,22 +19037,9 @@ loop_spec: CN_INV CN_CONSTANT SEMICOLON CN_TYPE_SYNONYM
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-translation_unit: BOOL LNAME TYPE CERB_MAGIC WHILE
-##
-## Ends in an error in state: 1999.
-##
-## function_definition -> function_definition1 option(declaration_list) magic_comment_list . compound_statement boption(SEMICOLON) [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACK_LBRACK INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
-## magic_comment_list -> magic_comment_list . CERB_MAGIC [ LBRACES LBRACE CERB_MAGIC ]
-##
-## The known suffix of the stack is as follows:
-## function_definition1 option(declaration_list) magic_comment_list
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
 translation_unit: BOOL LNAME TYPE BOOL SEMICOLON WHILE
 ##
-## Ends in an error in state: 2004.
+## Ends in an error in state: 1995.
 ##
 ## declaration_list -> declaration_list . no_leading_attribute_declaration [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACES LBRACE INT INLINE FLOAT EXTERN ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
 ## option(declaration_list) -> declaration_list . [ LBRACES LBRACE CERB_MAGIC ]
@@ -18969,7 +19052,7 @@ translation_unit: BOOL LNAME TYPE BOOL SEMICOLON WHILE
 
 translation_unit: CERB_MAGIC WHILE
 ##
-## Ends in an error in state: 2007.
+## Ends in an error in state: 1998.
 ##
 ## external_declaration_list -> external_declaration_list . external_declaration [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACK_LBRACK INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
 ## translation_unit -> external_declaration_list . EOF [ # ]
@@ -18982,7 +19065,7 @@ translation_unit: CERB_MAGIC WHILE
 
 translation_unit: BOOL LNAME TYPE RPAREN
 ##
-## Ends in an error in state: 2011.
+## Ends in an error in state: 2002.
 ##
 ## function_definition1 -> declaration_specifiers declarator_varname . [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACES LBRACE INT INLINE FLOAT EXTERN ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
 ## init_declarator(declarator_varname) -> declarator_varname . [ SEMICOLON COMMA ]
@@ -19006,7 +19089,7 @@ translation_unit: BOOL LNAME TYPE RPAREN
 
 translation_unit: LBRACK_LBRACK ALIGNAS RBRACK RBRACK WHILE
 ##
-## Ends in an error in state: 2013.
+## Ends in an error in state: 2004.
 ##
 ## attribute_declaration -> attribute_specifier_sequence . SEMICOLON [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACK_LBRACK INT INLINE FLOAT EXTERN EOF ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
 ## attribute_specifier_sequence -> attribute_specifier_sequence . attribute_specifier [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC SIGNED SHORT SEMICOLON RESTRICT REGISTER NORETURN LONG LNAME LBRACK_LBRACK INT INLINE FLOAT EXTERN ENUM DOUBLE CONST COMPLEX CHAR BOOL AUTO ATOMIC ALIGNAS ]
@@ -19022,7 +19105,7 @@ translation_unit: LBRACK_LBRACK ALIGNAS RBRACK RBRACK WHILE
 
 translation_unit: LBRACK_LBRACK ALIGNAS RBRACK RBRACK BOOL LNAME TYPE RPAREN
 ##
-## Ends in an error in state: 2015.
+## Ends in an error in state: 2006.
 ##
 ## function_definition1 -> attribute_specifier_sequence declaration_specifiers declarator_varname . [ VOLATILE VOID UNSIGNED UNION UNAME TYPEOF TYPEDEF THREAD_LOCAL STRUCT STATIC_ASSERT STATIC SIGNED SHORT RESTRICT REGISTER NORETURN LONG LNAME LBRACES LBRACE INT INLINE FLOAT EXTERN ENUM DOUBLE CONST COMPLEX CHAR CERB_MAGIC BOOL AUTO ATOMIC ALIGNAS ]
 ## init_declarator(declarator_varname) -> declarator_varname . [ SEMICOLON COMMA ]

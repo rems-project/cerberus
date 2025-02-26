@@ -1248,7 +1248,7 @@ let normalise_fun_map_decl
        (* let d_st = CAE.set_cn_c_identifier_env ail_env d_st in *)
        let d_st = CAE.{ inner = Pmap.find ail_marker markers_env; markers_env } in
        let@ trusted, accesses, requires, ensures, mk_functions =
-         Parse.function_spec attrs
+         Parse.function_spec loc attrs
        in
        debug 6 (lazy (string "parsed spec attrs"));
        let@ mk_functions =

@@ -18,15 +18,15 @@ predicate (struct list_head) O_struct_list_head(pointer p, boolean condition)
 @*/
 
 void __list_del(struct list_head * prev, struct list_head * next)
-/*@ requires take O1 = Owned(prev); @*/
-/*@ requires take O2 = O_struct_list_head(next, !ptr_eq(prev, next)); @*/
-/*@ ensures take O1R = Owned(prev); @*/
-/*@ ensures take O2R = O_struct_list_head(next, !ptr_eq(prev, next)); @*/
-/*@ ensures ptr_eq(prev, next) || ptr_eq(O2.next, O2R.next); @*/
-/*@ ensures ptr_eq(prev, next) || {(*prev).prev} unchanged; @*/
-/*@ ensures ptr_eq((*prev).next, next); @*/
-/*@ ensures ptr_eq(prev, next) || ptr_eq(O2R.prev, prev); @*/
-/*@ ensures !ptr_eq(prev, next) || ptr_eq((*prev).prev, prev); @*/
+/*@ requires take O1 = Owned(prev);
+             take O2 = O_struct_list_head(next, !ptr_eq(prev, next));
+    ensures take O1R = Owned(prev);
+            take O2R = O_struct_list_head(next, !ptr_eq(prev, next));
+            ptr_eq(prev, next) || ptr_eq(O2.next, O2R.next);
+            ptr_eq(prev, next) || {(*prev).prev} unchanged;
+            ptr_eq((*prev).next, next);
+            ptr_eq(prev, next) || ptr_eq(O2R.prev, prev);
+            !ptr_eq(prev, next) || ptr_eq((*prev).prev, prev); @*/
 {
         /*@ split_case !ptr_eq(prev, next); @*/
         next->prev = prev;

@@ -26,8 +26,8 @@ foo_integer (u64 y)
 
 int *
 foo (int *p)
-/*@ requires let p_u64 = (u64) p; @*/
-/*@ requires mod(p_u64, shift_left(1u64, ((u64) SHIFT_AMOUNT))) == 0u64; @*/
+/*@ requires let p_u64 = (u64) p;
+             mod(p_u64, shift_left(1u64, ((u64) SHIFT_AMOUNT))) == 0u64; @*/
 {
   u64 x = ((u64) p);
   int *p2;

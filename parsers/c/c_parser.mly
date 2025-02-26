@@ -17,13 +17,9 @@ module LF = Lexer_feedback
 let id =
   fun z -> z
 
-let option d f = function
-  | Some x -> f x
-  | None   -> d
-
-let map_option f = function
-  | Some x -> Some (f x)
-  | None -> None
+let opt_to_rev_list = function
+  | None -> []
+  | Some xs -> List.rev xs
 
 let empty_specs =
   { storage_classes= [];
@@ -316,7 +312,7 @@ type asm_qualifier =
   located_string_literal
 
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
-%start function_spec
+%start fundef_spec
 %start loop_spec
 %start cn_statements
 %start cn_toplevel
@@ -330,7 +326,7 @@ type asm_qualifier =
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_resource> resource
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_pred> pred
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_condition> condition
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_function_spec list> function_spec
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_fundef_spec> fundef_spec
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec> loop_spec
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_statement> cn_statement
 %type<((Symbol.identifier, Cabs.type_name) Cn.cn_statement) list> cn_statements
@@ -502,7 +498,7 @@ primary_expression:
 // | LPAREN stmt= scoped(compound_statement) RPAREN
 | LPAREN LBRACE bis_opt= block_item_list? RBRACE RPAREN
     { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                     , CabsEgcc_statement (option [] List.rev bis_opt) ) }
+                     , CabsEgcc_statement (opt_to_rev_list bis_opt) ) }
 ;
 
 (* §6.5.1.1 Generic selection *)
@@ -535,7 +531,7 @@ postfix_expression:
                      , CabsEsubscript (expr1, expr2) ) }
 | expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
     { CabsExpression ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-                     , CabsEcall (expr, option [] List.rev exprs_opt) ) }
+                     , CabsEcall (expr, opt_to_rev_list exprs_opt) ) }
 | expr= postfix_expression DOT i= general_identifier
     { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEmemberof (expr, i) ) }
@@ -821,10 +817,10 @@ constant_expression:
 no_leading_attribute_declaration:
 | decspecs= declaration_specifiers
     idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
-    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
+    { Declaration_base (Annot.no_attributes, decspecs, opt_to_rev_list idecls_opt) }
 | decspecs= declaration_specifiers_typedef
     idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
-    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
+    { Declaration_base (Annot.no_attributes, decspecs, opt_to_rev_list idecls_opt) }
 | sa= static_assert_declaration
     { Declaration_static_assert sa }
 ;
@@ -834,10 +830,10 @@ declaration:
     { xs_decl }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers
     idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
-    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
+    { Declaration_base (to_attrs (Some attr), decspecs, opt_to_rev_list idecls_opt) }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers_typedef
     idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
-    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
+    { Declaration_base (to_attrs (Some attr), decspecs, opt_to_rev_list idecls_opt) }
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Cerb_location.(region($startpos, $endpos) (PointCursor $startpos)) in
@@ -994,7 +990,7 @@ struct_declaration:
     { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       let (tspecs, tquals, align_specs) = tspecs_tquals in
       Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
-                          option [] List.rev rev_sdeclrs_opt) }
+                          opt_to_rev_list rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
 ;
@@ -1020,7 +1016,7 @@ struct_declarator:
 | decltor= declarator
     { SDecl_simple (LF.cabs_of_declarator decltor) }
 | decltor_opt= declarator? COLON expr= constant_expression
-    { SDecl_bitfield (map_option LF.cabs_of_declarator decltor_opt, expr) }
+    { SDecl_bitfield (Option.map LF.cabs_of_declarator decltor_opt, expr) }
 ;
 
 (* §6.7.2.2 Enumeration specifiers *)
@@ -1121,12 +1117,12 @@ array_declarator:
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
   expr_opt= assignment_expression? RBRACK
     { LF.array_decl (ADecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
-        option [] List.rev tquals_opt, false,
-        map_option (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
+        opt_to_rev_list tquals_opt, false,
+        Option.map (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
 | ddecltor= direct_declarator LBRACK STATIC tquals_opt= type_qualifier_list?
   expr= assignment_expression RBRACK
     { LF.array_decl (ADecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
-                            option [] List.rev tquals_opt,
+                            opt_to_rev_list tquals_opt,
                             true, Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals= type_qualifier_list STATIC
   expr= assignment_expression RBRACK
@@ -1135,7 +1131,7 @@ array_declarator:
                             Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
     { LF.array_decl (ADecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
-                            option [] List.rev tquals_opt, false,
+                            opt_to_rev_list tquals_opt, false,
                             Some ADeclSize_asterisk)) ddecltor }
 ;
 
@@ -1155,7 +1151,7 @@ pointer:
 | STAR ioption(attribute_specifier_sequence) tquals= type_qualifier_list?
   ptr_decltor= pointer?
     { PDecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
-             option [] List.rev tquals, ptr_decltor) }
+             opt_to_rev_list tquals, ptr_decltor) }
 ;
 
 type_qualifier_list: (* NOTE: the list is in reverse *)
@@ -1214,12 +1210,12 @@ array_abstract_declarator:
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK
   tquals= ioption(type_qualifier_list) expr= assignment_expression? RBRACK
     { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown,
-      option [] id tquals, false,
-      option None (fun e -> Some (ADeclSize_expression e)) expr)) }
+      Option.fold ~none:[] ~some:id tquals, false,
+      Option.map (fun e -> ADeclSize_expression e) expr)) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK STATIC
   tquals= type_qualifier_list? expr= assignment_expression RBRACK
     { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown,
-      option [] id tquals, true, Some (ADeclSize_expression expr))) }
+      Option.fold ~none:[] ~some:id tquals, true, Some (ADeclSize_expression expr))) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK
   tquals= type_qualifier_list STATIC expr= assignment_expression RBRACK
     { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown, tquals, true,
@@ -1331,7 +1327,7 @@ compound_statement:
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
-        , CabsSblock (option [] List.rev bis_opt) ) }
+        , CabsSblock (opt_to_rev_list bis_opt) ) }
 (* NON-STD cppmem syntax *)
 | LBRACES stmts= separated_nonempty_list(PIPES, statement) RBRACES
     { CabsStatement (Cerb_location.(region ($startpos, $endpos) NoCursor),
@@ -1373,7 +1369,7 @@ expression_statement:
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
-        , option CabsSnull (fun z -> CabsSexpr z) expr_opt ) }
+        , Option.fold ~none:CabsSnull ~some:(fun z -> CabsSexpr z) expr_opt ) }
 | attr= attribute_specifier_sequence expr= expression SEMICOLON
     { CabsStatement
         (Cerb_location.(region ($startpos, $endpos) NoCursor)
@@ -1401,6 +1397,7 @@ selection_statement:
         , CabsSswitch (expr, stmt) ) }
 ;
 
+(* FIXME magic comments should be singletons, not a list *)
 magic_comment_list:
 | xs= magic_comment_list magic= CERB_MAGIC
     { magic :: xs }
@@ -1425,7 +1422,7 @@ iteration_statement:
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , magic_to_attrs (List.rev magic)
-        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
+        , CabsSfor (Option.map (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
 | FOR LPAREN xs_decl= declaration expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
@@ -2334,23 +2331,6 @@ cn_option_func_body:
 |
     { None }
 
-(*
-cn_func_body:
-| CN_LET str= cn_variable EQ e= expr SEMICOLON c= cn_func_body
-    { let loc = Cerb_location.point $startpos(str) in
-      Cerb_frontend.Cn.CN_fb_letExpr (loc, str, e, c) }
-| RETURN e= expr SEMICOLON
-    { Cerb_frontend.Cn.CN_fb_return (Cerb_location.region $loc(e) NoCursor, e) }
-| SWITCH e= delimited(LPAREN, expr, RPAREN) cs= nonempty_list(cn_func_body_case)
-    { let loc = Cerb_location.point $startpos($1) in
-      Cerb_frontend.Cn.CN_fb_cases (loc, e, cs) }
-;
-
-cn_func_body_case:
-| CASE nm= cn_variable LBRACE body=cn_func_body RBRACE
-    { (nm, body) }
-*)
-
 clause:
 | CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
     { let loc = Cerb_location.point $startpos(str) in
@@ -2423,27 +2403,24 @@ condition:
     { Cerb_frontend.Cn.CN_cconstr (Cerb_location.region $loc NoCursor, e) }
 ;
 
-
-function_spec_item:
-| CN_TRUSTED SEMICOLON
-  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_trusted loc }
-| CN_ACCESSES accs=nonempty_list(terminated(cn_variable,SEMICOLON))
-  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_accesses (loc, accs) }
-| CN_REQUIRES cs=nonempty_list(condition)
-  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_requires (loc, cs) }
-| CN_ENSURES cs=nonempty_list(condition)
-  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_ensures (loc, cs) }
+accesses_or_function:
 | CN_FUNCTION nm=cn_variable SEMICOLON
-  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_mk_function (loc, nm) }
+  { Cerb_frontend.Cn.CN_mk_function nm }
+| accs=nonempty_list(CN_ACCESSES accs=separated_nonempty_list(COMMA,cn_variable) SEMICOLON { accs })
+  { Cerb_frontend.Cn.CN_accesses (List.concat accs) }
 
-function_spec: 
-| fs=list(function_spec_item) EOF
-  { fs }
+fundef_spec:
+| trusted=option(CN_TRUSTED SEMICOLON { () })
+  acc_func=option(af=accesses_or_function { af } )
+  requires=option(CN_REQUIRES reqs=nonempty_list(condition) { reqs })
+  ensures=option(CN_ENSURES ens=nonempty_list(condition) { ens })
+  EOF
+  { let region p = Cerb_location.region p NoCursor in
+    let opt_loc p = Option.map (fun list -> (region p, list)) in
+    { cn_fundef_trusted = Option.map (fun () -> region $loc(trusted)) trusted
+    ; cn_fundef_acc_func = opt_loc $loc(acc_func) acc_func
+    ; cn_fundef_requires = opt_loc $loc(requires) requires
+    ; cn_fundef_ensures = opt_loc $loc(ensures) ensures } }
 
 
 loop_spec:
