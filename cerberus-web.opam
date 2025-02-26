@@ -13,7 +13,7 @@ depends: [
   "cerberus-lib"
   "fpath" {>= "0.7.3"}
   "ezgzip" {>= "0.2.3"}
-  "cohttp-lwt-unix" {>= "4.0.0"}
+  "cohttp-lwt-unix" {>= "4.0.0" & < "6.0.0"}
   "cmdliner"
   "lwt"
   "base64"
