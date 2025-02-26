@@ -1522,12 +1522,22 @@ let and_bool_constraints (constraints : LC.t list) : BaseTypes.t annot =
   let it_and acc lc = IT (Binop (And, acc, lc), BT.Bool, Cerb_location.unknown) in
   List.fold_left it_and it_true no_foralls
 
+let assume_constraints (constraints : LC.t list) (s : solver) : solver =
+  let get_term lc =
+    match lc with
+    | LC.T it -> Some (translate_term s it)
+    | _ -> None in
+  let terms = List.filter_map get_term constraints in
+  let add_term term = debug_ack_command s (SMT.assume term); in
+  let _ = List.iter add_term terms in
+
 
 let ask_solver (s : solver) (lcs : LC.t list) : Simple_smt.result =
+  let lcs' = List.map (translate_term s) lcs
   let smt_term = translate_term s (and_bool_constraints lcs) in
   let simp_solver = s.smt_solver in
   debug_ack_command s (SMT.push 1);
-  debug_ack_command s (SMT.assume smt_term);
+
   let res = SMT.check simp_solver in
   debug_ack_command s (SMT.pop 1);
   res
