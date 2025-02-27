@@ -33,7 +33,7 @@ module CheckPreds = struct
   type check_result = (LC.t list, Pp.document) result_with_data
 
   (* let pp_check_result =
-    pp_result_with_data (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc)) (fun d -> d) *)
+     pp_result_with_data (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc)) (fun d -> d) *)
 
   let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
     List.fold_left
@@ -755,7 +755,7 @@ let state (ctxt : C.t) log model_with_q extras =
       match (rt, o) with
       | Req.Q _, _ -> None
       | Req.P { name = Owned _; pointer = _; iargs = _ }, _ -> None
-      | Req.P { name = PName s; pointer = _; iargs}, Resource.O it ->
+      | Req.P { name = PName s; pointer = _; iargs }, Resource.O it ->
         (match (Sym.Map.find_opt s defs, evaluate it) with
          | Some def, Some cand ->
            let ptr_val = Req.get_pointer rt in
