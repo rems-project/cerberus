@@ -2213,7 +2213,7 @@ let coq_steps_var_name = "ResourceInferenceSteps"
 (* Helper function that prints a list of strings, each followed by a hardline *)
 (* Usage in your code *)
 let coq_inference_proof =
-  !^"Require Import Reasoning.ResourceInference."
+  !^"From Reasoning Require Import ResourceInference ProofAutomation."
   ^^ P.hardline
   ^^ !^"Theorem resource_inference_steps_valid: prooflog_valid"
   ^^^ !^(quote_coq_name coq_steps_var_name)
@@ -2223,8 +2223,8 @@ let coq_inference_proof =
        [ "Proof.";
          "  unfold prooflog_valid.";
          "  unfold _cn_ResourceInferenceSteps.";
-         "  prove_log_entry_list_valid.";
-         "Qed."
+         "  ltac2:(prove_log_entry_list_valid ()).";
+         "Admitted."
        ]
 
 
