@@ -2,8 +2,8 @@ type statement = Locations.t * Cnprog.t list
 
 type statements = statement list
 
-type loop =
-  Locations.t * statements ArgumentTypes.t (* location is for the loop condition *)
+type loop = bool * Locations.t * Locations.t * statements ArgumentTypes.t
+(* first location is for the loop condition; second is for the entire loop *)
 
 type loops = loop list
 
@@ -19,6 +19,8 @@ type fn_largs_and_body = (ReturnTypes.t * fn_body) LogicalArgumentTypes.t
 val sym_subst
   :  Sym.t * BaseTypes.t * Sym.t ->
   [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t
+
+val loop_subst : [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t -> loop -> loop
 
 val fn_args_and_body_subst
   :  [ `Rename of Sym.t | `Term of IndexTerms.t ] Subst.t ->

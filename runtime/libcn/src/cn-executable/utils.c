@@ -210,6 +210,11 @@ void ghost_stack_depth_decr(void) {
   cn_stack_depth--;
   // update_error_message_info(0);
   // print_error_msg_info();
+
+  // cn_printf(CN_LOGGING_INFO, "\n");
+}
+
+void cn_postcondition_leak_check(void) {
   // leak checking
   hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
   // cn_printf(CN_LOGGING_INFO, "CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
@@ -219,13 +224,48 @@ void ghost_stack_depth_decr(void) {
     if (*depth > cn_stack_depth) {
       print_error_msg_info(error_msg_info);
       cn_printf(CN_LOGGING_ERROR,
-          "Leak check failed, ownership leaked for pointer " FMT_PTR "\n",
+          "Postcondition leak check failed, ownership leaked for pointer " FMT_PTR "\n",
           *key);
       cn_failure(CN_FAILURE_OWNERSHIP_LEAK);
       // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
     }
   }
-  // cn_printf(CN_LOGGING_INFO, "\n");
+}
+
+void cn_loop_leak_check(void) {
+  hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
+
+  while (ht_next(&it)) {
+    uintptr_t* key = (uintptr_t*)it.key;
+    int* depth = it.value;
+    /* Everything mapped to the function stack depth should have been bumped up by calls to Owned in invariant */
+    if (*depth == cn_stack_depth - 1) {
+      print_error_msg_info(error_msg_info);
+      cn_printf(CN_LOGGING_ERROR,
+          "Loop invariant leak check failed, ownership leaked for pointer " FMT_PTR "\n",
+          *key);
+      cn_failure(CN_FAILURE_OWNERSHIP_LEAK);
+      // cn_printf(CN_LOGGING_INFO, FMT_PTR_2 " (%d),", *key, *depth);
+    }
+  }
+}
+
+void cn_loop_put_back_ownership(void) {
+  hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
+
+  while (ht_next(&it)) {
+    uintptr_t* key = (uintptr_t*)it.key;
+    int* depth = it.value;
+    /* Bump down everything that was bumped up in loop invariant */
+    if (*depth == cn_stack_depth) {
+      ownership_ghost_state_set((signed long*)key, cn_stack_depth - 1);
+    }
+  }
+}
+
+void cn_loop_leak_check_and_put_back_ownership(void) {
+  cn_loop_leak_check();
+  cn_loop_put_back_ownership();
 }
 
 int ownership_ghost_state_get(signed long* address_key) {
@@ -253,11 +293,9 @@ void dump_ownership_state() {
   // cn_printf(CN_LOGGING_INFO, "END\n");
 }
 
-void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
-  // cn_printf(CN_LOGGING_INFO, "[CN: getting ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
-  //// print_error_msg_info();
-  c_ownership_check(
-      "Precondition ownership check", generic_c_ptr, (int)size, cn_stack_depth - 1);
+void cn_get_ownership(uintptr_t generic_c_ptr, size_t size, char* check_msg) {
+  /* Used for precondition and loop invariant taking/getting of ownership */
+  c_ownership_check(check_msg, generic_c_ptr, (int)size, cn_stack_depth - 1);
   c_add_to_ghost_state(generic_c_ptr, size, cn_stack_depth);
 }
 
@@ -286,12 +324,15 @@ void cn_get_or_put_ownership(
   nr_owned_predicates++;
   switch (owned_enum) {
     case GET: {
-      cn_get_ownership(generic_c_ptr, size);
+      cn_get_ownership(generic_c_ptr, size, "Precondition ownership check");
       break;
     }
     case PUT: {
       cn_put_ownership(generic_c_ptr, size);
       break;
+    }
+    case LOOP: {
+      cn_get_ownership(generic_c_ptr, size, "Loop invariant ownership check");
     }
   }
 }

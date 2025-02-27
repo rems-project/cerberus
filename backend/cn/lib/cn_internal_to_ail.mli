@@ -41,20 +41,17 @@ val wrap_with_convert_from_cn_bool
   :  CF.GenTypes.genTypeCategory A.expression ->
   CF.GenTypes.genTypeCategory A.expression
 
-val generate_sym_with_suffix
-  :  ?suffix:string ->
-  ?uppercase:bool ->
-  ?lowercase:bool ->
-  Sym.t ->
-  Sym.t
-
 type ail_bindings_and_statements =
   A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
 
 type ail_executable_spec =
   { pre : ail_bindings_and_statements;
     post : ail_bindings_and_statements;
-    in_stmt : (Locations.t * ail_bindings_and_statements) list
+    in_stmt : (Locations.t * ail_bindings_and_statements) list;
+    loops :
+      ((Locations.t * ail_bindings_and_statements)
+      * (Locations.t * ail_bindings_and_statements))
+        list
   }
 
 val generate_get_or_put_ownership_function
@@ -168,6 +165,7 @@ val cn_to_ail_predicates_internal
 
 val cn_to_ail_pre_post_internal
   :  without_ownership_checking:bool ->
+  with_loop_leak_checks:bool ->
   A.sigma_cn_datatype list ->
   (Sym.t * Definition.Predicate.t) list ->
   (Sym.t * C.ctype) list ->

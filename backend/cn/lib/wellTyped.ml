@@ -2202,7 +2202,7 @@ module WProc = struct
           match def with
           | Return loc ->
             (AT.of_rt function_rt (LAT.I False.False), CF.Annot.LAreturn, loc)
-          | Label (loc, label_args_and_body, annots, _parsed_spec, _loop_condition_loc) ->
+          | Label (loc, label_args_and_body, annots, _parsed_spec, _loop_info) ->
             let lt = WLabel.typ label_args_and_body in
             let kind = Option.get (CF.Annot.get_label_annot annots) in
             (lt, kind, loc)

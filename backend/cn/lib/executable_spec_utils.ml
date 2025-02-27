@@ -55,6 +55,18 @@ let is_empty_ail_stmt = function
   | _ -> false
 
 
+let generate_sym_with_suffix
+  ?(suffix = "_tag")
+  ?(uppercase = false)
+  ?(lowercase = false)
+  constructor
+  =
+  let str = Sym.pp_string constructor ^ suffix in
+  let str = if uppercase then String.uppercase_ascii str else str in
+  let str = if lowercase then String.lowercase_ascii str else str in
+  Sym.fresh_pretty str
+
+
 let rec list_split_three = function
   | [] -> ([], [], [])
   | (x, y, z) :: rest ->
@@ -155,3 +167,36 @@ let create_decl_object ctype =
 
 (* declarations: list (ail_identifier * (Loc.t * Annot.attributes * declaration)) *)
 let create_declaration sym decl = (sym, (Cerb_location.unknown, CF.Annot.Attrs [], decl))
+
+let get_start_loc ?(offset = 0) = function
+  | Cerb_location.Loc_region (start_pos, _, _) ->
+    let new_start_pos = { start_pos with pos_cnum = start_pos.pos_cnum + offset } in
+    Cerb_location.point new_start_pos
+  | Loc_regions (pos_list, _) ->
+    (match List.last pos_list with
+     | Some (_, start_pos) ->
+       let new_start_pos = { start_pos with pos_cnum = start_pos.pos_cnum + offset } in
+       Cerb_location.point new_start_pos
+     | None ->
+       failwith
+         "get_start_loc: Loc_regions has empty list of positions (should be non-empty)")
+  | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
+  | Loc_unknown | Loc_other _ ->
+    failwith "get_start_loc: Location should be Loc_region, Loc_regions or Loc_point"
+
+
+let get_end_loc ?(offset = 0) = function
+  | Cerb_location.Loc_region (_, end_pos, _) ->
+    let new_end_pos = { end_pos with pos_cnum = end_pos.pos_cnum + offset } in
+    Cerb_location.point new_end_pos
+  | Loc_regions (pos_list, _) ->
+    (match List.last pos_list with
+     | Some (_, end_pos) ->
+       let new_end_pos = { end_pos with pos_cnum = end_pos.pos_cnum + offset } in
+       Cerb_location.point new_end_pos
+     | None ->
+       failwith
+         "get_end_loc: Loc_regions has empty list of positions (should be non-empty)")
+  | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
+  | Loc_unknown | Loc_other _ ->
+    failwith "get_end_loc: Location should be Loc_region, Loc_regions or Loc_point"
