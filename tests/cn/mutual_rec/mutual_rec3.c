@@ -14,9 +14,9 @@
 
 struct a_node *
 predef_a_tree (struct a_node *p)
-/*@ requires take T = A_Tree (p); @*/
-/*@ ensures take T2 = A_Tree (p); @*/
-/*@ ensures is_null(return) || (T2.t == A_Node {k: 1i32, v: 0i32,
+/*@ requires take T = A_Tree (p);
+    ensures take T2 = A_Tree (p);
+            is_null(return) || (T2.t == A_Node {k: 1i32, v: 0i32,
     left: B_Node {even: A_Leaf {}, odd: A_Leaf {}}, right: B_Leaf {}}); @*/
 {
   struct b_node *l = NULL;

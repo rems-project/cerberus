@@ -1,6 +1,6 @@
 return code: 0
 tests/cn/cn_inline.c:13:5: warning: experimental keyword 'cn_function' (use of experimental features is discouraged)
-/*@ cn_function lookup_size_shift_cn; @*/
+/*@ cn_function lookup_size_shift_cn;
     ^~~~~~~~~~~ 
 [1/2]: lookup_size_shift -- pass
 [2/2]: f -- pass

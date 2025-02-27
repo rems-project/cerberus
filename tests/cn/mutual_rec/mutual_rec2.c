@@ -67,13 +67,13 @@ lemma b_tree_keys_lemma (datatype b_tree btree)
 
 void
 a_tree_keys_node_lemma (int k, int v, struct b_node *left, struct b_node *right)
-/*@ requires take L = B_Tree (left); @*/
-/*@ requires take R = B_Tree (right); @*/
-/*@ ensures take L2 = B_Tree (left); @*/
-/*@ ensures take R2 = B_Tree (right); @*/
-/*@ ensures L2.t == L.t; @*/
-/*@ ensures R2.t == R.t; @*/
-/*@ ensures (a_tree_keys (A_Node {k: k, v: v, left: L2.t, right: R2.t}))
+/*@ requires take L = B_Tree (left);
+             take R = B_Tree (right);
+    ensures take L2 = B_Tree (left);
+            take R2 = B_Tree (right);
+            L2.t == L.t;
+            R2.t == R.t;
+            (a_tree_keys (A_Node {k: k, v: v, left: L2.t, right: R2.t}))
   == (concat (b_tree_keys(L2.t), K_Cons {k: k, tail: (b_tree_keys(R2.t))})); @*/
 {
   /*@ apply a_tree_keys_lemma (A_Node {k: k, v: v, left: L.t, right: R.t}); @*/
@@ -82,13 +82,13 @@ a_tree_keys_node_lemma (int k, int v, struct b_node *left, struct b_node *right)
 
 void
 b_tree_keys_node_lemma (struct a_node *even, struct a_node *odd)
-/*@ requires take E = A_Tree (even); @*/
-/*@ requires take O = A_Tree (odd); @*/
-/*@ ensures take E2 = A_Tree (even); @*/
-/*@ ensures take O2 = A_Tree (odd); @*/
-/*@ ensures E2.t == E.t; @*/
-/*@ ensures O2.t == O.t; @*/
-/*@ ensures (b_tree_keys (B_Node {even: E2.t, odd: O2.t}))
+/*@ requires take E = A_Tree (even);
+             take O = A_Tree (odd);
+    ensures take E2 = A_Tree (even);
+            take O2 = A_Tree (odd);
+            E2.t == E.t;
+            O2.t == O.t;
+            (b_tree_keys (B_Node {even: E2.t, odd: O2.t}))
   == (merge (double_list (a_tree_keys (E2.t)), inc_list (double_list (a_tree_keys (O2.t))))); @*/
 {
   /*@ apply b_tree_keys_lemma (B_Node {even: E.t, odd: O.t}); @*/
@@ -104,13 +104,13 @@ lemma inc_concat_lemma (datatype key_list xs, datatype key_list ys)
 
 void
 a_tree_keys_node_concat_inc_lemma (int k, struct b_node *left, struct b_node *right)
-/*@ requires take L = B_Tree (left); @*/
-/*@ requires take R = B_Tree (right); @*/
-/*@ ensures take L2 = B_Tree (left); @*/
-/*@ ensures take R2 = B_Tree (right); @*/
-/*@ ensures L2.t == L.t; @*/
-/*@ ensures R2.t == R.t; @*/
-/*@ ensures (inc_list (concat (b_tree_keys(L2.t), K_Cons {k: k, tail: (b_tree_keys(R2.t))})))
+/*@ requires take L = B_Tree (left);
+             take R = B_Tree (right);
+    ensures take L2 = B_Tree (left);
+            take R2 = B_Tree (right);
+            L2.t == L.t;
+            R2.t == R.t;
+            (inc_list (concat (b_tree_keys(L2.t), K_Cons {k: k, tail: (b_tree_keys(R2.t))})))
   == (concat (inc_list (b_tree_keys(L2.t)), inc_list (K_Cons {k: k, tail: (b_tree_keys(R2.t))})));
 @*/
 {
@@ -120,11 +120,11 @@ a_tree_keys_node_concat_inc_lemma (int k, struct b_node *left, struct b_node *ri
 
 void
 a_tree_keys_node_concat_cons_inc_lemma (int k, struct b_node *right)
-/*@ requires take R = B_Tree (right); @*/
-/*@ requires k < enum_INT_MAX; @*/
-/*@ ensures take R2 = B_Tree (right); @*/
-/*@ ensures R2.t == R.t; @*/
-/*@ ensures (inc_list (K_Cons {k: k, tail: (b_tree_keys(R2.t))}))
+/*@ requires take R = B_Tree (right);
+             k < enum_INT_MAX;
+    ensures take R2 = B_Tree (right);
+            R2.t == R.t;
+            (inc_list (K_Cons {k: k, tail: (b_tree_keys(R2.t))}))
   == (K_Cons {k: k + 1i32, tail: inc_list (b_tree_keys(R2.t))}); @*/
 {
   /*@ apply inc_list_lemma (K_Cons {k: k, tail: b_tree_keys(R.t)}); @*/
@@ -141,13 +141,13 @@ lemma inc_merge_double_lemma (datatype key_list xs, datatype key_list ys)
 
 void
 b_tree_keys_node_merge_inc_lemma (struct a_node *even, struct a_node *odd)
-/*@ requires take E = A_Tree (even); @*/
-/*@ requires take O = A_Tree (odd); @*/
-/*@ ensures take E2 = A_Tree (even); @*/
-/*@ ensures take O2 = A_Tree (odd); @*/
-/*@ ensures E2.t == E.t; @*/
-/*@ ensures O2.t == O.t; @*/
-/*@ ensures (inc_list (merge (double_list (a_tree_keys (E2.t)),
+/*@ requires take E = A_Tree (even);
+             take O = A_Tree (odd);
+    ensures take E2 = A_Tree (even);
+            take O2 = A_Tree (odd);
+            E2.t == E.t;
+            O2.t == O.t;
+            (inc_list (merge (double_list (a_tree_keys (E2.t)),
         inc_list (double_list (a_tree_keys (O2.t))))))
   == (merge (inc_list (double_list (a_tree_keys (E2.t))),
         inc_list (inc_list (double_list (a_tree_keys (O2.t)))))); @*/
@@ -168,13 +168,13 @@ lemma flip_merge_lemma (datatype key_list xs, datatype key_list ys)
 
 void
 b_tree_keys_node_merge_flip_lemma (struct a_node *even, struct a_node *odd)
-/*@ requires take E = A_Tree (even); @*/
-/*@ requires take O = A_Tree (odd); @*/
-/*@ ensures take E2 = A_Tree (even); @*/
-/*@ ensures take O2 = A_Tree (odd); @*/
-/*@ ensures E2.t == E.t; @*/
-/*@ ensures O2.t == O.t; @*/
-/*@ ensures (merge (inc_list (double_list (a_tree_keys (E2.t))),
+/*@ requires take E = A_Tree (even);
+             take O = A_Tree (odd);
+    ensures take E2 = A_Tree (even);
+            take O2 = A_Tree (odd);
+            E2.t == E.t;
+            O2.t == O.t;
+            (merge (inc_list (double_list (a_tree_keys (E2.t))),
         inc_list (inc_list (double_list (a_tree_keys (O2.t))))))
   == (merge (inc_list (inc_list (double_list (a_tree_keys (O2.t)))),
         inc_list (double_list (a_tree_keys (E2.t))))); @*/
@@ -192,10 +192,10 @@ lemma inc_double_lemma (datatype key_list xs)
 
 void
 b_tree_keys_node_inc_inc_double_lemma (struct a_node *odd)
-/*@ requires take O = A_Tree (odd); @*/
-/*@ ensures take O2 = A_Tree (odd); @*/
-/*@ ensures O2.t == O.t; @*/
-/*@ ensures (inc_list (inc_list (double_list (a_tree_keys (O2.t)))))
+/*@ requires take O = A_Tree (odd);
+    ensures take O2 = A_Tree (odd);
+            O2.t == O.t;
+            (inc_list (inc_list (double_list (a_tree_keys (O2.t)))))
   == (double_list (inc_list (a_tree_keys (O2.t)))); @*/
 {
   /*@ apply inc_double_lemma (a_tree_keys (O.t)); @*/
@@ -233,10 +233,10 @@ int inc_b_tree (struct b_node *p);
 
 int
 inc_a_tree (struct a_node *p)
-/*@ requires is_null(p) || !addr_eq(p, NULL); @*/
-/*@ requires take T = A_Tree (p); @*/
-/*@ ensures take T2 = A_Tree (p); @*/
-/*@ ensures (return == 0i32) || ((a_tree_keys(T2.t)) == (inc_list(a_tree_keys(T.t)))); @*/
+/*@ requires is_null(p) || !addr_eq(p, NULL);
+             take T = A_Tree (p);
+    ensures take T2 = A_Tree (p);
+            (return == 0i32) || ((a_tree_keys(T2.t)) == (inc_list(a_tree_keys(T.t)))); @*/
 {
   int r = 0;
   /*@ apply a_tree_keys_lemma(T.t); @*/
@@ -257,10 +257,10 @@ inc_a_tree (struct a_node *p)
 
 int
 inc_b_tree (struct b_node *p)
-/*@ requires is_null(p) || !addr_eq(p, NULL); @*/
-/*@ requires take T = B_Tree (p); @*/
-/*@ ensures take T2 = B_Tree (p); @*/
-/*@ ensures (return == 0i32) || ((b_tree_keys(T2.t)) == (inc_list(b_tree_keys(T.t)))); @*/
+/*@ requires is_null(p) || !addr_eq(p, NULL);
+             take T = B_Tree (p);
+    ensures take T2 = B_Tree (p);
+            (return == 0i32) || ((b_tree_keys(T2.t)) == (inc_list(b_tree_keys(T.t)))); @*/
 {
   struct a_node *tmp = NULL;
   int r = 0;

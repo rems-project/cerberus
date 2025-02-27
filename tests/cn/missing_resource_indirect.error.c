@@ -11,9 +11,9 @@ predicate (i32) Owned_Wrapper (pointer p) {
 
 int
 f (int *p, int x)
-/*@ requires x < 12i32; @*/
-/*@ ensures return < 12i32; @*/
-/*@ ensures take Resource_From_Nothing = Owned_Wrapper(p); @*/
+/*@ requires x < 12i32;
+    ensures return < 12i32;
+            take Resource_From_Nothing = Owned_Wrapper(p); @*/
 {
   return x;
 }
