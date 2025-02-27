@@ -240,7 +240,6 @@ module CheckPreds = struct
     | Cast _, _ -> default
 
 
-  (*TODO: lcs may mention vars not examined in the algorithm*)
   let rec organize_lines_aux
     (lines : LAT.packing_ft)
     (defs : def_line Sym.Map.t)
