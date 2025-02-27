@@ -1,4 +1,4 @@
-From Ltac2 Require Import Ltac2 Notations Std Constr Env Ident.
+From Ltac2 Require Import Ltac1 Ltac2 Notations Std Constr Env Ident.
  
 From Cn Require Import Prooflog Request Resource Context.
 Require Import Ltac2Utils ResourceInference.
@@ -30,11 +30,11 @@ Qed.
  | _ =>
      Control.throw (Tactic_failure (Some (Message.of_string "Term is not an application (and thus not a P)")))
  end.
- 
+  
  Ltac2 res_set_remove_step () :=
    match! goal with
    | [ |- exists upred,
-       ResSet.eq (ResSet.remove (P upred, ?out) (set_from_list ?in_res)) (set_from_list ?out_res) /\ subsumed _ (Predicate.name upred) ] =>
+       ResSet.Equal (ResSet.add (P upred, ?out) (set_from_list ?out_res)) (set_from_list ?in_res) /\ subsumed _ (Predicate.name upred) ] =>
      (* break down goal into components *)
      let outname   := Fresh.in_goal @out in
      let inresname := Fresh.in_goal @in_res in
@@ -55,10 +55,10 @@ Qed.
          let p := predicate_of_request req in
          exists $p;
          Std.split false NoBindings;
-         (* TODO: ResSet quality, for example, usig [fsetdec] *)
-         Std.admit ();
+         (* ResSet subset proof *)
+         Control.focus 1 1 (fun () => ltac1:(subst;cbn;ResSetDecide.fsetdec));
          (* Second subgoal - subsumed *)
-         Std.constructor false; Std.reflexivity ()
+         Control.focus 1 1 (fun () => Std.constructor false; Std.reflexivity ())
      | _ =>
          Control.throw (Tactic_failure (Some (Message.of_string "Zero or more than one resource change between the input and output")))
      end
