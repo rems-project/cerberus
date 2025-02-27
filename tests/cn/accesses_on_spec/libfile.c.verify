@@ -1,0 +1,3 @@
+return code: 0
+[1/2]: foo -- pass
+[2/2]: buz -- pass

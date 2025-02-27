@@ -1,6 +1,7 @@
 (* Cabs to Ail desugaring auxiliary functions (included in Cabs_to_ail_effect) *)
 open import Pervasives
 import Symbol Loc Ctype State_exception Errors Map_extra Maybe String_extra
+import Cabs (* for cn_desugaring_state.cn_decl_specs *)
 
 open import Cn
 
@@ -13,7 +14,7 @@ type cn_desugaring_state = <|
   cn_datatypes: list (Symbol.identifier * (cn_datatype Symbol.sym));
   cn_functions: list (Symbol.identifier * (Symbol.sym * cn_function Symbol.sym Ctype.ctype));
   cn_lemmata: list (Symbol.identifier * (Symbol.sym * cn_lemma Symbol.sym Ctype.ctype));
-  cn_fun_specs: list (nat * cn_fun_spec Symbol.sym Ctype.ctype);
+  cn_decl_specs: list (nat * Symbol.sym * cn_decl_spec Symbol.identifier Cabs.type_name);
   cn_type_synonyms: map Symbol.identifier (cn_base_type Symbol.sym);
 |>
 
@@ -52,7 +53,7 @@ let initial_cn_desugaring_state cn_desugaring_init =
   cn_datatypes= [];
   cn_functions= [];
   cn_lemmata= [];
-  cn_fun_specs= [];
+  cn_decl_specs= [];
   cn_type_synonyms= Map.empty;
   (* cn_c_identifier_env= Map.empty; *)
 |>

@@ -180,17 +180,6 @@ type cn_lemma 'a 'ty = <|
   cn_lemma_ensures: list (cn_condition 'a 'ty);
 |>
 
-type cn_fun_spec 'a 'ty = <|
-  cn_spec_magic_loc: Loc.t;
-  cn_spec_loc: Loc.t;
-  cn_spec_name: 'a;
-  cn_spec_args: list ('a * cn_base_type 'a);
-  cn_spec_requires: list (cn_condition 'a 'ty);
-  cn_spec_ret_name: 'a;
-  cn_spec_ensures: list (cn_condition 'a 'ty);
-|>
-
-
 type cn_predicate 'a 'ty = <|
   cn_pred_magic_loc: Loc.t;
   cn_pred_loc: Loc.t;
@@ -216,14 +205,21 @@ type cn_type_synonym 'a = <|
 |>
 
 type cn_acc_func 'a =
-  | CN_accesses of list Symbol.identifier
+  | CN_accesses of list 'a
   | CN_mk_function of 'a
 
-type cn_fundef_spec 'a 'ty = <|
-  cn_fundef_trusted: maybe Loc.t;
-  cn_fundef_acc_func: maybe (Loc.t * cn_acc_func 'a);
-  cn_fundef_requires: maybe (Loc.t * list (cn_condition 'a 'ty));
-  cn_fundef_ensures: maybe (Loc.t * list (cn_condition 'a 'ty));
+type cn_func_spec 'a 'ty = <|
+  cn_func_trusted: maybe Loc.t;
+  cn_func_acc_func: maybe (Loc.t * cn_acc_func 'a);
+  cn_func_requires: maybe (Loc.t * list (cn_condition 'a 'ty));
+  cn_func_ensures: maybe (Loc.t * list (cn_condition 'a 'ty));
+|>
+
+type cn_decl_spec 'a 'ty = <|
+  cn_decl_loc: Loc.t;
+  cn_decl_name: 'a;
+  cn_decl_args: list ('a * cn_base_type 'a);
+  cn_func_spec: cn_func_spec 'a 'ty;
 |>
 
 type cn_loop_spec 'a 'ty =

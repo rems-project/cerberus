@@ -1,5 +1,5 @@
 return code: 2
 tests/cn/list_literal_type.error.c:3:15: error: unexpected token after 'list' and before '<'
-Please add error message for state 1869 to parsers/c/c_parser_error.messages
+Please add error message for state 1887 to parsers/c/c_parser_error.messages
 function (list<integer>) nonempty_list() {
               ^ 

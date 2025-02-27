@@ -106,7 +106,7 @@ let update_enclosing_region payload_region xs =
     | Cabs.EDecl_type_synCN ts ->
         Cabs.EDecl_type_synCN { ts with Cn.cn_tysyn_loc= slash_inclusive_region }
     | Cabs.EDecl_fun_specCN spec ->
-        Cabs.EDecl_fun_specCN { spec with Cn.cn_spec_magic_loc= slash_inclusive_region }
+        Cabs.EDecl_fun_specCN spec
     | _ ->
         (* C_parser.cn_toplevel only returns CN external declarations *)
         assert false

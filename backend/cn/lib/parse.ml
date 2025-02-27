@@ -60,55 +60,10 @@ let cn_statements annots =
   annots |> get_cerb_magic_attr |> ListM.concat_mapM (parse C_parser.cn_statements)
 
 
-let function_spec warning_loc (Attrs attributes) =
-  let@ conditions =
-    [ Aattrs (Attrs (List.rev attributes)) ]
-    |> get_cerb_magic_attr
-    |> ListM.mapM (parse C_parser.fundef_spec)
-  in
-  let process
-    Cn.{ cn_fundef_trusted; cn_fundef_acc_func; cn_fundef_requires; cn_fundef_ensures }
-    =
-    let cross_fst x =
-      match x with None -> [] | Some (a, bs) -> List.map (fun b -> (a, b)) bs
-    in
-    let trust =
-      match cn_fundef_trusted with
-      | None -> Mucore.Checked
-      | Some loc -> Mucore.Trusted loc
-    in
-    let accs, exs =
-      match cn_fundef_acc_func with
-      | None -> ([], [])
-      | Some (loc, Cn.CN_mk_function nm) -> ([], [ (loc, `Make_Logical_Function nm) ])
-      | Some (loc, Cn.CN_accesses ids) -> (cross_fst (Some (loc, ids)), [])
-    in
-    let reqs = cross_fst cn_fundef_requires in
-    let enss = cross_fst cn_fundef_ensures in
-    (trust, accs, reqs, enss, exs)
-  in
-  let conditions = List.map process conditions in
-  let base = (Mucore.Checked, [], [], [], []) in
-  match conditions with
-  | [] -> return base
-  | [ condition ] -> return condition
-  | _ :: _ :: _ ->
-    (* TODO remove this "feature" *)
-    Pp.warn
-      warning_loc
-      !^"Deprecated: function specs should not be split across multiple magic comments.";
-    let comb left right =
-      match (left, right) with
-      | Mucore.Trusted loc, _ -> Mucore.Trusted loc
-      | _, Mucore.Trusted loc -> Mucore.Trusted loc
-      | _, _ -> Mucore.Checked
-    in
-    let combine left right =
-      match (left, right) with
-      | (trust, accs, reqs, enss, ex), (trust', accs', reqs', enss', ex') ->
-        return (comb trust trust', accs @ accs', reqs @ reqs', enss @ enss', ex @ ex')
-    in
-    ListM.fold_leftM combine base conditions
+let function_spec (Attrs attributes) =
+  [ Aattrs (Attrs (List.rev attributes)) ]
+  |> get_cerb_magic_attr
+  |> ListM.mapM (parse C_parser.fundef_spec)
 
 
 let loop_spec attrs =

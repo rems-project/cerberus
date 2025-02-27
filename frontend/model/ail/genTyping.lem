@@ -2298,7 +2298,7 @@ let annotate_sigma sigm =
     cn_functions=  sigm.cn_functions;
     cn_lemmata=  sigm.cn_lemmata;
     cn_datatypes=  sigm.cn_datatypes;
-    cn_fun_specs=  sigm.cn_fun_specs;
+    cn_decl_specs=  sigm.cn_decl_specs;
     cn_idents=  sigm.cn_idents;
   |>
 
