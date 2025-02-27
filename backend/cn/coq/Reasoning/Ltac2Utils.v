@@ -1,6 +1,6 @@
 (* General-purpose Ltac2 utilities *)
 
-From Ltac2 Require Import Ltac2 Notations Std Constr Printf.
+From Ltac2 Require Import Ltac2 Notations Std Constr Printf Ident Env.
 Import Unsafe.
 
 Ltac2 rec list_subtract
@@ -124,3 +124,10 @@ end.
      Control.throw (Tactic_failure (Some (Message.of_string "Term is not an application (and thus not a pair)")))
  end.
  
+ (* Ident to constant reference *)
+ Ltac2 const_to_const_reference  (x:constr) :=  
+  match Constr.Unsafe.kind x with
+  | Constr.Unsafe.Constant c _ => Std.ConstRef c
+  | _ => Control.throw (Tactic_failure (Some (Message.of_string "Term is not a constant")))
+  end.
+
