@@ -42,6 +42,7 @@ SUCCESS=$(find cn -name '*.c' \
     ! -path '*/multifile/*' \
     ! -path '*/mutual_rec/*' \
     ! -path '*/tree16/*' \
+    ! -path "*/accesses_on_spec/*" \
     ! -name "division_casting.c" \
     ! -name "b_or.c" \
     ! -name "mod_with_constants.c" \
@@ -51,8 +52,6 @@ SUCCESS=$(find cn -name '*.c' \
     ! -path "tree16/as_mutual_dt/tree16.c" \
     ! -name "mod.c" \
     ! -name "mod_precedence.c" \
-    ! -path "multifile/g.c" \
-    ! -path "multifile/f.c" \
     ! -name "left_shift_const.c" \
     ! -name "bitwise_compl_precedence.c" \
     ! -name "fun_ptr_three_opts.c" \
@@ -170,6 +169,8 @@ BUGGY="cn/division_casting.c \
        cn/int_to_ptr.error.c \
        cn/create_rdonly.c \
        cn/offsetof_int_const.c \
+       cn/accesses_on_spec/clientfile.c \
+       cn/accesses_on_spec/libfile.c \
        "
 
 # Exclude files which cause error for proof but not testing

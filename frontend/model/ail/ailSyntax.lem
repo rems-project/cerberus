@@ -1,5 +1,6 @@
 open import Pervasives Loc Ctype
 import Symbol Annot Cn
+import Cabs (* for cn_desugaring_state.cn_decl_spec *)
 
 type ail_identifier = Symbol.sym
 
@@ -265,7 +266,7 @@ type sigma_cn_predicate = Cn.cn_predicate Symbol.sym Ctype.ctype
 
 type sigma_cn_datatype = Cn.cn_datatype Symbol.sym
 
-type sigma_cn_fun_spec  = nat * Cn.cn_fun_spec Symbol.sym Ctype.ctype
+type sigma_cn_decl_spec  = nat * Symbol.sym * Cn.cn_decl_spec Symbol.identifier Cabs.type_name
 
 type sigma_cn_ident = Cn.cn_namespace * Symbol.identifier
 
@@ -283,7 +284,7 @@ type sigma 'a = <|
   cn_lemmata: list sigma_cn_lemmata;
   cn_predicates: list sigma_cn_predicate;
   cn_datatypes: list sigma_cn_datatype;
-  cn_fun_specs: list sigma_cn_fun_spec;
+  cn_decl_specs: list sigma_cn_decl_spec;
   cn_idents: map sigma_cn_ident Symbol.sym;
 |>
 
@@ -300,7 +301,7 @@ let empty_sigma : sigma 'a = <|
   cn_lemmata = [];
   cn_predicates = [];
   cn_datatypes = [];
-  cn_fun_specs = [];
+  cn_decl_specs = [];
   cn_idents = Map.empty;
 |>
 

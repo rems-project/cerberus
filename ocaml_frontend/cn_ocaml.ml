@@ -358,12 +358,37 @@ module MakePp (Conf: PP_CN) = struct
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
             ] ) 
 
+  let dtrees_of_opt_cn_conds = function
+    | None -> []
+    | Some (_loc, conds) -> List.map dtree_of_cn_condition conds
+
+  let dtrees_of_cn_func_spec
+      { cn_func_trusted
+      ; cn_func_acc_func
+      ; cn_func_requires
+      ; cn_func_ensures } =
+    let trusted =
+      Option.fold
+        cn_func_trusted
+        ~none:[]
+        ~some:(fun _ -> [ Dleaf (pp_ctor "[CN]trusted") ]) in
+    let acc_func =
+      match cn_func_acc_func with
+        | None -> []
+        | Some (_, CN_accesses globals) ->
+          [ Dnode (pp_ctor "[CN]accesses", List.map (fun x -> Dleaf (Conf.pp_ident x)) globals) ]
+        | Some (_, CN_mk_function f) ->
+          [ Dnode (pp_ctor "[CN]cn_function", [ Dleaf (Conf.pp_ident f) ] ) ] in
+    trusted @
+    acc_func @
+    [ Dnode (pp_ctor "[CN]requires", dtrees_of_opt_cn_conds cn_func_requires)
+    ; Dnode (pp_ctor "[CN]ensures", dtrees_of_opt_cn_conds cn_func_ensures)
+    ]
+
   let dtree_of_cn_spec s =
-    Dnode ( pp_ctor "[CN]spec of" ^^^ P.squotes (Conf.pp_ident s.cn_spec_name)
-          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args Conf.pp_ident s.cn_spec_args)
-            ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition s.cn_spec_requires)
-            ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition s.cn_spec_ensures)
-            ] )
+    Dnode ( pp_ctor "[CN]spec of" ^^^ P.squotes (Conf.pp_ident s.cn_decl_name)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args Conf.pp_ident s.cn_decl_args) ]
+            @ dtrees_of_cn_func_spec s.cn_func_spec)
 
   let dtree_of_cn_predicate_return (_, bt) =
       [Dleaf (pp_base_type bt)]

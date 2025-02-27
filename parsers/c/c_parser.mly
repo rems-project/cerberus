@@ -144,7 +144,7 @@ type asm_qualifier =
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_PRINT
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
 %token <[`U|`I] * int>CN_BITS
-%token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
+%token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_LIFT_FUNCTION CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
 %token CN_UNCHANGED CN_WILD CN_MATCH
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES CN_TO_BYTES CN_FROM_BYTES
@@ -326,7 +326,7 @@ type asm_qualifier =
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_resource> resource
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_pred> pred
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_condition> condition
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_fundef_spec> fundef_spec
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_func_spec> function_spec fundef_spec
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec> loop_spec
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_statement> cn_statement
 %type<((Symbol.identifier, Cabs.type_name) Cn.cn_statement) list> cn_statements
@@ -2248,17 +2248,13 @@ cn_datatype:
 cn_fun_spec:
 | CN_SPEC
   str= cn_variable
-  cn_spec_args= delimited(LPAREN, cn_args, RPAREN) SEMICOLON
-  CN_REQUIRES cn_spec_requires=nonempty_list(condition)
-  CN_ENSURES cn_spec_ensures=nonempty_list(condition)
+  cn_decl_args= delimited(LPAREN, cn_args, RPAREN) SEMICOLON
+  cn_func_spec=function_spec
     { let loc = Cerb_location.point $startpos(str) in
-      { cn_spec_magic_loc= Cerb_location.unknown
-      ; cn_spec_loc= loc
-      ; cn_spec_name= str
-      ; cn_spec_args
-      ; cn_spec_requires
-      ; cn_spec_ret_name = Symbol.Identifier (Cerb_location.unknown, "dummy")
-      ; cn_spec_ensures } }
+      { cn_decl_loc= loc
+      ; cn_decl_name= str
+      ; cn_decl_args
+      ; cn_func_spec } }
 cn_type_synonym:
 | CN_TYPE_SYNONYM
   str= cn_variable
@@ -2403,24 +2399,42 @@ condition:
     { Cerb_frontend.Cn.CN_cconstr (Cerb_location.region $loc NoCursor, e) }
 ;
 
+accesses:
+| CN_ACCESSES accs=separated_nonempty_list(COMMA,cn_variable) SEMICOLON
+  { accs }
+
 accesses_or_function:
-| CN_FUNCTION nm=cn_variable SEMICOLON
+| CN_LIFT_FUNCTION nm=cn_variable SEMICOLON
   { Cerb_frontend.Cn.CN_mk_function nm }
-| accs=nonempty_list(CN_ACCESSES accs=separated_nonempty_list(COMMA,cn_variable) SEMICOLON { accs })
+| accs=nonempty_list(accesses)
   { Cerb_frontend.Cn.CN_accesses (List.concat accs) }
 
-fundef_spec:
+requires_clauses:
+| CN_REQUIRES reqs=nonempty_list(condition)
+  { reqs }
+
+ensures_clauses:
+| CN_ENSURES enss=nonempty_list(condition)
+  { enss }
+
+(* It's possible to use anonymous midrules for many of these but it results in
+   auto-generated nonterminal names which make auto-generated error messages
+   harder to read and understand *)
+function_spec:
 | trusted=option(CN_TRUSTED SEMICOLON { () })
-  acc_func=option(af=accesses_or_function { af } )
-  requires=option(CN_REQUIRES reqs=nonempty_list(condition) { reqs })
-  ensures=option(CN_ENSURES ens=nonempty_list(condition) { ens })
-  EOF
+  acc_func=option(accesses_or_function)
+  requires=option(requires_clauses)
+  ensures=option(ensures_clauses)
   { let region p = Cerb_location.region p NoCursor in
     let opt_loc p = Option.map (fun list -> (region p, list)) in
-    { cn_fundef_trusted = Option.map (fun () -> region $loc(trusted)) trusted
-    ; cn_fundef_acc_func = opt_loc $loc(acc_func) acc_func
-    ; cn_fundef_requires = opt_loc $loc(requires) requires
-    ; cn_fundef_ensures = opt_loc $loc(ensures) ensures } }
+    { cn_func_trusted = Option.map (fun () -> region $loc(trusted)) trusted
+    ; cn_func_acc_func = opt_loc $loc(acc_func) acc_func
+    ; cn_func_requires = opt_loc $loc(requires) requires
+    ; cn_func_ensures = opt_loc $loc(ensures) ensures } }
+
+fundef_spec: 
+| function_spec=function_spec EOF
+  { function_spec }
 
 
 loop_spec:

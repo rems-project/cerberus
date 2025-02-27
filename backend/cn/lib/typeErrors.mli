@@ -125,6 +125,7 @@ type message =
   | Inconsistent_assumptions of string * (Context.t * Explain.log)
   (** TODO replace string with an actual type *)
   | Byte_conv_needs_owned
+  | Requires_after_ensures of { ens_loc : Locations.t }
 
 type t =
   { loc : Locations.t;

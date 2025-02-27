@@ -46,7 +46,7 @@ let empty_sigma = <|
   A.cn_functions= [];
   A.cn_lemmata= [];
   A.cn_datatypes= [];
-  A.cn_fun_specs= [];
+  A.cn_decl_specs= [];
   A.cn_idents= Map.empty;
 |>
 

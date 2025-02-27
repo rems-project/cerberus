@@ -1,0 +1,7 @@
+return code: 1
+tests/cn/bad_ordering.error.c:4:5: error: all requires clauses must come before any ensures clauses
+/*@ requires x < MAXi32(); @*/
+    ^~~~~~~~~~~~~~~~~~~~~~ 
+ensures clause at tests/cn/bad_ordering.error.c:3:5:
+    ensures return == x + 1i32; @*/
+    ^~~~~~~~~~~~~~~~~~~~~~~~~~~ 

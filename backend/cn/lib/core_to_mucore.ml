@@ -20,6 +20,8 @@ module Desugar = struct
   let cn_assertion = CF.Cabs_to_ail.desugar_cn_assertion
 
   let cn_expr = CF.Cabs_to_ail.desugar_cn_expr
+
+  let cn_arg = CF.Cabs_to_ail.desugar_cn_arg
 end
 
 let get_loc = CF.Annot.get_loc
@@ -997,7 +999,7 @@ let make_function_args f_i loc env args (accesses, requires) =
   aux [] [] env C.LocalState.init_st args
 
 
-let make_fun_with_spec_args f_i loc env args requires =
+let make_fun_with_spec_args f_i loc env args (accesses, requires) =
   let rec aux good_lcs env st = function
     | ((pure_arg, cn_bt), ct_ct) :: rest ->
       let ct = convert_ct loc ct_ct in
@@ -1028,7 +1030,7 @@ let make_fun_with_spec_args f_i loc env args requires =
       let@ at = aux (* good_lc :: *) good_lcs env st rest in
       return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] ->
-      let@ lat = make_largs_with_accesses f_i env st ([], requires) in
+      let@ lat = make_largs_with_accesses f_i env st (accesses, requires) in
       return (Mu.L (Mu.mConstraints (List.rev good_lcs) lat))
   in
   aux [] env C.LocalState.init_st args
@@ -1204,23 +1206,153 @@ let normalise_label
      | None -> assert_error loc !^"non-loop labels")
 
 
-let add_spec_arg_renames
-  loc
-  args
-  arg_cts
-  (spec : (CF.Symbol.sym, Ctype.ctype) Cn.cn_fun_spec)
-  env
-  =
-  List.fold_right
-    (fun ((fun_sym, _), (ct, (spec_sym, _))) env ->
-      C.add_renamed_computational
-        spec_sym
-        fun_sym
-        (Memory.sbt_of_sct (convert_ct loc ct))
-        env)
-    (List.combine args (List.combine arg_cts spec.Cn.cn_spec_args))
-    env
+module Spec = struct
+  type 'a parsed =
+    { trusted : Mu.trusted;
+      accesses : (Cerb_location.t * Id.t) list;
+      requires : (Cerb_location.t * (Id.t, 'a) Cn.cn_condition) list;
+      ensures : (Cerb_location.t * (Id.t, 'a) Cn.cn_condition) list;
+      functions : (Cerb_location.t * Id.t) list
+    }
 
+  let default : _ parsed =
+    { trusted = Mucore.Checked;
+      accesses = [];
+      requires = [];
+      ensures = [];
+      functions = []
+    }
+
+
+  let combine parsed : _ parsed t =
+    let process
+      Cn.{ cn_func_trusted; cn_func_acc_func; cn_func_requires; cn_func_ensures }
+      : _ parsed
+      =
+      let cross_fst x =
+        match x with None -> [] | Some (a, bs) -> List.map (fun b -> (a, b)) bs
+      in
+      let trusted =
+        match cn_func_trusted with
+        | None -> Mucore.Checked
+        | Some loc -> Mucore.Trusted loc
+      in
+      let accesses, functions =
+        match cn_func_acc_func with
+        | None -> ([], [])
+        | Some (loc, Cn.CN_mk_function nm) -> ([], [ (loc, nm) ])
+        | Some (loc, Cn.CN_accesses ids) -> (cross_fst (Some (loc, ids)), [])
+      in
+      let requires = cross_fst cn_func_requires in
+      let ensures = cross_fst cn_func_ensures in
+      { trusted; accesses; requires; ensures; functions }
+    in
+    let parsed = List.map process parsed in
+    match parsed with
+    | [] -> return default
+    | [ condition ] -> return condition
+    | _ :: _ :: _ ->
+      let trust left right =
+        match (left, right) with
+        | Mucore.Trusted loc, _ -> Mucore.Trusted loc
+        | _, Mucore.Trusted loc -> Mucore.Trusted loc
+        | _, _ -> Mucore.Checked
+      in
+      let combine left right =
+        match (left, right) with
+        | { ensures = _ :: _ as ens; _ }, { requires = (loc, _) :: _; _ } ->
+          let ens_loc = fst (Option.get (List.last ens)) in
+          fail { loc; msg = Requires_after_ensures { ens_loc } }
+        | ( { trusted = t1; accesses = a1; requires = r1; ensures = e1; functions = f1 },
+            { trusted = t2; accesses = a2; requires = r2; ensures = e2; functions = f2 } )
+          ->
+          return
+            { trusted = trust t1 t2;
+              accesses = a1 @ a2;
+              requires = r1 @ r2;
+              ensures = e1 @ e2;
+              functions = f1 @ f2
+            }
+      in
+      ListM.fold_leftM combine default parsed
+
+
+  let there_can_only_be_one loc fname opt_spec parsed_decl_spec parsed_defn_specs =
+    match (parsed_decl_spec, parsed_defn_specs) with
+    | [], [] -> return default
+    | [], (_ :: _ as parsed_defn_specs) -> combine parsed_defn_specs
+    | parsed_decl_spec :: _, [] -> combine [ parsed_decl_spec ]
+    | _ :: _, _ :: _ ->
+      let _, spec = Option.get opt_spec in
+      let doc =
+        Sym.pp fname
+        ^^ colon
+        ^^^ !^"re-specification of CN annotations from:"
+        ^^ break 1
+        ^^^ Locations.pp spec.Cn.cn_decl_loc
+      in
+      fail { loc; msg = Generic doc }
+
+
+  let desugar_and_add_args decl_d_st spec_args =
+    do_ail_desugar_op decl_d_st
+    @@ CF.State_exception.stExpect_mapM (Desugar.cn_arg Cn.CN_vars) spec_args
+
+
+  let add_spec_arg_renames loc args arg_cts cn_spec_args env =
+    List.fold_right
+      (fun ((fun_sym, _), (ct, (spec_sym, _))) env ->
+        C.add_renamed_computational
+          spec_sym
+          fun_sym
+          (Memory.sbt_of_sct (convert_ct loc ct))
+          env)
+      (List.combine args (List.combine arg_cts cn_spec_args))
+      env
+
+
+  let setup_env_desugaring_state loc defn_marker markers_env opt_spec env args arg_cts =
+    match opt_spec with
+    | None -> return (env, CAE.{ inner = Pmap.find defn_marker markers_env; markers_env })
+    | Some (decl_marker, spec) ->
+      let decl_d_st = CAE.{ inner = Pmap.find decl_marker markers_env; markers_env } in
+      let@ spec_args, decl_d_st = desugar_and_add_args decl_d_st spec.Cn.cn_decl_args in
+      return (add_spec_arg_renames loc args arg_cts spec_args env, decl_d_st)
+
+
+  let logical_fun_syms d_st mk_functions =
+    ListM.mapM
+      (fun (loc, id) ->
+        (* from Thomas's convert_c_logical_funs *)
+        let@ logical_fun_sym = do_ail_desugar_rdonly d_st (CAE.lookup_cn_function id) in
+        return (loc, logical_fun_sym))
+      mk_functions
+
+
+  type desugared =
+    { trusted : Mu.trusted;
+      accesses : (Cerb_location.t * (Sym.t * Ctype.ctype)) list;
+      requires : (Sym.t, Ctype.ctype) Cn.cn_condition list;
+      ensures : (Sym.t, Ctype.ctype) Cn.cn_condition list;
+      functions : (Cerb_location.t * Sym.t) list
+    }
+
+  let desugar
+    global_types
+    d_st
+    ({ trusted; accesses; requires; ensures; functions } : _ parsed)
+    : (desugared * _ * _) t
+    =
+    let@ functions = logical_fun_syms d_st functions in
+    let@ accesses = ListM.mapM (desugar_access d_st global_types) accesses in
+    let@ requires, d_st = desugar_conds d_st (List.map snd requires) in
+    debug 6 (lazy (string "desugared requires conds"));
+    let here = Locations.other __LOC__ in
+    let@ ret_s, ret_d_st = register_new_cn_local (Id.make here "return") d_st in
+    let@ ensures, _ = desugar_conds ret_d_st (List.map snd ensures) in
+    debug 6 (lazy (string "desugared ensures conds"));
+    return ({ trusted; accesses; requires; ensures; functions }, ret_s, ret_d_st)
+end
 
 let normalise_fun_map_decl
   ~inherit_loc
@@ -1241,67 +1373,32 @@ let normalise_fun_map_decl
      | CF.Milicore.Mi_Fun (_bt, _args, _pe) -> assert false
      | Mi_Proc (loc, _mrk, _ret_bt, args, body, labels) ->
        debug 2 (lazy (item "normalising procedure" (Sym.pp fname)));
-       let _, ail_marker, _, ail_args, _ =
-         List.assoc Sym.equal fname ail_prog.CF.AilSyntax.function_definitions
+       let@ parsed_defn_specs = Parse.function_spec attrs in
+       let opt_spec, parsed_decl_spec =
+         match Sym.Map.find_opt fname fun_specs with
+         | None -> (None, [])
+         | Some (decl_marker, spec) -> (Some (decl_marker, spec), [ spec.Cn.cn_func_spec ])
        in
-       (* let ail_env = Pmap.find ail_marker ail_prog.markers_env in *)
-       (* let d_st = CAE.set_cn_c_identifier_env ail_env d_st in *)
-       let d_st = CAE.{ inner = Pmap.find ail_marker markers_env; markers_env } in
-       let@ trusted, accesses, requires, ensures, mk_functions =
-         Parse.function_spec loc attrs
+       let@ parsed =
+         Spec.there_can_only_be_one loc fname opt_spec parsed_decl_spec parsed_defn_specs
        in
        debug 6 (lazy (string "parsed spec attrs"));
-       let@ mk_functions =
-         ListM.mapM
-           (fun (loc, `Make_Logical_Function id) ->
-             (* from Thomas's convert_c_logical_funs *)
-             let@ logical_fun_sym =
-               do_ail_desugar_rdonly d_st (CAE.lookup_cn_function id)
-             in
-             return (loc, logical_fun_sym))
-           mk_functions
+       let _, defn_marker, _, ail_args, _ =
+         List.assoc Sym.equal fname ail_prog.CF.AilSyntax.function_definitions
        in
-       let defn_spec_sites =
-         List.map fst requires @ List.map fst ensures @ List.map fst accesses
+       let@ env, d_st =
+         Spec.setup_env_desugaring_state
+           loc
+           defn_marker
+           markers_env
+           opt_spec
+           env
+           args
+           (List.map snd arg_cts)
        in
-       let@ accesses = ListM.mapM (desugar_access d_st global_types) accesses in
-       let@ requires, d_st = desugar_conds d_st (List.map snd requires) in
-       debug 6 (lazy (string "desugared requires conds"));
-       let here = Locations.other __LOC__ in
-       let@ ret_s, ret_d_st = register_new_cn_local (Id.make here "return") d_st in
-       let@ ensures, _ret_d_st = desugar_conds ret_d_st (List.map snd ensures) in
-       debug 6 (lazy (string "desugared ensures conds"));
-       let@ spec_req, spec_ens, env =
-         match Sym.Map.find_opt fname fun_specs with
-         | Some (_, spec) ->
-           let@ () =
-             match defn_spec_sites with
-             | [] -> return ()
-             | loc2 :: _ ->
-               fail
-                 { loc = loc2;
-                   msg =
-                     Generic
-                       (Sym.pp fname
-                        ^^ colon
-                        ^^^ !^"re-specification of CN annotations from:"
-                        ^^ break 1
-                        ^^^ Locations.pp spec.Cn.cn_spec_loc)
-                 }
-           in
-           let env = add_spec_arg_renames loc args (List.map snd arg_cts) spec env in
-           let env =
-             C.add_renamed_computational
-               spec.Cn.cn_spec_ret_name
-               ret_s
-               (Memory.sbt_of_sct (convert_ct loc ret_ct))
-               env
-           in
-           return (spec.cn_spec_requires, spec.cn_spec_ensures, env)
-         | _ -> return ([], [], env)
+       let@ { trusted; accesses; requires; ensures; functions }, ret_s, d_st =
+         Spec.desugar global_types d_st parsed
        in
-       let requires = requires @ spec_req in
-       let ensures = ensures @ spec_ens in
        debug 6 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
        debug 6 (lazy (CF.Pp_ast.pp_doc_tree (dtree_of_accesses accesses)));
        debug 6 (lazy (CF.Pp_ast.pp_doc_tree (dtree_of_requires requires)));
@@ -1345,38 +1442,34 @@ let normalise_fun_map_decl
            (List.combine (List.combine ail_args arg_cts) args)
            (accesses, requires)
        in
-       (* let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in *)
        let desugared_spec = Mu.{ accesses = List.map snd accesses; requires; ensures } in
-       return
-         (Some (Mu.Proc { loc; args_and_body; trusted; desugared_spec }, mk_functions))
+       return (Some (Mu.Proc { loc; args_and_body; trusted; desugared_spec }, functions))
      | Mi_ProcDecl (loc, ret_bt, _bts) ->
        (match Sym.Map.find_opt fname fun_specs with
-        | Some (_ail_marker, (spec : (CF.Symbol.sym, Ctype.ctype) Cn.cn_fun_spec)) ->
+        | Some (ail_marker, (spec : _ Cn.cn_decl_spec)) ->
           let@ () =
             check_against_core_bt loc ret_bt (Memory.bt_of_sct (convert_ct loc ret_ct))
           in
-          (* let@ (requires, d_st2) = desugar_conds d_st spec.cn_spec_requires in *)
-          (* FIXME: do we need to note the return var somehow? *)
-          (* let@ (ensures, _) = desugar_conds d_st spec.cn_spec_ensures in *)
+          let@ parsed = Spec.combine [ spec.cn_func_spec ] in
+          let d_st = CAE.{ inner = Pmap.find ail_marker markers_env; markers_env } in
+          let@ spec_args, d_st = Spec.desugar_and_add_args d_st spec.cn_decl_args in
+          let@ { trusted = _; accesses; requires; ensures; functions }, ret_s, _ =
+            Spec.desugar global_types d_st parsed
+          in
           let@ args_and_rt =
             make_fun_with_spec_args
               (fun env st ->
                 let@ returned =
-                  C.make_rt
-                    loc
-                    env
-                    st
-                    (spec.cn_spec_ret_name, ret_ct)
-                    ([], spec.cn_spec_ensures)
+                  C.make_rt loc env st (ret_s, ret_ct) (accesses, ensures)
                 in
                 return returned)
               loc
               env
-              (List.combine spec.cn_spec_args (List.map snd arg_cts))
-              spec.cn_spec_requires
+              (List.combine spec_args (List.map snd arg_cts))
+              (accesses, requires)
           in
           let ft = at_of_arguments Tools.id args_and_rt in
-          return (Some (Mu.ProcDecl (loc, Some ft), []))
+          return (Some (Mu.ProcDecl (loc, Some ft), functions))
         | _ -> return (Some (Mu.ProcDecl (loc, None), [])))
      | Mi_BuiltinDecl (_loc, _bt, _bts) -> assert false)
 
@@ -1556,8 +1649,8 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
   let env = List.fold_left register_glob env globs in
   let fun_specs_map =
     List.fold_right
-      (fun (id, spec) acc -> Sym.Map.add spec.Cn.cn_spec_name (id, spec) acc)
-      ail_prog.cn_fun_specs
+      (fun (id, key, spec) acc -> Sym.Map.add key (id, spec) acc)
+      ail_prog.cn_decl_specs
       Sym.Map.empty
   in
   let@ funs, mk_functions =
