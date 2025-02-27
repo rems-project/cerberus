@@ -1515,14 +1515,12 @@ let eval mo t =
 
 
 let assume_constraints (constraints : LC.t list) (s : solver) : solver =
-  let get_term lc =
-    match lc with
-    | LC.T it -> Some (translate_term s it)
-    | _ -> None in
+  let get_term lc = match lc with LC.T it -> Some (translate_term s it) | _ -> None in
   let terms = List.filter_map get_term constraints in
-  let add_term term = debug_ack_command s (SMT.assume term); in
+  let add_term term = debug_ack_command s (SMT.assume term) in
   let _ = List.iter add_term terms in
   s
+
 
 let ask_solver (s : solver) (lcs : LC.t list) : Simple_smt.result =
   let s' = assume_constraints lcs s in

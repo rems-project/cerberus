@@ -35,7 +35,6 @@ module CheckPreds = struct
   (* let pp_check_result =
     pp_result_with_data (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc)) (fun d -> d) *)
 
-
   let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
     List.fold_left
       (fun acc elem -> match f elem with None -> acc | Some x -> x :: acc)
@@ -62,11 +61,10 @@ module CheckPreds = struct
 
 
   (* Type of nonterminal lines in a predicate clause.
-    Corresponds to packing_ft *)
+     Corresponds to packing_ft *)
   type def_line =
     | DefineL of (Sym.t * IT.t) * Loc.info
     | ResourceL of (Sym.t * (Req.t * BT.t)) * Loc.info
-
 
   (* Optionally zip two lists, returning None if the lists have different lengths *)
   let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option =
@@ -78,7 +76,7 @@ module CheckPreds = struct
 
 
   (* Take the union of two symbol maps,
-    removing any key that is in both maps but has a different value in each *)
+     removing any key that is in both maps but has a different value in each *)
   let merge_eq (eq : 'a -> 'a -> bool) (m1 : 'a Sym.Map.t) (m2 : 'a Sym.Map.t)
     : 'a Sym.Map.t
     =
@@ -87,9 +85,9 @@ module CheckPreds = struct
 
 
   (* Build a map by using f to develop a map for each
-    pair of elements in the two lists, failing
-    if they produce different results for any symbol or if
-    the lists have different lengths *)
+     pair of elements in the two lists, failing
+     if they produce different results for any symbol or if
+     the lists have different lengths *)
   let map_from_lists f eq exps exps' =
     let merge_r_maps r_acc (exp1, exp1') =
       let@ acc = r_acc in
@@ -102,7 +100,7 @@ module CheckPreds = struct
 
 
   (* Match an expression with free variables against a candidate returned by the solver to
-    get candidates for each of those free variables *)
+     get candidates for each of those free variables *)
   let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     : (IT.t Sym.Map.t, Pp.document) result_with_data
     =
@@ -120,7 +118,10 @@ module CheckPreds = struct
     in
     let default =
       Unknown
-        (!^"Different CN constructors for " ^^^ IT.pp exp ^^^ !^" and " ^^^ IT.pp candidate)
+        (!^"Different CN constructors for "
+         ^^^ IT.pp exp
+         ^^^ !^" and "
+         ^^^ IT.pp candidate)
     in
     match (IT.get_term exp, IT.get_term candidate) with
     | Const c, Const c' -> map_with_guard_no (IT.equal_const c c') [] []
@@ -155,10 +156,11 @@ module CheckPreds = struct
       map_with_guard_no (Sym.equal name name') (sort_by_id args) (sort_by_id args')
     | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
       map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [ exp1 ] [ exp1' ]
-    | ArrayShift { base; ct; index }, ArrayShift { base = base'; ct = ct'; index = index' }
-      ->
+    | ( ArrayShift { base; ct; index },
+        ArrayShift { base = base'; ct = ct'; index = index' } ) ->
       map_with_guard_unknown (Sctypes.equal ct ct') [ base; index ] [ base'; index' ]
-    | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc = exp2' } ->
+    | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc = exp2' }
+      ->
       map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
     | HasAllocId exp1, HasAllocId exp1' -> get_var_cands exp1 exp1'
     | SizeOf cty, SizeOf cty' -> map_with_guard_unknown (Sctypes.equal cty cty') [] []
@@ -333,7 +335,9 @@ module CheckPreds = struct
       (* get returned expression of c and variable dependency graph *)
       let exp, var_def_locs, lcs = organize_lines c.packing_ft in
       (* get constraints on whether candidate could have come from this clause *)
-      let@ cs, vs = get_body_constraints exp var_def_locs candidate ctxt iargs term_vals in
+      let@ cs, vs =
+        get_body_constraints exp var_def_locs candidate ctxt iargs term_vals
+      in
       (* add guard and variable assignments to constraints list *)
       let cs' =
         List.concat
@@ -347,8 +351,7 @@ module CheckPreds = struct
           ]
       in
       (* query solver *)
-      let res = ask_solver ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs') in
-      res
+      ask_solver ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs')
 
 
   (* get a list of constraints that are satisfiable iff candidate could have come from this clause body *)
@@ -381,12 +384,14 @@ module CheckPreds = struct
       let loc = Cerb_location.unknown in
       let th = !Solver.try_hard in
       let _ = Solver.try_hard := true in
-      let res = (match Solver.ask_solver s [ LC.T (IT.eq_ (exp, candidate) loc) ] with
-      | Sat ->
-        (* not using model to get var cands because it may overconstrain *)
-        Yes ([], Sym.Map.empty)
-      | Unsat -> No !^"Solver returned no at variable assignment stage."
-      | Unknown -> Unknown e) in
+      let res =
+        match Solver.ask_solver s [ LC.T (IT.eq_ (exp, candidate) loc) ] with
+        | Sat ->
+          (* not using model to get var cands because it may overconstrain *)
+          Yes ([], Sym.Map.empty)
+        | Unsat -> No !^"Solver returned no at variable assignment stage."
+        | Unknown -> Unknown e
+      in
       let _ = Solver.try_hard := th in
       res
 
@@ -405,46 +410,45 @@ module CheckPreds = struct
     match Sym.Map.find_opt v var_def_locs with
     | None ->
       (match (Sym.Map.find_opt v ctxt.logical, Sym.Map.find_opt v ctxt.computational) with
-      | Some (Value it, _), _ ->
-        get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
-      | _, Some (Value it, _) ->
-        get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
-      (* TODO: logical vs computational *)
-      (* TODO: BaseType case *)
-      | _ ->
-        let f (s, _) = Sym.equal s v in
-        (match List.find_opt f iargs with
+       | Some (Value it, _), _ ->
+         get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
+       | _, Some (Value it, _) ->
+         get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
+       (* TODO: logical vs computational *)
+       (* TODO: BaseType case *)
+       | _ ->
+         let f (s, _) = Sym.equal s v in
+         (match List.find_opt f iargs with
           | Some _ -> Yes ([], var_cands)
           | _ -> Unknown (!^"Could not find variable definition line for" ^^^ Sym.pp v)))
     | Some line ->
       (match line with
-      (* recurse with x's definition *)
-      | DefineL ((_, t), _) ->
-        get_body_constraints t var_def_locs v_cand ctxt iargs term_vals
-      | ResourceL ((_, (p, _)), _) ->
-        (match p with
+       (* recurse with x's definition *)
+       | DefineL ((_, t), _) ->
+         get_body_constraints t var_def_locs v_cand ctxt iargs term_vals
+       | ResourceL ((_, (p, _)), _) ->
+         (match p with
           | P psig ->
             (match psig.name with
-            | Owned (_, _) ->
-              (* if the predicate is Owned, its pointer argument should not be null *)
-              let neq = IT.ne__ psig.pointer (IT.null_ loc) loc in
-              Yes ([ LC.T neq ], var_cands)
-            | PName name ->
-              (* search for predicate definition *)
-              (match Sym.Map.find_opt name ctxt.global.resource_predicates with
+             | Owned (_, _) ->
+               (* if the predicate is Owned, its pointer argument should not be null *)
+               let neq = IT.ne__ psig.pointer (IT.null_ loc) loc in
+               Yes ([ LC.T neq ], var_cands)
+             | PName name ->
+               (* search for predicate definition *)
+               (match Sym.Map.find_opt name ctxt.global.resource_predicates with
                 | Some pdef ->
                   (match check_pred name pdef v_cand ctxt psig.iargs term_vals with
-                  | Yes cs -> Yes (cs, var_cands)
-                  | No e -> No e
-                  | Unknown e -> Unknown e
-                  | Error e -> Error e)
+                   | Yes cs -> Yes (cs, var_cands)
+                   | No e -> No e
+                   | Unknown e -> Unknown e
+                   | Error e -> Error e)
                 | None ->
                   Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name)))
           | Q qsig ->
             let _ = qsig in
             Unknown !^"Quantified predicates are out of scope for now."))
 end
-
 
 let clause_has_resource req c =
   let open LogicalArgumentTypes in
@@ -750,8 +754,8 @@ let state (ctxt : C.t) log model_with_q extras =
     let check (rt, o) =
       match (rt, o) with
       | Req.Q _, _ -> None
-      | Req.P {name = Owned _; pointer = _; iargs = _}, _ -> None
-      | Req.P {name = PName s; pointer = _; iargs}, Resource.O it ->
+      | Req.P { name = Owned _; pointer = _; iargs = _ }, _ -> None
+      | Req.P { name = PName s; pointer = _; iargs}, Resource.O it ->
         (match (Sym.Map.find_opt s defs, evaluate it) with
          | Some def, Some cand ->
            let ptr_val = Req.get_pointer rt in
