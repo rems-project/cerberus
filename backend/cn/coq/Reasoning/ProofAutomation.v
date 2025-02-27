@@ -32,7 +32,6 @@ Qed.
  end.
  
  Ltac2 res_set_remove_step () :=
-   Message.print (Message.of_string "res_set_remove_step");
    match! goal with
    | [ |- exists upred,
        ResSet.eq (ResSet.remove (P upred, ?out) (set_from_list ?in_res)) (set_from_list ?out_res) /\ subsumed _ (Predicate.name upred) ] =>
@@ -53,8 +52,6 @@ Qed.
      | [res] =>
          (* single resource [res] matched, extract request as [req] *)
          let (req,out') := destruct_pair res in
-         (* debug *)
-         (* Message.print (Message.of_constr req); *)
          let p := predicate_of_request req in
          exists $p;
          Std.split false NoBindings;
@@ -68,11 +65,9 @@ Qed.
  end.
  
  Ltac2 prove_log_entry_valid () :=
-   Message.print (Message.of_string "prove_log_entry_valid");
    match! goal with
    | [ |- log_entry_valid (ResourceInferenceStep _ _ _) ] =>
        (* TODO: define automation to prove validity *)
-       Message.print (Message.of_string "prove_log_entry_valid:ResourceInferenceStep");
        Std.constructor false;
        Control.focus 1 1 (fun () => Std.reflexivity ());
        Control.focus 1 1 (fun () => Std.reflexivity ());
@@ -96,10 +91,8 @@ Qed.
    end.
  
  Ltac2 prove_log_entry_list_valid () :=
-   Message.print (Message.of_string "prove_log_entry_list_valid");
    match! goal with
    | [ |- List.Forall log_entry_valid ?l ] =>
-       Message.print (Message.of_string "prove_log_entry_list_valid:Forall");
        let rec aux l :=
          let nil_constr := constr:(@nil log_entry) in
          let cons_constr := constr:(@cons log_entry) in
@@ -110,11 +103,9 @@ Qed.
              let cons_name := get_constructor_name cons_constr in
              if Constr.equal f_name nil_name then
                (* nil case *)
-               Message.print (Message.of_string "prove_log_entry_list_valid:nil");
                Std.constructor false
              else if Constr.equal f_name cons_name then
                (* cons case *)
-               Message.print (Message.of_string "prove_log_entry_list_valid:cons");
                let head := Array.get args 1 in
                let tail := Array.get args 2 in
                Std.constructor false;
