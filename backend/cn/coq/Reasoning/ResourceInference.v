@@ -82,37 +82,18 @@ Inductive log_entry_valid : log_entry -> Prop :=
 (** Proof log is valid if all entries are valid *)
 Definition prooflog_valid (l:Prooflog.log) := List.Forall log_entry_valid l.
 
-(* Automation to prove single entry *)
-Ltac prove_log_entry_valid :=
-  match goal with
-  | [ |- log_entry_valid (ResourceInferenceStep _ _ _) ] =>
-      (* TODO: define automation to prove validity *)
-      constructor; try auto
-  end.
-
-Ltac prove_log_entry_list_valid :=
-  match goal with
-  | [ |- List.Forall log_entry_valid ?l ] =>
-      let rec aux l :=
-        match l with
-        | nil => constructor
-        | ?hd :: ?tl =>
-            constructor; [ prove_log_entry_valid | aux tl ]
-        end
-      in aux l
-  end.
 
 (* Sample usage for the proof log extracted from CN:
 Theorem resource_inference_steps_valid: prooflog_valid _cn_ResourceInferenceSteps.
 Proof.
   unfold prooflog_valid.
   unfold _cn_ResourceInferenceSteps.
-  prove_log_entry_list_valid.
+  ltac2:)prove_log_entry_list_valid ()).
 Qed.
  *)
 
  (* Experimental Ltac2 automation below *)
-From Ltac2 Require Import Ltac2 Notations Std Constr.
+From Ltac2 Require Import Ltac2 Notations Std Constr Env Ident.
 Require Import Reasoning.Ltac2Utils.
 
 Ltac2 predicate_of_request (t : constr) :=
@@ -133,8 +114,9 @@ match Constr.Unsafe.kind t with
 end.
 
 Ltac2 res_set_remove_step () :=
-match! goal with
-| [ |- exists upred,
+  Message.print (Message.of_string "res_set_remove_step");
+  match! goal with
+  | [ |- exists upred,
       ResSet.eq (ResSet.remove (P upred, ?out) (set_from_list ?in_res)) (set_from_list ?out_res) /\ subsumed _ (Predicate.name upred) ] =>
     (* break down goal into components *)
     let outname   := Fresh.in_goal @out in
@@ -166,3 +148,65 @@ match! goal with
         Control.throw (Tactic_failure (Some (Message.of_string "Zero or more than one resource change between the input and output")))
     end
 end.
+
+Ltac2 prove_log_entry_valid () :=
+  Message.print (Message.of_string "prove_log_entry_valid");
+  match! goal with
+  | [ |- log_entry_valid (ResourceInferenceStep _ _ _) ] =>
+      (* TODO: define automation to prove validity *)
+      Message.print (Message.of_string "prove_log_entry_valid:ResourceInferenceStep");
+      Std.constructor false;
+      Control.focus 1 1 (fun () => Std.reflexivity ());
+      Control.focus 1 1 (fun () => Std.reflexivity ());
+      Control.focus 1 1 (fun () => Std.reflexivity ());
+      Control.focus 1 1 (fun () => Std.reflexivity ());
+      Control.focus 1 1 (fun () => 
+      let clause := { on_hyps := None; on_concl := AllOccurrences } in
+        Std.unfold [(const_to_const_reference constr:(@ctx_resources_set), AllOccurrences)] clause;
+        Std.cbn 
+          { rStrength := Std.Norm;
+            rBeta := true;
+            rMatch := true;
+            rFix := true;
+            rCofix := true;
+            rZeta := true;
+            rDelta := true;
+            rConst := [const_to_const_reference  constr:(@set_from_list)]
+          } clause ;
+        res_set_remove_step ()
+      )
+  end.
+
+Ltac2 prove_log_entry_list_valid () :=
+  Message.print (Message.of_string "prove_log_entry_list_valid");
+  match! goal with
+  | [ |- List.Forall log_entry_valid ?l ] =>
+      Message.print (Message.of_string "prove_log_entry_list_valid:Forall");
+      let rec aux l :=
+        let nil_constr := constr:(@nil log_entry) in
+        let cons_constr := constr:(@cons log_entry) in
+        match Constr.Unsafe.kind l with
+        | Constr.Unsafe.App f args =>
+            let f_name := get_constructor_name f in
+            let nil_name := get_constructor_name nil_constr in
+            let cons_name := get_constructor_name cons_constr in
+            if Constr.equal f_name nil_name then
+              (* nil case *)
+              Message.print (Message.of_string "prove_log_entry_list_valid:nil");
+              Std.constructor false
+            else if Constr.equal f_name cons_name then
+              (* cons case *)
+              Message.print (Message.of_string "prove_log_entry_list_valid:cons");
+              let head := Array.get args 1 in
+              let tail := Array.get args 2 in
+              Std.constructor false;
+              Control.focus 1 1 (fun () => prove_log_entry_valid ());
+              Control.focus 1 1 (fun () => aux tail)
+            else
+              Control.throw (Tactic_failure (Some (Message.of_string "Not a list")))
+        | _ =>
+            Control.throw (Tactic_failure (Some (Message.of_string "Not a list")))
+        end
+      in aux l
+  end.
+
