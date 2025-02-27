@@ -173,16 +173,13 @@
     while (convert_from_cn_bool(perm)) {                                                 \
     /* Generate each item */
 
-#define CN_GEN_MAP_BODY(perm)                                                            \
-  if (convert_from_cn_bool(perm)) {                                                      \
-  /* Inner generator */
-
 #define CN_GEN_MAP_END(map, i, i_ty, min, val)                                           \
   cn_map_set(map, cast_##i_ty##_to_cn_integer(i), val);                                  \
-  }                                                                                      \
+                                                                                         \
   if (convert_from_cn_bool(i_ty##_equality(i, min))) {                                   \
     break;                                                                               \
   }                                                                                      \
+                                                                                         \
   i = i_ty##_sub(i, convert_to_##i_ty(1));                                               \
   }                                                                                      \
   }

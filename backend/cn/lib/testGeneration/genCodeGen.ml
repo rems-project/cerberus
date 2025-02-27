@@ -399,11 +399,15 @@ let rec compile_term
         mk_expr (AilEident (Sym.fresh_named (name_of_bt name i_bt)))
       ]
     in
-    let b_perm, s_perm, e_perm = compile_it sigma name perm in
+    let e_perm =
+      let b_perm, s_perm, e_perm = compile_it sigma name perm in
+      A.(
+        mk_expr
+          (AilEgcc_statement (b_perm, List.map mk_stmt (s_perm @ [ AilSexpr e_perm ]))))
+    in
     let s_begin =
       A.(
         s_min
-        @ s_perm
         @ [ AilSexpr
               (mk_expr
                  (AilEcall
@@ -426,15 +430,6 @@ let rec compile_term
                       @ [ mk_expr (AilEconst ConstantNull) ] )))
           ])
     in
-    let s_body =
-      A.(
-        s_perm
-        @ [ AilSexpr
-              (mk_expr
-                 (AilEcall
-                    (mk_expr (AilEident (Sym.fresh_named "CN_GEN_MAP_BODY")), [ e_perm ])))
-          ])
-    in
     let b_val, s_val, e_val = compile_term sigma ctx name inner in
     let s_end =
       A.(
@@ -446,9 +441,7 @@ let rec compile_term
                       e_args @ [ e_min; e_val ] )))
           ])
     in
-    ( [ b_map; b_i ] @ b_min @ b_perm @ b_val,
-      s_begin @ s_body @ s_end,
-      mk_expr (AilEident sym_map) )
+    ([ b_map; b_i ] @ b_min @ b_val, s_begin @ s_end, mk_expr (AilEident sym_map))
   | SplitSize { rest; _ } when not (TestGenConfig.is_random_size_splits ()) ->
     compile_term sigma ctx name rest
   | SplitSize { marker_var; syms; path_vars; last_var; rest } ->
