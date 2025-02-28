@@ -704,8 +704,16 @@ let do_unfold_resources loc =
       let@ () = iterM (add_r_internal loc) extract in
       (match (unpack, extract) with [], [] -> return () | _ -> aux ())
   in
+  let@ c = get_typing_context () in
   let@ () = aux () in
-  modify (fun s -> { s with unfold_resources_required = false })
+  let@ () = modify (fun s -> { s with unfold_resources_required = false }) in
+  (* TODO: this should be computed *)
+  let changed = true in
+  if changed then
+    let@ c' = get_typing_context () in
+    return (Prooflog.record_resource_inference_step c c' (UnfoldResources loc))
+  else
+    return ()
 
 
 let sync_unfold_resources loc =

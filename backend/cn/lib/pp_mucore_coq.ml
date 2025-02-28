@@ -2198,6 +2198,7 @@ let pp_resource_inference_type = function
         pp_option (pp_pair pp_location pp_string) o;
         pp_pair pp_resource_predicate (pp_list pp_int) ri
       ]
+  | Prooflog.UnfoldResources loc -> pp_constructor "UnfoldResources" [ pp_location loc ]
 
 
 (* Add this definition before its use in `pp_unit_file_with_resource_inference` *)

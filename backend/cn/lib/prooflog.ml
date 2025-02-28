@@ -10,6 +10,7 @@ type resource_inference_type =
       * Request.Predicate.t
       * (Locations.t * string) option
       * (Resource.predicate * int list)
+  | UnfoldResources of Cerb_location.t
 
 (** Info about what happened *)
 type log_entry =

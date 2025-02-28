@@ -66,8 +66,8 @@ Qed.
  
  Ltac2 prove_log_entry_valid () :=
    match! goal with
-   | [ |- log_entry_valid (ResourceInferenceStep _ _ _) ] =>
-       (* TODO: define automation to prove validity *)
+   | [ |- log_entry_valid (ResourceInferenceStep _ (PredicateRequest _ _ _ _) _) ] =>
+       (* PredicateRequest case *)
        Std.constructor false;
        Control.focus 1 1 (fun () => Std.reflexivity ());
        Control.focus 1 1 (fun () => Std.reflexivity ());
@@ -88,6 +88,9 @@ Qed.
            } clause ;
          res_set_remove_step ()
        )
+   | [ |- log_entry_valid (ResourceInferenceStep _ (UnfoldResources _) _) ] =>
+      (* UnfoldResources case *)
+      Std.constructor false
    end.
  
  Ltac2 prove_log_entry_list_valid () :=
