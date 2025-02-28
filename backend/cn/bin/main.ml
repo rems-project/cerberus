@@ -134,6 +134,7 @@ let with_well_formedness_check
   ~incl_files
   ~coq_export_file
   ~coq_proof_log
+  ~coq_check_proof_log
   ~csv_times
   ~log_times
   ~astprints
@@ -190,7 +191,7 @@ let with_well_formedness_check
             path
             (Pp_mucore_coq.pp_unit_file_with_resource_inference
                prog5
-               (if coq_proof_log then Some steps else None)))
+               (if coq_proof_log then Some steps else None) coq_check_proof_log))
         coq_export_file;
       return ()
     in
@@ -269,6 +270,7 @@ let well_formed
     ~incl_files
     ~coq_export_file:None
     ~coq_proof_log:false
+    ~coq_check_proof_log:false
     ~csv_times
     ~log_times
     ~astprints
@@ -297,6 +299,7 @@ let verify
   lemmata
   coq_export_file
   coq_proof_log
+  coq_check_proof_log
   only
   skip
   csv_times
@@ -350,6 +353,7 @@ let verify
     ~incl_files
     ~coq_export_file
     ~coq_proof_log
+    ~coq_check_proof_log
     ~csv_times
     ~log_times
     ~astprints
@@ -461,6 +465,7 @@ let generate_executable_specs
     ~incl_files
     ~coq_export_file:None
     ~coq_proof_log:false
+    ~coq_check_proof_log:false
     ~csv_times
     ~log_times
     ~astprints
@@ -531,6 +536,7 @@ let run_seq_tests
     ~csv_times
     ~coq_export_file:None
     ~coq_proof_log:false
+    ~coq_check_proof_log:false
     ~log_times
     ~astprints
     ~no_inherit_loc
@@ -651,6 +657,7 @@ let run_tests
     ~csv_times
     ~coq_export_file:None
     ~coq_proof_log:false
+    ~coq_check_proof_log:false
     ~log_times
     ~astprints
     ~no_inherit_loc
@@ -1014,6 +1021,12 @@ module CoqProofLog_flags = struct
     Arg.(value & flag & info [ "coq-proof-log" ] ~docv:"FILE" ~doc)
 end
 
+module CoqCherkProofLog_flags = struct
+  let coq_check_proof_log =
+    let doc = "Include statements to check proof log in coq exported file" in
+    Arg.(value & flag & info [ "coq-check-proof-log" ] ~docv:"FILE" ~doc)
+end
+
 let wf_cmd =
   let open Term in
   let wf_t =
@@ -1063,6 +1076,7 @@ let verify_t : unit Term.t =
   $ Lemma_flags.lemmata
   $ CoqExport_flags.coq_export
   $ CoqProofLog_flags.coq_proof_log
+  $ CoqCherkProofLog_flags.coq_check_proof_log
   $ Verify_flags.only
   $ Verify_flags.skip
   $ Common_flags.csv_times

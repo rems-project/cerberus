@@ -23,6 +23,7 @@ STOP_ON_ERROR=0
 SINGLE_FILE=""
 USE_DUNE=0
 COQ_PROOF_LOG=0
+COQ_CHECK_PROOF_LOG=0
 
 while getopts "dpef: v" opt; do
     case ${opt} in
@@ -31,6 +32,9 @@ while getopts "dpef: v" opt; do
             ;;
         p)
             COQ_PROOF_LOG=1
+            ;;
+        c)
+            COQ_CHECK_PROOF_LOG=1
             ;;
         e)
             STOP_ON_ERROR=1
@@ -48,6 +52,7 @@ while getopts "dpef: v" opt; do
             echo "  -f  Run single test file (implies -e)"
             echo "  -d  Use dune to run CN"
             echo "  -p  Include proof log in Coq export"
+            echo "  -c  Check proof log in Coq export"
             echo "  -v  Verbose output for resource usage logging"
             exit 1
             ;;
@@ -99,6 +104,9 @@ for TEST in ${SUCC}; do
     VERIFY_CMD=("${CN[@]}" verify "${TEST}" --coq-export-file="${COQ_EXPORT}")
     if [ ${COQ_PROOF_LOG} -eq 1 ]; then
         VERIFY_CMD+=("--coq-proof-log")
+        if [ ${COQ_CHECK_PROOF_LOG} -eq 1 ]; then
+            VERIFY_CMD+=("--coq-check-proof-log")
+        fi
     fi
     
     VERIFY_START=$(date +%s)
