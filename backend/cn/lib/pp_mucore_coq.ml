@@ -2225,7 +2225,10 @@ let coq_inference_proof =
        ]
 
 
-let pp_unit_file_with_resource_inference (prog : unit file) (osteps : Prooflog.log option)
+let pp_unit_file_with_resource_inference
+  (prog : unit file)
+  (osteps : Prooflog.log option)
+  (generate_proof : bool)
   =
   pp_file pp_unit pp_unit_type prog
   ^^ P.hardline
@@ -2239,7 +2242,9 @@ let pp_unit_file_with_resource_inference (prog : unit file) (osteps : Prooflog.l
          P.empty
          (pp_list pp_resource_inference_step steps)
     ^^ P.hardline
-    ^^ pp_comment "Resource Inference Proof"
-    ^^ P.hardline
-    ^^ coq_inference_proof
+    ^^
+    if generate_proof then
+      pp_comment "Resource Inference Proof" ^^ P.hardline ^^ coq_inference_proof
+    else
+      P.empty
   | None -> P.empty
