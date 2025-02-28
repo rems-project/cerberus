@@ -650,7 +650,7 @@ let map_and_fold_resources_internal loc (f : Res.t -> 'acc -> changed * 'acc) (a
 
 (* the main inference loop *)
 let do_unfold_resources loc =
-  let rec aux () =
+  let rec aux changed =
     let@ s = get_typing_context () in
     let@ movable_indices = get_movable_indices () in
     let@ _provable_f = provable_internal (Locations.other __LOC__) in
@@ -660,7 +660,7 @@ let do_unfold_resources loc =
     let here = Locations.other __LOC__ in
     let@ true_m = model_with_internal loc (IT.bool_ true here) in
     match true_m with
-    | None -> return () (* contradictory state *)
+    | None -> return changed (* contradictory state *)
     | Some model ->
       let@ provable_m, provable_f2 = prove_or_model_with_past_model loc model in
       let keep, unpack, extract =
@@ -702,13 +702,11 @@ let do_unfold_resources loc =
       in
       let@ () = iterM do_unpack unpack in
       let@ () = iterM (add_r_internal loc) extract in
-      (match (unpack, extract) with [], [] -> return () | _ -> aux ())
+      (match (unpack, extract) with [], [] -> return changed | _ -> aux true)
   in
   let@ c = get_typing_context () in
-  let@ () = aux () in
+  let@ changed = aux false in
   let@ () = modify (fun s -> { s with unfold_resources_required = false }) in
-  (* TODO: this should be computed *)
-  let changed = true in
   if changed then
     let@ c' = get_typing_context () in
     return (Prooflog.record_resource_inference_step c c' (UnfoldResources loc))
