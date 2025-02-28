@@ -13,9 +13,11 @@ Definition ctx_resources_set (l:((list (Resource.t * Z)) * Z)) : Resource.ResSet
 
 (** Inductive predicate which defines correctess of log inference step *)
 Inductive log_entry_valid : log_entry -> Prop :=
+| unfold_resources_step:
+  forall loc c c',
+    log_entry_valid (ResourceInferenceStep c (UnfoldResources loc) c')
 
 (* simple case: non-recursive request, no packing *)
-
 | simple_resource_inference_step:
   forall iname  ipointer  iargs
     oname  opointer  oargs

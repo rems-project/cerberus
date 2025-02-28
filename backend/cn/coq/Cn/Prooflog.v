@@ -14,7 +14,8 @@ Inductive resource_inference_type : Type :=
                        Request.Predicate.t ->
                        option (Location.t * string) ->
                        (Resource.predicate * list Z) ->
-                       resource_inference_type.
+                       resource_inference_type
+  | UnfoldResources: Location.t -> resource_inference_type.
 
 Inductive log_entry : Type :=
   | ResourceInferenceStep : Context.t -> resource_inference_type -> Context.t -> log_entry.
