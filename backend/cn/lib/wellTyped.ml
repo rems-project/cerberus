@@ -1053,7 +1053,7 @@ let warn_when_not_quantifier_bt
        ^^^ !^"was provided. This will become an error in the future.")
 
 
-let owned_ct_ok loc (ct, init) = 
+let owned_ct_ok loc (ct, init) =
   let@ () = WCT.is_ct loc ct in
   let pp_resource ct =
     match init with
@@ -1068,7 +1068,7 @@ let owned_ct_ok loc (ct, init) =
       ^^^ !^"please specify another C-type"
       ^^^ Pp.parens (!^"using" ^^^ pp_resource "YOURTYPE")
     in
-    fail { loc; msg = Generic msg}
+    fail { loc; msg = Generic msg }
   | _ -> return ()
 
 module WReq = struct
