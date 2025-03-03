@@ -1212,7 +1212,8 @@ module Spec = struct
       accesses : (Cerb_location.t * Id.t) list;
       requires : (Cerb_location.t * (Id.t, 'a) Cn.cn_condition) list;
       ensures : (Cerb_location.t * (Id.t, 'a) Cn.cn_condition) list;
-      functions : (Cerb_location.t * Id.t) list
+      functions : (Cerb_location.t * Id.t) list;
+      if_spec : (int * (Id.t * Id.t Cn.cn_base_type) list) option
     }
 
   let default : _ parsed =
@@ -1220,11 +1221,12 @@ module Spec = struct
       accesses = [];
       requires = [];
       ensures = [];
-      functions = []
+      functions = [];
+      if_spec = None
     }
 
 
-  let combine parsed : _ parsed t =
+  let combine ?if_spec parsed : _ parsed t =
     let process
       Cn.{ cn_func_trusted; cn_func_acc_func; cn_func_requires; cn_func_ensures }
       : _ parsed
@@ -1245,13 +1247,14 @@ module Spec = struct
       in
       let requires = cross_fst cn_func_requires in
       let ensures = cross_fst cn_func_ensures in
-      { trusted; accesses; requires; ensures; functions }
+      { trusted; accesses; requires; ensures; functions; if_spec }
     in
     let parsed = List.map process parsed in
     match parsed with
     | [] -> return default
     | [ condition ] -> return condition
     | _ :: _ :: _ ->
+      assert (Option.is_none if_spec);
       let trust left right =
         match (left, right) with
         | Mucore.Trusted loc, _ -> Mucore.Trusted loc
@@ -1263,35 +1266,52 @@ module Spec = struct
         | { ensures = _ :: _ as ens; _ }, { requires = (loc, _) :: _; _ } ->
           let ens_loc = fst (Option.get (List.last ens)) in
           fail { loc; msg = Requires_after_ensures { ens_loc } }
-        | ( { trusted = t1; accesses = a1; requires = r1; ensures = e1; functions = f1 },
-            { trusted = t2; accesses = a2; requires = r2; ensures = e2; functions = f2 } )
-          ->
+        | ( { trusted = t1;
+              accesses = a1;
+              requires = r1;
+              ensures = e1;
+              functions = f1;
+              if_spec = _
+            },
+            { trusted = t2;
+              accesses = a2;
+              requires = r2;
+              ensures = e2;
+              functions = f2;
+              if_spec = _
+            } ) ->
           return
             { trusted = trust t1 t2;
               accesses = a1 @ a2;
               requires = r1 @ r2;
               ensures = e1 @ e2;
-              functions = f1 @ f2
+              functions = f1 @ f2;
+              if_spec = None
             }
       in
       ListM.fold_leftM combine default parsed
 
 
-  let there_can_only_be_one loc fname opt_spec parsed_decl_spec parsed_defn_specs =
+  let there_can_only_be_one defn_loc fname parsed_decl_spec parsed_defn_specs =
+    let _ : (_ * _ Cn.cn_decl_spec) list = parsed_decl_spec in
     match (parsed_decl_spec, parsed_defn_specs) with
+    (* No specs *)
     | [], [] -> return default
+    (* Multiple definition specs: combined to support ifdefs on specs *)
     | [], (_ :: _ as parsed_defn_specs) -> combine parsed_defn_specs
-    | parsed_decl_spec :: _, [] -> combine [ parsed_decl_spec ]
-    | _ :: _, _ :: _ ->
-      let _, spec = Option.get opt_spec in
-      let doc =
-        Sym.pp fname
-        ^^ colon
-        ^^^ !^"re-specification of CN annotations from:"
-        ^^ break 1
-        ^^^ Locations.pp spec.Cn.cn_decl_loc
-      in
-      fail { loc; msg = Generic doc }
+    (* Single decl spec *)
+    | [ (decl_marker, parsed_decl_spec) ], [] ->
+      combine
+        ~if_spec:(decl_marker, parsed_decl_spec.cn_decl_args)
+        [ parsed_decl_spec.cn_func_spec ]
+    (* Multiple decl spec: not supported due to variable re-binding complexity *)
+    | (_, spec) :: (_, spec') :: _, [] ->
+      let loc, orig_loc = (spec'.cn_decl_loc, spec.cn_decl_loc) in
+      fail { loc; msg = Double_spec { fname; orig_loc } }
+    (* Decl and definition spec: user error *)
+    | (_, decl_spec) :: _, _ :: _ ->
+      let loc, orig_loc = (defn_loc, decl_spec.cn_decl_loc) in
+      fail { loc; msg = Double_spec { fname; orig_loc } }
 
 
   let desugar_and_add_args decl_d_st spec_args =
@@ -1311,12 +1331,12 @@ module Spec = struct
       env
 
 
-  let setup_env_desugaring_state loc defn_marker markers_env opt_spec env args arg_cts =
-    match opt_spec with
+  let setup_env_desugaring_state loc defn_marker markers_env if_spec env args arg_cts =
+    match if_spec with
     | None -> return (env, CAE.{ inner = Pmap.find defn_marker markers_env; markers_env })
-    | Some (decl_marker, spec) ->
+    | Some (decl_marker, spec_args) ->
       let decl_d_st = CAE.{ inner = Pmap.find decl_marker markers_env; markers_env } in
-      let@ spec_args, decl_d_st = desugar_and_add_args decl_d_st spec.Cn.cn_decl_args in
+      let@ spec_args, decl_d_st = desugar_and_add_args decl_d_st spec_args in
       return (add_spec_arg_renames loc args arg_cts spec_args env, decl_d_st)
 
 
@@ -1340,7 +1360,7 @@ module Spec = struct
   let desugar
     global_types
     d_st
-    ({ trusted; accesses; requires; ensures; functions } : _ parsed)
+    ({ trusted; accesses; requires; ensures; functions; if_spec = _ } : _ parsed)
     : (desugared * _ * _) t
     =
     let@ functions = logical_fun_syms d_st functions in
@@ -1374,13 +1394,11 @@ let normalise_fun_map_decl
      | Mi_Proc (loc, _mrk, _ret_bt, args, body, labels) ->
        debug 2 (lazy (item "normalising procedure" (Sym.pp fname)));
        let@ parsed_defn_specs = Parse.function_spec attrs in
-       let opt_spec, parsed_decl_spec =
-         match Sym.Map.find_opt fname fun_specs with
-         | None -> (None, [])
-         | Some (decl_marker, spec) -> (Some (decl_marker, spec), [ spec.Cn.cn_func_spec ])
+       let parsed_decl_spec =
+         Option.fold (Sym.Map.find_opt fname fun_specs) ~none:[] ~some:Fun.id
        in
        let@ parsed =
-         Spec.there_can_only_be_one loc fname opt_spec parsed_decl_spec parsed_defn_specs
+         Spec.there_can_only_be_one loc fname parsed_decl_spec parsed_defn_specs
        in
        debug 6 (lazy (string "parsed spec attrs"));
        let _, defn_marker, _, ail_args, _ =
@@ -1391,7 +1409,7 @@ let normalise_fun_map_decl
            loc
            defn_marker
            markers_env
-           opt_spec
+           parsed.if_spec
            env
            args
            (List.map snd arg_cts)
@@ -1446,13 +1464,14 @@ let normalise_fun_map_decl
        return (Some (Mu.Proc { loc; args_and_body; trusted; desugared_spec }, functions))
      | Mi_ProcDecl (loc, ret_bt, _bts) ->
        (match Sym.Map.find_opt fname fun_specs with
-        | Some (ail_marker, (spec : _ Cn.cn_decl_spec)) ->
+        | Some parsed_decl_spec ->
           let@ () =
             check_against_core_bt loc ret_bt (Memory.bt_of_sct (convert_ct loc ret_ct))
           in
-          let@ parsed = Spec.combine [ spec.cn_func_spec ] in
+          let@ parsed = Spec.there_can_only_be_one loc fname parsed_decl_spec [] in
+          let ail_marker, spec_args = Option.get parsed.if_spec in
           let d_st = CAE.{ inner = Pmap.find ail_marker markers_env; markers_env } in
-          let@ spec_args, d_st = Spec.desugar_and_add_args d_st spec.cn_decl_args in
+          let@ spec_args, d_st = Spec.desugar_and_add_args d_st spec_args in
           let@ { trusted = _; accesses; requires; ensures; functions }, ret_s, _ =
             Spec.desugar global_types d_st parsed
           in
@@ -1647,9 +1666,17 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
   in
   let@ globs = normalise_globs_list ~inherit_loc env file.mi_globs in
   let env = List.fold_left register_glob env globs in
+  let add_to_list key value list_map =
+    (* Map.add_to_list exists in OCaml 5.1, this is because we currently build
+     * with 4.14 *)
+    Sym.Map.update
+      key
+      (function None -> Some [ value ] | Some vs -> Some (value :: vs))
+      list_map
+  in
   let fun_specs_map =
     List.fold_right
-      (fun (id, key, spec) acc -> Sym.Map.add key (id, spec) acc)
+      (fun (id, key, spec) acc -> add_to_list key (id, spec) acc)
       ail_prog.cn_decl_specs
       Sym.Map.empty
   in
