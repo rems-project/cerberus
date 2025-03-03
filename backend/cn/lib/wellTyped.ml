@@ -1055,18 +1055,20 @@ let warn_when_not_quantifier_bt
 
 let owned_ct_ok loc (ct, init) = 
   let@ () = WCT.is_ct loc ct in
-  let pp_resource ct = match init with
-  | Request.Init -> !^"Owned" ^^ Pp.angles !^ct
-  | Request.Uninit -> !^"Block" ^^ Pp.angles !^ct
+  let pp_resource ct =
+    match init with
+    | Request.Init -> !^"Owned" ^^ Pp.angles !^ct
+    | Request.Uninit -> !^"Block" ^^ Pp.angles !^ct
   in
   match ct with
-  | Void -> 
-    let msg = 
-      pp_resource "void" ^^^ !^"is not a valid resource," 
+  | Void ->
+    let msg =
+      pp_resource "void"
+      ^^^ !^"is not a valid resource,"
       ^^^ !^"please specify another C-type"
       ^^^ Pp.parens (!^"using" ^^^ pp_resource "YOURTYPE")
     in
-    fail {loc; msg = Generic msg}
+    fail { loc; msg = Generic msg}
   | _ -> return ()
 
 module WReq = struct
@@ -1077,7 +1079,7 @@ module WReq = struct
     Pp.debug 22 (lazy (Pp.item "WReq: checking" (Req.pp r)));
     let@ spec_iargs =
       match Req.get_name r with
-      | Owned (ct, init) -> 
+      | Owned (ct, init) ->
         let@ () = owned_ct_ok loc (ct, init) in
         return []
       | PName name ->
