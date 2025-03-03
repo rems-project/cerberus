@@ -7,10 +7,10 @@ tests/cn/swap.c:6:10: warning: 'each' expects a 'u64', but 'j' with type 'i32' w
          ^
 tests/cn/swap.c:11:38: warning: 'focus' expects a 'u64', but '0'i32' with type 'i32' was provided. This will become an error in the future.
     /*@ focus RW<unsigned long int>, 0i32; @*/
-                                          ^
+                                     ^
 tests/cn/swap.c:12:38: warning: 'focus' expects a 'u64', but '1'i32' with type 'i32' was provided. This will become an error in the future.
     /*@ focus RW<unsigned long int>, 1i32; @*/
-                                          ^
+                                     ^
 tests/cn/swap.c:13:9: warning: nothing instantiated
     /*@ instantiate good<unsigned long int>, 0i32; @*/
         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
