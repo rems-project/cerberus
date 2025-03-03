@@ -5,4 +5,4 @@ tests/cn/ptr_diff.error.c:13:10: error: Pointer `q` needs to be live for pointer
   return q - p;
          ~~^~~ 
 Need an Alloc or RW in context with same allocation id
-State file: file:///tmp/state__ptr_diff.error.c__live_owned_footprint.html
+State file: file:///tmp/state__ptr_diff.error.c__live_RW_footprint.html

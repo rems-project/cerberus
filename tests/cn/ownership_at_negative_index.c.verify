@@ -1,11 +1,11 @@
 return code: 0
 tests/cn/ownership_at_negative_index.c:2:19: warning: 'each' expects a 'u64', but 'i' with type 'i32' was provided. This will become an error in the future.
-/*@ requires take vs = each(i32 i; i == -1i32) { Owned<int>(array_shift(p,i)) };
+/*@ requires take vs = each(i32 i; i == -1i32) { RW<int>(array_shift(p,i)) };
                   ^
 tests/cn/ownership_at_negative_index.c:3:18: warning: 'each' expects a 'u64', but 'i' with type 'i32' was provided. This will become an error in the future.
-    ensures take ws = each(i32 i; i == -1i32) { Owned<int>(array_shift(p,i)) };
+    ensures take ws = each(i32 i; i == -1i32) { RW<int>(array_shift(p,i)) };
                  ^
-tests/cn/ownership_at_negative_index.c:6:27: warning: 'extract' expects a 'u64', but '-1'i32' with type 'i32' was provided. This will become an error in the future.
-  /*@ extract Owned<int>, -1i32; @*/
-                          ^~~~~ 
+tests/cn/ownership_at_negative_index.c:6:22: warning: 'focus' expects a 'u64', but '-1'i32' with type 'i32' was provided. This will become an error in the future.
+  /*@ focus Owned<int>, -1i32; @*/
+                        ^~~~~ 
 [1/1]: f -- pass

@@ -3,9 +3,9 @@
 int
 f (int x, int *p, int *q)
 /*@ requires take p_arr = each(u64 i; 0u64 <= i && i < 10u64) {RW(array_shift(p, i))};
-             take q_arr = each(u64 i; 0u64 <= i && i < 12u64) {Block<int>(array_shift(q, i))};
+             take q_arr = each(u64 i; 0u64 <= i && i < 12u64) {W<int>(array_shift(q, i))};
     ensures take p_arr2 = each(u64 i; 0u64 <= i && i < 10u64) {RW(array_shift(p, i))};
-            take q_arr2 = each(u64 i; 0u64 <= i && i < 12u64) {Block<int>(array_shift(q, i))}; @*/
+            take q_arr2 = each(u64 i; 0u64 <= i && i < 12u64) {W<int>(array_shift(q, i))}; @*/
 {
   /*@ focus RW<int>, 1; @*/
   /*@ focus RW<int>, 1; @*/
