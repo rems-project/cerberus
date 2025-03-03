@@ -191,7 +191,8 @@ let with_well_formedness_check
             path
             (Pp_mucore_coq.pp_unit_file_with_resource_inference
                prog5
-               (if coq_proof_log then Some steps else None) coq_check_proof_log))
+               (if coq_proof_log then Some steps else None)
+               coq_check_proof_log))
         coq_export_file;
       return ()
     in
