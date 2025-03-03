@@ -3,6 +3,16 @@ From Ltac2 Require Import Ltac1 Ltac2 Notations Std Constr Env Ident.
 From Cn Require Import Prooflog Request Resource Context.
 Require Import Ltac2Utils ResourceInference.
 
+
+Ltac2 verbose: bool := true.
+
+Ltac2 verbose_print (msg : string) :=
+  if verbose then
+    Message.print (Message.of_string msg)
+  else
+    ()
+  .
+
 (* Sample usage for the proof log extracted from CN:
 
 Theorem resource_inference_steps_valid: prooflog_valid _cn_ResourceInferenceSteps.
@@ -59,13 +69,28 @@ Qed.
          Control.focus 1 1 (fun () => ltac1:(subst;cbn;ResSetDecide.fsetdec));
          (* Second subgoal - subsumed *)
          Control.focus 1 1 (fun () => Std.constructor false; Std.reflexivity ())
+     | [] =>
+         Control.throw (Tactic_failure (Some (Message.of_string "No resource change between the input and output")))
+         (* 
+         Message.print (Message.of_string "Warning: No resource change between the input and output");
+         Control.shelve ()
+         *)
      | _ =>
-         (* Control.throw (Tactic_failure (Some (Message.of_string "Zero or more than one resource change between the input and output"))); *)
-         Message.print (Message.of_string "Warning:Zero or more than one resource change between the input and output");
+         (* Control.throw (Tactic_failure (Some (Message.of_string "More than one resource change between the input and output"))); *)
+         let n := List.length diff in
+         let msg := Message.concat (Message.of_string "Warning: multiple resources changed: ") (Message.of_int n) in
+         Message.print msg;
+         (if verbose then
+           (* Print changed resources: *)
+           let print_resource res :=
+             Message.print (Message.of_constr res)
+           in
+           List.iter print_resource diff
+         else ());
          Control.shelve ()
      end
  end.
- 
+
 Ltac2 prove_unfold_step () :=
   match! goal with
   | [ |- unfold_step ?c ?c' ] =>
@@ -80,6 +105,7 @@ Ltac2 prove_unfold_step () :=
    match! goal with
    | [ |- log_entry_valid (ResourceInferenceStep _ (PredicateRequest _ _ _ _) _) ] =>
        (* PredicateRequest case *)
+       verbose_print "Checking PredicateRequest";
        Std.constructor false;
        Control.focus 1 1 (fun () => Std.reflexivity ());
        Control.focus 1 1 (fun () => Std.reflexivity ());
@@ -102,6 +128,7 @@ Ltac2 prove_unfold_step () :=
        )
    | [ |- log_entry_valid (ResourceInferenceStep _ (UnfoldResources _) _) ] =>
       (* UnfoldResources case *)
+      verbose_print "Checking UnfoldResources";
       Std.constructor false;
       prove_unfold_step ()
    end.
