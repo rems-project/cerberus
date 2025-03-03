@@ -1053,6 +1053,25 @@ let warn_when_not_quantifier_bt
        ^^^ !^"was provided. This will become an error in the future.")
 
 
+let owned_ct_ok loc (ct, init) =
+  let@ () = WCT.is_ct loc ct in
+  let pp_resource ct =
+    match init with
+    | Request.Init -> !^"Owned" ^^ Pp.angles !^ct
+    | Request.Uninit -> !^"Block" ^^ Pp.angles !^ct
+  in
+  match ct with
+  | Void ->
+    let msg =
+      pp_resource "void"
+      ^^^ !^"is not a valid resource,"
+      ^^^ !^"please specify another C-type"
+      ^^^ Pp.parens (!^"using" ^^^ pp_resource "YOURTYPE")
+    in
+    fail { loc; msg = Generic msg }
+  | _ -> return ()
+
+
 module WReq = struct
   module Req = Request
   open IndexTerms
@@ -1061,7 +1080,9 @@ module WReq = struct
     Pp.debug 22 (lazy (Pp.item "WReq: checking" (Req.pp r)));
     let@ spec_iargs =
       match Req.get_name r with
-      | Owned (_ct, _init) -> return []
+      | Owned (ct, init) ->
+        let@ () = owned_ct_ok loc (ct, init) in
+        return []
       | PName name ->
         let@ def = get_resource_predicate_def loc name in
         return def.iargs
@@ -1108,35 +1129,10 @@ module WReq = struct
           let hint = "Only constant iteration steps are allowed." in
           fail { loc; msg = NIA { it = p.step; hint } }
       in
-      (*let@ () = match p.name with | (Owned (ct, _init)) -> let sz = Memory.size_of_ctype
-        ct in if IT.equal step (IT.int_lit_ sz (snd p.q)) then return () else fail (fun _
-        -> {loc; msg = Generic (!^"Iteration step" ^^^ IT.pp p.step ^^^ parens (IT.pp
-        step) ^^^ !^ "different to sizeof" ^^^ Sctypes.pp ct ^^^ parens (!^ (Int.to_string
-        sz)))}) | _ -> return () in*)
       let@ permission, iargs =
         pure
           (let@ () = add_l (fst p.q) (snd p.q) (loc, lazy (Pp.string "forall-var")) in
            let@ permission = WIT.check loc BT.Bool p.permission in
-           (* let@ provable = provable loc in *)
-           (* let here = Locations.other __LOC__ in *)
-           (* let only_nonnegative_indices = *)
-           (*   (\* It is important to use `permission` here and NOT `p.permission`. *)
-           (* If there is a record involved, `permission` is normalised but the
-              `p.permission` is not *)
-           (*      If there is a subsitution in `provable` then a type check *)
-           (*      assertion may fail if the non-normalised form is used *\) *)
-           (*   let sym_args = (fst p.q, snd p.q, p.q_loc) in *)
-           (* LC.forall_ p.q (impl_ (permission, ge_ (sym_ sym_args, int_lit_ 0 (snd p.q)
-              here) here) here) *)
-           (* in *)
-           (* let@ () = match provable only_nonnegative_indices with *)
-           (*   | `True -> *)
-           (*      return () *)
-           (*   | `False -> *)
-           (*      let model = Solver.model () in *)
-           (*      let msg = "Iterated resource gives ownership to negative indices." in *)
-           (*      fail (fun ctxt -> {loc; msg = Generic_with_model {err= !^msg; ctxt; model}}) *)
-           (* in *)
            let has_iargs, expect_iargs = (List.length p.iargs, List.length spec_iargs) in
            (* +1 because of pointer argument *)
            let@ () =
@@ -2611,6 +2607,8 @@ module Lift (M : ErrorReader) : WellTyped_intf.S with type 'a t := 'a M.t = stru
   let check_term x y z = lift3 check_term x y z
 
   let check_ct = lift2 check_ct
+
+  let owned_ct_ok = lift2 owned_ct_ok
 
   let ensure_same_argument_number loc type_ n ~expect =
     let ( let@ ) = M.bind in
