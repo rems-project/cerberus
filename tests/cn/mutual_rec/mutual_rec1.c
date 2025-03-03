@@ -15,9 +15,9 @@ void walk_b_tree (struct b_node *p);
 
 void
 walk_a_tree (struct a_node *p)
-/*@ accesses global_val; @*/
-/*@ requires take T = A_Tree (p); @*/
-/*@ ensures take T2 = A_Tree (p); @*/
+/*@ accesses global_val;
+    requires take T = A_Tree (p);
+    ensures take T2 = A_Tree (p); @*/
 {
   if (! p)
     return;
@@ -28,9 +28,9 @@ walk_a_tree (struct a_node *p)
 
 void
 walk_b_tree (struct b_node *p)
-/*@ accesses global_val; @*/
-/*@ requires take T = B_Tree (p); @*/
-/*@ ensures take T2 = B_Tree (p); @*/
+/*@ accesses global_val;
+    requires take T = B_Tree (p);
+    ensures take T2 = B_Tree (p); @*/
 {
   if (! p)
     return;

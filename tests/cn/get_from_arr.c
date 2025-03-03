@@ -5,8 +5,8 @@
 char
 get_from_arr (char *in_arr)
 /*@ requires take IA = each (i32 j; 0i32 <= j && j < 10i32)
-  {Owned<char>(in_arr + j)}; @*/
-/*@ ensures take IA2 = each (i32 j; 0i32 <= j && j < 10i32)
+  {Owned<char>(in_arr + j)};
+    ensures take IA2 = each (i32 j; 0i32 <= j && j < 10i32)
   {Owned<char>(in_arr + j)}; @*/
 {
   char c;

@@ -215,16 +215,16 @@ type cn_type_synonym 'a = <|
   cn_tysyn_rhs: cn_base_type 'a;
 |>
 
+type cn_acc_func 'a =
+  | CN_accesses of list Symbol.identifier
+  | CN_mk_function of 'a
 
-
-
-
-type cn_function_spec 'a 'ty =
-  | CN_accesses of Loc.t * list Symbol.identifier
-  | CN_requires of Loc.t * list (cn_condition 'a 'ty)
-  | CN_ensures of Loc.t * list (cn_condition 'a 'ty)
-  | CN_trusted of Loc.t
-  | CN_mk_function of Loc.t * 'a
+type cn_fundef_spec 'a 'ty = <|
+  cn_fundef_trusted: maybe Loc.t;
+  cn_fundef_acc_func: maybe (Loc.t * cn_acc_func 'a);
+  cn_fundef_requires: maybe (Loc.t * list (cn_condition 'a 'ty));
+  cn_fundef_ensures: maybe (Loc.t * list (cn_condition 'a 'ty));
+|>
 
 type cn_loop_spec 'a 'ty =
   | CN_inv of Loc.t * list (cn_condition 'a 'ty)

@@ -121,8 +121,8 @@ function (list) tl (list xs) {
 ilist split(ilist xs)
 /*@ requires take Xs = List(xs);
     ensures take Ys = List(xs);
-    ensures take Zs = List(return);
-    ensures {fst: Ys, snd: Zs} == cn_split(Xs);
+            take Zs = List(return);
+            {fst: Ys, snd: Zs} == cn_split(Xs);
 @*/
 {
   /*@ unfold cn_split(Xs); @*/
@@ -191,9 +191,9 @@ void prove_merge_sorted(struct node *p, struct node *q)
 
 struct node *merge(struct node *xs, struct node *ys)
 /*@ requires take Xs = List(xs);
-    requires take Ys = List(ys);
+             take Ys = List(ys);
     ensures take Zs = List(return);
-    ensures Zs == cn_merge(Xs, Ys); @*/
+            Zs == cn_merge(Xs, Ys); @*/
 {
   /*@ unfold cn_merge(Xs, Ys); @*/
   if (xs == 0) {

@@ -10,8 +10,8 @@ enum size {
 
 static inline int
 lookup_size_shift (enum size sz)
-/*@ cn_function lookup_size_shift_cn; @*/
-/*@ ensures return == lookup_size_shift_cn(sz); @*/
+/*@ cn_function lookup_size_shift_cn;
+    ensures return == lookup_size_shift_cn(sz); @*/
 {
   switch (sz) {
     case big:

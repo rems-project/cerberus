@@ -23,9 +23,9 @@ predicate {integer len} List (pointer p) {
 
 struct node *
 rev_list (struct node *p)
-/*@ requires is_null(p) || !addr_eq(p, NULL); @*/
-/*@ requires take R = List(p); @*/
-/*@ ensures take R2 = List(return); @*/
+/*@ requires is_null(p) || !addr_eq(p, NULL);
+             take R = List(p);
+    ensures take R2 = List(return); @*/
 {
   struct node *rev = NULL;
   struct node *p2;
