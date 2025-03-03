@@ -7,5 +7,5 @@ tests/cn_vip_testsuite/pointer_from_integer_1ig.annot.c:15:7: warning: Cannot ru
 tests/cn_vip_testsuite/pointer_from_integer_1ig.annot.c:16:5: error: Missing resource for writing
     *p=7; // CN VIP UB (no annot)
     ~~^~ 
-Resource needed: Block<signed int>(intToPtr)
+Resource needed: W<signed int>(intToPtr)
 State file: file:///tmp/state__pointer_from_integer_1ig.annot.c__f.html

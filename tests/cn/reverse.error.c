@@ -10,7 +10,7 @@ predicate (datatype seq) IntList(pointer p) {
   if (is_null(p)) {
     return Nil{};
   } else {
-    take H = Owned<struct node>(p);
+    take H = RW<struct node>(p);
     take tl = IntList(H.tail);
     return (Cons { head: H.head, tail: tl });
   }

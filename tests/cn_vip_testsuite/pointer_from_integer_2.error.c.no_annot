@@ -4,5 +4,5 @@ return code: 1
 tests/cn_vip_testsuite/pointer_from_integer_2.error.c:7:3: error: Missing resource for writing
   *p=7;
   ~~^~ 
-Resource needed: Block<signed int>(intToPtr)
+Resource needed: W<signed int>(intToPtr)
 State file: file:///tmp/state__pointer_from_integer_2.error.c__f.html

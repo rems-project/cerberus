@@ -1,23 +1,23 @@
 return code: 0
-tests/cn/extract_verbose.c:10:27: warning: 'extract' expects a 'u64', but '1' with type 'integer' was provided. This will become an error in the future.
-  /*@ extract Owned<int>, 1; @*/
-                          ^
-tests/cn/extract_verbose.c:11:27: warning: 'extract' expects a 'u64', but '1' with type 'integer' was provided. This will become an error in the future.
-  /*@ extract Owned<int>, 1; @*/
-                          ^
-tests/cn/extract_verbose.c:14:27: warning: 'extract' expects a 'u64', but '12' with type 'integer' was provided. This will become an error in the future.
-  /*@ extract Owned<int>, 12; @*/
-                          ^
-tests/cn/extract_verbose.c:10:7: warning: extract: index added, no resources (yet) extracted.
-  /*@ extract Owned<int>, 1; @*/
-      ^~~~~~~~~~~~~~~~~~~~~~ 
-tests/cn/extract_verbose.c:11:7: warning: extract: index added, no resources (yet) extracted.
-  /*@ extract Owned<int>, 1; @*/
-      ^~~~~~~~~~~~~~~~~~~~~~ 
-tests/cn/extract_verbose.c:13:7: warning: extract: index added, no resources (yet) extracted.
-  /*@ extract Owned<int>, 1u64; @*/
-      ^~~~~~~~~~~~~~~~~~~~~~~~~ 
-tests/cn/extract_verbose.c:14:7: warning: extract: index added, no resources (yet) extracted.
-  /*@ extract Owned<int>, 12; @*/
-      ^~~~~~~~~~~~~~~~~~~~~~~ 
+tests/cn/extract_verbose.c:10:22: warning: 'focus' expects a 'u64', but '1' with type 'integer' was provided. This will become an error in the future.
+  /*@ focus RW<int>, 1; @*/
+                     ^
+tests/cn/extract_verbose.c:11:22: warning: 'focus' expects a 'u64', but '1' with type 'integer' was provided. This will become an error in the future.
+  /*@ focus RW<int>, 1; @*/
+                     ^
+tests/cn/extract_verbose.c:14:22: warning: 'focus' expects a 'u64', but '12' with type 'integer' was provided. This will become an error in the future.
+  /*@ focus RW<int>, 12; @*/
+                     ^
+tests/cn/extract_verbose.c:10:7: warning: focus: index added, no effect on existing resources (yet).
+  /*@ focus RW<int>, 1; @*/
+      ^~~~~~~~~~~~~~~~~ 
+tests/cn/extract_verbose.c:11:7: warning: focus: index added, no effect on existing resources (yet).
+  /*@ focus RW<int>, 1; @*/
+      ^~~~~~~~~~~~~~~~~ 
+tests/cn/extract_verbose.c:13:7: warning: focus: index added, no effect on existing resources (yet).
+  /*@ focus RW<int>, 1u64; @*/
+      ^~~~~~~~~~~~~~~~~~~~ 
+tests/cn/extract_verbose.c:14:7: warning: focus: index added, no effect on existing resources (yet).
+  /*@ focus RW<int>, 12; @*/
+      ^~~~~~~~~~~~~~~~~~ 
 [1/1]: f -- pass

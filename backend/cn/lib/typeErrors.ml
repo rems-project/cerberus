@@ -470,7 +470,7 @@ let pp_message = function
             Explain.{ no_ex with unproven_constraint = Some (LC.T constr) })
         model_constr
     in
-    let descr = !^"Need an Alloc or Owned in context with same allocation id" in
+    let descr = !^"Need an Alloc or RW in context with same allocation id" in
     { short; descr = Some descr; state }
   (* | Implementation_defined_behaviour (impl, state) -> *)
   (*    let short = !^"Implementation defined behaviour" in *)
@@ -523,7 +523,7 @@ let pp_message = function
     let state = Some (Explain.trace ctxt_log (Solver.empty_model, []) Explain.no_ex) in
     { short; descr = None; state }
   | Byte_conv_needs_owned ->
-    let short = !^"byte conversion only supports Owned/Block" in
+    let short = !^"byte conversion only supports W/RW" in
     { short; descr = None; state = None }
 
 

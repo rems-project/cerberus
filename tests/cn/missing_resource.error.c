@@ -6,7 +6,7 @@ int
 f (int *p, int x)
 /*@ requires x < 12i32;
     ensures return < 12i32;
-            take Resource_From_Nothing = Owned(p); @*/
+            take Resource_From_Nothing = RW(p); @*/
 {
   return x;
 }

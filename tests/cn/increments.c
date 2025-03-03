@@ -20,10 +20,10 @@ struct has_short {
 
 void
 indirect (unsigned char *p, struct has_short *q)
-/*@ requires take C = Owned(p);
-             take S = Owned(q);
-    ensures take C2 = Owned(p);
-            take S2 = Owned(q); @*/
+/*@ requires take C = RW(p);
+             take S = RW(q);
+    ensures take C2 = RW(p);
+            take S2 = RW(q); @*/
 {
   char x = 1;
   char *r = &x;

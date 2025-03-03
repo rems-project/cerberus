@@ -6,7 +6,7 @@ int y[2], x[2];
 int main()
 /*CN_VIP*//*@ accesses x; @*/
 {
-  /*CN_VIP*//*@ extract Owned<int>, 1u64; @*/
+  /*CN_VIP*//*@ focus RW<int>, 1u64; @*/
 #if defined(ANNOT)
   int *p = copy_alloc_id(
     (((uintptr_t)&(x[0])) + ((uintptr_t)&(y[1])))

@@ -13,11 +13,11 @@ int main()
   int *q = &y;
   uintptr_t i = (uintptr_t)p;
   uintptr_t j = (uintptr_t)q;
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&q); @*/
   /*CN_VIP*/int result = _memcmp((unsigned char*)&p, (unsigned char*)&q, sizeof(p));
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&q); @*/
   if (result == 0) {
 #ifdef NO_ROUND_TRIP
     /*CN_VIP*/int *r = __cerbvar_copy_alloc_id(i, &x);

@@ -14,9 +14,9 @@ requires
 {
   int *p=&x, *q=&x;
   // read low-order (little endian) representation byte of p
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
   unsigned char* p_char = (unsigned char*)&p;
-  /*@ extract Owned<unsigned char>, 0u64; @*/
+  /*@ focus RW<unsigned char>, 0u64; @*/
   unsigned char i = *p_char;
   // check the bottom two bits of an int* are not usec
   assert(_Alignof(int) >= 4);
@@ -29,7 +29,7 @@ requires
   // clear the low-order bits again
   *(unsigned char*)&p = (*(unsigned char*)&p) & ~((unsigned char)3u);
   // are p and q now equivalent?
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
 #ifdef NO_ROUND_TRIP
   /*CN_VIP*/p = __cerbvar_copy_alloc_id((uintptr_t)p, &x);
 #endif

@@ -1,8 +1,8 @@
 return code: 0
 tests/cn_vip_testsuite/pointer_from_int_disambiguation_1.annot.c:16:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
                 ^~~~~~~~ 
 tests/cn_vip_testsuite/pointer_from_int_disambiguation_1.annot.c:19:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
                 ^~~~~~~~~~ 
 [1/1]: main -- pass

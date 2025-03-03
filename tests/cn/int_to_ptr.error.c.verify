@@ -4,5 +4,5 @@ return code: 1
 tests/cn/int_to_ptr.error.c:16:12: error: Missing resource for reading
     return *p == 0;
            ^~ 
-Resource needed: Owned<signed int>(call_cast0.return)
+Resource needed: RW<signed int>(call_cast0.return)
 State file: file:///tmp/state__int_to_ptr.error.c__main.html

@@ -15,14 +15,14 @@ predicate (list) List(pointer p) {
   if (is_null(p)) {
     return Nil {};
   } else {
-    take node = Owned<struct node>(p);
+    take node = RW<struct node>(p);
     take tl = List(node.next);
     return (Cons { head: node.value, tail: tl });
   }
 }
 
 predicate (list) ListP(pointer p) {
-  take l = Owned<struct node *>(p);
+  take l = RW<struct node *>(p);
   take xs = List(l);
   return xs;
 }
