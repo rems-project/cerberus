@@ -876,7 +876,7 @@ module Verify_flags = struct
 
   let try_hard =
     let doc = "Try undecidable SMT solving using full set of assumptions" in
-    Arg.(value & flag & info [ "try_hard" ] ~doc)
+    Arg.(value & flag & info [ "try-hard" ] ~doc)
 
 
   let only =

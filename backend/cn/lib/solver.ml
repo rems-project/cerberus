@@ -1450,9 +1450,8 @@ end
 let try_hard = ref false
 
 (** The main way to query the solver. *)
-let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
+let provable ~loc ~solver ~assumptions ~simp_ctxt lc =
   let _ = loc in
-  let _ = global in
   let set_model smt_solver qs =
     let defs = SMT.get_model smt_solver in
     let model = model_evaluator solver defs in
@@ -1515,7 +1514,7 @@ let eval mo t =
 
 
 let assume_constraints (constraints : LC.t list) (s : solver) : solver =
-  let get_term lc = match lc with LC.T it -> Some (translate_term s it) | _ -> None in
+  let get_term lc = match lc with LC.T it -> Some (translate_term s it) | Forall _ -> None in
   let terms = List.filter_map get_term constraints in
   let add_term term = debug_ack_command s (SMT.assume term) in
   let _ = List.iter add_term terms in

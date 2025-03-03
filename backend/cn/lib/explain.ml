@@ -35,12 +35,6 @@ module CheckPreds = struct
   (* let pp_check_result =
      pp_result_with_data (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc)) (fun d -> d) *)
 
-  let filter_map_some (f : 'a -> 'b option) (l : 'a list) : 'b list =
-    List.fold_left
-      (fun acc elem -> match f elem with None -> acc | Some x -> x :: acc)
-      []
-      l
-
 
   (* Gives a single canonical result *)
   let combine_results (results : check_result list) : check_result =
@@ -275,15 +269,15 @@ module CheckPreds = struct
 
 
   let pair_to_lc (ps : IT.t * IT.t) : LogicalConstraints.t =
-    let loc = Cerb_location.unknown in
-    LC.T (IT.eq_ (fst ps, snd ps) loc)
+    let here = Locations.other __LOC__ in
+    LC.T (IT.eq_ (fst ps, snd ps) here)
 
 
   (* convert a list of variable assignments to equality constraints *)
   let convert_symmap_to_lcs (m : IT.t Sym.Map.t) : LogicalConstraints.t list =
-    let loc = Cerb_location.unknown in
+    let here = Locations.other __LOC__ in
     let kvs = Sym.Map.bindings m in
-    List.map (fun (k, v) -> pair_to_lc (IT.IT (IT.Sym k, IT.get_bt v, loc), v)) kvs
+    List.map (fun (k, v) -> pair_to_lc (IT.IT (IT.Sym k, IT.get_bt v, here), v)) kvs
 
 
   (* check if a candidate term could have been the output of a given predicate *)
@@ -381,11 +375,11 @@ module CheckPreds = struct
     | Error e -> Error e
     | Unknown e ->
       let s = Solver.make ctxt.global in
-      let loc = Cerb_location.unknown in
+      let here = Locations.other __LOC__ in
       let th = !Solver.try_hard in
       let _ = Solver.try_hard := true in
       let res =
-        match Solver.ask_solver s [ LC.T (IT.eq_ (exp, candidate) loc) ] with
+        match Solver.ask_solver s [ LC.T (IT.eq_ (exp, candidate) here) ] with
         | Sat ->
           (* not using model to get var cands because it may overconstrain *)
           Yes ([], Sym.Map.empty)
@@ -405,7 +399,6 @@ module CheckPreds = struct
     (iargs : (Sym.t * BT.t) list)
     (term_vals : (IT.t * IT.t) list)
     =
-    let loc = Cerb_location.unknown in
     (* find def of x *)
     match Sym.Map.find_opt v var_def_locs with
     | None ->
@@ -432,7 +425,8 @@ module CheckPreds = struct
             (match psig.name with
              | Owned (_, _) ->
                (* if the predicate is Owned, its pointer argument should not be null *)
-               let neq = IT.ne__ psig.pointer (IT.null_ loc) loc in
+               let here = Locations.other __LOC__ in
+               let neq = IT.ne__ psig.pointer (IT.null_ here) here in
                Yes ([ LC.T neq ], var_cands)
              | PName name ->
                (* search for predicate definition *)
@@ -758,9 +752,10 @@ let state (ctxt : C.t) log model_with_q extras =
       | Req.P { name = PName s; pointer = _; iargs }, Resource.O it ->
         (match (Sym.Map.find_opt s defs, evaluate it) with
          | Some def, Some cand ->
+           let here = Locations.other __LOC__ in
            let ptr_val = Req.get_pointer rt in
            let ptr_def =
-             (IT.sym_ (def.pointer, IT.get_bt ptr_val, Cerb_location.unknown), ptr_val)
+             (IT.sym_ (def.pointer, IT.get_bt ptr_val, here), ptr_val)
            in
            Some (CheckPreds.check_pred s def cand ctxt iargs (ptr_def :: vals), rt, it)
          | Some _, None ->
@@ -768,7 +763,7 @@ let state (ctxt : C.t) log model_with_q extras =
          | None, _ ->
            Some (Error (!^"Could not locate definition of predicate" ^^^ Sym.pp s), rt, it))
     in
-    let checked = CheckPreds.filter_map_some check (C.get_rs ctxt) in
+    let checked = List.filter_map check (C.get_rs ctxt) in
     let nos, _ = List.partition (fun (r, _, _) -> ResultWithData.is_no r) checked in
     (* let yeses, unknown = List.partition (fun (r, _, _) -> is_yes r) rest in *)
     let pp_checked_res (p, req, cand) =

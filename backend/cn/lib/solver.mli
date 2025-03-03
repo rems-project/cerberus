@@ -43,7 +43,6 @@ val reset_model_evaluator_state : unit -> unit
 val provable
   :  loc:Locations.t ->
   solver:solver ->
-  global:Global.t ->
   assumptions:LogicalConstraints.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
