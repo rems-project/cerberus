@@ -34,8 +34,8 @@ ensures
     each (u64 i; 0u64 <= i && i < n_start - n ) { S[i] == D2[i] };
   @*/
   {
-    /*@ extract RW<unsigned char>, n_start - n; @*/
-    /*@ extract W<unsigned char>, n_start - n; @*/
+    /*@ focus RW<unsigned char>, n_start - n; @*/
+    /*@ focus W<unsigned char>, n_start - n; @*/
     *dest = *src;
     src += 1; dest += 1; n -= 1u;
   }

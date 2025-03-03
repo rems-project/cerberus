@@ -16,7 +16,7 @@ requires
   // read low-order (little endian) representation byte of p
   /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
   unsigned char* p_char = (unsigned char*)&p;
-  /*@ extract RW<unsigned char>, 0u64; @*/
+  /*@ focus RW<unsigned char>, 0u64; @*/
   unsigned char i = *p_char;
   // check the bottom two bits of an int* are not usec
   assert(_Alignof(int) >= 4);
