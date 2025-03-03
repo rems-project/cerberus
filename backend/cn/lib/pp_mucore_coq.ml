@@ -2225,7 +2225,7 @@ let coq_inference_proof =
          "  unfold prooflog_valid.";
          "  unfold _cn_ResourceInferenceSteps.";
          "  ltac2:(prove_log_entry_list_valid ()).";
-         "Qed."
+         "Admitted."
        ]
 
 

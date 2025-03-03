@@ -11,10 +11,48 @@ Definition ctx_resources_set (l:((list (Resource.t * Z)) * Z)) : Resource.ResSet
   :=
   Resource.set_from_list (List.map fst (fst l)).
 
+
+(** Inductive predicate which defines correctness of resource unfolding step *)
+Inductive unfold_step : Context.t -> Context.t -> Prop :=
+| simple_unfold_step:
+    forall 
+    icomputational ilogical iresources iconstraints iglobal
+    ocomputational ological oresources oconstraints oglobal,
+    
+  (* The following parts of context are not changed *)
+    icomputational = ocomputational ->
+    iglobal = oglobal ->
+    ilogical = ological ->
+    iconstraints = oconstraints ->
+
+    let in_res := ctx_resources_set iresources in
+    let out_res := ctx_resources_set oresources in
+
+    unfold_step
+    (* input context *)
+    {|
+      Context.computational := icomputational;
+      Context.logical := ilogical;
+      Context.resources := iresources;
+      Context.constraints := iconstraints;
+      Context.global := iglobal
+    |}
+
+    (* output context *)
+    {|
+      Context.computational := ocomputational;
+      Context.logical := ological;
+      Context.resources := oresources;
+      Context.constraints := oconstraints;
+      Context.global := oglobal
+    |}.
+  
+
 (** Inductive predicate which defines correctess of log inference step *)
 Inductive log_entry_valid : log_entry -> Prop :=
 | unfold_resources_step:
-  forall loc c c',
+    forall loc c c',
+    unfold_step c c' ->
     log_entry_valid (ResourceInferenceStep c (UnfoldResources loc) c')
 
 (* simple case: non-recursive request, no packing *)
