@@ -4,5 +4,5 @@ return code: 1
 tests/cn/copy_alloc_id2.error.c:10:12: error: Pointer `p` needs to be live for copy_alloc_id
   int* q = __cerbvar_copy_alloc_id(p_int + 0ULL, p);
            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-Need an Alloc or Owned in context with same allocation id
+Need an Alloc or RW in context with same allocation id
 State file: file:///tmp/state__copy_alloc_id2.error.c__f.html

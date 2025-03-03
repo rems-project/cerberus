@@ -6,7 +6,7 @@ tests/cn/partial_init_bytes.error.c:9:9: warning: experimental keyword 'from_byt
     /*@ from_bytes RW<int>(p); @*/
         ^~~~~~~~~~ 
 tests/cn/partial_init_bytes.error.c:7:9: warning: focus: index added, no resources (yet) extracted.
-    /*@ extract W<char>, 2u64; @*/
+    /*@ focus W<char>, 2u64; @*/
         ^~~~~~~~~~~~~~~~~~~~~~~~~~ 
 [1/1]: main -- fail
 tests/cn/partial_init_bytes.error.c:8:5: error: Missing resource for writing

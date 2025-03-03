@@ -3,7 +3,7 @@ int f(int *p)
     ensures take ws = each(i32 i; i == -1i32) { RW<int>(array_shift(p,i)) };
 @*/
 {
-  /*@ focus Owned<int>, -1i32; @*/
+  /*@ focus RW<int>, -1i32; @*/
   return p[-1];
 }
 

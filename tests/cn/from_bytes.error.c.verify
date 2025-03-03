@@ -6,6 +6,6 @@ tests/cn/from_bytes.error.c:6:9: warning: experimental keyword 'from_bytes' (use
     /*@ from_bytes Alloc(p); @*/ // <-- proof fails here, but this is a no-op in runtime
         ^~~~~~~~~~ 
 [1/1]: main -- fail
-tests/cn/from_bytes.error.c:6:9: error: byte conversion only supports RW/W
+tests/cn/from_bytes.error.c:6:9: error: byte conversion only supports W/RW
     /*@ from_bytes Alloc(p); @*/ // <-- proof fails here, but this is a no-op in runtime
         ^~~~~~~~~~~~~~~~~~~~ 

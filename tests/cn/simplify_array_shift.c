@@ -31,7 +31,7 @@ predicate (void) Test(pointer f, pointer b) {
 @*/
 void freeIntQueueCell (struct int_queueCell *p)
 /*@ trusted;
-    requires take u = Block<struct int_queueCell>(p);
+    requires take u = W<struct int_queueCell>(p);
     ensures true;
 @*/
 {
@@ -46,7 +46,7 @@ requires
     eq_testable(Q.front, Q.back);
     take B = Test(Q.front, Q.back);
 ensures
-    take Q2 = Block<struct int_queue>(q);
+    take Q2 = W<struct int_queue>(q);
 @*/
 {
   struct int_queueCell* h = q->front;

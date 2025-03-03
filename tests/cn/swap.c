@@ -8,8 +8,8 @@ ensures
     pairEnd[1i32] == pairStart[0i32];
 @*/
 {
-    /*@ extract RW<unsigned long int>, 0i32; @*/
-    /*@ extract RW<unsigned long int>, 1i32; @*/
+    /*@ focus RW<unsigned long int>, 0i32; @*/
+    /*@ focus RW<unsigned long int>, 1i32; @*/
     /*@ instantiate good<unsigned long int>, 0i32; @*/
     /*@ instantiate good<unsigned long int>, 1i32; @*/
     unsigned long int tmp = pair[0];

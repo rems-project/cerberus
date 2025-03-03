@@ -1,5 +1,5 @@
 return code: 1
-[1/2]: live_owned_footprint -- fail
+[1/2]: live_RW_footprint -- fail
 [2/2]: main -- pass
 tests/cn/ptr_diff.error.c:13:10: error: Pointer `q` needs to be live for pointer difference
   return q - p;
