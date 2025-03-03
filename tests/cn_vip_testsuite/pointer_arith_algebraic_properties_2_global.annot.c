@@ -6,7 +6,7 @@ int y[2], x[2];
 int main()
 /*@ accesses x; @*/
 {
-  /*CN_VIP*//*@ extract Owned<int>, 1u64; @*/
+  /*CN_VIP*//*@ extract RW<int>, 1u64; @*/
 #ifdef ANNOT
   int *p= copy_alloc_id(
     (((uintptr_t)&(x[0])) +

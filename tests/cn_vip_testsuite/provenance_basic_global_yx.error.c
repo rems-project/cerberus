@@ -9,11 +9,11 @@ int main()
   int *p = &x + 1;
   int *q = &y;
   //CN_VIP printf("Addresses: p=%p q=%p\n",(void*)p,(void*)q);
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&q); @*/
   /*CN_VIP*/int result = _memcmp((unsigned char *)&p, (unsigned char*)&q, sizeof(p));
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&q); @*/
 #ifdef NO_ROUND_TRIP
   /*CN_VIP*/p = __cerbvar_copy_alloc_id((uintptr_t)p, &x);
 #endif

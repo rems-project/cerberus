@@ -22,11 +22,11 @@ int main()
   int *q = &y;
   //CN_VIP printf("Addresses: &x=%p p=%p &y=%"PRIxPTR\
          "\n",(void*)&x,(void*)p,(unsigned long)uy);
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&q); @*/
   /*CN_VIP*/int result = _memcmp((unsigned char*)&p, (unsigned char*)&q, sizeof(p));
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&q); @*/
 #ifdef NO_ROUND_TRIP
 #ifdef ANNOT
   /*CN_VIP*/p = copy_alloc_id((uintptr_t)p, &y);
