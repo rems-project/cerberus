@@ -22,7 +22,7 @@ function (boolean) eq_testable(pointer x, pointer y) {
 
 predicate (void) Test(pointer f, pointer b) {
   if (ptr_eq(f,b)) {
-    take F = Owned<struct int_queueCell>(b);
+    take F = RW<struct int_queueCell>(b);
     return;
   } else {
     return;
@@ -41,7 +41,7 @@ void freeIntQueueCell (struct int_queueCell *p)
 void IntQueue_pop (struct int_queue *q)
 /*@
 requires
-    take Q = Owned<struct int_queue>(q);
+    take Q = RW<struct int_queue>(q);
     !is_null(Q.front) && !is_null(Q.back);
     eq_testable(Q.front, Q.back);
     take B = Test(Q.front, Q.back);

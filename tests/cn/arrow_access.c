@@ -19,10 +19,10 @@ void arrow_access_1()
 void arrow_access_2 (struct s *origin)
 /*@
 requires
-  take Or = Owned<struct s>(origin);
+  take Or = RW<struct s>(origin);
   origin->y == 0i32;
 ensures
-  take Or_ = Owned<struct s>(origin);
+  take Or_ = RW<struct s>(origin);
   origin->y == 7i32;
   (*origin).y == 7i32;
 @*/

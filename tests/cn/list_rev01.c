@@ -11,7 +11,7 @@ predicate {integer len} List (pointer p) {
     return { len: 0 };
   }
   else {
-    take Point = Owned<struct node>(p);
+    take Point = RW<struct node>(p);
     assert (is_null(Point.next) || !addr_eq(Point.next, NULL));
     take R = List (Point.next);
     return { len: R.len + 1 };

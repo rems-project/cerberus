@@ -12,7 +12,7 @@ requires
     let base = array_shift<char>(p, -2i64);
     log.base == (u64) base;
     log.size == sizeof<int>;
-    take i = Block<int>(base);
+    take i = W<int>(base);
 ensures
     true;
 @*/
@@ -28,7 +28,7 @@ ensures
     allocs[(alloc_id)return] == log;
     log.base == (u64) return;
     log.size == sizeof<int>;
-    take i = Block<int>(return);
+    take i = W<int>(return);
 @*/
 {
     return cn_malloc(sizeof(int));

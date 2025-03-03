@@ -22,7 +22,7 @@ static inline int get_global_array_width_for_cn (void)
 predicate (map<i32, i32>) Global_Array (pointer p)
 {
   take Arr = each (i32 i; 0i32 <= i && i < global_array_width ())
-    { Owned(array_shift<int>(p, i)) };
+    { RW(array_shift<int>(p, i)) };
   return Arr;
 }
 @*/
@@ -37,7 +37,7 @@ void set_a_pointer(int *p, int x)
              0u64 <= idx && idx < ((u64) (global_array_width ()));
     ensures take Arr2 = Global_Array(global_array); @*/
 {
-  /*@ extract Owned<int>, ((i32) idx); @*/
+  /*@ focus RW<int>, ((i32) idx); @*/
   /*@ instantiate good<int>, ((i32) idx); @*/
   *p = x;
 }

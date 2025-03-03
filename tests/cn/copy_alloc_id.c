@@ -1,9 +1,9 @@
 void f1 (int *p)
 /*@
 requires
-    take B = Block(p);
+    take B = W(p);
 ensures
-    take B2 = Block(p);
+    take B2 = W(p);
 @*/
 {
   unsigned long long p_int = (unsigned long long) p;
@@ -32,7 +32,7 @@ ensures
 int main(void)
 {
   int p[1] = {1};
-  /*@ extract Owned<int>, 0u64; @*/
+  /*@ focus RW<int>, 0u64; @*/
   f1(p);
   f2(p);
 }

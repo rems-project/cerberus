@@ -37,7 +37,7 @@ predicate {datatype a_tree t} A_Tree (pointer p) {
     return {t: A_Leaf {}};
   }
   else {
-    take V = Owned<struct a_node>(p);
+    take V = RW<struct a_node>(p);
     assert ((is_null(V.left) || !addr_eq(V.left, NULL))
       && (is_null(V.right) || !addr_eq(V.right, NULL)));
     take L = B_Tree(V.left);
@@ -51,7 +51,7 @@ predicate {datatype b_tree t} B_Tree (pointer p) {
     return {t: B_Leaf {}};
   }
   else {
-    take V = Owned<struct b_node>(p);
+    take V = RW<struct b_node>(p);
     assert ((is_null(V.even) || !addr_eq(V.even, NULL))
       && (is_null(V.odd) || !addr_eq(V.odd, NULL)));
     take E = A_Tree(V.even);

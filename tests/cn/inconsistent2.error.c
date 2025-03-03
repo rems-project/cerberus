@@ -9,7 +9,7 @@ void f (int *p)
 /*@ requires take f1 = each(i32 i; 0i32 <= i && i <= 0i32) { False(p + i, i) };
     ensures false; @*/
 {
-  /*@ extract False, 0i32; @*/
+  /*@ focus False, 0i32; @*/
 }
 
 int main(void)

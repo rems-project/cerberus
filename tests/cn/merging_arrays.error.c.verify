@@ -6,6 +6,6 @@ tests/cn/merging_arrays.error.c:25:5: error: Cannot satisfy request for resource
     whole(a);
     ^~~~~~~~ 
 Resource needed: each(u64 i; 0'u64 <= i && i < 10'u64)
-{Owned<signed int>(&a + i * 4'u64)}
+{RW<signed int>(&a + i * 4'u64)}
       tests/cn/merging_arrays.error.c:14:10: (arg X)
 State file: file:///tmp/state__merging_arrays.error.c__main.html
