@@ -1937,11 +1937,8 @@ let coq_prologue =
 
 
 let pp_file pp_type pp_type_name file =
-  coq_prologue
-  ^^ P.hardline
-  ^^ P.hardline
   (* Print globals *)
-  ^^ pp_comment "Global definitions"
+  pp_comment "Global definitions"
   ^^ P.hardline
   ^^ List.fold_left
        (fun acc (sym, glob) ->
@@ -2229,26 +2226,22 @@ let coq_inference_proof =
        ]
 
 
-let pp_unit_file_with_resource_inference
-  (prog : unit file)
-  (osteps : Prooflog.log option)
-  (generate_proof : bool)
-  =
-  pp_file pp_unit pp_unit_type prog
+(* High-level functions to pretty print the unit file and proof log *)
+
+let pp_prologue () = coq_prologue ^^ P.hardline
+
+let pp_unit_file (prog : unit file) = pp_file pp_unit pp_unit_type prog ^^ P.hardline
+
+let pp_proof_log (steps : Prooflog.log) (generate_proof : bool) =
+  pp_comment "Resource Inference Steps"
+  ^^ P.hardline
+  ^^ coq_def
+       (coq_steps_var_name ^ ":Prooflog.log")
+       P.empty
+       (pp_list pp_resource_inference_step steps)
   ^^ P.hardline
   ^^
-  match osteps with
-  | Some steps ->
-    pp_comment "Resource Inference Steps"
-    ^^ P.hardline
-    ^^ coq_def
-         (coq_steps_var_name ^ ":Prooflog.log")
-         P.empty
-         (pp_list pp_resource_inference_step steps)
-    ^^ P.hardline
-    ^^
-    if generate_proof then
-      pp_comment "Resource Inference Proof" ^^ P.hardline ^^ coq_inference_proof
-    else
-      P.empty
-  | None -> P.empty
+  if generate_proof then
+    pp_comment "Resource Inference Proof" ^^ P.hardline ^^ coq_inference_proof
+  else
+    P.empty

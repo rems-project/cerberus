@@ -133,6 +133,7 @@ let with_well_formedness_check
   ~incl_dirs
   ~incl_files
   ~coq_export_file
+  ~coq_mucore
   ~coq_proof_log
   ~coq_check_proof_log
   ~csv_times
@@ -184,15 +185,21 @@ let with_well_formedness_check
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
       let@ _ = f ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused in
-      let steps = Prooflog.get_proof_log () in
       Option.iter
         (fun path ->
-          Pp.print_file
-            path
-            (Pp_mucore_coq.pp_unit_file_with_resource_inference
-               prog5
-               (if coq_proof_log then Some steps else None)
-               coq_check_proof_log))
+          let prologue = Pp_mucore_coq.pp_prologue () in
+          let mucore =
+            if coq_mucore then Pp_mucore_coq.pp_unit_file prog5 else PPrint.empty
+          in
+          let proof =
+            if coq_proof_log then (
+              let steps = Prooflog.get_proof_log () in
+              Pp_mucore_coq.pp_proof_log steps coq_check_proof_log)
+            else
+              PPrint.empty
+          in
+          let doc = PPrint.( ^^ ) prologue (PPrint.( ^^ ) mucore proof) in
+          Pp.print_file path doc)
         coq_export_file;
       return ()
     in
@@ -270,6 +277,7 @@ let well_formed
     ~incl_dirs
     ~incl_files
     ~coq_export_file:None
+    ~coq_mucore:false
     ~coq_proof_log:false
     ~coq_check_proof_log:false
     ~csv_times
@@ -299,6 +307,7 @@ let verify
   diag
   lemmata
   coq_export_file
+  coq_mucore
   coq_proof_log
   coq_check_proof_log
   only
@@ -353,6 +362,7 @@ let verify
     ~incl_dirs
     ~incl_files
     ~coq_export_file
+    ~coq_mucore
     ~coq_proof_log
     ~coq_check_proof_log
     ~csv_times
@@ -465,6 +475,7 @@ let generate_executable_specs
     ~incl_dirs
     ~incl_files
     ~coq_export_file:None
+    ~coq_mucore:false
     ~coq_proof_log:false
     ~coq_check_proof_log:false
     ~csv_times
@@ -536,6 +547,7 @@ let run_seq_tests
     ~incl_files
     ~csv_times
     ~coq_export_file:None
+    ~coq_mucore:false
     ~coq_proof_log:false
     ~coq_check_proof_log:false
     ~log_times
@@ -657,6 +669,7 @@ let run_tests
     ~incl_files
     ~csv_times
     ~coq_export_file:None
+    ~coq_mucore:false
     ~coq_proof_log:false
     ~coq_check_proof_log:false
     ~log_times
@@ -1012,20 +1025,26 @@ end
 
 module CoqExport_flags = struct
   let coq_export =
-    let doc = "export to coq" in
+    let doc = "File to export to coq defintions" in
     Arg.(value & opt (some string) None & info [ "coq-export-file" ] ~docv:"FILE" ~doc)
+end
+
+module CoqMucore_flags = struct
+  let coq_mucore =
+    let doc = "include mu-core AST in coq export" in
+    Arg.(value & flag & info [ "coq-mucore" ] ~doc)
 end
 
 module CoqProofLog_flags = struct
   let coq_proof_log =
     let doc = "include proof log in coq export" in
-    Arg.(value & flag & info [ "coq-proof-log" ] ~docv:"FILE" ~doc)
+    Arg.(value & flag & info [ "coq-proof-log" ] ~doc)
 end
 
 module CoqCherkProofLog_flags = struct
   let coq_check_proof_log =
     let doc = "Include statements to check proof log in coq exported file" in
-    Arg.(value & flag & info [ "coq-check-proof-log" ] ~docv:"FILE" ~doc)
+    Arg.(value & flag & info [ "coq-check-proof-log" ] ~doc)
 end
 
 let wf_cmd =
@@ -1076,6 +1095,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
   $ CoqExport_flags.coq_export
+  $ CoqMucore_flags.coq_mucore
   $ CoqProofLog_flags.coq_proof_log
   $ CoqCherkProofLog_flags.coq_check_proof_log
   $ Verify_flags.only
