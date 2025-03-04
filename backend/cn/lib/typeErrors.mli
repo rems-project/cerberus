@@ -131,6 +131,7 @@ type message =
         orig_loc : Locations.t
       }
   | Requires_after_ensures of { ens_loc : Locations.t }
+  | Unsupported_byte_conv_ct of Sctypes.ctype
 
 type t =
   { loc : Locations.t;

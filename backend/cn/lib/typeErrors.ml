@@ -192,6 +192,7 @@ type message =
         orig_loc : Locations.t
       }
   | Requires_after_ensures of { ens_loc : Locations.t }
+  | Unsupported_byte_conv_ct of Sctypes.ctype
 
 type t =
   { loc : Locations.t;
@@ -541,6 +542,11 @@ let pp_message = function
     let head, pos = Locations.head_pos_of_location ens_loc in
     let descr = Some (!^"ensures clause at" ^^^ !^head ^/^ !^pos) in
     { short; descr; state = None }
+  | Unsupported_byte_conv_ct ct ->
+    let short =
+      !^"Cannot (yet) convert value of" ^^^ Sctypes.pp ct ^^^ !^"to/from bytes"
+    in
+    { short; descr = None; state = None }
 
 
 (** Convert a possibly-relative filepath into an absolute one. *)
