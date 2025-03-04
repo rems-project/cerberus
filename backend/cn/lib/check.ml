@@ -1881,7 +1881,8 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          (* FIXME this hard codes big endianness but this should be switchable *)
          let here = Locations.other __LOC__ in
          match ct with
-         | Sctypes.Void | Array (_, _) | Struct _ | Function (_, _, _) -> assert false
+         | Sctypes.Void | Array (_, _) | Struct _ | Function (_, _, _) ->
+           fail (fun _ -> { loc; msg = Unsupported_byte_conv_ct ct })
          | Integer it ->
            let bt = IT.get_bt value in
            let lhs = value in
@@ -1895,7 +1896,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              in
              List.fold_left (fun x y -> IT.add_ (x, y) here) b bytes
            in
-           eq_ (lhs, rhs) here
+           return (eq_ (lhs, rhs) here)
          | Pointer _ ->
            (* FIXME this totally ignores provenances *)
            let bt = WellTyped.default_quantifier_bt in
@@ -1910,7 +1911,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              in
              List.fold_left (fun x y -> IT.add_ (x, y) here) b bytes
            in
-           eq_ (lhs, rhs) here
+           return (eq_ (lhs, rhs) here)
        in
        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
        let aux loc stmt =
@@ -1938,7 +1939,9 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            let@ () = add_r loc (Q (bytes_qpred q_sym ct pointer init), O byte_arr) in
            (match init with
             | Uninit -> add_c loc (LC.T (IT.eq_ (byte_arr, default_ map_bt here) here))
-            | Init -> add_c loc (LC.T (bytes_constraints ~value ~byte_arr ct)))
+            | Init ->
+              let@ constr = bytes_constraints ~value ~byte_arr ct in
+              add_c loc (LC.T constr))
          | To_from_bytes (From, { name = Owned (ct, init); pointer; _ }) ->
            let@ () = WellTyped.owned_ct_ok loc (ct, init) in
            let@ pointer = WellTyped.infer_term pointer in
@@ -1961,7 +1964,9 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            in
            (match init with
             | Uninit -> add_c loc (LC.T (IT.eq_ (value, default_ value_bt here) here))
-            | Init -> add_c loc (LC.T (bytes_constraints ~value ~byte_arr ct)))
+            | Init ->
+              let@ constr = bytes_constraints ~value ~byte_arr ct in
+              add_c loc (LC.T constr))
          | Have lc ->
            let@ _lc = WellTyped.logical_constraint loc lc in
            fail (fun _ ->
