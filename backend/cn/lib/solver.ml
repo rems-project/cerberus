@@ -1522,8 +1522,8 @@ let assume_constraints (constraints : LC.t list) (s : solver) : solver =
 
 
 let ask_solver (s : solver) (lcs : LC.t list) : Simple_smt.result =
-  let s' = assume_constraints lcs s in
   debug_ack_command s (SMT.push 1);
+  let s' = assume_constraints lcs s in
   let simp_solver = s'.smt_solver in
   let res = SMT.check simp_solver in
   debug_ack_command s' (SMT.pop 1);

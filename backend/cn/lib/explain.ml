@@ -407,7 +407,6 @@ module CheckPreds = struct
          get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
        | _, Some (Value it, _) ->
          get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
-       (* TODO: logical vs computational *)
        (* TODO: BaseType case *)
        | _ ->
          let f (s, _) = Sym.equal s v in
@@ -421,26 +420,22 @@ module CheckPreds = struct
          get_body_constraints t var_def_locs v_cand ctxt iargs term_vals
        | ResourceL ((_, (p, _)), _) ->
          (match p with
-          | P psig ->
-            (match psig.name with
-             | Owned (_, _) ->
-               (* if the predicate is Owned, its pointer argument should not be null *)
-               let here = Locations.other __LOC__ in
-               let neq = IT.ne__ psig.pointer (IT.null_ here) here in
-               Yes ([ LC.T neq ], var_cands)
-             | PName name ->
-               (* search for predicate definition *)
-               (match Sym.Map.find_opt name ctxt.global.resource_predicates with
-                | Some pdef ->
-                  (match check_pred name pdef v_cand ctxt psig.iargs term_vals with
-                   | Yes cs -> Yes (cs, var_cands)
-                   | No e -> No e
-                   | Unknown e -> Unknown e
-                   | Error e -> Error e)
-                | None ->
-                  Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name)))
-          | Q qsig ->
-            let _ = qsig in
+          | P { name = Owned _; pointer = _; iargs = _ } ->
+            (* if the predicate is Owned, get restrictions on pointer *)
+            let owned_lcs = Res.derived_lc1 (p, O v_cand) in
+            Yes (List.map (fun it -> LC.T it) owned_lcs, var_cands)
+          | P { name = PName name; pointer = _; iargs } ->
+            (* search for predicate definition *)
+            (match Sym.Map.find_opt name ctxt.global.resource_predicates with
+            | Some pdef ->
+              (match check_pred name pdef v_cand ctxt iargs term_vals with
+                | Yes cs -> Yes (cs, var_cands)
+                | No e -> No e
+                | Unknown e -> Unknown e
+                | Error e -> Error e)
+            | None ->
+              Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name))
+          | Q _ ->
             Unknown !^"Quantified predicates are out of scope for now."))
 end
 

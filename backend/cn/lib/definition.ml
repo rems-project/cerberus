@@ -116,24 +116,16 @@ module Clause = struct
     in
     aux clause_packing_ft
 
-
-  let rec explicit_negative_guards_aux (cs : t list) (prev_negated : IT.t) : t list =
-    let here = Locations.other __LOC__ in
-    match cs with
-    | [] -> []
-    | { loc; guard = cur_guard; packing_ft } :: cs' ->
-      let cur =
-        { loc; guard = IT.and_ [ prev_negated; cur_guard ] here; packing_ft }
-      in
-      let so_far_ng = IT.and_ [ IT.not_ cur_guard here; prev_negated ] here in
-      cur :: explicit_negative_guards_aux cs' so_far_ng
-
-
   let explicit_negative_guards (cs : t list) : t list =
     let here = Locations.other __LOC__ in
-    match cs with
-    | [] -> []
-    | h :: tl -> h :: explicit_negative_guards_aux tl (IT.not_ h.guard here)
+    let comb prev_negated {loc; guard = cur_guard; packing_ft} =
+      let cur =
+        { loc; guard = IT.and_ [ cur_guard; prev_negated ] here; packing_ft }
+      in
+      let new_negated = IT.and_ [ IT.not_ cur_guard here; prev_negated ] here in
+      (new_negated, cur)
+    in
+    snd (List.fold_left_map comb (IT.bool_ true here) cs)
 end
 
 module Predicate = struct
