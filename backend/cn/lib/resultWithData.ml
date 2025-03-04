@@ -49,7 +49,9 @@ let equal eq_a eq_b r r' =
 
 
 (* Gives a single canonical result *)
-let combine_results (e : 'b) (results : ('a, 'b) result_with_data list) : ('a, 'b) result_with_data =
+let combine_results (e : 'b) (results : ('a, 'b) result_with_data list)
+  : ('a, 'b) result_with_data
+  =
   match results with
   | [] -> Error e
   | h :: t ->

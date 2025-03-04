@@ -85,10 +85,7 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   in
   let default =
     RWD.Unknown
-      (!^"Different CN constructors for "
-       ^^^ IT.pp exp
-       ^^^ !^" and "
-       ^^^ IT.pp candidate)
+      (!^"Different CN constructors for " ^^^ IT.pp exp ^^^ !^" and " ^^^ IT.pp candidate)
   in
   match (IT.get_term exp, IT.get_term candidate) with
   | Const c, Const c' -> map_with_guard_no (IT.equal_const c c') [] []
@@ -123,7 +120,7 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     map_with_guard_no (Sym.equal name name') (sort_by_id args) (sort_by_id args')
   | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
     map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [ exp1 ] [ exp1' ]
-  | ( ArrayShift { base; ct; index }, ArrayShift { base = base'; ct = ct'; index = index' } )
+  | ArrayShift { base; ct; index }, ArrayShift { base = base'; ct = ct'; index = index' }
     ->
     map_with_guard_unknown (Sctypes.equal ct ct') [ base; index ] [ base'; index' ]
   | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc = exp2' } ->
@@ -238,7 +235,7 @@ let ask_solver try_hard g lcs =
   let th = !Solver.try_hard in
   Solver.try_hard := try_hard;
   let simp_ctxt =
-    Simplify.{global = g; values = Sym.Map.empty; simp_hook = fun _ -> None}
+    Simplify.{ global = g; values = Sym.Map.empty; simp_hook = (fun _ -> None) }
   in
   let get_it lc = match lc with LC.T it -> Some it | LC.Forall _ -> None in
   let lc = LC.T (IT.and_ (List.filter_map get_it lcs) here) in
@@ -334,7 +331,7 @@ and check_clause
       ]
   in
   (* query solver *)
-  ask_solver true ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs')
+  ask_solver false ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs')
 
 
 (* get a list of constraints that are satisfiable iff candidate could have come from this clause body *)
@@ -396,7 +393,8 @@ and get_var_constraints
        get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
      | _, Some (Value it, _) ->
        get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
-     | _ -> (* baseType case: Issue #901 *)
+     | _ ->
+       (* baseType case: Issue #901 *)
        let f (s, _) = Sym.equal s v in
        (match List.find_opt f iargs with
         | Some _ -> Yes ([], var_cands)
@@ -416,5 +414,5 @@ and get_var_constraints
         | Some pdef ->
           let@ cs = check_pred name pdef v_cand ctxt iargs term_vals in
           Yes (cs, var_cands)
-      | None -> Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name))
-    | Q _ -> Unknown !^"Quantified predicates are out of scope for now.")
+        | None -> Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name))
+     | Q _ -> Unknown !^"Quantified predicates are out of scope for now.")
