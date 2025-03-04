@@ -33,21 +33,33 @@ type def_line =
   | DefineL of (Sym.t * IT.t) * Loc.info
   | ResourceL of (Sym.t * (Req.t * BT.t)) * Loc.info
 
-(* Build a map by using f to develop a map for each
-    pair of elements in the two lists, failing
-    if they produce different results for any symbol or if
-    the lists have different lengths *)
+(* Takes in:
+    - exps and exps', two lists
+    - eq, an equality function for the type of the elements of the lists
+    - f, which, given two elements from the same index in the two lists,
+        uses them to construct a symbol map
+   Applies f across the lists and combines the results into one map
+   Safely fails if:
+   - the lists have different lengths
+   - different indexes produce incompatible maps
+   - f safely fails on any pair of elements *)
 let map_from_lists f eq exps exps' =
-  (* Take the union of two symbol maps, removing any key that is in both maps with different values *)
   let open ResultWithData in
-  let merge_eq eq m1 m2 =
-    let merge _ v1 v2 = if eq v1 v2 then Some v1 else None in
-    Sym.Map.union merge m1 m2
+  (* Take the union of two symbol maps,
+    failing on any key that is in both maps with different values *)
+  let merge eq m1 m2 =
+    let comb k v acc =
+      let@ macc = acc in
+      match Sym.Map.find_opt k macc with
+      | Some v' -> if eq v v' then acc else No (Pp.(!^) "Incompatible list elements")
+      | None -> Yes (Sym.Map.add k v macc)
+    in
+    Sym.Map.fold comb m1 (Yes m2)
   in
   let merge_r_maps r_acc (exp1, exp1') =
     let@ acc = r_acc in
     let@ combined = f exp1 exp1' in
-    Yes (merge_eq eq acc combined)
+    merge eq acc combined
   in
   let zipped = List.combine exps exps' in
   List.fold_left merge_r_maps (Yes Sym.Map.empty) zipped
@@ -300,7 +312,6 @@ and check_clause
     List.fold_left (fun acc (k, v) -> Sym.Map.add k v acc) Sym.Map.empty xs
   in
   let ics = convert_symmap_to_lcs (toMap zipped) in
-  (* (Sym.Map.of_seq (List.to_seq zipped)) in *)
   (* get other constraints on terms *)
   let tcs = List.map pair_to_lc term_vals in
   (* get returned expression of c and variable dependency graph *)
