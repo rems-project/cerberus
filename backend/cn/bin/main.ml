@@ -1041,7 +1041,7 @@ module CoqProofLog_flags = struct
     Arg.(value & flag & info [ "coq-proof-log" ] ~doc)
 end
 
-module CoqCherkProofLog_flags = struct
+module CoqCheckProofLog_flags = struct
   let coq_check_proof_log =
     let doc = "Include statements to check proof log in coq exported file" in
     Arg.(value & flag & info [ "coq-check-proof-log" ] ~doc)
@@ -1097,7 +1097,7 @@ let verify_t : unit Term.t =
   $ CoqExport_flags.coq_export
   $ CoqMucore_flags.coq_mucore
   $ CoqProofLog_flags.coq_proof_log
-  $ CoqCherkProofLog_flags.coq_check_proof_log
+  $ CoqCheckProofLog_flags.coq_check_proof_log
   $ Verify_flags.only
   $ Verify_flags.skip
   $ Common_flags.csv_times
