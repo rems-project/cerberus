@@ -39,7 +39,7 @@ let do_ail_desugar_op desugar_state f =
   match f desugar_state with
   | CF.Exception.Result (x, st2) -> return (x, st2)
   | CF.Exception.Exception (loc, msg) ->
-    fail { loc; msg = Generic !^(CF.Pp_errors.short_message msg) }
+    fail { loc; msg = Generic !^(CF.Pp_errors.short_message msg) [@alert "-deprecated"] }
 
 
 let do_ail_desugar_rdonly desugar_state f =
@@ -931,7 +931,8 @@ let is_pass_by_pointer = function By_pointer -> true | By_value -> false
 
 let check_against_core_bt loc cbt bt =
   CoreTypeChecks.check_against_core_bt cbt bt
-  |> Result.map_error (fun msg -> TypeErrors.{ loc; msg = Generic msg })
+  |> Result.map_error (fun msg ->
+    TypeErrors.{ loc; msg = Generic msg [@alert "-deprecated"] })
 
 
 let make_label_args f_i loc env st args (accesses, inv) =
@@ -1018,7 +1019,7 @@ let make_fun_with_spec_args f_i loc env args (accesses, requires) =
                    ^^^ BT.pp bt
                    ^^^ parens (!^"from" ^^^ Sctypes.pp ct)
                    ^^^ !^"and"
-                   ^^^ BT.pp (SBT.proj sbt2))
+                   ^^^ BT.pp (SBT.proj sbt2)) [@alert "-deprecated"]
             }
       in
       let env = C.add_computational pure_arg sbt env in
@@ -1042,7 +1043,12 @@ let desugar_access d_st global_types (loc, id) =
     match var_kind with
     | Var_kind_c C_kind_var -> return ()
     | Var_kind_c C_kind_enum ->
-      fail { loc; msg = Generic !^"accesses: expected global, not enum constant" }
+      fail
+        { loc;
+          msg =
+            Generic !^"accesses: expected global, not enum constant" [@alert
+                                                                       "-deprecated"]
+        }
     | Var_kind_cn ->
       let msg =
         !^"The name"
@@ -1050,12 +1056,14 @@ let desugar_access d_st global_types (loc, id) =
         ^^^ !^"is not bound to a C global variable."
         ^^^ !^"Perhaps it has been shadowed by a CN variable?"
       in
-      fail { loc; msg = Generic msg }
+      fail { loc; msg = Generic msg [@alert "-deprecated"] }
   in
   let@ ct =
     match List.assoc_opt Sym.equal s global_types with
     | Some ct -> return (convert_ct loc ct)
-    | None -> fail { loc; msg = Generic (Sym.pp s ^^^ !^"is not a global") }
+    | None ->
+      fail
+        { loc; msg = Generic (Sym.pp s ^^^ !^"is not a global") [@alert "-deprecated"] }
   in
   let ct = Sctypes.to_ctype ct in
   return (loc, (s, ct))

@@ -273,7 +273,9 @@ let convert_enum_expr =
         | None ->
           fail
             { loc;
-              msg = Generic (Pp.item "no standard encoding type for constant" (Pp.z z))
+              msg =
+                Generic (Pp.item "no standard encoding type for constant" (Pp.z z)) [@alert
+                                                                                      "-deprecated"]
             }
       in
       return (IT.Surface.inj (IT.num_lit_ z bt loc))
@@ -284,7 +286,7 @@ let convert_enum_expr =
             Generic
               (Pp.item
                  "enum conversion: unhandled constant"
-                 (CF.Pp_ail_ast.pp_constant c))
+                 (CF.Pp_ail_ast.pp_constant c)) [@alert "-deprecated"]
         }
   in
   let rec conv_expr_ e1 loc = function
@@ -298,7 +300,8 @@ let convert_enum_expr =
               (Pp.item
                  "enum conversion: unhandled expression kind"
                  (CF.Pp_ast.doc_tree_toplevel
-                    (CF.Pp_ail_ast.dtree_of_expression (fun _ -> !^"()") e1)))
+                    (CF.Pp_ail_ast.dtree_of_expression (fun _ -> !^"()") e1))) [@alert
+                                                                                 "-deprecated"]
         }
   and conv_expr e =
     match e with AnnotatedExpression (_, _, loc, expr) -> conv_expr_ e loc expr
@@ -348,7 +351,8 @@ let add_datatype_info env (dt : cn_datatype) =
             Generic
               (!^"Re-using member name"
                ^^^ Id.pp nm
-               ^^^ !^"within datatype definition (SMT limitation).")
+               ^^^ !^"within datatype definition (SMT limitation).") [@alert
+                                                                       "-deprecated"]
         }
   in
   let@ all_params =
@@ -449,7 +453,7 @@ module EffectfulTranslation = struct
 
   let cannot_tell_pointee_ctype loc e =
     let msg = !^"Cannot tell pointee C-type of" ^^^ squotes (IT.pp e) ^^ dot in
-    fail { loc; msg = Generic msg }
+    fail { loc; msg = Generic msg [@alert "-deprecated"] }
 
 
   (* TODO: type checks and disambiguation at this stage seems ill-advised,
@@ -622,7 +626,8 @@ module EffectfulTranslation = struct
         { loc;
           msg =
             (let open Pp in
-             Generic (!^"quantified v must be integer or bitvector:" ^^^ SBT.pp bt))
+             (Generic (!^"quantified v must be integer or bitvector:" ^^^ SBT.pp bt) [@alert
+                                                                                       "-deprecated"]))
         }
 
 
@@ -785,7 +790,7 @@ module EffectfulTranslation = struct
                 msg =
                   Generic
                     !^"type of array not specified (e.g. array_shift<int>) or known from \
-                       pointer"
+                       pointer" [@alert "-deprecated"]
               }
         in
         (match IT.get_bt base with
@@ -955,7 +960,11 @@ module EffectfulTranslation = struct
         let@ () =
           match evaluation_scope with
           | None -> return ()
-          | Some _ -> fail { loc; msg = Generic !^"Cannot nest evaluation scopes." }
+          | Some _ ->
+            fail
+              { loc;
+                msg = Generic !^"Cannot nest evaluation scopes." [@alert "-deprecated"]
+              }
         in
         let@ scope_exists = scope_exists loc scope in
         (* let@ () = match StringMap.mem scope env.old_states with *)
@@ -963,7 +972,12 @@ module EffectfulTranslation = struct
           match scope_exists with
           | true -> return ()
           | false ->
-            fail { loc; msg = Generic !^("Unknown evaluation scope '" ^ scope ^ "'.") }
+            fail
+              { loc;
+                msg =
+                  Generic !^("Unknown evaluation scope '" ^ scope ^ "'.") [@alert
+                                                                            "-deprecated"]
+              }
         in
         trans (Some scope) locally_bound env e
       | CNExpr_deref e ->
@@ -978,7 +992,7 @@ module EffectfulTranslation = struct
               ^/^ !^"Cannot dereference a pointer expression containing a locally bound \
                      variable."
             in
-            fail { loc; msg = Generic msg }
+            fail { loc; msg = Generic msg [@alert "-deprecated"] }
         in
         let@ expr = self e in
         let@ o_v = deref loc expr evaluation_scope in
@@ -999,7 +1013,7 @@ module EffectfulTranslation = struct
              ^^ dot
              ^^^ !^"Is the necessary ownership missing?"
            in
-           fail { loc; msg = Generic msg })
+           fail { loc; msg = Generic msg [@alert "-deprecated"] })
       | CNExpr_value_of_c_atom (sym, C_kind_var) ->
         assert (not (Sym.Set.mem sym locally_bound));
         (* let@ o_v = match evaluation_scope with *)
@@ -1027,7 +1041,7 @@ module EffectfulTranslation = struct
              ^^^ Sym.pp sym
              ^^^ !^"missing?"
            in
-           fail { loc; msg = Generic msg }
+           fail { loc; msg = Generic msg [@alert "-deprecated"] }
          | Some v -> return v)
       | CNExpr_value_of_c_atom (sym, C_kind_enum) ->
         assert (not (Sym.Set.mem sym locally_bound));
@@ -1059,7 +1073,7 @@ module EffectfulTranslation = struct
                       ^^^ !^cname
                       ^^^ !^" with an annotation: \'"
                       ^^^ !^cname
-                      ^^^ !^"<CTYPE>'.")
+                      ^^^ !^"<CTYPE>'.") [@alert "-deprecated"]
                }
            | has ->
              let expected = "pointer" in
@@ -1107,7 +1121,7 @@ module EffectfulTranslation = struct
     | ArrayShift { base = p; ct; index = x } when Terms.equal_annot SBT.equal x qs ->
       let here = Locations.other __LOC__ in
       return (p, IT.cast_ (SBT.proj bt) (IT.sizeOf_ ct here) here)
-    | _ -> fail { loc; msg = Generic (!^msg_s ^^^ IT.pp ptr_expr) }
+    | _ -> fail { loc; msg = Generic (!^msg_s ^^^ IT.pp ptr_expr) [@alert "-deprecated"] }
 
 
   let owned_good _sym (res_t, _oargs_ty) =
@@ -1207,13 +1221,13 @@ module Pure = struct
     | E.Error e -> Or_TypeError.fail e
     | E.Value_of_c_variable (loc, _, _, _) ->
       let msg = !^what ^^^ !^"are not allowed to refer to (the state of) C variables." in
-      fail { loc; msg = Generic msg }
+      fail { loc; msg = Generic msg [@alert "-deprecated"] }
     | E.Deref (loc, _, _, _) ->
       let msg = !^what ^^^ !^"are not allowed to dereference pointers." in
-      fail { loc; msg = Generic msg }
+      fail { loc; msg = Generic msg [@alert "-deprecated"] }
     | E.ScopeExists (loc, _, _) ->
       let msg = !^what ^^^ !^"are not allowed to use evaluation scopes." in
-      fail { loc; msg = Generic msg }
+      fail { loc; msg = Generic msg [@alert "-deprecated"] }
 end
 
 let translate_cn_func_body env body =
@@ -1244,7 +1258,8 @@ let translate_cn_function env (def : cn_function) =
         else
           fail
             { loc = def.cn_func_loc;
-              msg = Generic (Pp.item "Unknown attribute" (Id.pp id))
+              msg =
+                Generic (Pp.item "Unknown attribute" (Id.pp id)) [@alert "-deprecated"]
             })
       def.cn_func_attrs
   in
@@ -1548,7 +1563,7 @@ module UsingLoads = struct
     | BT.Loc (Some ct) -> return ct
     | BT.Loc None ->
       let msg = !^"Cannot tell pointee C-type of" ^^^ squotes (IT.pp it) ^^ dot in
-      fail { loc; msg = Generic msg }
+      fail { loc; msg = Generic msg [@alert "-deprecated"] }
     | has ->
       let expected = "pointer" in
       let reason = "dereferencing" in
