@@ -290,6 +290,10 @@ let main
       (String.concat "\n" cn_header_decls_list)
   in
   output_to_oc cn_header_oc [ cn_header_oc_str ];
+
+
+  (* Genereate CN.c *)
+
   (* TODO: Topological sort *)
   let cn_defs_list =
     [ cn_header;
@@ -304,6 +308,10 @@ let main
     ]
   in
   output_to_oc cn_oc cn_defs_list;
+  
+  
+  (* Generate myfile-exec.c *)
+
   let incls =
     [ ("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true) ]
   in
@@ -366,6 +374,7 @@ let main
     @ List.map (fun (loc, _) -> Cerb_location.get_filename loc) squashed_block_return_injs
   in
   let remaining_fns_and_ocs =
+    if use_preproc then [] else
     open_auxilliary_files filename prefix included_filenames' []
   in
   let pre_post_pairs =
