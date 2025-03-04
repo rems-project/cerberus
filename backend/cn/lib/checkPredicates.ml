@@ -363,7 +363,7 @@ and get_body_constraints
   | Unknown e ->
     let here = Locations.other __LOC__ in
     let res =
-      match ask_solver true ctxt.global [ LC.T (IT.eq_ (exp, candidate) here) ] with
+      match ask_solver false ctxt.global [ LC.T (IT.eq_ (exp, candidate) here) ] with
       | Yes _ ->
         (* not using model to get var cands because it may overconstrain *)
         Yes ([], Sym.Map.empty)
