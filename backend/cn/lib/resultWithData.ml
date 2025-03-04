@@ -48,19 +48,19 @@ let equal eq_a eq_b r r' =
   | _, _ -> false
 
 
-  (* Gives a single canonical result *)
-  let combine_results (e : 'b) (results : ('a, 'b) result_with_data list) : ('a, 'b) result_with_data =
-    match results with
-    | [] -> Error e
-    | h :: t ->
-      let combine acc res =
-        match (acc, res) with
-        | Yes l, _ -> Yes l
-        | _, Yes l -> Yes l
-        | Error s, _ -> Error s
-        | _, Error s -> Error s
-        | Unknown s, _ -> Unknown s
-        | _, Unknown s -> Unknown s
-        | No s, _ -> No s
-      in
-      List.fold_left combine h t
+(* Gives a single canonical result *)
+let combine_results (e : 'b) (results : ('a, 'b) result_with_data list) : ('a, 'b) result_with_data =
+  match results with
+  | [] -> Error e
+  | h :: t ->
+    let combine acc res =
+      match (acc, res) with
+      | Yes l, _ -> Yes l
+      | _, Yes l -> Yes l
+      | Error s, _ -> Error s
+      | _, Error s -> Error s
+      | Unknown s, _ -> Unknown s
+      | _, Unknown s -> Unknown s
+      | No s, _ -> No s
+    in
+    List.fold_left combine h t

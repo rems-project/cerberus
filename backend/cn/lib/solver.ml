@@ -1402,12 +1402,6 @@ module TryHard = struct
         ((s2, bt) :: qs1, body2)
       in
       List.fold_right comb qs ([], body)
-      (* match qs' with
-      | [] -> ([], body)
-      | (s, bt) :: qs ->
-        let qs1, body1 = alpha_rename qs body in
-        let s1, body2 = IT.alpha_rename s body1 in
-        ((s1, bt) :: qs1, body2) *)
     in
     let qs, body = alpha_rename qs body in
     let body_ = translate_term solver body in
@@ -1453,7 +1447,6 @@ module TryHard = struct
 end
 
 let try_hard = ref false
-
 
 let provableWithUnknown ~loc ~solver ~assumptions ~simp_ctxt lc =
   let _ = loc in

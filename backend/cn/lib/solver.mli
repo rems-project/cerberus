@@ -46,7 +46,8 @@ val provableWithUnknown
   assumptions:LogicalConstraints.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
-  [> `True | `False | `Unknown ] (*TODO CHT*)
+  [> `True | `False | `Unknown ]
+(*TODO CHT*)
 
 (* Run the solver. Note that we pass the assumptions explicitly even though they are also
    available in the solver context, because CN is going some simplification on its own. *)

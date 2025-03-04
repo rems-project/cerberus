@@ -116,12 +116,11 @@ module Clause = struct
     in
     aux clause_packing_ft
 
+
   let explicit_negative_guards (cs : t list) : t list =
     let here = Locations.other __LOC__ in
-    let comb prev_negated {loc; guard = cur_guard; packing_ft} =
-      let cur =
-        { loc; guard = IT.and_ [ cur_guard; prev_negated ] here; packing_ft }
-      in
+    let comb prev_negated { loc; guard = cur_guard; packing_ft } =
+      let cur = { loc; guard = IT.and_ [ cur_guard; prev_negated ] here; packing_ft } in
       let new_negated = IT.and_ [ IT.not_ cur_guard here; prev_negated ] here in
       (new_negated, cur)
     in

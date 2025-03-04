@@ -11,47 +11,47 @@ module RWD = ResultWithData
 
 (** Infrastructure for checking if a countermodel satisfies a predicate **)
 (* The core function is `check_pred`, which, given a predicate and a term
-  matching the return type of the predicate, checks if the term is in the
-  range of that predicate. The term here is referred to as a "candidate".
-  The algorithm works by "walking backward" over the predicate: it
-  compares the candidate to the `return` expression of the predicate. If they
-  are compatible (e.g., use the same constructor), then this implies candidate
-  values for the free variables in the `return` expression.
-  (`get_var_cands` identifies these candidates.) These new
-  candidates are then recursively checked against the definitions of those
-  variables. *)
+   matching the return type of the predicate, checks if the term is in the
+   range of that predicate. The term here is referred to as a "candidate".
+   The algorithm works by "walking backward" over the predicate: it
+   compares the candidate to the `return` expression of the predicate. If they
+   are compatible (e.g., use the same constructor), then this implies candidate
+   values for the free variables in the `return` expression.
+   (`get_var_cands` identifies these candidates.) These new
+   candidates are then recursively checked against the definitions of those
+   variables. *)
 
 type check_result = (LC.t list, Pp.document) RWD.result_with_data
 
 (* let pp_check_result =
-    pp_result_with_data (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc)) (fun d -> d) *)
+   pp_result_with_data (Pp.list (fun lc -> !^"\n" ^^^ LC.pp lc)) (fun d -> d) *)
 (* Issue #900 *)
 
 (* Type of nonterminal lines in a predicate clause.
-    Corresponds to packing_ft *)
+   Corresponds to packing_ft *)
 type def_line =
   | DefineL of (Sym.t * IT.t) * Loc.info
   | ResourceL of (Sym.t * (Req.t * BT.t)) * Loc.info
 
 (* Takes in:
-    - exps and exps', two lists
-    - eq, an equality function for the type of the elements of the lists
-    - f, which, given two elements from the same index in the two lists,
-        uses them to construct a symbol map
-   Applies f across the lists and combines the results into one map
-   Safely fails if:
+   - exps and exps', two lists
+   - eq, an equality function for the type of the elements of the lists
+   - f, which, given two elements from the same index in the two lists,
+     uses them to construct a symbol map
+     Applies f across the lists and combines the results into one map
+     Safely fails if:
    - the lists have different lengths
    - different indexes produce incompatible maps
    - f safely fails on any pair of elements *)
 let map_from_lists f eq exps exps' =
   let open ResultWithData in
   (* Take the union of two symbol maps,
-    failing on any key that is in both maps with different values *)
+     failing on any key that is in both maps with different values *)
   let merge eq m1 m2 =
     let comb k v acc =
       let@ macc = acc in
       match Sym.Map.find_opt k macc with
-      | Some v' -> if eq v v' then acc else No (Pp.(!^) "Incompatible list elements")
+      | Some v' -> if eq v v' then acc else No (Pp.( !^ ) "Incompatible list elements")
       | None -> Yes (Sym.Map.add k v macc)
     in
     Sym.Map.fold comb m1 (Yes m2)
@@ -66,7 +66,7 @@ let map_from_lists f eq exps exps' =
 
 
 (* Match an expression with free variables against a candidate returned by the solver to
-    get candidates for each of those free variables *)
+   get candidates for each of those free variables *)
 let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   : (IT.t Sym.Map.t, Pp.document) RWD.result_with_data
   =
@@ -85,10 +85,10 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
   in
   let default =
     RWD.Unknown
-      (Pp.(!^) "Different CN constructors for "
-        ^^^ IT.pp exp
-        ^^^ !^" and "
-        ^^^ IT.pp candidate)
+      (!^"Different CN constructors for "
+       ^^^ IT.pp exp
+       ^^^ !^" and "
+       ^^^ IT.pp candidate)
   in
   match (IT.get_term exp, IT.get_term candidate) with
   | Const c, Const c' -> map_with_guard_no (IT.equal_const c c') [] []
@@ -123,11 +123,10 @@ let rec get_var_cands (exp : IT.t) (candidate : IT.t)
     map_with_guard_no (Sym.equal name name') (sort_by_id args) (sort_by_id args')
   | MemberShift (exp1, v, id), MemberShift (exp1', v', id') ->
     map_with_guard_unknown (Sym.equal v v' && Id.equal id id') [ exp1 ] [ exp1' ]
-  | ( ArrayShift { base; ct; index },
-      ArrayShift { base = base'; ct = ct'; index = index' } ) ->
-    map_with_guard_unknown (Sctypes.equal ct ct') [ base; index ] [ base'; index' ]
-  | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc = exp2' }
+  | ( ArrayShift { base; ct; index }, ArrayShift { base = base'; ct = ct'; index = index' } )
     ->
+    map_with_guard_unknown (Sctypes.equal ct ct') [ base; index ] [ base'; index' ]
+  | CopyAllocId { addr = exp1; loc = exp2 }, CopyAllocId { addr = exp1'; loc = exp2' } ->
     map_from_IT_lists [ exp1; exp2 ] [ exp1'; exp2' ]
   | HasAllocId exp1, HasAllocId exp1' -> get_var_cands exp1 exp1'
   | SizeOf cty, SizeOf cty' -> map_with_guard_unknown (Sctypes.equal cty cty') [] []
@@ -238,19 +237,23 @@ let ask_solver try_hard g lcs =
   let here = Locations.other __LOC__ in
   let th = !Solver.try_hard in
   Solver.try_hard := try_hard;
-  let simp_ctxt = Simplify.{global = g; values = Sym.Map.empty; simp_hook = fun _ -> None} in
+  let simp_ctxt =
+    Simplify.{global = g; values = Sym.Map.empty; simp_hook = fun _ -> None}
+  in
   let get_it lc = match lc with LC.T it -> Some it | LC.Forall _ -> None in
   let lc = LC.T (IT.and_ (List.filter_map get_it lcs) here) in
-  let solver_res = Solver.provableWithUnknown
-    ~loc:here
-    ~solver:(Solver.make g)
-    ~assumptions:LC.Set.empty
-    ~simp_ctxt
-    lc
+  let solver_res =
+    Solver.provableWithUnknown
+      ~loc:here
+      ~solver:(Solver.make g)
+      ~assumptions:LC.Set.empty
+      ~simp_ctxt
+      lc
   in
-  let res = match solver_res with
-    | `False -> RWD.No (Pp.(!^) "Solver returned No.")
-    | `Unknown -> RWD.Unknown (Pp.(!^) "Solver returned Unknown.")
+  let res =
+    match solver_res with
+    | `False -> RWD.No (Pp.( !^ ) "Solver returned No.")
+    | `Unknown -> RWD.Unknown (Pp.( !^ ) "Solver returned Unknown.")
     | `True -> RWD.Yes lcs
   in
   Solver.try_hard := th;
@@ -317,9 +320,7 @@ and check_clause
   (* get returned expression of c and variable dependency graph *)
   let exp, var_def_locs, lcs = organize_lines c.packing_ft in
   (* get constraints on whether candidate could have come from this clause *)
-  let@ cs, vs =
-    get_body_constraints exp var_def_locs candidate ctxt iargs term_vals
-  in
+  let@ cs, vs = get_body_constraints exp var_def_locs candidate ctxt iargs term_vals in
   (* add guard and variable assignments to constraints list *)
   let cs' =
     List.concat
@@ -369,7 +370,7 @@ and get_body_constraints
       | Yes _ ->
         (* not using model to get var cands because it may overconstrain *)
         Yes ([], Sym.Map.empty)
-      | No _ -> No (Pp.(!^) "Solver returned no at variable assignment stage.")
+      | No _ -> No (Pp.( !^ ) "Solver returned no at variable assignment stage.")
       | Unknown _ -> Unknown e
       | Error e' -> Error e'
     in
@@ -391,31 +392,29 @@ and get_var_constraints
   match Sym.Map.find_opt v var_def_locs with
   | None ->
     (match (Sym.Map.find_opt v ctxt.logical, Sym.Map.find_opt v ctxt.computational) with
-      | Some (Value it, _), _ ->
-        get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
-      | _, Some (Value it, _) ->
-        get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
-      | _ -> (* baseType case: Issue #901 *)
-        let f (s, _) = Sym.equal s v in
-        (match List.find_opt f iargs with
+     | Some (Value it, _), _ ->
+       get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
+     | _, Some (Value it, _) ->
+       get_body_constraints it var_def_locs v_cand ctxt iargs term_vals
+     | _ -> (* baseType case: Issue #901 *)
+       let f (s, _) = Sym.equal s v in
+       (match List.find_opt f iargs with
         | Some _ -> Yes ([], var_cands)
         | _ -> Unknown (!^"Could not find variable definition line for" ^^^ Sym.pp v)))
   (* recurse with x's definition *)
-  | Some DefineL ((_, t), _) ->
+  | Some (DefineL ((_, t), _)) ->
     get_body_constraints t var_def_locs v_cand ctxt iargs term_vals
-  | Some ResourceL ((_, (p, _)), _) ->
+  | Some (ResourceL ((_, (p, _)), _)) ->
     (match p with
-    | P { name = Owned _; pointer = _; iargs = _ } ->
-      (* if the predicate is Owned, get restrictions on pointer *)
-      let owned_lcs = Res.derived_lc1 (p, O v_cand) in
-      Yes (List.map (fun it -> LC.T it) owned_lcs, var_cands)
-    | P { name = PName name; pointer = _; iargs } ->
-      (* search for predicate definition *)
-      (match Sym.Map.find_opt name ctxt.global.resource_predicates with
-      | Some pdef ->
-        let@ cs = check_pred name pdef v_cand ctxt iargs term_vals
-        in Yes (cs, var_cands)
-      | None ->
-        Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name))
-    | Q _ ->
-      Unknown !^"Quantified predicates are out of scope for now.")
+     | P { name = Owned _; pointer = _; iargs = _ } ->
+       (* if the predicate is Owned, get restrictions on pointer *)
+       let owned_lcs = Res.derived_lc1 (p, O v_cand) in
+       Yes (List.map (fun it -> LC.T it) owned_lcs, var_cands)
+     | P { name = PName name; pointer = _; iargs } ->
+       (* search for predicate definition *)
+       (match Sym.Map.find_opt name ctxt.global.resource_predicates with
+        | Some pdef ->
+          let@ cs = check_pred name pdef v_cand ctxt iargs term_vals in
+          Yes (cs, var_cands)
+      | None -> Unknown (!^"Could not find definition of predicate" ^^^ Sym.pp name))
+    | Q _ -> Unknown !^"Quantified predicates are out of scope for now.")
