@@ -230,10 +230,8 @@ let organize_lines (lines : LAT.packing_ft) : IT.t * def_line Sym.Map.t * LC.t l
 
 
 (* ask the solver if the given set of constraints is satisfiable *)
-let ask_solver try_hard g lcs =
+let ask_solver g lcs =
   let here = Locations.other __LOC__ in
-  let th = !Solver.try_hard in
-  Solver.try_hard := try_hard;
   let simp_ctxt =
     Simplify.{ global = g; values = Sym.Map.empty; simp_hook = (fun _ -> None) }
   in
@@ -253,7 +251,6 @@ let ask_solver try_hard g lcs =
     | `Unknown -> RWD.Unknown (Pp.( !^ ) "Solver returned Unknown.")
     | `True -> RWD.Yes lcs
   in
-  Solver.try_hard := th;
   res
 
 
@@ -331,7 +328,7 @@ and check_clause
       ]
   in
   (* query solver *)
-  ask_solver false ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs')
+  ask_solver ctxt.global (Base.List.dedup_and_sort ~compare:LC.compare cs')
 
 
 (* get a list of constraints that are satisfiable iff candidate could have come from this clause body *)
@@ -363,7 +360,7 @@ and get_body_constraints
   | Unknown e ->
     let here = Locations.other __LOC__ in
     let res =
-      match ask_solver false ctxt.global [ LC.T (IT.eq_ (exp, candidate) here) ] with
+      match ask_solver ctxt.global [ LC.T (IT.eq_ (exp, candidate) here) ] with
       | Yes _ ->
         (* not using model to get var cands because it may overconstrain *)
         Yes ([], Sym.Map.empty)
