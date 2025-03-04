@@ -113,12 +113,13 @@ type message =
         ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
-  | Generic of Pp.document (** TODO delete this *)
+  | Generic of Pp.document [@deprecated "Please add a specific constructor"]
+  (** TODO delete this *)
   | Generic_with_model of
-      { err : Pp.document; (** TODO delete this too *)
+      { err : Pp.document;
         model : Solver.model_with_q;
         ctxt : Context.t * Explain.log
-      }
+      } [@deprecated "Please add a specific constructor"] (** TODO delete this too *)
   | Unsupported of Pp.document (** TODO add source location *)
   | Parser of Cerb_frontend.Errors.cparser_cause
   | Empty_provenance

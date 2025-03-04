@@ -215,7 +215,7 @@ let rec check_object_value (loc : Locations.t) (Mu.OV (expect, ov)) : IT.t m =
           msg =
             Generic
               (!^"integer literal not representable at type"
-               ^^^ Pp.typ (Pp.z z) (BT.pp expect))
+               ^^^ Pp.typ (Pp.z z) (BT.pp expect)) [@alert "-deprecated"]
         })
   | OVpointer p -> check_ptrval loc ~expect p
   | OVarray items ->
@@ -319,7 +319,10 @@ let try_prove_constant loc expr =
   | None ->
     (* backup strategy, try to figure out the single value *)
     let fail2 msg =
-      fail (fun _ -> { loc; msg = Generic (!^"model constant calculation:" ^^^ !^msg) })
+      fail (fun _ ->
+        { loc;
+          msg = Generic (!^"model constant calculation:" ^^^ !^msg) [@alert "-deprecated"]
+        })
     in
     let fail_on_none msg = function Some m -> return m | None -> fail2 msg in
     let here = Locations.other __LOC__ in
@@ -343,7 +346,11 @@ let check_single_ct loc expr =
   | Some (IT.CType_const ct, _) -> return ct
   | Some _ -> assert false (* should be impossible given the type *)
   | None ->
-    fail (fun _ -> { loc; msg = Generic !^"use of non-constant ctype mucore expression" })
+    fail (fun _ ->
+      { loc;
+        msg =
+          Generic !^"use of non-constant ctype mucore expression" [@alert "-deprecated"]
+      })
 
 
 let is_fun_addr global t =
@@ -379,7 +386,7 @@ let known_function_pointer loc p =
           Generic
             (Pp.item
                "function pointer must be provably equal to a defined function"
-               (IT.pp p))
+               (IT.pp p)) [@alert "-deprecated"]
       })
 
 
@@ -425,7 +432,8 @@ let check_conv_int loc ~expect ct arg =
 
 let check_against_core_bt loc msg2 cbt bt =
   CoreTypeChecks.check_against_core_bt cbt bt
-  |> Result.map_error (fun msg -> { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
+  |> Result.map_error (fun msg ->
+    { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) [@alert "-deprecated"] })
   |> Typing.lift
 
 
@@ -772,7 +780,8 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
              { loc;
                msg =
                  Generic
-                   (Pp.item "untypeable mucore function" (Pp_mucore_ast.pp_pexpr orig_pe))
+                   (Pp.item "untypeable mucore function" (Pp_mucore_ast.pp_pexpr orig_pe)) 
+                 [@alert "-deprecated"]
              })
        in
        let expect_args = Mucore.fun_param_types fun_id in
@@ -825,7 +834,11 @@ let rec check_pexpr (pe : BT.t Mu.pexpr) (k : IT.t -> unit m) : unit m =
          | Some it -> k it
          | None ->
            fail (fun _ ->
-             { loc; msg = Generic (!^"unsupported c-type in sig of:" ^^^ Sym.pp sym) }))
+             { loc;
+               msg =
+                 Generic (!^"unsupported c-type in sig of:" ^^^ Sym.pp sym) [@alert
+                                                                              "-deprecated"]
+             }))
      | PEmemberof _ -> Cerb_debug.error "todo: PEmemberof"
      | PEbool_to_integer pe ->
        let@ _ = ensure_bitvector_type loc ~expect in
@@ -1220,7 +1233,7 @@ let _check_used_distinct loc used =
                      ^^^ break 1
                      ^^^ render_upd h
                      ^^^ break 1
-                     ^^^ render_upd h2))
+                     ^^^ render_upd h2)) [@alert "-deprecated"]
            }))
   in
   let@ w_map = check_ws IntMap.empty (List.concat (List.map snd used)) in
@@ -1239,7 +1252,7 @@ let _check_used_distinct loc used =
                   ^^^ break 1
                   ^^^ render_read h
                   ^^^ break 1
-                  ^^^ render_upd h2))
+                  ^^^ render_upd h2)) [@alert "-deprecated"]
         })
   in
   ListM.iterM check_rd (List.concat (List.map fst used))
@@ -1780,7 +1793,11 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            | Some ft -> return ft
            | None ->
              fail (fun _ ->
-               { loc; msg = Generic (!^"Call to function with no spec:" ^^^ Sym.pp fsym) })
+               { loc;
+                 msg =
+                   Generic (!^"Call to function with no spec:" ^^^ Sym.pp fsym) [@alert
+                                                                                  "-deprecated"]
+               })
          in
          (* checks pes against their annotations, and that they match ft's argument types *)
          Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) ->
@@ -1947,7 +1964,10 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
             | Init -> add_c loc (LC.T (bytes_constraints ~value ~byte_arr ct)))
          | Have lc ->
            let@ _lc = WellTyped.logical_constraint loc lc in
-           fail (fun _ -> { loc; msg = Generic !^"todo: 'have' not implemented yet" })
+           fail (fun _ ->
+             { loc;
+               msg = Generic !^"todo: 'have' not implemented yet" [@alert "-deprecated"]
+             })
          | Instantiate (to_instantiate, it) ->
            let@ filter =
              match to_instantiate with
@@ -1967,16 +1987,16 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              match to_extract with
              | E_Everything ->
                let msg = "'extract' requires a predicate name annotation" in
-               fail (fun _ -> { loc; msg = Generic !^msg })
+               fail (fun _ -> { loc; msg = Generic !^msg [@alert "-deprecated"] })
              | E_Pred (CN_owned None) ->
                let msg = "'extract' requires a C-type annotation for 'Owned'" in
-               fail (fun _ -> { loc; msg = Generic !^msg })
+               fail (fun _ -> { loc; msg = Generic !^msg [@alert "-deprecated"] })
              | E_Pred (CN_owned (Some ct)) ->
                let@ () = WellTyped.check_ct loc ct in
                return (Request.Owned (ct, Init))
              | E_Pred (CN_block None) ->
                let msg = "'extract' requires a C-type annotation for 'Block'" in
-               fail (fun _ -> { loc; msg = Generic !^msg })
+               fail (fun _ -> { loc; msg = Generic !^msg [@alert "-deprecated"] })
              | E_Pred (CN_block (Some ct)) ->
                let@ () = WellTyped.check_ct loc ct in
                return (Request.Owned (ct, Uninit))
@@ -2016,7 +2036,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               let msg =
                 !^"Cannot unfold definition of uninterpreted function" ^^^ Sym.pp f ^^ dot
               in
-              fail (fun _ -> { loc; msg = Generic msg })
+              fail (fun _ -> { loc; msg = Generic msg [@alert "-deprecated"] })
             | Some body ->
               add_c loc (LC.T (eq_ (apply_ f args def.return_bt loc, body) loc)))
          | Apply (lemma, args) ->
@@ -2073,7 +2093,11 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                 | T it -> return it
                 | Forall ((_sym, _bt), _it) ->
                   fail (fun _ ->
-                    { loc; msg = Generic !^"Cannot split on forall condition" })
+                    { loc;
+                      msg =
+                        Generic !^"Cannot split on forall condition" [@alert
+                                                                       "-deprecated"]
+                    })
               in
               let branch it nm =
                 let@ () = add_c loc (LC.T it) in
@@ -2115,7 +2139,11 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
          match Sym.Map.find_opt label_sym labels with
          | None ->
            fail (fun _ ->
-             { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym) })
+             { loc;
+               msg =
+                 Generic (!^"undefined code label" ^/^ Sym.pp label_sym) [@alert
+                                                                           "-deprecated"]
+             })
          | Some (lt, lkind, _) -> return (lt, lkind)
        in
        let@ original_resources = all_resources_tagged loc in
@@ -2137,7 +2165,7 @@ let check_expr_top loc labels rt e =
         return ())
     | _ ->
       let msg = "Non-void-return function does not call 'return'." in
-      fail (fun _ -> { loc; msg = Generic !^msg }))
+      fail (fun _ -> { loc; msg = Generic !^msg [@alert "-deprecated"] }))
 
 
 (* let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt)) = *)
