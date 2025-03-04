@@ -41,3 +41,10 @@ Inductive request_t : Type :=
 
 Definition t := request_t. 
 
+Inductive subsumed : name -> name -> Prop :=
+  | Subsumed_equal : forall n1 n2,
+    n1 = n2 ->
+    subsumed n1 n2
+  | Subsumed_owned : forall ct ct',
+    ct = ct' -> subsumed (Owned ct Uninit) (Owned ct' Init).
+

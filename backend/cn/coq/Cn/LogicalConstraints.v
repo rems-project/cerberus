@@ -2,50 +2,39 @@ Require Import BaseTypes.
 Require Import IndexTerms.
 Require Import Sym.
 
-Require Import Coq.Structures.OrderedType.
-Require Import Coq.Structures.OrderedTypeEx.
-Require Import Coq.FSets.FSetAVL.
+Require Import Coq.Structures.DecidableType.
+Require Import Coq.Structures.DecidableTypeEx.
+Require Import Coq.FSets.FSetWeakList.
 
 (* Define the logical constraint type *)
 Inductive logical_constraint : Type :=
-  | T : IndexTerms.t -> logical_constraint
-  | Forall : (Sym.t * BaseTypes.t) -> IndexTerms.t -> logical_constraint. 
+| T : IndexTerms.t -> logical_constraint
+| Forall : (Sym.t * BaseTypes.t) -> IndexTerms.t -> logical_constraint.
 
 Definition t := logical_constraint.
 
-Module LogicalConstraint_as_OrderedType <: OrderedType.
+Module LogicalConstraint_as_MiniDecidableType <: MiniDecidableType.
   Definition t := logical_constraint.
+  Definition eq := @eq t.
+  Lemma eq_dec : forall (x y : t), { eq x y } + { ~ eq x y }.
+  Proof.
+    unfold eq.
+    decide equality.
+    -
+      apply IndexTerm_as_MiniDecidableType.eq_dec.
+    -
+      apply IndexTerm_as_MiniDecidableType.eq_dec.
+    -
+      decide equality; subst.
+      +
+        apply BasetTypes_t_as_MiniDecidableType.eq_dec.
+      +
+        apply Sym_t_as_MiniDecidableType.eq_dec.
+  Qed.
+End LogicalConstraint_as_MiniDecidableType.
 
-  Definition eq := @eq t. (* TODO: check if this is the correct definition *)
+Module LogicalConstraints_as_DecidableType := Make_UDT LogicalConstraint_as_MiniDecidableType.
+Module LCSet := FSetWeakList.Make LogicalConstraints_as_DecidableType.
 
-  Lemma eq_dec : forall (x y : t), { eq x y } + { ~ eq x y }.  
-  Proof. Admitted. (* TODO *)
-
-  Definition lt : t -> t -> Prop.
-  Proof. Admitted. (* TODO *)
-
-  Lemma eq_refl : forall x : t, eq x x.
-  Proof. Admitted. (* TODO *)
-
-  Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-  Proof. Admitted. (* TODO *)
-
-  Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-  Proof. Admitted. (* TODO *)
-
-  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-  Proof. Admitted. (* TODO *)
-
-  Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
-  Proof. Admitted. (* TODO *)
-
-  Definition compare : forall x y : t, Compare lt eq x y.
-  Proof. Admitted. (* TODO *)
-
-  
-End LogicalConstraint_as_OrderedType.
-
-Module LCSet := FSetAVL.Make(LogicalConstraint_as_OrderedType).
-
-Definition set_from_list (l : list t) : LCSet.t.
-Proof. Admitted. (* TODO *)
+Definition set_from_list (l : list t) : LCSet.t :=
+  List.fold_left (fun s c => LCSet.add c s) l LCSet.empty.

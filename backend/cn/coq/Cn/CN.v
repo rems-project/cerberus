@@ -125,8 +125,8 @@ Inductive cn_pred (A TY : Type) : Type :=
 
 (* CN resource types *)
 Inductive cn_resource (A TY : Type) : Type :=
-  | CN_pred : Location_t -> cn_pred A TY -> list (cn_expr A TY) -> cn_resource A TY
-  | CN_each : A -> cn_base_type A -> cn_expr A TY -> Location_t -> 
+  | CN_pred : Locations.t -> cn_pred A TY -> list (cn_expr A TY) -> cn_resource A TY
+  | CN_each : A -> cn_base_type A -> cn_expr A TY -> Locations.t -> 
               cn_pred A TY -> list (cn_expr A TY) -> cn_resource A TY.
 
 (* CN assertion types *)
