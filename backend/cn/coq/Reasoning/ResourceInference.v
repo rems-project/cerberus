@@ -2,16 +2,61 @@ Require Import Coq.Lists.List.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.FSets.FSetInterface.
 
-From Cn Require Import Prooflog Request Resource Context.
+From Cn Require Import Prooflog Request Resource Context Sym.
 
+Import ListNotations.
 
 (* Helper functoin to get set of resources from contex *)
 
-Definition ctx_resources_set (l:((list (Resource.t * Z)) * Z)) : Resource.ResSet.t
+Definition ctx_resources_set (l:((list (Resource.t * Z)) * Z)) : ResSet.t
   :=
   Resource.set_from_list (List.map fst (fst l)).
 
+(* resource = (P {name,pointer,iargs}) * output *)  
+Inductive resource_unfold (globals:Global.t): Resource.t -> ResSet.t -> Prop :=
+(* non-struct resources unfold to themselves *)
+| resource_unfold_nonstruct:
+    forall ipointer iargs iout iinit ity,
+    not (SCtypes.is_struct ity) ->
 
+    resource_unfold globals
+      (Request.P 
+        {| 
+          Predicate.name := Request.Owned ity iinit; 
+          Predicate.pointer := ipointer; 
+          Predicate.iargs := iargs 
+        |}, 
+        iout) 
+      (ResSet.singleton 
+        (Request.P 
+        {| 
+          Predicate.name := Request.Owned ity iinit; 
+          Predicate.pointer := ipointer; 
+          Predicate.iargs := iargs 
+        |}, 
+        iout)         
+      ) 
+
+| resource_unfold_struct:
+  forall out_res ipointer iargs iout iinit isym sdecl,
+  SymMap.MapsTo isym sdecl globals.(Global.struct_decls) ->
+  List.Forall (fun piece =>
+    match Memory.piece_member_or_padding piece with
+    | Some (pid,pty) => True (* TODO: bijection with out_res*)
+    | None => False
+    end
+  ) sdecl ->
+  
+  resource_unfold globals
+    (Request.P 
+      {| 
+        Predicate.name := Request.Owned (SCtypes.Struct isym) iinit; 
+        Predicate.pointer := ipointer; 
+        Predicate.iargs := iargs 
+      |}, 
+      iout) 
+    out_res.
+  
 (** Inductive predicate which defines correctness of resource unfolding step *)
 Inductive unfold_step : Context.t -> Context.t -> Prop :=
 | simple_unfold_step:
