@@ -158,7 +158,7 @@ let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
     "cn_tuple"      , (Experimental, CN_TUPLE);
     "cn_set"        , (Experimental, CN_SET);
     "cn_have"       , (Experimental, CN_HAVE);
-    "cn_function"   , (Experimental, CN_FUNCTION);
+    "cn_function"   , (Experimental, CN_LIFT_FUNCTION);
     "cn_print"      , (Experimental, CN_PRINT);
     "to_bytes"      , (Experimental, CN_TO_BYTES);
     "from_bytes"    , (Experimental, CN_FROM_BYTES);

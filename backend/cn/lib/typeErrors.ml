@@ -186,6 +186,11 @@ type message =
   | Empty_provenance
   | Inconsistent_assumptions of string * (Context.t * Explain.log)
   | Byte_conv_needs_owned
+  | Double_spec of
+      { fname : Sym.t;
+        orig_loc : Locations.t
+      }
+  | Requires_after_ensures of { ens_loc : Locations.t }
 
 type t =
   { loc : Locations.t;
@@ -525,6 +530,16 @@ let pp_message = function
   | Byte_conv_needs_owned ->
     let short = !^"byte conversion only supports W/RW" in
     { short; descr = None; state = None }
+  | Double_spec { fname; orig_loc } ->
+    let short = !^"double specification of" ^^^ Sym.pp fname in
+    let head, pos = Locations.head_pos_of_location orig_loc in
+    let descr = Some (!^"first specification at" ^^^ !^head ^/^ !^pos) in
+    { short; descr; state = None }
+  | Requires_after_ensures { ens_loc } ->
+    let short = !^"all requires clauses must come before any ensures clauses" in
+    let head, pos = Locations.head_pos_of_location ens_loc in
+    let descr = Some (!^"ensures clause at" ^^^ !^head ^/^ !^pos) in
+    { short; descr; state = None }
 
 
 (** Convert a possibly-relative filepath into an absolute one. *)

@@ -4177,6 +4177,19 @@ let desugar_maybe desugar_f o =
   | Nothing -> E.return Nothing
   end
 
+let cn_resolve_ordinary_id_other loc nm =
+  E.resolve_ordinary_identifier loc nm >>= function
+   | Just (_, E.OReg_other nm_sym _ _) ->
+       E.return nm_sym
+   | Just (_, E.OReg_enum_constant _) ->
+       E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+   | Just (_, E.OReg_typedef _) ->
+       E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+   | Nothing ->
+       E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+  end
+
+
 let rec desugar_cn_expr (CNExpr loc expr_) =
   match expr_ with
     | CNExpr_const cst ->
@@ -4241,16 +4254,7 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
       end
     | CNExpr_addr nm ->
-       E.resolve_ordinary_identifier loc nm >>= function
-          | Just (_, E.OReg_other nm_sym _ _) ->
-              E.return (CNExpr_addr nm_sym)
-          | Just (_, E.OReg_enum_constant _) ->
-              E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
-          | Just (_, E.OReg_typedef _) ->
-              E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
-          | Nothing ->
-              E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
-      end
+        CNExpr_addr <$> cn_resolve_ordinary_id_other loc nm
     | CNExpr_cast ty e ->
         CNExpr_cast <$> desugar_cn_base_type loc ty
                     <*> desugar_cn_expr e
@@ -4502,24 +4506,10 @@ let desugar_and_register_cn_lemma lmma =
 (* copying and adjusting desugar_and_register_cn_lemma *)
 let desugar_and_register_cn_fun_spec spec =
   E.record_marker ()     >>= fun marker_id ->
-  let loc = Loc.locOf spec.cn_spec_name in
-  E.resolve_ordinary_identifier loc spec.cn_spec_name >>= function
-    | Just (_, E.OReg_other nm_sym _ _) ->
-        E.return nm_sym
-    | Just (_, E.OReg_enum_constant _) ->
-        E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier spec.cn_spec_name))
-    | Just (_, E.OReg_typedef _) ->
-        E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier spec.cn_spec_name))
-    | Nothing ->
-        E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier spec.cn_spec_name))
-  end
-  >>= fun fun_sym ->
-  E.register_cn_fun_spec spec.cn_spec_magic_loc loc fun_sym marker_id begin
-    E.mapM (desugar_cn_arg CN_vars) spec.cn_spec_args >>= fun args ->
-    desugar_cn_conditions spec.cn_spec_requires >>= fun requires ->
-    E.register_cn_ident CN_vars (Symbol.Identifier Loc.unknown "return") >>= fun rsym ->
-    desugar_cn_conditions spec.cn_spec_ensures >>= fun ensures ->
-    E.return (args, requires, ensures, rsym)
+  let loc = spec.cn_decl_loc in
+  cn_resolve_ordinary_id_other loc spec.cn_decl_name >>= fun fun_sym ->
+  E.register_cn_fun_spec loc fun_sym spec.cn_decl_name marker_id begin
+    E.return (spec.cn_decl_args, spec.cn_func_spec)
   end
 
 
@@ -4578,17 +4568,7 @@ let desugar_cn_statement (CN_statement loc stmt_) =
      E.mapM desugar_cn_expr args >>= fun args ->
      E.return (CN_apply l args)
   | CN_inline nms ->
-     CN_inline <$> E.mapM (fun nm ->
-       E.resolve_ordinary_identifier loc nm >>= function
-         | Just (_, E.OReg_other nm_sym _ _) ->
-           E.return nm_sym
-         | Just (_, E.OReg_enum_constant _) ->
-           E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
-         | Just (_, E.OReg_typedef _) ->
-           E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
-         | Nothing ->
-           E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
-         end) nms
+     CN_inline <$> E.mapM (cn_resolve_ordinary_id_other loc) nms
   | CN_print e ->
      desugar_cn_expr e >>= fun e ->
      E.return (CN_print e)

@@ -1,0 +1,8 @@
+return code: 2
+tests/cn/spec_grammar.error.c:12:5: warning: experimental keyword 'cn_function' (use of experimental features is discouraged)
+    cn_function foo;
+    ^~~~~~~~~~~ 
+tests/cn/spec_grammar.error.c:12:5: error: unexpected token after ';' and before 'cn_function'
+I've seen an 'accesses' list, and I'm expecting requires/ensures clauses now.
+    cn_function foo;
+    ^~~~~~~~~~~ 

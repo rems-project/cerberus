@@ -138,6 +138,7 @@ type token =
   (* CN syntax *)
   | CN_CONSTANT of (string * [`I|`U] * int)
   | CN_FUNCTION
+  | CN_LIFT_FUNCTION
   | CN_PREDICATE
   | CN_LEMMA
   | CN_SPEC
@@ -339,6 +340,7 @@ let string_of_token = function
   | CN_TRUE -> "CN_TRUE"
   | CN_FALSE -> "CN_FALSE"
   | CN_FUNCTION -> "CN_FUNCTION"
+  | CN_LIFT_FUNCTION -> "CN_LIFT_FUNCTION"
   | CN_PREDICATE -> "CN_PREDICATE"
   | CN_LEMMA -> "CN_LEMMA"
   | CN_SPEC -> "CN_SPEC"
