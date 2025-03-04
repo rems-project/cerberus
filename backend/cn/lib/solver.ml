@@ -1396,13 +1396,18 @@ let model_evaluator, reset_model_evaluator_state =
 
 module TryHard = struct
   let translate_forall solver qs body =
-    let rec alpha_rename qs body =
-      match qs with
+    let alpha_rename qs body =
+      let comb (s1, bt) (qs1, body1) =
+        let s2, body2 = IT.alpha_rename s1 body1 in
+        ((s2, bt) :: qs1, body2)
+      in
+      List.fold_right comb qs ([], body)
+      (* match qs' with
       | [] -> ([], body)
-      | (s, bt) :: qs' ->
-        let qs', body = alpha_rename qs' body in
-        let s, body = IT.alpha_rename s body in
-        ((s, bt) :: qs', body)
+      | (s, bt) :: qs ->
+        let qs1, body1 = alpha_rename qs body in
+        let s1, body2 = IT.alpha_rename s body1 in
+        ((s1, bt) :: qs1, body2) *)
     in
     let qs, body = alpha_rename qs body in
     let body_ = translate_term solver body in
@@ -1492,7 +1497,7 @@ let provable ~loc ~solver ~assumptions ~simp_ctxt lc =
           set_model inc qs;
           debug_ack_command solver (SMT.pop 1);
           Pp.(debug 3 (lazy !^"***** try-hard: unprovable *****"));
-          `False
+          `Unknown (*TODO CHT*)
         | SMT.Unknown ->
           set_model inc qs;
           debug_ack_command solver (SMT.pop 1);
@@ -1511,20 +1516,3 @@ let provable ~loc ~solver ~assumptions ~simp_ctxt lc =
 let eval mo t =
   let model_fn = Hashtbl.find models_tbl mo in
   model_fn t
-
-
-let assume_constraints (constraints : LC.t list) (s : solver) : solver =
-  let get_term lc = match lc with LC.T it -> Some (translate_term s it) | Forall _ -> None in
-  let terms = List.filter_map get_term constraints in
-  let add_term term = debug_ack_command s (SMT.assume term) in
-  let _ = List.iter add_term terms in
-  s
-
-
-let ask_solver (s : solver) (lcs : LC.t list) : Simple_smt.result =
-  debug_ack_command s (SMT.push 1);
-  let s' = assume_constraints lcs s in
-  let simp_solver = s'.smt_solver in
-  let res = SMT.check simp_solver in
-  debug_ack_command s' (SMT.pop 1);
-  res

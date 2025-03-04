@@ -46,7 +46,7 @@ val provable
   assumptions:LogicalConstraints.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
-  [> `True | `False ]
+  [> `True | `False | `Unknown ] (*TODO CHT*)
 
 (* Ask the solver for the model that it found in a call to [provable] *)
 val model : unit -> model_with_q
@@ -55,8 +55,6 @@ val model : unit -> model_with_q
     counter-example model (e.g. for evaluating sub-terms). Might return None in
     case we ask for the value of a "don't care" value in the (minimal) model. *)
 val eval : model -> IndexTerms.t -> IndexTerms.t option
-
-val ask_solver : solver -> LogicalConstraints.t list -> Simple_smt.result
 
 (** Try undecidable SMT solving using full set of assumptions. *)
 val try_hard : bool ref
