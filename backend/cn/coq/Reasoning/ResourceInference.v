@@ -12,6 +12,15 @@ Definition ctx_resources_set (l:((list (Resource.t * Z)) * Z)) : ResSet.t
   :=
   Resource.set_from_list (List.map fst (fst l)).
 
+(* Helper function to convert struct piece to resource *)
+Definition struct_piece_to_resource (piece:Memory.struct_piece) (iinit:init) (ipointer:IndexTerms.t) (iargs:list IndexTerms.t) (iout:output) : option Resource.t :=
+  match Memory.piece_member_or_padding piece with
+  | Some (pid,pty) => Some (Request.P {| Predicate.name := Request.Owned pty iinit; 
+                                        Predicate.pointer := ipointer; 
+                                        Predicate.iargs := iargs |}, iout)
+  | None => None
+  end.
+
 (* resource = (P {name,pointer,iargs}) * output *)  
 Inductive resource_unfold (globals:Global.t): Resource.t -> ResSet.t -> Prop :=
 (* non-struct resources unfold to themselves *)
@@ -39,13 +48,28 @@ Inductive resource_unfold (globals:Global.t): Resource.t -> ResSet.t -> Prop :=
 
 | resource_unfold_struct:
   forall out_res ipointer iargs iout iinit isym sdecl,
+
+  (* lookup struct declaration in global environment *)
   SymMap.MapsTo isym sdecl globals.(Global.struct_decls) ->
-  List.Forall (fun piece =>
-    match Memory.piece_member_or_padding piece with
-    | Some (pid,pty) => True (* TODO: bijection with out_res*)
-    | None => False
-    end
-  ) sdecl ->
+
+  (* convert struct list members to set resources *)
+  let member_resources := 
+    List.fold_right (fun piece acc =>
+      match struct_piece_to_resource piece iinit ipointer iargs iout with
+      | Some r => ResSet.add r acc
+      | None => acc
+      end) ResSet.empty sdecl 
+  in
+  
+  (* bijection between struct members and out_res: *)
+
+  ResSet.Equal member_resources out_res /\
+  (forall r, ResSet.In r out_res ->
+    exists piece, List.In piece sdecl /\
+      match struct_piece_to_resource piece iinit ipointer iargs iout with
+      | Some r' => r = r'
+      | None => False
+      end) ->
   
   resource_unfold globals
     (Request.P 
