@@ -36,6 +36,7 @@ Inductive resource_unfold (globals:Global.t): Resource.t -> ResSet.t -> Prop :=
           Predicate.iargs := iargs 
         |}, 
         iout) 
+      (* TODO: maybe need recursive unfolding *)
       (ResSet.singleton 
         (Request.P 
         {| 
@@ -96,6 +97,14 @@ Inductive unfold_step : Context.t -> Context.t -> Prop :=
 
     let in_res := ctx_resources_set iresources in
     let out_res := ctx_resources_set oresources in
+
+    (* The `out_res` is union of `resource_unfold` of all resources in `in_res` *)
+    (forall r', ResSet.In r' out_res <-> 
+      exists r, ResSet.In r in_res /\ exists s, 
+      resource_unfold iglobal r s /\ ResSet.In r' s
+    ) 
+    
+    ->
 
     unfold_step
     (* input context *)
