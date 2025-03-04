@@ -263,7 +263,7 @@ module General = struct
             ^^ colon
             ^^^ IT.pp step)
         in
-        fail (fun _ -> { loc; msg = TypeErrors.Generic doc }))
+        fail (fun _ -> { loc; msg = TypeErrors.Generic doc [@alert "-deprecated"] }))
     in
     let@ (needed, oarg), rw_time =
       map_and_fold_resources

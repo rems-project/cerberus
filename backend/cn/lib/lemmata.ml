@@ -129,7 +129,7 @@ let fail msg details =
 
 (* print the error message, but continue with a default value when possible *)
 let fail_m rv loc msg =
-  let err = TypeErrors.{ loc; msg = Generic msg } in
+  let err = TypeErrors.{ loc; msg = Generic msg [@alert "-deprecated"] } in
   Pp.error loc msg [];
   let@ () = upd (fun st -> { st with failures = err :: st.failures }) in
   return rv

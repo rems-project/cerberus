@@ -512,7 +512,10 @@ let do_check_model loc m prop =
   match prover (LogicalConstraints.T (IT.and_ (prop :: eqs) here)) with
   | `False -> return ()
   | `True ->
-    fail (fun _ -> { loc; msg = Generic (Pp.string "Solver model inconsistent") })
+    fail (fun _ ->
+      { loc;
+        msg = Generic (Pp.string "Solver model inconsistent") [@alert "-deprecated"]
+      })
 
 
 let cond_check_model loc m prop =
