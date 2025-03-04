@@ -12,7 +12,7 @@ predicate {integer size} Tree (pointer p) {
     return { size: 0 };
   }
   else {
-    take point = Owned<struct tree_node>(p);
+    take point = RW<struct tree_node>(p);
     take left = Tree (point.left);
     take right = Tree (point.right);
     return { size: left.size + right.size + 1 };

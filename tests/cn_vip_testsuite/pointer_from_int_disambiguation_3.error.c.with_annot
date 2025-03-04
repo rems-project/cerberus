@@ -1,9 +1,9 @@
 return code: 1
 tests/cn_vip_testsuite/pointer_from_int_disambiguation_3.error.c:16:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
                 ^~~~~~~~ 
 tests/cn_vip_testsuite/pointer_from_int_disambiguation_3.error.c:19:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
                 ^~~~~~~~~~ 
 [1/1]: main -- fail
 tests/cn_vip_testsuite/pointer_from_int_disambiguation_3.error.c:35:7: error: `&copy_alloc_id((u64)&&x[1'u64], copy_alloc_id((u64)value, &y))[(u64)(0'i32 - 1'i32)]` out of bounds

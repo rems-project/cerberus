@@ -1,8 +1,8 @@
 # Checking for required tools.
-ifeq (,$(shell which dune 2> /dev/null))
+ifeq (,$(shell command -v dune 2> /dev/null))
 $(error "Compilation requires [dune].")
 endif
-ifeq (,$(shell which lem 2> /dev/null))
+ifeq (,$(shell command -v lem 2> /dev/null))
 $(error "Compilation requires [lem].")
 endif
 

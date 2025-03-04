@@ -1,9 +1,9 @@
 void half(int *q)
 /*@
 requires
-    take X = each (u64 i; 5u64 <= i && i < 10u64 ) { Owned(array_shift(q, i)) };
+    take X = each (u64 i; 5u64 <= i && i < 10u64 ) { RW(array_shift(q, i)) };
 ensures
-    take X2 = each (u64 i; 5u64 <= i && i < 10u64 ) { Owned(array_shift(q, i)) };
+    take X2 = each (u64 i; 5u64 <= i && i < 10u64 ) { RW(array_shift(q, i)) };
 @*/
 {
 }
@@ -11,9 +11,9 @@ ensures
 void whole(int *q)
 /*@
 requires
-    take X = each (u64 i; 0u64 <= i && i < 10u64 ) { Owned(array_shift(q, i)) };
+    take X = each (u64 i; 0u64 <= i && i < 10u64 ) { RW(array_shift(q, i)) };
 ensures
-    take X2 = each (u64 i; 0u64 <= i && i < 10u64 ) { Owned(array_shift(q, i)) };
+    take X2 = each (u64 i; 0u64 <= i && i < 10u64 ) { RW(array_shift(q, i)) };
 @*/
 {
 }

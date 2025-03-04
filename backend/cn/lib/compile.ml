@@ -1074,13 +1074,13 @@ module EffectfulTranslation = struct
       in
       match res with
       | CN_owned oty ->
-        let@ scty = infer_scty "Owned" oty in
+        let@ scty = infer_scty "RW" oty in
         (* we don't take Resource.owned_oargs here because we want to maintain the C-type
            information *)
         let oargs_ty = Memory.sbt_of_sct scty in
         return (Req.Owned (scty, Init), oargs_ty)
       | CN_block oty ->
-        let@ scty = infer_scty "Block" oty in
+        let@ scty = infer_scty "W" oty in
         let oargs_ty = Memory.sbt_of_sct scty in
         return (Req.Owned (scty, Uninit), oargs_ty)
       | CN_named pred ->

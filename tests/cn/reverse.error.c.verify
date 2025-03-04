@@ -11,7 +11,7 @@ State file: file:///tmp/state__reverse.error.c__reverse.html
 tests/cn/reverse.error.c:124:3: error: Missing resource for de-allocating
   return 0;
   ^~~~~~~~~ 
-Resource needed: Block<struct node>(&n3)
-  which requires: Block<signed int>(&&n3->head)
+Resource needed: W<struct node>(&n3)
+  which requires: W<signed int>(&&n3->head)
       other location (File "backend/cn/lib/resourceInference.ml", line 220, characters 31-38)  (arg head)
 State file: file:///tmp/state__reverse.error.c__main.html

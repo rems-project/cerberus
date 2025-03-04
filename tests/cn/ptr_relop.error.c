@@ -1,10 +1,10 @@
 int live_owned_footprint(char *p, char *q)
 /*@
  requires
-    take P = Owned<int[11]>(array_shift<char>(p, -2i64));
+    take P = RW<int[11]>(array_shift<char>(p, -2i64));
     ptr_eq(q, array_shift<char>(p, 12i64));
 ensures
-    take P2 = Owned<int[11]>(array_shift<char>(p, -2i64));
+    take P2 = RW<int[11]>(array_shift<char>(p, -2i64));
     P == P2;
     return == 1i32;
 @*/

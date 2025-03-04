@@ -13,7 +13,7 @@ predicate (list) List(pointer p) {
   if (is_null(p)) {
     return Nil {};
   } else {
-    take node = Owned<struct node>(p);
+    take node = RW<struct node>(p);
     take tl = List(node.next);
     return (Cons { head: node.value, tail: tl });
   }

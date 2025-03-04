@@ -4,5 +4,5 @@ return code: 1
 tests/cn/solver_crash.error.c:13:10: error: Missing resource for reading
     .y = str_inst.x + 3,
          ~~~~~~~~^~ 
-Resource needed: Owned<signed int>(&&str_inst->x)
+Resource needed: RW<signed int>(&&str_inst->x)
 State file: file:///tmp/state__solver_crash.error.c__f.html

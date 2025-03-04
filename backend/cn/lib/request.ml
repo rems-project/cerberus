@@ -16,8 +16,8 @@ type name =
 [@@deriving eq, ord]
 
 let pp_name = function
-  | Owned (ct, Init) -> !^"Owned" ^^ Pp.angles (Sctypes.pp ct)
-  | Owned (ct, Uninit) -> !^"Block" ^^ Pp.angles (Sctypes.pp ct)
+  | Owned (ct, Init) -> !^"RW" ^^ Pp.angles (Sctypes.pp ct)
+  | Owned (ct, Uninit) -> !^"W" ^^ Pp.angles (Sctypes.pp ct)
   | PName pn -> Sym.pp pn
 
 

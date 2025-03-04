@@ -1,16 +1,16 @@
 return code: 1
 tests/cn/partial_init_bytes.error.c:5:9: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-    /*@ to_bytes Block(p); @*/
+    /*@ to_bytes W(p); @*/
         ^~~~~~~~ 
 tests/cn/partial_init_bytes.error.c:9:9: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-    /*@ from_bytes Owned<int>(p); @*/
+    /*@ from_bytes RW<int>(p); @*/
         ^~~~~~~~~~ 
-tests/cn/partial_init_bytes.error.c:7:9: warning: extract: index added, no resources (yet) extracted.
-    /*@ extract Block<char>, 2u64; @*/
-        ^~~~~~~~~~~~~~~~~~~~~~~~~~ 
+tests/cn/partial_init_bytes.error.c:7:9: warning: focus: index added, no effect on existing resources (yet).
+    /*@ focus W<char>, 2u64; @*/
+        ^~~~~~~~~~~~~~~~~~~~ 
 [1/1]: main -- fail
 tests/cn/partial_init_bytes.error.c:8:5: error: Missing resource for writing
     p_char[2] = 0xff;
     ~~~~~~~~~~^~~~~~ 
-Resource needed: Block<char>(&&x[(u64)2'i32])
+Resource needed: W<char>(&&x[(u64)2'i32])
 State file: file:///tmp/state__partial_init_bytes.error.c__main.html

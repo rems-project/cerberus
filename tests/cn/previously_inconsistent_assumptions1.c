@@ -8,6 +8,6 @@ struct in_addr {
 extern int test(struct in_addr* addr);
 /*@
   spec test(pointer addr);
-  requires take x =Owned<struct in_addr>(addr);
-  ensures take x2 =Owned<struct in_addr>(addr);
+  requires take x =RW<struct in_addr>(addr);
+  ensures take x2 =RW<struct in_addr>(addr);
 @*/

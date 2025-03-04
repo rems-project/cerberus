@@ -1,8 +1,8 @@
 return code: 0
 tests/cn/to_from_bytes_owned.c:5:9: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-    /*@ to_bytes Owned(p); @*/
+    /*@ to_bytes RW(p); @*/
         ^~~~~~~~ 
 tests/cn/to_from_bytes_owned.c:9:9: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-    /*@ from_bytes Owned<int>(p); @*/
+    /*@ from_bytes RW<int>(p); @*/
         ^~~~~~~~~~ 
 [1/1]: main -- pass

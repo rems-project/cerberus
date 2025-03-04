@@ -8,12 +8,12 @@ void user_memcpy(unsigned char *dest,
                  unsigned char *src, size_t n)
 /*@
 requires
-    take Src = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(src, i)) };
-    take Dest = each (u64 i; 0u64 <= i && i < n ) { Block<unsigned char>(array_shift(dest, i)) };
+    take Src = each (u64 i; 0u64 <= i && i < n ) { RW(array_shift(src, i)) };
+    take Dest = each (u64 i; 0u64 <= i && i < n ) { W<unsigned char>(array_shift(dest, i)) };
 
 ensures
-    take SrcR = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(src, i)) };
-    take DestR = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(dest, i)) };
+    take SrcR = each (u64 i; 0u64 <= i && i < n ) { RW(array_shift(src, i)) };
+    take DestR = each (u64 i; 0u64 <= i && i < n ) { RW(array_shift(dest, i)) };
     Src == SrcR;
     each (u64 i; 0u64 <= i && i < n ) { SrcR[i] == DestR[i] };
 @*/
@@ -27,15 +27,15 @@ ensures
     0u64 <= n; n <= n_start;
     src == array_shift<unsigned char>(src_start, n_start - n);
     dest == array_shift<unsigned char>(dest_start, n_start - n);
-    take S = each (u64 i; 0u64 <= i && i < n_start ) { Owned(array_shift(src_start, i)) };
+    take S = each (u64 i; 0u64 <= i && i < n_start ) { RW(array_shift(src_start, i)) };
     Src == S;
-    take D1 = each (u64 i; n_start - n <= i && i < n_start ) { Block<unsigned char>(array_shift(dest_start, i)) };
-    take D2 = each (u64 i; 0u64 <= i && i < n_start - n ) { Owned(array_shift(dest_start, i)) };
+    take D1 = each (u64 i; n_start - n <= i && i < n_start ) { W<unsigned char>(array_shift(dest_start, i)) };
+    take D2 = each (u64 i; 0u64 <= i && i < n_start - n ) { RW(array_shift(dest_start, i)) };
     each (u64 i; 0u64 <= i && i < n_start - n ) { S[i] == D2[i] };
   @*/
   {
-    /*@ extract Owned<unsigned char>, n_start - n; @*/
-    /*@ extract Block<unsigned char>, n_start - n; @*/
+    /*@ focus RW<unsigned char>, n_start - n; @*/
+    /*@ focus W<unsigned char>, n_start - n; @*/
     *dest = *src;
     src += 1; dest += 1; n -= 1u;
   }
@@ -45,12 +45,12 @@ int main()
 {
   int *p = &x;
   int *q;
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ to_bytes Block<int*>(&q); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes W<int*>(&q); @*/
   user_memcpy((unsigned char*)&q, (unsigned char*)&p, sizeof(int *));
   /*CN_VIP*//*@ apply byte_arrays_equal(&q, &p, sizeof<int*>); @*/
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&q); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
 #ifdef NO_ROUND_TRIP
   /*CN_VIP*/q = __cerbvar_copy_alloc_id((uintptr_t)q, &x);
   /*CN_VIP*/p = __cerbvar_copy_alloc_id((uintptr_t)p, &x);

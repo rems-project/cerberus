@@ -8,11 +8,11 @@ int main()
 {
   int *p = &x;
   int *q;
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ to_bytes Block<int*>(&q); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes W<int*>(&q); @*/
   memcpy((unsigned char*)&q, (unsigned char*)&p, sizeof p);
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&p); @*/
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&q); @*/
 #ifdef NO_ROUND_TRIP
   /*CN_VIP*/p = __cerbvar_copy_alloc_id((uintptr_t)p, &x); // only for *p in assertion
   /*CN_VIP*/q = __cerbvar_copy_alloc_id((uintptr_t)q, &x);

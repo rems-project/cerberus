@@ -3,5 +3,5 @@ return code: 1
 tests/cn/before_to_bytes.error.c:6:5: error: Missing resource for writing
     p_char[2] = 0xff;
     ~~~~~~~~~~^~~~~~ 
-Resource needed: Block<char>(&&x[(u64)2'i32])
+Resource needed: W<char>(&&x[(u64)2'i32])
 State file: file:///tmp/state__before_to_bytes.error.c__main.html

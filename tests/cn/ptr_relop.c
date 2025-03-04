@@ -1,16 +1,16 @@
 int live_owned_footprint(char *p, char *q)
 /*@
  requires
-    take P = Owned<int[11]>(array_shift<char>(p, -2i64));
+    take P = RW<int[11]>(array_shift<char>(p, -2i64));
     ptr_eq(q, array_shift<char>(p, 12i64));
 ensures
-    take P2 = Owned<int[11]>(array_shift<char>(p, -2i64));
+    take P2 = RW<int[11]>(array_shift<char>(p, -2i64));
     P == P2;
     return == 0i32;
 @*/
 {
-  /*@ extract Owned<int>, 7u64; @*/
-  // NOTE: neither argument needs to be in the footprint of the Owned
+  /*@ focus RW<int>, 7u64; @*/
+  // NOTE: neither argument needs to be in the footprint of the RW
   // The bounds check for the allocation are done separately to the resource
   // lookup
   return q < p;
@@ -21,14 +21,14 @@ ensures
 int live_owned_both(int *p, int *q)
 /*@
  requires
-    take P = Owned(p);
-    take Q = Owned(q);
+    take P = RW(p);
+    take Q = RW(q);
     (u64) p < (u64) q;
     ptr_eq(q, array_shift(p, 10i32));
 ensures
-    take P2 = Owned(p);
+    take P2 = RW(p);
     P == P2;
-    take Q2 = Owned(q);
+    take Q2 = RW(q);
     Q == Q2;
     return == 0i32;
 @*/
@@ -39,13 +39,13 @@ ensures
 int live_owned_one(int *p, int *q)
 /*@
  requires
-    take P = Owned(p);
+    take P = RW(p);
     ptr_eq(q, array_shift(p, 10i32));
     let A = allocs[(alloc_id)p];
     (u64) p <= (u64) q;
     (u64) q <= A.base + A.size;
 ensures
-    take P2 = Owned(p);
+    take P2 = RW(p);
     P == P2;
     return == 1i32;
 @*/
@@ -76,8 +76,8 @@ int main(void)
 {
     int arr[11] = { 0 };
     live_alloc(&arr[0], &arr[10]);
-    /*@ extract Owned<int>, 0u64; @*/
-    /*@ extract Owned<int>, 10u64; @*/
+    /*@ focus RW<int>, 0u64; @*/
+    /*@ focus RW<int>, 10u64; @*/
     live_owned_one(&arr[0], &arr[10]);
     live_owned_both(&arr[0], &arr[10]);
     char *p = (char*) arr;

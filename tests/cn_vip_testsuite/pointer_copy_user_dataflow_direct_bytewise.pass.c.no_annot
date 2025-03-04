@@ -3,10 +3,10 @@ tests/cn_vip_testsuite/pointer_copy_user_dataflow_direct_bytewise.pass.c:28:5: w
     src == array_shift<unsigned char>(src_start, n_start - n);
     ~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 tests/cn_vip_testsuite/pointer_copy_user_dataflow_direct_bytewise.pass.c:48:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ to_bytes Owned<int*>(&p); @*/
+  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
                 ^~~~~~~~ 
 tests/cn_vip_testsuite/pointer_copy_user_dataflow_direct_bytewise.pass.c:52:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ from_bytes Owned<int*>(&q); @*/
+  /*CN_VIP*//*@ from_bytes RW<int*>(&q); @*/
                 ^~~~~~~~~~ 
 [1/2]: user_memcpy -- pass
 [2/2]: main -- pass
