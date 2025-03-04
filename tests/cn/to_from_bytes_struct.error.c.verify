@@ -1,0 +1,8 @@
+return code: 1
+tests/cn/to_from_bytes_struct.error.c:30:7: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
+  /*@ to_bytes RW<s>(p); @*/
+      ^~~~~~~~ 
+[1/1]: untransmute_to_blob -- fail
+tests/cn/to_from_bytes_struct.error.c:30:6: error: Cannot (yet) convert value of struct s to/from bytes
+  /*@ to_bytes RW<s>(p); @*/
+     ^~~~~~~~~~~~~~~~~~~~~ 
