@@ -9,6 +9,7 @@ module LAT = LogicalArgumentTypes
 module LC = LogicalConstraints
 module Loc = Locations
 module C = Context
+module CP = CheckPredicates
 open Pp
 
 (* perhaps somehow unify with above *)
@@ -190,7 +191,6 @@ let state (ctxt : C.t) log model_with_q extras =
     let forall_constraints, funs, ctxt_preds = C.not_given_to_solver ctxt in
     let preds =
       let pred_compare (s1, _) (s2, _) = Sym.compare s1 s2 in
-      (*CHT TODO: deriving this would require changing a lot of files *)
       Base.List.dedup_and_sort (List.append log_preds ctxt_preds) ~compare:pred_compare
     in
     let interesting_constraints, uninteresting_constraints =
@@ -218,7 +218,7 @@ let state (ctxt : C.t) log model_with_q extras =
             ])
          Rp.labeled_empty)
   in
-  let terms =
+  let terms, vals =
     let variables =
       let make s ls = IT.sym_ (s, ls, Locations.other __LOC__) in
       let basetype_binding (s, (binding, _)) =
@@ -259,22 +259,30 @@ let state (ctxt : C.t) log model_with_q extras =
       List.filter_map
         (fun it ->
           match evaluate it with
-          | Some value when not (IT.equal value it) ->
-            Some (it, Rp.{ term = IT.pp it; value = IT.pp value })
+          | Some value when not (IT.equal value it) -> Some (it, value)
           | Some _ -> None
           | None -> None)
         (ITSet.elements subterms)
+    in
+    let pretty_printed =
+      List.map
+        (fun (it, value) -> (it, Rp.{ term = IT.pp it; value = IT.pp value }))
+        filtered
     in
     let interesting, uninteresting =
       List.partition
         (fun (it, _entry) ->
           match IT.get_bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
-        filtered
+        pretty_printed
     in
-    Rp.add_labeled
-      Rp.lab_interesting
-      (List.map snd interesting)
-      (Rp.add_labeled Rp.lab_uninteresting (List.map snd uninteresting) Rp.labeled_empty)
+    ( Rp.add_labeled
+        Rp.lab_interesting
+        (List.map snd interesting)
+        (Rp.add_labeled
+           Rp.lab_uninteresting
+           (List.map snd uninteresting)
+           Rp.labeled_empty),
+      filtered )
   in
   let constraints =
     Rp.add_labeled
@@ -317,7 +325,47 @@ let state (ctxt : C.t) log model_with_q extras =
       interesting
       (Rp.add_labeled Rp.lab_uninteresting uninteresting Rp.labeled_empty)
   in
-  Rp.{ where; not_given_to_solver; terms; resources; constraints }
+  let invalid_resources =
+    let g = ctxt.global in
+    let defs = g.resource_predicates in
+    let check (rt, o) =
+      match (rt, o) with
+      | Req.Q _, _ -> None
+      | Req.P { name = Owned _; pointer = _; iargs = _ }, _ -> None
+      | Req.P { name = PName s; pointer = _; iargs }, Resource.O it ->
+        (match (Sym.Map.find_opt s defs, evaluate it) with
+         | Some def, Some cand ->
+           let here = Locations.other __LOC__ in
+           let ptr_val = Req.get_pointer rt in
+           let ptr_def = (IT.sym_ (def.pointer, IT.get_bt ptr_val, here), ptr_val) in
+           Some (CP.check_pred s def cand ctxt iargs (ptr_def :: vals), rt, it)
+         | Some _, None ->
+           Some (Error (!^"Could not locate definition of variable" ^^^ IT.pp it), rt, it)
+         | None, _ ->
+           Some (Error (!^"Could not locate definition of predicate" ^^^ Sym.pp s), rt, it))
+    in
+    let checked = List.filter_map check (C.get_rs ctxt) in
+    let nos, _ = List.partition (fun (r, _, _) -> ResultWithData.is_no r) checked in
+    (* let yeses, unknown = List.partition (fun (r, _, _) -> is_yes r) rest in *)
+    (* Issue #900 *)
+    let pp_checked_res (p, req, cand) =
+      let _ = p in
+      let rslt = Req.pp req ^^^ !^"(" ^^^ IT.pp cand ^^^ !^")" in
+      Rp.
+        { original = rslt;
+          (* original = ^^^ !^"\n"^^^ LAT.pp_check_result p; *)
+          (* Issue #900 *)
+          simplified = [ rslt ]
+        }
+    in
+    Rp.add_labeled Rp.lab_invalid (List.map pp_checked_res nos) Rp.labeled_empty
+    (* Currently only displays invalid predicates : Issue #900 *)
+    (* (Rp.add_labeled
+       Rp.lab_unknown
+       (List.map pp_checked_res unknown)
+       (Rp.add_labeled Rp.lab_valid (List.map pp_checked_res yeses) Rp.labeled_empty)) *)
+  in
+  Rp.{ where; invalid_resources; not_given_to_solver; terms; resources; constraints }
 
 
 let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extras) =
