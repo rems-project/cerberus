@@ -98,7 +98,11 @@ Ltac2 prove_unfold_step () :=
       Control.focus 1 1 (fun () => Std.reflexivity ());
       Control.focus 1 1 (fun () => Std.reflexivity ());
       Control.focus 1 1 (fun () => Std.reflexivity ());
-      Control.focus 1 1 (fun () => Std.reflexivity ())
+      Control.focus 1 1 (fun () => Std.reflexivity ());
+
+      Message.print (Message.of_string "TODO: Shelving unfold step pre-condition.");
+      Control.shelve ()
+
   end.
 
  Ltac2 prove_log_entry_valid () :=
