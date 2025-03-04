@@ -235,21 +235,21 @@ let ask_solver g lcs =
   let simp_ctxt =
     Simplify.{ global = g; values = Sym.Map.empty; simp_hook = (fun _ -> None) }
   in
-  let get_it lc = match lc with LC.T it -> Some it | LC.Forall _ -> None in
-  let lc = LC.T (IT.and_ (List.filter_map get_it lcs) here) in
+  let s = Solver.make g in
+  List.fold_right (fun lc _ -> Solver.add_assumption s g lc) lcs ();
   let solver_res =
     Solver.provableWithUnknown
       ~loc:here
       ~solver:(Solver.make g)
-      ~assumptions:LC.Set.empty
+      ~assumptions:(LC.Set.of_list lcs)
       ~simp_ctxt
-      lc
+      (LC.T (IT.bool_ false here))
   in
   let res =
     match solver_res with
-    | `False -> RWD.No (Pp.( !^ ) "Solver returned No.")
+    | `True -> RWD.No (Pp.( !^ ) "Solver returned No.")
     | `Unknown -> RWD.Unknown (Pp.( !^ ) "Solver returned Unknown.")
-    | `True -> RWD.Yes lcs
+    | `False -> RWD.Unknown (Pp.( !^ ) "Solver returned No, but without some definitions available.")
   in
   res
 
