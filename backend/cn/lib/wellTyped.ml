@@ -15,7 +15,8 @@ type message =
       { has : Pp.document;
         expect : Pp.document
       }
-  | Generic of Pp.document (** TODO remove *)
+  | Generic of Pp.document [@deprecated "Please add a specific constructor"]
+  (** TODO remove *)
   | Illtyped_it of
       { it : Pp.document; (** TODO replace with terms *)
         has : Pp.document; (* 'expected' and 'has' as in Kayvan's Core type checker *)
@@ -127,7 +128,7 @@ let ensure_z_fits_bits_type loc (sign, n) v =
     return ()
   else (
     let err = !^"Value" ^^^ Pp.z v ^^^ !^"does not fit" ^^^ BT.pp (Bits (sign, n)) in
-    fail { loc; msg = Generic err })
+    (fail { loc; msg = Generic err } [@alert "-deprecated"]))
 
 
 let ensure_arith_type ~reason it =
@@ -282,7 +283,11 @@ module WBT = struct
     | Some bt -> return bt
     | None ->
       fail
-        { loc; msg = Generic (Pp.item "no standard encoding type for constant" (Pp.z z)) }
+        { loc;
+          msg =
+            Generic (Pp.item "no standard encoding type for constant" (Pp.z z)) [@alert
+                                                                                  "-deprecated"]
+        }
 end
 
 module WCT = struct
@@ -355,7 +360,7 @@ module WIT = struct
     | [] ->
       assert (List.for_all (function [] -> true | _ -> false) cases);
       (match cases with
-       | [] -> fail { loc; msg = Generic !^"Incomplete pattern" }
+       | [] -> fail { loc; msg = Generic !^"Incomplete pattern" [@alert "-deprecated"] }
        | _ -> return ())
       (* | [_(\*[]*\)] -> return () *)
       (* | _::_::_ -> fail (fun _ -> {loc; msg = Generic !^"Duplicate pattern"}) *)
@@ -793,7 +798,9 @@ module WIT = struct
           | Integer, Loc () ->
             fail
               { loc;
-                msg = Generic !^"cast from integer not allowed in bitvector version"
+                msg =
+                  Generic !^"cast from integer not allowed in bitvector version" [@alert
+                                                                                   "-deprecated"]
               }
           | Loc (), Alloc_id -> return ()
           | Integer, Real -> return ()
@@ -814,7 +821,7 @@ module WIT = struct
               ^^^ BT.pp target
               ^^ dot
             in
-            fail { loc; msg = Generic msg }
+            fail { loc; msg = Generic msg [@alert "-deprecated"] }
         in
         return (IT (Cast (cbt, t), cbt, loc))
       | MemberShift (t, tag, member) ->
@@ -932,7 +939,7 @@ module WIT = struct
                   Generic
                     (Pp.item
                        "array_to_list: index type disagreement"
-                       (Pp.list IT.pp_with_typ [ i; arr ]))
+                       (Pp.list IT.pp_with_typ [ i; arr ])) [@alert "-deprecated"]
               }
         in
         return (IT (ArrayToList (arr, i, len), BT.List bt, loc))
@@ -1068,7 +1075,7 @@ let owned_ct_ok loc (ct, init) =
       ^^^ !^"please specify another C-type"
       ^^^ Pp.parens (!^"using" ^^^ pp_resource "YOURTYPE")
     in
-    fail { loc; msg = Generic msg }
+    fail { loc; msg = Generic msg [@alert "-deprecated"] }
   | _ -> return ()
 
 
@@ -1121,7 +1128,8 @@ module WReq = struct
             fail
               { loc;
                 msg =
-                  Generic (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^"must be positive")
+                  Generic (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^"must be positive") [@alert
+                                                                                          "-deprecated"]
               }
         | IT (SizeOf _, _, _) -> return step
         | IT (Cast (_, IT (SizeOf _, _, _)), _, _) -> return step
@@ -1397,7 +1405,8 @@ module BaseTyping = struct
 
   let check_against_core_bt loc msg2 cbt bt =
     CoreTypeChecks.check_against_core_bt cbt bt
-    |> Result.map_error (fun msg -> { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
+    |> Result.map_error (fun msg ->
+      { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) [@alert "-deprecated"] })
     |> lift
 
 
@@ -1428,7 +1437,12 @@ module BaseTyping = struct
         match BT.is_list_bt bt with
         | Some bt -> return bt
         | None ->
-          fail { loc; msg = Generic (Pp.item "list pattern match against" (BT.pp bt)) }
+          fail
+            { loc;
+              msg =
+                Generic (Pp.item "list pattern match against" (BT.pp bt)) [@alert
+                                                                            "-deprecated"]
+            }
       in
       let@ ctor, pats =
         match (ctor, pats) with
@@ -1460,7 +1474,7 @@ module BaseTyping = struct
                       (Pp.item
                          (Int.to_string (List.length pats)
                           ^ "-length tuple pattern match against")
-                         (BT.pp bt))
+                         (BT.pp bt)) [@alert "-deprecated"]
                 }
           in
           let@ pats = ListM.map2M check_and_bind_pattern bts pats in
@@ -1520,7 +1534,8 @@ module BaseTyping = struct
           { loc;
             msg =
               Generic
-                (!^"Value " ^^^ Pp.z z ^^^ !^"does not fit in expected type" ^^^ BT.pp bt)
+                (!^"Value " ^^^ Pp.z z ^^^ !^"does not fit in expected type" ^^^ BT.pp bt) 
+              [@alert "-deprecated"]
           }
     | _ ->
       let@ ov = infer_object_value loc ov_original in
@@ -1816,7 +1831,8 @@ module BaseTyping = struct
           { loc;
             msg =
               Generic
-                (Pp.item "untypeable mucore function" (Pp_mucore_ast.pp_pexpr orig_pe))
+                (Pp.item "untypeable mucore function" (Pp_mucore_ast.pp_pexpr orig_pe)) [@alert
+                                                                                          "-deprecated"]
           }
       | Some `Returns_Integer, None ->
         fail
@@ -1825,7 +1841,7 @@ module BaseTyping = struct
               Generic
                 (Pp.item
                    "mucore function requires type-annotation"
-                   (Pp_mucore_ast.pp_pexpr orig_pe))
+                   (Pp_mucore_ast.pp_pexpr orig_pe)) [@alert "-deprecated"]
           }
     in
     return (bt, pexps)
@@ -2077,7 +2093,8 @@ module BaseTyping = struct
                 { loc;
                   msg =
                     Generic
-                      (Pp.item "not a function pointer at call-site" (Sctypes.pp act.ct))
+                      (Pp.item "not a function pointer at call-site" (Sctypes.pp act.ct)) [@alert
+                                                                                          "-deprecated"]
                 }
           in
           let@ f_pe = check_pexpr (Loc ()) f_pe in
@@ -2127,7 +2144,12 @@ module BaseTyping = struct
           (* copying from check.ml *)
           let@ lt, _lkind =
             match Sym.Map.find_opt l label_context with
-            | None -> fail { loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l) }
+            | None ->
+              fail
+                { loc;
+                  msg =
+                    Generic (!^"undefined code label" ^/^ Sym.pp l) [@alert "-deprecated"]
+                }
             | Some (lt, lkind, _) -> return (lt, lkind)
           in
           let@ pes =
@@ -2484,7 +2506,7 @@ module WDT = struct
                           ^/^ !^"Indirect recursion via map, set, record,"
                           ^^^ !^"or tuple types is not permitted."
                         in
-                        fail { loc; msg = Generic err })
+                        fail { loc; msg = Generic err [@alert "-deprecated"] })
                     args)
                 cases)
             scc)

@@ -175,12 +175,13 @@ type message =
         ctxt : Context.t * Explain.log;
         model : Solver.model_with_q
       }
-  | Generic of Pp.document (** TODO delete this *)
+  | Generic of Pp.document [@deprecated "Please add a specific constructor"]
+  (** TODO delete this *)
   | Generic_with_model of
       { err : document;
         model : Solver.model_with_q;
         ctxt : Context.t * Explain.log
-      }
+      } [@deprecated "Please add a specific constructor"]
   | Unsupported of document
   | Parser of Cerb_frontend.Errors.cparser_cause
   | Empty_provenance
@@ -300,7 +301,7 @@ let pp_welltyped = function
   | Empty_pattern ->
     let short = !^"Empty match expression." in
     { short; descr = None; state = None }
-  | Generic err ->
+  | ((Generic err) [@alert "-deprecated"]) ->
     let short = err in
     { short; descr = None; state = None }
   | Redundant_pattern p' ->
@@ -489,10 +490,10 @@ let pp_message = function
     let state = Explain.trace ctxt model Explain.no_ex in
     let descr = !^err in
     { short; descr = Some descr; state = Some state }
-  | Generic err ->
+  | ((Generic err) [@alert "-deprecated"]) ->
     let short = err in
     { short; descr = None; state = None }
-  | Generic_with_model { err; model; ctxt } ->
+  | ((Generic_with_model { err; model; ctxt }) [@alert "-deprecated"]) ->
     let short = err in
     let state = Explain.trace ctxt model Explain.no_ex in
     { short; descr = None; state = Some state }

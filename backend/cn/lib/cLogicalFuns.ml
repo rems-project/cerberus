@@ -67,7 +67,12 @@ let is_local_ptr ptr =
 
 let get_local_ptr loc ptr =
   match is_local_ptr ptr with
-  | None -> fail_n { loc; msg = Generic (Pp.item "use of non-local pointer" (IT.pp ptr)) }
+  | None ->
+    fail_n
+      { loc;
+        msg =
+          Generic (Pp.item "use of non-local pointer" (IT.pp ptr)) [@alert "-deprecated"]
+      }
   | Some ix -> return ix
 
 
@@ -89,7 +94,7 @@ let simp_const loc lpp it =
           Generic
             (Pp.item
                "getting expr from C syntax: failed to simplify integer to numeral"
-               (Pp.typ (Lazy.force lpp) (IT.pp it2)))
+               (Pp.typ (Lazy.force lpp) (IT.pp it2))) [@alert "-deprecated"]
       }
   | _, _ -> return it2
 
@@ -106,7 +111,8 @@ let do_wrapI loc ct it =
     fail_n
       { loc;
         msg =
-          Generic (Pp.item "expr from C syntax: coercion to non-int type" (Sctypes.pp ct))
+          Generic (Pp.item "expr from C syntax: coercion to non-int type" (Sctypes.pp ct)) 
+          [@alert "-deprecated"]
       }
 
 
@@ -141,7 +147,8 @@ let rec add_pattern p v var_map =
               Generic
                 (Pp.item
                    "getting expr from C syntax: cannot tuple-split val"
-                   (Pp.typ (IT.pp it) (Pp_mucore.Basic.pp_pattern p)))
+                   (Pp.typ (IT.pp it) (Pp_mucore.Basic.pp_pattern p))) [@alert
+                                                                         "-deprecated"]
           }
     in
     assert (List.length vs == List.length ps);
@@ -156,7 +163,7 @@ let rec add_pattern p v var_map =
           Generic
             (Pp.item
                "getting expr from C syntax: unsupported pattern"
-               (Pp_mucore.Basic.pp_pattern p))
+               (Pp_mucore.Basic.pp_pattern p)) [@alert "-deprecated"]
       }
 
 
@@ -198,7 +205,7 @@ let eval_fun f args orig_pexpr =
                  "function application result out of range"
                  (Pp_mucore_ast.pp_pexpr orig_pexpr
                   ^^ Pp.hardline
-                  ^^ Pp.typ (Pp.z z) (BT.pp bt)))
+                  ^^ Pp.typ (Pp.z z) (BT.pp bt))) [@alert "-deprecated"]
         }
   | None ->
     fail_n
@@ -210,7 +217,7 @@ let eval_fun f args orig_pexpr =
                (Pp_mucore_ast.pp_pexpr orig_pexpr
                 ^^ Pp.hardline
                 ^^ !^"arg vals:"
-                ^^^ Pp.brackets (Pp.list IT.pp args)))
+                ^^^ Pp.brackets (Pp.list IT.pp args))) [@alert "-deprecated"]
       }
 
 
@@ -237,7 +244,7 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
           Generic
             (Pp.item
                ("getting expr from C syntax: unsupported: " ^ msg)
-               (Pp.typ doc (Pp_mucore_ast.pp_pexpr pexpr)))
+               (Pp.typ doc (Pp_mucore_ast.pp_pexpr pexpr))) [@alert "-deprecated"]
       }
   in
   match pe with
@@ -354,7 +361,9 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
       | None ->
         fail_n
           { loc;
-            msg = Generic (Pp.item "expr from C syntax: non-constant type" (IT.pp ct_it))
+            msg =
+              Generic (Pp.item "expr from C syntax: non-constant type" (IT.pp ct_it)) [@alert
+                                                                                        "-deprecated"]
           }
     in
     (match ct with
@@ -402,7 +411,8 @@ let rec symb_exec_pexpr ctxt var_map pexpr =
              Generic
                (Pp.item
                   "getting expr from C syntax: c-function ptr"
-                  (Pp.typ (IT.pp x) (Pp_mucore_ast.pp_pexpr pexpr)))
+                  (Pp.typ (IT.pp x) (Pp_mucore_ast.pp_pexpr pexpr))) [@alert
+                                                                       "-deprecated"]
          })
   | _ -> unsupported "pure-expression type" !^""
 
@@ -465,7 +475,9 @@ let rec symb_exec_expr ctxt state_vars expr =
       | Call_Ret _ ->
         fail_n
           { loc;
-            msg = Generic (Pp.item "unsequenced return" (Pp_mucore.pp_expr orig_expr))
+            msg =
+              Generic (Pp.item "unsequenced return" (Pp_mucore.pp_expr orig_expr)) [@alert
+                                                                                     "-deprecated"]
           }
       | Compute (v, state) -> cont1 state (v :: exp_vals) exps
       | If_Else (t, x, y) ->
@@ -481,7 +493,12 @@ let rec symb_exec_expr ctxt state_vars expr =
        assert (List.length args == 1);
        return (Call_Ret (List.hd arg_vs))
      | _ ->
-       fail_n { loc; msg = Generic Pp.(!^"function has goto-labels in control-flow") })
+       fail_n
+         { loc;
+           msg =
+             Generic Pp.(!^"function has goto-labels in control-flow") [@alert
+                                                                         "-deprecated"]
+         })
   | Ebound ex -> symb_exec_expr ctxt (state, var_map) ex
   | Eaction (Paction (_, Action (_, action))) ->
     (match action with
@@ -500,10 +517,18 @@ let rec symb_exec_expr ctxt state_vars expr =
          match IntMap.find_opt ix state.loc_map with
          | None ->
            fail_n
-             { loc; msg = Generic (Pp.item "unavailable memory address" (IT.pp p_v)) }
+             { loc;
+               msg =
+                 Generic (Pp.item "unavailable memory address" (IT.pp p_v)) [@alert
+                                                                              "-deprecated"]
+             }
          | Some None ->
            fail_n
-             { loc; msg = Generic (Pp.item "uninitialised memory address" (IT.pp p_v)) }
+             { loc;
+               msg =
+                 Generic (Pp.item "uninitialised memory address" (IT.pp p_v)) [@alert
+                                                                                "-deprecated"]
+             }
          | Some (Some ix) -> return ix
        in
        rcval v state
@@ -518,7 +543,7 @@ let rec symb_exec_expr ctxt state_vars expr =
              Generic
                (Pp.item
                   "getting expr from C syntax: unsupported memory op"
-                  (Pp_mucore.pp_expr expr))
+                  (Pp_mucore.pp_expr expr)) [@alert "-deprecated"]
          })
   | Eccall (_act, fun_pe, args_pe) ->
     let@ fun_it = symb_exec_pexpr ctxt var_map fun_pe in
@@ -530,7 +555,8 @@ let rec symb_exec_expr ctxt state_vars expr =
             Generic
               (Pp.item
                  ("getting expr from C syntax: function val: " ^ msg)
-                 (Pp.typ (Pp_mucore.pp_pexpr fun_pe) (IT.pp fun_it)))
+                 (Pp.typ (Pp_mucore.pp_pexpr fun_pe) (IT.pp fun_it))) [@alert
+                                                                        "-deprecated"]
         }
     in
     let@ nm =
@@ -565,7 +591,8 @@ let rec symb_exec_expr ctxt state_vars expr =
       { loc;
         msg =
           Generic
-            (Pp.item "getting expr from C syntax: unsupported" (Pp_mucore.pp_expr expr))
+            (Pp.item "getting expr from C syntax: unsupported" (Pp_mucore.pp_expr expr)) [@alert
+                                                                                          "-deprecated"]
       }
 
 
@@ -598,7 +625,7 @@ let rec get_ret_it loc body bt = function
               Generic
                 (Pp.item
                    "get_ret_it: basetype mismatch"
-                   (Pp.infix_arrow (IT.pp_with_typ v) (BT.pp bt)))
+                   (Pp.infix_arrow (IT.pp_with_typ v) (BT.pp bt))) [@alert "-deprecated"]
           }
     in
     return v
@@ -609,7 +636,7 @@ let rec get_ret_it loc body bt = function
           Generic
             (Pp.item
                "cn_function c->logical conversion: does not return"
-               (Pp_mucore.pp_expr body))
+               (Pp_mucore.pp_expr body)) [@alert "-deprecated"]
       }
   | If_Else (t, x, y) ->
     let@ x_v = get_ret_it loc body bt x in
@@ -652,7 +679,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
                     !^"mismatched arguments:"
                     ^^^ parens (BT.pp (IT.get_bt v) ^^^ IT.pp v)
                     ^^^ !^"and"
-                    ^^^ parens (BT.pp bt ^^^ Sym.pp s))
+                    ^^^ parens (BT.pp bt ^^^ Sym.pp s)) [@alert "-deprecated"]
             }
       | L l, [] -> return (acc, ignore_l l)
       | _ ->
@@ -662,7 +689,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
               Generic
                 Pp.(
                   !^"mismatched argument number for"
-                  ^^^ Pp.infix_arrow (Sym.pp fsym) (Sym.pp id))
+                  ^^^ Pp.infix_arrow (Sym.pp fsym) (Sym.pp id)) [@alert "-deprecated"]
           }
     in
     let rec in_computational_ctxt args_and_body m =
@@ -689,7 +716,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
                      "cn_function: return-type mismatch"
                      (Pp.infix_arrow
                         (Pp.typ (Sym.pp fsym) (BT.pp bt))
-                        (Pp.typ (Sym.pp id) (BT.pp l_ret_bt))))
+                        (Pp.typ (Sym.pp id) (BT.pp l_ret_bt)))) [@alert "-deprecated"]
             }
     in
     let ctxt = { glob_context with label_defs = labels } in
@@ -703,7 +730,9 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
   | _ ->
     fail_n
       { loc = id_loc;
-        msg = Generic (Pp.string ("cn_function: not defined: " ^ Sym.pp_string fsym))
+        msg =
+          Generic (Pp.string ("cn_function: not defined: " ^ Sym.pp_string fsym)) [@alert
+                                                                                    "-deprecated"]
       }
 
 
@@ -716,7 +745,8 @@ let upd_def (loc, sym, def_tm) =
     fail_n
       { loc;
         msg =
-          Generic (Pp.typ (Pp.string "logical predicate already defined") (Sym.pp sym))
+          Generic (Pp.typ (Pp.string "logical predicate already defined") (Sym.pp sym)) [@alert
+                                                                                          "-deprecated"]
       }
 
 

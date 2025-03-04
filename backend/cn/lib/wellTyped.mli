@@ -6,7 +6,7 @@ type message =
       { has : Pp.document;
         expect : Pp.document
       }
-  | Generic of Pp.document
+  | Generic of Pp.document [@deprecated "Please add a specific constructor"]
   | Illtyped_it of
       { it : Pp.document;
         has : Pp.document;
