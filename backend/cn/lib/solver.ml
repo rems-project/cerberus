@@ -1454,8 +1454,8 @@ end
 
 let try_hard = ref false
 
-(** The main way to query the solver. *)
-let provable ~loc ~solver ~assumptions ~simp_ctxt lc =
+
+let provableWithUnknown ~loc ~solver ~assumptions ~simp_ctxt lc =
   let _ = loc in
   let set_model smt_solver qs =
     let defs = SMT.get_model smt_solver in
@@ -1510,6 +1510,14 @@ let provable ~loc ~solver ~assumptions ~simp_ctxt lc =
      | SMT.Unknown ->
        debug_ack_command solver (SMT.pop 1);
        failwith "Unknown")
+
+
+(** The main way to query the solver. *)
+let provable ~loc ~solver ~assumptions ~simp_ctxt lc =
+  match provableWithUnknown ~loc ~solver ~assumptions ~simp_ctxt lc with
+  | `True -> `True
+  | `False -> `False
+  | `Unknown -> `False
 
 
 (* ISD: Could these globs be different from the saved ones? *)

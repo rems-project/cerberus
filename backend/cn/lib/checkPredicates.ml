@@ -229,7 +229,7 @@ let ask_solver try_hard g lcs =
   let simp_ctxt = Simplify.{global = g; values = Sym.Map.empty; simp_hook = fun _ -> None} in
   let get_it lc = match lc with LC.T it -> Some it | LC.Forall _ -> None in
   let lc = LC.T (IT.and_ (List.filter_map get_it lcs) here) in
-  let solver_res = Solver.provable
+  let solver_res = Solver.provableWithUnknown
     ~loc:here
     ~solver:(Solver.make g)
     ~assumptions:LC.Set.empty

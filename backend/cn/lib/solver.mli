@@ -40,13 +40,23 @@ val reset_model_evaluator_state : unit -> unit
 
 (* Run the solver. Note that we pass the assumptions explicitly even though they are also
    available in the solver context, because CN is going some simplification on its own. *)
-val provable
+val provableWithUnknown
   :  loc:Locations.t ->
   solver:solver ->
   assumptions:LogicalConstraints.Set.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
   [> `True | `False | `Unknown ] (*TODO CHT*)
+
+(* Run the solver. Note that we pass the assumptions explicitly even though they are also
+   available in the solver context, because CN is going some simplification on its own. *)
+val provable
+  :  loc:Locations.t ->
+  solver:solver ->
+  assumptions:LogicalConstraints.Set.t ->
+  simp_ctxt:Simplify.simp_ctxt ->
+  LogicalConstraints.t ->
+  [> `True | `False ]
 
 (* Ask the solver for the model that it found in a call to [provable] *)
 val model : unit -> model_with_q
