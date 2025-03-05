@@ -261,6 +261,7 @@ let make_invalid_resources rs =
   in
   pp_rs rs "rs";
   let rs' = StrMap.filter (fun _ v -> not (List.is_empty v)) rs in
+
   pp_rs rs' "rs'";
   if StrMap.is_empty rs' then
     ""
