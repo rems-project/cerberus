@@ -47,7 +47,8 @@ type t =
     sized_null : bool;
     coverage : bool;
     disable_passes : string list;
-    trap : bool
+    trap : bool;
+    replicas : bool
   }
 
 let default =
@@ -75,7 +76,8 @@ let default =
     sized_null = false;
     coverage = false;
     disable_passes = [];
-    trap = false
+    trap = false;
+    replicas = false
   }
 
 
@@ -191,3 +193,5 @@ let is_coverage () = !instance.coverage
 let has_pass s = not (List.mem String.equal s !instance.disable_passes)
 
 let is_trap () = !instance.trap
+
+let has_replicas () = !instance.replicas

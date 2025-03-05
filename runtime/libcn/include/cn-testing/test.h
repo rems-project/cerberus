@@ -7,6 +7,8 @@
 #include <cn-executable/utils.h>
 #include <cn-testing/result.h>
 #include <cn-testing/uniform.h>
+#include <cn-replicate/lines.h>
+#include <cn-replicate/shape.h>
 
 enum cn_test_gen_progress {
   CN_TEST_GEN_PROGRESS_NONE = 0,
@@ -20,8 +22,11 @@ enum cn_gen_sizing_strategy {
   CN_GEN_SIZE_QUICKCHECK = 2
 };
 
-typedef enum cn_test_result cn_test_case_fn(
-    bool replay, enum cn_test_gen_progress, enum cn_gen_sizing_strategy, bool trap);
+typedef enum cn_test_result cn_test_case_fn(bool replay,
+    enum cn_test_gen_progress,
+    enum cn_gen_sizing_strategy,
+    bool trap,
+    bool replicas);
 
 void cn_register_test_case(const char* suite, const char* name, cn_test_case_fn* func);
 
@@ -49,7 +54,8 @@ size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy,
   enum cn_test_result cn_test_const_##FuncName(bool replay,                              \
       enum cn_test_gen_progress progress_level,                                          \
       enum cn_gen_sizing_strategy sizing_strategy,                                       \
-      bool trap) {                                                                       \
+      bool trap,                                                                         \
+      bool replicas) {                                                                   \
     if (setjmp(buf_##FuncName)) {                                                        \
       return CN_TEST_FAIL;                                                               \
     }                                                                                    \
@@ -74,7 +80,8 @@ size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy,
   enum cn_test_result cn_test_gen_##Name(bool replay,                                    \
       enum cn_test_gen_progress progress_level,                                          \
       enum cn_gen_sizing_strategy sizing_strategy,                                       \
-      bool trap) {                                                                       \
+      bool trap,                                                                         \
+      bool replicas) {                                                                   \
     cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                              \
     int i = 0, d = 0, recentDiscards = 0;                                                \
     set_cn_failure_cb(&cn_test_gen_##Name##_fail);                                       \
@@ -85,6 +92,17 @@ size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy,
         if (progress_level == CN_TEST_GEN_PROGRESS_FINAL) {                              \
           print_test_info(#Suite, #Name, i, d);                                          \
         }                                                                                \
+                                                                                         \
+        if (progress_level > CN_TEST_GEN_PROGRESS_NONE) {                                \
+          printf("\n");                                                                  \
+        }                                                                                \
+                                                                                         \
+        if (replicas) {                                                                  \
+          printf("\n********************* Replication code *********************\n\n");  \
+          printf("%s", cn_replica_lines_to_str());                                       \
+          printf("\n************************************************************\n\n");  \
+        }                                                                                \
+                                                                                         \
         return CN_TEST_FAIL;                                                             \
       case CN_FAILURE_ALLOC:                                                             \
         cn_gen_rand_replace(checkpoint);                                                 \
@@ -123,6 +141,14 @@ size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy,
       }                                                                                  \
       assume_##Name(__VA_ARGS__);                                                        \
       Init(res);                                                                         \
+      if (replicas) {                                                                    \
+        cn_replica_alloc_reset();                                                        \
+        cn_replica_lines_reset();                                                        \
+                                                                                         \
+        cn_analyze_shape_##Name(__VA_ARGS__);                                            \
+        cn_replicate_##Name(__VA_ARGS__);                                                \
+      }                                                                                  \
+                                                                                         \
       if (trap) {                                                                        \
         cn_trap();                                                                       \
       }                                                                                  \

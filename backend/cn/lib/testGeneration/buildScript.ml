@@ -116,7 +116,8 @@ let link ~filename_base =
               else
                 " " ^ filename_base ^ "-exec.o cn.o");
              "\"${RUNTIME_PREFIX}/libcn_exec.a\"";
-             "\"${RUNTIME_PREFIX}/libcn_test.a\""
+             "\"${RUNTIME_PREFIX}/libcn_test.a\"";
+             "\"${RUNTIME_PREFIX}/libcn_replica.a\""
            ]
            @ cc_flags ()))
        "Linked C *.o files."
@@ -193,9 +194,13 @@ let run () =
             ])
           |> Option.to_list
           |> List.flatten)
+       @ (if Config.is_trap () then
+            [ "--trap" ]
+          else
+            [])
        @
-       if Config.is_trap () then
-         [ "--trap" ]
+       if Config.has_replicas () then
+         [ "--replicas" ]
        else
          [])
   in

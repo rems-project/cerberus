@@ -24,6 +24,9 @@
   (cn-testing/size.h as runtime/include/cn-testing/size.h)
   (cn-testing/test.h as runtime/include/cn-testing/test.h)
   (cn-testing/uniform.h as runtime/include/cn-testing/uniform.h)
-  (cn-testing/urn.h as runtime/include/cn-testing/urn.h))
+  (cn-testing/urn.h as runtime/include/cn-testing/urn.h)
+  ;
+  (cn-replicate/shape.h as runtime/include/cn-replicate/shape.h)
+  (cn-replicate/lines.h as runtime/include/cn-replicate/lines.h))
  (section lib)
  (package cn))

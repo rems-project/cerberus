@@ -76,13 +76,21 @@ void cn_gen_split(size_t n, size_t* arr[], size_t len);
 
 uint64_t cn_gen_rand_retry(void);
 
-typedef void* cn_gen_rand_checkpoint;
+struct choice_list {
+  uint64_t choice;
+  struct choice_list* next;
+  struct choice_list* prev;
+};
+
+typedef struct choice_list* cn_gen_rand_checkpoint;
 
 cn_gen_rand_checkpoint cn_gen_rand_save(void);
 
 void cn_gen_rand_restore(cn_gen_rand_checkpoint checkpoint);
 
 void cn_gen_rand_replace(cn_gen_rand_checkpoint checkpoint);
+
+char* cn_gen_rand_to_str(cn_gen_rand_checkpoint checkpoint);
 
 #ifdef __cplusplus
 }

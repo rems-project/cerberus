@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -264,12 +265,6 @@ void cn_gen_split(size_t n, size_t* arr[], size_t len) {
   cn_gen_shuffle(&arr, len, sizeof(size_t*));
 }
 
-struct choice_list {
-  uint64_t choice;
-  struct choice_list* next;
-  struct choice_list* prev;
-};
-
 static struct choice_list* choice_history = 0;
 
 void cn_gen_srand(uint64_t seed) {
@@ -338,4 +333,40 @@ void cn_gen_rand_replace(cn_gen_rand_checkpoint checkpoint) {
   cn_gen_rand_restore(checkpoint);
   free_list(choice_history->next);
   choice_history->next = 0;
+}
+
+char* cn_gen_rand_to_str(cn_gen_rand_checkpoint checkpoint) {
+  size_t bytes = 1;
+
+  struct choice_list* curr = (struct choice_list*)checkpoint;
+  while (curr != NULL) {
+    bytes += 20;
+
+    curr = curr->next;
+  }
+
+  curr = (struct choice_list*)checkpoint;
+  char* buf = malloc(bytes);
+  buf[0] = '\0';
+
+  if (curr != NULL) {
+    curr = curr->next;
+  }
+
+  if (curr != NULL) {
+    sprintf(buf, "%" PRIu64, curr->choice);
+
+    curr = curr->next;
+  }
+
+  while (curr != NULL) {
+    char* tmp = malloc(21);
+    sprintf(tmp, ", %" PRIu64, curr->choice);
+    strcat(buf, tmp);
+    free(tmp);
+
+    curr = curr->next;
+  }
+
+  return buf;
 }

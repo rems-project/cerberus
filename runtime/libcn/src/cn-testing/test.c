@@ -13,6 +13,7 @@
 #include <cn-testing/result.h>
 #include <cn-testing/size.h>
 #include <cn-testing/test.h>
+#include <cn-replicate/shape.h>
 
 struct cn_test_case {
   const char* suite;
@@ -203,6 +204,7 @@ int cn_test_main(int argc, char* argv[]) {
   int exit_fast = 0;
   int trap = 0;
   enum cn_gen_sizing_strategy sizing_strategy = CN_GEN_SIZE_QUICKCHECK;
+  int replicas = 0;
   for (int i = 0; i < argc; i++) {
     char* arg = argv[i];
 
@@ -293,6 +295,8 @@ int cn_test_main(int argc, char* argv[]) {
       }
 
       i++;
+    } else if (strcmp("--replicas", arg) == 0) {
+      replicas = 1;
     }
   }
 
@@ -324,7 +328,7 @@ int cn_test_main(int argc, char* argv[]) {
       repros[i].checkpoint = cn_gen_rand_save();
       cn_gen_set_input_timeout(input_timeout);
       enum cn_test_result result =
-          test_case->func(false, progress_level, sizing_strategy, 0);
+          test_case->func(false, progress_level, sizing_strategy, 0, 0);
       if (!(results[i] == CN_TEST_PASS && result == CN_TEST_GEN_FAIL)) {
         results[i] = result;
       }
@@ -344,8 +348,9 @@ int cn_test_main(int argc, char* argv[]) {
           cn_printf(CN_LOGGING_ERROR, "\n");
 
           cn_test_reproduce(&repros[i]);
-          enum cn_test_result replay_result =
-              test_case->func(true, CN_TEST_GEN_PROGRESS_NONE, sizing_strategy, trap);
+          enum cn_test_result replay_result = test_case->func(
+              true, CN_TEST_GEN_PROGRESS_NONE, sizing_strategy, trap, replicas);
+
           if (replay_result != CN_TEST_FAIL) {
             fprintf(stderr, "Replay of failure did not fail.\n");
             abort();

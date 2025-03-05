@@ -47,7 +47,8 @@ type t =
     sized_null : bool;
     coverage : bool;
     disable_passes : string list;
-    trap : bool
+    trap : bool;
+    replicas : bool
   }
 
 val default : t
@@ -123,3 +124,5 @@ val is_coverage : unit -> bool
 val has_pass : string -> bool
 
 val is_trap : unit -> bool
+
+val has_replicas : unit -> bool
