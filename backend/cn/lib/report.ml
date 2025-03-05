@@ -36,6 +36,12 @@ let lab_interesting : label = "interesting"
 
 let lab_uninteresting : label = "uninteresting"
 
+let lab_invalid = "Resources that do not satisfy predicate definitions"
+
+let lab_unknown = "Resources that may not satisfy predicate definitions"
+
+let lab_valid = "Resources that do satisfy predicate definitions"
+
 let sequence (xs : ('a, 'e) Result.t list) : ('a list, 'e) Result.t =
   let ( let* ) = Result.bind in
   let rcons e es =
@@ -88,6 +94,7 @@ let get_labeled mp lab = StrMap.find_opt lab mp
 
 type state_report =
   { where : where_report;
+    invalid_resources : simp_view labeled_view;
     not_given_to_solver : simp_view labeled_view;
     resources : simp_view labeled_view;
     constraints : simp_view labeled_view;
@@ -230,6 +237,33 @@ let simp_view s =
     [ val_orig ]
   else
     [ div [ btn; div [ val_simp ]; div [ val_orig ] ] ]
+
+
+let table_by_label mk_table render data main_lab labs =
+  let get_table lab =
+    match StrMap.find_opt lab data with
+    | None -> (lab, "(none)")
+    | Some t -> (lab, mk_table (List.map render t))
+  in
+  let tables = List.map get_table labs in
+  let combine_tables acc (new_lab, new_table) = acc ^ details new_lab new_table in
+  List.fold_left combine_tables (snd (get_table main_lab)) tables
+
+
+let make_invalid_resources rs =
+  let rs' = StrMap.filter (fun _ v -> not (List.is_empty v)) rs in
+  if StrMap.is_empty rs' then
+    ""
+  else
+    h
+      1
+      lab_invalid
+      (table_by_label
+         table_without_head
+         simp_view
+         rs'
+         lab_invalid
+         [] (* Issue #900: [ lab_unknown; lab_valid ] *))
 
 
 let make_not_given_to_solver ds =
@@ -447,7 +481,7 @@ th {
     color: rgb(150, 150, 150);
     background-color: rgb(50, 50, 50);
   }
-  
+
   .toggle {
     background-color: #CCCCCC;
     color: black;
@@ -664,7 +698,7 @@ function create_line(n, str) {
   return ret
 }
 
-function make_toggles(className, labels) {     
+function make_toggles(className, labels) {
   for(const btn of document.getElementsByClassName(className)) {
     const opts = []
     for (let i = btn.nextSibling; i !== null; i = i.nextSibling) {
@@ -719,6 +753,7 @@ let make_state (report : state_report) requested unproven predicate_hints =
       make_requested requested;
       make_unproven unproven;
       make_predicate_hints predicate_hints;
+      make_invalid_resources report.invalid_resources;
       make_not_given_to_solver report.not_given_to_solver;
       make_resources report.resources;
       make_terms report.terms;

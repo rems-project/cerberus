@@ -86,3 +86,5 @@ val alpha_equivalent : t -> t -> bool
 val steps_constant : t -> bool
 
 val dtree : t -> Cerb_frontend.Pp_ast.doc_tree
+
+val get_pointer : t -> IndexTerms.t

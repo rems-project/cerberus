@@ -38,10 +38,19 @@ val lab_interesting : label
 (** Uninteresting things that are hidden by default *)
 val lab_uninteresting : label
 
+(** Resources that do not satisfy predicate definitions *)
+val lab_invalid : label
+
+(** Resources that may not satisfy predicate definitions *)
+val lab_unknown : label
+
+(** Resources that do satisfy predicate definitions *)
+val lab_valid : label
+
 (** A collection of labeled things *)
 type 'a labeled_view
 
-(** Empty collection of labeld things *)
+(** Empty collection of labeled things *)
 val labeled_empty : 'a labeled_view
 
 (** Set the entities associated with a label *)
@@ -56,6 +65,7 @@ val get_labeled : 'a labeled_view -> label -> 'a list option
     the first component is "interesting", the second is not. *)
 type state_report =
   { where : where_report; (** Location information *)
+    invalid_resources : simp_view labeled_view;
     not_given_to_solver : simp_view labeled_view;
     resources : simp_view labeled_view;
     constraints : simp_view labeled_view;

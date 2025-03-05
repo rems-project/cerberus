@@ -1394,51 +1394,124 @@ let model_evaluator, reset_model_evaluator_state =
 
 (* ---------------------------------------------------------------------------*)
 
-(** The main way to query the solver. *)
-let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
+module TryHard = struct
+  let translate_forall solver qs body =
+    let alpha_rename qs body =
+      let comb (s1, bt) (qs1, body1) =
+        let s2, body2 = IT.alpha_rename s1 body1 in
+        ((s2, bt) :: qs1, body2)
+      in
+      List.fold_right comb qs ([], body)
+    in
+    let qs, body = alpha_rename qs body in
+    let body_ = translate_term solver body in
+    let qs_ =
+      List.map
+        (fun (s, bt) ->
+          let name = CN_Names.var_name s in
+          let sort = translate_base_type bt in
+          (SMT.atom name, sort))
+        qs
+    in
+    SMT.forall qs_ body_
+
+
+  let translate_lc solver = function
+    | LC.T it -> translate_term solver it
+    | LC.Forall ((s, bt), body) -> translate_forall solver [ (s, bt) ] body
+
+
+  let translate_function solver f args rbt body =
+    let loc = Locations.other __LOC__ in
+    let arg_exprs = List.map (fun (s, bt) -> IT.sym_ (s, bt, loc)) args in
+    translate_forall solver args (eq_ (apply_ f arg_exprs rbt loc, body) loc)
+
+
+  let translate_functions solver =
+    let open Definition.Function in
+    List.filter_map
+      (fun (f, def) ->
+        match def.body with
+        | Rec_Def body ->
+          (* Normally this would require the relevant functions,
+             including `f`, to already have been declared. Here this
+             happens lazily (in the `Apply` case), including for `f`. *)
+          Some (translate_function solver f def.args def.return_bt body)
+        | Def _ -> None
+        | Uninterp -> None)
+      (Sym.Map.bindings solver.globals.logical_functions)
+
+
+  let translate_foralls solver assumptions =
+    List.map (translate_lc solver) (List.filter LC.is_forall assumptions)
+end
+
+let try_hard = ref false
+
+let provableWithUnknown ~loc ~solver ~assumptions ~simp_ctxt lc =
   let _ = loc in
-  (* ISD: should we use this somehow? *)
-  let s1 = { solver with globals = global } in
-  let rtrue () =
-    model_state := No_model;
-    `True
+  let set_model smt_solver qs =
+    let defs = SMT.get_model smt_solver in
+    let model = model_evaluator solver defs in
+    model_state := Model (model, qs)
   in
   match shortcut simp_ctxt lc with
-  | `True -> rtrue ()
+  | `True ->
+    model_state := No_model;
+    `True
   | `No_shortcut lc ->
-    let { expr; qs; extra } = translate_goal s1 assumptions lc in
-    let model_from sol =
-      let defs = SMT.get_model sol in
-      let mo = model_evaluator s1 defs in
-      model_state := Model (mo, qs)
-    in
-    let nlc = SMT.bool_not expr in
-    let inc = s1.smt_solver in
-    debug_ack_command s1 (SMT.push 1);
-    debug_ack_command s1 (SMT.assume (SMT.bool_ands (nlc :: extra)));
-    let res = SMT.check inc in
-    (match res with
+    let { expr; qs; extra } = translate_goal solver assumptions lc in
+    let nexpr = SMT.bool_not expr in
+    let inc = solver.smt_solver in
+    debug_ack_command solver (SMT.push 1);
+    debug_ack_command solver (SMT.assume (SMT.bool_ands (nexpr :: extra)));
+    (match SMT.check inc with
      | SMT.Unsat ->
-       debug_ack_command s1 (SMT.pop 1);
-       rtrue ()
+       debug_ack_command solver (SMT.pop 1);
+       model_state := No_model;
+       `True
+     | SMT.Sat when !try_hard ->
+       debug_ack_command solver (SMT.pop 1);
+       let assumptions = LC.Set.elements assumptions in
+       let foralls = TryHard.translate_foralls solver assumptions in
+       let functions = TryHard.translate_functions solver in
+       debug_ack_command solver (SMT.push 1);
+       debug_ack_command
+         solver
+         (SMT.assume (SMT.bool_ands ((nexpr :: foralls) @ functions)));
+       Pp.(debug 3 (lazy !^"***** try-hard *****"));
+       (match SMT.check inc with
+        | SMT.Unsat ->
+          debug_ack_command solver (SMT.pop 1);
+          model_state := No_model;
+          Pp.(debug 3 (lazy !^"***** try-hard: provable *****"));
+          `True
+        | SMT.Sat ->
+          set_model inc qs;
+          debug_ack_command solver (SMT.pop 1);
+          Pp.(debug 3 (lazy !^"***** try-hard: unprovable *****"));
+          `Unknown (*TODO CHT*)
+        | SMT.Unknown ->
+          set_model inc qs;
+          debug_ack_command solver (SMT.pop 1);
+          Pp.(debug 3 (lazy !^"***** try-hard: unknown *****"));
+          `False)
      | SMT.Sat ->
-       model_from inc;
-       debug_ack_command s1 (SMT.pop 1);
+       set_model inc qs;
+       debug_ack_command solver (SMT.pop 1);
        `False
      | SMT.Unknown ->
-       debug_ack_command s1 (SMT.pop 1);
+       debug_ack_command solver (SMT.pop 1);
        failwith "Unknown")
 
 
-(* let () = Z3.Solver.reset solver.non_incremental in let () = List.iter (fun lc ->
-   Z3.Solver.add solver.non_incremental [lc] ) (nlc :: extra @ existing_scs) in let
-   (elapsed2, res2) = time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)" (Z3.Solver.check
-   solver.non_incremental)) [] in maybe_save_slow_problem (res_short_string res2) loc lc
-   expr smt2_doc elapsed2 solver.non_incremental; match res2 with |
-   Z3.Solver.UNSATISFIABLE -> rtrue () | Z3.Solver.SATISFIABLE -> rfalse qs
-   solver.non_incremental | Z3.Solver.UNKNOWN -> let reason = Z3.Solver.get_reason_unknown
-   solver.non_incremental in failwith ("SMT solver returned 'unknown'; reason: " ^
-   reason) *)
+(** The main way to query the solver. *)
+let provable ~loc ~solver ~assumptions ~simp_ctxt lc =
+  match provableWithUnknown ~loc ~solver ~assumptions ~simp_ctxt lc with
+  | `True -> `True
+  | `False -> `False
+  | `Unknown -> `False
+
 
 (* ISD: Could these globs be different from the saved ones? *)
 let eval mo t =
