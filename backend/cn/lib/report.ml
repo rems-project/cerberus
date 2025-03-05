@@ -251,18 +251,7 @@ let table_by_label mk_table render data main_lab labs =
 
 
 let make_invalid_resources rs =
-  let pp_rs rs str =
-    let rs' = StrMap.to_list rs in
-    let open Pp in
-    let pp_list pp_elem xs = !^"[" ^^^ List.fold_right (fun x acc -> pp_elem x ^^^ !^"; " ^^^ acc) xs !^"]" in
-    let pp_pair pp_x pp_y (x,y) = !^"(" ^^^ pp_x x ^^^ !^", " ^^^ pp_y y ^^^ !^")" in
-    let pp_sv {original; _} = original in
-    Pp.debug 0 (lazy (!^str ^^^ !^": " ^^^ pp_list (pp_pair (!^) (fun svs -> pp_list pp_sv svs)) rs'));
-  in
-  pp_rs rs "rs";
   let rs' = StrMap.filter (fun _ v -> not (List.is_empty v)) rs in
-
-  pp_rs rs' "rs'";
   if StrMap.is_empty rs' then
     ""
   else

@@ -240,7 +240,7 @@ let ask_solver g lcs =
   let solver_res =
     Solver.provableWithUnknown
       ~loc:here
-      ~solver:(Solver.make g)
+      ~solver:s
       ~assumptions:(LC.Set.of_list lcs)
       ~simp_ctxt
       (LC.T (IT.bool_ false here))
