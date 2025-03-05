@@ -76,6 +76,52 @@ let compile_assumes
   ^^ hardline
 
 
+let compile_shape_analyzers
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
+  (insts : Executable_spec_extract.instrumentation list)
+  : Pp.document
+  =
+  let declarations, function_definitions =
+    BugExplanation.synthesize_shape_analyzers sigma prog5 insts |> List.split
+  in
+  let open Pp in
+  separate_map
+    (twice hardline)
+    (fun (tag, (_, _, decl)) ->
+      CF.Pp_ail.pp_function_prototype ~executable_spec:true tag decl)
+    declarations
+  ^^ twice hardline
+  ^^ CF.Pp_ail.pp_program
+       ~executable_spec:true
+       ~show_include:true
+       (None, { A.empty_sigma with declarations; function_definitions })
+  ^^ hardline
+
+
+let compile_replicators
+  (sigma : CF.GenTypes.genTypeCategory A.sigma)
+  (prog5 : unit Mucore.file)
+  (insts : Executable_spec_extract.instrumentation list)
+  : Pp.document
+  =
+  let declarations, function_definitions =
+    BugExplanation.synthesize_replicators sigma prog5 insts |> List.split
+  in
+  let open Pp in
+  separate_map
+    (twice hardline)
+    (fun (tag, (_, _, decl)) ->
+      CF.Pp_ail.pp_function_prototype ~executable_spec:true tag decl)
+    declarations
+  ^^ twice hardline
+  ^^ CF.Pp_ail.pp_program
+       ~executable_spec:true
+       ~show_include:true
+       (None, { A.empty_sigma with declarations; function_definitions })
+  ^^ hardline
+
+
 let pp_label ?(width : int = 30) (label : string) (doc : Pp.document) : Pp.document =
   let padding = max 2 ((width - (String.length label + 2)) / 2) in
   let width = max width (String.length label + 6) in
@@ -104,6 +150,9 @@ let pp_label ?(width : int = 30) (label : string) (doc : Pp.document) : Pp.docum
 let compile_includes ~filename_base =
   let open Pp in
   string "#include "
+  ^^ angles (string "cn-replicate/shape.h")
+  ^^ hardline
+  ^^ string "#include "
   ^^ dquotes (string (filename_base ^ "_gen.h"))
   ^^ hardline
   ^^
@@ -144,6 +193,8 @@ let compile_test_file
   ^^ pp_label
        "Assume Ownership Functions"
        (compile_assumes ~without_ownership_checking sigma prog5 insts)
+  ^^ pp_label "Shape Analyzers" (compile_shape_analyzers sigma prog5 insts)
+  ^^ pp_label "Replicators" (compile_replicators sigma prog5 insts)
   ^^ pp_label "Constant function tests" constant_tests_defs
   ^^ pp_label "Generator-based tests" generator_tests_defs
   ^^ pp_label

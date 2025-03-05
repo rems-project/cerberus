@@ -45,9 +45,26 @@
     cn-testing/uniform.o
     cn-testing/urn.o))))
 
+(rule
+ (target libcn_replica.a)
+ (deps
+  (:headers
+   (glob_files ../include/cn-executable/*.h)
+   (glob_files ../include/cn-replicate/*.h))
+  (:src
+   (glob_files ../src/cn-replicate/*.c)))
+ (action
+  (progn
+   (run mkdir -p cn-replicate)
+   (chdir
+    cn-replicate
+    (run cc -I../../include/ -c -g %{src}))
+   (run ar -rcs %{target} cn-replicate/lines.o cn-replicate/shape.o))))
+
 (install
  (files
   (libcn_exec.a as runtime/libcn_exec.a)
-  (libcn_test.a as runtime/libcn_test.a))
+  (libcn_test.a as runtime/libcn_test.a)
+  (libcn_replica.a as runtime/libcn_replica.a))
  (section lib)
  (package cn))

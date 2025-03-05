@@ -21,6 +21,10 @@ IncludeCategories:
     Priority: 3
     SortPriority: 4
     CaseSensitive: true
+  - Regex: "<(cn-replicate)/"
+    Priority: 3
+    SortPriority: 5
+    CaseSensitive: true
   - Regex: "<[[:alnum:].]+>"
     Priority: 2
   - Regex: ".*"
