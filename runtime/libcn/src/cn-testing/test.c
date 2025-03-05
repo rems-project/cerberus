@@ -344,7 +344,12 @@ int cn_test_main(int argc, char* argv[]) {
           cn_printf(CN_LOGGING_ERROR, "\n");
 
           cn_test_reproduce(&repros[i]);
-          test_case->func(true, CN_TEST_GEN_PROGRESS_NONE, sizing_strategy, trap);
+          enum cn_test_result replay_result =
+              test_case->func(true, CN_TEST_GEN_PROGRESS_NONE, sizing_strategy, trap);
+          if (replay_result != CN_TEST_FAIL) {
+            fprintf(stderr, "Replay of failure did not fail.\n");
+            abort();
+          }
 
           set_cn_logging_level(CN_LOGGING_NONE);
 

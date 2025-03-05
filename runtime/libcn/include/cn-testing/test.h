@@ -111,7 +111,7 @@ size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy,
       if (!replay) {                                                                     \
         cn_gen_set_input_timer(cn_gen_get_milliseconds());                               \
       } else {                                                                           \
-        cn_gen_set_input_timer(0);                                                       \
+        cn_gen_set_input_timeout(0);                                                     \
       }                                                                                  \
       struct cn_gen_##Name##_record* res = cn_gen_##Name();                              \
       if (cn_gen_backtrack_type() != CN_GEN_BACKTRACK_NONE) {                            \
