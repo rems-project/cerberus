@@ -14,14 +14,12 @@ Definition ctx_resources_set (l:((list (Resource.t * Z)) * Z)) : ResSet.t
 
 (* Helper function to convert struct piece to resource *)
 Definition struct_piece_to_resource (piece:Memory.struct_piece) (iinit:init) (ipointer:IndexTerms.t) (iargs:list IndexTerms.t) (iout:output) : option Resource.t :=
-  match Memory.piece_member_or_padding piece with
-  | Some (pid,pty) => Some (Request.P {| Predicate.name := Request.Owned pty iinit; 
-                                        Predicate.pointer := ipointer; 
-                                        Predicate.iargs := iargs |}, iout)
-  | None => None
-  end.
-
-(* resource = (P {name,pointer,iargs}) * output *)  
+  option_map (fun '(pid,pty) => 
+    (Request.P {| Predicate.name := Request.Owned pty iinit; 
+                  Predicate.pointer := ipointer; 
+                  Predicate.iargs := iargs |}, iout)
+  ) (Memory.piece_member_or_padding piece).
+  
 Inductive resource_unfold (globals:Global.t): Resource.t -> ResSet.t -> Prop :=
 (* non-struct resources unfold to themselves *)
 | resource_unfold_nonstruct:
@@ -195,9 +193,75 @@ Inductive log_entry_valid : log_entry -> Prop :=
            Context.constraints := oconstraints;
            Context.global := oglobal
          |}
-      ).
+      )
+(* 
+| struct_resource_inference_step:
+  forall isym ity iinit ipointer  iargs
+    oname  opointer  oargs
+    err out lines oloc
+    icomputational ilogical iresources iconstraints iglobal
+    ocomputational ological oresources oconstraints oglobal,
+
+  (* The following parts of context are not changed *)
+  icomputational = ocomputational ->
+  iglobal = oglobal ->
+  ilogical = ological ->
+  iconstraints = oconstraints ->
+
+  let in_res := ctx_resources_set iresources in
+  let out_res := ctx_resources_set oresources in
+
+  (* [out_res] is a subset of [in_res] with [upreds] elements removed. *)
+  (exists (upreds: ResSet.t),
+      resource_unfold iglobal 
+        (Request.P {| Predicate.name:=iname; Predicate.pointer:=ipointer; Predicate.iargs:=iargs |}, out) upreds /\
+      ResSet.Equal (Resource.ResSet.add (P upred, out) out_res) in_res /\
+      Request.subsumed iname upred.(Request.Predicate.name)
+  )
+  ->
+
+    log_entry_valid
+      (ResourceInferenceStep
+         (* input context *)
+         {|
+           Context.computational := icomputational;
+           Context.logical := ilogical;
+           Context.resources := iresources;
+           Context.constraints := iconstraints;
+           Context.global := iglobal
+         |}
+
+         (* request type *)
+         (PredicateRequest
+            err (* unused *)
+            (* input predicate *)
+            {| Predicate.name:=
+              Request.Owned (SCtypes.Struct isym) iinit ;
+              Predicate.pointer:=ipointer; Predicate.iargs:=iargs 
+            |}
+            oloc (* unused *)
+            ((
+                (* output predicate *)
+                {| Predicate.name:=oname; Predicate.pointer:=opointer; Predicate.iargs:=oargs |},
+                  out
+              ), lines (* unused *)
+         ))
+
+         (* output context *)
+         {|
+           Context.computational := ocomputational;
+           Context.logical := ological;
+           Context.resources := oresources;
+           Context.constraints := oconstraints;
+           Context.global := oglobal
+         |}
+      )
+*)         
+         .
+
 
 (** Proof log is valid if all entries are valid *)
 Definition prooflog_valid (l:Prooflog.log) := List.Forall log_entry_valid l.
+
 
 

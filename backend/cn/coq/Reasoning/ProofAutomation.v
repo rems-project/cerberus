@@ -10,8 +10,13 @@ Ltac2 verbose_print (msg : string) :=
   if verbose then
     Message.print (Message.of_string msg)
   else
-    ()
-  .
+    ().
+
+Ltac2 verbose_print_constr (msg:string) (c : constr) :=
+  if verbose then
+    Message.print (Message.concat (Message.of_string msg) (Message.of_constr c))
+  else
+    ().
 
 (* Sample usage for the proof log extracted from CN:
 
@@ -107,9 +112,10 @@ Ltac2 prove_unfold_step () :=
 
  Ltac2 prove_log_entry_valid () :=
    match! goal with
-   | [ |- log_entry_valid (ResourceInferenceStep _ (PredicateRequest _ _ _ _) _) ] =>
+   | [ |- log_entry_valid (ResourceInferenceStep _ (PredicateRequest _ ?p _ _) _) ] =>
        (* PredicateRequest case *)
        verbose_print "Checking PredicateRequest";
+       verbose_print_constr "    Predicate: " p;
        Std.constructor false;
        Control.focus 1 1 (fun () => Std.reflexivity ());
        Control.focus 1 1 (fun () => Std.reflexivity ());

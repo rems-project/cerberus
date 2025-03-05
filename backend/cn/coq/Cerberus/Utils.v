@@ -52,3 +52,9 @@ Qed.
  *)
 Definition split_at {A:Type} (n:nat) (l:list A)
   := (List.firstn n l, List.skipn n l).
+
+Definition option_map {A B:Type} (f: A -> B) (o: option A) : option B :=
+  match o with
+  | Some x => Some (f x)
+  | None => None
+  end.
