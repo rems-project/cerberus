@@ -259,11 +259,11 @@ let make_invalid_resources rs =
       1
       lab_invalid
       (table_by_label
-        table_without_head
-        simp_view
-        rs'
-        lab_invalid
-        [] (* Issue #900: [ lab_unknown; lab_valid ] *))
+         table_without_head
+         simp_view
+         rs'
+         lab_invalid
+         [] (* Issue #900: [ lab_unknown; lab_valid ] *))
 
 
 let make_not_given_to_solver ds =
