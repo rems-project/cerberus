@@ -249,7 +249,9 @@ let ask_solver g lcs =
     match solver_res with
     | `True -> RWD.No (Pp.( !^ ) "Solver returned No.")
     | `Unknown -> RWD.Unknown (Pp.( !^ ) "Solver returned Unknown.")
-    | `False -> RWD.Unknown (Pp.( !^ ) "Solver returned No, but without some definitions available.")
+    | `False ->
+      RWD.Unknown
+      (Pp.( !^ ) "Solver returned No, but without some definitions available.")
   in
   res
 
