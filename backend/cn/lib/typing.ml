@@ -131,6 +131,7 @@ let make_provable loc ({ typing_context = s; solver; _ } as c) =
     Solver.provable
       ~loc
       ~solver:(Option.get solver)
+      ~global:s.global
       ~assumptions:s.constraints
       ~simp_ctxt
       lc
