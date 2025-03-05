@@ -349,3 +349,12 @@ let document_of_yojson (json : Yojson.Safe.t) : (document, string) Result.t =
   | `String str -> Ok (PPrint.arbitrary_string str)
   | _ ->
     Error ("document_of_yojson: expected `String, found " ^ Yojson.Safe.to_string json)
+
+
+let string str =
+  let amp = Str.regexp "&" in
+  if !html_escapes then (
+    let str = Str.global_replace amp "&amp;" str in
+    string str)
+  else
+    string str
