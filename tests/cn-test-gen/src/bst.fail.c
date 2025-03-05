@@ -294,8 +294,8 @@ predicate RangedBST
   }}
 }
 
-function (BST) unfocus(BSTFocus focus) {
-  match focus {
+function (BST) unfocus(BSTFocus fcs) {
+  match fcs {
     AtLeaf { tree: tree } => { tree }
     AtNode { done: tree, node: node, smaller: smaller, larger: larger } => {
       let bst = Node { data: getNodeData(node), smaller: smaller, larger: larger };
@@ -304,8 +304,8 @@ function (BST) unfocus(BSTFocus focus) {
   }
 }
 
-function (BST) focusDone(BSTFocus focus) {
-  match focus {
+function (BST) focusDone(BSTFocus fcs) {
+  match fcs {
     AtLeaf { tree: tree } => { tree }
     AtNode { done: tree, node: _, smaller: _, larger: _ } => { tree }
   }
@@ -347,9 +347,9 @@ ensures
   take cur_ptr  = Owned<struct MapNode*>(node);
   let not_found = is_null(cur_ptr);
   not_found == !member(key, tree);
-  take focus = BSTFocus(tree_ptr, return);
-  unfocus(focus) == tree;
-  match focus {
+  take fcs = BSTFocus(tree_ptr, return);
+  unfocus(fcs) == tree;
+  match fcs {
     AtLeaf { tree: _ } => {
       not_found || ptr_eq(cur_ptr,tree_ptr) && hasRoot(key, tree)
     }
