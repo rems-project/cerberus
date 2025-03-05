@@ -36,11 +36,11 @@ let lab_interesting : label = "interesting"
 
 let lab_uninteresting : label = "uninteresting"
 
-let lab_invalid : label = "Resources that do not satisfy predicate definitions"
+let lab_invalid = "Resources that do not satisfy predicate definitions"
 
-let lab_unknown : label = "Resources that may not satisfy predicate definitions"
+let lab_unknown = "Resources that may not satisfy predicate definitions"
 
-let lab_valid : label = "Resources that do satisfy predicate definitions"
+let lab_valid = "Resources that do satisfy predicate definitions"
 
 let sequence (xs : ('a, 'e) Result.t list) : ('a list, 'e) Result.t =
   let ( let* ) = Result.bind in
@@ -251,15 +251,19 @@ let table_by_label mk_table render data main_lab labs =
 
 
 let make_invalid_resources rs =
-  h
-    1
-    lab_invalid
-    (table_by_label
-       table_without_head
-       simp_view
-       rs
-       lab_invalid
-       [] (* Issue #900: [ lab_unknown; lab_valid ] *))
+  let rs' = StrMap.filter (fun _ v -> not (List.is_empty v)) rs in
+  if StrMap.is_empty rs' then
+    ""
+  else
+    h
+      1
+      lab_invalid
+      (table_by_label
+        table_without_head
+        simp_view
+        rs'
+        lab_invalid
+        [] (* Issue #900: [ lab_unknown; lab_valid ] *))
 
 
 let make_not_given_to_solver ds =
