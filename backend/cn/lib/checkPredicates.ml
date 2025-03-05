@@ -251,7 +251,7 @@ let ask_solver g lcs =
     | `Unknown -> RWD.Unknown (Pp.( !^ ) "Solver returned Unknown.")
     | `False ->
       RWD.Unknown
-      (Pp.( !^ ) "Solver returned No, but without some definitions available.")
+        (Pp.( !^ ) "Solver returned No, but without some definitions available.")
   in
   res
 
