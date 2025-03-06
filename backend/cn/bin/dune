@@ -11,7 +11,7 @@
   cerb_util
   cmdliner
   cn
-  mem_concrete
+  mem_vip
   menhirLib
   monomorphic
   ocamlgraph

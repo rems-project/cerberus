@@ -181,6 +181,10 @@ let ity_max ity =
           sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
         let unsigned_max =
           sub (pow_int (of_int 2) (8*n)) (of_int 1) in
+        let ity = match ity with
+          | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
+          | _ -> ity
+        in
         begin match ity with
           | Char ->
               if (Ocaml_implementation.get ()).is_signed_ity Char then
@@ -200,15 +204,18 @@ let ity_max ity =
               signed_max
           |  Ptraddr_t ->
               unsigned_max
-          | Enum _ ->
-              (* TODO: hack, assuming like int *)
-              sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
+          | Enum nm ->
+              assert false
         end
     | None ->
         failwith "the VIP memory model requires a complete implementation MAX"
 
 let ity_min ity =
   let open Nat_big_num in
+  let ity = match ity with
+    | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
+    | _ -> ity
+  in
   match ity with
     | Char ->
         if (Ocaml_implementation.get ()).is_signed_ity Char then
@@ -233,5 +240,4 @@ let ity_min ity =
         end
     | Ptraddr_t -> zero
     | Enum _ ->
-        (* TODO: hack, assuming like int *)
-        negate (pow_int (of_int 2) (8*4-1))
+        assert false
