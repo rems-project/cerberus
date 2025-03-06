@@ -10,11 +10,17 @@ function report {
   echo -e "Test $1: $res"
 }
 
+TESTSDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+cd ${TESTSDIR}
+
+# Load function for setting up CERB and CERB_INSTALL_PREFIX
+. ./common.sh
+
+
 mkdir -p tmp
 
-# Use the provided path to cerberus, otherwise default to the driver backend build
-CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
-# export CERB_RUNTIME=../runtime/
+# Setup CERB and CERB_INSTALL_PREFIX (see common.sh)
+set_cerberus_exec "cerberus"
 
 # Running ci tests
 for file in ./ci/*.c
