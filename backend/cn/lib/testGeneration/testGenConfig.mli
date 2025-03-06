@@ -7,7 +7,7 @@ type logging_level =
 
 type trace_granularity =
   | None
-  | End
+  | Ends
   | All
 
 type progress_level =
