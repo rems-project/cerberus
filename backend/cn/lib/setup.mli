@@ -11,4 +11,5 @@ val conf
   string list ->
   string list ->
   Cerb_backend.Pipeline.language list ->
+  string option ->
   Cerb_backend.Pipeline.configuration

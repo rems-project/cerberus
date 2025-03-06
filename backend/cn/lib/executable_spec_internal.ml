@@ -107,11 +107,9 @@ let generate_c_specs_internal
   let modify_magic_comment_loc loc =
     match loc with
     | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
-      Cerb_location.(
-        region
-          ( { start_pos with pos_cnum = start_pos.pos_cnum - 3 },
-            { end_pos with pos_cnum = end_pos.pos_cnum + 2 } )
-          cursor)
+      Cerb_location.region
+        (Cerb_position.change_cnum start_pos (-3), Cerb_position.change_cnum end_pos 2)
+        cursor
     | _ -> assert false (* loc should always be a region *)
   in
   let in_stmt =

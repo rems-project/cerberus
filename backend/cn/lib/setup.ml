@@ -23,7 +23,7 @@ let cpp_str macros_def incl_dirs incl_files =
      @ [ " -DDEBUG -DCN_MODE" ])
 
 
-let conf macros incl_dirs incl_files astprints =
+let conf macros incl_dirs incl_files astprints save_cpp =
   { debug_level = 0;
     pprints = [];
     astprints;
@@ -33,5 +33,6 @@ let conf macros incl_dirs incl_files astprints =
     rewrite_core = true;
     sequentialise_core = true;
     cpp_cmd = cpp_str macros incl_dirs incl_files;
-    cpp_stderr = true
+    cpp_stderr = true;
+    cpp_save = save_cpp
   }

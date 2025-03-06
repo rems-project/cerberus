@@ -80,6 +80,7 @@ type configuration = {
   sequentialise_core: bool;
   cpp_cmd: string;
   cpp_stderr: bool; (* pipe cpp stderr to stderr *)
+  cpp_save: string option;
 }
 
 type io_helpers = {
@@ -163,7 +164,17 @@ let cpp (conf, io) ~filename =
       if n <> 0 then
         Exception.fail (Cerb_location.unknown, Errors.CPP (String.concat "\n" err))
       else
-        return @@ String.concat "\n" out
+        let txt = String.concat "\n" out in
+        (match conf.cpp_save with
+        | None -> ()
+        | Some cpp_file ->
+          try 
+            let out = open_out cpp_file in
+            Printf.fprintf out "%s" txt;
+            close_out out
+          with e -> ()
+        );
+        return txt
   end ()
 
 let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init) (conf, io) (core_stdlib, core_impl) ~filename =

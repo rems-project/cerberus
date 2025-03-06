@@ -140,8 +140,8 @@ let state (ctxt : C.t) log model_with_q extras =
     in
     let loc_cartesian, (loc_head, _loc_pos) =
       match (ctxt.where.statement, ctxt.where.expression) with
-      | _, Some loc -> (Cerb_location.to_cartesian loc, head_pos "expr" loc)
-      | Some loc, None -> (Cerb_location.to_cartesian loc, head_pos "stmt" loc)
+      | _, Some loc -> (Cerb_location.to_cartesian_user loc, head_pos "expr" loc)
+      | Some loc, None -> (Cerb_location.to_cartesian_user loc, head_pos "stmt" loc)
       | None, None -> (None, ("", "\n"))
     in
     let fnction = Option.map Sym.pp_string ctxt.where.fnction in
