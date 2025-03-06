@@ -54,6 +54,9 @@ function exits_with_code() {
 
 DIRNAME=$(dirname "$0")
 
+# Making sure the runtime installed in dune _build is not used
+unset CERB_INSTALL_PREFIX
+
 SUCC=$(find "${DIRNAME}"/cn -name '*.c' | grep -v '\.error\.c')
 FAIL=$(find "${DIRNAME}"/cn -name '*.error.c')
 

@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
-# export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
+TESTSDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+cd ${TESTSDIR}
 
 # This initialises citests and skip
-. ./tests.sh
+source ./tests.sh
+
+# Load function for setting up CERB and CERB_INSTALL_PREFIX
+source ./common.sh
 
 mkdir -p tmp
 
@@ -57,16 +60,9 @@ if [[ $# == 1 ]]; then
   citests=($(basename $1))
 fi
 
-# Use the provided path to cerberus, otherwise default to the driver backend build
-# CERB="${WITH_CERB:=dune exec --no-print-directory cerberus --no-build -- }"
-CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
-if [[ ! -z "${USE_OPAM+x}" ]]; then
-  echo -e "\033[1m\033[33mUsing opam installed cerberus\033[0m";
-  CERB=$OPAM_SWITCH_PREFIX/bin/cerberus
-  export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus/runtime/
-else
-  export CERB_RUNTIME=../runtime/
-fi
+
+# Setup CERB and CERB_INSTALL_PREFIX (see common.sh)
+set_cerberus_exec "cerberus"
 
 # Running ci tests
 for file in "${citests[@]}"

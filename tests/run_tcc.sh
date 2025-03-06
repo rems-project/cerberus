@@ -8,10 +8,11 @@ function ctrl_c() {
   exit 0
 }
 
+TESTSDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+cd ${TESTSDIR}
 
-# export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query Z3`
-# export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query Z3`
-
+# Load function for setting up CERB and CERB_INSTALL_PREFIX
+source ./common.sh
 source tests.sh
 
 mkdir -p tmp
@@ -72,9 +73,8 @@ function create_testsuite {
   JOUTPUT=""
 }
 
-# Use the provided path to cerberus, otherwise default to the driver backend build
-# CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
-CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+# Setup CERB and CERB_INSTALL_PREFIX (see common.sh)
+set_cerberus_exec "cerberus"
 
 # Running TinyCC tests
 for file in tcc/*.c

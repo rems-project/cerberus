@@ -153,6 +153,14 @@
  (section lib)
  (package cerberus))
 
+(install
+ (files
+  (libm.co as runtime/libc/libm.co)
+  (libc.co as runtime/libc/libc.co)
+  (libc_inner_arg_temps.co as runtime/libc/libc_inner_arg_temps.co))
+ (section lib)
+ (package cerberus-bmc))
+
 
 (rule
  (targets libc-cheri-coq.co)

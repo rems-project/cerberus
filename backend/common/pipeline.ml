@@ -26,7 +26,7 @@ let run_pp fout_opt doc =
 
 (* The path to the Core standard library *)
 let core_stdlib_path () =
-  Filename.concat (Cerb_runtime.runtime ()) "libcore"
+  Cerb_runtime.in_runtime "libcore"
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
