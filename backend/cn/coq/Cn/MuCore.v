@@ -21,7 +21,7 @@ Require Import CN.
 Require Import CNProgs.
 Require Import SCtypes.
 Require Import Id.
-Require Import Cerberus.ImplMem.
+Require Import CNMem.
 
 Module Mem := CNMem.
 

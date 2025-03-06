@@ -8,10 +8,10 @@
   Annot
   IntegerType
   Memory
-  ImplMem
   Ctype
   Location
   Symbol
   Undefined
   Core
-  Utils))
+  Utils
+  Implementation))

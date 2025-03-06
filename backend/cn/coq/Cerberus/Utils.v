@@ -58,3 +58,9 @@ Definition option_map {A B:Type} (f: A -> B) (o: option A) : option B :=
   | Some x => Some (f x)
   | None => None
   end.
+
+Definition option_get {A:Type} (default:A) (o: option A) : A :=
+  match o with
+  | Some x => x
+  | None => default
+  end.

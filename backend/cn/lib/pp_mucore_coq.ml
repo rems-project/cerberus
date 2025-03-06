@@ -1928,9 +1928,9 @@ let coq_prologue =
       "Require Import Coq.Strings.String.";
       "Open Scope string_scope.";
       "Require Import ZArith.";
-      "From Cerberus Require Import Annot Core Ctype ImplMem IntegerType Location Memory \
+      "From Cerberus Require Import Annot Core Ctype IntegerType Location Memory \
        Symbol Undefined Utils.";
-      "From Cn Require Import ArgumentTypes BaseTypes CN CNProgs ErrorCommon False Id \
+      "From Cn Require Import ArgumentTypes BaseTypes CN CNProgs CNMem ErrorCommon False Id \
        IndexTerms Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes \
        MuCore Prooflog Request ReturnTypes Resource SCtypes Sym Terms."
     ]
