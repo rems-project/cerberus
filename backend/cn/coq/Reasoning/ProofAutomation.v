@@ -6,17 +6,17 @@ Require Import Ltac2Utils ResourceInference.
 
 Ltac2 verbose: bool := true.
 
-Ltac2 verbose_print (msg : string) :=
+Ltac2 verbose_msg msg :=
   if verbose then
-    Message.print (Message.of_string msg)
+    Message.print msg
   else
     ().
 
+Ltac2 verbose_print (msg : string) :=
+  verbose_msg (Message.of_string msg).
+
 Ltac2 verbose_print_constr (msg:string) (c : constr) :=
-  if verbose then
-    Message.print (Message.concat (Message.of_string msg) (Message.of_constr c))
-  else
-    ().
+  verbose_msg (Message.concat (Message.of_string msg) (Message.of_constr c)).
 
 (* Sample usage for the proof log extracted from CN:
 
@@ -86,12 +86,13 @@ Qed.
          let msg := Message.concat (Message.of_string "Warning: multiple resources changed: ") (Message.of_int n) in
          Message.print msg;
          (if verbose then
-           (* Print changed resources: *)
-           let print_resource res :=
-             Message.print (Message.of_constr res)
-           in
-           List.iter print_resource diff
-         else ());
+            verbose_print_constr "Combined output" out ;
+            (* Print changed resources: *)
+            let print_resource res :=
+              Message.print (Message.of_constr res)
+            in
+            List.iter print_resource diff
+          else ());
          Control.shelve ()
      end
  end.
