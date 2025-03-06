@@ -40,20 +40,25 @@ Inductive struct_piece_to_resource
   (iargs: list IndexTerms.t) 
   (tag: Sym.t) 
   (loc: Location.t)
-  (iout: output)
-  : Resource.t -> Prop :=
+  : output -> Resource.t -> Prop :=
 | struct_piece_to_resource_intro:
-    forall pid pty field_bt,
+    forall pid pty field_bt fields field_it struct_loc,
     Memory.piece_member_or_padding piece = Some (pid, pty) ->
     let field_pointer := Terms.IT _ (Terms.MemberShift _ ipointer tag pid) (BaseTypes.Loc _ tt) loc in
-    let field_out := iout in (* TODO this is a placeholder *)
+    let field_out := Resource.O field_it in
     (* The field's type maps to its base type *)
     bt_of_sct_rel pty field_bt ->
-    struct_piece_to_resource piece iinit ipointer iargs tag loc iout
-      (Request.P {| Predicate.name := Request.Owned pty iinit; 
-                   Predicate.pointer := field_pointer; 
-                   Predicate.iargs := iargs |},
-                   field_out ).
+    (* field_out is the IT corresponding to pid in iout's field list *)
+    List.In (pid, field_it) fields 
+    
+    ->
+
+    struct_piece_to_resource piece iinit ipointer iargs tag loc 
+      (Resource.O (Terms.IT _ (Terms.Struct _ tag fields) (BaseTypes.Struct _ tag) struct_loc))
+      (Request.P {| Predicate.name := Request.Owned pty iinit;
+                    Predicate.pointer := field_pointer; 
+                    Predicate.iargs := iargs |},
+       field_out).
 
 Inductive resource_unfold (globals:Global.t): Resource.t -> ResSet.t -> Prop :=
 (* non-struct "Owned" resources unfold to themselves *)
@@ -187,7 +192,6 @@ Inductive log_entry_valid : log_entry -> Prop :=
   /\ iname=oname  
   /\ ipointer=opointer
   /\ iargs=oargs
-  /\ out=out
   *)
   ->
 
@@ -258,7 +262,6 @@ Inductive log_entry_valid : log_entry -> Prop :=
   /\ iname=oname  
   /\ ipointer=opointer
   /\ iargs=oargs
-  /\ out=out
   *)
 
   log_entry_valid
