@@ -7,7 +7,7 @@ type logging_level =
 
 type trace_granularity =
   | None
-  | End
+  | Ends
   | All
 
 type progress_level =
@@ -86,7 +86,7 @@ let string_of_logging_level (logging_level : logging_level) =
 
 
 let string_of_trace_granularity (trace_granularity : trace_granularity) =
-  match trace_granularity with None -> "none" | End -> "end" | All -> "all"
+  match trace_granularity with None -> "none" | Ends -> "ends" | All -> "all"
 
 
 let string_of_progress_level (progress_level : progress_level) =
@@ -111,7 +111,7 @@ module Options = struct
 
 
   let trace_granularity : (string * trace_granularity) list =
-    List.map (fun gran -> (string_of_trace_granularity gran, gran)) [ None; End; All ]
+    List.map (fun gran -> (string_of_trace_granularity gran, gran)) [ None; Ends; All ]
 
 
   let progress_level : (string * progress_level) list =
