@@ -18,9 +18,10 @@ let after_before_msg offset buffer (lexbuf : Lexing.lexbuf) =
   MenhirLib.ErrorReports.show show_token buffer
 
 let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
+  let to_pos = C_lexer.LineMap.position in
   try Exception.except_return (parse lexer lexbuf) with
   | C_lexer.Error err ->
-    let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
+    let loc = Cerb_location.point (to_pos (Lexing.lexeme_start_p lexbuf)) in
     Exception.fail (loc, Errors.CPARSER err)
   | C_parser.Error state ->
     let message =
@@ -31,7 +32,7 @@ let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
         Printf.sprintf "Please add error message for state %d to parsers/c/c_parser_error.messages\n" state
     in
     let message = String.sub message 0 (String.length message - 1) in
-    let range = (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) in
+    let range = (to_pos (Lexing.lexeme_start_p lexbuf), to_pos (Lexing.lexeme_end_p lexbuf)) in
     let loc = Cerb_location.(region range NoCursor) in
     let where = after_before_msg offset token_pos_buffer lexbuf in
     Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token  (where ^ "\n" ^ message)))
@@ -41,7 +42,7 @@ let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
   | Lexer_feedback.KnR_declaration loc ->
     Exception.fail (loc, Errors.CPARSER Errors.Cparser_KnR_declaration)
   | exn ->
-    let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
+    let loc = Cerb_location.point @@ Cerb_position.from_lexing @@ Lexing.lexeme_start_p lexbuf in
     failwith @@ "CPARSER_DRIVER(" ^ Cerb_location.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
 
 let start_pos = function
@@ -63,8 +64,9 @@ let diagnostic_get_tokens ~inside_cn loc string =
         let Lexing.{ pos_lnum; pos_bol; pos_cnum; _ } = lexbuf.lex_start_p in
         let (line, col) =
           (* the first line needs to have columns shifted by /*@ but the rest do not *)
-          let col_off = if pos_lnum > 1 then 1 else start_pos.pos_cnum - start_pos.pos_bol + 1 in
-          (pos_lnum + start_pos.pos_lnum, col_off + pos_cnum - pos_bol) in
+          let col_off = if pos_lnum > 1 then 1 else Cerb_position.column start_pos in
+          let fi_pos = Cerb_position.to_file_lexing start_pos in
+          (pos_lnum + fi_pos.pos_lnum, col_off + pos_cnum - pos_bol) in
         relex (Tokens.string_of_token t :: toks, (line, col) :: pos)
       with
         C_lexer.Error err ->
@@ -76,13 +78,13 @@ let parse_loc_string parse (loc, str) =
   let lexbuf = Lexing.from_string str in
   (* `C_lexer.magic_token' ensures `loc` is a region *)
   let start_pos = Option.get @@ start_pos loc in
-  Lexing.set_position lexbuf start_pos;
+  Lexing.set_position lexbuf (Cerb_position.to_file_lexing start_pos);
   Lexing.set_filename lexbuf (Option.value ~default:"<none>" (Cerb_location.get_filename loc));
   let `LEXER cn_lexer = C_lexer.create_lexer ~inside_cn:true in
   handle
     parse
     (MenhirLib.ErrorReports.wrap cn_lexer)
-    ~offset:start_pos.pos_cnum
+    ~offset: (Cerb_position.to_file_lexing start_pos).pos_cnum
     lexbuf
 
 let update_enclosing_region payload_region xs =
@@ -90,8 +92,8 @@ let update_enclosing_region payload_region xs =
     | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
       (* TODO: adjust CERB_MAGIC and EDecl_magic to carry a record:
          { slash_inclusive_region: Cerb_location.t; payload_region: Cerb_location.t } *)
-        Cerb_location.region ( { start_pos with pos_cnum=start_pos.pos_cnum - 3 }
-                             , { end_pos with pos_cnum=end_pos.pos_cnum + 2 }) cursor
+        Cerb_location.region ( Cerb_position.change_cnum start_pos (-3)
+                             , Cerb_position.change_cnum end_pos 2) cursor
     | _ -> assert false (* loc should always be a region *)
   in
   let update_decl_with_enclosing_region = function
@@ -133,6 +135,8 @@ let parse_with_magic_comments lexbuf =
     lexbuf
 
 let parse lexbuf =
+  (* Setup the lexer's line map *)
+  C_lexer.LineMap.init lexbuf.Lexing.lex_curr_p.pos_fname;
   Exception.except_bind (parse_with_magic_comments lexbuf)
     magic_comments_to_cn_toplevel
 

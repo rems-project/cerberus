@@ -6,7 +6,9 @@ module LocCompare = struct
 
   type pre_cmp = int * (int * int * int * string) list * string list [@@deriving eq, ord]
 
-  let lex_to_cmp l =
+  let lex_to_cmp pos =
+    let l = Cerb_position.to_file_lexing pos in
+    (* XXX: file or source location? not sure why we are compring positions here, *)
     let open Lexing in
     (l.pos_lnum, l.pos_bol, l.pos_cnum, l.pos_fname)
 

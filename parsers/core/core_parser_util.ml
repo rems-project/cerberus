@@ -1,7 +1,7 @@
 open Cerb_frontend
 
 type _sym =
-  string * (Lexing.position * Lexing.position)
+  string * (Cerb_position.t * Cerb_position.t)
 
 let _sym_compare (str1, _) (str2, _) =
   compare str1 str2

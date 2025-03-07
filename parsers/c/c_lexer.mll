@@ -7,16 +7,55 @@ open Tokens
 exception Error of Errors.cparser_cause
 
 type flags = {
-  inside_cn : bool;
-  magic_comment_char : char;
-  at_magic_comments : bool;
+  inside_cn : bool;           (* We are lexing in a CN comment *)
+  magic_comment_char : char;  (* The character after a comment indicating to start a CN comment *)
+  at_magic_comments : bool;   (* Should we process CN comments (true) or treat them as normal comments (false) *)
 }
 
+(* WARNING: GLOBAL STATE
+We wouldn't need this if the Lexing.position type was parameterized on the
+type of locations or if there was some way to extend the lexer buffer with
+additional user state, but I can't seem to find a way to do either of these,
+so for the time being we use a global variable.
+
+Note that one needs to call `init` when starting to work a
+new (preprocessed) file.
+*)
+module LineMap = struct
+
+  (** Maps a line in the preprocessed file to a filename and a line number.
+  The following lines in the preprocessed file reside at the specified source
+  location, until the next entry in the map. *)
+  let mapping = ref (Cerb_position.LineMap.empty "")
+
+  (** Clear all line mapping entries *)
+  let init file = mapping := Cerb_position.LineMap.empty file
+
+  (** Add a new line mapping *)
+  let add line info = mapping := Cerb_position.LineMap.add line info !mapping
+
+  (** Get the current mapping *)
+  let get () = !mapping
+
+  (** Make a position from a Lexing.position, consulting the line map *)
+  let position x =
+    let p1 = Cerb_position.from_lexing x in
+    let line_map = !mapping in
+    let src_loc = Cerb_position.LineMap.lookup (Cerb_position.line p1) line_map in
+    Cerb_position.set_source src_loc p1
+
+end
+
+
+
+(* This is called when we we see a note from the pre-processor that
+we should change the file/line number (e.g., because of #include start/end) *)
 let offset_location lexbuf pos_fname pos_lnum =
-  if pos_lnum > 0 then
-    let pos_lnum = pos_lnum - 1 in
-    lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname; pos_lnum};
+  if pos_lnum > 0 then begin
+    LineMap.add lexbuf.lex_curr_p.pos_lnum (pos_fname, pos_lnum)
+  end;
   new_line lexbuf
+  
 
 (* STD §6.4.1#1 *)
 let keywords: (string * Tokens.token) list = [
@@ -203,7 +242,7 @@ let cn_lex_keyword id start_pos end_pos =
     Hashtbl.replace cn_keywords id (Production, kw);
     prerr_endline
       (Pp_errors.make_message
-        Cerb_location.(region (start_pos, end_pos) NoCursor)
+        Cerb_location.(region (LineMap.position start_pos, LineMap.position end_pos) NoCursor)
         Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
         Warning);
     kw
@@ -212,7 +251,7 @@ let cn_lex_keyword id start_pos end_pos =
     Hashtbl.replace cn_keywords id (Production, kw);
     prerr_endline
       (Pp_errors.make_message
-        Cerb_location.(region (start_pos, end_pos) NoCursor)
+        Cerb_location.(region (LineMap.position start_pos, LineMap.position end_pos) NoCursor)
         Errors.(CPARSER (Errors.Cparser_deprecated_keyword (id, instead)))
         Warning);
     kw
@@ -238,13 +277,13 @@ let magic_token flags start_pos end_pos chars =
   else if List.nth chars (len - 1) != flags.magic_comment_char then (
     prerr_endline
       (Pp_errors.make_message
-         (Cerb_location.point end_pos)
+         (Cerb_location.point (LineMap.position end_pos))
          Errors.(CPARSER Cparser_mismatched_magic_comment)
          Warning);
     None
   ) else (
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
-    let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
+    let loc = Cerb_location.(region (LineMap.position start_pos, LineMap.position end_pos) NoCursor) in
     let c = List.hd chars in
     Some (CERB_MAGIC (loc, (c,str)))
   )

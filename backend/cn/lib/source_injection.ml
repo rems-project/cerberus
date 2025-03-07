@@ -1,9 +1,11 @@
 open Cerb_frontend
 
+let use_preproc_loc = ref true
+
 module Pos : sig
   type t = private
-    { line : int;
-      col : int
+    { line : int; (* 1 based *)
+      col : int (* 1 based *)
     }
 
   val compare : t -> t -> int
@@ -35,6 +37,7 @@ end = struct
 
   let initial = v 1 1
 
+  (* Go to the beginning of the next line *)
   let newline pos = { line = pos.line + 1; col = 1 }
 
   let offset_col ~off pos =
@@ -44,13 +47,20 @@ end = struct
       Ok { pos with col = pos.col + off }
 
 
+  (* Go down to the next line (does not affect column) *)
   let increment_line pos n = { pos with line = pos.line + n }
 
   let of_location loc =
     (* if not (Cerb_location.from_main_file loc) then Printf.fprintf stderr
        "\x1b[31mHEADER LOC: %s\x1b[0m\n" (Option.value ~default:"<unknown>"
        (Cerb_location.get_filename loc)) ; *)
-    match Cerb_location.to_cartesian loc with
+    let to_cart =
+      if !use_preproc_loc then
+        Cerb_location.to_cartesian_raw
+      else
+        Cerb_location.to_cartesian_user
+    in
+    match to_cart loc with
     | None -> Error (__LOC__ ^ ": failed to get line/col positions")
     | Some ((start_line, start_col), (end_line, end_col)) ->
       Ok (v (start_line + 1) (start_col + 1), v (end_line + 1) (end_col + 1))
@@ -142,21 +152,28 @@ let move_to ?(print = true) ?(no_ident = false) st pos =
   aux st
 
 
+(* Various kinds of edits we can perform *)
 type injection_kind =
+  (* Inject a statement in a function *)
   | InStmt of int * string
   (* | Return of (Pos.t * Pos.t) option *)
   (* | Return of Pos.t option *)
+
+  (* Inject a pre-condition for a function *)
   | Pre of
       string list
       * Cerb_frontend.Ctype.ctype
       * bool (* flag for whether injection is for main function *)
+  (* Inject a post-condition for a function *)
   | Post of string list * Cerb_frontend.Ctype.ctype
 
+(* Describes how much space we need for an edit. *)
 type injection_footprint =
   { start_pos : Pos.t;
     end_pos : Pos.t
   }
 
+(* A low-level edit we'd like to perform.  See function [inject]. *)
 type injection =
   { footprint : injection_footprint;
     kind : injection_kind
@@ -379,10 +396,12 @@ type 'a cn_injection =
     program : 'a A.ail_program;
     pre_post : (Symbol.sym * (string list * string list)) list;
     in_stmt : (Cerb_location.t * string list) list;
-    returns : (Cerb_location.t * 'a AilSyntax.expression option * string list) list
+    returns : (Cerb_location.t * 'a AilSyntax.expression option * string list) list;
+    inject_in_preproc : bool
   }
 
 let output_injections oc cn_inj =
+  use_preproc_loc := cn_inj.inject_in_preproc;
   Cerb_colour.without_colour
     (fun () ->
       let* injs =
@@ -422,37 +441,39 @@ let output_injections oc cn_inj =
       Ok ())
     ()
 
+(* This appears to be unused:
 
-open Cerb_frontend
+   open Cerb_frontend
 
-let get_magics_of_statement stmt =
-  let open AilSyntax in
-  let rec aux acc (AnnotatedStatement (_loc, Annot.Attrs xs, stmt_)) =
-    let acc =
-      List.fold_left
-        (fun acc attr ->
-          let open Annot in
-          match (attr.attr_ns, attr.attr_id, attr.attr_args) with
-          | Some (Symbol.Identifier (_, "cerb")), Symbol.Identifier (_, "magic"), xs ->
-            List.map (fun (loc, str, _) -> (loc, str)) xs :: acc
-          | _ -> acc)
-        acc
-        xs
-    in
-    match stmt_ with
-    | AilSskip | AilSexpr _ | AilSbreak | AilScontinue | AilSreturnVoid | AilSreturn _
-    | AilSgoto _ | AilSdeclaration _ | AilSreg_store _ ->
-      acc
-    | AilSblock (_, ss) | AilSpar ss -> List.fold_left aux acc ss
-    | AilSif (_, s1, s2) -> aux (aux acc s1) s2
-    | AilSwhile (_, s, _)
-    | AilSdo (s, _, _)
-    | AilSswitch (_, s)
-    | AilScase (_, s)
-    | AilScase_rangeGNU (_, _, s)
-    | AilSdefault s
-    | AilSlabel (_, s, _)
-    | AilSmarker (_, s) ->
-      aux acc s
-  in
-  aux [] stmt
+   let get_magics_of_statement stmt =
+   let open AilSyntax in
+   let rec aux acc (AnnotatedStatement (_loc, Annot.Attrs xs, stmt_)) =
+   let acc =
+   List.fold_left
+   (fun acc attr ->
+   let open Annot in
+   match (attr.attr_ns, attr.attr_id, attr.attr_args) with
+   | Some (Symbol.Identifier (_, "cerb")), Symbol.Identifier (_, "magic"), xs ->
+   List.map (fun (loc, str, _) -> (loc, str)) xs :: acc
+   | _ -> acc)
+   acc
+   xs
+   in
+   match stmt_ with
+   | AilSskip | AilSexpr _ | AilSbreak | AilScontinue | AilSreturnVoid | AilSreturn _
+   | AilSgoto _ | AilSdeclaration _ | AilSreg_store _ ->
+   acc
+   | AilSblock (_, ss) | AilSpar ss -> List.fold_left aux acc ss
+   | AilSif (_, s1, s2) -> aux (aux acc s1) s2
+   | AilSwhile (_, s, _)
+   | AilSdo (s, _, _)
+   | AilSswitch (_, s)
+   | AilScase (_, s)
+   | AilScase_rangeGNU (_, _, s)
+   | AilSdefault s
+   | AilSlabel (_, s, _)
+   | AilSmarker (_, s) ->
+   aux acc s
+   in
+   aux [] stmt
+*)

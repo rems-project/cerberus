@@ -59,12 +59,11 @@ let unpack l = l
  *      pos_cnum : int;
  * } *)
 
-let json_lexing_position p =
-  let open Lexing in
+let json_lexing_position pos =
   `Assoc
-    [ ("file", `String p.pos_fname);
-      ("line", `Int p.pos_lnum);
-      ("char", `Int (p.pos_cnum - p.pos_bol))
+    [ ("file", `String (Cerb_position.file pos));
+      ("line", `Int (Cerb_position.line pos));
+      ("char", `Int (Cerb_position.column pos - 1))
     ]
 
 
@@ -131,7 +130,7 @@ let json_path locs : Yojson.Safe.t =
   `Variant ("path", Some (`List locs_json))
 
 
-type region = Lexing.position * Lexing.position
+type region = Cerb_position.t * Cerb_position.t
 
 let point = Cerb_location.point
 

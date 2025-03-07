@@ -18,6 +18,7 @@ type configuration = {
   sequentialise_core: bool;
   cpp_cmd: string;
   cpp_stderr: bool;
+  cpp_save: string option; (* Save the result of pre-processing to this file *)
 }
 
 type io_helpers = {

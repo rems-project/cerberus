@@ -43,7 +43,14 @@ end
 
 open Log
 
-let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_char_dollar
+let frontend
+  ~macros
+  ~incl_dirs
+  ~incl_files
+  astprints
+  ~filename
+  ~magic_comment_char_dollar
+  ~save_cpp
   =
   let open CF in
   Cerb_global.set_cerb_conf
@@ -66,7 +73,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~filename ~magic_comment_c
      @ if magic_comment_char_dollar then [ "magic_comment_char_dollar" ] else []);
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
-  let conf = Setup.conf macros incl_dirs incl_files astprints in
+  let conf = Setup.conf macros incl_dirs incl_files astprints save_cpp in
   let cn_init_scope : Cn_desugaring.init_scope =
     { predicates = [ Alloc.Predicate.(str, sym, Some loc) ];
       functions = List.map (fun (str, sym) -> (str, sym, None)) cn_builtin_fun_names;
@@ -132,6 +139,7 @@ let with_well_formedness_check
   ~astprints
   ~no_inherit_loc
   ~magic_comment_char_dollar
+  ~save_cpp
   ~(* Callbacks *)
    handle_error
   ~(f :
@@ -151,7 +159,8 @@ let with_well_formedness_check
          ~incl_files
          astprints
          ~filename
-         ~magic_comment_char_dollar)
+         ~magic_comment_char_dollar
+         ~save_cpp)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel
@@ -265,6 +274,7 @@ let well_formed
     ~astprints
     ~no_inherit_loc
     ~magic_comment_char_dollar
+    ~save_cpp:None
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ ->
       Or_TypeError.return ())
@@ -345,6 +355,7 @@ let verify
     ~astprints
     ~no_inherit_loc
     ~magic_comment_char_dollar
+    ~save_cpp:None
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~cabs_tunit:_ ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
       let check (functions, global_var_constraints, lemmas) =
@@ -377,6 +388,11 @@ let handle_error_with_user_guidance ~(label : string) (e : exn) : unit =
   Printf.eprintf "Prefix your issue with \"[%s]\". " label;
   Printf.eprintf "Check that there isn't already one for this error.\n";
   exit 1
+
+
+let pick_cpp_file_name outdir filename =
+  let cpp_name = Filename.remove_extension filename ^ "-preproc.c" in
+  match outdir with None -> cpp_name | Some d -> Filename.concat d cpp_name
 
 
 let generate_executable_specs
@@ -429,6 +445,15 @@ let generate_executable_specs
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
   Sym.executable_spec_enabled := true;
+  (* XXX temporary: should we inject in the pre-processed file or original one *)
+  let use_preproc = false in
+  let fi, save =
+    if use_preproc then (
+      let fi = pick_cpp_file_name output_dir filename in
+      (fi, Some fi))
+    else
+      (filename, None)
+  in
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -441,6 +466,7 @@ let generate_executable_specs
     ~astprints
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
+    ~save_cpp:save
     ~handle_error:(handle_type_error ~json ?output_dir ~serialize_json:json_trace)
     ~f:(fun ~cabs_tunit:_ ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
@@ -452,7 +478,8 @@ let generate_executable_specs
                ~with_loop_leak_checks
                ~with_test_gen
                ~copy_source_dir
-               filename
+               fi
+               ~use_preproc
                ail_prog
                output_decorated
                output_decorated_dir
@@ -508,6 +535,7 @@ let run_seq_tests
     ~astprints
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
+    ~save_cpp:None (* XXX *)
     ~handle_error
     ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
@@ -537,6 +565,7 @@ let run_seq_tests
             ~with_test_gen:true
             ~copy_source_dir:false
             filename
+            ~use_preproc:false
             ail_prog
             None
             (Some output_dir)
@@ -626,6 +655,7 @@ let run_tests
     ~astprints
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
+    ~save_cpp:None (* XXX *)
     ~handle_error
     ~f:(fun ~cabs_tunit ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       let config : TestGeneration.config =
@@ -680,6 +710,7 @@ let run_tests
                ~with_test_gen:true
                ~copy_source_dir:false
                filename
+               ~use_preproc:false (* XXX *)
                ail_prog
                None
                (Some output_dir)

@@ -77,7 +77,8 @@ let rec inject_injs_to_multiple_files ail_prog in_stmt_injs block_return_injs cn
              program = ail_prog;
              pre_post = [];
              in_stmt = in_stmt_injs_for_fn';
-             returns = return_injs_for_fn'
+             returns = return_injs_for_fn';
+             inject_in_preproc = false
            })
      with
      | Ok () -> ()
@@ -200,6 +201,7 @@ let main
   ?(with_test_gen = false)
   ?(copy_source_dir = false)
   filename
+  ~use_preproc
   ((_, sigm) as ail_prog)
   output_decorated
   output_decorated_dir
@@ -292,6 +294,8 @@ let main
       (String.concat "\n" cn_header_decls_list)
   in
   output_to_oc cn_header_oc [ cn_header_oc_str ];
+  (* Genereate CN.c *)
+
   (* TODO: Topological sort *)
   let cn_defs_list =
     [ cn_header;
@@ -306,6 +310,7 @@ let main
     ]
   in
   output_to_oc cn_oc cn_defs_list;
+  (* Generate myfile-exec.c *)
   let incls =
     [ ("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true) ]
   in
@@ -368,7 +373,10 @@ let main
     @ List.map (fun (loc, _) -> Cerb_location.get_filename loc) squashed_block_return_injs
   in
   let remaining_fns_and_ocs =
-    open_auxilliary_files filename prefix included_filenames' []
+    if use_preproc then
+      []
+    else
+      open_auxilliary_files filename prefix included_filenames' []
   in
   let pre_post_pairs =
     if with_test_gen then
@@ -393,7 +401,8 @@ let main
            program = ail_prog;
            pre_post = pre_post_pairs;
            in_stmt = source_file_in_stmt_injs;
-           returns = source_file_return_injs
+           returns = source_file_return_injs;
+           inject_in_preproc = use_preproc
          })
    with
    | Ok () -> ()
