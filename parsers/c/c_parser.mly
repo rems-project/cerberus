@@ -1405,10 +1405,8 @@ selection_statement:
 
 (* FIXME magic comments should be singletons, not a list *)
 magic_comment_list:
-| xs= magic_comment_list magic= CERB_MAGIC
-    { magic :: xs }
-|
-    { [] }
+| xs= list(CERB_MAGIC)
+    { xs }
 
 (* §6.8.5 Iteration statements *)
 iteration_statement:
@@ -1416,24 +1414,24 @@ iteration_statement:
     {
       CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs (List.rev magic)
+        , magic_to_attrs magic
         , CabsSwhile (expr, stmt) ) }
 | DO magic= magic_comment_list stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs (List.rev magic)
+        , magic_to_attrs magic
         , CabsSdo (expr, stmt) ) }
 | FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs (List.rev magic)
+        , magic_to_attrs magic
         , CabsSfor (Option.map (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
 | FOR LPAREN xs_decl= declaration expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs(List.rev magic)
+        , magic_to_attrs magic
         , CabsSfor (Some (FC_decl (region $loc(xs_decl) noCursor, xs_decl)), expr2_opt, expr3_opt, stmt) ) }
 ;
 
@@ -1579,7 +1577,7 @@ function_definition:
     { if has_semi then warn_extra_semicolon $startpos(has_semi) AFTER_FUNCTION;
       let loc = region ($startpos, $endpos) noCursor in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
-      let magic_opt = magic_to_opt_attrs (List.rev magic) in
+      let magic_opt = magic_to_opt_attrs magic in
       LF.restore_context ctxt;
       LF.create_function_definition loc attr_opt magic_opt specifs decltor stmt rev_decl_opt }
 ;
