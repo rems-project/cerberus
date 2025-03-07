@@ -85,6 +85,10 @@ let magic_to_opt_attrs = function
   | [] -> None
   | magic -> Some (magic_to_attrs magic)
 
+let opt_magic_to_attrs = function
+  | None -> Annot.Attrs []
+  | Some magic -> magic_to_attrs [magic]
+
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
   if not (Cerb_global.isPermissive ()) then
@@ -153,7 +157,7 @@ type asm_qualifier =
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_LIFT_FUNCTION CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
 %token CN_UNCHANGED CN_WILD CN_MATCH
-%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES CN_TO_BYTES CN_FROM_BYTES
+%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES CN_TO_BYTES CN_FROM_BYTES CN_AS
 %token <string * [`U|`I] * int> CN_CONSTANT
 
 %token EOF
@@ -535,9 +539,9 @@ postfix_expression:
 | expr1= postfix_expression LBRACK expr2= expression RBRACK
     { CabsExpression ( region ($startpos, $endpos) noCursor
                      , CabsEsubscript (expr1, expr2) ) }
-| expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
+| expr= postfix_expression LPAREN exprs_opt= argument_expression_list? opt_magic=option(CERB_MAGIC) RPAREN
     { CabsExpression ( region ($startpos, $endpos) noCursor
-                     , CabsEcall (expr, opt_to_rev_list exprs_opt) ) }
+                     , CabsEcall (expr, opt_to_rev_list exprs_opt, opt_magic_to_attrs opt_magic) ) }
 | expr= postfix_expression DOT i= general_identifier
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEmemberof (expr, i) ) }
@@ -1405,10 +1409,8 @@ selection_statement:
 
 (* FIXME magic comments should be singletons, not a list *)
 magic_comment_list:
-| xs= magic_comment_list magic= CERB_MAGIC
-    { magic :: xs }
-|
-    { [] }
+| xs= list(CERB_MAGIC)
+    { xs }
 
 (* §6.8.5 Iteration statements *)
 iteration_statement:
@@ -1416,24 +1418,24 @@ iteration_statement:
     {
       CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs (List.rev magic)
+        , magic_to_attrs magic
         , CabsSwhile (expr, stmt) ) }
 | DO magic= magic_comment_list stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs (List.rev magic)
+        , magic_to_attrs magic
         , CabsSdo (expr, stmt) ) }
 | FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs (List.rev magic)
+        , magic_to_attrs magic
         , CabsSfor (Option.map (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
 | FOR LPAREN xs_decl= declaration expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
-        , magic_to_attrs(List.rev magic)
+        , magic_to_attrs magic
         , CabsSfor (Some (FC_decl (region $loc(xs_decl) noCursor, xs_decl)), expr2_opt, expr3_opt, stmt) ) }
 ;
 
@@ -1579,7 +1581,7 @@ function_definition:
     { if has_semi then warn_extra_semicolon $startpos(has_semi) AFTER_FUNCTION;
       let loc = region ($startpos, $endpos) noCursor in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
-      let magic_opt = magic_to_opt_attrs (List.rev magic) in
+      let magic_opt = magic_to_opt_attrs magic in
       LF.restore_context ctxt;
       LF.create_function_definition loc attr_opt magic_opt specifs decltor stmt rev_decl_opt }
 ;
@@ -2334,9 +2336,9 @@ cn_option_func_body:
     { None }
 
 clause:
-| CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
+| CN_TAKE str= cn_variable EQ res= resource as_name=option(preceded(CN_AS, cn_variable)) SEMICOLON c= clause
     { let loc = point $startpos(str) in
-      Cerb_frontend.Cn.CN_letResource (loc, str, res, c) }
+      Cerb_frontend.Cn.CN_letResource (loc, str, res, as_name, c) }
 | CN_LET str= cn_variable EQ e= expr SEMICOLON c= clause
     { let loc = point $startpos(str) in
       Cerb_frontend.Cn.CN_letExpr (loc, str, e, c) }
@@ -2395,9 +2397,9 @@ ctype:
 
 /* copying 'clause' and adjusting */
 condition:
-| CN_TAKE str= cn_variable EQ res= resource SEMICOLON
+| CN_TAKE str= cn_variable EQ res= resource as_name=option(preceded(CN_AS,cn_variable)) SEMICOLON
     { let loc = point $startpos(str) in
-      Cerb_frontend.Cn.CN_cletResource (loc, str, res) }
+      Cerb_frontend.Cn.CN_cletResource (loc, str, res, as_name) }
 | CN_LET str= cn_variable EQ e= expr SEMICOLON
     { let loc = point $startpos(str) in
       Cerb_frontend.Cn.CN_cletExpr (loc, str, e) }

@@ -2281,7 +2281,7 @@ STD_ "§6.5.2.1#2, sentence 2" $
                       <*> E.return (Arithmetic Add)
                       <*> desugar_expression e2)
         )
-    | CabsEcall e es ->
+    | CabsEcall e es _annots (* FIXME *) ->
         (* TODO: STD check + annot *)
         AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es
     | CabsEmemberof e ident ->
@@ -4379,15 +4379,19 @@ let desugar_cn_assertion a =
       E.return (CN_assert_qexp sym bTy e1 e2)
   end
 
-
+let desugar_maybe_cn_ident = function
+  | Just ident -> Just <$> (E.register_cn_ident CN_vars ident)
+  | Nothing -> E.return Nothing
+end
 
 let rec desugar_cn_clause_aux clause =
   match clause with
-    | CN_letResource loc ident res c ->
+    | CN_letResource loc ident res opt_name c ->
         desugar_cn_resource res              >>= fun res' ->
         E.register_cn_ident CN_vars ident >>= fun sym  ->
+        desugar_maybe_cn_ident opt_name >>= fun opt_sym  ->
         desugar_cn_clause_aux c                  >>= fun c'   ->
-        E.return (CN_letResource loc sym res' c')
+        E.return (CN_letResource loc sym res' opt_sym c')
     | CN_letExpr loc ident e c ->
         desugar_cn_expr e                    >>= fun e'  ->
         E.register_cn_ident CN_vars ident >>= fun sym ->
@@ -4476,10 +4480,11 @@ let desugar_and_register_cn_function func =
 (* adapting desugar_cn_clause *)
 let desugar_cn_condition condition =
   match condition with
-  | CN_cletResource loc ident res ->
+  | CN_cletResource loc ident res opt_ident ->
      desugar_cn_resource res >>= fun res' ->
      E.register_cn_ident CN_vars ident >>= fun sym ->
-     E.return (CN_cletResource loc sym res')
+     desugar_maybe_cn_ident opt_ident >>= fun opt_sym ->
+     E.return (CN_cletResource loc sym res' opt_sym)
   | CN_cletExpr loc ident e ->
      desugar_cn_expr e >>= fun e' ->
      E.register_cn_ident CN_vars ident >>= fun sym ->

@@ -1685,10 +1685,10 @@ let pp_cn_assertion ppfa ppfty = function
 
 
 let pp_cn_condition ppfa ppfty = function
-  | CF.Cn.CN_cletResource (loc, sym, res) ->
+  | CF.Cn.CN_cletResource (loc, sym, res, opt_sym) ->
     pp_constructor2
       "CN_cletResource"
-      [ pp_location loc; ppfa sym; pp_cn_resource ppfa ppfty res ]
+      [ pp_location loc; ppfa sym; pp_cn_resource ppfa ppfty res; pp_option ppfa opt_sym ]
   | CN_cletExpr (loc, sym, ex) ->
     pp_constructor2 "CN_cletExpr" [ pp_location loc; ppfa sym; pp_cn_expr ppfa ppfty ex ]
   | CN_cconstr (loc, assertion) ->

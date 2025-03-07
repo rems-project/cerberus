@@ -147,7 +147,7 @@ type cn_assertion 'a 'ty =
 
 
 type cn_clause 'a 'ty =
-  | CN_letResource of Loc.t * 'a * cn_resource 'a 'ty * cn_clause 'a 'ty
+  | CN_letResource of Loc.t * 'a * cn_resource 'a 'ty * maybe 'a * cn_clause 'a 'ty
   | CN_letExpr of Loc.t * 'a * cn_expr 'a 'ty * cn_clause 'a 'ty
   | CN_assert of Loc.t * cn_assertion 'a 'ty * cn_clause 'a 'ty
   | CN_return of Loc.t * cn_expr 'a 'ty
@@ -167,7 +167,7 @@ type cn_function 'a 'ty = <|
 |>
 
 type cn_condition 'a 'ty =
-  | CN_cletResource of Loc.t * 'a * cn_resource 'a 'ty
+  | CN_cletResource of Loc.t * 'a * cn_resource 'a 'ty * maybe 'a
   | CN_cletExpr of Loc.t * 'a * cn_expr 'a 'ty
   | CN_cconstr of Loc.t * cn_assertion 'a 'ty
 
