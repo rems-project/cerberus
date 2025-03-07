@@ -1,6 +1,6 @@
 (library
  (name mem_vip)
- (public_name cerberus.mem.vip)
+ (public_name cerberus-lib.mem.vip)
  (flags (:standard -w -27-32-69))
  (implements cerb_frontend)
  (private_modules common)
