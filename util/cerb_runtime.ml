@@ -9,7 +9,7 @@ let specified_runtime : string option ref = ref None
 (** [find_build_install_path ()] attempts to locate the build-time install
     directory for Cerberus packages (inside the Dune [_build] directory) using
     the PATH. Exception [Not_found] is raised in case of failure. *)
-let find_build_install_path : unit -> string = fun _ ->
+let [@warning "-32"] find_build_install_path : unit -> string = fun _ ->
   let path = String.split_on_char ':' (Sys.getenv "PATH") in
   let suffix_r = Str.regexp {|^\(.*/_build/install/[a-z][a-z\-]*\)/bin$|} in
   let rec find_prefix path =
@@ -42,7 +42,9 @@ let detect_runtime : unit -> runtime_loc = fun _ ->
   (* Then check the CERB_INSTALL_PREFIX environment variable. *)
   try wrap `ENV_VAR (Sys.getenv "CERB_INSTALL_PREFIX") with Not_found ->
   (* Then check for build time runtime (in repository). *)
-  try wrap `BUILD_DIR (find_build_install_path ()) with Not_found ->
+  (* TODO: temporarily disabling the dune runtime discovery for the CN split
+           because it does not work with pinned opam installs *)
+  (* try wrap `BUILD_DIR (find_build_install_path ()) with Not_found -> *)
   (* Fall back to installed runtime under the opam switch prefix. *)
   try wrap `OPAM (Sys.getenv "OPAM_SWITCH_PREFIX") with Not_found ->
   failwith "OPAM_SWITCH_PREFIX not set."

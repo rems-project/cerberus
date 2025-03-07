@@ -11,6 +11,9 @@ type runtime_loc = {
   mk: pkg:string -> string;
 }
 
+(* TODO: the discovery of dune local runtime is temporarily disabled
+         (see comment in cerb_runtime.ml) *)
+
 (** [runtime ()] detects and returns an absolute path to the Cerberus runtime.
     If [specified_runtime] is set then its value is used, and otherwise if the
     [CERB_INSTALL_PREFIX] environment variable is set then its value is used.
