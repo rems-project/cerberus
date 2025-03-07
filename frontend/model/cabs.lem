@@ -55,7 +55,7 @@ type cabs_expression_ =
   | CabsEgeneric of cabs_expression * list cabs_generic_association
   (* §6.5.2 Postfix operators, Syntax *)
   | CabsEsubscript of cabs_expression * cabs_expression
-  | CabsEcall of cabs_expression * list cabs_expression
+  | CabsEcall of cabs_expression * list cabs_expression * Annot.attributes
   | CabsEmemberof of cabs_expression * Symbol.identifier
   | CabsEmemberofptr of cabs_expression * Symbol.identifier
   | CabsEpostincr of cabs_expression

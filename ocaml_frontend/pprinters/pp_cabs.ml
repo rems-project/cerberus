@@ -191,7 +191,7 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
               , let d_e1 = dtree_of_cabs_expression e1 in
                 let d_e2 = dtree_of_cabs_expression e2 in
                [ d_e1; d_e2 ] )
-    | CabsEcall (e, es) ->
+    | CabsEcall (e, es, _attrs (* FIXME *)) ->
         Dnode ( pp_stmt_ctor "CabsEcall" ^^^ d_loc
               , let d_e  = dtree_of_cabs_expression e in
                 let d_es = dtree_of_list dtree_of_cabs_expression es in
