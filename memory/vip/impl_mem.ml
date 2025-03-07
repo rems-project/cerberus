@@ -1170,8 +1170,8 @@ let pp_list_for_coq pp_elem xs =
 let pp_address_for_coq n = !^(N.to_string n)
 
 let pp_provenance_for_coq = function
-  | Prov_empty -> !^"Prov_empty"
-  | Prov_some alloc_id -> !^"(Prov_some" ^^^ !^(Nat_big_num.to_string alloc_id) ^^ !^")"
+  | Prov_empty -> !^"Mem.Prov_empty"
+  | Prov_some alloc_id -> !^"(Mem.Prov_some" ^^^ !^(Nat_big_num.to_string alloc_id) ^^ !^")"
 
 let pp_location_for_coq (prov, addr) =
   pp_pair_for_coq pp_provenance_for_coq pp_address_for_coq (prov, addr) 
@@ -1184,9 +1184,9 @@ let pp_integer_value_for_coq = function
 let pp_floating_value_for_coq (f:floating_value) = !^ (string_of_float f)
 
  let pp_pointer_value_for_coq pp_symbol = function
-   | PVnull -> !^"PVnull"
-   | PVloc loc -> !^"(PVloc" ^^^ pp_location_for_coq loc ^^ !^")"
-   | PVfunptr sym -> !^"(PVfunptr" ^^^ pp_symbol sym ^^ !^")"
+   | PVnull -> !^"Mem.PVnull"
+   | PVloc loc -> !^"(Mem.PVloc" ^^^ pp_location_for_coq loc ^^ !^")"
+   | PVfunptr sym -> !^"(Mem.PVfunptr" ^^^ pp_symbol sym ^^ !^")"
 
 
 let rec pp_mem_value_for_coq pp_symbol pp_integer_type pp_floating_type pp_ctype pp_identifier = function
