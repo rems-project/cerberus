@@ -297,11 +297,14 @@ module MakePp (Conf: PP_CN) = struct
               , [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
 
 
+  let dtree_of_opt_ident = function
+    | None -> []
+    | Some name -> [ Dnode (!^"As", [Dleaf (P.squotes (Conf.pp_ident name))]) ]
 
   let rec dtree_of_cn_clause = function
-    | CN_letResource (_, ident, res, c) ->
+    | CN_letResource (_, ident, res, opt_ident, c) ->
         Dnode ( pp_stmt_ctor "CN_letResource" ^^^ P.squotes (Conf.pp_ident ident)
-              , [dtree_of_cn_resource res; dtree_of_cn_clause c])
+              , (dtree_of_cn_resource res) :: dtree_of_opt_ident opt_ident @ [ dtree_of_cn_clause c ])
     | CN_letExpr (_, ident, e, c) ->
         Dnode ( pp_stmt_ctor "CN_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
               , [dtree_of_cn_expr e; dtree_of_cn_clause c])
@@ -312,9 +315,9 @@ module MakePp (Conf: PP_CN) = struct
 
   (* copied and adjusted from dtree_of_cn_clause *)
   let dtree_of_cn_condition = function
-    | CN_cletResource (_, ident, res) ->
+    | CN_cletResource (_, ident, res, opt_ident) ->
         Dnode ( pp_stmt_ctor "CN_letResource" ^^^ P.squotes (Conf.pp_ident ident)
-              , [dtree_of_cn_resource res])
+              , dtree_of_opt_ident opt_ident @ [dtree_of_cn_resource res])
     | CN_cletExpr (_, ident, e) ->
         Dnode ( pp_stmt_ctor "CN_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
               , [dtree_of_cn_expr e])

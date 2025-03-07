@@ -883,7 +883,7 @@ let rec arguments_of_at f_i = function
 
 let make_largs f_i =
   let rec aux env st = function
-    | Cn.CN_cletResource (loc, name, resource) :: conditions ->
+    | Cn.CN_cletResource (loc, name, resource, _opt_name) :: conditions ->
       let@ (pt_ret, oa_bt), lcs, pointee_values =
         C.LocalState.handle st (C.ET.translate_cn_let_resource env (loc, name, resource))
       in
@@ -1070,11 +1070,18 @@ let desugar_access d_st global_types (loc, id) =
 
 
 let desugar_cond d_st = function
-  | Cn.CN_cletResource (loc, id, res) ->
+  | Cn.CN_cletResource (loc, id, res, opt_id) ->
     debug 6 (lazy (typ (string "desugaring a let-resource at") (Locations.pp loc)));
     let@ res = do_ail_desugar_rdonly d_st (Desugar.cn_resource res) in
     let@ sym, d_st = register_new_cn_local id d_st in
-    return (Cn.CN_cletResource (loc, sym, res), d_st)
+    let@ opt_sym, d_st =
+      match opt_id with
+      | Some id ->
+        let@ sym, d_st = register_new_cn_local id d_st in
+        return (Some sym, d_st)
+      | None -> return (None, d_st)
+    in
+    return (Cn.CN_cletResource (loc, sym, res, opt_sym), d_st)
   | Cn.CN_cletExpr (loc, id, expr) ->
     debug 6 (lazy (typ (string "desugaring a let-expr at") (Locations.pp loc)));
     let@ expr = do_ail_desugar_rdonly d_st (Desugar.cn_expr expr) in

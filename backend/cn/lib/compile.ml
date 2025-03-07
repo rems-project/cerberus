@@ -1385,7 +1385,7 @@ let translate_cn_clause env clause =
   let rec translate_cn_clause_aux env st acc clause =
     let module LAT = LogicalArgumentTypes in
     match clause with
-    | CN_letResource (res_loc, sym, the_res, cl) ->
+    | CN_letResource (res_loc, sym, the_res, _opt_sym, cl) ->
       let@ (pt_ret, oa_bt), lcs, pointee_vals =
         handle st (ET.translate_cn_let_resource env (res_loc, sym, the_res))
       in
@@ -1471,7 +1471,7 @@ let translate_cn_predicate env (def : cn_predicate) =
 let rec make_lrt_generic env st =
   let open LocalState in
   function
-  | CN_cletResource (loc, name, resource) :: ensures ->
+  | CN_cletResource (loc, name, resource, _opt_name) :: ensures ->
     let@ (pt_ret, oa_bt), lcs, pointee_values =
       handle st (ET.translate_cn_let_resource env (loc, name, resource))
     in

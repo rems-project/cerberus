@@ -153,7 +153,7 @@ type asm_qualifier =
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_LIFT_FUNCTION CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
 %token CN_UNCHANGED CN_WILD CN_MATCH
-%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES CN_TO_BYTES CN_FROM_BYTES
+%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES CN_TO_BYTES CN_FROM_BYTES CN_AS
 %token <string * [`U|`I] * int> CN_CONSTANT
 
 %token EOF
@@ -2332,9 +2332,9 @@ cn_option_func_body:
     { None }
 
 clause:
-| CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
+| CN_TAKE str= cn_variable EQ res= resource as_name=option(preceded(CN_AS, cn_variable)) SEMICOLON c= clause
     { let loc = point $startpos(str) in
-      Cerb_frontend.Cn.CN_letResource (loc, str, res, c) }
+      Cerb_frontend.Cn.CN_letResource (loc, str, res, as_name, c) }
 | CN_LET str= cn_variable EQ e= expr SEMICOLON c= clause
     { let loc = point $startpos(str) in
       Cerb_frontend.Cn.CN_letExpr (loc, str, e, c) }
@@ -2393,9 +2393,9 @@ ctype:
 
 /* copying 'clause' and adjusting */
 condition:
-| CN_TAKE str= cn_variable EQ res= resource SEMICOLON
+| CN_TAKE str= cn_variable EQ res= resource as_name=option(preceded(CN_AS,cn_variable)) SEMICOLON
     { let loc = point $startpos(str) in
-      Cerb_frontend.Cn.CN_cletResource (loc, str, res) }
+      Cerb_frontend.Cn.CN_cletResource (loc, str, res, as_name) }
 | CN_LET str= cn_variable EQ e= expr SEMICOLON
     { let loc = point $startpos(str) in
       Cerb_frontend.Cn.CN_cletExpr (loc, str, e) }
