@@ -1,8 +1,10 @@
 Require Import Coq.ZArith.ZArith.
 
+From Cerberus Require Import Implementation Utils.
 Require Import Sym.
 Require Import SCtypes.
 Require Import Id.
+Require Import CNImpl.
 
 Record struct_piece := mk_struct_piece {
   piece_offset : Z;
@@ -19,3 +21,10 @@ Record struct_member := mk_struct_member {
 Definition struct_layout := list struct_piece.
 Definition struct_decl := struct_layout.
 Definition struct_decls := SymMap.t struct_decl.
+
+
+Definition is_signed_integer_type ity := (CNImpl.get).(is_signed_ity) ity.
+
+Definition sizeof_ity ity := option_get 0 ((CNImpl.get).(sizeof_ity) ity).
+
+

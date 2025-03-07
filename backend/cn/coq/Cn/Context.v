@@ -22,3 +22,6 @@ Record t := mk_context {
   constraints : LogicalConstraints.LCSet.t;
   global : Global.t
 }.
+
+(* Helper function *)
+Definition get_rs (ctxt : t) := List.map fst (fst ctxt.(resources)).

@@ -15,6 +15,13 @@ Inductive ctype : Type :=
 
 Definition t := ctype.
 
+Inductive is_struct : t -> Prop :=
+  | is_struct_struct : forall s, is_struct (Struct s).
+
+Inductive is_function : t -> Prop :=
+  | is_function_function : forall q args ret, is_function (SCFunction (q, args, ret)).
+
+
 (* C concrete signature *)
 Record c_concrete_sig := mk_c_concrete_sig {
   sig_return_ty : Ctype.ctype;

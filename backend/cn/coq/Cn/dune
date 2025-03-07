@@ -6,6 +6,8 @@
  (theories StructTact Cerberus)
  (modules
   Sym
+  CNMem
+  CNImpl
   Memory
   CNDefinition
   Context

@@ -4,9 +4,6 @@
 Require Import String.
 Require Import List.
 Require Import ZArith.
-Require Import Coq.FSets.FMapInterface.
-Require Import Coq.FSets.FMapList.
-Require Import Coq.Structures.OrderedTypeEx.
 
 Require Import Sym.
 Require Import Cerberus.Location.
@@ -24,7 +21,7 @@ Require Import CN.
 Require Import CNProgs.
 Require Import SCtypes.
 Require Import Id.
-Require Import Cerberus.ImplMem.
+Require Import CNMem.
 
 Module Mem := CNMem.
 
@@ -107,7 +104,7 @@ Inductive iop : Type :=
 
 (* Annotated C type *)
 Record act := {
-  loc : Location_t;
+  loc : Locations.t;
   annot : list Annot.annot;
   ct : SCtypes.t
 }.
@@ -149,7 +146,7 @@ Inductive pattern_ (TY : Type) : Type :=
   | CaseCtor : ctor -> list (pattern TY) -> pattern_ TY
 
 with pattern (TY : Type) : Type :=
-  | Pattern : Location_t -> list Annot.annot -> TY -> pattern_ TY -> pattern TY.
+  | Pattern : Locations.t -> list Annot.annot -> TY -> pattern_ TY -> pattern TY.
 
 (* Function types *)
 Inductive mu_function : Type :=
@@ -209,13 +206,13 @@ Inductive pexpr_ (TY: Type) : Type :=
   | PEcatch_exceptional_condition : act -> pexpr TY -> pexpr_ TY
   | PEbounded_binop : bound_kind -> Core.iop -> pexpr TY -> pexpr TY -> pexpr_ TY
   | PEis_representable_integer : pexpr TY -> act -> pexpr_ TY
-  | PEundef : Location_t -> undefined_behaviour -> pexpr_ TY
+  | PEundef : Locations.t -> undefined_behaviour -> pexpr_ TY
   | PEerror : string -> pexpr TY -> pexpr_ TY
   | PElet : pattern TY -> pexpr TY -> pexpr TY -> pexpr_ TY
   | PEif : pexpr TY -> pexpr TY -> pexpr TY -> pexpr_ TY
 
 with pexpr (TY: Type) : Type :=
-  | Pexpr : Location_t -> list Annot.annot -> TY -> pexpr_ TY -> pexpr TY.
+  | Pexpr : Locations.t -> list Annot.annot -> TY -> pexpr_ TY -> pexpr TY.
 
 (* Action types *)
 Inductive action_ (TY : Type) : Type :=
@@ -239,7 +236,7 @@ Inductive action_ (TY : Type) : Type :=
   | LinuxRMW : act -> pexpr TY -> pexpr TY -> linux_memory_order -> action_ TY.
 
 Record action (TY : Type) := {
-  action_loc : Location_t;
+  action_loc : Locations.t;
   action_content : action_ TY
 }.
 
@@ -293,7 +290,7 @@ Inductive expr_ (TY : Type) : Type :=
       expr_ TY
 
 with expr (TY : Type) : Type :=
-  | Expr : Location_t -> list Annot.annot -> TY -> expr_ TY -> expr TY.
+  | Expr : Locations.t -> list Annot.annot -> TY -> expr_ TY -> expr TY.
 
 (* Global declarations and definitions *)
 Inductive globs (TY : Type) : Type :=
@@ -318,17 +315,17 @@ Record parse_ast_label_spec := mk_parse_ast_label_spec {
 
 (* Label definition *)
 Inductive label_def (TY : Type) : Type :=
-  | Return : Location_t -> label_def TY
-  | Label : Location_t -> 
+  | Return : Locations.t -> label_def TY
+  | Label : Locations.t -> 
            arguments (expr TY) ->
            list Annot.annot ->
            parse_ast_label_spec ->
-           (Location_t * Location_t) -> (* Loop locations *)
+           (Locations.t * Locations.t) -> (* Loop locations *)
            label_def TY.
 
 (* Trusted status *)
 Inductive trusted : Type :=
-  | Trusted : Location_t -> trusted
+  | Trusted : Locations.t -> trusted
   | Checked : trusted.
 
 (* Desugared specification *)
@@ -344,12 +341,12 @@ Definition args_and_body (TY : Type) :=
 
 (* Function map declaration *)
 Inductive fun_map_decl (TY : Type) : Type :=
-  | Proc : Location_t ->
+  | Proc : Locations.t ->
            args_and_body TY ->
            trusted ->
            desugared_spec ->
            fun_map_decl TY
-  | ProcDecl : Location_t -> option ArgumentTypes.ft -> fun_map_decl TY.
+  | ProcDecl : Locations.t -> option ArgumentTypes.ft -> fun_map_decl TY.
 
 (* Tag definition *)
 Inductive tag_definition : Type :=
@@ -358,14 +355,14 @@ Inductive tag_definition : Type :=
 
 (* Function to convert *)
 Record function_to_convert := {
-  ftc_loc : Location_t;
+  ftc_loc : Locations.t;
   c_fun_sym : Sym.t;
   l_fun_sym : Sym.t
 }.
 
 (* Datatype *)
 Record datatype := {
-  dt_loc : Location_t;
+  dt_loc : Locations.t;
   cases : list (Sym.t * list (Symbol.identifier * BaseTypes.t))
 }.
 

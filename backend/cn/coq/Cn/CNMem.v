@@ -7,9 +7,7 @@ Require Import Coq.NArith.NArith.
 Require Import Coq.Floats.PrimFloat.
 
 Require Import Memory.
-Require Import Symbol.
-Require Import IntegerType.
-Require Import Ctype.
+From Cerberus Require Import Symbol IntegerType Ctype.
 
 Module CNMem.
 

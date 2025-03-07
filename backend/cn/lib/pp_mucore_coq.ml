@@ -62,6 +62,10 @@ let pp_pmap
   P.parens (!^fromlist_fun ^^^ pp_list (pp_pair pp_key pp_value) (Pmap.bindings_list m))
 
 
+let pp_lines (lines : string list) : P.document =
+  List.fold_left (fun acc s -> acc ^^ !^s ^^ P.hardline) P.empty lines
+
+
 let pp_bool b = if b then !^"true" else !^"false"
 
 (* Some user-defined names can clash with existing Coq identifiers so we need to quote them *)
@@ -558,7 +562,7 @@ let rec pp_basetype pp_loc = function
     pp_constructor "BaseTypes.Datatype" [ !^"unit"; pp_symbol sym ]
   | BaseTypes.Record fields ->
     pp_constructor
-      "BaseTypes.Record"
+      "BaseTypes.TRecord"
       [ !^"unit"; pp_list (pp_pair pp_identifier (pp_basetype pp_loc)) fields ]
   | BaseTypes.Map (t1, t2) ->
     pp_constructor
@@ -1174,7 +1178,7 @@ and pp_index_term_content = function
       "StructUpdate"
       [ pp_index_term t1; pp_identifier member; pp_index_term t2 ]
   | Record members ->
-    pp_constructor1 "Record" [ pp_list (pp_pair pp_identifier pp_index_term) members ]
+    pp_constructor1 "TRecord" [ pp_list (pp_pair pp_identifier pp_index_term) members ]
   | RecordMember (t, member) ->
     pp_constructor1 "RecordMember" [ pp_index_term t; pp_identifier member ]
   | RecordUpdate ((t1, member), t2) ->
@@ -1918,31 +1922,24 @@ let rec pp_argument_types pp_type = function
 
 
 let coq_prologue =
-  !^"Require Import Coq.Lists.List."
-  ^^ P.hardline
-  ^^ !^"Import ListNotations."
-  ^^ P.hardline
-  ^^ !^"Require Import Coq.Strings.String."
-  ^^ P.hardline
-  ^^ !^"Open Scope string_scope."
-  ^^ P.hardline
-  ^^ !^"Require Import ZArith."
-  ^^ P.hardline
-  ^^ !^"From Cerberus Require Import Annot Core Ctype ImplMem IntegerType Location \
-        Memory Symbol Undefined Utils."
-  ^^ P.hardline
-  ^^ !^"From Cn Require Import ArgumentTypes BaseTypes CN CNProgs ErrorCommon False Id \
-        IndexTerms Locations LogicalArgumentTypes LogicalConstraints LogicalReturnTypes \
-        MuCore Prooflog Request ReturnTypes Resource SCtypes Sym Terms."
-  ^^ P.hardline
+  pp_lines
+    [ "Require Import Coq.Lists.List.";
+      "Import ListNotations.";
+      "Require Import Coq.Strings.String.";
+      "Open Scope string_scope.";
+      "Require Import ZArith.";
+      "From Cerberus Require Import Annot Core Ctype IntegerType Location Memory Symbol \
+       Undefined Utils.";
+      "From Cn Require Import ArgumentTypes BaseTypes CN CNProgs CNMem ErrorCommon False \
+       Id IndexTerms Locations LogicalArgumentTypes LogicalConstraints \
+       LogicalReturnTypes MuCore Prooflog Request ReturnTypes Resource SCtypes Sym \
+       Terms."
+    ]
 
 
 let pp_file pp_type pp_type_name file =
-  coq_prologue
-  ^^ P.hardline
-  ^^ P.hardline
   (* Print globals *)
-  ^^ pp_comment "Global definitions"
+  pp_comment "Global definitions"
   ^^ P.hardline
   ^^ List.fold_left
        (fun acc (sym, glob) ->
@@ -2199,6 +2196,7 @@ let pp_resource_inference_type = function
         pp_option (pp_pair pp_location pp_string) o;
         pp_pair pp_resource_predicate (pp_list pp_int) ri
       ]
+  | Prooflog.UnfoldResources loc -> pp_constructor "UnfoldResources" [ pp_location loc ]
 
 
 (* Add this definition before its use in `pp_unit_file_with_resource_inference` *)
@@ -2209,17 +2207,42 @@ let pp_resource_inference_step = function
       [ pp_context c1; pp_resource_inference_type ri; pp_context c2 ]
 
 
-let pp_unit_file_with_resource_inference (prog : unit file) (osteps : Prooflog.log option)
-  =
-  pp_file pp_unit pp_unit_type prog
+let coq_steps_var_name = "ResourceInferenceSteps"
+
+(* Helper function that prints a list of strings, each followed by a hardline *)
+(* Usage in your code *)
+let coq_inference_proof =
+  !^"From Reasoning Require Import ResourceInference ProofAutomation."
+  ^^ P.hardline
+  ^^ !^"Theorem resource_inference_steps_valid: prooflog_valid"
+  ^^^ !^(quote_coq_name coq_steps_var_name)
+  ^^^ !^"."
+  ^^ P.hardline
+  ^^ pp_lines
+       [ "Proof.";
+         "  unfold prooflog_valid.";
+         "  unfold _cn_ResourceInferenceSteps.";
+         "  ltac2:(prove_log_entry_list_valid ()).";
+         "Admitted."
+       ]
+
+
+(* High-level functions to pretty print the unit file and proof log *)
+
+let pp_prologue () = coq_prologue ^^ P.hardline
+
+let pp_unit_file (prog : unit file) = pp_file pp_unit pp_unit_type prog ^^ P.hardline
+
+let pp_proof_log (steps : Prooflog.log) (generate_proof : bool) =
+  pp_comment "Resource Inference Steps"
+  ^^ P.hardline
+  ^^ coq_def
+       (coq_steps_var_name ^ ":Prooflog.log")
+       P.empty
+       (pp_list pp_resource_inference_step steps)
   ^^ P.hardline
   ^^
-  match osteps with
-  | Some steps ->
-    pp_comment "Resource Inference Steps"
-    ^^ P.hardline
-    ^^ coq_def
-         "ResourceInferenceSteps:Prooflog.log"
-         P.empty
-         (pp_list pp_resource_inference_step steps)
-  | None -> P.empty
+  if generate_proof then
+    pp_comment "Resource Inference Proof" ^^ P.hardline ^^ coq_inference_proof
+  else
+    P.empty
