@@ -85,6 +85,10 @@ let magic_to_opt_attrs = function
   | [] -> None
   | magic -> Some (magic_to_attrs magic)
 
+let opt_magic_to_attrs = function
+  | None -> Annot.Attrs []
+  | Some magic -> magic_to_attrs [magic]
+
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
   if not (Cerb_global.isPermissive ()) then
@@ -535,9 +539,9 @@ postfix_expression:
 | expr1= postfix_expression LBRACK expr2= expression RBRACK
     { CabsExpression ( region ($startpos, $endpos) noCursor
                      , CabsEsubscript (expr1, expr2) ) }
-| expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
+| expr= postfix_expression LPAREN exprs_opt= argument_expression_list? opt_magic=option(CERB_MAGIC) RPAREN
     { CabsExpression ( region ($startpos, $endpos) noCursor
-                     , CabsEcall (expr, opt_to_rev_list exprs_opt) ) }
+                     , CabsEcall (expr, opt_to_rev_list exprs_opt, opt_magic_to_attrs opt_magic) ) }
 | expr= postfix_expression DOT i= general_identifier
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEmemberof (expr, i) ) }
