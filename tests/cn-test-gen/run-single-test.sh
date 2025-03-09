@@ -29,7 +29,7 @@ function separator() {
   OUTPUT="${OUTPUT}\n\n"
 }
 
-CONFIGS=("--sized-null --sizing-strategy=uniform" "--coverage --sizing-strategy=quartile" "--with-static-hack --coverage --sizing-strategy=quickcheck" "--random-size-splits --replicas" "--random-size-splits --allowed-size-split-backtracks=10")
+CONFIGS=("--sized-null --sizing-strategy=uniform" "--coverage --sizing-strategy=quartile" "--with-static-hack --coverage --sizing-strategy=quickcheck" "--random-size-splits --no-replicas" "--random-size-splits --allowed-size-split-backtracks=10")
 
 OUTPUT=""
 

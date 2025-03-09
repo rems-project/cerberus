@@ -650,7 +650,7 @@ let run_tests
   coverage
   disable_passes
   trap
-  replicas
+  no_replicas
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -705,7 +705,7 @@ let run_tests
           coverage;
           disable_passes;
           trap;
-          replicas
+          no_replicas
         }
       in
       TestGeneration.set_config config;
@@ -1363,9 +1363,9 @@ module Testing_flags = struct
     Arg.(value & flag & info [ "trap" ] ~doc)
 
 
-  let replicas =
-    let doc = "Attempt to synthesize C code to replicate bugs" in
-    Arg.(value & flag & info [ "replicas" ] ~doc)
+  let no_replicas =
+    let doc = "Disable synthesizing C code to replicate bugs" in
+    Arg.(value & flag & info [ "no-replicas" ] ~doc)
 end
 
 module Seq_testing_flags = struct
@@ -1454,7 +1454,7 @@ let testing_cmd =
     $ Testing_flags.coverage
     $ Testing_flags.disable_passes
     $ Testing_flags.trap
-    $ Testing_flags.replicas
+    $ Testing_flags.no_replicas
   in
   let doc =
     "Generates tests for all functions in [FILE] with CN specifications.\n\

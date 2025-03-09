@@ -59,7 +59,7 @@ void reset_cn_failure_cb(void) {
   cn_failure_aux = &cn_failure_default;
 }
 
-static enum cn_trace_granularity trace_granularity = CN_TRACE_ALL;
+static enum cn_trace_granularity trace_granularity = CN_TRACE_NONE;
 
 enum cn_trace_granularity get_cn_trace_granularity(void) {
   return trace_granularity;
@@ -79,7 +79,8 @@ void print_error_msg_info_single(struct cn_error_message_info* info) {
       info->file_name,
       info->line_number);
   if (info->cn_source_loc) {
-    cn_printf(CN_LOGGING_ERROR, "original source location: \n%s\n", info->cn_source_loc);
+    cn_printf(
+        CN_LOGGING_ERROR, "original source location: \n%s\n\n", info->cn_source_loc);
   }
 }
 

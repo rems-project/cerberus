@@ -199,8 +199,8 @@ let run () =
           else
             [])
        @
-       if Config.has_replicas () then
-         [ "--replicas" ]
+       if Config.has_no_replicas () then
+         [ "--no-replicas" ]
        else
          [])
   in
