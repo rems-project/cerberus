@@ -93,12 +93,8 @@ size_t cn_gen_compute_size(enum cn_gen_sizing_strategy strategy,
           print_test_info(#Suite, #Name, i, d);                                          \
         }                                                                                \
                                                                                          \
-        if (progress_level > CN_TEST_GEN_PROGRESS_NONE) {                                \
-          printf("\n");                                                                  \
-        }                                                                                \
-                                                                                         \
         if (replicas) {                                                                  \
-          printf("\n********************* Replication code *********************\n\n");  \
+          printf("********************** Failing input ***********************\n\n");    \
           printf("%s", cn_replica_lines_to_str());                                       \
           printf("\n************************************************************\n\n");  \
         }                                                                                \

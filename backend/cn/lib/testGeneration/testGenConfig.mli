@@ -48,7 +48,7 @@ type t =
     coverage : bool;
     disable_passes : string list;
     trap : bool;
-    replicas : bool
+    no_replicas : bool
   }
 
 val default : t
@@ -125,4 +125,4 @@ val has_pass : string -> bool
 
 val is_trap : unit -> bool
 
-val has_replicas : unit -> bool
+val has_no_replicas : unit -> bool
