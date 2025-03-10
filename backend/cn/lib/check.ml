@@ -1917,8 +1917,12 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        let aux loc stmt =
          (* copying bits of code from elsewhere in check.ml *)
          match stmt with
-         | Cnprog.Pack_unpack (_pack_unpack, _pt) ->
-           warn loc !^"Explicit pack/unpack unsupported.";
+         | Cnprog.Pack_unpack (Pack, pt) ->
+           let@ pt = WellTyped.WReq.welltyped loc (P pt) in
+           let pt = match pt with P pt -> pt | Q _ -> assert false in
+           add_packable_resource loc pt
+         | Cnprog.Pack_unpack (Unpack, _pt) ->
+           warn loc !^"Explicit unpack unsupported.";
            return ()
          | To_from_bytes ((To | From), { name = PName _; _ }) ->
            fail (fun _ -> { loc; msg = Byte_conv_needs_owned })
