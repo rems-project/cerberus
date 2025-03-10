@@ -2570,7 +2570,7 @@ let cn_to_ail_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * Def.Predicate.t) list)
+  (preds : (Sym.t * Definition.Predicate.t) list)
   ownership_mode
   loc
   =
@@ -2860,12 +2860,16 @@ let cn_to_ail_resource_internal
 
 let cn_to_ail_logical_constraint_internal
   : type a.
-    _ CF.Cn.cn_datatype list -> (C.union_tag * C.ctype) list -> a dest -> LC.t -> a
+    _ CF.Cn.cn_datatype list ->
+    (C.union_tag * C.ctype) list ->
+    a dest ->
+    LogicalConstraints.t ->
+    a
   =
   fun dts globals d lc ->
   match lc with
-  | LC.T it -> cn_to_ail_expr_internal dts globals it d
-  | LC.Forall ((sym, bt), it) ->
+  | LogicalConstraints.T it -> cn_to_ail_expr_internal dts globals it d
+  | LogicalConstraints.Forall ((sym, bt), it) ->
     let cond_it, t =
       match IT.get_term it with
       | Binop (Implies, it, it') -> (it, it')
@@ -2916,7 +2920,7 @@ let cn_to_ail_logical_constraint_internal
 let cn_to_ail_logical_constraint
   (dts : _ CF.Cn.cn_datatype list)
   (globals : (C.union_tag * C.ctype) list)
-  (lc : LC.t)
+  (lc : LogicalConstraints.t)
   : A.bindings
     * CF.GenTypes.genTypeCategory A.statement_ list
     * CF.GenTypes.genTypeCategory A.expression
@@ -3038,14 +3042,14 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
 
 
 let cn_to_ail_predicate_internal
-  (pred_sym, (rp_def : Def.Predicate.t))
+  (pred_sym, (rp_def : Definition.Predicate.t))
   dts
   globals
   preds
   cn_preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : Def.Clause.t list) =
+  let rec clause_translate (clauses : Definition.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->
@@ -3180,7 +3184,7 @@ let cn_to_ail_post_internal
   (*loc*) dts
   globals
   preds
-  (RT.Computational (_bound, _oinfo, t))
+  (ReturnTypes.Computational (_bound, _oinfo, t))
   =
   (*let upd_s = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
     let pop_s = generate_cn_pop_msg_info in*)
@@ -3690,7 +3694,7 @@ let cn_to_ail_assume_resource_internal
   sym
   dts
   globals
-  (preds : (Sym.t * Def.Predicate.t) list)
+  (preds : (Sym.t * Definition.Predicate.t) list)
   loc
   =
   let calculate_return_type = function
@@ -4007,13 +4011,13 @@ let rec cn_to_ail_assume_lat_internal dts pred_sym_opt globals preds = function
 
 
 let cn_to_ail_assume_predicate_internal
-  (pred_sym, (rp_def : Def.Predicate.t))
+  (pred_sym, (rp_def : Definition.Predicate.t))
   dts
   globals
   preds
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
-  let rec clause_translate (clauses : Def.Clause.t list) =
+  let rec clause_translate (clauses : Definition.Clause.t list) =
     match clauses with
     | [] -> ([], [])
     | c :: cs ->
