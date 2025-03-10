@@ -40,6 +40,10 @@ type cerb_switch =
   (* set magic comment syntax to "/*$ ... $*/" *)
   | SW_magic_comment_char_dollar
 
+  (* type aliases (e.g. size_t) are normalised during the elaboration to Core.
+     As a result the generated Core has fixed their implementation. *)
+  | SW_elaboration_normalises_types
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
