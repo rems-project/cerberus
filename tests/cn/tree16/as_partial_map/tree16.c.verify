@@ -2,21 +2,21 @@ return code: 0
 tests/cn/tree16/as_partial_map/tree16.c:22:5: warning: experimental keyword 'cn_function' (use of experimental features is discouraged)
 /*@ cn_function num_nodes; @*/
     ^~~~~~~~~~~ 
-tests/cn/tree16/as_partial_map/tree16.c:55:10: warning: 'each' expects a 'u64', but 'i' with type 'i32' was provided. This will become an error in the future.
+tests/cn/tree16/as_partial_map/tree16.c:55:10: warning: 'each' prefers a 'u64', but 'i' has type 'i32'.
     take Ns = each (i32 i; (0i32 <= i) && (i < (num_nodes ())))
          ^
-tests/cn/tree16/as_partial_map/tree16.c:75:8: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
+tests/cn/tree16/as_partial_map/tree16.c:75:8: warning: 'each' prefers a 'u64', but 'j' has type 'i32'.
   take Xs = each (i32 j; (0i32 <= j) && (j < len))
        ^
-tests/cn/tree16/as_partial_map/tree16.c:137:19: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
+tests/cn/tree16/as_partial_map/tree16.c:137:19: warning: 'each' prefers a 'u64', but 'j' has type 'i32'.
              take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
                   ^
-tests/cn/tree16/as_partial_map/tree16.c:146:18: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
+tests/cn/tree16/as_partial_map/tree16.c:146:18: warning: 'each' prefers a 'u64', but 'j' has type 'i32'.
             take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
                  ^
-other location (File "backend/cn/lib/compile.ml", line 1608, characters 38-45)  warning: 'focus' expects a 'u64', but 'read_&i2' with type 'i32' was provided. This will become an error in the future.
+other location (File "backend/cn/lib/compile.ml", line 1607, characters 38-45)  warning: 'focus' prefers a 'u64', but 'read_&i2' has type 'i32'.
 
-other location (File "backend/cn/lib/compile.ml", line 1608, characters 38-45)  warning: 'focus' expects a 'u64', but 'read_&idx0' with type 'i32' was provided. This will become an error in the future.
+other location (File "backend/cn/lib/compile.ml", line 1607, characters 38-45)  warning: 'focus' prefers a 'u64', but 'read_&idx0' has type 'i32'.
 
 [1/2]: cn_get_num_nodes -- pass
 [2/2]: lookup_rec -- pass

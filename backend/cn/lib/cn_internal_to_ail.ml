@@ -1638,7 +1638,7 @@ let generate_map_get sym =
   [ (decl, def) ]
 
 
-let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
+let cn_to_ail_datatype ?(first = false) (cn_datatype : _ cn_datatype)
   : Locations.t * A.sigma_tag_definition list
   =
   let enum_sym = generate_sym_with_suffix cn_datatype.cn_dt_name in
@@ -1718,7 +1718,7 @@ let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
   (cn_datatype.cn_dt_magic_loc, enum :: structs)
 
 
-let generate_datatype_equality_function (cn_datatype : cn_datatype)
+let generate_datatype_equality_function (cn_datatype : _ cn_datatype)
   : (A.sigma_declaration * 'a A.sigma_function_definition) list
   =
   (*
@@ -1856,12 +1856,12 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype)
   [ (decl, def) ]
 
 
-let generate_datatype_map_get (cn_datatype : cn_datatype) =
+let generate_datatype_map_get (cn_datatype : _ cn_datatype) =
   let cn_sym = cn_datatype.cn_dt_name in
   generate_map_get cn_sym
 
 
-let generate_datatype_default_function (cn_datatype : cn_datatype) =
+let generate_datatype_default_function (cn_datatype : _ cn_datatype) =
   let cn_sym = cn_datatype.cn_dt_name in
   let fn_str = "default_struct_" ^ Sym.pp_string cn_sym in
   let cn_struct_ctype = C.(Struct cn_sym) in

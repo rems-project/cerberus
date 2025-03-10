@@ -2,10 +2,10 @@ return code: 0
 tests/cn/get_from_array.c:16:5: warning: experimental keyword 'cn_function' (use of experimental features is discouraged)
 /*@ cn_function global_array_width; @*/
     ^~~~~~~~~~~ 
-tests/cn/get_from_array.c:24:8: warning: 'each' expects a 'u64', but 'i' with type 'i32' was provided. This will become an error in the future.
+tests/cn/get_from_array.c:24:8: warning: 'each' prefers a 'u64', but 'i' has type 'i32'.
   take Arr = each (i32 i; 0i32 <= i && i < global_array_width ())
        ^
-tests/cn/get_from_array.c:40:23: warning: 'focus' expects a 'u64', but '(i32)idx' with type 'i32' was provided. This will become an error in the future.
+tests/cn/get_from_array.c:40:23: warning: 'focus' prefers a 'u64', but '(i32)idx' has type 'i32'.
   /*@ focus RW<int>, ((i32) idx); @*/
                       ^~~~~~~~~ 
 [1/2]: get_global_array_width_for_cn -- pass

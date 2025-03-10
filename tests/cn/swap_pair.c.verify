@@ -1,14 +1,14 @@
 return code: 0
-tests/cn/swap_pair.c:4:10: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
+tests/cn/swap_pair.c:4:10: warning: 'each' prefers a 'u64', but 'j' has type 'i32'.
     take pairStart = each (i32 j; 0i32 <= j && j < 2i32) {RW(array_shift(pair_p, j))};
          ^
-tests/cn/swap_pair.c:6:10: warning: 'each' expects a 'u64', but 'j' with type 'i32' was provided. This will become an error in the future.
+tests/cn/swap_pair.c:6:10: warning: 'each' prefers a 'u64', but 'j' has type 'i32'.
     take pairEnd = each (i32 j; 0i32 <= j && j < 2i32) {RW(array_shift(pair_p, j))};
          ^
-tests/cn/swap_pair.c:11:38: warning: 'focus' expects a 'u64', but '0'i32' with type 'i32' was provided. This will become an error in the future.
+tests/cn/swap_pair.c:11:38: warning: 'focus' prefers a 'u64', but '0'i32' has type 'i32'.
     /*@ focus RW<unsigned long int>, 0i32; @*/
                                      ^
-tests/cn/swap_pair.c:13:38: warning: 'focus' expects a 'u64', but '1'i32' with type 'i32' was provided. This will become an error in the future.
+tests/cn/swap_pair.c:13:38: warning: 'focus' prefers a 'u64', but '1'i32' has type 'i32'.
     /*@ focus RW<unsigned long int>, 1i32; @*/
                                      ^
 tests/cn/swap_pair.c:14:9: warning: nothing instantiated

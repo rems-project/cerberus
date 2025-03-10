@@ -14,7 +14,6 @@ open CF.Cn
 open TypeErrors
 module STermMap = Map.Make (IndexTerms.Surface)
 module StringMap = Map.Make (String)
-module StringSet = Set.Make (String)
 
 type function_sig =
   { args : (Sym.t * BaseTypes.t) list;

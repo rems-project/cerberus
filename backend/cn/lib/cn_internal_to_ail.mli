@@ -69,11 +69,11 @@ val generate_datatype_equality_function
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
 val generate_datatype_map_get
-  :  Compile.cn_datatype ->
+  :  Cerb_frontend.Symbol.sym Cerb_frontend.Cn.cn_datatype ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
 val generate_datatype_default_function
-  :  Compile.cn_datatype ->
+  :  Cerb_frontend.Symbol.sym Cerb_frontend.Cn.cn_datatype ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
 val generate_struct_conversion_to_function

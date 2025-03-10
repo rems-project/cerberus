@@ -1045,19 +1045,19 @@ let warn_when_not_quantifier_bt
   (ident : string)
   (loc : Locations.t)
   (bt : BaseTypes.t)
-  (sym : Pp.document option)
+  (sym : Pp.document)
   : unit
   =
   if not (BT.equal bt quantifier_bt) then
     warn
       loc
       (squotes (string ident)
-       ^^^ !^"expects a"
+       ^^^ !^"prefers a"
        ^^^ squotes !^"u64"
        ^^ !^", but"
-       ^^^ (match sym with Some sym -> squotes sym ^^^ !^"with type" | None -> !^"type")
+       ^^^ (squotes sym ^^^ !^"has type")
        ^^^ squotes (BaseTypes.pp bt)
-       ^^^ !^"was provided. This will become an error in the future.")
+       ^^ dot)
 
 
 let owned_ct_ok loc (ct, init) =
@@ -1117,7 +1117,7 @@ module WReq = struct
       assert (BT.equal (snd p.q) qbt);
       (*normalisation does not change bit types. If this assertion fails, we have to
         adjust the later code to use qbt.*)
-      warn_when_not_quantifier_bt "each" loc qbt (Some (Sym.pp (fst p.q)));
+      warn_when_not_quantifier_bt "each" loc qbt (Sym.pp (fst p.q));
       let@ step = WIT.check loc (snd p.q) p.step in
       let@ step =
         match step with
@@ -1892,7 +1892,7 @@ module BaseTyping = struct
         "focus"
         (IT.get_loc it)
         (IT.get_bt it)
-        (Some (IndexTerms.pp it));
+        (IndexTerms.pp it);
       return (Extract (attrs, to_extract, it))
     | Unfold (f, its) ->
       let@ def = get_logical_function_def loc f in
