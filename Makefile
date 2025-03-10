@@ -299,7 +299,7 @@ install_lib: cerberus-lib
 	$(Q)dune install cerberus-lib
 
 .PHONY: install
-install: cerberus install_lib
+install: install_lib cerberus
 	@echo "[DUNE] install cerberus"
 	$(Q)dune install cerberus
 
