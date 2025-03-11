@@ -73,7 +73,6 @@ type annot =
   | Aattrs of attributes (* C2X attributes *)
   | Atypedef of Symbol.sym (* (TODO: I don't like but hey)
                               must only be used on a ctype to indicate it is a unfolding of a typedef *)
-  | Anot_explode (* tell the a-normalisation not to explode if-then-else *)
   | Alabel of label_annot
   | Acerb of cerb_attribute
   | Avalue of value_annot
@@ -118,8 +117,6 @@ let rec get_loc annots =
     | (Aattrs _ :: annots') ->
         get_loc annots'
     | (Atypedef _ :: annots') ->
-        get_loc annots'
-    | (Anot_explode :: annots') ->
         get_loc annots'
     | (Alabel _ :: annots') ->
         get_loc annots'
@@ -184,8 +181,6 @@ let rec get_attrs annots =
        | Just (Attrs attributes') -> Just (Attrs (attributes ++ attributes'))
        | Nothing -> Just (Attrs attributes)       
        end
-    | (Anot_explode :: annots') ->
-        get_attrs annots'
     | (Alabel _ :: annots') ->
         get_attrs annots'
     | (Acerb _ :: annots') ->
@@ -280,8 +275,6 @@ let rec get_uid annots =
         get_uid annots'
     | (Aattrs _ :: annots') ->
         get_uid annots'
-    | (Anot_explode :: annots') ->
-        get_uid annots'
     | (Alabel _ :: annots') ->
         get_uid annots'
     | (Acerb _ :: annots') ->
@@ -295,18 +288,6 @@ let rec get_uid annots =
     | (Aexpr :: annots') ->
         get_uid annots'
   end
-
-
-(* adapting code from get_loc *)
-val     explode: list annot -> bool
-let rec explode annots =
-  match annots with
-  | Anot_explode :: _ -> false
-  | _ :: annots -> explode annots
-  | [] -> true
-  end
-
-
 
 
 val is_return: list annot -> bool

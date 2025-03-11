@@ -66,17 +66,6 @@ let maybe_print_location (annot: Annot.annot list) : P.document =
       | _ ->
           P.empty
 
-let maybe_print_explode_annot (annot: Annot.annot list) : P.document =
-  if not show_explode_annot then
-    P.empty
-  else
-    match Annot.explode annot with
-      | false ->
-          !^ "{- not-explode -}" ^^ P.space
-      | _ ->
-          P.empty
-
-
 let precedence_pexpr = function
   | PEundef _
   | PEerror _
@@ -444,7 +433,6 @@ let pp_pexpr pe =
     let prec' = precedence_pexpr pe in
     let pp z = P.group (pp prec' z) in
     (maybe_print_location annot) ^^
-    (maybe_print_explode_annot annot) ^^
     (if compare_precedence prec' prec then fun z -> z else P.parens)
     begin P.group begin match pe with
       | PEundef (_, ub) ->
@@ -596,9 +584,6 @@ let rec pp_expr expr =
                   end ^^ acc
                 else
                   acc
-            | Anot_explode ->
-               (* !^"{-not-explode-}" ^^  *)
-               acc
             | Alabel _ -> 
                acc
             | Acerb _ ->
