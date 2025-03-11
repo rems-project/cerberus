@@ -612,7 +612,6 @@ let rec pp_annot_t = function
   | Annot.Abmc bmc -> pp_constructor "Abmc" [ pp_bmc_annot bmc ]
   | Annot.Aattrs attrs -> pp_constructor "Aattrs" [ pp_attributes attrs ]
   | Annot.Atypedef sym -> pp_constructor "Atypedef" [ pp_symbol sym ]
-  | Annot.Anot_explode -> pp_constructor0 "Anot_explode"
   | Annot.Alabel la -> pp_constructor "Alabel" [ pp_label_annot la ]
   | Annot.Acerb ca -> pp_constructor "Acerb" [ pp_cerb_attribute ca ]
   | Annot.Avalue va -> pp_constructor "Avalue" [ pp_value_annot va ]

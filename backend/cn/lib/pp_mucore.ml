@@ -494,7 +494,6 @@ module Make (Config : CONFIG) = struct
     | Abmc annot -> (match annot with Abmc_id id -> [ !^(string_of_int id) ])
     | Atypedef sym -> [ pp_symbol sym ]
     | Aattrs _ -> [ !^"TODO(Aattrs)" ]
-    | Anot_explode -> [ !^"not-explode" ]
     | Alabel _ -> [ !^"TODO(label)" ]
     | Acerb _ -> []
     | Avalue (Ainteger ity) -> [ !^"type" ^^^ Pp_core_ctype.pp_integer_ctype ity ]

@@ -178,7 +178,6 @@ module CerbTagDefs = struct
     | Abmc ba      -> Abmc (toCoq_annot ba)
     | Aattrs atr   -> Aattrs (toCoq_attributes atr)
     | Atypedef s   -> Atypedef (toCoq_Symbol_sym s)
-    | Anot_explode -> Anot_explode
     | Alabel la    -> Alabel (toCoq_label_annot la)
     | Acerb ca -> Acerb (toCoq_cerb_attribute ca)
     | Avalue va -> Avalue (toCoq_value_annot va)
@@ -765,7 +764,6 @@ module CHERIMorello : Memory = struct
   | Abmc ba      -> Abmc (fromCoq_annot ba)
   | Aattrs atr   -> Aattrs (fromCoq_attributes atr)
   | Atypedef s   -> Atypedef (fromCoq_Symbol_sym s)
-  | Anot_explode -> Anot_explode
   | Alabel la    -> Alabel (fromCoq_label_annot la)
   | Acerb ca     -> Acerb (fromCoq_cerb_attribute ca)
   | Avalue va     -> Avalue (fromCoq_value_annot va)
