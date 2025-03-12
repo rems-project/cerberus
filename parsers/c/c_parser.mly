@@ -1867,7 +1867,7 @@ prim_expr:
 | CN_MEMBER_SHIFT LPAREN base=expr COMMA member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( region ($startpos, $endpos) (pointCursor $startpos($1))
                                , CNExpr_membershift (base, None, member))) }
-| CN_MEMBER_SHIFT LT tag=cn_variable GT LPAREN base=expr COMMA member=cn_variable RPAREN
+| CN_MEMBER_SHIFT LT tag=ctype GT LPAREN base=expr COMMA member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( region ($startpos, $endpos) (pointCursor $startpos($1))
                                , CNExpr_membershift (base, Some tag, member))) }
 | ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
