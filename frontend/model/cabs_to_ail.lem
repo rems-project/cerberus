@@ -4245,14 +4245,11 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_membershift e Nothing memb ->
       desugar_cn_expr e >>= fun e ->
       E.return (CNExpr_membershift e Nothing memb)
-    | CNExpr_membershift e (Just struct_tag) memb ->
-      E.resolve_extraordinary_identifier struct_tag E.Namespace_tag >>= function
-          | Just (_, (tag_sym, _)) ->
-              desugar_cn_expr e >>= fun e ->
-              E.return (CNExpr_membershift e (Just tag_sym) memb)
-          | Nothing ->
-              E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
-      end
+    | CNExpr_membershift e ct memb ->
+      desugar_maybe desugar_type_name ct >>= fun ct_tup ->
+      let ct = Maybe.map (fun (_, ct) -> ct) ct_tup in
+      desugar_cn_expr e >>= fun e ->
+      E.return (CNExpr_membershift e ct memb)
     | CNExpr_addr nm ->
         CNExpr_addr <$> cn_resolve_ordinary_id_other loc nm
     | CNExpr_cast ty e ->

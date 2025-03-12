@@ -104,7 +104,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_binop of cn_binop * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_sizeof of 'ty
   | CNExpr_offsetof of 'a * Symbol.identifier
-  | CNExpr_membershift of cn_expr 'a 'ty * maybe 'a * Symbol.identifier
+  | CNExpr_membershift of cn_expr 'a 'ty * maybe 'ty * Symbol.identifier
   | CNExpr_addr of 'a
   | CNExpr_cast of cn_base_type 'a * cn_expr 'a 'ty
   | CNExpr_array_shift of cn_expr 'a 'ty * maybe 'ty * cn_expr 'a 'ty

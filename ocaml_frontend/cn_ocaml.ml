@@ -205,7 +205,7 @@ module MakePp (Conf: PP_CN) = struct
                 P.squotes (pp_identifier member))
       | CNExpr_membershift (e, ty_tag, member) ->
           Dnode (pp_ctor "CNExpr_membershift", [dtree_of_cn_expr e]
-                                               @ (Option.fold ty_tag ~none:[] ~some:(fun ty_tag -> [Dleaf (P.squotes @@ Conf.pp_ident ty_tag)]))
+                                               @ (Option.fold ty_tag ~none:[] ~some:(fun ctype -> [Dleaf (Conf.pp_ty ctype)]))
                                                @ [Dleaf (P.squotes (pp_identifier member))])
       | CNExpr_addr nm ->
           Dnode (pp_ctor "CNExpr_addr", [Dleaf (Conf.pp_ident nm)])
