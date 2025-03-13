@@ -327,7 +327,7 @@ type asm_qualifier =
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_function> cn_function
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_predicate> cn_predicate
 %type<(Symbol.identifier) Cn.cn_datatype> cn_datatype
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_clauses> clauses
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_clauses> clauses if_clauses
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_clause> clause
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_resource> resource
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_pred> pred
@@ -2318,12 +2318,18 @@ cons_args:
     { xs }
 
 
+if_clauses:
+| LBRACE cs= clauses RBRACE
+    { cs }
+| IF LPAREN e= expr RPAREN LBRACE c= clause SEMICOLON RBRACE ELSE cs = if_clauses
+    { Cerb_frontend.Cn.CN_if (region $loc noCursor, e, c, cs) }
+;
+
 clauses:
 | c= clause SEMICOLON
     { Cerb_frontend.Cn.CN_clause (region $loc noCursor, c) }
-| IF LPAREN e= expr RPAREN LBRACE c= clause SEMICOLON RBRACE ELSE LBRACE cs= clauses RBRACE
-    { Cerb_frontend.Cn.CN_if (region $loc noCursor, e, c, cs) }
-;
+| c= if_clauses
+    { c }
 
 cn_option_func_body:
 | cn_func_body=delimited(LBRACE, expr, RBRACE)
