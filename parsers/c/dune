@@ -9,7 +9,7 @@
 
 (ocamllex c_lexer)
 (menhir
- (flags (--external-tokens Tokens --explain --exn-carries-state))
+ (flags (--external-tokens Tokens --exn-carries-state))
  (modules c_parser))
 
 ;; integrating and checking .messages file
