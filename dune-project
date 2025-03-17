@@ -1,5 +1,5 @@
-(lang dune 3.8)
+(lang dune 3.13)
 (name cerberus)
 
-(using menhir 2.0)
+(using menhir 3.0)
 (using coq 0.8) 
