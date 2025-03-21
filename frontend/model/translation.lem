@@ -817,13 +817,14 @@ let translate_assignment_conversion translate_expr stdlib ty1 e2 =
 
 val translate_function_call:
   Loc.t ->
+  list Annot.annot ->
   bool -> (* is_used *)
   (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
   translation_stdlib ->
   A.expression GenTypes.genTypeCategory ->
   list (A.expression GenTypes.genTypeCategory) ->
   E.elabM (C.expr unit)
-let translate_function_call loc is_used translate_expr stdlib e es =
+let translate_function_call loc annots is_used translate_expr stdlib e es =
   (* TODO: is_used_pe is commented out because it requires some changes to CN to support it.
       But as a result currently a non-void function missing a return statement is deemed UB even when
       the value of the function call is NOT used by the caller. (which is explicitly excluded from the UB by the STD) *)
@@ -1030,7 +1031,7 @@ match callconv with
             (List.zip varg_ptr_sym_pats (List.reverse rev_variadic_core_creates))
             (Caux.mk_sseq_e call_ret_wrp.E.sym_pat
               (* do the function call *)
-              (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
+              (Caux.mk_ccall_e_ annots (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
                 (let (_, varg_ptr_sym_pes) = List.splitAt (List.length expect_params) arg_ptr_sym_pes in
                   let varargs_ty_pes =
                     List.map (fun (ty_pe, pe) -> Caux.mk_tuple_pe [ty_pe; pe])
@@ -1064,7 +1065,7 @@ match callconv with
             (List.zip arg_ptr_sym_pats (List.reverse rev_core_creates ++ List.reverse rev_variadic_core_creates))
             (Caux.mk_sseq_e call_ret_wrp.E.sym_pat
               (* do the function call *)
-              (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
+              (Caux.mk_ccall_e_ annots (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
                 (let (arg_pes, vararg_pes) = List.splitAt (List.length expect_params) arg_ptr_sym_pes in
                   let varargs_ty_pes =
                     List.map (fun (ty_pe, pe) -> Caux.mk_tuple_pe [ty_pe; pe])
@@ -1101,13 +1102,13 @@ else
           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
 match callconv with
 | C.Inner_arg_callconv ->
-          (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe ((*is_used_pe :: *)List.reverse rev_cn_core_args))
+          (Caux.mk_ccall_e_ annots (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe ((*is_used_pe :: *)List.reverse rev_cn_core_args))
 | C.Normal_callconv ->
             (* create temporary object *)
             (Caux.mk_sseqs (List.zip arg_ptr_sym_pats (List.reverse rev_core_creates))
             (Caux.mk_sseq_e call_ret_wrp.E.sym_pat
               (* do the function call *)
-              (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
+              (Caux.mk_ccall_e_ annots (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
               
               
             (
@@ -2591,7 +2592,7 @@ end
                     begin
                       Caux.mk_if_e_ []
                         (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe ret_ty) ret_wrp.E.sym_pe)
-                          (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) fun_wrp.E.sym_pe [(*Caux.mk_boolean_pe is_used*)])
+                          (Caux.mk_ccall_e_ std_annots (Caux.mk_ail_ctype_pe (ctype_of e)) fun_wrp.E.sym_pe [(*Caux.mk_boolean_pe is_used*)])
                           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
                     end
                     (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
@@ -2600,7 +2601,7 @@ end
           end
       
       | A.AilEcall e es ->
-          translate_function_call loc is_used self stdlib e es
+          translate_function_call loc std_annots is_used self stdlib e es
       
       | A.AilEassert e ->
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
