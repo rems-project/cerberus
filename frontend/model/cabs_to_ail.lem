@@ -2223,9 +2223,9 @@ and desugar_declarator fundef (Declarator ptr_decltor_opt ddecltor) =
 
 (* val     desugar_expression: cabs_expression -> E.desugM (expression unit) *)
 and desugar_expression (CabsExpression loc expr) =
-  AnnotatedExpression () [] loc <$>
   match expr with
     | CabsEident ident ->
+  AnnotatedExpression () [] loc <$>
         let (Symbol.Identifier _ str) = ident in (* DEBUG *)
         E.print_debugM 2 (fun () -> "DESUGARING, CabsEident: " ^ str) >>= fun () -> (* DEBUG *)
 STD_ "§6.5.1#2" $
@@ -2266,41 +2266,55 @@ STD_ "§6.5.1#2" $
         end
     
     | CabsEconst cst ->
-        AilEconst <$> desugar_cabs_constant loc cst
+  AnnotatedExpression () [] loc <$>
+        (AilEconst <$> desugar_cabs_constant loc cst)
     | CabsEstring lit ->
+  AnnotatedExpression () [] loc <$>
         E.return (AilEstr $ translate_cabs_string_literal lit)
     | CabsEgeneric e gas ->
-        AilEgeneric <$> desugar_expression e
-                    <*> E.mapM desugar_generic_association gas
+  AnnotatedExpression () [] loc <$>
+        (AilEgeneric <$> desugar_expression e
+                     <*> E.mapM desugar_generic_association gas)
     
     | CabsEsubscript e1 e2 ->
-STD_ "§6.5.2.1#2, sentence 2" $
+  AnnotatedExpression () [] loc <$>
+(STD_ "§6.5.2.1#2, sentence 2" $
         AilEunary Indirection <$> (
           AnnotatedExpression () [] loc <$>
           (AilEbinary <$> desugar_expression e1
                       <*> E.return (Arithmetic Add)
                       <*> desugar_expression e2)
-        )
+        ))
     | CabsEcall e es _annots (* FIXME *) ->
+  AnnotatedExpression () [] loc <$>
         (* TODO: STD check + annot *)
-        AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es
+        (AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es)
     | CabsEmemberof e ident ->
+  AnnotatedExpression () [] loc <$>
         (* NOTE: we don't desugar the field name here because we need to know the type of [e] ... *)
-        AilEmemberof <$> desugar_expression e <*> (E.return ident)
+        (AilEmemberof <$> desugar_expression e <*> (E.return ident))
     | CabsEmemberofptr e ident ->
+  AnnotatedExpression () [] loc <$>
         (* NOTE: we don't desugar the field name here because we need to know the type of [e] ... *)
-        AilEmemberofptr <$> desugar_expression e <*> (E.return ident)
+        (AilEmemberofptr <$> desugar_expression e <*> (E.return ident))
     | CabsEpostincr e ->
-        AilEunary PostfixIncr <$> desugar_expression e
+  AnnotatedExpression () [] loc <$>
+        (AilEunary PostfixIncr <$> desugar_expression e)
     | CabsEpostdecr e ->
-        AilEunary PostfixDecr <$> desugar_expression e
+  AnnotatedExpression () [] loc <$>
+        (AilEunary PostfixDecr <$> desugar_expression e)
     | CabsEcompound tyname inits ->
+  AnnotatedExpression () [] loc <$>
+  begin
         desugar_type_name tyname >>= fun (qs, ty)    ->
         E.is_inside_function     >>= fun inside_func ->
         (* NOTE: there is no need to do the check for STD §6.7.9#3 here, because of the ail typing *)
         wip_desugar_initializer_ loc (if inside_func then Automatic else Static) ty (Init_list loc inits) >>= fun (ty', d_e) ->
         E.return (AilEcompound qs ty' d_e)
+      end
     | CabsEpreincr e ->
+  AnnotatedExpression () [] loc <$>
+  begin
 STD_ "§6.5.3.1#2, sentence 3" $
 (*
         desugar_expression e >>= fun d_e ->
@@ -2309,7 +2323,10 @@ STD_ "§6.5.3.1#2, sentence 3" $
         (* TODO: temporary hack, while the elab doesn't support compound assigns *)
         desugar_expression e >>= fun d_e ->
         E.return $ AilEassign d_e (AnnotatedExpression () [] loc (AilEbinary d_e (Arithmetic Add) oneAil))
+          end
     | CabsEpredecr e ->
+  AnnotatedExpression () [] loc <$>
+  begin
 STD_ "§6.5.3.1#3" $
 (*
         desugar_expression e >>= fun d_e ->
@@ -2318,16 +2335,23 @@ STD_ "§6.5.3.1#3" $
         (* TODO: temporary hack, while the elab doesn't support compound assigns *)
         desugar_expression e >>= fun d_e ->
         E.return $ AilEassign d_e (AnnotatedExpression () [] loc (AilEbinary d_e (Arithmetic Sub) oneAil))
-
       (* (§6.5.3.3#5) *)
+end
     | CabsEunary CabsNot e ->
+  AnnotatedExpression () [] loc <$>
+  begin
         desugar_expression e >>= fun d_e ->
         E.return $ AilEbinary zeroAil Eq d_e
+      end
     
     | CabsEunary uop e ->
+  AnnotatedExpression () [] loc <$>
+  begin
         desugar_expression e >>= fun d_e ->
         E.return $ AilEunary (translate_unary_operator uop) d_e
+      end
     | CabsEsizeof_expr e ->
+  AnnotatedExpression () [] loc <$>
         if Global.isAgnostic () then
           E.fail loc (Errors.Desugar_NotYetSupported "sizeof(expr) in the implementation agnostic mode")
           (* NOTE: use to be
@@ -2347,28 +2371,44 @@ STD_ "§6.5.3.1#3" $
           end
     
     | CabsEsizeof_type tyname ->
+  AnnotatedExpression () [] loc <$>
+  begin
         (* TODO: STD check + annot *)
         desugar_type_name tyname >>= fun (qs, ty) ->
         E.return $ AilEsizeof qs ty
+      end
     | CabsEalignof tyname ->
+  AnnotatedExpression () [] loc <$>
+  begin
         (* TODO: STD check + annot *)
         desugar_type_name tyname >>= fun (qs, ty) ->
         E.return $ AilEalignof qs ty
+      end
     | CabsEcast tyname e ->
+  AnnotatedExpression () [] loc <$>
+  begin
         (* TODO: check *)
         desugar_type_name tyname >>= fun (qs, ty) ->
         desugar_expression e     >>= fun d_e      ->
         E.return (AilEcast qs ty d_e)
+      end
     
     | CabsEbinary bop e1 e2 ->
+  AnnotatedExpression () [] loc <$>
+  begin
         AilEbinary <$> desugar_expression e1
                    <*> E.return (translate_binary_operator bop)
                    <*> desugar_expression e2
+                 end
     | CabsEcond e1 e2 e3 ->
+  AnnotatedExpression () [] loc <$>
+  begin
         AilEcond <$> desugar_expression e1
                  <*> (Just <$> desugar_expression e2)
                  <*> desugar_expression e3
+               end
     | CabsEassign aop e1 e2 ->
+  AnnotatedExpression () [] loc <$>
         match translate_assignment_operator aop with
           | Nothing  ->
               AilEassign <$> desugar_expression e1
@@ -2384,16 +2424,27 @@ STD_ "§6.5.3.1#3" $
 *)
         end 
     | CabsEcomma e1 e2 ->
+  AnnotatedExpression () [] loc <$>
+  begin
         AilEbinary <$> desugar_expression e1
                    <*> E.return Comma
                    <*> desugar_expression e2
+                 end
     | CabsEassert e ->
+  AnnotatedExpression () [] loc <$>
+  begin
         AilEassert <$> desugar_expression e
+      end
     | CabsEoffsetof tyname ident ->
+  AnnotatedExpression () [] loc <$>
+  begin
         (* TODO: do something with the qualifiers? *)
         desugar_type_name tyname >>= fun (qs, ty) ->
         E.return (AilEoffsetof ty ident)
+          end
     | CabsEva_start e ident ->
+  AnnotatedExpression () [] loc <$>
+  begin
         desugar_expression e >>= fun d_e ->
         desugar_expression
           (CabsExpression (Loc.locOf ident) (CabsEident ident)) >>= function
@@ -2403,33 +2454,57 @@ STD_ "§6.5.3.1#3" $
               (* TODO: is this a fatal error? *)
               error "the second operand of va_start() was not paramN"
         end
+end
     | CabsEva_copy e1 e2 ->
+  AnnotatedExpression () [] loc <$>
+  begin
         desugar_expression e1 >>= fun d_e1 ->
         desugar_expression e2 >>= fun d_e2 ->
         E.return (AilEva_copy d_e1 d_e2)
+      end
     | CabsEva_arg e tyname ->
+  AnnotatedExpression () [] loc <$>
+    begin
         (* TODO: do something with the qualifiers? *)
         desugar_expression e     >>= fun d_e      ->
         desugar_type_name tyname >>= fun (qs, ty) ->
         E.return (AilEva_arg d_e ty)
+end
     | CabsEva_end e ->
+  AnnotatedExpression () [] loc <$>
+  begin
         desugar_expression e     >>= fun d_e      ->
         E.return (AilEva_end d_e)
+      end
     | CabsEprint_type e ->
+  AnnotatedExpression () [] loc <$>
+  begin
         AilEprint_type <$> desugar_expression e
+      end
     | CabsEbmc_assume e ->
+  AnnotatedExpression () [] loc <$>
+  begin
         AilEbmc_assume <$> desugar_expression e
+      end
     | CabsEgcc_statement ss ->
+  AnnotatedExpression () [] loc <$>
+  begin
         let ctx = <| cont_ident_opt= Nothing |> in
         desugar_block_statement (desugar_statement_aux ctx) ss >>= fun (bs, d_ss) ->
         E.return (AilEgcc_statement bs d_ss) 
+      end
     | CabsEcondGNU e1 e3 ->
+  AnnotatedExpression () [] loc <$>
+  begin
         (* TODO: add extension warning *)
         AilEcond
           <$> desugar_expression e1
           <*> E.return Nothing
           <*> desugar_expression e3
+        end
     | CabsEbuiltinGNU (GNUbuiltin_types_compatible_p tyname1 tyname2) ->
+  AnnotatedExpression () [] loc <$>
+  begin
         (* TODO: add extension warning *)
         (* the GCC documentation says:
             This built-in function returns 1 if the unqualified versions of the types type1
@@ -2441,8 +2516,11 @@ STD_ "§6.5.3.1#3" $
           E.return (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
         else
           E.return (AilEconst (ConstantInteger (IConstant 0 Octal Nothing)))
+      end
     | CabsEbuiltinGNU (GNUbuiltin_choose_expr const_e e1 e2) ->
+  AnnotatedExpression () [] loc <$>
         (* TODO: add extension warning *)
+  begin
         desugar_expression const_e         >>= fun d_e ->
         is_integer_constant_expression d_e >>= function
           | false ->
@@ -2455,6 +2533,7 @@ STD_ "§6.5.3.1#3" $
                 desugar_expression e2
         end >>= fun (AnnotatedExpression _ _ _ expr_) ->
         E.return expr_
+  end
   end
 
 and desugar_generic_association gas =
