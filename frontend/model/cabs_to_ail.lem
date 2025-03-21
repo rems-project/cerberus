@@ -1762,7 +1762,7 @@ and register_enumerators tag_loc tag_sym enums =
     end >>= fun () ->
     let d_e =
       AilEannot Ctype.signed_int (
-        AnnotatedExpression () ["§6.7.2.2#3"] loc (
+        AnnotatedExpression () [Annot.Astd "§6.7.2.2#3"] loc (
           AilEconst (ConstantInteger (IConstant n Decimal Nothing))
         )
       ) in
