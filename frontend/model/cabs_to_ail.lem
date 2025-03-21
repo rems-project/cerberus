@@ -2282,9 +2282,9 @@ STD_ "§6.5.2.1#2, sentence 2" $
             (AilEbinary <$> desugar_expression e1
                         <*> E.return (Arithmetic Add)
                         <*> desugar_expression e2)))
-    | CabsEcall e es _annots (* FIXME *) ->
+    | CabsEcall e es attrs ->
         (* TODO: STD check + annot *)
-        AnnotatedExpression () [] loc <$>
+        AnnotatedExpression () [Annot.Aattrs attrs] loc <$>
           (AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es)
     | CabsEmemberof e ident ->
         (* NOTE: we don't desugar the field name here because we need to know the type of [e] ... *)
