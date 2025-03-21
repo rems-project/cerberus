@@ -313,14 +313,3 @@ let set_loc loc annots =
     end) annots
   in
   Aloc loc :: annots'
-
-
-
-
-
-
-
-(* CP: not sure where best to put this *)
-type to_pack_unpack = 
-  | TPU_Struct of Symbol.sym
-  | TPU_Predicate of Symbol.identifier
