@@ -187,7 +187,7 @@ and generic_association 'a =
   | AilGAdefault of expression 'a
 
 and expression 'a [name = "e*"] =
-  | AnnotatedExpression of 'a * list string * Loc.t * expression_ 'a
+  | AnnotatedExpression of 'a * list Annot.annot * Loc.t * expression_ 'a
 
 and statement_ 'a [name="s*"] =
   | AilSskip
