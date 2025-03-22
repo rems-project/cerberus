@@ -254,10 +254,13 @@ let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
          ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
 
 let rec dtree_of_expression pp_annot expr =
-  let rec self (AnnotatedExpression (annot, std_annots, loc, expr_)) =
+  let rec self (AnnotatedExpression (annot, annots, loc, expr_)) =
+    let module E = Stdlib.Either in
+    let is_attr = function Annot.Aattrs (Annot.Attrs attrs) -> E.Left attrs | annot -> E.Right annot in
+    let attrs, rest = List.partition_map is_attr annots in
+    let attrs = Annot.Attrs (List.concat attrs) in
     let pp_std_annot =
-      (* FIXME *)
-      let std_annots = List.filter_map (function Annot.Astd str -> Some str | _ -> None) std_annots in
+      let std_annots = List.filter_map (function Annot.Astd str -> Some str | _ -> None) rest in
       match std_annots with
         | [] -> P.empty
         | _ -> pp_ansi_format [Bold] (fun () -> P.brackets (semi_list P.string std_annots)) in
@@ -323,8 +326,10 @@ let rec dtree_of_expression pp_annot expr =
                 , (*add_std_annot*) [self e] )
       | AilEcall (e, es) ->
           let d_ctor = pp_expr_ctor "AilEcall" in
-          Dnode ( d_ctor
-                , (*add_std_annot*) (self e :: List.map self es) )
+          with_attributes attrs begin
+            Dnode ( d_ctor
+                  , (*add_std_annot*) (self e :: List.map self es) )
+          end
       | AilEassert e ->
           let d_ctor = pp_expr_ctor "AilEassert" in
           Dnode ( d_ctor
