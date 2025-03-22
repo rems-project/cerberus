@@ -1636,7 +1636,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->
-  let annots = List.map Annot.Astd annots in
+  let annots = List.append std_annots  $ List.map Annot.Astd annots in
   perform_decays sigm ctx (AnnotatedExpression gtc annots loc expr_')
 
 
