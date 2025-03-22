@@ -191,11 +191,13 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
               , let d_e1 = dtree_of_cabs_expression e1 in
                 let d_e2 = dtree_of_cabs_expression e2 in
                [ d_e1; d_e2 ] )
-    | CabsEcall (e, es, _attrs (* FIXME *)) ->
-        Dnode ( pp_stmt_ctor "CabsEcall" ^^^ d_loc
-              , let d_e  = dtree_of_cabs_expression e in
-                let d_es = dtree_of_list dtree_of_cabs_expression es in
-                [ d_e; d_es ] )
+    | CabsEcall (e, es, attrs) ->
+        with_attributes attrs begin
+          Dnode ( pp_stmt_ctor "CabsEcall" ^^^ d_loc
+                , let d_e  = dtree_of_cabs_expression e in
+                  let d_es = dtree_of_list dtree_of_cabs_expression es in
+                  [ d_e; d_es ])
+        end
     | CabsEassert e ->
         Dnode (pp_stmt_ctor "CabsEassert" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEoffsetof (tyname, ident) ->
