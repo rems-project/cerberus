@@ -1,8 +1,0 @@
-return code: 1
-tests/cn/arith_type.error.c:8:21: error: Type error
- let x = negate() + true;
-                    ^
-Expression 'true' has type 'boolean'.
-I expected it to have type 'integer' because of tests/cn/arith_type.error.c:8:10:
- let x = negate() + true;
-         ~~~~~~^~ 

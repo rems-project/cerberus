@@ -1,8 +1,0 @@
-return code: 1
-[1/2]: f -- fail
-[2/2]: main -- pass
-tests/cn_vip_testsuite/pointer_from_integer_1i.annot.c:15:3: error: Missing resource for writing
-  *p=7;
-  ~~^~ 
-Resource needed: W<signed int>(intToPtr)
-State file: file:///tmp/state__pointer_from_integer_1i.annot.c__f.html

@@ -1,9 +1,0 @@
-return code: 1
-[1/1]: f -- fail
-tests/cn/spec_null_shift.error.c:5:1: error: Unprovable constraint
-void f(int *p, int *q)
-~~~~~^~~~~~~~~~~~~~~~~ 
-Constraint from tests/cn/spec_null_shift.error.c:13:5:
-    ptr_eq(x, NULL) || ptr_eq(y, NULL) || (u64) x == 1u64 || (u64) y == 2u64;
-    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-State file: file:///tmp/state__spec_null_shift.error.c__f.html

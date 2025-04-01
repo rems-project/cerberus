@@ -1,8 +1,0 @@
-return code: 1
-tests/cn/struct_updates2.error.c:12:24: error: Type error
-    { x : 0 , y: 0 , ..bar }
-                       ^
-Expression 'bar' has type '{integer x,integer y}'.
-I expected it to have type 'struct' because of tests/cn/struct_updates2.error.c:12:5:
-    { x : 0 , y: 0 , ..bar }
-    ^~~~~~~~~~~~~~~~~~~~~~~~ 

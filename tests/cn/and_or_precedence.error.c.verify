@@ -1,9 +1,0 @@
-return code: 1
-[1/1]: g1 -- fail
-tests/cn/and_or_precedence.error.c:15:13: error: Unprovable constraint
-        /*@ assert (false); @*/
-            ^~~~~~~~~~~~~~~ 
-Constraint from tests/cn/and_or_precedence.error.c:15:13:
-        /*@ assert (false); @*/
-            ^~~~~~~~~~~~~~~ 
-State file: file:///tmp/state__and_or_precedence.error.c__g1.html

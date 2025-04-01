@@ -1,8 +1,0 @@
-return code: 1
-tests/cn/to_bytes.error.c:5:9: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-    /*@ to_bytes Alloc(p); @*/
-        ^~~~~~~~ 
-[1/1]: main -- fail
-tests/cn/to_bytes.error.c:5:9: error: byte conversion only supports W/RW
-    /*@ to_bytes Alloc(p); @*/
-        ^~~~~~~~~~~~~~~~~~ 

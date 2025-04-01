@@ -1,4 +1,0 @@
-return code: 1
-tests/cn/spec_accesses.error.c:5:10: error: the variable `y' is not declared
-accesses y;
-         ^

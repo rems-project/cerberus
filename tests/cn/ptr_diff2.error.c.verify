@@ -1,8 +1,0 @@
-return code: 1
-[1/2]: f -- fail
-[2/2]: main -- pass
-tests/cn/ptr_diff2.error.c:4:10: error: Pointer `p` needs allocation ID
-  return p - 1;
-         ~~^~~ 
-(UB missing short message): UB_CERB004_unspecified__pointer_add
-State file: file:///tmp/state__ptr_diff2.error.c__f.html

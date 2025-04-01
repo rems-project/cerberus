@@ -1,4 +1,0 @@
-return code: 0
-[1/3]: mod_no_parenthesis -- pass
-[2/3]: multiply_then_mod -- pass
-[3/3]: divide_multiply_mod_add_subtract -- pass

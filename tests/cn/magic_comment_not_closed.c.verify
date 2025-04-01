@@ -1,5 +1,0 @@
-return code: 0
-tests/cn/magic_comment_not_closed.c:1:19: warning: magic comment syntax at open but not close
-/*@ assert(true); */
-                  ^
-[1/1]: main -- pass

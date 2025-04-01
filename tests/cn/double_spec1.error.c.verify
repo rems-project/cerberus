@@ -1,7 +1,0 @@
-return code: 1
-tests/cn/double_spec1.error.c:7:1: error: double specification of foo
-int foo(int x)
-~~~~^~~~~~~~~~ 
-first specification at tests/cn/double_spec1.error.c:2:10:
-/*@ spec foo(i32 x);
-         ^

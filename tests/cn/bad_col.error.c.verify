@@ -1,5 +1,0 @@
-return code: 1
-tests/cn/bad_col.error.c:3:32: error: unexpected token after '+' and before 'function'
-parsing "add_expr": seen "add_expr PLUS", expecting "mul_expr"
-              x < 2147483647 + function; @*/
-                               ^~~~~~~~ 

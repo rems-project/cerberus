@@ -1,9 +1,0 @@
-return code: 1
-[1/1]: inc -- fail
-tests/cn/failing_postcond.error.c:5:5: error: Unprovable constraint
-    return x + 1;
-    ^~~~~~~~~~~~~ 
-Constraint from tests/cn/failing_postcond.error.c:3:13:
-    ensures return < 2147483647i32; @*/
-            ^~~~~~~~~~~~~~~~~~~~~~~ 
-State file: file:///tmp/state__failing_postcond.error.c__inc.html

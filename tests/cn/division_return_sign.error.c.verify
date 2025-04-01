@@ -1,8 +1,0 @@
-return code: 1
-tests/cn/division_return_sign.error.c:7:25: error: Type error
-    ensures return == x/y; @*/
-                        ^
-Expression 'y' has type 'u32'.
-I expected it to have type 'i32' because of tests/cn/division_return_sign.error.c:7:23:
-    ensures return == x/y; @*/
-                      ^

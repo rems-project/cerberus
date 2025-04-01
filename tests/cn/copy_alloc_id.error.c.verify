@@ -1,8 +1,0 @@
-return code: 1
-[1/2]: f -- fail
-[2/2]: main -- pass
-tests/cn/copy_alloc_id.error.c:4:12: error: Pointer `p` needs allocation ID
-  int* q = __cerbvar_copy_alloc_id(p_int + 0ULL, p);
-           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-(UB missing short message): UB_CERB004_unspecified__copy_alloc_id
-State file: file:///tmp/state__copy_alloc_id.error.c__f.html

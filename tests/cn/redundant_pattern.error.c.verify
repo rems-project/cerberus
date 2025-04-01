@@ -1,8 +1,0 @@
-return code: 1
-tests/cn/redundant_pattern.error.c:12:9: error: Redundant pattern
-        Cons { head : head , tail : tail } => { head + sum(tail) }
-        ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-covered by previous variable at tests/cn/redundant_pattern.error.c:11:9:
-        Nil => { 0 }
-        ^
-If this is meant to be an nullary constructor, write `Nil {}` instead

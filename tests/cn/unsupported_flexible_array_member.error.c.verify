@@ -1,4 +1,0 @@
-return code: 2
-tests/cn/unsupported_flexible_array_member.error.c:3:9: error: unsupported flexible array members
-    int y[];
-        ^ 

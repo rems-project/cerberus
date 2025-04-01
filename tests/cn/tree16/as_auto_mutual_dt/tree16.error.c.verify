@@ -1,5 +1,0 @@
-return code: 2
-tests/cn/tree16/as_auto_mutual_dt/tree16.error.c:30:21: error: unexpected token after 'list' and before '<'
-Please add error message for state 1014 to parsers/c/c_parser_error.messages
-  Node {i32 v, list <datatype tree> children}
-                    ^ 

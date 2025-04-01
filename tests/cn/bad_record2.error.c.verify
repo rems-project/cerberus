@@ -1,4 +1,0 @@
-return code: 2
-tests/cn/bad_record2.error.c:6:15: error: field `x' duplicated
-    { x: p.x, x: p.y }
-              ^

@@ -1,6 +1,0 @@
-{
-    "name": "no_annot",
-    "args": ["verify", "-DVIP", "-DNO_ROUND_TRIP", "--solver-type=cvc5" ],
-    "filter": "^(.*\\.c)$",
-    "timeout": 35
-}

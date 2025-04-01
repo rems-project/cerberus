@@ -1,8 +1,0 @@
-return code: 1
-tests/cn/bad_function_call.error.c:7:12: error: Type error
-    id_int(x)
-           ^
-Expression 'x' has type 'i32'.
-I expected it to have type 'integer' because of tests/cn/bad_function_call.error.c:2:1:
-function (integer) id_int(integer x) {
-^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 

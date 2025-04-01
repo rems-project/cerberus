@@ -27,7 +27,7 @@ endif
 normal: cerberus
 
 .PHONY: all
-all: cerberus cerberus-bmc cerberus-web cn #rustic
+all: cerberus cerberus-bmc cerberus-web #rustic
 
 .PHONY: full-build
 full-build: prelude-src
@@ -72,12 +72,6 @@ cerberus-bmc: prelude-src
 # rustic: prelude-src
 # 	@echo "[DUNE] $@"
 # 	$(Q)dune build $(DUNEFLAGS) cerberus.install rustic.install
-
-.PHONY: cn
-cn: prelude-src
-	@echo "[DUNE] $@"
-	$(Q)dune build $(DUNEFLAGS) cerberus-lib.install cn.install
-	@echo "\nDONE"
 
 cheri: prelude-src
 	@echo "[DUNE] cerberus-cheri"
@@ -164,7 +158,7 @@ LEM_CONC          = cmm_csem.lem cmm_op.lem linux.lem
 LEM_CN            = cn.lem cn_desugaring.lem
 
 LEM_SRC_AUX       = $(LEM_PRELUDE) \
-										$(LEM_CN) \
+                    $(LEM_CN) \
                     $(LEM_CABS) \
                     $(addprefix ail/, $(LEM_AIL)) \
                     $(LEM_CTYPE_AUX) \
@@ -308,39 +302,7 @@ install-cheri: install_lib
 	@echo "[DUNE] install cerberus-cheri"
 	$(Q)dune install cerberus-cheri
 
-.PHONY: install_cn
-install_cn: install_lib cn
-	@echo "[DUNE] install cn"
-	$(Q)dune install cn
-
 .PHONY: uninstall
 uninstall: cerberus
 	@echo "[DUNE] uninstall cerberus"
 	$(Q)dune uninstall cerberus
-
-.PHONY: uninstall_cn
-uninstall_cn: cn
-	@echo "[DUNE] uninstall cn"
-	$(Q)dune uninstall cn
-
-.PHONY: cn-coq
-cn-coq:
-	@echo "[DUNE] cn-coq"
-	$(Q)dune build -p cerberus-lib,cn-coq
-
-.PHONY: cn-coq-install
-cn-coq-install: install_lib cn-coq
-	@echo "[DUNE] install cn-coq"
-	$(Q)dune install cn-coq
-
-.PHONY: cn-with-coq
-cn-with-coq: prelude-src
-	@echo "[DUNE] cerberus-lib,cn,cn-coq"
-	$(Q)dune build -p cerberus-lib,cn,cn-coq
-
-# Developement target to watch for changes in cn/lib and rebuild
-# e.g. to be used with vscode IDE
-.PHONY: cn-dev-watch
-cn-dev-watch: prelude-src
-	@echo "[DUNE] cn-dev-watch"
-	$(Q)dune build --watch -p cerberus-lib,cn,cn-coq

@@ -1,4 +1,0 @@
-return code: 1
-tests/cn/unary_negation.error.c:3:5: error: Value -129 does not fit i8
-    -129i8
-    ^~~~~~ 
