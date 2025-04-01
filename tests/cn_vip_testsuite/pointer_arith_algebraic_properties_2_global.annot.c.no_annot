@@ -1,7 +1,0 @@
-return code: 1
-[1/1]: main -- fail
-tests/cn_vip_testsuite/pointer_arith_algebraic_properties_2_global.annot.c:20:3: error: Missing resource for writing
-  *p = 11;  // CN VIP UB (no annot)
-  ~~~^~~~ 
-Resource needed: W<signed int>(intToPtr)
-State file: file:///tmp/state__pointer_arith_algebraic_properties_2_global.annot.c__main.html

@@ -1,5 +1,0 @@
-return code: 1
-tests/cn/bitwise_compl_type.error.c:3:18: error: Mismatched types.
-    /*@ assert (~0 == -1); @*/
-                 ^
-Expected value of type 'bitvector' but found value of type 'integer'

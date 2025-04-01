@@ -1,9 +1,0 @@
-return code: 1
-[1/1]: identity -- fail
-tests/cn/implies2.error.c:4:9: error: Unprovable constraint
-    /*@ assert((x == 0i32) implies (y == 1i32));@*/
-        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-Constraint from tests/cn/implies2.error.c:4:9:
-    /*@ assert((x == 0i32) implies (y == 1i32));@*/
-        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-State file: file:///tmp/state__implies2.error.c__identity.html

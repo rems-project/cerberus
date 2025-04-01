@@ -1,7 +1,0 @@
-(install
- (files
-  (libexec/cn-runtime-single-file.sh
-   as
-   runtime/libexec/cn-runtime-single-file.sh))
- (section libexec)
- (package cn))

@@ -1,4 +1,0 @@
-return code: 0
-[1/3]: x_mod_three -- pass
-[2/3]: x_mod_neg_three -- pass
-[3/3]: mod_first_operand_neg -- pass

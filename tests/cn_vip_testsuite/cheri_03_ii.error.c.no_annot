@@ -1,7 +1,0 @@
-return code: 1
-[1/1]: main -- fail
-tests/cn_vip_testsuite/cheri_03_ii.error.c:6:12: error: `&&x[(u64)11'i32]` out of bounds
-  int *q = p + 11; // CN VIP UB
-           ~~^~~~ 
-(UB missing short message): UB_CERB004_unspecified__pointer_add
-State file: file:///tmp/state__cheri_03_ii.error.c__main.html

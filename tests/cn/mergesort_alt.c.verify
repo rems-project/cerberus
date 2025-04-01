@@ -1,5 +1,0 @@
-return code: 0
-[1/4]: split -- pass
-[2/4]: prove_merge_sorted -- pass
-[3/4]: merge -- pass
-[4/4]: naive_mergesort -- pass

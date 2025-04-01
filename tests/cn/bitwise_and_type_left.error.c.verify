@@ -1,5 +1,0 @@
-return code: 1
-tests/cn/bitwise_and_type_left.error.c:3:17: error: Ill-typed application of binary operation '&' .
-    /*@ assert (0 & 1i32 == 0i32); @*/
-                ~~^~~~~~ 
-'0' has type 'integer', '1'i32' has type 'i32'.

@@ -1,4 +1,0 @@
-return code: 2
-tests/cn/duplicate_pattern_var.error.c:15:43: error: redeclaration of variable
-        Cons { head : Point { x : a , y : a } , tail : tail } => { a + b + sum(tail) }
-                                          ^

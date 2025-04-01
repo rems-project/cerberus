@@ -1,6 +1,0 @@
-return code: 0
-[1/5]: live_owned_footprint -- pass
-[2/5]: live_owned_both -- pass
-[3/5]: live_owned_one -- pass
-[4/5]: live_alloc -- pass
-[5/5]: main -- pass

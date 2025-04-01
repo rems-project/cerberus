@@ -1,9 +1,0 @@
-return code: 1
-[1/1]: inc -- fail
-tests/cn/bad_resource_var.error.c:1:1: error: Unprovable constraint
-void inc(int* p)
-~~~~~^~~~~~~~~~~ 
-Constraint from tests/cn/bad_resource_var.error.c:5:13:
-            X2 < 2147483647i32; @*/
-            ^~~~~~~~~~~~~~~~~~~ 
-State file: file:///tmp/state__bad_resource_var.error.c__inc.html

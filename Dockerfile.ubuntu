@@ -2,20 +2,21 @@
 FROM ubuntu:24.04
 
 # Install system packages
-RUN apt-get update
-RUN apt-get upgrade -y
-RUN apt-get install -y opam libgmp-dev libmpfr-dev
+RUN apt-get update && \
+    apt-get install -y libgmp-dev pkg-config opam && \
+    apt-get autoremove --purge -y && \
+    apt-get autoclean -y && \
+    rm -rf /var/cache/apt/* /tmp/*
 
-ENV OPAMCONFIRMLEVEL=unsafe-yes
-RUN opam init --disable-sandboxing
+RUN opam init --disable-sandboxing --yes
 
 ADD . /opt/cerberus
 WORKDIR /opt/cerberus
-RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
-RUN opam install z3
+RUN opam pin add -n --yes cerberus-lib . && \
+    opam pin add -n --yes cerberus .
 
-RUN eval `opam env` \
-  && make install_cn
+RUN opam install --yes cerberus && \
+    opam clean --yes --all-switches --download-cache --logs --repo-cache
 
 WORKDIR /opt
 

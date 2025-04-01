@@ -1,4 +1,0 @@
-return code: 0
-[1/3]: divide_by_ten -- pass
-[2/3]: divide_by_neg_ten -- pass
-[3/3]: division_diff_sign -- pass

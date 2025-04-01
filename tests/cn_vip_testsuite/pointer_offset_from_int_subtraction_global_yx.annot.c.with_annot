@@ -1,8 +1,0 @@
-return code: 0
-tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_global_yx.annot.c:23:17: warning: experimental keyword 'to_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ to_bytes RW<int*>(&p); @*/
-                ^~~~~~~~ 
-tests/cn_vip_testsuite/pointer_offset_from_int_subtraction_global_yx.annot.c:26:17: warning: experimental keyword 'from_bytes' (use of experimental features is discouraged)
-  /*CN_VIP*//*@ from_bytes RW<int*>(&p); @*/
-                ^~~~~~~~~~ 
-[1/1]: main -- pass

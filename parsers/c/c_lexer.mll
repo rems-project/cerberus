@@ -653,7 +653,7 @@ and initial flags = parse
   | "|||" { PIPES   }
   | "}-}" { RBRACES }
 
-    (* copied over from backend/cn/assertion_lexer.mll *)
+    (* copied over from (now extinct) backend/cn/assertion_lexer.mll *)
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
       {
         if flags.inside_cn then

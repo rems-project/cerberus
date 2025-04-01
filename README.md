@@ -1,6 +1,6 @@
 # Cerberus C semantics
 
-[![CI](https://github.com/rems-project/cerberus/actions/workflows/ci.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci.yml) [![CI-CN](https://github.com/rems-project/cerberus/actions/workflows/ci-cn.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cn.yml) [![CI-CN-specs-testing](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-spec-testing.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-spec-testing.yml) [![CI-CN-becnhmarks](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-bench.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cn-bench.yml) [![CI-CHERI](https://github.com/rems-project/cerberus/actions/workflows/ci-cheri.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cheri.yml) [![Docker](https://github.com/rems-project/cerberus/actions/workflows/docker.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/docker.yml)
+[![CI](https://github.com/rems-project/cerberus/actions/workflows/ci.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci.yml) [![CI-CHERI](https://github.com/rems-project/cerberus/actions/workflows/ci-cheri.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci-cheri.yml)
 
 
 Web interfaces, papers, and web page
@@ -175,32 +175,16 @@ You can also compile all the targets with:
 $ make all
 ```
 
-Building CN
----
-See https://github.com/rems-project/cerberus/blob/master/backend/cn/README.md
-
-
 Docker image
 ------------
 
-A pre-build docker image with `cerberus` and `cn` can be downloaded with:
-
-* For the Ubuntu 22.04 based image (recommended):
-    ```bash
-    $ docker pull ghcr.io/rems-project/cerberus/cn:release
-    ```
-* For Redhat Ubi9 based image:
-    ```bash
-    $ docker pull ghcr.io/rems-project/cerberus/cn:release-redhat
-    ```
-
 For a local build, run:
 ```bash
-$ docker build -t cn:release -f Dockerfile.ubuntu .
+$ docker build -t cerberus:release -f Dockerfile.ubuntu .
 ```
 which creates a Docker image than can be used for example with:
 ```bash
-$ docker run --volume `PWD`:/data/ cerberus:0.1 tests/tcc/00_assignment.c --pp=core
+$ docker run --volume `PWD`:/data/ cerberus:release cerberus tests/tcc/00_assignment.c --pp=core
 ```
 This image contains all the source code.
 

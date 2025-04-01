@@ -1,7 +1,0 @@
-(coq.theory
- (name Reasoning)
- (package cn-coq)
- (synopsis "CN Reasoning in Coq")
- (mode vo)
- (theories StructTact Cerberus Cn Ltac2)
- (modules Ltac2Utils ResourceInference ProofAutomation))

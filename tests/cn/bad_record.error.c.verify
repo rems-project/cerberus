@@ -1,4 +1,0 @@
-return code: 2
-tests/cn/bad_record.error.c:3:43: error: field `x' duplicated
-type_synonym wrong = { integer x, integer x }
-                                          ^

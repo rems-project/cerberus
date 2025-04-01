@@ -1,8 +1,0 @@
-return code: 1
-[1/2]: f -- fail
-[2/2]: main -- pass
-tests/cn/solver_crash.error.c:13:10: error: Missing resource for reading
-    .y = str_inst.x + 3,
-         ~~~~~~~~^~ 
-Resource needed: RW<signed int>(&&str_inst->x)
-State file: file:///tmp/state__solver_crash.error.c__f.html
