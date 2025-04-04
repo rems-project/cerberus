@@ -336,6 +336,10 @@ let dtree_of_expr expr =
         | None ->
             pp_eff_ctor str in
 
+    let module E = Stdlib.Either in
+    let is_attr = function Annot.Aattrs (Annot.Attrs attrs) -> E.Left attrs | annot -> E.Right annot in
+    let attrs, rest = List.partition_map is_attr annot in
+    let attrs = Annot.Attrs (List.concat attrs) in
 
     match expr_ with
       | Epure pe ->
@@ -348,13 +352,21 @@ let dtree_of_expr expr =
           dtree_of_action act
 (*
       | Ecase of ('bty, 'sym) generic_pexpr * ('sym generic_pattern * ('a, 'bty, 'sym) generic_expr) list
-      | Elet of 'sym generic_pattern * ('bty, 'sym) generic_pexpr * ('a, 'bty, 'sym) generic_expr
-      | Eif of ('bty, 'sym) generic_pexpr * ('a, 'bty, 'sym) generic_expr * ('a, 'bty, 'sym) generic_expr
 *)
+      | Elet (pat, pe, e) ->
+          Dnode ( pp_ctor "Elet" (* ^^^ Pp_core.Basic.pp_pattern pat *)
+                , [ dtree_of_pexpr pe; self e] )
 
+      | Eif (pe, e1, e2) ->
+          Dnode ( pp_ctor "Eif"
+                , [ dtree_of_pexpr pe; self e1; self e2 ] )
+
+      | Eccall (_, pe1, pe2, pe3) ->
+          with_attributes attrs begin
+            Dnode (pp_ctor "Eccall",
+                   List.map dtree_of_pexpr (pe1 :: pe2 :: pe3))
+          end
 (*
-    | Eccall of 'a * ('bty, 'sym) generic_pexpr *
-        ('bty, 'sym) generic_pexpr * ('bty, 'sym) generic_pexpr list
     | Eproc of 'a * 'sym generic_name * ('bty, 'sym) generic_pexpr list
 *)
     | Eunseq es ->

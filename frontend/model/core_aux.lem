@@ -2074,9 +2074,9 @@ val mk_let_e: pattern -> pexpr -> expr unit -> expr unit
 let mk_let_e pat pe e =
   Expr [] (Elet pat pe e)
 
-val mk_ccall_e: pexpr -> pexpr -> list pexpr -> expr unit
-let mk_ccall_e cty pe pes =
-  Expr [] (Eccall default cty pe pes)
+val mk_ccall_e_: list annot -> pexpr -> pexpr -> list pexpr -> expr unit
+let mk_ccall_e_ annots cty pe pes =
+  Expr annots (Eccall default cty pe pes)
 
 val mk_memop_e: Mem_common.memop -> list pexpr -> expr unit
 let mk_memop_e mop pes =
