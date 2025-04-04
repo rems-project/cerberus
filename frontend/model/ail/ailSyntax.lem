@@ -211,8 +211,18 @@ and statement_ 'a [name="s*"] =
   | AilSreg_store of reg * expression 'a
 (* for CN *)
   | AilSmarker of nat * statement 'a (* NOTE: this is placeholder we used to carry annotations for CN *)
-and statement 'a [name="s*"] =
-  | AnnotatedStatement of Loc.t * Annot.attributes * statement_ 'a
+and statement 'a [name="s*"] = <|
+  loc: Loc.t;
+  is_forloop: bool; (* whether this Ail statement is the desugaring of a for loop *)
+  attrs: Annot.attributes;
+  node: statement_ 'a;
+|>
+
+let mk_statement loc node =
+  <| loc= loc; is_forloop= false; attrs= Annot.no_attributes; node= node |>
+
+let mk_statement_full loc is_forloop attrs node =
+  <| loc= loc; is_forloop= is_forloop; attrs= attrs; node= node |>
 
 instance forall 'a. (Located (expression 'a))
   let locOf a_expr =
@@ -222,8 +232,7 @@ end
 
 instance forall 'a. (Located (statement 'a))
   let locOf stmt =
-    let (AnnotatedStatement loc _ _) = stmt in
-    loc
+    stmt.loc
 end
 
 type declaration =

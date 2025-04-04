@@ -433,11 +433,11 @@ let rec dtree_of_expression pp_annot expr =
     end in
   self expr
 
-and dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
+and dtree_of_statement pp_annot stmt =
   let dtree_of_expression = dtree_of_expression pp_annot in
   let dtree_of_statement = dtree_of_statement pp_annot in
-  with_attributes attrs
-  begin match stmt_ with
+  with_attributes stmt.attrs
+  begin match stmt.node with
     | AilSskip ->
         Dleaf (pp_stmt_ctor "AilSskip")
     | AilSexpr e ->

@@ -630,7 +630,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEprint_type e ->
               pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
         | AilEgcc_statement (bs, ss) ->
-            P.parens (pp_statement_aux mk_pp_annot ~bs:[] (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
+            P.parens (pp_statement_aux mk_pp_annot ~bs:[] (mk_statement Cerb_location.unknown (AilSblock (bs, ss))))
 
       )) in
   pp None a_expr
@@ -642,10 +642,10 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, Annot.Attrs attrs, stmt_)) =
+and pp_statement_aux pp_annot ~bs {attrs= Annot.Attrs attrs; node; _} =
   let pp_expression_aux pp_annot e = pp_expression_aux pp_annot e in
-  let pp_statement ?(bs=bs) ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
-    begin match stmt_ with
+  let pp_statement ?(bs=bs) ?(is_control=false) stmt =
+    begin match stmt.node with
       | AilSblock _ ->
           P.empty
       | _ ->
@@ -655,7 +655,7 @@ and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, Annot.Attrs attrs, stm
             P.empty
     end ^^
     pp_statement_aux pp_annot ~bs stmt in
-  match stmt_ with
+  match node with
     | AilSskip ->
         P.semi
     | AilSexpr e ->
