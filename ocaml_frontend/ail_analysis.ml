@@ -100,8 +100,8 @@ let collect_memory_accesses (_, sigm) =
           ) xs
       | AilEgcc_statement (_, ss) ->
           List.iter aux_stmt ss
-  and aux_stmt (AnnotatedStatement (_, _, stmt_)) =
-    match stmt_ with
+  and aux_stmt stmt =
+    match stmt.node with
       | AilSskip
       | AilSbreak
       | AilScontinue
