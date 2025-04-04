@@ -3882,24 +3882,26 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.record_loop_attribute loop_id attrs (match e2_opt with Just e2 -> Loc.locOf e2 | Nothing -> Loc.unknown end) loc >>
           let ctx' =
             <| cont_ident_opt= Just cont_ident |> in
-          
+
+          (* this avoids introducing an unecessary block *)
+          let mk_d_s_body d_s_e3 = function
+            | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
+                AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
+            | d_s ->
+                AnnotatedStatement loc Annot.no_attributes (AilSblock [] [d_s; d_s_e3])
+          end in
+
           (* NOTE: it is important that the expressions and the body are
              desugared in the order of the syntax *)
           E.fresh_block_scope >>= fun for_scope ->
           E.under_scope for_scope begin
             match fc_opt with
               | Just (FC_expr e1) ->
-                  (* for (E1; E2; E3) S ==> { E1; while(E2) { S'; cont: E3   } }  *)
-                  (* for (E1; E2; ) S   ==> { E1; while(E2) { S'; cont: skip } }  *)
+                  (* for (E1; E2; E3) S ==> { E1; while(E2) { S'; E3; } }  *)
+                  (* for (E1; E2; ) S   ==> { E1; while(E2) { S'      } }  *)
                   desugar_expression e1 >>= fun d_e1 ->
                   let d_s_e1 =
                     AnnotatedStatement (Loc.locOf e1) Annot.no_attributes (AilSexpr d_e1) in
-                  let mk_d_s_body d_s_e3 = function
-                    | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
-                        AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
-                    | d_s ->
-                        AnnotatedStatement loc Annot.no_attributes (AilSblock [] [d_s; d_s_e3])
-                  end in
                   E.return begin
                     fun d_e2 d_s_e3 d_s ->
                       AilSblock [] [ d_s_e1
@@ -3908,29 +3910,13 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               | Just (FC_decl _ (Declaration_base _ _ _)) ->
                   error "desugar_statement_aux: Just (FC_decl (Declaration_base _ _ _)), _)"
               | Just (FC_decl _ (Declaration_static_assert sa_decl)) ->
-                  (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
-                  (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
-                  desugar_and_register_static_assert_declaration sa_decl >>
-                  let mk_d_s_body d_s_e3 = function
-                    | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
-                        AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
-                    | d_s ->
-                        AnnotatedStatement Loc.unknown Annot.no_attributes begin
-                          AilSblock [] [d_s; d_s_e3]
-                        end
-                  end in
+                  (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; E3; } *)
+                  (* for (_Static_assert(...); E2; ) S   ==> while(E2) { S' } *)
+                  desugar_and_register_static_assert_declaration sa_decl >>= fun () ->
                   E.return (fun d_e2 d_s_e3 d_s -> AilSwhile d_e2 (mk_d_s_body d_s_e3 d_s) loop_id)
               | Nothing ->
                   (* for (; E2; E3) S ==> while(E2) { S'; cont: E3 } *)
                   (* for (; E2; ) S ==> while(E2) { S'; cont: skip } *)
-                  let mk_d_s_body d_s_e3 = function
-                    | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
-                        AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
-                    | d_s ->
-                        AnnotatedStatement Loc.unknown Annot.no_attributes begin
-                          AilSblock [] [d_s; d_s_e3]
-                        end
-                  end in
                   E.return (fun d_e2 d_s_e3 d_s -> AilSwhile d_e2 (mk_d_s_body d_s_e3 d_s) loop_id)
             end >>= fun mk_for ->
             (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
