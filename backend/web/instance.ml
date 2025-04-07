@@ -43,6 +43,7 @@ let setup conf =
                            then conf.cpp_cmd ^ " -DCERB_WITH_LIB"
                            else conf.cpp_cmd);
       cpp_stderr=         false;
+      cpp_save=           None;
     }
   in { pipeline= pipeline_conf;
        io= dummy_io;
@@ -123,7 +124,7 @@ let pp_core core =
       let show_include = false
       let show_locations = false
       let handle_location c_loc core_range =
-        match Cerb_location.to_cartesian c_loc with
+        match Cerb_location.to_cartesian_raw c_loc with
         | Some c_range ->
           locs := (c_range, core_range)::!locs
         | None -> ()
