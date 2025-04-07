@@ -3551,13 +3551,17 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
             , Caux.pcreate (Loc.with_cursor_from loc ident_loc) align_ival c_ty (Symbol.PrefSource ident_loc [f; sym]) )
           ) decls_with_loc in
-        let cheri_const_intrinsic = List.map (fun (sym, (qs, ty, sym')) ->
-          (* TODO: the partial pattern match in the lets is tasteless (even though the memop()
-              never evaluates to an unspecified value) *)
-          let ptr_ty = Ctype.mk_ctype_pointer qs ty in
-          ( Caux.mk_specified_pat (Caux.mk_sym_pat sym' (C.BTy_object C.OTy_pointer))
-          , cheri_readonly_perms ptr_ty (Caux.mk_sym_pe sym) )
-        ) const_aliases in
+        let cheri_const_intrinsic =
+          if Global.is_CHERI () then
+            List.map (fun (sym, (qs, ty, sym')) ->
+            (* TODO: the partial pattern match in the lets is tasteless (even though the memop()
+                never evaluates to an unspecified value) *)
+            let ptr_ty = Ctype.mk_ctype_pointer qs ty in
+            ( Caux.mk_specified_pat (Caux.mk_sym_pat sym' (C.BTy_object C.OTy_pointer))
+            , cheri_readonly_perms ptr_ty (Caux.mk_sym_pe sym) )
+            ) const_aliases
+          else
+            [] in
         let pat_core_kills : list (C.expr unit) =
           List.map (fun (loc, _, sym, _, ty) ->
             Caux.pkill (Loc.with_cursor_from loc loc) (C.Static ty) (Caux.mk_sym_pe sym)
