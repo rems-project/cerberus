@@ -101,7 +101,8 @@ let cerberus debug_level progress core_obj
       bmc_all_execs bmc_output_model bmc_cat bmc_mode;
   set_cerb_conf ~backend_name:"Bmc" ~exec exec_mode ~concurrency QuoteStd ~defacto ~permissive:false ~agnostic:false ~ignore_bitfields:false;
   let conf = { astprints; pprints; ppflags; ppouts=[]; debug_level; typecheck_core;
-               rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
+               rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true;
+               cpp_save= None } in
   let prelude =
     (* Looking for and parsing the core standard library *)
     Switches.set switches;
