@@ -2309,24 +2309,14 @@ STD_ "§6.5.2.1#2, sentence 2" $
           E.return (AilEcompound qs ty' d_e))
     | CabsEpreincr e ->
         AnnotatedExpression () [] loc <$>
-(STD_ "§6.5.3.1#2, sentence 3" $
-(*
+          (STD_ "§6.5.3.1#2, sentence 3" $
           desugar_expression e >>= fun d_e ->
-          E.return $ AilEcompoundAssign d_e Add oneAil
-*)
-          (* TODO: temporary hack, while the elab doesn't support compound assigns *)
-          desugar_expression e >>= fun d_e ->
-          E.return $ AilEassign d_e (AnnotatedExpression () [] loc (AilEbinary d_e (Arithmetic Add) oneAil)))
+          E.return $ AilEcompoundAssign d_e Add oneAil)
     | CabsEpredecr e ->
         AnnotatedExpression () [] loc <$>
-(STD_ "§6.5.3.1#3" $
-(*
+          (STD_ "§6.5.3.1#3" $
           desugar_expression e >>= fun d_e ->
-          E.return $ AilEcompoundAssign d_e Sub oneAil
-*)
-          (* TODO: temporary hack, while the elab doesn't support compound assigns *)
-          desugar_expression e >>= fun d_e ->
-          E.return $ AilEassign d_e (AnnotatedExpression () [] loc (AilEbinary d_e (Arithmetic Sub) oneAil)))
+          E.return $ AilEcompoundAssign d_e Sub oneAil)
           (* (§6.5.3.3#5) *)
     | CabsEunary CabsNot e ->
         AnnotatedExpression () [] loc <$>
