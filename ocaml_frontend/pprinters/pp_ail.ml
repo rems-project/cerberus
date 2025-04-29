@@ -794,29 +794,50 @@ let pp_function_prototype sym decl = match decl with
 | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) -> 
   (fun k -> if is_inline then !^ "inline" ^^^ k else k) (
       (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
-        begin
-          if !Cerb_debug.debug_level > 5 then
-            (* printing the types in a human readable format *)
-            pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
-          else
-            pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty
-        end ^^
-        P.parens (
-          comma_list (fun (qs, ty, isRegister) ->
-            if !Cerb_debug.debug_level > 5 then
-              (* printing the types in a human readable format *)
-              P.parens (
-                (fun z -> if isRegister then !^ "register" ^^^ z else z)
-                  (pp_ctype_human qs ty)
-              )
-            else
-              pp_ctype qs ty
-          ) params ^^
-          if is_variadic then
-            P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-          else
-            P.empty
-        ) ^^ P.semi
+        let args = P.parens
+          (comma_list
+             (fun (qs, ty, isRegister) ->
+                if !Cerb_debug.debug_level > 5 then
+                  (* printing the types in a human readable format *)
+                  P.parens
+                    ((fun z -> if isRegister then !^"register" ^^^ z else z)
+                       (pp_ctype_human qs ty))
+                else
+                  pp_ctype qs ty)
+             params
+           ^^
+           if is_variadic then
+             P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+           else
+             P.empty)
+      in
+      if !Cerb_debug.debug_level > 5 then
+        (* printing the types in a human readable format *)
+        pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
+      else (
+        let is_func_ptr =
+          let rec aux ct =
+            match ct with
+            | Ctype (_, Pointer (_, Ctype (_, Function _)))
+            | Ctype (_, Pointer (_, Ctype (_, FunctionNoParams _))) ->
+              true
+            | Ctype (_, Pointer (_, ct')) -> aux ct'
+            | _ -> false
+          in
+          aux ret_ty
+        in
+        if is_func_ptr then
+          pp_ctype_declaration
+            (pp_id_func
+               (Symbol.fresh_pretty
+                  (Pp_symbol.to_string_pretty ~is_human:false sym
+                   ^ Pp_utils.to_plain_pretty_string args)))
+            ret_qs
+            ret_ty
+          ^^ P.semi
+        else
+          pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty ^^ args ^^ P.semi
+        )
       )
     )
 
@@ -887,33 +908,56 @@ let pp_program_aux pp_annot (startup, sigm) =
               | Some (_, _, _, param_syms, stmt) ->
                 ((fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
                   (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
-                    begin
-                      if !Cerb_debug.debug_level > 5 then
-                        (* printing the types in a human readable format *)
-                        pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
-                      else
-                        pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty
-                    end ^^
-                      P.parens (
-                        comma_list (fun (sym, (qs, ty, isRegister)) ->
-                          if !Cerb_debug.debug_level > 5 then
-                            (* printing the types in a human readable format *)
-                            pp_id_obj sym ^^ P.colon ^^^
-                            P.parens (
-                              (fun z -> if isRegister then !^ "register" ^^^ z else z)
-                                (pp_ctype_human qs ty)
-                            )
-                          else
-                            pp_ctype_declaration (pp_id_obj sym) qs ty
-                        ) (List.combine param_syms params) ^^
+                    let args =
+                      P.parens
+                        (comma_list
+                          (fun (sym, (qs, ty, isRegister)) ->
+                              if !Cerb_debug.debug_level > 5 then
+                                (* printing the types in a human readable format *)
+                                pp_id_obj sym
+                                ^^ P.colon
+                                ^^^ P.parens
+                                      ((fun z ->
+                                          if isRegister then !^"register" ^^^ z else z)
+                                        (pp_ctype_human qs ty))
+                              else
+                                pp_ctype_declaration (pp_id_obj sym) qs ty)
+                          (List.combine param_syms params)
+                        ^^
                         if is_variadic then
                           P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
                         else
-                          P.empty
-                      ) ^^^ P.break 1 ^^
-                      pp_statement_aux ~bs:[] pp_annot stmt
+                          P.empty)
+                    in
+                    (if !Cerb_debug.debug_level > 5 then
+                      (* printing the types in a human readable format *)
+                      pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
+                    else (
+                      let is_func_ptr =
+                        let rec aux ct =
+                          match ct with
+                          | Ctype (_, Pointer (_, Ctype (_, Function _)))
+                          | Ctype (_, Pointer (_, Ctype (_, FunctionNoParams _))) ->
+                            true
+                          | Ctype (_, Pointer (_, ct')) -> aux ct'
+                          | _ -> false
+                        in
+                        aux ret_ty
+                      in
+                      if is_func_ptr then
+                        pp_ctype_declaration
+                          (pp_id_func
+                              (Symbol.fresh_pretty
+                                (Pp_symbol.to_string_pretty ~is_human:false sym
+                                  ^ Pp_utils.to_plain_pretty_string args)))
+                          ret_qs
+                          ret_ty
+                      else
+                        pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty ^^ args))
+                    ^^^ P.break 1
+                    ^^ pp_statement_aux ~bs:[] pp_annot stmt
                   )
-                )  
+                )
               )
               | None -> pp_function_prototype sym decl
             )
