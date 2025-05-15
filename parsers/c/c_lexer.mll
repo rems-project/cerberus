@@ -168,6 +168,7 @@ let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
     "true"          , (Production, CN_TRUE);
     "false"         , (Production, CN_FALSE);
     "requires"      , (Production, CN_REQUIRES);
+    "ghost"         , (Production, CN_GHOST);
     "ensures"       , (Production, CN_ENSURES);
     "inv"           , (Production, CN_INV);
     "accesses"      , (Production, CN_ACCESSES);

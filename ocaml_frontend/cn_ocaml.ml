@@ -356,11 +356,15 @@ module MakePp (Conf: PP_CN) = struct
           , [ Dnode (pp_ctor "[CN]args", dtrees_of_args Conf.pp_ident lmma.cn_lemma_args)
             ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition lmma.cn_lemma_requires)
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
-            ] ) 
+            ] )
+
+  let dtrees_of_opt_cn_ghosts = function
+    | None -> []
+    | Some (_loc, (ghosts, _conds)) -> dtrees_of_args Conf.pp_ident ghosts
 
   let dtrees_of_opt_cn_conds = function
     | None -> []
-    | Some (_loc, conds) -> List.map dtree_of_cn_condition conds
+    | Some (_loc, (_ghosts, conds)) -> List.map dtree_of_cn_condition conds
 
   let dtrees_of_cn_func_spec
       { cn_func_trusted
@@ -381,7 +385,9 @@ module MakePp (Conf: PP_CN) = struct
           [ Dnode (pp_ctor "[CN]cn_function", [ Dleaf (Conf.pp_ident f) ] ) ] in
     trusted @
     acc_func @
-    [ Dnode (pp_ctor "[CN]requires", dtrees_of_opt_cn_conds cn_func_requires)
+    [ Dnode (pp_ctor "[CN]ghost_arguments", dtrees_of_opt_cn_ghosts cn_func_requires)
+    ; Dnode (pp_ctor "[CN]requires", dtrees_of_opt_cn_conds cn_func_requires)
+    ; Dnode (pp_ctor "[CN]ghost_returns", dtrees_of_opt_cn_ghosts cn_func_ensures)
     ; Dnode (pp_ctor "[CN]ensures", dtrees_of_opt_cn_conds cn_func_ensures)
     ]
 

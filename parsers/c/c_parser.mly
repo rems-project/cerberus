@@ -150,7 +150,7 @@ type asm_qualifier =
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
-%token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
+%token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV CN_GHOST
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_PRINT
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
 %token <[`U|`I] * int>CN_BITS
@@ -2423,13 +2423,20 @@ accesses_or_function:
 | accs=nonempty_list(accesses)
   { Cerb_frontend.Cn.CN_accesses (List.concat accs) }
 
+ghost:
+| CN_GHOST g=cn_args SEMICOLON
+  { g }
+
 requires_clauses:
-| CN_REQUIRES reqs=nonempty_list(condition)
-  { reqs }
+| CN_REQUIRES ghost_args=option(ghost)
+  reqs=nonempty_list(condition)
+  { Option.value ghost_args ~default:[], reqs }
 
 ensures_clauses:
-| CN_ENSURES enss=nonempty_list(condition)
-  { enss }
+| CN_ENSURES
+  ghost_rets=option(ghost)
+  enss=nonempty_list(condition)
+  { Option.value ghost_rets ~default:[], enss }
 
 (* It's possible to use anonymous midrules for many of these but it results in
    auto-generated nonterminal names which make auto-generated error messages

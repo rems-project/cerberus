@@ -177,6 +177,7 @@ type token =
   | CN_TRUE
   | CN_FALSE
   | CN_REQUIRES
+  | CN_GHOST
   | CN_ENSURES
   | CN_INV
   | CN_ACCESSES
@@ -347,6 +348,7 @@ let string_of_token = function
   | CN_DATATYPE -> "CN_DATATYPE"
   | CN_TYPE_SYNONYM -> "CN_TYPE_SYNONYM"
   | CN_REQUIRES -> "CN_REQUIRES"
+  | CN_GHOST -> "CN_GHOST"
   | CN_ENSURES -> "CN_ENSURES"
   | CN_INV -> "CN_INV"
   | CN_ACCESSES -> "CN_ACCESSES"
