@@ -358,13 +358,17 @@ module MakePp (Conf: PP_CN) = struct
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
             ] )
 
+  let dtrees_of_cn_ghosts ghosts = dtrees_of_args Conf.pp_ident ghosts
+
   let dtrees_of_opt_cn_ghosts = function
     | None -> []
-    | Some (_loc, (ghosts, _conds)) -> dtrees_of_args Conf.pp_ident ghosts
+    | Some (_loc, (ghosts, _conds)) -> dtrees_of_cn_ghosts ghosts
+
+  let dtrees_of_cn_conditions conds = List.map dtree_of_cn_condition conds
 
   let dtrees_of_opt_cn_conds = function
     | None -> []
-    | Some (_loc, (_ghosts, conds)) -> List.map dtree_of_cn_condition conds
+    | Some (_loc, (_ghosts, conds)) -> dtrees_of_cn_conditions conds
 
   let dtrees_of_cn_func_spec
       { cn_func_trusted
