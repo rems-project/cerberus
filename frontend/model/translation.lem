@@ -3144,6 +3144,9 @@ else
       | A.AilEgcc_statement _ _ ->
           E.record_error_at loc "GCC statements as expressions not yet supported" >>= fun () ->
           E.return Caux.mk_skip_e
+
+      | A.AilEinvalid _ _ ->
+          error "Translation called on Ail program with an invalid node"
     end
 
 

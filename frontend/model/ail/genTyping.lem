@@ -1633,6 +1633,8 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           end
         else
           error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
+    | AilEinvalid ty reason ->
+        E.return (AilEinvalid ty reason, GenRValueType (inject_type ty))
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->
@@ -1779,6 +1781,9 @@ and perform_decays sigm ctx a_expr =
                 | AnnotatedExpression _ _ _ (AilEarray false _ _) ->
                     (* NOTE: this case doesn't syntactically exist in C, since
                        array values don't exist *)
+                    a_expr
+                | AnnotatedExpression _ _ _ (AilEinvalid _ _) ->
+                    (* We need invalid nodes kept as is *)
                     a_expr
                 | _ ->
                     if not (List.elem ctx [CTXarray_init] && is_literal) then

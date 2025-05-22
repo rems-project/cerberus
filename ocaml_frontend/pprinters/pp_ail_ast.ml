@@ -267,8 +267,15 @@ let rec dtree_of_expression pp_annot expr =
     let pp_expr_ctor str =
       pp_std_annot ^^^ pp_stmt_ctor str ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
     let pp_implicit_ctor str =
-      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
-    
+      pp_std_annot ^^^ !^ (ansi_format [Bold; Blue] str) ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
+
+    let pp_invalid_ctor reason =
+      let str = match reason with
+        | AilInvalid_desugaring_init_failed _ -> "initialiser-desugaring-BUG"
+        | AilInvalid_other str -> str in
+      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] "AilEinvalid") ^^^ P.brackets (!^ str) ^^^
+        Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
+
     let pp_cabs_id = Pp_symbol.pp_identifier in
     let dtree_of_generic_association = function
       | AilGAtype (ty, e) ->
@@ -437,6 +444,8 @@ let rec dtree_of_expression pp_annot expr =
       | AilEgcc_statement (bs, ss) ->
           Dnode ( pp_expr_ctor "AilEgcc_statement"
                 , Dnode (pp_ctor "Bindings", List.map dtree_of_binding bs) :: List.map (dtree_of_statement pp_annot) ss )
+      | AilEinvalid (_, reason) ->
+          Dleaf ( pp_invalid_ctor reason )
     end in
   self expr
 
