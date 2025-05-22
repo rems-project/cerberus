@@ -2284,7 +2284,8 @@ STD_ "§6.5.2.1#2, sentence 2" $
                         <*> desugar_expression e2)))
     | CabsEcall e es attrs ->
         (* TODO: STD check + annot *)
-        AnnotatedExpression () [Annot.Aattrs attrs] loc <$>
+        E.record_marker () >>= fun id ->
+        AnnotatedExpression () [Annot.Amarker id; Annot.Aattrs attrs] loc <$>
           (AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es)
     | CabsEmemberof e ident ->
         (* NOTE: we don't desugar the field name here because we need to know the type of [e] ... *)
