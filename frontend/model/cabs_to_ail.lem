@@ -3448,8 +3448,26 @@ and wip_desugar_initializer_ loc dur current_ty init =
             Desugaring_init.is_initializer_constant_expression_or_string_literal= is_initializer_constant_expression_or_string_literal;
             Desugaring_init.evaluate_integer_constant_expression= evaluate_integer_constant_expression;
           |> in
-          Desugaring_init.desugar_init tagDefs funcs (dur = Static || dur = Thread) current_ty init >>= fun (current_ty', init_st, _) ->
-          E.return (current_ty', Desugaring_init.constructValue tagDefs init_st current_ty')
+          (* If the (currently buggy) desugaring of initialisers fails, we
+             produces an invalid AST node to be able to carry on. *)
+          E.catch begin
+            Desugaring_init.desugar_init tagDefs funcs (dur = Static || dur = Thread) current_ty init >>= fun (current_ty', init_st, _) ->
+            E.return (current_ty', Desugaring_init.constructValue tagDefs init_st current_ty')
+          end
+          function
+            | (_, Errors.INTERNAL_ERROR (Errors.Internal_error_desugaring str)) ->
+                let current_ty' =
+                  (* If we are dealing with an array of unknown size, we give
+                     it size 1 to make the type complete *)
+                  match current_ty with
+                    | Ctype.Ctype annots (Ctype.Array elem_ty Nothing) ->
+                        Ctype.Ctype annots (Ctype.Array elem_ty (Just 1))
+                    | _ ->
+                        current_ty
+                  end in
+                E.return (current_ty', AnnotatedExpression () [] loc (AilEinvalid current_ty' (AilInvalid_desugaring_init_failed str)))
+            | err -> E.generic_fail err
+          end
 
           (* E.get_tag_definitions >>= fun tagDefs ->
           foo current_ty init >>= fun (current_ty', xs) ->

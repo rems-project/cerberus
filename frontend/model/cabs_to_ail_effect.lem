@@ -327,6 +327,13 @@ let inline iter = State_exception.iter
 val tryWith: forall 'a. Errors.error -> desugM 'a -> desugM 'a
 let inline tryWith = State_exception.tryWith
 
+val catch: forall 'a. desugM 'a -> (Errors.error -> desugM 'a) -> desugM 'a
+let catch m f = fun s ->
+  match m s with
+    | Exception.Result a -> Exception.Result a
+    | Exception.Exception err -> f err s
+  end
+
 val fmap: forall 'a 'b. ('a -> 'b) -> desugM 'a -> desugM 'b
 let inline fmap = State_exception.fmap
 
