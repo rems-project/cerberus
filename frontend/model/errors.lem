@@ -92,6 +92,9 @@ type core_parser_cause =
 type driver_cause =
   | Driver_UB of list Undefined.undefined_behaviour
 
+type internal_error =
+  | Internal_error_desugaring of string
+
 type cause =
   | CPP of string (* NOTE: this is an empty string when piping to stderr *)
   | CPARSER of cparser_cause
@@ -103,6 +106,7 @@ type cause =
   | CORE_RUN of core_run_cause
   | DRIVER of driver_cause
   | UNSUPPORTED of string
+  | INTERNAL_ERROR of internal_error
 
 type error = Loc.t * cause
 
