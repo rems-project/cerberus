@@ -66,67 +66,89 @@ let lookup_union_members tagDefs tag_sym =
         error "Desugaring_init.lookup_union_members: Nothing or empty Union definition"
   end
 
-val go_down_aux: map Symbol.sym tag_definition -> bool -> init_position -> maybe init_position
+type desug_init_error 'a =
+  | DInit_internal_error of string
+  | DInit_nothing
+  | DInit_ok of 'a
+
+let desug_init_bind m f =
+  match m with
+    | DInit_internal_error msg ->
+        DInit_internal_error msg
+    | DInit_nothing ->
+        DInit_nothing
+    | DInit_ok a ->
+        f a
+  end
+
+val go_down_aux: map Symbol.sym tag_definition -> bool -> init_position -> desug_init_error init_position
 let go_down_aux tagDefs entering_block pos =
   if cursor_overflowing pos.cursor then
     (* OVERFLOWING *)
-    Nothing
+    DInit_nothing
   else
     let mk_cursor_elem kind =
       <| is_block= entering_block; is_overflowing= false; kind= kind |> in
     match unatomic pos.ty with
       | Ctype _ (Basic _) ->
-          Nothing
+          DInit_nothing
       | Ctype _ (Pointer _ _) ->
-          Nothing
-      | Ctype _  (Array elem_ty size_opt) ->
-          Just <| pos with ty= elem_ty; cursor= mk_cursor_elem (Init_array 0 size_opt) :: pos.cursor |>
-      | Ctype _  (Struct tag_sym) ->
+          DInit_nothing
+      | Ctype _ (Array elem_ty size_opt) ->
+          DInit_ok <| pos with ty= elem_ty; cursor= mk_cursor_elem (Init_array 0 size_opt) :: pos.cursor |>
+      | Ctype _ (Struct tag_sym) ->
           let ((first_ident, first_ty), other_membrs, _) = lookup_struct_members tagDefs tag_sym in
-          Just <| pos with ty= first_ty; cursor= mk_cursor_elem (Init_struct tag_sym [] first_ident other_membrs) :: pos.cursor |>
+          DInit_ok <| pos with ty= first_ty; cursor= mk_cursor_elem (Init_struct tag_sym [] first_ident other_membrs) :: pos.cursor |>
       | Ctype _ (Union tag_sym) ->
           let ((first_ident, first_ty), _) = lookup_union_members tagDefs tag_sym in
-          Just <| pos with ty= first_ty; cursor= mk_cursor_elem (Init_union tag_sym first_ident) :: pos.cursor |>
+          DInit_ok <| pos with ty= first_ty; cursor= mk_cursor_elem (Init_union tag_sym first_ident) :: pos.cursor |>
       | _ ->
           let ty_str = Pp.stringFromAil_ctype no_qualifiers pos.ty in
-          error ("Desugaring_init.go_down_aux NOT Basic, Array, Struct, Union ==> " ^ ty_str)
+          DInit_internal_error ("Desugaring_init.go_down_aux NOT Basic, Array, Struct, Union ==> " ^ ty_str)
     end
 
 let go_down                tagDefs pos = go_down_aux tagDefs false pos
 let go_down_entering_block tagDefs pos = go_down_aux tagDefs true  pos
 
-val     go_bottom: map Symbol.sym tag_definition -> init_position -> init_position
+module E = Cabs_to_ail_effect
+let inline (>>=) = E.bind
+let internal_error msg =
+  E.generic_fail (Loc.unknown, Errors.INTERNAL_ERROR (Errors.Internal_error_desugaring msg))
+
+val     go_bottom: map Symbol.sym tag_definition -> init_position -> E.desugM init_position
 let rec go_bottom tagDefs pos =
   match go_down tagDefs pos with
-    | Just pos ->
+    | DInit_ok pos ->
         go_bottom tagDefs pos
-    | Nothing ->
-        pos
+    | DInit_nothing ->
+        E.return pos
+    | DInit_internal_error msg ->
+        internal_error msg
   end
 
 
-val go_up_aux: bool -> init_position -> maybe init_position
+val go_up_aux: bool -> init_position -> desug_init_error init_position
 let go_up_aux stop_at_block pos =
   match pos.cursor with
     | [] ->
-        Nothing
+        DInit_nothing
     | elem :: cursor' ->
         match elem.kind with
           | Init_array _ size_opt ->
               if stop_at_block && elem.is_block then
-                Nothing
+                DInit_nothing
               else
-                Just <| pos with ty= Ctype [] (Array pos.ty size_opt); cursor= cursor'|>
+                DInit_ok <| pos with ty= Ctype [] (Array pos.ty size_opt); cursor= cursor'|>
           | Init_struct tag_sym _ _ _ ->
               if stop_at_block && elem.is_block then
-                Nothing
+                DInit_nothing
               else
-                Just <| pos with ty= Ctype [] (Struct tag_sym); cursor= cursor' |>
+                DInit_ok <| pos with ty= Ctype [] (Struct tag_sym); cursor= cursor' |>
           | Init_union tag_sym _ ->
               if stop_at_block && elem.is_block then
-                Nothing
+                DInit_nothing
               else
-                Just <| pos with ty= Ctype [] (Union tag_sym); cursor= cursor' |>
+                DInit_ok <| pos with ty= Ctype [] (Union tag_sym); cursor= cursor' |>
         end
   end
 
@@ -134,11 +156,11 @@ let go_up               pos = go_up_aux false pos
 let go_up_stop_at_block pos = go_up_aux true  pos
 
 
-val     go_next_aux: map Symbol.sym tag_definition -> bool -> init_position -> maybe init_position
+val     go_next_aux: map Symbol.sym tag_definition -> bool -> init_position -> desug_init_error init_position
 let rec go_next_aux tagDefs going_up pos =
   if cursor_overflowing pos.cursor then
     (* TODO: check (OVERFLOWING) *)
-    Nothing
+    DInit_nothing
   else match pos.cursor with
     | [] ->
         go_down tagDefs pos
@@ -154,32 +176,32 @@ let rec go_next_aux tagDefs going_up pos =
               if index_is_overflowing then
                 if elem.is_block then
                   (* OVERFLOWING *)
-                  Just <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
+                  DInit_ok <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
                 else
-                  Maybe.bind (go_up pos) (go_next_going_up tagDefs)
+                  desug_init_bind (go_up pos) (go_next_going_up tagDefs)
               else if AilTypesAux.is_scalar (unatomic pos.ty) || going_up then
-                Just <| pos with cursor= <| is_block= elem.is_block; is_overflowing= elem.is_overflowing; kind= Init_array new_idx size_opt |> :: cursor' |>
+                DInit_ok <| pos with cursor= <| is_block= elem.is_block; is_overflowing= elem.is_overflowing; kind= Init_array new_idx size_opt |> :: cursor' |>
               else
-                Maybe.bind (go_down tagDefs pos) (go_next tagDefs)
+                desug_init_bind (go_down tagDefs pos) (go_next tagDefs)
           | Init_struct _ _ _ [] ->
               if elem.is_block then
                 (* OVERFLOWING *)
-                Just <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
+                DInit_ok <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
               else
-                Maybe.bind (go_up pos) (go_next_going_up tagDefs)
+                desug_init_bind (go_up pos) (go_next_going_up tagDefs)
           | Init_struct tag_sym prev_membrs current_member next_membrs ->
               let (memb_ident, memb_ty) = List_extra.head next_membrs in
               if AilTypesAux.is_scalar (unatomic pos.ty) || going_up then
-                Just <| pos with ty= memb_ty; cursor= <| elem with kind=
+                DInit_ok <| pos with ty= memb_ty; cursor= <| elem with kind=
                   Init_struct tag_sym(prev_membrs ++ [(current_member, pos.ty)]) memb_ident (List_extra.tail next_membrs) |> :: cursor' |>
               else
-                Maybe.bind (go_down tagDefs pos) (go_next tagDefs)
+                desug_init_bind (go_down tagDefs pos) (go_next tagDefs)
           | Init_union _ _ ->
               if elem.is_block then
                 (* OVERFLOWING *)
-                Just <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
+                DInit_ok <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
               else
-                Maybe.bind (go_up pos) (go_next_going_up tagDefs)
+                desug_init_bind (go_up pos) (go_next_going_up tagDefs)
         end
   end
 
@@ -187,10 +209,10 @@ and go_next          tagDefs pos = go_next_aux tagDefs false pos
 and go_next_going_up tagDefs pos = go_next_aux tagDefs true  pos
 
 
-val do_next_in_same_level: map Symbol.sym tag_definition -> init_position -> maybe init_position
+val do_next_in_same_level: map Symbol.sym tag_definition -> init_position -> desug_init_error init_position
 let do_next_in_same_level tagDefs pos =
   if cursor_overflowing pos.cursor then
-    Just pos
+    DInit_ok pos
   else match pos.cursor with
     | elem :: cursor' ->
         match elem.kind with
@@ -204,34 +226,30 @@ let do_next_in_same_level tagDefs pos =
               if index_is_overflowing then
                 if cursor' = [] then
                   (* OVERFLOWING *)
-                  Just <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
+                  DInit_ok <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
                 else
-                  Maybe.bind (go_up pos) (go_next_going_up tagDefs)
+                  desug_init_bind (go_up pos) (go_next_going_up tagDefs)
               else
-                Just <| pos with cursor= <| elem with kind= Init_array new_idx size_opt |> :: cursor' |>
+                DInit_ok <| pos with cursor= <| elem with kind= Init_array new_idx size_opt |> :: cursor' |>
           | Init_struct _ _ _ [] ->
               if cursor' = [] then
                 (* OVERFLOWING *)
-                Just <| pos with cursor= [<| elem with is_overflowing= true |>] |>
+                DInit_ok <| pos with cursor= [<| elem with is_overflowing= true |>] |>
               else
-                Maybe.bind (go_up pos) (go_next_going_up tagDefs)
+                desug_init_bind (go_up pos) (go_next_going_up tagDefs)
           | Init_struct tag_sym prev_membrs current_member ((memb_ident, memb_ty) :: next_membrs) ->
-              Just (<| pos with ty= memb_ty; cursor= <| elem with kind= Init_struct tag_sym (prev_membrs ++ [(current_member, pos.ty)]) memb_ident next_membrs |> :: cursor' |>)
+              DInit_ok (<| pos with ty= memb_ty; cursor= <| elem with kind= Init_struct tag_sym (prev_membrs ++ [(current_member, pos.ty)]) memb_ident next_membrs |> :: cursor' |>)
           | Init_union _ _ ->
               if cursor' = [] then
                 (* OVERFLOWING *)
-                Just <| pos with cursor= [<| elem with is_overflowing= true |>] |>
+                DInit_ok <| pos with cursor= [<| elem with is_overflowing= true |>] |>
               else
-                Maybe.bind (go_up pos) (go_next_going_up tagDefs)
+                desug_init_bind (go_up pos) (go_next_going_up tagDefs)
 
         end    
     | _ ->
-        error "TODO: do_next_in_same_level _"
+        DInit_internal_error "TODO: do_next_in_same_level _"
   end
-
-
-module E = Cabs_to_ail_effect
-let inline (>>=) = E.bind
 
 let find_struct_member tagDefs ident tag_sym =
   let (x, xs, flex_opt) = lookup_struct_members tagDefs tag_sym in
@@ -268,19 +286,23 @@ type desugaring_init_funcs = <|
 |>
 
 let liftM = function
-  | Just z ->
+  | DInit_ok z ->
       E.return z
-  | Nothing ->
-      error "TODO: liftM fail"
+  | DInit_nothing ->
+      internal_error "liftM failed"
+  | DInit_internal_error msg ->
+      internal_error msg
 end
 
 
 let rec go_top_of_block pos =
   match go_up_stop_at_block pos with
-    | Nothing ->
-        pos
-    | Just pos' ->
-      go_top_of_block pos'
+    | DInit_nothing ->
+        E.return pos
+    | DInit_ok pos' ->
+        go_top_of_block pos'
+    | DInit_internal_error msg ->
+        internal_error msg
   end
 
 
@@ -351,7 +373,8 @@ let moveTo tagDefs funcs pos = function
   | Nothing ->
       E.return pos
   | Just desigs ->
-      liftM (go_up (go_top_of_block pos))                       >>= fun pos            ->
+      go_top_of_block pos                                       >>= fun pos            ->
+      liftM (go_up pos)                                         >>= fun pos            ->
       moveTo_aux tagDefs funcs true (pos.ty, pos.cursor) desigs >>= fun (ty', cursor') ->
       E.return <| pos with ty= ty'; cursor= cursor' |>
 end
@@ -436,10 +459,10 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
             E.return ()
       end >>= fun () ->
       if false (* is_compound_literal OR string literal *) then
-        error "TODO: explode the elements"
+        internal_error "TODO: explode the elements"
       else
         (* NOTE: we dealing with a scalar, so we go down to a leaf *)
-        let pos = go_bottom tagDefs pos in
+        go_bottom tagDefs pos >>= fun pos ->
         let inits_acc' =
           if cursor_overflowing pos.cursor then
             inits_acc
@@ -487,7 +510,7 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
             else
               (* NOTE: if we are dealing with the LAST element of the init list *)
               (* NOTE: we move the cursor back to the level of the block we just opened *)
-              let pos' = go_top_of_block pos' in
+              go_top_of_block pos' >>= fun pos' ->
               (* NOTE: we move up from this block *)
               (* TODO: if we were overflowing before entering the block we need to STILL be overflowing *)
               liftM (go_up (unmark_as_overflowing pos')) >>= fun pos' ->
