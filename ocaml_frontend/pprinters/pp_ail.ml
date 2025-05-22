@@ -631,7 +631,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
               pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
         | AilEgcc_statement (bs, ss) ->
             P.parens (pp_statement_aux mk_pp_annot ~bs:[] (mk_statement Cerb_location.unknown (AilSblock (bs, ss))))
-
+        | AilEinvalid _ ->
+            pp_ail_keyword "INVALID"
       )) in
   pp None a_expr
 

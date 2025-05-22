@@ -51,7 +51,8 @@ let collect_memory_accesses (_, sigm) =
            to have an expression with VLA type here (?) *)
       | AilEsizeof_expr _
       | AilEalignof _
-      | AilEreg_load _ ->
+      | AilEreg_load _
+      | AilEinvalid _ ->
           ()
       | AilEunary (_, e)
       | AilEcast (_, _, e)
