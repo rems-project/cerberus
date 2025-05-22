@@ -536,6 +536,8 @@ let short_message = function
       string_of_core_parser_cause ccause
   | DRIVER dcause ->
       string_of_driver_cause dcause
+  | INTERNAL_ERROR (Internal_error_desugaring str) ->
+      "internal error during desugaring (" ^ str ^ ")"
 
 type std_ref =
   | StdRef of string list
@@ -620,17 +622,21 @@ let make_message loc err k =
     | [ref] -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref
     | ref::refs -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
   in
-  match Cerb_global.verbose (), get_std_ref err with
-  | Basic, _
-  | _, NoRef ->
+  match err with
+  | INTERNAL_ERROR _ ->
       Printf.sprintf "%s %s %s\n%s" head kind msg pos
-  | RefStd, StdRef refs ->
-      Printf.sprintf "%s %s %s (%s)\n%s" head kind msg (string_of_refs refs) pos
-  | RefStd, UnknownRef
-  | QuoteStd, UnknownRef ->
-      Printf.sprintf "%s %s %s (unknown ISO C reference)\n%s" head kind msg pos
-  | QuoteStd, StdRef refs ->
-      Printf.sprintf "%s %s %s\n%s\n%s" head kind msg pos (string_of_quotes refs)
+  | _ ->
+    match Cerb_global.verbose (), get_std_ref err with
+    | Basic, _
+    |  _, NoRef ->
+        Printf.sprintf "%s %s %s\n%s" head kind msg pos
+    | RefStd, StdRef refs ->
+        Printf.sprintf "%s %s %s (%s)\n%s" head kind msg (string_of_refs refs) pos
+    | RefStd, UnknownRef
+    | QuoteStd, UnknownRef ->
+        Printf.sprintf "%s %s %s (unknown ISO C reference)\n%s" head kind msg pos
+    | QuoteStd, StdRef refs ->
+        Printf.sprintf "%s %s %s\n%s\n%s" head kind msg pos (string_of_quotes refs)
 
 let to_string (loc, err) =
   match err with
