@@ -298,6 +298,8 @@ let inline return = State_exception.return
 val bind: forall 'a 'b. desugM 'a -> ('a -> desugM 'b) -> desugM 'b
 let inline bind = State_exception.bind
 
+val generic_fail: forall 'a. Errors.error -> desugM 'a
+let inline generic_fail err = State_exception.fail err
 
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
 let inline fail loc dcause = State_exception.fail (loc, Errors.DESUGAR dcause)
