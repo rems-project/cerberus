@@ -325,6 +325,7 @@ type asm_qualifier =
 %start fundef_spec
 %start loop_spec
 %start cn_statements
+%start cn_ghosts
 %start cn_toplevel
 
 %type<Symbol.identifier Cn.cn_base_type> base_type
@@ -340,6 +341,7 @@ type asm_qualifier =
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec> loop_spec
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_statement> cn_statement
 %type<((Symbol.identifier, Cabs.type_name) Cn.cn_statement) list> cn_statements
+%type<((Symbol.identifier, Cabs.type_name) Cn.cn_expr) list> cn_ghosts
 %type<(Symbol.identifier * Symbol.identifier Cn.cn_base_type) list> cn_args
 
 
@@ -2524,6 +2526,10 @@ cn_statement:
 cn_statements:
 | ls=nonempty_list(cn_statement) EOF
     { ls }
+
+cn_ghosts:
+| gs = separated_list(COMMA, expr)
+    { gs }
 
 cn_toplevel_elem:
 | pred= cn_predicate
