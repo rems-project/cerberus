@@ -2282,7 +2282,10 @@ STD_ "§6.5.2.1#2, sentence 2" $
             (AilEbinary <$> desugar_expression e1
                         <*> E.return (Arithmetic Add)
                         <*> desugar_expression e2)))
-    | CabsEcall e es attrs ->
+    | CabsEcall e es Nothing ->
+        AnnotatedExpression () [] loc <$>
+          (AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es)
+    | CabsEcall e es (Just attrs) ->
         (* TODO: STD check + annot *)
         E.record_marker () >>= fun id ->
         AnnotatedExpression () [Annot.Amarker id; Annot.Aattrs attrs] loc <$>
