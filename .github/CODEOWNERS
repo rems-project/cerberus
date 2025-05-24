@@ -1,0 +1,20 @@
+* @kmemarian
+
+# CN
+frontend/model/cn.lem @cp526 @dc-mak @kmemarian
+frontend/model/cn_desugaring.lem @cp526 @dc-mak @kmemarian
+ocaml_frontend/cn_ocaml.ml @cp526 @dc-mak @kmemarian
+ocaml_frontend/milicore.ml @cp526 @dc-mak @kmemarian
+ocaml_frontend/milicore_label_inline.ml @cp526 @dc-mak @kmemarian
+
+# CHERI-C
+# coq/*
+# memory/cheri-coq/*
+# runtime/libc/include/cheri/*
+# runtime/libc/include/cheriintrin.h
+# _CoqProject
+# cerberus-cheri.opam
+# README-cheri.md
+
+# workflows and CODEOWNERS
+/.github/ @kmemarian
