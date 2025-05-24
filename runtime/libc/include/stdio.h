@@ -24,6 +24,15 @@ typedef long long fpos_t;
 
 #define L_tmpnam      20
 
+/* Even so it is undefined to do so, there is code out there that defines these
+ * before including stdio.h, so we undefine them first. We might want to have
+ * a pedantic mode that fails on this, but doing so by default will be too
+ * common.
+ */
+#undef SEEK_SET
+#undef SEEK_CUR
+#undef SEEK_END
+
 #define SEEK_SET      0
 #define SEEK_CUR      1
 #define SEEK_END      2
