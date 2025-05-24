@@ -105,6 +105,7 @@ let cerberus debug_level progress core_obj
   Cerb_debug.debug_level := debug_level;
   Cerb_runtime.specified_runtime := runtime_path_opt;
   let cpp_cmd =
+    let cpp_cmd = if syntax_only then cpp_cmd ^ " -D__cerb_syntax_only__" else cpp_cmd in
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
   let args = match args_opt with
