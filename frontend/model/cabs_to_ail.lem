@@ -869,6 +869,12 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
         else
           is_lvalue_to_static_object e
 
+    | AilEstr _ ->
+        (* String literals decay to a pointer to the start of an array of
+           static storage duration (except when directly initialising an array,
+           but this is not relevant here) *)
+        E.return true
+
 (* TODO
     | AilEmemberof e ident ->
 *)
