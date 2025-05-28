@@ -325,7 +325,7 @@ type asm_qualifier =
 %start fundef_spec
 %start loop_spec
 %start cn_statements
-%start cn_ghosts
+%start cn_ghost_args
 %start cn_toplevel
 
 %type<Symbol.identifier Cn.cn_base_type> base_type
@@ -341,7 +341,7 @@ type asm_qualifier =
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec> loop_spec
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_statement> cn_statement
 %type<((Symbol.identifier, Cabs.type_name) Cn.cn_statement) list> cn_statements
-%type<((Symbol.identifier, Cabs.type_name) Cn.cn_expr) list> cn_ghosts
+%type<((Symbol.identifier, Cabs.type_name) Cn.cn_expr) list> cn_ghost_args
 %type<(Symbol.identifier * Symbol.identifier Cn.cn_base_type) list> cn_args
 
 
@@ -2425,18 +2425,18 @@ accesses_or_function:
 | accs=nonempty_list(accesses)
   { Cerb_frontend.Cn.CN_accesses (List.concat accs) }
 
-ghost:
+ghost_binders:
 | CN_GHOST g=cn_args SEMICOLON
   { g }
 
 requires_clauses:
-| CN_REQUIRES ghost_args=option(ghost)
+| CN_REQUIRES ghost_args=option(ghost_binders)
   reqs=nonempty_list(condition)
   { Option.value ghost_args ~default:[], reqs }
 
 ensures_clauses:
 | CN_ENSURES
-  ghost_rets=option(ghost)
+  ghost_rets=option(ghost_binders)
   enss=nonempty_list(condition)
   { Option.value ghost_rets ~default:[], enss }
 
@@ -2527,8 +2527,8 @@ cn_statements:
 | ls=nonempty_list(cn_statement) EOF
     { ls }
 
-cn_ghosts:
-| gs = separated_list(COMMA, expr)
+cn_ghost_args:
+| gs = separated_list(COMMA, expr) EOF
     { gs }
 
 cn_toplevel_elem:
