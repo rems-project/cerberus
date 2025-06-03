@@ -117,7 +117,7 @@ let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec
             `Assoc [ "status", `String "Undefined"
                    ; "details", `Assoc [ "ub", `String (Undefined.stringFromUndefined_behaviour ub)
                                        ; "stderr", `String (String.escaped stderr)
-                                       ; "loc", Cerb_location.to_json loc ] ]
+                                       ; "loc", (Cerb_location.to_json loc :> Yojson.t) ] ]
           end
         end else
           Printf.bprintf buf "Undefined {ub: \"%s\", stderr: \"%s\", loc: \"%s\"}%s"
