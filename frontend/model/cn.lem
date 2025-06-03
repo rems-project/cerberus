@@ -211,8 +211,8 @@ type cn_acc_func 'a =
 type cn_func_spec 'a 'ty = <|
   cn_func_trusted: maybe Loc.t;
   cn_func_acc_func: maybe (Loc.t * cn_acc_func 'a);
-  cn_func_requires: maybe (Loc.t * list (cn_condition 'a 'ty));
-  cn_func_ensures: maybe (Loc.t * list (cn_condition 'a 'ty));
+  cn_func_requires: maybe (Loc.t * (list ('a * cn_base_type 'a) * list (cn_condition 'a 'ty)));
+  cn_func_ensures: maybe (Loc.t * (list ('a * cn_base_type 'a) * list (cn_condition 'a 'ty)));
 |>
 
 type cn_decl_spec 'a 'ty = <|

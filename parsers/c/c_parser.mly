@@ -150,7 +150,7 @@ type asm_qualifier =
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
-%token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
+%token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV CN_GHOST
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_PRINT
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
 %token <[`U|`I] * int>CN_BITS
@@ -325,6 +325,7 @@ type asm_qualifier =
 %start fundef_spec
 %start loop_spec
 %start cn_statements
+%start cn_ghost_args
 %start cn_toplevel
 
 %type<Symbol.identifier Cn.cn_base_type> base_type
@@ -340,6 +341,7 @@ type asm_qualifier =
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec> loop_spec
 %type<(Symbol.identifier, Cabs.type_name) Cn.cn_statement> cn_statement
 %type<((Symbol.identifier, Cabs.type_name) Cn.cn_statement) list> cn_statements
+%type<((Symbol.identifier, Cabs.type_name) Cn.cn_expr) list> cn_ghost_args
 %type<(Symbol.identifier * Symbol.identifier Cn.cn_base_type) list> cn_args
 
 
@@ -2423,13 +2425,20 @@ accesses_or_function:
 | accs=nonempty_list(accesses)
   { Cerb_frontend.Cn.CN_accesses (List.concat accs) }
 
+ghost_binders:
+| CN_GHOST g=cn_args SEMICOLON
+  { g }
+
 requires_clauses:
-| CN_REQUIRES reqs=nonempty_list(condition)
-  { reqs }
+| CN_REQUIRES ghost_args=option(ghost_binders)
+  reqs=nonempty_list(condition)
+  { Option.value ghost_args ~default:[], reqs }
 
 ensures_clauses:
-| CN_ENSURES enss=nonempty_list(condition)
-  { enss }
+| CN_ENSURES
+  ghost_rets=option(ghost_binders)
+  enss=nonempty_list(condition)
+  { Option.value ghost_rets ~default:[], enss }
 
 (* It's possible to use anonymous midrules for many of these but it results in
    auto-generated nonterminal names which make auto-generated error messages
@@ -2517,6 +2526,10 @@ cn_statement:
 cn_statements:
 | ls=nonempty_list(cn_statement) EOF
     { ls }
+
+cn_ghost_args:
+| gs = separated_list(COMMA, expr) EOF
+    { gs }
 
 cn_toplevel_elem:
 | pred= cn_predicate
