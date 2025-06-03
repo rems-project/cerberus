@@ -360,15 +360,7 @@ module MakePp (Conf: PP_CN) = struct
 
   let dtrees_of_cn_ghosts ghosts = dtrees_of_args Conf.pp_ident ghosts
 
-  let dtrees_of_opt_cn_ghosts = function
-    | None -> []
-    | Some (_loc, (ghosts, _conds)) -> dtrees_of_cn_ghosts ghosts
-
   let dtrees_of_cn_conditions conds = List.map dtree_of_cn_condition conds
-
-  let dtrees_of_opt_cn_conds = function
-    | None -> []
-    | Some (_loc, (_ghosts, conds)) -> dtrees_of_cn_conditions conds
 
   let dtrees_of_cn_func_spec
       { cn_func_trusted
@@ -387,12 +379,15 @@ module MakePp (Conf: PP_CN) = struct
           [ Dnode (pp_ctor "[CN]accesses", List.map (fun x -> Dleaf (Conf.pp_ident x)) globals) ]
         | Some (_, CN_mk_function f) ->
           [ Dnode (pp_ctor "[CN]cn_function", [ Dleaf (Conf.pp_ident f) ] ) ] in
+    let opt_split3 = Option.fold ~none:(None, [], []) ~some:(fun (x,(y,z)) -> (Some x, y, z)) in
+    let _req_loc, req_ghost, req_conds = opt_split3 cn_func_requires in
+    let _ens_loc, ens_ghost, ens_conds = opt_split3 cn_func_ensures in
     trusted @
     acc_func @
-    [ Dnode (pp_ctor "[CN]ghost_arguments", dtrees_of_opt_cn_ghosts cn_func_requires)
-    ; Dnode (pp_ctor "[CN]requires", dtrees_of_opt_cn_conds cn_func_requires)
-    ; Dnode (pp_ctor "[CN]ghost_returns", dtrees_of_opt_cn_ghosts cn_func_ensures)
-    ; Dnode (pp_ctor "[CN]ensures", dtrees_of_opt_cn_conds cn_func_ensures)
+    [ Dnode (pp_ctor "[CN]ghost_arguments", dtrees_of_cn_ghosts req_ghost)
+    ; Dnode (pp_ctor "[CN]requires", dtrees_of_cn_conditions req_conds)
+    ; Dnode (pp_ctor "[CN]ghost_returns", dtrees_of_cn_ghosts ens_ghost)
+    ; Dnode (pp_ctor "[CN]ensures", dtrees_of_cn_conditions ens_conds)
     ]
 
   let dtree_of_cn_spec s =
