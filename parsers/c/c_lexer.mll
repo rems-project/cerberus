@@ -168,7 +168,6 @@ let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
     "true"          , (Production, CN_TRUE);
     "false"         , (Production, CN_FALSE);
     "requires"      , (Production, CN_REQUIRES);
-    "ghost"         , (Production, CN_GHOST);
     "ensures"       , (Production, CN_ENSURES);
     "inv"           , (Production, CN_INV);
     "accesses"      , (Production, CN_ACCESSES);
@@ -200,6 +199,7 @@ let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
     "cn_have"       , (Experimental, CN_HAVE);
     "cn_function"   , (Experimental, CN_LIFT_FUNCTION);
     "cn_print"      , (Experimental, CN_PRINT);
+    "cn_ghost"      , (Experimental, CN_GHOST);
     "to_bytes"      , (Experimental, CN_TO_BYTES);
     "from_bytes"    , (Experimental, CN_FROM_BYTES);
 
