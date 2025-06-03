@@ -8,9 +8,7 @@ type json =
     | `List of json list
     | `Null
     | `String of string
-    | `Stringlit of string
-    | `Tuple of json list
-    | `Variant of string * json option ]
+    | `Stringlit of string ]
 
 let of_string s = `String s
 
