@@ -687,7 +687,7 @@ let cerberus ~rheader ~conf ~flow content =
   do_action msg.action >|= json_of_result >>= fun json ->
   let time = Some ((Sys.time () -. start_time) *. 1000.) in
   Sys.remove filename;
-  respond_json ~time ~rheader json
+  respond_json ~time ~rheader (json : Cerb_json.json :> Yojson.t)
 
 (* GET and POST *)
 
@@ -760,7 +760,7 @@ let post ~conf ~rheader ~flow uri path content =
     | Lwt_io.Channel_closed msg ->
       Debug.warn @@ "Lwt channel closed: " ^ msg;
       respond_json ~time:None ~rheader
-      @@ json_of_result
+      @@ (json_of_result : _ -> Cerb_json.json :> _ -> Yojson.t)
       @@ Failure "Error: timeout!"
     | e ->
       Debug.error_exception "POST" e;
