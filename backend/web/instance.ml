@@ -75,6 +75,7 @@ let hack ?(is_bmc=false) ~conf mode =
       defacto=          false;
       permissive=       false;
       agnostic=         false;
+      lexicon=          default_lexicon;
       ignore_bitfields= false;
       n1570=            Some conf.instance.n1570;
     }

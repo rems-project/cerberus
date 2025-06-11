@@ -9,6 +9,15 @@ type execution_mode =
   | Exhaustive
   | Random
 
+type lexicon = {
+  with_c23: bool;     (* add keywords introduced by C23 *)
+  with_gnu: bool;     (* add GCC keywords extensions *)
+  without_cerb: bool; (* remove optional Cerberus keywords *)
+}
+
+(* Default to C11 lexicon with no GCC extensions, but with Cerberus keywords *)
+val default_lexicon: lexicon
+
 (*
  * NOTE: incomplete list of uses of permissive:
  *   - (Cabs parsing) allows extra semicolons
@@ -22,6 +31,7 @@ type cerberus_conf = {
   defacto:         bool;
   permissive:      bool; (* allows GCC extensions and stuff *)
   agnostic:        bool;
+  lexicon:         lexicon;
   ignore_bitfields: bool;
   n1570:           Yojson.Basic.t option;
 }
@@ -31,6 +41,7 @@ val (!!): (unit -> 'a) ref -> 'a
 val cerb_conf: (unit -> cerberus_conf) ref
 
 val set_cerb_conf:
+    ?lexicon:lexicon ->
     backend_name:string ->
     exec:bool ->
     execution_mode ->
