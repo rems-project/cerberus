@@ -62,7 +62,6 @@ Inductive annot : Type :=
   | Aattrs:  attributes  -> annot  (* C2X attributes *)
   | Atypedef:  CoqSymbol.sym  -> annot  (* (TODO: I don't like but hey)
                               must only be used on a ctype to indicate it is a unfolding of a typedef *)
-  | Anot_explode: annot  (* tell the a-normalisation not to explode if-then-else *)
   | Alabel:  label_annot  -> annot
   | Acerb: cerb_attribute -> annot
   | Avalue: value_annot -> annot
