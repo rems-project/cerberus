@@ -133,6 +133,13 @@ type bindings =
 type identifier_item_kind = Annot.identifier_item_kind
 type identifier_env = Annot.identifier_env
 
+(* Annotation to Ail statement to keep track of nodes resulting from some
+   desugaring of a C/Cabs construct *)
+type desug_info =
+  | Desug_none (* no desugaring *)
+  | Desug_forloop
+  | Desug_continue
+
 type ail_invalid_reason =
   | AilInvalid_desugaring_init_failed of string
   | AilInvalid_other of string
@@ -221,16 +228,16 @@ and statement_ 'a [name="s*"] =
   | AilSmarker of nat * statement 'a (* NOTE: this is placeholder we used to carry annotations for CN *)
 and statement 'a [name="s*"] = <|
   loc: Loc.t;
-  is_forloop: bool; (* whether this Ail statement is the desugaring of a for loop *)
+  desug_info: desug_info;
   attrs: Annot.attributes;
   node: statement_ 'a;
 |>
 
 let mk_statement loc node =
-  <| loc= loc; is_forloop= false; attrs= Annot.no_attributes; node= node |>
+  <| loc= loc; desug_info= Desug_none; attrs= Annot.no_attributes; node= node |>
 
-let mk_statement_full loc is_forloop attrs node =
-  <| loc= loc; is_forloop= is_forloop; attrs= attrs; node= node |>
+let mk_statement_full loc desug_info attrs node =
+  <| loc= loc; desug_info= desug_info; attrs= attrs; node= node |>
 
 instance forall 'a. (Located (expression 'a))
   let locOf a_expr =

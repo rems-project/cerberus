@@ -3234,7 +3234,7 @@ let rec erase_loop_control_aux stmt =
       let break_sym    = Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x) in
       let (ret, st')   = mf <| elc_continue= Just continue_sym; elc_break= Just break_sym |> in
       ((continue_sym, break_sym, ret), st) in 
-  A.mk_statement_full loc stmt.A.is_forloop stmt.A.attrs <$> match stmt.A.node with
+  A.mk_statement_full loc stmt.A.desug_info stmt.A.attrs <$> match stmt.A.node with
     | A.AilSskip ->
         St.return stmt.A.node
     | A.AilSexpr _ ->
