@@ -3674,11 +3674,12 @@ E.fresh_block_scope >>= fun scope ->
 and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
   let attrs_outer = attrs in
   let self = desugar_statement_aux ctx in
-  let is_forloop = match stmt_ with
-    | CabsSfor _ _ _ _ -> true
-    | _ -> false
+  let desug_info = match stmt_ with
+    | CabsSfor _ _ _ _ -> Desug_forloop
+    | CabsScontinue -> Desug_continue
+    | _ -> Desug_none
   end in
-  mk_statement_full loc is_forloop attrs <$>
+  mk_statement_full loc desug_info attrs <$>
     match stmt_ with
       | CabsSlabel ident s ->
           AilSlabel <$> E.resolve_label ident
@@ -3894,7 +3895,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                     let d_s_e3 = mk_statement Loc.unknown (AilSexpr d_e3) in
                     E.return match d_s.A.node with
                       | AilSblock bindings d_ss ->
-                          mk_statement_full d_s.A.loc d_s.A.is_forloop d_s.A.attrs (
+                          mk_statement_full d_s.A.loc d_s.A.desug_info d_s.A.attrs (
                             AilSblock bindings (d_ss ++ [mk_statement loc (AilSlabel cont_sym d_s_e3 loop_annot)])
                           )
                       | _ ->
@@ -3933,7 +3934,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           (* this avoids introducing an unecessary block *)
           let mk_d_s_body d_s_e3 stmt = match stmt.A.node with
             | AilSblock bs d_ss ->
-                mk_statement_full stmt.A.loc stmt.A.is_forloop stmt.A.attrs (AilSblock bs (d_ss ++ [d_s_e3]))
+                mk_statement_full stmt.A.loc stmt.A.desug_info stmt.A.attrs (AilSblock bs (d_ss ++ [d_s_e3]))
             | _ ->
                 mk_statement loc (AilSblock [] [stmt; d_s_e3])
           end in

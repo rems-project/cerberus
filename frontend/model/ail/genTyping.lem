@@ -2185,7 +2185,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
 
 and annotate_statement sigm gamm ty stmt =
   annotate_statement_ stmt.loc sigm gamm ty stmt.node >>= fun node' ->
-  E.return (mk_statement_full stmt.loc stmt.is_forloop stmt.attrs node')
+  E.return (mk_statement_full stmt.loc stmt.desug_info stmt.attrs node')
 
 (* ty_opt should be Nothing if the annotate_block is passed to a function
    annotating outside of the body of a function *)
