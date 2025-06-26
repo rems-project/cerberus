@@ -1628,11 +1628,11 @@ else match AilTypesAux.referenced_type (ctype_of e) with
                           Caux.mk_pure_e begin
                             Caux.mk_if_pe test_wrp.E.sym_pe
                               obj_wrp.E.sym_pe
-                              (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)
+                              (Caux.mk_std_undef_pe loc "§6.5.3.2#4, sentence 4" Undefined.UB043_indirection_invalid_value)
                           end
                         end )
                   ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                    , Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value) ) ]
+                    , Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.3.2#4, sentence 4" Undefined.UB043_indirection_invalid_value) ) ]
               end
             end
           end
