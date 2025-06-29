@@ -205,7 +205,7 @@ let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
 
     (* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
     "pack"          , (Unimplemented, CN_PACK);
-    "unpack"        , (Unimplemented, CN_UNPACK);
+    "unpack"        , (Production, CN_UNPACK);
   ]
 
 
