@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env -S bash -euo pipefail
 
 for f in _lem/*.lem
 do

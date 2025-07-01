@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env -S bash -euo pipefail
 
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
   $@
