@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env -S bash -euo pipefail
 
 # Sets the CERB and CERB_INSTALL_PREFIX variables for a given backend
 # (given in $1).
