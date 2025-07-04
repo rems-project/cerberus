@@ -430,9 +430,9 @@ module MakePp (Conf: PP_CN) = struct
   let dtree_of_cn_statement (CN_statement (_loc, stmt_)) =
     match stmt_ with
     | CN_pack_unpack (Pack, pred, args) ->
-       Dnode (pp_ctor "[CN]pack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
+       Dnode (pp_ctor "[CN]pack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr (List.flatten (Option.to_list args))))
     | CN_pack_unpack (Unpack, pred, args) ->
-       Dnode (pp_ctor "[CN]unpack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
+       Dnode (pp_ctor "[CN]unpack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr (List.flatten (Option.to_list args))))
     | CN_to_from_bytes (To, pred, args) ->
        Dnode (pp_ctor "[CN]to_bytes", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
     | CN_to_from_bytes (From, pred, args) ->

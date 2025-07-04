@@ -4550,7 +4550,7 @@ let desugar_cn_statement (CN_statement loc stmt_) =
   | CN_pack_unpack pack_unpack pred iargs ->
      (* copying from desugar_cn_resource *)
      desugar_cn_pred pred >>= fun pred ->
-     E.mapM desugar_cn_expr iargs >>= fun iargs ->
+     desugar_maybe (fun i -> E.mapM desugar_cn_expr i) iargs >>= fun iargs ->
      E.return (CN_pack_unpack pack_unpack pred iargs)
   | CN_to_from_bytes to_from pred iargs ->
      desugar_cn_pred pred >>= fun pred ->
