@@ -2479,16 +2479,24 @@ loop_spec:
 | p=pred COMMA
     { Cerb_frontend.Cn.E_Pred p }
 
+%inline cn_pack_unpack:
+| CN_PACK
+    { Pack }
+| CN_UNPACK
+    { Unpack }
+
+cn_exprs_or_elipsis:
+| es = separated_list(COMMA, expr)
+    { Some es }
+| ELLIPSIS
+    { None }
 
 cn_statement:
 /* copying from 'resource' rule */
-| CN_PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+| pack_unpack=cn_pack_unpack p= pred es= delimited(LPAREN, cn_exprs_or_elipsis, RPAREN) SEMICOLON
     { let loc = region ($startpos, $endpos) noCursor in
-      CN_statement (loc , CN_pack_unpack (Pack, p, es)) }
+      CN_statement (loc , CN_pack_unpack (pack_unpack, p, es)) }
 /* copying from 'resource' rule */
-| CN_UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
-    { let loc = region ($startpos, $endpos) noCursor in
-      CN_statement (loc , CN_pack_unpack (Unpack, p, es)) }
 | CN_TO_BYTES p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = region ($startpos, $endpos) noCursor in
       CN_statement (loc , CN_to_from_bytes (To, p, es)) }
