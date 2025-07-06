@@ -1311,24 +1311,24 @@ statement:
 labeled_statement:
 | attr_opt= ioption(attribute_specifier_sequence) i= general_identifier COLON
   stmt= statement
-    { CabsStatement (region ($startpos, $endpos) noCursor,
+    { CabsStatement (region ($startpos(i), $endpos) noCursor,
         to_attrs attr_opt,
         CabsSlabel (i, stmt)) }
 | attr_opt= attribute_specifier_sequence? CASE expr1= constant_expression ELLIPSIS expr2= constant_expression COLON
   stmt= statement
     { CabsStatement
-        ( region ($startpos, $endpos) noCursor
+        ( region ($startpos($2), $endpos) noCursor
         , to_attrs attr_opt
         , CabsScaseGNU (expr1, expr2, stmt) ) }
 | attr_opt= attribute_specifier_sequence? CASE expr= constant_expression COLON
   stmt= statement
     { CabsStatement
-        ( region ($startpos, $endpos) noCursor
+        ( region ($startpos($2), $endpos) noCursor
         , to_attrs attr_opt
         , CabsScase (expr, stmt) ) }
 | attr_opt= attribute_specifier_sequence? DEFAULT COLON stmt= statement
     { CabsStatement
-        ( region ($startpos, $endpos) noCursor
+        ( region ($startpos($2), $endpos) noCursor
         , to_attrs attr_opt
         , CabsSdefault stmt ) }
 ;
