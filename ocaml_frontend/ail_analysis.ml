@@ -83,10 +83,10 @@ let collect_memory_accesses (_, sigm) =
       | AilEcall (e, es) ->
           aux_expr e;
           List.iter aux_expr es
-      | AilEgeneric (e, gas) ->
+      | AilEgeneric (e, _, gas) ->
           aux_expr e;
           List.iter (function
-            | AilGAtype (_, e)
+            | AilGAtype (_, _, e)
             | AilGAdefault e -> aux_expr e
           ) gas
       | AilEarray (_ , _, xs) ->

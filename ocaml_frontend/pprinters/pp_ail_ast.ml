@@ -277,14 +277,16 @@ let rec dtree_of_expression pp_annot expr =
         Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
 
     let pp_cabs_id = Pp_symbol.pp_identifier in
-    let dtree_of_generic_association = function
-      | AilGAtype (ty, e) ->
+    let annot_selected b doc =
+      if b then doc ^^^ !^ "selected" else doc in
+    let dtree_of_generic_association selected = function
+      | AilGAtype (qs, ty, e) ->
           let d_ctor = pp_expr_ctor "AilGAtype" in
-          Dnode ( d_ctor ^^^ P.squotes (pp_ctype empty_qs ty)
+          Dnode ( annot_selected selected d_ctor ^^^ P.squotes (pp_ctype qs ty)
                 , [self e] )
       | AilGAdefault e ->
           let d_ctor = pp_expr_ctor "AilGAdefault" in
-          Dnode ( d_ctor, [self e] )
+          Dnode ( annot_selected selected d_ctor, [self e] )
     in
     let dtree_of_field (cid, e_opt) =
       match e_opt with
@@ -345,11 +347,17 @@ let rec dtree_of_expression pp_annot expr =
           let d_ctor = pp_expr_ctor "AilEoffsetof" in
           (*add_std_to_leaf*)Dleaf ( d_ctor ^^^ pp_cabs_id ident ^^^
                 P.squotes (pp_ctype empty_qs ty))
-      | AilEgeneric (e, gas) ->
+      | AilEgeneric (e, idx_opt, gas) ->
           let d_ctor = pp_expr_ctor "AilEgeneric" in
+          let d_gas = match idx_opt with
+            | None -> List.map (dtree_of_generic_association false) gas
+            | Some sel_idx ->
+                List.mapi (fun idx ->
+                  dtree_of_generic_association Int.(equal sel_idx idx)
+                ) gas
+          in
           Dnode ( d_ctor
-                , (*add_std_annot*) (self e :: List.map dtree_of_generic_association
-                                   gas) )
+                , (*add_std_annot*) (self e :: d_gas) )
       | AilEarray (is_str, ty, e_opts) ->
           let d_ctor = pp_expr_ctor "AilEarray" in
           Dnode ( d_ctor ^^^ (if is_str then !^ (ansi_format [Cyan] "str") ^^ P.space else P.empty) ^^

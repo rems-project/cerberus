@@ -40,9 +40,19 @@ type illegal_initialisation =
   | InitialisedIncomplete of ctype
   | InitialisedVLA
 
+type invalid_generic_association =
+  | InvalidGenericAssociation_not_object
+  | InvalidGenericAssociation_incomplete
+  | InvalidGenericAssociation_VLA
 
 type violation =
   (* 6.5 Expressions *)
+  (* 6.5.1.1 Generic selection *)
+  | GenericSelectionMultipleDefault (* §6.5.1.1#2, sentence 1 *)
+  | GenericSelectionIncorrectType of (qualifiers * ctype) * invalid_generic_association (* §6.5.1.1#2, sentence 2 *)
+  | GenericSelectionOverlapping of (qualifiers * ctype) * (qualifiers * ctype) (* §6.5.1.1#2, sentence 3 *)
+  | GenericSelectionMultipleMatch of genType (* §6.5.1.1#2, sentence 4 *)
+  | GenericSelectionNoMatch of genType (* §6.5.1.1#2, sentence 5 *)
   (* 6.5.2.2 Function calls *)
   | FunctionCallIncompleteReturnType of ctype (* §6.5.2.2#1 *)
   | FunctionCallArrayReturnType of ctype (* §6.5.2.2#1 *)
@@ -248,6 +258,16 @@ let std_of_atomic_operation_synopsis = function
 end
 
 let std_of_violation = function
+  | GenericSelectionMultipleDefault ->
+      ["§6.5.1.1#2, sentence 1"]
+  | GenericSelectionIncorrectType _ _ ->
+      ["§6.5.1.1#2, sentence 2"]
+  | GenericSelectionOverlapping _ _ ->
+      ["§6.5.1.1#2, sentence 3"]
+  | GenericSelectionMultipleMatch _ ->
+      ["§6.5.1.1#2, sentence 4"]
+  | GenericSelectionNoMatch _ ->
+      ["§6.5.1.1#2, sentence 5"]
   | FunctionCallIncompleteReturnType _ -> 
       ["§6.5.2.2#1"]
   | FunctionCallArrayReturnType _ ->

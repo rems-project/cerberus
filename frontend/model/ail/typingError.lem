@@ -15,6 +15,7 @@ type typing_error =
   | TError_UndefinedBehaviour of Undefined.undefined_behaviour
   | TError_MiscError of typing_misc_error
   | TError_NotYetSupported of string
+  | TError_AgnosticFailure of string
   | TError_CN of Cn.cn_typing_error
 
 val std_of_typing_misc_error: typing_misc_error -> list string
@@ -45,6 +46,8 @@ let std_of_ail_typing_error = function
   | TError_MiscError e ->
       std_of_typing_misc_error e
   | TError_NotYetSupported _ ->
+      []
+  | TError_AgnosticFailure _ ->
       []
   | TError_CN _ ->
       []
