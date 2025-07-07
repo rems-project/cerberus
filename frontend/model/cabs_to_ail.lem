@@ -1719,10 +1719,11 @@ let rec desugar_type_specifiers specs =
               end
 
           | [TSpec loc (TSpec_typeof_expr e)] ->
-              desugar_expression e >>= fun d_e  ->
-              E.get_sigma_sofar    >>= fun sigm ->
-              E.get_gamma_sofar    >>= fun gamm ->
-              match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (GenTyping.annotate_block Nothing) sigm gamm GenTyping.CTXsizeof d_e) with
+              desugar_expression e      >>= fun d_e    ->
+              E.get_sigma_sofar         >>= fun sigm   ->
+              E.get_gamma_sofar         >>= fun gamm   ->
+              E.get_current_return_type >>= fun ret_ty ->
+              match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (GenTyping.annotate_block (Just ret_ty)) sigm gamm GenTyping.CTXsizeof d_e) with
               | Left (loc, err) ->
                   E.fail_ailtyping loc err
               | Right a_expr ->
