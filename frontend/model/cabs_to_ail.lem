@@ -1002,9 +1002,6 @@ val desugar_init_declarator:
   E.desugM (maybe (Loc.t * Annot.attributes * linkage * ail_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
             (unit -> E.desugM (maybe (Ctype.ctype * expression unit)))))
 
-val desugar_generic_association:
-  cabs_generic_association -> E.desugM (generic_association unit)
-
 val check_storage_class_specifiers:
   Loc.t -> declaration_context -> list storage_class_specifier -> E.desugM unit
 
@@ -1316,6 +1313,20 @@ List.all (function
 
 
 
+let rec find_compatible_generic_association (qs, ty) = function
+  | [] -> Nothing
+  | AilGAtype qs' ty' _ :: gs' ->
+      if AilTypesAux.are_compatible
+        (qs, ty) (qs', ty') then
+        Just (qs', ty')
+      else
+        find_compatible_generic_association (qs, ty) gs'
+  | AilGAdefault _ :: gs' ->
+      find_compatible_generic_association (qs, ty) gs'
+end
+
+let invalid_generic_association loc qs_ty kind =
+  E.constraint_violation loc (GenericSelectionIncorrectType qs_ty kind)
 
 
 val desugar_basic_type_specifiers: list Loc.t -> Multiset.t cabs_base_type_specifier -> E.desugM (maybe (Loc.t * Ctype.basicType))
@@ -2277,10 +2288,37 @@ STD_ "§6.5.1#2" $
     | CabsEstring lit ->
         AnnotatedExpression () [] loc <$> E.return (AilEstr $ translate_cabs_string_literal lit)
     | CabsEgeneric e gas ->
-        AnnotatedExpression () [] loc <$>
-          (AilEgeneric <$> desugar_expression e
-                       <*> E.mapM desugar_generic_association gas)
-    
+        desugar_expression e >>= fun d_e ->
+        E.foldlM (fun (seen_default, acc) ga ->
+          match ga with
+            | GA_type tyname e ->
+                desugar_type_name tyname >>= fun (qs, ty) ->
+                E.is_complete_object ty >>= fun is_complete_object ->
+                if not (AilTypesAux.is_object ty) then
+                  invalid_generic_association loc (qs, ty) InvalidGenericAssociation_not_object
+                else if not is_complete_object then
+                  invalid_generic_association loc (qs, ty) InvalidGenericAssociation_incomplete
+                else if AilTypesAux.is_vla ty then
+                  invalid_generic_association loc (qs, ty) InvalidGenericAssociation_VLA
+                else match find_compatible_generic_association (qs, ty) acc with
+                  | Just (qs', ty') ->
+                      E.constraint_violation loc (GenericSelectionOverlapping (qs', ty') (qs, ty))
+                  | Nothing ->
+                      desugar_expression e >>= fun d_e ->
+                      E.return (seen_default, AilGAtype qs ty d_e :: acc)
+                end
+            | GA_default e ->
+                if seen_default then
+                  E.constraint_violation loc GenericSelectionMultipleDefault
+                else
+                  desugar_expression e >>= fun d_e ->
+                  E.return (true, AilGAdefault d_e :: acc)
+          end
+        ) (false, []) gas >>= fun (default_opt, d_gas) ->
+        (* The compability of the controlling expression with exactly one
+           AilGAtype is checked during Ail typing *)
+        E.return (AnnotatedExpression () [] loc (AilEgeneric d_e Nothing d_gas))
+
     | CabsEsubscript e1 e2 ->
         AnnotatedExpression () [] loc <$> (
 STD_ "§6.5.2.1#2, sentence 2" $
@@ -2482,21 +2520,6 @@ STD_ "§6.5.2.1#2, sentence 2" $
           end >>= fun (AnnotatedExpression _ _ _ expr_) ->
           E.return expr_)
   end
-
-and desugar_generic_association gas =
-  match gas with
-    | GA_type tyname e ->
-        desugar_type_name tyname >>= fun (_, ty) ->
-        (* TODO: (§6.5.1.1#2, sentence 2), ty must be complete and not variably modified *)
-        desugar_expression e     >>= fun d_e     ->
-        E.return (AilGAtype ty d_e)
-    | GA_default e ->
-        AilGAdefault <$> desugar_expression e
-  end
-
-
-
-
 
 
 (* TODO: rename this function *)

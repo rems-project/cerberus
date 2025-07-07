@@ -25,7 +25,7 @@ let string_of_kind = function
 
 
 let string_of_cid (Symbol.Identifier (_, s)) = s
-let string_of_ctype ty = String_ail.string_of_ctype ~is_human:true Ctype.no_qualifiers ty
+let string_of_ctype ?(qs=Ctype.no_qualifiers) ty = String_ail.string_of_ctype ~is_human:true qs ty
 let string_of_sym = Pp_symbol.to_string_pretty
 let string_of_gentype = String_ail.string_of_genType
 
@@ -65,6 +65,20 @@ let string_of_cparser_cause = function
 
 
 let string_of_constraint_violation = function
+  | GenericSelectionMultipleDefault ->
+      "duplicate default generic association"
+  | GenericSelectionIncorrectType ((qs, ty), InvalidGenericAssociation_not_object) ->
+      "type '" ^ string_of_ctype ~qs ty ^ "' in generic association not an object type"
+  | GenericSelectionIncorrectType ((qs, ty), InvalidGenericAssociation_incomplete) ->
+      "type '" ^ string_of_ctype ~qs ty ^ "' in generic association incomplete"
+  | GenericSelectionIncorrectType ((qs, ty), InvalidGenericAssociation_VLA) ->
+      "type '" ^ string_of_ctype ~qs ty ^ "' in generic association is a variably modified type"
+  | GenericSelectionOverlapping ((qs1, ty1), (qs2, ty2)) ->
+      "type '" ^ string_of_ctype ~qs:qs2 ty2 ^ "' in generic association compatible with previously specified type '" ^ string_of_ctype ~qs:qs1 ty1 ^ "'"
+  | GenericSelectionMultipleMatch gty ->
+      "type '" ^ string_of_gentype gty ^ "' in generic selection has multiple matches"
+  | GenericSelectionNoMatch gty ->
+      "type '" ^ string_of_gentype gty ^ "' in generic selection no matche"
   | FunctionCallIncompleteReturnType ty ->
       "calling function with incomplete return type '" ^ string_of_ctype ty ^ "'"
   | FunctionCallArrayReturnType ty ->
@@ -396,6 +410,8 @@ let string_of_ail_typing_error = function
       string_of_ail_typing_misc_error tme
   | TError_NotYetSupported str ->
       "feature not yet supported: " ^ str
+  | TError_AgnosticFailure str ->
+      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnotic)"
   | TError_CN Cn.CNErr_typing_TODO ->
       "CN typing error"
 

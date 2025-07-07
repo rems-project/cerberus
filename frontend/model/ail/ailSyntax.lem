@@ -154,7 +154,9 @@ type expression_ 'a [name = "e*"] =
   | AilEcall of expression 'a * list (expression 'a)
   | AilEassert of expression 'a
   | AilEoffsetof of ctype * Symbol.identifier
-  | AilEgeneric of expression 'a * list (generic_association 'a)
+  (* the maybe nat is the index of the selected association, this is added by
+     the Ail typing *)
+  | AilEgeneric of expression 'a * maybe nat * list (generic_association 'a)
   (* NOTE: these don't exist in C (apart from in decl)
    * the boolean says whether this array was created from a string literal
    * used to initialise a pointer to an array of character *)
@@ -198,7 +200,7 @@ type expression_ 'a [name = "e*"] =
   | AilEinvalid of ctype * ail_invalid_reason
 
 and generic_association 'a =
-  | AilGAtype of ctype * expression 'a
+  | AilGAtype of qualifiers * ctype * expression 'a
   | AilGAdefault of expression 'a
 
 and expression 'a [name = "e*"] =

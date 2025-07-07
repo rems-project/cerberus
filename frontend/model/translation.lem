@@ -2670,11 +2670,18 @@ end
             end
           end
       
-      | A.AilEgeneric _ _ ->
-          (* NOTE: this is already caught by the frontend *)
-          E.record_error_at loc "TODO: elaboration of C11 generics" >>= fun () ->
-          E.return Caux.mk_skip_e
-      
+      | A.AilEgeneric _ Nothing _ ->
+          illTypedAil loc "AilEgeneric"
+
+      | A.AilEgeneric _ (Just idx) gas ->
+          (* STD §6.5.1.1 *)
+          let e = match List.index gas idx with
+            | Nothing -> illTypedAil loc "AilEgeneric"
+            | Just (A.AilGAtype _ _ e) -> e
+            | Just (A.AilGAdefault e) -> e
+          end in
+          self e
+
       | A.AilEarray _ _ e_opts ->
           let elem_ty = match result_ty with
             | Ctype.Ctype _ (Ctype.Array ty _) ->

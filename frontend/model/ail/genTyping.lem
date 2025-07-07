@@ -518,6 +518,59 @@ val annotate_arguments:
   sigma unit -> gamma -> Loc.t -> bool -> list (expression unit) -> maybe (list (qualifiers * ctype * bool)) ->
   E.errorM (list (expression genTypeCategory))
 
+type generic_selection =
+  | GA_match of genTypeCategory * nat * list (generic_association genTypeCategory)
+  | GA_multiple
+  | GA_no_match
+
+let rec find_generic_association_aux idx (select_opt, default_opt, rev_gas')
+annotate_expression are_compatible gas =
+  let next acc =
+    find_generic_association_aux (idx+1) acc
+    annotate_expression
+    are_compatible in
+  match gas with
+    | [] ->
+        let gas' = List.reverse rev_gas' in
+        E.return (match (select_opt, default_opt) with
+          | (Just (sel_gtc, sel_idx), _) ->
+              GA_match sel_gtc sel_idx gas'
+          | (Nothing, Just (def_gtc, def_idx)) ->
+              GA_match def_gtc def_idx gas'
+          | (Nothing, Nothing) ->
+              GA_no_match
+        end)
+    | AilGAtype qs ty e :: gas ->
+        annotate_expression e >>= fun e' ->
+        if are_compatible qs ty then
+          if isJust select_opt then
+            E.return GA_multiple
+          else
+            next
+              ( Just (GenTypes.genTypeCategoryOf e', idx)
+              , default_opt
+              , AilGAtype qs ty e' :: rev_gas' )
+              gas
+        else
+          next
+            ( select_opt
+            , default_opt
+            , AilGAtype qs ty e' :: rev_gas' )
+            gas
+  | AilGAdefault e :: gas ->
+      annotate_expression e >>= fun e' ->
+      next
+        ( select_opt
+        , Just (GenTypes.genTypeCategoryOf e', idx)
+        , AilGAdefault e' :: rev_gas' )
+        gas
+end
+
+let find_generic_association annotate_expression ctrl_ty gas =
+  let are_compatible qs ty =
+    AilTypesAux.are_compatible (qs, ty) (no_qualifiers, ctrl_ty) in
+  find_generic_association_aux 0 (Nothing, Nothing, []) annotate_expression are_compatible gas
+
 (* context given to [annotate_expression] to inform it on the what the current
    expression is: *)
 type annotation_context =
@@ -1086,9 +1139,21 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEoffsetof ty ident ->
         E.return (AilEoffsetof ty ident, GenRValueType (GenBasic (GenInteger SizeT)))
     
-    | AilEgeneric (* e gas *) _ _ ->
-        E.fail loc (TError_NotYetSupported "C11 generic selection")
-    
+    | AilEgeneric e _ gas ->
+        annotate_rvalue e >>= fun (e', gty) ->
+        if Global.isAgnostic () then
+          E.fail loc (TError_AgnosticFailure "_Generic() is not supported")
+        else
+          GenTypesAux.interpret_genType loc (Implementation.integerImpl ()) gty >>= fun ty ->
+          find_generic_association (annotate_expression CTXother) ty gas >>= function
+            | GA_match gtc idx gas' ->
+                E.return (AilEgeneric e' (Just idx) gas', gtc)
+            | GA_multiple ->
+                E.constraint_violation loc (GenericSelectionMultipleMatch gty)
+            | GA_no_match ->
+                E.constraint_violation loc (GenericSelectionNoMatch gty)
+          end
+
     | AilEmemberof e memb_ident ->
         (* TODO: factorise *)
         annotate_expression CTXmemberof e >>= fun a_e ->

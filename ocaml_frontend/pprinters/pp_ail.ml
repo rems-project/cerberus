@@ -556,7 +556,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             !^ "assert" ^^ P.parens (pp e)
         | AilEoffsetof (ty, ident) ->
             !^ "offsetof" ^^ P.parens (pp_ctype no_qualifiers ty ^^ P.comma ^^^ Pp_symbol.pp_identifier ident)
-        | AilEgeneric (e, gas) ->
+        | AilEgeneric (e, _, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
         | AilEarray (_, ty, e_opts) ->
             let f i e_opt =
@@ -637,8 +637,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
   pp None a_expr
 
 and pp_generic_association_aux pp_annot = function
-  | AilGAtype (ty, e) ->
-      pp_ctype no_qualifiers ty ^^ P.colon ^^^ pp_expression_aux pp_annot e
+  | AilGAtype (qs, ty, e) ->
+      pp_ctype qs ty ^^ P.colon ^^^ pp_expression_aux pp_annot e
   | AilGAdefault e ->
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
