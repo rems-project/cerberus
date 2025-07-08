@@ -752,7 +752,8 @@ except when they are contained within a subexpression that is not evaluated.115)
     | AilEident _ ->
         E.return false
     
-
+    | AilEgcc_statement _ _ ->
+        E.fail loc (Errors.Desugar_NotYetSupported "GNU statement as expression in constant expression")
     
     | _ ->
         error ("TODO: Cabs_to_ail.is_integer_constant_expression, wildcard ==> " ^

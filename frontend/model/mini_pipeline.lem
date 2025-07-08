@@ -78,7 +78,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
           Translation_aux.ctype_of a_e
     end in
     let oTy = force_core_object_type_of_ctype ty in
-    TranslateEff.bind (translate_expression true ECTX_other ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib (translate_tag_definitions sigm.A.tag_definitions: C.core_tag_definitions) a_e) (fun core_e                       ->
+    TranslateEff.bind (translate_expression Nothing true ECTX_other ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib (translate_tag_definitions sigm.A.tag_definitions: C.core_tag_definitions) a_e) (fun core_e                       ->
     TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy)) (fun e_wrp ->
     TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy)) (fun obj_wrp ->
     TranslateEff.return begin
