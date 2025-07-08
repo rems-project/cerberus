@@ -839,7 +839,10 @@ let array_shift_ptrval ptrval ty ival : pointer_value =
         failwith "UB: array_offset ==> @empty"
     | PVloc (Prov_some alloc_id, addr) ->
         (* lookup_alloc alloc_id >>= fun alloc -> *)
-        let addr' = N.(add addr (mul (ival_to_int ival) (N.of_int (Common.sizeof ty)))) in
+        (* As a GNU extension ty may be void, in which case the pointer arithmetic
+          is performed at the byte granularity *)
+        let sz = if AilTypesAux.is_void ty then N.of_int 1 else N.of_int (Common.sizeof ty) in
+        let addr' = N.(add addr (mul (ival_to_int ival) sz)) in
         (* TODO *)
         (* if alloc.killed then
           failwith "TODO UB, array_offset ==> killed"

@@ -2201,7 +2201,10 @@ module Concrete : Memory = struct
           failwith "Concrete.offsetof_ival: invalid memb_ident"
   
   let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
-    let offset = (Nat_big_num.(mul (sizeof ty) ival)) in
+    (* As a GNU extension ty may be void, in which case the pointer arithmetic
+       is performed at the byte granularity *)
+    let sz = if AilTypesAux.is_void ty then Z.one else sizeof ty in
+    let offset = (Nat_big_num.(mul sz ival)) in
     match prov with
       (* PNVI-ae-udi *)
       | Prov_symbolic iota ->
