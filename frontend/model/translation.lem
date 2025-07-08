@@ -1382,6 +1382,10 @@ type expr_ctx =
   | ECTX_other
 
 val translate_expression:
+  maybe (
+    (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+    A.bindings -> list (A.statement GenTypes.genTypeCategory) -> E.elabM (C.expr unit)
+  ) ->
   bool -> (* whether the value of the expression is used (i.e. the expression is directly applied to AilSexpr) *)
   expr_ctx ->
   (maybe Symbol.sym * maybe Symbol.sym) ->
@@ -1389,8 +1393,9 @@ val translate_expression:
   Core.core_tag_definitions ->
   A.expression GenTypes.genTypeCategory ->
   E.elabM (C.expr unit)
-let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
-  let self = translate_expression true ctx variadic_env stdlib tagDefs in
+let rec translate_expression translate_block_opt is_used ctx variadic_env stdlib tagDefs a_expr =
+  let self = translate_expression translate_block_opt true ctx variadic_env stdlib tagDefs in
+  let translate_expression = translate_expression translate_block_opt in
   let is_lvalue = match GenTypes.genTypeCategoryOf a_expr with
     | GenTypes.GenLValueType _ _ _ ->
         true
@@ -3196,9 +3201,12 @@ else
       | A.AilEatomic e ->
           self e
       
-      | A.AilEgcc_statement _ _ ->
-          E.record_error_at loc "GCC statements as expressions not yet supported" >>= fun () ->
-          E.return Caux.mk_skip_e
+      | A.AilEgcc_statement bs ss ->
+          match translate_block_opt with
+            | Nothing -> illTypedAil loc "AilEgcc_statement"
+            | Just translate_block ->
+                translate_block self bs ss
+          end
 
       | A.AilEinvalid _ _ ->
           error "Translation called on Ail program with an invalid node"
@@ -3501,9 +3509,9 @@ type translate_stmt_env = <|
 |>
 
 
-let wrapped_translate_expression is_used ctx variadic_env stdlib tagDefs e =
+let wrapped_translate_expression translate_block_opt is_used ctx variadic_env stdlib tagDefs e =
   E.track_temporary_objects begin
-    translate_expression is_used ctx variadic_env stdlib tagDefs e
+    translate_expression translate_block_opt is_used ctx variadic_env stdlib tagDefs e
   end >>= fun (xs, core_e) ->
   let bound_core = C.Expr [Annot.Astd "§6.5#2"] (C.Ebound core_e) in
   match xs with
@@ -3532,6 +3540,105 @@ let wrapped_translate_expression is_used ctx variadic_env stdlib tagDefs e =
   end
 
 
+(* TODO: make use of this function for elaboration of normal AilSblock statements *)
+let translate_block translate_expr_opt self loc f binds ss =
+  let decls_with_loc = [ (sym, ident_loc, (align_opt, qs, ty)) | forall ((sym, ((ident_loc, _, _), align_opt, qs, ty)) MEM binds ) | true ] in
+  let decls = List.map (fun (sym, _, (_, qs, ty)) -> (sym, (qs, ty))) decls_with_loc in
+  E.with_block_objects decls begin
+    match List.dest_init ss with
+      | Nothing ->
+          E.return (fun kills ->
+            Caux.mk_unit_sseq kills Caux.mk_skip_e
+          )
+      | Just (first_ss, last_s) ->
+          match translate_expr_opt with
+            | Nothing ->
+                E.mapM self ss >>= fun core_ss ->
+                E.return (fun kills ->
+                  Caux.mk_unit_sseq (core_ss ++ kills) Caux.mk_skip_e
+                )
+            | Just translate_expr ->
+                match last_s.A.node with
+                  | A.AilSexpr e ->
+                      let ty = ctype_of e in
+                      let bTy =
+                        if AilTypesAux.is_void ty then
+                          C.BTy_unit
+                        else
+                          C.BTy_loaded (force_core_object_type_of_ctype ty) in
+                      E.wrapped_fresh_symbol bTy >>= fun e_wrp ->
+                      E.mapM self first_ss >>= fun core_first_ss ->
+                      translate_expr e     >>= fun core_e        ->
+                      E.return (fun kills ->
+                        Caux.mk_unit_sseq core_first_ss begin
+                          Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
+                            Caux.mk_unit_sseq kills
+                              (Caux.mk_pure_e e_wrp.E.sym_pe)
+                          end
+                        end
+                      )
+                  | _ ->
+                      E.mapM self ss >>= fun core_ss ->
+                      E.return (fun kills ->
+                        Caux.mk_unit_sseq (core_ss ++ kills) Caux.mk_skip_e
+                      )
+                end
+          end
+    end
+  end >>= fun (const_aliases, compound_lits, mk_core) ->
+  let lit_pats_core_creates : list (C.pattern * C.expr unit) =
+    List.map (fun (loc, prefix, sym, is_const, ty) ->
+      let core_ty = Caux.mk_ail_ctype_pe ty in
+      ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
+      , Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty prefix )
+    ) compound_lits
+  in
+  (* the symbolic names and create actions for the local variables *)
+  let pats_core_creates : list (C.pattern * C.expr unit) =
+    List.map (fun (sym, ident_loc, (align_opt, qs, ty)) ->
+      let c_ty = Caux.mk_ail_ctype_pe ty in
+      let align_ival  =
+      match align_opt with
+        | Just (Ctype.AlignInteger n) ->
+            Caux.mk_integer_pe n
+        | Just (Ctype.AlignType al_ty) ->
+            Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe al_ty)
+        | Nothing ->
+            Caux.mk_alignof_pe c_ty
+      end in    
+      ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
+      , Caux.pcreate (Loc.with_cursor_from loc ident_loc) align_ival c_ty (Symbol.PrefSource ident_loc [f; sym]) )
+    ) decls_with_loc in
+  let cheri_const_intrinsic =
+    if Global.is_CHERI () then
+      List.map (fun (sym, (qs, ty, sym')) ->
+      (* TODO: the partial pattern match in the lets is tasteless (even though the memop()
+          never evaluates to an unspecified value) *)
+      let ptr_ty = Ctype.mk_ctype_pointer qs ty in
+      ( Caux.mk_specified_pat (Caux.mk_sym_pat sym' (C.BTy_object C.OTy_pointer))
+      , cheri_readonly_perms ptr_ty (Caux.mk_sym_pe sym) )
+      ) const_aliases
+    else
+      [] in
+  let pat_core_kills : list (C.expr unit) =
+    List.map (fun (loc, _, sym, _, ty) ->
+      Caux.pkill (Loc.with_cursor_from loc loc) (C.Static ty) (Caux.mk_sym_pe sym)
+    ) compound_lits in
+  (* NOTE: doing the kills here is now redundant if there is are returns before all exit point.
+      but it may be nasty to do the check.
+      For non-void function however we know (?) that their must be these returns ?? so we could drop the kills here *)
+  (* the kill actions for the local variables *)
+  let core_kills : list (C.expr unit) =
+    List.map (fun (sym, ident_loc, (_, _, ty)) ->
+      Caux.pkill (Loc.with_cursor_from loc ident_loc) (C.Static ty) (Caux.mk_sym_pe sym)
+    ) decls_with_loc in
+  E.return (
+    (* NOTE: we sequence (left-to-right) the creates and kills of the block-scoped objects *)
+    Caux.mk_sseqs (lit_pats_core_creates ++ pats_core_creates ++ cheri_const_intrinsic) begin
+      mk_core (core_kills ++ pat_core_kills)
+    end
+  )
+
 val translate_stmt:
   translation_stdlib ->
   C.core_tag_definitions ->
@@ -3542,16 +3649,15 @@ val translate_stmt:
 
 let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
   let loc = stmt.A.loc in
-  let translate_expression is_used = wrapped_translate_expression is_used ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
+  let self = translate_stmt stdlib tagDefs f env in
+  let translate_expression is_used =
+    wrapped_translate_expression
+      (Just (fun translate_expr -> translate_block (Just translate_expr) self loc f))
+      is_used ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
   let translate_cases_block case_labs default_lab =
     translate_stmt stdlib tagDefs f <| env with case_labs=   case_labs;
                                                 default_lab= default_lab |>
   in
-  let self = translate_stmt stdlib tagDefs f env in
-  let () = Debug.print_debug_located 1 [] loc (fun () ->
-            "** TRANSLATING ** " ^
-            Pp.stringFromAil_statement stmt
-          ) in
   (Caux.add_loc loc -| Caux.add_stmt -| Caux.add_attrs stmt.A.attrs) <$>
   match stmt.A.node with
     | A.AilSskip ->
@@ -4134,7 +4240,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   else
                     (* NOTE: we use `with_block_objects`, for the compound_literal tracking *)
                     E.with_block_objects [] begin
-                      wrapped_translate_expression true (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr
+                      wrapped_translate_expression Nothing true (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr
                     end >>= fun (_, compound_lits, core) ->
                     let lit_pats_core_creates : list (C.pattern * C.expr unit) =
                       List.map (fun (loc, prefix, sym, is_const, ty) ->
