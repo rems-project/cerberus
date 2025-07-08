@@ -9,6 +9,11 @@ type execution_mode =
   | Exhaustive
   | Random
 
+(*
+ * NOTE: incomplete list of uses of permissive:
+ *   - (Cabs parsing) allows extra semicolons
+ *   - (Ail typing) allows GNU void* arithmetic
+ *)
 type cerberus_conf = {
   backend_name:    string;
   exec_mode_opt:   execution_mode option;

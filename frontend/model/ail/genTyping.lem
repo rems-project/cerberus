@@ -1401,6 +1401,14 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
+        else if Global.isPermissive () && is_pointer_to_void gty1 && is_integer gty2 then
+          (* NOTE: this is a GNU extension (arithmetic on void pointers),
+             add a more fine-grained switch *)
+          E.return (AilEbinary e1' bop e2', GenRValueType gty1)
+        else if Global.isPermissive () && is_pointer_to_void gty2 && is_integer gty1 then
+          (* NOTE: this is a GNU extension (arithmetic on void pointers),
+             add a more fine-grained switch *)
+          E.return (AilEbinary e1' bop e2', GenRValueType gty2)
         else
           well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Add gty2 >>
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
@@ -1411,6 +1419,10 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         if are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects sigm gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger PtrdiffT)))
         else if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType gty1)
+        else if Global.isPermissive () && is_pointer_to_void gty1 && is_integer gty2 then
+          (* TODO: this is a GNU extension (arithmetic on void pointers),
+             add a more fine-grained switch *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else
           well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Sub gty2 >>

@@ -37,6 +37,9 @@ declare hol  target_rep function using_concurrency u = false
 val isDefacto: unit -> bool
 declare ocaml target_rep function isDefacto = `Cerb_global.isDefacto`
 
+val isPermissive: unit -> bool
+declare ocaml target_rep function isPermissive = `Cerb_global.isPermissive`
+
 val isAgnostic: unit -> bool
 declare ocaml target_rep function isAgnostic = `Cerb_global.isAgnostic`
 
