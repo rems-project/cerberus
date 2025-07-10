@@ -347,6 +347,8 @@ let rec simplify_integer_value_base ival_ =
             (* TOOD: move the code from mem_simplify here *)
             | Union tag_sym ->
                 Right ival_ (* error "TODO simplify_integer_value: IVsizeof Union" *)
+            | Byte ->
+                Left 1
           end
       | IValignof (Ctype _ ty) ->
           match ty with
@@ -384,6 +386,8 @@ let rec simplify_integer_value_base ival_ =
                 Right ival_
             | Union tag_sym ->
                 error "TODO simplify_integer_value: IValignof Union"
+            | Byte ->
+                Left 1
           end
       | IVoffsetof _ _ ->
           Right ival_

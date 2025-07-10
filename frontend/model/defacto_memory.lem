@@ -434,6 +434,8 @@ let rec mkUnspec (Ctype _ ty) =
     | (Union tag_sym) ->
         let ((memb_ident, (_, _, _, ty)), _) = Ctype_aux.get_unionDef tag_sym in
         MVunion tag_sym memb_ident (mkUnspec ty)
+    | Byte ->
+        MVinteger Char (IV Prov_none IVunspecified)
   end
 
 
@@ -1065,6 +1067,8 @@ let rec impl_sizeof_ival_aux (Ctype _ ty as cty) =
     | Union tag_sym ->
         (* TODO: move the code from mem_simplify *)
         IVsizeof (Ctype [] (Union tag_sym))
+    | Byte ->
+       IVconcrete 1
 end
 
 

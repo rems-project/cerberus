@@ -232,6 +232,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
     | Atomic ct -> names_in_ctype ct
     | Struct sym -> record_dep (Sym sym)
     | Union sym -> record_dep (Sym sym)
+    | Byte -> return ()
   in
 
   let rec names_in_core_object_type = function
