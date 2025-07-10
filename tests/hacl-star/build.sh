@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env -S bash -euo pipefail
 #gcc -fPIC -Wall -Wextra -Wno-parentheses -Wno-unused compact/*.c minimal/*.c -I. -Iinclude -Icompact -Iminimal -shared -olibhacl.so -Xlinker -z -Xlinker noexecstack -Xlinker --unresolved-symbols=report-all
 
 CERBERUS="../../_build/default/backend/driver/main.exe"
