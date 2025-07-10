@@ -114,6 +114,8 @@ let rec wf_type sigm (Ctype _ ty) =
       return ()
   | Union _ ->
       return ()
+  | Byte ->
+      return ()
 (*
   | Builtin _ ->
       return () *)

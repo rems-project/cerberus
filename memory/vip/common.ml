@@ -98,6 +98,8 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
               let x = max_size mod max_align in
               if x = 0 then max_size else max_size + (max_align - x)
         end
+    | Byte ->
+        1
 
 and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
   match ty with
@@ -176,6 +178,8 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
                 max memb_align acc
               ) 0 membrs
         end
+    | Byte ->
+        1
 
 let ity_max ity =
   let open Nat_big_num in
