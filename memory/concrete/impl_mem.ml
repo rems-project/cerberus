@@ -23,7 +23,8 @@ let ctype_mem_compatible ty1 ty2 =
       | Void
       | Basic _
       | Struct _
-      | Union _ ->
+      | Union _
+      | Byte ->
           ty
       | Function ((_, ret_ty), xs, b) ->
           Function (
@@ -187,6 +188,8 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : N.num =
               let x = modulus max_size max_align in
               if equal x zero then max_size else add max_size (sub max_align x)
         end
+    | Byte ->
+      of_int 1
 
 and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
   match ty with
@@ -265,6 +268,8 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
                 max memb_align acc
               ) 0 membrs
         end
+    | Byte ->
+      1
 
 
 module Concrete : Memory = struct
@@ -951,6 +956,20 @@ module Concrete : Memory = struct
               | None ->
                   MVunspecified cty
             end , bs2)
+      | Byte ->
+          (* should be handled similarly to integers *)
+          let (bs1, bs2) = L.split_at 1 bs in
+          let (prov, bs1') = AbsByte.pvi_split_bytes bs1 in
+            (* PNVI-ae-udi *)
+          ( AbsByte.provs_of_bytes bs1
+          , begin match extract_unspec bs1' with
+              | Some cs ->
+                  let char_signed = (Ocaml_implementation.get ()).is_signed_ity Char  in
+                  MVinteger ( Char
+                            , mk_ival prov (int_of_bytes char_signed cs))
+              | None ->
+                  MVunspecified cty
+            end , bs2)
       | Basic (Floating fty) ->
           let (bs1, bs2) = L.split_at (N.to_int (sizeof cty)) bs in
           (* we don't care about provenances for floats *)
@@ -1055,7 +1074,7 @@ module Concrete : Memory = struct
           if is_zap then
             (* TODO: hack to prevent pointer zap from crashing if a union is in the memory *)
             ( `NoTaint, MVunspecified cty, bs2)
-          else match Pmap.find tag_sym (Tags.tagDefs ()) with
+          else (match Pmap.find tag_sym (Tags.tagDefs ()) with
             | _, UnionDef ((first_membr_def :: _) as membrs) ->
                 let (membr_ident, (_, _, _, membr_ty)) =
                   match IntMap.find_opt addr unionmap with
@@ -1070,7 +1089,7 @@ module Concrete : Memory = struct
                 let (taint, mval, _ ) = self membr_ty bs1 in
                 (taint, MVunion (tag_sym, membr_ident, mval), bs2)
             | _ ->
-                assert false
+                assert false)
 
   (* INTERNAL bytes_of_int *)
   let bytes_of_int is_signed size i : (char option) list =
@@ -1351,7 +1370,8 @@ module Concrete : Memory = struct
           None
       | Some (Ctype (_, Basic _))
       | Some (Ctype (_, Union _))
-      | Some (Ctype (_, Pointer _)) ->
+      | Some (Ctype (_, Pointer _))
+      | Some (Ctype (_, Byte)) ->
           let offset = N.sub addr alloc.base in
           Some (string_of_prefix alloc.prefix ^ " + " ^ N.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)

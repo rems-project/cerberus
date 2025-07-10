@@ -507,6 +507,8 @@ let rec alignof ?(tagDefs= alignof_tagDefs_aux ()) (Ctype (_, ty)) =
             | _ ->
                 None
         ) (Some 1) (Pmap.find tag_sym tagDefs)
+    | Byte ->
+      Some 1
 
 let alignof_proxy tagDefs =
   alignof ~tagDefs

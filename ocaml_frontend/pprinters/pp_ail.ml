@@ -250,6 +250,8 @@ let pp_ctype_aux ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
         2
     | Pointer _ ->
         3
+    | Byte ->
+        4
   in
   let rec aux p qs (Ctype (annots, ty)) : P.document -> P.document =
     let annot_doc = if !executable_spec then
@@ -304,7 +306,10 @@ let pp_ctype_aux ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
           | Union sym ->
               fun k ->
                 pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type ~is_human sym ^^ k
-        end) 
+          | Byte ->
+              fun k ->
+                pp_qualifiers qs ^^ pp_keyword "byte" ^^ k
+        end)
     in
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
@@ -359,6 +364,8 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
         prefix_pp_qs ^^ !^ "struct" ^^^ pp_id tag_sym
     | Union tag_sym ->
         prefix_pp_qs ^^ !^ "union" ^^^ pp_id tag_sym
+    | Byte ->
+        prefix_pp_qs ^^ !^ "byte"
 
 (* -- EXPRESSIONS -- *)
 let pp_arithmeticOperator = function
@@ -1010,6 +1017,8 @@ let rec pp_genType = function
       !^ "union" ^^^ pp_id ~is_human:true tag_sym
   | GenAtomic gty ->
       !^ "atomic" ^^^ pp_genType gty
+  | GenByte ->
+      !^ "byte"
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->

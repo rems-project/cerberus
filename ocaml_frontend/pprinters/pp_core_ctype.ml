@@ -86,6 +86,8 @@ let rec pp_ctype (Ctype (_, ty)) =
       !^ "struct" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
   | Union sym ->
       !^ "union" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
+  | Byte ->
+      !^ "cn_byte"
 
 
 (*

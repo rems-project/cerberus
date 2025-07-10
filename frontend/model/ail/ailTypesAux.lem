@@ -257,6 +257,8 @@ let rec is_complete sigm ty =
         | Nothing ->
             false
       end
+  | Byte ->
+      true
 end
 
 (* STD §6.2.5#1, sentence 4 *)
@@ -1262,6 +1264,8 @@ match ty with
   | Struct _ ->
       false
   | Union _ ->
+      false
+  | Byte ->
       false
 end
 

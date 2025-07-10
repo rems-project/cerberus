@@ -26,6 +26,7 @@ type genType =
  | GenStruct of ail_identifier
  | GenUnion of ail_identifier
  | GenAtomic of genType
+ | GenByte
 
 val signedInt_gty: genType
 let signedInt_gty =
@@ -126,6 +127,8 @@ let rec eq_genType gty1 gty2 =
         7
     | GenAtomic _ ->
         8
+    | GenByte ->
+        9
   end in
   match (gty1, gty2) with
     | (GenBasic gbty1, GenBasic gbty2 ) ->
@@ -209,6 +212,8 @@ match ty with
       GenStruct tag
   | Union  tag ->
       GenUnion tag
+  | Byte ->
+      GenByte
 end
 
 val inject_typeCategory: typeCategory -> genTypeCategory

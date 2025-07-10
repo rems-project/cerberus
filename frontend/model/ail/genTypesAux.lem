@@ -318,6 +318,8 @@ let rec interpret_genType loc impl gty =
     | GenAtomic gty ->
         interpret_genType loc impl gty >>= fun ty ->
         ret (Atomic ty)
+    | GenByte ->
+        ret Byte
   end
 
 val interpret_genTypeCategory: Loc.t -> IntegerImpl.implementation -> genTypeCategory -> errorM typeCategory
@@ -401,6 +403,8 @@ let is_complete sigm gty =
           | _ ->
               false
         end
+    | GenByte ->
+        true
 end
 
 val is_incomplete: forall 'a. sigma 'a -> genType -> bool
