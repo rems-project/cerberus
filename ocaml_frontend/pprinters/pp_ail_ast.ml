@@ -66,6 +66,8 @@ let rec pp_ctype_human_aux qs (Ctype (_, ty)) =
         prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id ~is_human:true tag_sym
     | Union tag_sym ->
         prefix_pp_qs ^^ !^ "union" ^^^ Pp_ail.pp_id ~is_human:true tag_sym
+    | Byte ->
+        prefix_pp_qs ^^ !^ "byte"
 
 and pp_ctype_human qs (Ctype (xs, _) as ty) =
   let typedef_opt = List.fold_left (fun acc_opt x ->
@@ -135,6 +137,8 @@ let rec pp_genType = function
       !^ "GenUnion" ^^ Pp_ail.pp_id ~is_human:true sym
   | GenAtomic gty ->
       !^ "GenAtomic" ^^ pp_genType gty
+  | GenByte ->
+      !^"GenByte"
 
 
 let pp_ctype qs ty =

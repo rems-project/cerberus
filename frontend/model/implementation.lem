@@ -676,6 +676,8 @@ let rec normalise_ctype (Ctype annots ty_) =
         ty_
     | Union _ ->
         ty_
+    | Byte ->
+        ty_
   end
 
 

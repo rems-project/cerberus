@@ -58,6 +58,7 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
   | Atomic of ctype
   | Struct of Symbol.sym
   | Union of Symbol.sym
+  | Byte
 and ctype =
   Ctype of list Annot.annot * ctype_
 
@@ -150,6 +151,8 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         7
     | Union _ ->
         8
+    | Byte ->
+        9
   end in
   let paramsEqual (qs1, ty1, b1) (qs2, ty2, b2) =
     qs1 = qs2 && ctypeEqual ty1 ty2 && b1 = b2 in

@@ -285,6 +285,8 @@ let rec symbolify_ctype (Ctype (annots, ty)) =
   | Union tag ->
       symbolify_symbol tag >>= fun tag' ->
       Eff.return (Union tag')
+  | Byte ->
+      Eff.return Byte
 
 let symbolify_value _cval =
   match _cval with

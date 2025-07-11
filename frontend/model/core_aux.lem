@@ -47,6 +47,9 @@ let rec core_object_type_of_ctype (Ctype _ ty) =
        Just (OTy_struct tag_sym)
    | Union tag_sym ->
        Just (OTy_union tag_sym)
+   | Byte ->
+       (* TODO add an OTy_byte? *)
+       Just OTy_integer
   end
 
 val oTy_of_bTy: core_base_type -> maybe core_object_type

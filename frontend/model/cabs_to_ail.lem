@@ -173,6 +173,8 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
           | _ ->
               error "elemPathFromCtype_aux3, Union"
         end
+    | Ctype.Byte ->
+        (path_prefix, outer_path, outer_ty) :: acc
   end
 
 val elemPathFromCtype3: bool -> map ail_identifier tag_definition -> Ctype.ctype -> list (init_path * init_path * Ctype.ctype)
@@ -422,6 +424,8 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
           | _ ->
               error "innerCtype: Union"
         end
+   | Ctype.Byte ->
+        error "innerCtype: Byte"
   end
 
 
