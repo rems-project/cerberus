@@ -435,7 +435,7 @@ let rec mkUnspec (Ctype _ ty) =
         let ((memb_ident, (_, _, _, ty)), _) = Ctype_aux.get_unionDef tag_sym in
         MVunion tag_sym memb_ident (mkUnspec ty)
     | Byte ->
-        MVinteger Char (IV Prov_none IVunspecified)
+        MVinteger (Unsigned Ichar) (IV Prov_none IVunspecified)
   end
 
 

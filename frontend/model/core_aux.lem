@@ -48,7 +48,7 @@ let rec core_object_type_of_ctype (Ctype _ ty) =
    | Union tag_sym ->
        Just (OTy_union tag_sym)
    | Byte ->
-       (* TODO add an OTy_byte? *)
+       (* May need to revisit based on CN *)
        Just OTy_integer
   end
 

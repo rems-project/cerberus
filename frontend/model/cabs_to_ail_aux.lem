@@ -152,7 +152,6 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
               error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Union"
         end
     | Ctype.Byte ->
-        (* TODO: check *)
         A.ConstantInteger (A.IConstant 0 A.Octal Nothing)
   end
 let mk_zeroInit tagDefs ty =

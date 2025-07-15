@@ -452,8 +452,8 @@ match ty with
      let (bs1, bs2) = L.split_at (Common.sizeof cty) bs in
      ( begin match interp_bytes bs1 with
          | `SPECIFIED (prov_status, _, cs, _) ->
-             let char_signed = (Ocaml_implementation.get ()).is_signed_ity Char in
-             let n = int_of_bytes char_signed cs in
+              (* C++ has std::byte typedef's to unsigned char, hence false *)
+             let n = int_of_bytes false cs in
              MVinteger ( Char
                        , match prov_status with
                            | `NOPROV ->
