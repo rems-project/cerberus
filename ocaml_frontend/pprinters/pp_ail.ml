@@ -796,8 +796,10 @@ let pp_function_prototype sym decl = match decl with
   (fun k -> if is_inline then !^ "inline" ^^^ k else k) (
       (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
         let args = P.parens
-          (comma_list
-             (fun (qs, ty, isRegister) ->
+          (if List.length params = 0
+            then !^ "void"
+            else (comma_list
+              (fun (qs, ty, isRegister) ->
                 if !Cerb_debug.debug_level > 5 then
                   (* printing the types in a human readable format *)
                   P.parens
@@ -805,7 +807,7 @@ let pp_function_prototype sym decl = match decl with
                        (pp_ctype_human qs ty))
                 else
                   pp_ctype qs ty)
-             params
+              params)
            ^^
            if is_variadic then
              P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
@@ -911,24 +913,27 @@ let pp_program_aux pp_annot (startup, sigm) =
                   (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
                     let args =
                       P.parens
-                        (comma_list
-                          (fun (sym, (qs, ty, isRegister)) ->
-                              if !Cerb_debug.debug_level > 5 then
-                                (* printing the types in a human readable format *)
-                                pp_id_obj sym
-                                ^^ P.colon
-                                ^^^ P.parens
-                                      ((fun z ->
-                                          if isRegister then !^"register" ^^^ z else z)
-                                        (pp_ctype_human qs ty))
-                              else
-                                pp_ctype_declaration (pp_id_obj sym) qs ty)
-                          (List.combine param_syms params)
-                        ^^
-                        if is_variadic then
-                          P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-                        else
-                          P.empty)
+                        (if List.length params = 0
+                          then !^ "void"
+                          else
+                          (comma_list
+                              (fun (sym, (qs, ty, isRegister)) ->
+                                  if !Cerb_debug.debug_level > 5 then
+                                    (* printing the types in a human readable format *)
+                                    pp_id_obj sym
+                                    ^^ P.colon
+                                    ^^^ P.parens
+                                          ((fun z ->
+                                              if isRegister then !^"register" ^^^ z else z)
+                                            (pp_ctype_human qs ty))
+                                  else
+                                    pp_ctype_declaration (pp_id_obj sym) qs ty)
+                              (List.combine param_syms params)
+                            ^^
+                            if is_variadic then
+                              P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+                            else
+                              P.empty))
                     in
                     (if !Cerb_debug.debug_level > 5 then
                       (* printing the types in a human readable format *)
