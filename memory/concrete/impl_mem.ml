@@ -964,7 +964,7 @@ module Concrete : Memory = struct
           ( AbsByte.provs_of_bytes bs1
           , begin match extract_unspec bs1' with
               | Some cs ->
-                  (* C++ has std::byte typedef's to unsigned char, hence false *)
+                  (* C++ has std::byte typedef'd to unsigned char, hence false *)
                   MVinteger ( Char , mk_ival prov (int_of_bytes false cs))
               | None ->
                   MVunspecified cty

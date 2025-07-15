@@ -210,6 +210,16 @@ let get_cerb_magic_attr annots =
        ) attributes
   end
 
+let is_cerb_byte (Attrs attributes) =
+     List.any (fun attr ->
+         match (attr.attr_ns, attr.attr_id) with
+         | (Just (Symbol.Identifier _loc1 "cerb"), Symbol.Identifier _loc2 "byte") ->
+            true
+         | _ ->
+            false
+         end
+       ) attributes
+
        
 
 
