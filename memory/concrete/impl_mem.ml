@@ -964,9 +964,8 @@ module Concrete : Memory = struct
           ( AbsByte.provs_of_bytes bs1
           , begin match extract_unspec bs1' with
               | Some cs ->
-                  let char_signed = (Ocaml_implementation.get ()).is_signed_ity Char  in
-                  MVinteger ( Char
-                            , mk_ival prov (int_of_bytes char_signed cs))
+                  (* C++ has std::byte typedef's to unsigned char, hence false *)
+                  MVinteger ( Char , mk_ival prov (int_of_bytes false cs))
               | None ->
                   MVunspecified cty
             end , bs2)
