@@ -1,6 +1,6 @@
 {
     "name": "elab",
-    "args": [],
+    "args": ["--typecheck-core"],
     "filter": "^(.*\\.c)$",
     "timeout": 5
 }

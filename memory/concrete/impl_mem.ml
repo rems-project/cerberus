@@ -23,9 +23,11 @@ let ctype_mem_compatible ty1 ty2 =
       | Void
       | Basic _
       | Struct _
-      | Union _
-      | Byte ->
+      | Union _ ->
           ty
+      | Byte ->
+          (* treat bytes as unsigned chars for typing *)
+          Basic (Integer (Unsigned Ichar))
       | Function ((_, ret_ty), xs, b) ->
           Function (
             (no_qualifiers, Ctype ([], unqualify_and_unatomic ret_ty)),
@@ -40,8 +42,8 @@ let ctype_mem_compatible ty1 ty2 =
           Pointer (no_qualifiers, Ctype ([], unqualify_and_unatomic ref_ty))
       | Atomic atom_ty ->
           unqualify_and_unatomic atom_ty
-          (* Atomic (Ctype ([], unqualify atom_ty)) *)
-  in Ctype.ctypeEqual (Ctype ([], unqualify_and_unatomic ty1)) (Ctype ([], unqualify_and_unatomic ty2))
+          (* Atomic (Ctype ([], unqualify atom_ty)) *) in
+  Ctype.ctypeEqual (Ctype ([], unqualify_and_unatomic ty1)) (Ctype ([], unqualify_and_unatomic ty2))
 
 module Eff : sig
   type ('a, 'err, 'cs, 'st) eff =

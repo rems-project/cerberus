@@ -780,7 +780,8 @@ let translate_assignment_conversion translate_expr stdlib ty1 e2 =
         ( force_core_object_type_of_ctype ty2
         , core_e2
         , conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1) )
-    else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
+    else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1
+            || AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_byte ty1 then
     (* NOTE: the two struct/union types could be from two different translation units,
              but as far as I can things are sufficiently restricted such that no conversion is needed here *)
       translate_expr e2 >>= fun core_e2 ->
@@ -2370,7 +2371,8 @@ if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && Ail
               , conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1) )
   end
 
-else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
+else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1
+        || AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_byte ty1 then
             (* NOTE: the two struct/union types could be from two different translation units,
                      but as far as I can things are sufficiently restricted such that no
                      conversion is needed here *)
