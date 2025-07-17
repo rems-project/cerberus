@@ -1,0 +1,7 @@
+{
+    "name": "elab",
+    "args": [],
+    "filter": "^(.*\\.c)$",
+    "timeout": 5
+}
+

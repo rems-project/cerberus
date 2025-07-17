@@ -1,0 +1,5 @@
+return code: 1
+bytes/cast_byte_uchar.c:9:20: error: constraint violation: cannot cast non-byte type to or from byte
+    (unsigned char)(q[0]);
+    ^              ~~~~~~ 
+no C11 reference

@@ -1,0 +1,6 @@
+return code: 1
+bytes/no_shift_right.c:8:7: error: constraint violation: invalid operands to binary expression ('signed int' and 'byte')
+    1 >> y;
+    ~ ^  ~ 
+§6.5.7#2: 
+2    Each of the operands shall have integer type.
