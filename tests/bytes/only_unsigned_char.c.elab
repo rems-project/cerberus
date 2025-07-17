@@ -1,0 +1,5 @@
+return code: 1
+bytes/only_unsigned_char.c:1:29: error: constraint violation: [[cerb::byte]] attribute must only be applied to typedefs of unsigned char
+[[cerb::byte]] typedef char byte;
+                            ^~~~ 
+no C11 reference

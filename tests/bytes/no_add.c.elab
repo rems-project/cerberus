@@ -1,0 +1,8 @@
+return code: 1
+bytes/no_add.c:8:7: error: constraint violation: invalid operands to binary expression ('byte' and 'byte')
+    y + y;
+    ~ ^ ~ 
+§6.5.6#2: 
+2   For addition, either both operands shall have arithmetic type, or one operand shall be a
+    pointer to a complete object type and the other shall have integer type. (Incrementing is
+    equivalent to adding 1.)
