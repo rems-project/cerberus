@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, sys, re, subprocess, json, difflib, argparse, concurrent.futures, math
+import os, sys, re, subprocess, json, difflib, argparse, concurrent.futures, math, multiprocessing
 
 def eprint(*args, then_exit=True, **kwargs):
     print('Error:', *args, file=sys.stderr, **kwargs)
@@ -8,7 +8,7 @@ def eprint(*args, then_exit=True, **kwargs):
         exit(1)
 
 def time_cmd(cmd):
-    return ["/usr/bin/time", "--quiet", "--format", "%e"] + cmd
+    return ["/usr/bin/time", "-p"] + cmd
 
 class Prog:
 
@@ -33,8 +33,8 @@ class Prog:
         try:
             completed = self.run(test_rel_path);
             lines = completed.stdout.splitlines(True)
-            time = float(lines[-1])
-            return { 'time': time, 'lines' : [("return code: %d\n" % completed.returncode)] + lines[:-1] }
+            time = float(lines[-3].split()[1])
+            return { 'time': time, 'lines' : [("return code: %d\n" % completed.returncode)] + lines[:-3] }
         except subprocess.TimeoutExpired:
             return { 'time': float(self.timeout), 'lines': ["TIMEOUT\n"] }
 
@@ -104,23 +104,28 @@ def main(opts):
         config = json.load(config_file)
         prog = Prog(opts, config)
         files = filter_tests(test_dir=os.path.dirname(opts.config), suffix=opts.suffix, matcher=re.compile(config['filter']))
-        result = run_tests(prog, test_rel_paths=files, quiet=opts.quiet, max_workers=(1 if opts.bench else None))
+        result = run_tests(prog, test_rel_paths=files, quiet=opts.quiet, max_workers=(1 if opts.bench else opts.max_workers))
         if opts.bench:
             output_bench(config['name'], result['timings'])
         return result['code']
 
-# top level
-parser = argparse.ArgumentParser(description="Script for running an executable and diffing the output.")
-parser.set_defaults(func=(lambda _: parser.parse_args(['-h'])))
-parser.add_argument('prog')
-parser.add_argument('config', help='Path to JSON config file: { "name": string; "args": string list; "filter": python regexp; "timeout": seconds }.')
-parser.add_argument('-v', '--verbose', help='Print commands used.', action='store_true')
-parser.add_argument('--dry-run', help='Print but do not run commands.', action='store_true')
-parser.add_argument('--suffix', help='Uniquely identifying suffix of a file in the test directory.')
-parser.add_argument('--quiet', help='Don\'t show tests completed so far on std out.', action='store_true')
-parser.add_argument('--bench', help='Output a JSON file with benchmarks, including total time.', action='store_true')
-parser.set_defaults(func=main)
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+    # top level
+    parser = argparse.ArgumentParser(description="Script for running an executable and diffing the output.")
+    parser.set_defaults(func=(lambda _: parser.parse_args(['-h'])))
+    parser.add_argument('prog')
+    parser.add_argument('config', help='Path to JSON config file: { "name": string; "args": string list; "filter": python regexp; "timeout": seconds }.')
+    parser.add_argument('-v', '--verbose', help='Print commands used.', action='store_true')
+    parser.add_argument('--dry-run', help='Print but do not run commands.', action='store_true')
+    parser.add_argument('--suffix', help='Uniquely identifying suffix of a file in the test directory.')
+    parser.add_argument('--quiet', help='Don\'t show tests completed so far on std out.', action='store_true')
+    parser.add_argument('--bench', help='Output a JSON file with benchmarks, including total time.', action='store_true')
+    parser.add_argument('--max-workers', help='Specify max number of workers for process pool (default is number of CPUs).', type=int)
+    parser.set_defaults(func=main)
 
 # parse args and call func (as set using set_defaults)
-opts = parser.parse_args()
-exit(opts.func(opts))
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    opts = parser.parse_args()
+    exit(opts.func(opts))

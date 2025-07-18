@@ -51,6 +51,14 @@ let is_pointer = function
       false
   end
 
+val is_byte: genType -> bool
+let is_byte = function
+  | GenByte ->
+      true
+  | _ ->
+      false
+  end
+
 val is_atomic: genType -> bool
 let is_atomic = function
   | GenAtomic _ ->
@@ -101,6 +109,8 @@ let is_arithmetic gty =
 val is_scalar: genType -> bool
 let is_scalar gty =
   is_pointer gty || is_arithmetic gty
+  (* non-standard *)
+  || is_byte gty
 
 let is_real gt : bool = is_integer gt || is_floating gt
 

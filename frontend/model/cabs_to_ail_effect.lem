@@ -805,9 +805,19 @@ let internal_register_identifier if_found ident namespace kind link_opt =
 val register_typedef: Symbol.identifier -> Annot.attributes * Ctype.qualifiers * Ctype.ctype -> desugM unit
 let register_typedef ident (attrs, qs, ty) =
   let loc = Loc.locOf ident in
+  let has_byte_attr = Annot.is_cerb_byte attrs in
+  let byte_attr_str = if has_byte_attr then "[[cerb::byte]] " else "" in
+  let mk_byte ty =
+    if has_byte_attr then
+      if Ctype.is_unsigned_char ty then
+        return (Ctype.Ctype [] Ctype.Byte)
+      else
+        constraint_violation loc Constraint.TypedefBytesAreUnsignedCharsOnly
+      else
+        return ty in
   let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
     "registering typedef identifier: " ^ show ident ^
-    " with (qs, ty) = " ^ Pp.stringFromAil_ctype qs ty
+    " with (qs, ty) = " ^ byte_attr_str ^ Pp.stringFromAil_ctype qs ty
   ) in
   (* if the identifier is already declared we reuse that existing declaration *)
   internal_register_identifier
@@ -822,12 +832,14 @@ let register_typedef ident (attrs, qs, ty) =
         else if qs <> qs' || ty <> ty' then
           constraint_violation loc Constraint.TypedefRedefinition
         else
+          mk_byte ty' >>= fun ty' ->
           (* TODO: we combine the attributes, not sure this is right thing to do *)
           put_inner (<| st with
             typedef_definitions= Map.insert sym (Annot.combine_attributes attrs attrs', qs', ty') st.typedef_definitions
           |>)
           (* return () *)
     | Nothing ->
+        mk_byte ty >>= fun ty ->
         put_inner (<| st with
           typedef_definitions= Map.insert sym (attrs, qs, ty) st.typedef_definitions
         |>)

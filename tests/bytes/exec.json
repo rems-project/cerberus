@@ -1,0 +1,8 @@
+{
+    "name": "exec",
+    "args": ["--exec"],
+    "filter": "^(.*\\.exec\\.c)$",
+    "timeout": 5
+}
+
+

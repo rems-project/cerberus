@@ -156,6 +156,10 @@ let rec memValueFromValue ty cval =
         Just (Mem.integer_value_mval ity ival)
     | (Basic (Integer ity), Vloaded (LVspecified (OVinteger ival))) ->
         Just (Mem.integer_value_mval ity ival)
+    | (Byte, Vobject (OVinteger ival)) ->
+        Just (Mem.integer_value_mval (Unsigned Ichar) ival)
+    | (Byte, Vloaded (LVspecified (OVinteger ival))) ->
+        Just (Mem.integer_value_mval (Unsigned Ichar) ival)
     | (Basic (Floating fty), Vloaded (LVspecified (OVfloating fval))) ->
         Just (Mem.floating_value_mval fty fval)
     | (Basic (Floating fty), Vobject (OVfloating fval)) ->

@@ -64,6 +64,14 @@ let is_pointer = function
       false
 end
 
+val is_byte: ctype -> bool
+let is_byte = function
+  | Ctype _ Byte ->
+      true
+  | _ ->
+      false
+end
+
 val is_atomic: ctype -> bool
 let is_atomic = function
   | Ctype _ (Atomic _) ->
@@ -198,6 +206,8 @@ let is_arithmetic ty =
 val is_scalar: ctype -> bool
 let is_scalar ty =
   is_pointer ty || is_arithmetic ty
+  (* non-standard *)
+  || is_byte ty
 
 (* STD §6.2.5#21, sentence 2 *)
 val is_aggregate: ctype -> bool
@@ -825,6 +835,8 @@ let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
         tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
     | (Atomic atom_ty1, Atomic atom_ty2) ->
         are_compatible (no_qualifiers, atom_ty1) (no_qualifiers, atom_ty2)
+    | (Byte, Byte) ->
+        true
     | _ ->
         (* TODO: we can't see Enum types here and there is some impl-def stuff *)
         false

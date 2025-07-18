@@ -151,7 +151,8 @@ let string_of_constraint_violation = function
   | CompoundAssignmentOthersOperandTypes (_, gty1, gty2) ->
       "invalid operands to binary expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
   | ConditionalOperatorControlType gty ->
-      "'" ^ string_of_gentype gty ^ "' is not a scalar type"
+      let opt_non_byte = if GenTypesAux.is_byte0 gty then "non-byte" else "" in
+      "'" ^ string_of_gentype gty ^ "' is not a " ^ opt_non_byte ^ " scalar type"
   | ConditionalOperatorInvalidOperandTypes (gty1, gty2) ->
       "type mismatch in conditional expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
   | AssignmentModifiableLvalue ->
@@ -346,9 +347,13 @@ let string_of_constraint_violation = function
   | AtomicAddressArgumentMustBePointer (_, gty) ->
       "address argument to atomic operation must be a pointer ('" ^ string_of_gentype gty ^ "' invalid)"
   | GNUConditionalOperatorInvalidOperandType gty ->
-      "illtypd second operand in a GNU ?: expression ('" ^ string_of_gentype gty ^ "')"
+      "illtyped second operand in a GNU ?: expression ('" ^ string_of_gentype gty ^ "')"
   | GNUBuiltinChooseExprNotIntegerConstant ->
       "first operand of __builtin_choose_expr() is not an integer constant expression"
+  | TypedefBytesAreUnsignedCharsOnly ->
+      "[[cerb::byte]] attribute must only be applied to typedefs of unsigned char"
+  | CastToFromByte ->
+      "cannot cast non-byte type to or from byte"
 
 let string_of_misc_violation = function
   | MultipleEnumDeclaration x ->

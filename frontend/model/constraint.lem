@@ -211,6 +211,9 @@ type violation =
   (* ?: operator *)
   | GNUConditionalOperatorInvalidOperandType of genType
   | GNUBuiltinChooseExprNotIntegerConstant
+  (* Byte *)
+  | TypedefBytesAreUnsignedCharsOnly
+  | CastToFromByte
 
 
 type assignment_violation =
@@ -493,5 +496,9 @@ let std_of_violation = function
   | GNUConditionalOperatorInvalidOperandType _ ->
       []
   | GNUBuiltinChooseExprNotIntegerConstant ->
+      []
+  | TypedefBytesAreUnsignedCharsOnly ->
+      []
+  | CastToFromByte ->
       []
 end

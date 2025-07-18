@@ -181,7 +181,10 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
         throw BoolExpectsArithmeticOrPointer
     else
       throw NotArithmetic
-  
+
+  else if AAux.atomic_qualified_unqualified AAux.is_byte ty1 && GAux.is_byte gty2 then
+    E.return ()
+
   else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty1 then
     E.add "§6.5.16.1#1, bullet 2" >>
     match (Cty.unatomic_ ty1, GenTypesAux.unatomic gty2) with
@@ -346,7 +349,7 @@ val well_typed_conditionalGNU:
     (Loc.t * Loc.t * Loc.t) ->
     genType -> genType -> E.errorM genTypeCategory
 let well_typed_conditionalGNU (loc_cond, loc_e1, loc_e3) gty1 gty3 =
-  if is_scalar gty1 then
+  if is_scalar gty1 && not (is_byte gty1) then
     E.add "§6.5.15#2" >>
     if is_arithmetic gty3 then
       E.add "§6.5.15#3, bullet 1" >>
@@ -378,7 +381,7 @@ val well_typed_conditional:
     (Loc.t * Loc.t * Loc.t * Loc.t) ->
     genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
 let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_null2 is_null3 =
-  if is_scalar gty1 then
+  if is_scalar gty1 && not (is_byte gty1) then
     E.add "§6.5.15#2" >>
     if is_arithmetic gty2 && is_arithmetic gty3 then
       E.add "§6.5.15#3, bullet 1" >>
@@ -1543,6 +1546,8 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.constraint_violation (with_cursor_from (locOf e) loc) CastPointerToFloat
         else if is_floating gty && AAux.is_pointer ty then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastFloatToPointer
+        else if xor (is_byte gty) (AAux.is_byte ty) then
+          E.constraint_violation (with_cursor_from (locOf e) loc) CastToFromByte
         else
           E.return (AilEcast qs ty e', GenRValueType (inject_type ty))
     

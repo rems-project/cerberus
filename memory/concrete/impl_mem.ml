@@ -23,9 +23,11 @@ let ctype_mem_compatible ty1 ty2 =
       | Void
       | Basic _
       | Struct _
-      | Union _
-      | Byte ->
+      | Union _ ->
           ty
+      | Byte ->
+          (* treat bytes as unsigned chars for typing *)
+          Basic (Integer (Unsigned Ichar))
       | Function ((_, ret_ty), xs, b) ->
           Function (
             (no_qualifiers, Ctype ([], unqualify_and_unatomic ret_ty)),
@@ -40,8 +42,8 @@ let ctype_mem_compatible ty1 ty2 =
           Pointer (no_qualifiers, Ctype ([], unqualify_and_unatomic ref_ty))
       | Atomic atom_ty ->
           unqualify_and_unatomic atom_ty
-          (* Atomic (Ctype ([], unqualify atom_ty)) *)
-  in Ctype.ctypeEqual (Ctype ([], unqualify_and_unatomic ty1)) (Ctype ([], unqualify_and_unatomic ty2))
+          (* Atomic (Ctype ([], unqualify atom_ty)) *) in
+  Ctype.ctypeEqual (Ctype ([], unqualify_and_unatomic ty1)) (Ctype ([], unqualify_and_unatomic ty2))
 
 module Eff : sig
   type ('a, 'err, 'cs, 'st) eff =
@@ -964,7 +966,7 @@ module Concrete : Memory = struct
           ( AbsByte.provs_of_bytes bs1
           , begin match extract_unspec bs1' with
               | Some cs ->
-                  (* C++ has std::byte typedef's to unsigned char, hence false *)
+                  (* C++ has std::byte typedef'd to unsigned char, hence false *)
                   MVinteger ( Char , mk_ival prov (int_of_bytes false cs))
               | None ->
                   MVunspecified cty

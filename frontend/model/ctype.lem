@@ -338,6 +338,15 @@ val unsigned_char: ctype
 let unsigned_char =
   Ctype [] (Basic (Integer (Unsigned (Ichar))))
 
+val is_unsigned_char: ctype -> bool
+let is_unsigned_char (Ctype _ ty_) =
+  match ty_ with
+    | Basic (Integer (Unsigned Ichar)) ->
+        true
+    | _ ->
+        false
+  end
+
 val unsigned_short: ctype
 let unsigned_short =
   Ctype [] (Basic (Integer (Unsigned Short)))
