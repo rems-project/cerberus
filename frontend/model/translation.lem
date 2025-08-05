@@ -1939,6 +1939,30 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_pointer e_ty then
 else if AilTypesAux.is_byte cast_ty && AilTypesAux.is_byte e_ty then
                     core_e
 
+else if AilTypesAux.is_byte cast_ty && AilTypesAux.is_integer e_ty then
+                Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                    Caux.mk_case_e e_wrp.E.sym_pe
+                      [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                        , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer (* byte *)))
+                            (C.Expr [] (C.Ememop Mem_common.ByteFromInt [Caux.mk_ail_ctype_pe e_ty; obj_wrp.E.sym_pe]))
+                            (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
+                      ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                        , (* Casting an unspecified integer to a byte type gives an unspecified byte *)
+                          Caux.mk_pure_e (Caux.mk_unspecified_pe cast_ty) ) ]
+                )
+
+else if AilTypesAux.is_integer cast_ty && AilTypesAux.is_byte e_ty then
+                Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                    Caux.mk_case_e e_wrp.E.sym_pe
+                      [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                        , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer))
+                            (C.Expr [] (C.Ememop Mem_common.IntFromByte [Caux.mk_ail_ctype_pe cast_ty; obj_wrp.E.sym_pe]))
+                            (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
+                      ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                        , (* Casting an unspecified byte to an integer type gives an unspecified integer *)
+                          Caux.mk_pure_e (Caux.mk_unspecified_pe cast_ty) ) ]
+                )
+
 else (* pointer <-> pointer cast *)
               let () = Debug.warn [Debug.DB_elaboration] (fun () ->
                 "the elaboration does the identity for casts between pointer types (this is different from ISO)"

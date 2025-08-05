@@ -1,5 +1,1 @@
-return code: 1
-bytes/cast_0_byte.c:7:11: error: constraint violation: cannot cast non-byte type to or from byte
-    (byte)0;
-    ^     ~ 
-no C11 reference
+return code: 0

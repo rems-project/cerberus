@@ -70,6 +70,10 @@ let pp_memop = function
   | CHERI_intrinsic (str, (ret_ty, tys)) ->
       let fun_ty = Ctype.(Ctype ([], Function ((no_qualifiers, ret_ty), List.map (fun ty -> (no_qualifiers, ty, false)) tys, false))) in
       !^ ("cheri_" ^ str) ^^ P.brackets (P.squotes (Pp_core_ctype.pp_ctype fun_ty))
+  | ByteFromInt ->
+      !^"ByteFromInt"
+  | IntFromByte ->
+      !^"IntFromByte"
 
 
 (* let pp_pointer_shift = Impl.pp_pointer_shift *)
