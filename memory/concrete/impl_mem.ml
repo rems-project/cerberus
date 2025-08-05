@@ -2766,6 +2766,23 @@ VIP:type pointer_value =
     intfromptr (Cerb_location.other "copy_alloc_id") Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
     ptrfromint (Cerb_location.other "copy_alloc_id") Ctype.(Unsigned Intptr_t) Ctype.void ival
 
+  (* Bytes are always typedef'd to unsigned chars, and I'm assuming unsigned
+     chars are always 8 bits. This function flips the interpretation of the
+     leading bit if it is 1. *)
+  let bytefromint loc (IV (prov, intval) as ival) =
+    if N.(less_equal zero intval) && N.(less_equal intval (of_int 255)) then
+      return ival
+    else if N.(less_equal (of_int (-128)) intval) && N.(less intval zero) then
+      return (IV (prov,  N.(add intval (of_int 256))))
+    else
+      fail ~loc MerrByteFromInt
+
+  let intfrombyte _loc ity (IV (prov, intval) as ival) =
+    if (AilTypesAux.is_signed_ity ity && N.(greater_equal intval (of_int 128))) then
+      return (IV (prov, N.(sub intval (of_int 256))))
+    else
+      return ival
+
   (* JSON serialisation: Memory layout for UI *)
 
   type ui_value =

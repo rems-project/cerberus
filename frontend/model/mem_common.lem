@@ -157,6 +157,7 @@ type mem_error =
     (* for the VIP memory model (should add a mechanism in the memory interface to expose custom errors) *)
   | MerrVIP of vip_error
   | MerrCHERI of mem_cheri_error
+  | MerrByteFromInt
 
 instance (Show mem_error)
   let show = function
@@ -241,6 +242,8 @@ instance (Show mem_error)
         end
     | MerrCHERI k ->
       "MerrCHERI " ^ show k
+    | MerrByteFromInt ->
+      "MerrByteFromInt"
   end
 end
 
@@ -399,8 +402,8 @@ type generic_memop 'sym =
   | CHERI_intrinsic of string * (Ctype.ctype * list Ctype.ctype)
 
   (* Bytes *)
-  | ByteFromInt  (* (ctype, integer) -> eff byte *) (* first type is that of integer *)
-  | IntFromByte  (* (ctype, byte) -> eff integer *) (* first type is that of integer -- is it necessary? *)
+  | ByteFromInt  (* integer -> eff byte *)
+  | IntFromByte  (* (integerType, byte) -> eff integer *)
 
 type memop = generic_memop Symbol.sym
 

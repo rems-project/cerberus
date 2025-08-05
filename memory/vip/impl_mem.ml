@@ -970,6 +970,34 @@ let copy_alloc_id ival ptrval : pointer_value memM =
     | _ ->
         fail (MerrVIP VIP_copy_alloc_id_invalid)
 
+(* Bytes are always typedef'd to unsigned chars, and I'm assuming unsigned
+   chars are always 8 bits. This function flips the interpretation of the
+   leading bit if it is 1. *)
+let bytefromint _loc ival : integer_value memM =
+  let intval = match ival with IVloc (_, i) | IVint i -> i in
+  let update x =
+    match ival with
+      | IVloc (p, _) -> IVloc (p, x)
+      | IVint _ -> IVint x in
+  if N.(less_equal zero intval) && N.(less_equal intval (of_int 255)) then
+    return ival
+  else if N.(less_equal (of_int (-128)) intval) && N.(less intval zero) then
+    return (update (N.(add intval (of_int 256))))
+  else
+    fail MerrByteFromInt
+
+let intfrombyte _loc ity ival : integer_value memM =
+  let intval = match ival with IVloc (_, i) | IVint i -> i in
+  let update x =
+    match ival with
+      | IVloc (p, _) -> IVloc (p, x)
+      | IVint _ -> IVint x in
+  if (AilTypesAux.is_signed_ity ity && N.(greater_equal intval (of_int 128))) then
+    return (update N.(sub intval (of_int 256)))
+  else
+    return ival
+
+
 (* Integer value constructors *)
 let concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value =
   fun _ _ -> assert false (* TODO *)

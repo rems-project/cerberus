@@ -123,6 +123,11 @@ module type Memory = sig
   val va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM
 
   val copy_alloc_id: integer_value -> pointer_value -> pointer_value memM
+
+  (* Byte casting operations *)
+  val bytefromint: Cerb_location.t -> integer_value -> integer_value memM
+  val intfrombyte: Cerb_location.t -> Ctype.integerType -> integer_value -> integer_value memM
+
   
   (* Integer value constructors *)
   val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value
