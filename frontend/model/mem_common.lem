@@ -398,6 +398,10 @@ type generic_memop 'sym =
   (* CHERI *)
   | CHERI_intrinsic of string * (Ctype.ctype * list Ctype.ctype)
 
+  (* Bytes *)
+  | ByteFromInt  (* (ctype, integer) -> eff byte *) (* first type is that of integer *)
+  | IntFromByte  (* (ctype, byte) -> eff integer *) (* first type is that of integer -- is it necessary? *)
+
 type memop = generic_memop Symbol.sym
 
 instance forall 'a. Show 'a => (Show (generic_memop 'a))
@@ -446,6 +450,10 @@ instance forall 'a. Show 'a => (Show (generic_memop 'a))
         "copy_alloc_id"
     | CHERI_intrinsic str _ ->
         "cheri_" ^ str
+    | ByteFromInt ->
+        "bytefromint"
+    | IntFromByte ->
+        "intfrombyte"
   end
 end
 

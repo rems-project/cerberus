@@ -644,6 +644,10 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
               Eff.return Copy_alloc_id
           | CHERI_intrinsic _ ->
               assert false
+          | ByteFromInt ->
+              Eff.return ByteFromInt
+          | IntFromByte ->
+              Eff.return IntFromByte
        end >>= fun memop ->
        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
        Eff.return (Ememop (memop, pes))
