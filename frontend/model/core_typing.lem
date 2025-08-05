@@ -1572,7 +1572,7 @@ let memop_signature = function
             error "when typechecking CHERI intrinsics failed to get the params object types"
       end
   | Mem_common.ByteFromInt ->
-      (BTy_object OTy_integer, [BTy_ctype; BTy_object OTy_integer])
+      (BTy_object OTy_integer, [BTy_object OTy_integer])
   | Mem_common.IntFromByte ->
       (BTy_object OTy_integer, [BTy_ctype; BTy_object OTy_integer])
 end
