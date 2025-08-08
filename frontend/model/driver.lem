@@ -876,14 +876,6 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
             ND.return (mk_th_st Core.Vunit)
         end
 
-    | (Mem_common.ByteFromInt, [Core.Vobject (Core.OVinteger ival)]) ->
-        liftMem (Mem.bytefromint loc ival) >>= fun ival ->
-        ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
-
-    | (Mem_common.IntFromByte, [Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVinteger ival)]) ->
-        liftMem (Mem.intfrombyte loc ity ival) >>= fun ival ->
-        ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
-
     | _ ->
         error ("INVALID memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
   end >>= fun th_st' ->
