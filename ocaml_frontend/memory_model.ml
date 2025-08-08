@@ -125,8 +125,8 @@ module type Memory = sig
   val copy_alloc_id: integer_value -> pointer_value -> pointer_value memM
 
   (* Byte casting operations *)
-  val bytefromint: Cerb_location.t -> integer_value -> integer_value memM
-  val intfrombyte: Cerb_location.t -> Ctype.integerType -> integer_value -> integer_value memM
+  val bytefromint: Cerb_location.t -> integer_value -> integer_value
+  val intfrombyte: Cerb_location.t -> Ctype.integerType -> integer_value -> integer_value
 
   
   (* Integer value constructors *)

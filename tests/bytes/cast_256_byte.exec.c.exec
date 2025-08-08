@@ -1,2 +1,5 @@
 return code: 0
-OTHER ERROR: MerrByteFromInt
+bytes/cast_256_byte.exec.c:7:5: error: undefined behaviour: invalid byte value
+    (byte)256;
+    ^~~~~~~~~ 
+no C11 reference

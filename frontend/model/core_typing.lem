@@ -603,8 +603,15 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
     | PEmemop Mem_common.Ptr_tIntValue [pe] ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
         E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.Ptr_tIntValue [pe']))
+    | PEmemop Mem_common.ByteFromInt [pe] ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
+        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.ByteFromInt [pe']))
+    | PEmemop Mem_common.IntFromByte [pe1; pe2] ->
+        typecheck_pexpr tagDefs env BTy_ctype pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.IntFromByte [pe1'; pe2']))
     | PEmemop _ _ ->
-        E.fail loc (CoreTyping_TODO "PEmemop")
+        E.fail loc (CoreTyping_TODO (Pp.stringFromCore_pexpr pexpr))
     | PEnot pe ->
         Pexpr annot InferredType_boolean <$> (PEnot <$> typecheck_pexpr tagDefs env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
@@ -992,8 +999,17 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         guard_match loc "memop(ptr_t_int_value)" bTy (BTy_object OTy_integer) >>
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
         E.return (PEmemop Mem_common.Ptr_tIntValue [pe'])
+    | PEmemop Mem_common.ByteFromInt [pe] ->
+        guard_match loc "memop(bytefromtint)" bTy (BTy_object OTy_integer) >>
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
+        E.return (PEmemop Mem_common.ByteFromInt [pe'])
+    | PEmemop Mem_common.IntFromByte [pe1; pe2] ->
+        guard_match loc "memop(intfrombyte)" bTy (BTy_object OTy_integer) >>
+        typecheck_pexpr tagDefs env BTy_ctype pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return (PEmemop Mem_common.IntFromByte [pe1'; pe2'])
     | PEmemop _ _ ->
-        E.fail loc (CoreTyping_TODO "PEmemop")
+        E.fail loc (CoreTyping_TODO (Pp.stringFromCore_pexpr pexpr))
     | PEnot pe ->
         guard_match loc "not()" bTy BTy_boolean >>
         (PEnot <$> typecheck_pexpr tagDefs env BTy_boolean pe)
@@ -1571,10 +1587,6 @@ let memop_signature = function
         | _ ->
             error "when typechecking CHERI intrinsics failed to get the params object types"
       end
-  | Mem_common.ByteFromInt ->
-      (BTy_object OTy_integer, [BTy_object OTy_integer])
-  | Mem_common.IntFromByte ->
-      (BTy_object OTy_integer, [BTy_ctype; BTy_object OTy_integer])
 end
 
 
