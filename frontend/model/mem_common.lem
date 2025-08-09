@@ -364,6 +364,9 @@ type pure_memop =
   | CapAssignValue
     (* CHERI *) (* integer -> integer *)
   | Ptr_tIntValue
+    (* Bytes *)
+  | ByteFromInt  (* integer -> byte *)
+  | IntFromByte  (* (integerType, byte) -> integer *)
 
 type generic_memop 'sym =
   | PtrEq

@@ -1546,7 +1546,8 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.constraint_violation (with_cursor_from (locOf e) loc) CastPointerToFloat
         else if is_floating gty && AAux.is_pointer ty then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastFloatToPointer
-        else if xor (is_byte gty) (AAux.is_byte ty) then
+        else if (is_byte gty && not (AAux.is_byte ty || AAux.is_integer ty))
+                || (AAux.is_byte ty && not (is_byte gty || is_integer gty)) then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastToFromByte
         else
           E.return (AilEcast qs ty e', GenRValueType (inject_type ty))

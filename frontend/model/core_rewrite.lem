@@ -1039,6 +1039,10 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
               ()
           | Mem_common.Ptr_tIntValue ->
               ()
+          | Mem_common.ByteFromInt ->
+              ()
+          | Mem_common.IntFromByte ->
+              ()
         end in
         List.all isAlwaysDefined pes
     | PEnot pe ->
