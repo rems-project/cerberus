@@ -126,7 +126,7 @@ module type Memory = sig
 
   (* Byte casting operations *)
   val bytefromint: Cerb_location.t -> integer_value -> integer_value
-  val intfrombyte: Cerb_location.t -> Ctype.integerType -> integer_value -> integer_value
+  val intfrombyte: Cerb_location.t -> integer_value -> integer_value
 
   
   (* Integer value constructors *)

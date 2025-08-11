@@ -731,9 +731,6 @@ type undefined_behaviour =
   (* free() is called on a NULL pointer (used in switch stricter than ISO) *)
   | UB_CERB005_free_nullptr
 
-  (* bytes *)
-  | UB_Byte_invalid_byte_value
-
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
 let std_of_undefined_behaviour = function
   | UB004a_incorrect_main_return_type ->
@@ -1089,7 +1086,6 @@ let ub_str_bimap =
     ; (UB_CHERI_BoundsViolation,"UB_CHERI_BoundsViolation")
     ; (UB_CHERI_UndefinedTag,"UB_CHERI_UndefinedTag")
     ; (UB_CHERI_ZeroLength,"UB_CHERI_ZeroLength")
-    ; (UB_Byte_invalid_byte_value,"UB_Byte_invalid_byte_value")
     ]
 
 
@@ -1250,8 +1246,6 @@ let ub_short_string = function
       "out of bounds pointer in realloc()"
   | UB_CERB003_invalid_function_pointer ->
       "invalid function pointer"
-  | UB_Byte_invalid_byte_value ->
-      "invalid byte value"
   | ub ->
       "(UB missing short message): " ^ show ub
 end
@@ -1421,8 +1415,6 @@ let pretty_string_of_undefined_behaviour = function
       "a call to 'free()' is given a 'NULL' pointer"
   | Invalid_format str ->
       "Invalid_format \"" ^ str ^ "\""
-  | UB_Byte_invalid_byte_value ->
-      "conversion to byte given unrepresentable value"
   | ub ->
       "(UB missing short message): " ^ show ub
 end

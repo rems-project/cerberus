@@ -176,7 +176,7 @@ declare ocaml target_rep function copy_alloc_id = `Impl_mem.copy_alloc_id`
 
 (* Byte casting operations *)
 val bytefromint: Loc.t -> integer_value -> integer_value
-val intfrombyte: Loc.t -> Ctype.integerType -> integer_value -> integer_value
+val intfrombyte: Loc.t -> integer_value -> integer_value
 declare ocaml target_rep function bytefromint = `Impl_mem.bytefromint`
 declare ocaml target_rep function intfrombyte = `Impl_mem.intfrombyte`
 

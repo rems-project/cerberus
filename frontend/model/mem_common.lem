@@ -366,7 +366,7 @@ type pure_memop =
   | Ptr_tIntValue
     (* Bytes *)
   | ByteFromInt  (* integer -> byte *)
-  | IntFromByte  (* (integerType, byte) -> integer *)
+  | IntFromByte  (* byte -> integer *)
 
 type generic_memop 'sym =
   | PtrEq

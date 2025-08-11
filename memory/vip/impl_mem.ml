@@ -980,18 +980,13 @@ let update_ival ival x =
    leading bit if it is 1. *)
 let bytefromint _loc ival : integer_value =
   let intval = match ival with IVloc (_, i) | IVint i -> i in
-  assert (N.(less_equal (of_int (-128)) intval && less_equal intval (of_int 255)));
-  if N.(less_equal zero intval) then
-    ival
-  else 
-    update_ival ival (N.(add intval (of_int 256)))
+  assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
+  ival
 
-let intfrombyte _loc ity ival : integer_value =
+let intfrombyte _loc ival : integer_value =
   let intval = match ival with IVloc (_, i) | IVint i -> i in
-  if (AilTypesAux.is_signed_ity ity && N.(greater_equal intval (of_int 128))) then
-    update_ival ival N.(sub intval (of_int 256))
-  else
-    ival
+  assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
+  ival
 
 
 (* Integer value constructors *)

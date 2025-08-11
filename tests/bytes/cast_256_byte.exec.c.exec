@@ -1,5 +1,1 @@
 return code: 0
-bytes/cast_256_byte.exec.c:7:5: error: undefined behaviour: invalid byte value
-    (byte)256;
-    ^~~~~~~~~ 
-no C11 reference
