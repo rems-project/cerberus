@@ -23,6 +23,10 @@ let pp_pure_memop = function
       !^ "CapAssignValue"
   | Ptr_tIntValue ->
       !^ "Ptr_tIntValue"
+  | ByteFromInt ->
+      !^"ByteFromInt"
+  | IntFromByte ->
+      !^"IntFromByte"
 
 let pp_memop = function
   | PtrEq ->
