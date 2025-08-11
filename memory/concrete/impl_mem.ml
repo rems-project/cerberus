@@ -2769,18 +2769,13 @@ VIP:type pointer_value =
   (* Bytes are always typedef'd to unsigned chars, and I'm assuming unsigned
      chars are always 8 bits. This function flips the interpretation of the
      leading bit if it is 1. *)
-  let bytefromint loc (IV (prov, intval) as ival) =
-    assert (N.(less_equal (of_int (-128)) intval && less_equal intval (of_int 255)));
-    if N.(less_equal zero intval) then
-      ival
-    else 
-      (IV (prov,  N.(add intval (of_int 256))))
+  let bytefromint loc (IV (_, intval) as ival) =
+    assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
+    ival
 
-  let intfrombyte _loc ity (IV (prov, intval) as ival) =
-    if (AilTypesAux.is_signed_ity ity && N.(greater_equal intval (of_int 128))) then
-      IV (prov, N.(sub intval (of_int 256)))
-    else
-      ival
+  let intfrombyte _loc (IV (_, intval) as ival) =
+    assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
+    ival
 
   (* JSON serialisation: Memory layout for UI *)
 

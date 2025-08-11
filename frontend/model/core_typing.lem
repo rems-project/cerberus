@@ -606,10 +606,9 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
     | PEmemop Mem_common.ByteFromInt [pe] ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
         E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.ByteFromInt [pe']))
-    | PEmemop Mem_common.IntFromByte [pe1; pe2] ->
-        typecheck_pexpr tagDefs env BTy_ctype pe1 >>= fun pe1' ->
-        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
-        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.IntFromByte [pe1'; pe2']))
+    | PEmemop Mem_common.IntFromByte [pe] ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
+        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.IntFromByte [pe']))
     | PEmemop _ _ ->
         E.fail loc (CoreTyping_TODO (Pp.stringFromCore_pexpr pexpr))
     | PEnot pe ->
@@ -1003,11 +1002,10 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         guard_match loc "memop(bytefromtint)" bTy (BTy_object OTy_integer) >>
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
         E.return (PEmemop Mem_common.ByteFromInt [pe'])
-    | PEmemop Mem_common.IntFromByte [pe1; pe2] ->
+    | PEmemop Mem_common.IntFromByte [pe] ->
         guard_match loc "memop(intfrombyte)" bTy (BTy_object OTy_integer) >>
-        typecheck_pexpr tagDefs env BTy_ctype pe1 >>= fun pe1' ->
-        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
-        E.return (PEmemop Mem_common.IntFromByte [pe1'; pe2'])
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
+        E.return (PEmemop Mem_common.IntFromByte [pe'])
     | PEmemop _ _ ->
         E.fail loc (CoreTyping_TODO (Pp.stringFromCore_pexpr pexpr))
     | PEnot pe ->
