@@ -782,10 +782,10 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                 EU.return (PEval (Vobject (OVinteger (Mem.ptr_t_int_value ival))))
           | ( Mem_common.ByteFromInt
             , Just [ Core.Vobject (Core.OVinteger ival) ] ) ->
-                EU.return (PEval (Vobject (OVinteger (Mem.bytefromint loc ival))))
+                EU.return (PEval (Vobject (OVinteger (Mem.bytefromint ival))))
           | ( Mem_common.IntFromByte
             , Just [ Core.Vobject (Core.OVinteger ival) ] ) ->
-                EU.return (PEval (Vobject (OVinteger (Mem.intfrombyte loc ival))))
+                EU.return (PEval (Vobject (OVinteger (Mem.intfrombyte ival))))
           | (_, Just _) ->
               EU.fail $ Illformed_program "PEmemop"
           | (_, Nothing) ->

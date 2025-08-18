@@ -2772,11 +2772,11 @@ VIP:type pointer_value =
   (* Bytes are always typedef'd to unsigned chars, and I'm assuming unsigned
      chars are always 8 bits. This function flips the interpretation of the
      leading bit if it is 1. *)
-  let bytefromint loc (IV (_, intval) as ival) =
+  let bytefromint (IV (_, intval) as ival) =
     assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
     ival
 
-  let intfrombyte _loc (IV (_, intval) as ival) =
+  let intfrombyte (IV (_, intval) as ival) =
     assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
     ival
 
