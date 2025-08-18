@@ -1233,6 +1233,10 @@ module CHERIMorello : Memory = struct
   let intfromptr (loc:Cerb_location.t) (ty:Ctype.ctype) (ity:Ctype.integerType) (ptr:pointer_value): integer_value memM
     = lift_coq_memM "intfromptr" (MM.intfromptr (toCoq_location loc) (toCoq_ctype ty) (toCoq_integerType ity) ptr)
 
+  let intfrombyte ival = ival
+
+  let bytefromint ival = ival
+
   (* New operations for CHERI *)
   let derive_cap is_signed (bop:Mem_common.derivecap_op) ival1 ival2 =
     lift_coq_serr (MM.derive_cap is_signed (toCoq_derivecap_op bop) ival1 ival2)
