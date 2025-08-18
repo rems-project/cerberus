@@ -1116,6 +1116,7 @@ module CtypeToZ3 = struct
                            : Sort.sort =
      match ty with
     | Void     -> assert false
+    | Byte  -> LoadedInteger.mk_sort
     | Basic(Integer i) -> LoadedInteger.mk_sort
     | Basic _ -> assert false
     | Array(ty', _) ->

@@ -981,12 +981,12 @@ let update_ival ival x =
 (* Bytes are always typedef'd to unsigned chars, and I'm assuming unsigned
    chars are always 8 bits. This function flips the interpretation of the
    leading bit if it is 1. *)
-let bytefromint _loc ival : integer_value =
+let bytefromint ival : integer_value =
   let intval = match ival with IVloc (_, i) | IVint i -> i in
   assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
   ival
 
-let intfrombyte _loc ival : integer_value =
+let intfrombyte ival : integer_value =
   let intval = match ival with IVloc (_, i) | IVint i -> i in
   assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255)));
   ival

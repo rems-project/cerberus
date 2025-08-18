@@ -145,6 +145,14 @@ let rec simplify_integer_value_base ival_ =
           | Void ->
               (* Ail type error *)
               assert false
+          | Byte ->
+              begin match (Ocaml_implementation.get()).sizeof_ity (Unsigned Ichar) with
+                | Some n ->
+                    Left (of_int n)
+                | None ->
+                    prerr_endline (String_core_ctype.string_of_ctype (Ctype ([], ty)));
+                    Right ival_
+              end
           | Basic (Integer ity) ->
               begin match (Ocaml_implementation.get()).sizeof_ity ity with
                 | Some n ->
@@ -225,6 +233,13 @@ let rec simplify_integer_value_base ival_ =
           | Void ->
               (* Ail type error *)
               assert false
+          | Byte ->
+              begin match (Ocaml_implementation.get()).alignof_ity (Unsigned Ichar) with
+                | Some n ->
+                    Left (of_int n)
+                | None ->
+                    Right ival_
+              end
           | Basic (Integer ity) ->
               begin match (Ocaml_implementation.get()).alignof_ity ity with
                 | Some n ->

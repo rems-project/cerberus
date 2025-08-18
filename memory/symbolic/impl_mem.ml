@@ -313,6 +313,8 @@ let rec ctype_to_expr slvSt (Ctype.Ctype (_, ty)) =
     match ty with
       | Void ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
+      | Byte ->
+        Expr.mk_app slvSt.ctx (List.nth fdecls 1) [basicType_to_expr slvSt (Integer (Unsigned Ichar))]
       | Basic bty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 1) [basicType_to_expr slvSt bty]
       | Array (_, None) ->
@@ -614,8 +616,8 @@ let va_arg _ _ = failwith "Defacto: va_arg"
 let va_end _ = failwith "Defacto: va_end"
 let va_list _ = failwith "Defacto: va_list"
 let copy_alloc_id _ _ = failwith "Defacto: copy_alloc_id"
-let bytefromint _ _ = failwith "Defacto: bytefromint"
-let intfrombyte _ _ = failwith "Defacto: intfrombyte"
+let bytefromint = Defacto_memory.impl_bytefromint
+let intfrombyte = Defacto_memory.impl_intfrombyte
 let concurRead_ival = Defacto_memory.impl_concurRead_ival
 let integer_ival = Defacto_memory.impl_integer_ival
 let max_ival = Defacto_memory.impl_max_ival

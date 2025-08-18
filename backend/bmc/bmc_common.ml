@@ -50,6 +50,7 @@ let rec flatten_bmcz3sort (l: bmcz3sort): (ctype * Sort.sort) list =
 let rec base_ctype (Ctype (_, ty) as cty) : ctype =
   match ty with
   | Void -> assert false
+  | Byte -> cty
   | Basic _ -> cty
   | Array (ty2, _) ->
       base_ctype ty2
@@ -70,6 +71,8 @@ let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
                            : bmcz3sort =
   match ty with
   | Void     -> assert false
+  | Byte ->
+      CaseSortBase (cty, LoadedInteger.mk_sort)
   | Basic(Integer i) ->
       CaseSortBase (cty, LoadedInteger.mk_sort)
   | Basic(Floating _) ->
