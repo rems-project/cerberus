@@ -2095,7 +2095,9 @@ let impl_ptrcast_ival loc int_ty ref_ty ival =
           end
   end
 
+let impl_bytefromint ival = ival
 
+let impl_intfrombyte ival = ival
 
 
 
