@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env -S bash -euo pipefail
 
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`

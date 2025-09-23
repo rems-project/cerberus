@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env -S bash -euo pipefail
 # This script tests if Core pretty printer and parse coincide!
 
 function report {
