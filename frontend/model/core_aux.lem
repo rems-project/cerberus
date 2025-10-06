@@ -249,6 +249,19 @@ let rec mk_list_pat (bTy : core_base_type) pats =
 
 
 (* Core pexpr builders  ***************************************************** *)
+val annotate_integer_type_pexpr : integerType -> pexpr -> pexpr
+let annotate_integer_type_pexpr ity (Pexpr annot bty expr_) =
+  let annot = (Avalue (Ainteger ity)) :: annot in
+  Pexpr annot bty expr_
+
+
+val maybe_annotate_integer_type_pexpr : ctype -> pexpr -> pexpr
+let maybe_annotate_integer_type_pexpr (Ctype _ ctype_) pe =
+  match ctype_ with
+    | Basic (Integer ity) -> annotate_integer_type_pexpr ity pe
+    | _ -> pe
+  end
+
 val mk_sym_pe_ : forall 'bty. list Annot.annot -> 'bty -> Symbol.sym -> generic_pexpr 'bty Symbol.sym
 let mk_sym_pe_ annots bty sym =
   Pexpr annots bty (PEsym sym)
@@ -407,9 +420,10 @@ val mk_case_pe: pexpr -> list (pattern * pexpr) -> pexpr
 let mk_case_pe pe pat_pes =
   Pexpr [] () (PEcase pe pat_pes)
 
-val mk_neg_pe: pexpr -> pexpr
-let mk_neg_pe pe =
-  Pexpr [] () (PEop OpSub (mk_integer_pe 0) pe)
+(* integerType is the type annotation placed on the 0 literal *)
+val mk_neg_pe: integerType -> pexpr -> pexpr
+let mk_neg_pe ity pe =
+  Pexpr [] () (PEop OpSub (annotate_integer_type_pexpr ity (mk_integer_pe 0)) pe)
 
 val mk_struct_pe: Symbol.sym -> list (Symbol.identifier * pexpr) -> pexpr
 let mk_struct_pe tag_sym xs =
@@ -704,6 +718,20 @@ let mk_wseqs end_e = function
       mk_wseqs_aux end_e pat_es
 end
 *)
+
+val annotate_integer_type_expr : integerType -> expr unit -> expr unit
+let annotate_integer_type_expr ity (Expr annot expr_) =
+  let annot = (Avalue (Ainteger ity)) :: annot in
+  Expr annot expr_
+
+
+val maybe_annotate_integer_type : ctype -> expr unit -> expr unit
+let maybe_annotate_integer_type (Ctype _ ctype_) (Expr annot expr_) =
+  let annot = match ctype_ with
+    | Basic (Integer ity) -> (Avalue (Ainteger ity)) :: annot
+    | _ -> annot
+  end in
+  Expr annot expr_
 
 val     mk_sseqs: list (pattern * expr unit) -> (expr unit -> expr unit)
 let rec mk_sseqs pat_es =
@@ -2117,37 +2145,6 @@ let add_stmt (Expr annot expr_) =
 val add_expr: expr unit -> expr unit
 let add_expr (Expr annot expr_) =
   Expr (Aexpr :: annot) expr_
-
-
-val annotate_integer_type_pexpr : integerType -> pexpr -> pexpr
-let annotate_integer_type_pexpr ity (Pexpr annot bty expr_) =
-  let annot = (Avalue (Ainteger ity)) :: annot in
-  Pexpr annot bty expr_
-
-
-val maybe_annotate_integer_type_pexpr : ctype -> pexpr -> pexpr
-let maybe_annotate_integer_type_pexpr (Ctype _ ctype_) pe =
-  match ctype_ with
-    | Basic (Integer ity) -> annotate_integer_type_pexpr ity pe
-    | _ -> pe
-  end
-
-
-val annotate_integer_type_expr : integerType -> expr unit -> expr unit
-let annotate_integer_type_expr ity (Expr annot expr_) =
-  let annot = (Avalue (Ainteger ity)) :: annot in
-  Expr annot expr_
-
-
-val maybe_annotate_integer_type : ctype -> expr unit -> expr unit
-let maybe_annotate_integer_type (Ctype _ ctype_) (Expr annot expr_) =
-  let annot = match ctype_ with
-    | Basic (Integer ity) -> (Avalue (Ainteger ity)) :: annot
-    | _ -> annot
-  end in
-  Expr annot expr_
-
-
 
 val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
