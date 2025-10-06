@@ -2210,11 +2210,18 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
           end
 else
             (* Here one of the operand is pointer *)
-            let (ptr_ty, ptr_core_e, integer_core_e) =
+            let (ptr_ty, ptr_core_e, integer_ty, integer_core_e) =
               if AilTypesAux.is_arithmetic (ctype_of e1) then
-                (ctype_of e2, core_e2, core_e1)
+                (ctype_of e2, core_e2, ctype_of e1, core_e1)
               else
-                (ctype_of e1, core_e1, core_e2) in
+                (ctype_of e1, core_e1, ctype_of e2, core_e2) in
+            let ity =
+              match Cty.match_integer_ctype integer_ty with
+                | Cty.MatchedItySigned ity -> ity
+                | Cty.MatchedItyUnsigned ity -> ity
+                | Cty.NotMatchedIty ->
+                    illTypedAil loc "A.AilEbinary (A.Arithmetic A.Sub), one is pointer, other is not an integer"
+              end in
             let ref_ty = match AilTypesAux.referenced_type ptr_ty with
               | (*BISECT-IGNORE*) Nothing ->
                   illTypedAil loc "A.AilEbinary (A.Arithmetic A.Sub), one is pointer"
@@ -2224,7 +2231,7 @@ else
             E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun ptr_wrp         ->
             E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun integer_wrp     ->
             E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun ptr_obj_wrp     ->
-            E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun integer_obj_wrp ->  
+            E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun integer_obj_wrp ->
             E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun res_wrp         ->
             E.return begin
               C.Expr [Annot.Astd "§6.5.6"] (
@@ -2236,12 +2243,12 @@ else
                          (* Both operand are specified *)
 begin if Global.has_strict_pointer_arith () || Global.is_CHERI () || Global.is_PNVI () then
                         Caux.mk_wseq_e res_wrp.E.sym_pat
-                          (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; (Caux.mk_neg_pe integer_obj_wrp.E.sym_pe)]))
+                          (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; (Caux.mk_neg_pe ity integer_obj_wrp.E.sym_pe)]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_wrp.E.sym_pe))
 else
                         Caux.mk_pure_e begin
                           Caux.mk_specified_pe begin
-                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_wrp.E.sym_pe ref_ty (Caux.mk_neg_pe integer_obj_wrp.E.sym_pe))
+                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_wrp.E.sym_pe ref_ty (Caux.mk_neg_pe ity integer_obj_wrp.E.sym_pe))
                           end
                         end
 end                       )
