@@ -357,28 +357,37 @@ let translate_div_mod_operator loc translate_expr usual_arithmetic_conversion st
   E.wrapped_fresh_symbol (C.BTy_object oTy_res) >>= fun conv2_wrp ->
   let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.5#3"
     (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
-  let (ub, core_pe) = match aop with
+  let (ub, bop, iop) = match aop with
     | A.Div ->
         ( Undefined.UB045a_division_by_zero
-        , Caux.mk_op_pe C.OpDiv promoted1_pe conv2_wrp.E.sym_pe )
+        , C.OpDiv
+        , C.IOpDiv )
     | A.Mod ->
         ( Undefined.UB045b_modulo_by_zero
-        , Caux.mk_op_pe C.OpRem_t conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe )
+        , C.OpRem_t
+        , C.IOpRem_t )
     | (*BISECT-IGNORE*) _ ->
-        error "[Translation.translate_div_mod_operator], 'aop' must be multiplicative"
+        error "[Translation.translate_div_mod_operator], 'aop' must be Div or Mod"
   end in
+  (* NOTE: we don't use a Core let because this can't be factorised with the
+     operand of `is_representable()` when the operator is Mod *)
+  let div_mod_pe = Caux.mk_op_pe bop conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe in
   E.return begin
     Caux.add_std "§6.5.5" (
       Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) (
         Caux.mk_pure_e (
           Caux.mk_case_pe (Caux.mk_tuple_pe [e1_wrp.E.sym_pe; e2_wrp.E.sym_pe])
             [ ( Caux.mk_tuple_pat [ Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                                  ; Caux.mk_empty_pat (C.BTy_loaded oTy2) ]
-              ,
-if AilTypesAux.is_signed_integer_type result_ty then
-                Caux.mk_undef_exceptional_condition loc
+                                  ; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
+              , Caux.mk_let_pe conv2_wrp.E.sym_pat promoted2_pe (
+                  Caux.mk_if_pe (Caux.mk_op_pe C.OpEq conv2_wrp.E.sym_pe zero_pe)
+                    (Caux.mk_std_undef_pe loc "§6.5.5#5, sentence 2" ub)
+begin if AilTypesAux.is_signed_integer_type result_ty then
+                    Caux.mk_undef_exceptional_condition loc
 else
-                Caux.mk_unspecified_pe result_ty )
+                    Caux.mk_unspecified_pe result_ty
+end
+                ) )
 
             ; ( Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded oTy1)
                                   ; Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype) ]
@@ -391,20 +400,25 @@ else
                     Caux.mk_if_pe (Caux.mk_op_pe C.OpEq conv2_wrp.E.sym_pe zero_pe)
                       (Caux.mk_std_undef_pe loc "§6.5.5#5, sentence 2" ub)
                       (* if a/b is representable *)
-                      ( Caux.mk_if_pe (stdlib.mkcall_is_representable (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_wrp.E.sym_pe) result_ty)
+                      ( Caux.mk_if_pe (stdlib.mkcall_is_representable
+                          (Caux.mk_op_pe C.OpDiv conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe) result_ty)
                           begin
                             Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" begin
-                              if AilTypesAux.is_signed_integer_type result_ty then
-                                stdlib.mkcall_catch_exceptional_condition result_ty core_pe
-                              else if AilTypesAux.is_integer result_ty then
-                                stdlib.mkcall_wrapI result_ty core_pe
-                              else
-                                core_pe
+  if Global.backend_name () = "Cn" then
+                              match Cty.match_integer_ctype result_ty with
+                                | Cty.MatchedItySigned ity ->
+                                    Caux.mk_wrapI_pe ity iop conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe
+                                | Cty.MatchedItyUnsigned ity ->
+                                    Caux.mk_wrapI_pe ity iop conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe
+                                | Cty.NotMatchedIty ->
+                                    div_mod_pe
+                              end
+  else
+                                div_mod_pe
                             end)
                           end
                           (Caux.mk_undef_pe loc Undefined.UB045c_quotient_not_representable) )
-                    )
-                  ) ) ]
+                  ) ) ) ]
           )
         )
       )

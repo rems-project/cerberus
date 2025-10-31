@@ -115,9 +115,9 @@ type iop =
  | IOpMul
  | IOpShl
  | IOpShr
-(* | IOpDiv
+ | IOpDiv
  | IOpRem_t
- | IOpRem_f *)
+(* | IOpRem_f *)
 
 type core_type =  (* Core types *)
  | TyBase of core_base_type (* pure base type *)
