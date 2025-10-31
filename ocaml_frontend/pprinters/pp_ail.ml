@@ -1022,10 +1022,16 @@ let rec pp_genType = function
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->
+    if !executable_spec then 
+      pp_qualifiers qs ^^^ pp_ctype_raw ty
+    else
      !^ "GenLValueType" ^^ P.brackets (
        pp_qualifiers qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ (if isRegister then "true" else "false")
      )
  | GenRValueType gty ->
+  if !executable_spec then 
+    pp_genType gty
+  else
      !^ "GenRValueType" ^^ P.brackets (pp_genType gty)
 
 let pp_expression e = pp_expression_aux (fun _ d -> d) e
