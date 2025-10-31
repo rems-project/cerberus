@@ -117,9 +117,9 @@ let string_of_iop = function
   | IOpMul   -> "*"
   | IOpShl   -> "<<"
   | IOpShr   -> ">>"
-(*  | OpDiv   -> "/"
-  | OpRem_t -> "rem_t"
-  | OpRem_f -> "rem_f"
+  | IOpDiv   -> "/"
+  | IOpRem_t -> "rem_t"
+(*  | OpRem_f -> "rem_f"
   | OpExp   -> "^" *)
 
 let dtree_of_pexpr pexpr =

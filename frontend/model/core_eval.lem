@@ -84,6 +84,8 @@ let mk_iop = function
   | IOpAdd -> fun x y -> Mem.op_ival Mem_common.IntAdd x y
   | IOpSub -> fun x y -> Mem.op_ival Mem_common.IntSub x y
   | IOpMul -> fun x y -> Mem.op_ival Mem_common.IntMul x y
+  | IOpDiv -> fun x y -> Mem.op_ival Mem_common.IntDiv x y
+  | IOpRem_t -> fun x y -> Mem.op_ival Mem_common.IntRem_t x y
   | IOpShl -> fun x y -> Mem.op_ival Mem_common.IntMul x (Mem.op_ival Mem_common.IntExp (Mem.integer_ival 2) y)
   | IOpShr -> fun x y -> Mem.op_ival Mem_common.IntDiv x (Mem.op_ival Mem_common.IntExp (Mem.integer_ival 2) y)
 end
