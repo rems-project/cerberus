@@ -1033,7 +1033,7 @@ let pp_genTypeCategory gtc =
       | _ -> failwith "impossible case: TODO move to Exception.t"
     in 
     let (qs, ctype) = qualified_ctype_of gtc in 
-    pp_qualifiers qs ^^ pp_ctype_raw ctype
+    pp_ctype qs ctype
   else
   (match gtc with 
  | GenLValueType (qs, ty, isRegister) ->
