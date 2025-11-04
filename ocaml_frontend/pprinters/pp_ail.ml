@@ -1020,19 +1020,28 @@ let rec pp_genType = function
   | GenByte ->
       !^ "byte"
 
-let pp_genTypeCategory = function
+let pp_genTypeCategory gtc = 
+  if !executable_spec then 
+    let qualified_ctype_of gtc' =
+    match ErrorMonad.runErrorMonad
+        (GenTypesAux.interpret_genTypeCategory Cerb_location.unknown (Implementation.integerImpl ())
+          gtc') with
+      | Right (GenTypes.LValueType (qs, ty, _)) -> (qs, ty)
+      | Right (GenTypes.RValueType   ty) -> (no_qualifiers, ty)
+      | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
+          failwith "untypeable integer constant"
+      | _ -> failwith "impossible case: TODO move to Exception.t"
+    in 
+    let (qs, ctype) = qualified_ctype_of gtc in 
+    pp_qualifiers qs ^^ pp_ctype_raw ctype
+  else
+  (match gtc with 
  | GenLValueType (qs, ty, isRegister) ->
-    if !executable_spec then 
-      pp_qualifiers qs ^^^ pp_ctype_raw ty
-    else
      !^ "GenLValueType" ^^ P.brackets (
        pp_qualifiers qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ (if isRegister then "true" else "false")
      )
  | GenRValueType gty ->
-  if !executable_spec then 
-    pp_genType gty
-  else
-     !^ "GenRValueType" ^^ P.brackets (pp_genType gty)
+     !^ "GenRValueType" ^^ P.brackets (pp_genType gty))
 
 let pp_expression e = pp_expression_aux (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
