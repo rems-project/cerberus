@@ -404,7 +404,8 @@ end
                           (Caux.mk_op_pe C.OpDiv conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe) result_ty)
                           begin
                             Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" begin
-  if Global.backend_name () = "Cn" then
+  (* TODO Christopher: Fixme *)
+  if (* Global.backend_name () = "Cn" *) false then
                               match Cty.match_integer_ctype result_ty with
                                 | Cty.MatchedItySigned ity ->
                                     Caux.mk_wrapI_pe ity iop conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe
