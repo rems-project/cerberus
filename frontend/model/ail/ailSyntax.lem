@@ -135,10 +135,14 @@ type identifier_env = Annot.identifier_env
 
 (* Annotation to Ail statement to keep track of nodes resulting from some
    desugaring of a C/Cabs construct *)
-type desug_info =
-  | Desug_none (* no desugaring *)
+type desug_case =
   | Desug_forloop
   | Desug_continue
+
+type desug_info = <|
+  is_forloop_body: bool;
+  desug_case: maybe desug_case;
+|>
 
 type ail_invalid_reason =
   | AilInvalid_desugaring_init_failed of string
@@ -236,7 +240,11 @@ and statement 'a [name="s*"] = <|
 |>
 
 let mk_statement loc node =
-  <| loc= loc; desug_info= Desug_none; attrs= Annot.no_attributes; node= node |>
+  let desug_info = <|
+    is_forloop_body= false;
+    desug_case= Nothing
+  |> in
+  <| loc= loc; desug_info= desug_info; attrs= Annot.no_attributes; node= node |>
 
 let mk_statement_full loc desug_info attrs node =
   <| loc= loc; desug_info= desug_info; attrs= attrs; node= node |>

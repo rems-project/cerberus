@@ -3702,11 +3702,15 @@ E.fresh_block_scope >>= fun scope ->
 and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
   let attrs_outer = attrs in
   let self = desugar_statement_aux ctx in
-  let desug_info = match stmt_ with
-    | CabsSfor _ _ _ _ -> Desug_forloop
-    | CabsScontinue -> Desug_continue
-    | _ -> Desug_none
-  end in
+  let desug_info = <|
+    is_forloop_body= false;
+    desug_case=
+      match stmt_ with
+        | CabsSfor _ _ _ _ -> Just Desug_forloop
+        | CabsScontinue -> Just Desug_continue
+        | _ -> Nothing
+      end
+  |> in
   mk_statement_full loc desug_info attrs <$>
     match stmt_ with
       | CabsSlabel ident s ->
@@ -3919,7 +3923,8 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               match e3_opt with
                 | Just e3 ->
                     desugar_expression e3 >>= fun d_e3 ->
-                    E.under_scope s_scope (desugar_statement_aux ctx' s) >>= fun d_s  ->
+                    E.under_scope s_scope (desugar_statement_aux ctx' s) >>= fun d_s ->
+                    let d_s = AilSyntaxAux.mark_as_forloop_body d_s in
                     let d_s_e3 = mk_statement Loc.unknown (AilSexpr d_e3) in
                     E.return match d_s.A.node with
                       | AilSblock bindings d_ss ->
@@ -3933,6 +3938,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                     end
                 | Nothing ->
                     E.under_scope s_scope (desugar_statement_aux ctx' s) >>= fun d_s ->
+                    let d_s = AilSyntaxAux.mark_as_forloop_body d_s in
                     E.return begin
                       mk_statement loc (
                         AilSblock [] [ d_s
@@ -4016,6 +4022,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             end >>= fun d_s_e3 ->
             E.fresh_block_scope >>= fun s_scope ->
             E.under_scope s_scope (desugar_statement_aux ctx' s) >>= fun d_s ->
+            let d_s = AilSyntaxAux.mark_as_forloop_body d_s in
             E.return (mk_for d_e2 d_s_e3 d_s)
         end
       
