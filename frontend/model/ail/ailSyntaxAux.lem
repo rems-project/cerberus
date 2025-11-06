@@ -46,3 +46,7 @@ let sigma_fresh_bindings bs S =
       | Just _ -> false
       | Nothing -> true
     end) bs
+
+val mark_as_forloop_body: forall 'a. statement 'a -> statement 'a
+let mark_as_forloop_body stmt =
+  <| stmt with desug_info= <| stmt.desug_info with is_forloop_body= true |> |>
