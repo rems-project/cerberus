@@ -333,6 +333,8 @@ let rec ctype_to_expr slvSt (Ctype.Ctype (_, ty)) =
           failwith "TODO: Smt.ctype_to_expr, Struct"
       | Union _ ->
           failwith "TODO: Smt.ctype_to_expr, Union"
+      | Byte ->
+          failwith "TODO: Smt.ctype_to_expr, Byte"
 (*
       | _ ->
           failwith "TODO: Smt.ctype_to_expr"
@@ -612,6 +614,8 @@ let va_arg _ _ = failwith "Defacto: va_arg"
 let va_end _ = failwith "Defacto: va_end"
 let va_list _ = failwith "Defacto: va_list"
 let copy_alloc_id _ _ = failwith "Defacto: copy_alloc_id"
+let bytefromint _ _ = failwith "Defacto: bytefromint"
+let intfrombyte _ _ = failwith "Defacto: intfrombyte"
 let concurRead_ival = Defacto_memory.impl_concurRead_ival
 let integer_ival = Defacto_memory.impl_integer_ival
 let max_ival = Defacto_memory.impl_max_ival
