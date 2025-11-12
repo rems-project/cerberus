@@ -62,6 +62,8 @@ let rec base_ctype (Ctype (_, ty) as cty) : ctype =
       cty
   | Union _ ->
       cty
+  | Byte ->
+      cty
 
 let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
                            (file: unit typed_file)
@@ -100,6 +102,8 @@ let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
       end
   | Union _ ->
     failwith "Error: unions are not supported."
+  | Byte ->
+    failwith "Error: byte not supported"
 
 
   (*

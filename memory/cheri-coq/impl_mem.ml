@@ -206,6 +206,7 @@ module CerbTagDefs = struct
     | Atomic cty ->  Atomic (toCoq_ctype cty)
     | Struct s -> Struct (toCoq_Symbol_sym s)
     | Union s -> Union (toCoq_Symbol_sym s)
+    | Byte -> Basic (toCoq_basicType (Integer (Unsigned Ichar)))
 
   let toCoq_flexible_array_member: Ctype.flexible_array_member -> CoqCtype.flexible_array_member = function
     | FlexibleArrayMember (attr,sym, q, cty) ->
@@ -1175,7 +1176,8 @@ module CHERIMorello : Memory = struct
          None
       | Some (Ctype (_, Basic _))
         | Some (Ctype (_, Union _))
-        | Some (Ctype (_, Pointer _)) ->
+        | Some (Ctype (_, Pointer _))
+        | Some (Ctype (_, Byte)) ->
          let offset = Z.sub addr alloc.base in
          Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ " + " ^ Z.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
@@ -1281,6 +1283,15 @@ module CHERIMorello : Memory = struct
 
   let copy_alloc_id ival ptrval =
     lift_coq_memM "copy_alloc_id" (MM.copy_alloc_id ival ptrval)
+
+  let bytefromint _ ival =
+    (* assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255))); *)
+    ival
+
+  let intfrombyte _ ival =
+    (* assert (N.(less_equal (of_int 0) intval && less_equal intval (of_int 255))); *)
+    ival
+
 
   (* Integer value constructors *)
   let concurRead_ival ity sym =
