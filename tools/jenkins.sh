@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env -S bash -euo pipefail
 
 export CERB_PATH=/local/jenkins/home/workspace/rems/cerberus
 export DEPPATH=$CERB_PATH/dependencies

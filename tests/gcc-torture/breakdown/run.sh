@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env -S bash -euo pipefail
 
 SUCCESS=$(git ls-files success/*.c | wc -l)
 LIMBUS=$(git ls-files limbus/*.c | wc -l)
