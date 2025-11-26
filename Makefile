@@ -13,15 +13,15 @@ else
 SEDI = sed -i ''
 endif
 
+PROFILE = dev
+DUNEFLAGS = --profile=$(PROFILE)
+ifdef PROFILING
+    DUNEFLAGS += --workspace=dune-workspace.profiling
+endif
+
 # Trick to avoid printing the commands.
 # To enable the printing of commands, use [make Q= ...],
 Q = @
-
-ifdef PROFILING
-    DUNEFLAGS=--workspace=dune-workspace.profiling
-else
-    DUNEFLAGS=
-endif
 
 .PHONY: normal
 normal: cerberus
@@ -285,7 +285,7 @@ distclean: clean clean-prelude-src clean-sibylfs-src
 .PHONY: cerberus-lib
 cerberus-lib:
 	@echo "[DUNE] cerberus-lib"
-	$(Q)dune build -p cerberus-lib
+	$(Q)dune build $(DUNEFLAGS) cerberus-lib.install
 
 .PHONY: install_lib
 install_lib: cerberus-lib
