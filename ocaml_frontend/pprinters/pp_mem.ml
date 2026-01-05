@@ -68,7 +68,7 @@ let pp_memop = function
   | PtrArrayShift ->
       !^ "PtrArrayShift"
   | PtrMemberShift (tag_sym, membr_ident) ->
-      !^ "PtrArrayShift" ^^ P.brackets (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ Pp_symbol.pp_identifier membr_ident)
+      !^ "PtrMemberShift" ^^ P.brackets (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ Pp_symbol.pp_identifier membr_ident)
   | Copy_alloc_id ->
       !^ "Copy_alloc_id"
   | CHERI_intrinsic (str, (ret_ty, tys)) ->
