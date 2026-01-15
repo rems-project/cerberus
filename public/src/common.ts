@@ -61,7 +61,7 @@ export namespace ExecOpt {
 }
 
 export namespace AllocModel {
-  const opts = flags(['concrete', 'symbolic', 'vip'])
+  const opts = flags(['concrete', 'vip'])
   export type t = keyof typeof opts
   export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
   export const Err = (opt: string) => new Error (`Expecting an 'allocation model' type, got '${opt}'`)

@@ -115,9 +115,8 @@ web: cerberus-web
 cerberus-web: prelude-src web-deployment
 	@echo "[DUNE] web"
 	$(Q)dune build $(DUNEFLAGS) cerberus-lib.install cerberus-web.install
-	$(Q) rm -f webcerb.concrete webcerb.symbolic webcerb.vip cerberus-webserver
+	$(Q) rm -f webcerb.concrete webcerb.vip cerberus-webserver
 	$(Q)cp -L _build/default/backend/web/instance.exe webcerb.concrete
-	$(Q)cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
 	$(Q)cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
 	$(Q)cp -L _build/default/backend/web/web.exe cerberus-webserver
 
@@ -149,8 +148,7 @@ LEM_CORE_TO_CORE  = core_sequentialise.lem core_indet.lem core_rewrite.lem \
                     core_unstruct.lem
 LEM_CORE_DYNAMICS = core_run_aux.lem core_eval.lem core_run.lem core_reduction.lem core_reduction_aux.lem driver.lem
 LEM_ELABORATION   = translation_effect.lem translation_aux.lem translation.lem 
-LEM_DEFACTO       = mem_common.lem defacto_memory_types.lem \
-                    defacto_memory_aux.lem defacto_memory.lem mem.lem \
+LEM_DEFACTO       = mem_common.lem mem.lem \
                     mem_aux.lem
 LEM_CONC_INTERF   = cmm_aux.lem
 LEM_CONC          = cmm_csem.lem cmm_op.lem linux.lem
@@ -276,7 +274,7 @@ clean-sibylfs-src:
 
 .PHONY: clean-web distclean-web
 clean-web:
-	$(Q)rm -f webcerb.concrete webcerb.symbolic webcerb.vip cerberus-webserver
+	$(Q)rm -f webcerb.concrete webcerb.vip cerberus-webserver
 distclean-web:
 	$(Q)rm -f public/dist/main.bundle.js public/dist/main.bundle.js.map
 	$(Q)rm -f public/dist/style.bundle.css public/dist/style.bundle.css.map

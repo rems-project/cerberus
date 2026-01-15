@@ -5,18 +5,6 @@
  (modules main)
  (libraries result cmdliner str unix mem_concrete cerberus-lib.backend_common))
 
-;(executable
-; (name main_symbolic)
-; (public_name cerberus-symbolic)
-; (package cerberus)
-; (modules main_symbolic)
-; (libraries result cmdliner str unix mem_symbolic cerberus-lib.backend_common))
-
-(rule
- (target main_symbolic.ml)
- (deps main.ml)
- (action (copy main.ml main_symbolic.ml)))
-
 (executable
  (name main_vip)
  (public_name cerberus-vip)

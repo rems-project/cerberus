@@ -176,7 +176,6 @@ module type Memory = sig
   
   
   (* Memory value constructors *)
-  (*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
   val unspecified_mval: Ctype.ctype -> mem_value
   val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
   val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value

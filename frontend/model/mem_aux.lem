@@ -6,15 +6,6 @@ val integerFromIntegerValue: integer_value -> maybe integer
 let integerFromIntegerValue ival =
   eval_integer_value ival
 
-(*
-val symbolicFromIntegerValue: integer_value -> maybe Symbolic.symbolic
-let symbolicFromIntegerValue ival =
-  case_integer_value ival
-    (fun _ -> Nothing)
-    (fun symb -> Just symb)
-    (fun () -> Nothing)
-*)
-
 val integerValueFromMemValue: mem_value -> maybe (Ctype.integerType * integer_value)
 let integerValueFromMemValue mval =
   let () = Debug.print_debug 1 [] (fun () ->
@@ -49,29 +40,6 @@ let isUnspecifiedMemValue mval =
     | Nothing -> false
   end
 
-(*
-val symbolicFromMemValue: mem_value -> maybe (Symbolic.symbolic mem_value Mem.pointer_value)
-let symbolicFromMemValue mval =
-  error "symbolicFromMemValue"
-*)
-(*
-let symbolicFromMemValue mval =
-(*
-  maybe Nothing (symbolicFromIntegerValue -| snd) (integerValueFromMemValue mval)
-*)
-  case_mem_value mval
-    (fun _ -> Nothing)
-    (fun symb -> Just symb)
-    (fun _ _ -> Nothing)
-    (fun _ _ -> Nothing)
-    (fun _ _ -> Nothing)
-    (fun _ -> Nothing)
-    (fun _ _ -> Nothing)
-    (fun _ _ _ -> Nothing)
-*)
-
-
-
 val pointerValueFromMemValue: mem_value -> maybe (Ctype.ctype * pointer_value)
 let pointerValueFromMemValue mem_val =
   let () = Debug.print_debug 1 [] (fun () ->
@@ -86,8 +54,6 @@ let pointerValueFromMemValue mem_val =
     (fun _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ _ -> Nothing)
-
-
 
 val integer_mval: Ctype.integerType -> integer -> mem_value
 let integer_mval ity n =

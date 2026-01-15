@@ -1,4 +1,4 @@
-(dirs cheri-coq concrete symbolic vip)
+(dirs cheri-coq concrete vip)
 
 
 

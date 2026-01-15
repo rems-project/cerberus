@@ -188,12 +188,10 @@ type action =
 (* implementation of the memory interface *)
 type model =
   [ `Concrete
-  | `Symbolic
   | `VIP ]
 
 let string_of_model = function
   | `Concrete -> "concrete"
-  | `Symbolic -> "symbolic"
   | `VIP      -> "vip"
 
 let string_of_action = function
@@ -263,7 +261,6 @@ let parse_incoming_msg content =
   in
   let parse_model = function
     | "concrete" -> `Concrete
-    | "symbolic" -> `Symbolic
     | "vip"      -> `VIP
     | str -> 
         Debug.warn ("Unknown model: '" ^ str ^ "' (defaulting to 'concrete')");
@@ -655,7 +652,6 @@ let cerberus ~rheader ~conf ~flow content =
          prevent the possibility of exploits since the string comes from the client *)
       "./webcerb." ^ begin match msg.model with
         | `Concrete -> "concrete"
-        | `Symbolic -> "symbolic"
         | `VIP      -> "vip"
       end in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
