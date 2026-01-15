@@ -145,14 +145,7 @@ let rec simplify_integer_value_base ival_ =
           | Void ->
               (* Ail type error *)
               assert false
-          | Byte ->
-              begin match (Ocaml_implementation.get()).sizeof_ity (Unsigned Ichar) with
-                | Some n ->
-                    Left (of_int n)
-                | None ->
-                    prerr_endline (String_core_ctype.string_of_ctype (Ctype ([], ty)));
-                    Right ival_
-              end
+          | Byte -> Left (of_int 1)
           | Basic (Integer ity) ->
               begin match (Ocaml_implementation.get()).sizeof_ity ity with
                 | Some n ->
@@ -226,20 +219,13 @@ let rec simplify_integer_value_base ival_ =
                 let max_size = List.fold_left (fun acc z -> max z acc) size sizes in
                 Left (add max_size (sub align (integerRem_f max_size align)))
               end
-          | Byte -> Left (of_int 1)
         end
     | IValignof (Ctype (_, ty)) ->
         begin match ty with
           | Void ->
               (* Ail type error *)
               assert false
-          | Byte ->
-              begin match (Ocaml_implementation.get()).alignof_ity (Unsigned Ichar) with
-                | Some n ->
-                    Left (of_int n)
-                | None ->
-                    Right ival_
-              end
+          | Byte -> Left (of_int 1)
           | Basic (Integer ity) ->
               begin match (Ocaml_implementation.get()).alignof_ity ity with
                 | Some n ->
@@ -297,7 +283,6 @@ let rec simplify_integer_value_base ival_ =
                      alignment constraint of any of its member *)
                   Left (List.fold_left (fun acc z -> max z acc) n ns)
               end
-          | Byte -> Left (of_int 1)
         end
     | IVoffsetof (tag_sym, memb_ident) ->
         failwith "simplify_integer_value: IVoffsetof"
