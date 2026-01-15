@@ -335,8 +335,6 @@ let rec ctype_to_expr slvSt (Ctype.Ctype (_, ty)) =
           failwith "TODO: Smt.ctype_to_expr, Struct"
       | Union _ ->
           failwith "TODO: Smt.ctype_to_expr, Union"
-      | Byte ->
-          failwith "TODO: Smt.ctype_to_expr, Byte"
 (*
       | _ ->
           failwith "TODO: Smt.ctype_to_expr"
