@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env -S bash -euo pipefail
 
 #DIR=/home/jm/work/wg14
 DIR=/home/pes20/tmp/wg14

@@ -1,4 +1,4 @@
-#!/usr/bash
+#!/usr/bin/env -S bash -euo pipefail
 
 citests=(
   0001-emptymain.c
