@@ -103,23 +103,23 @@ cerberus-with-cheri: prelude-src
 # 	@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
 # 	@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
 
-tmp/:
-	@echo "[MKDIR] tmp"
-	$(Q)mkdir -p tmp
+.PHONY: cerberus-web web web-deployment
+web-deployment:
+	@echo "Setting up Webapp deployment directory"
+	$(Q)mkdir -p public/_deployment/
+	$(Q)mkdir -p public/_deployment/tmp/
+	$(Q)mkdir -p public/_deployment/logs/
+	$(Q) sed 's?#SRC_ROOT#?'$(shell pwd)'?' tools/config.json > public/_deployment/config.json
 
-config.json: tools/config.json
-	@echo "[CP] $< → $@"
-	@cp $< $@
-
-.PHONY: cerberus-web web
 web: cerberus-web
-cerberus-web: prelude-src config.json tmp/
+cerberus-web: prelude-src web-deployment
 	@echo "[DUNE] web"
-	$(Q)dune build $(DUNEFLAGS) cerberus-lib.install cerberus.install cerberus-web.install
-#	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
-#	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
-#	@cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
-#	@cp -L _build/default/backend/web/web.exe cerberus-webserver
+	$(Q)dune build $(DUNEFLAGS) cerberus-lib.install cerberus-web.install
+	$(Q) rm -f webcerb.concrete webcerb.symbolic webcerb.vip cerberus-webserver
+	$(Q)cp -L _build/default/backend/web/instance.exe webcerb.concrete
+	$(Q)cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
+	$(Q)cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
+	$(Q)cp -L _build/default/backend/web/web.exe cerberus-webserver
 
 .PHONY: ui
 ui:
@@ -267,20 +267,30 @@ sibylfs-src: $(SIBYLFS_TRG)
 .PHONY: clean-prelude-src
 clean-prelude-src:
 	$(Q)rm -rf $(PRELUDE_SRC_DIR)
+	$(Q)rm -f ocaml_frontend/lem.log
 
 .PHONY: clean-sibylfs-src
 clean-sibylfs-src:
 	$(Q)rm -rf $(SIBYLFS_SRC_DIR)
+	$(Q)rm -f sibylfs/lem.log
+
+.PHONY: clean-web distclean-web
+clean-web:
+	$(Q)rm -f webcerb.concrete webcerb.symbolic webcerb.vip cerberus-webserver
+distclean-web:
+	$(Q)rm -f public/dist/main.bundle.js public/dist/main.bundle.js.map
+	$(Q)rm -f public/dist/style.bundle.css public/dist/style.bundle.css.map
+	$(Q)rm -f public/package-lock.json
+	$(Q)rm -rf public/node_modules/
+	$(Q)rm -rf public/_deployment/
 
 .PHONY: clean
-clean:
+clean: clean-web
 	$(Q)rm -f coq/*.{glob,vo,vok}
-	$(Q)rm -f webcerb.concrete webcerb.symbolic cerberus-webserver
 	$(Q)rm -rf _build/
 
 .PHONY: distclean
-distclean: clean clean-prelude-src clean-sibylfs-src
-	$(Q)rm -rf tmp config.json
+distclean: clean clean-prelude-src clean-sibylfs-src distclean-web
 
 .PHONY: cerberus-lib
 cerberus-lib:

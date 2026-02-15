@@ -1,5 +1,5 @@
 # We need npm
-ifeq (, $(shell which npm))
+ifeq (,$(shell command -v npm 2> /dev/null))
 $(error "npm is required to build the UI part of Cerberus")
 endif
 

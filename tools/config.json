@@ -1,11 +1,12 @@
 {
+  "docroot": "#SRC_ROOT#/public/dist/",
+  "tmp_path": "#SRC_ROOT#/public/_deployment/tmp/",
   "log": {
-    "all": "tmp/all",
-    "index": "tmp/index",
-    "request": "tmp/request"
+    "all": "#SRC_ROOT#/public/_deployment/logs/all",
+    "index": "#SRC_ROOT#/public/_deployment/logs/index",
+    "request": "#SRC_ROOT#/public/_deployment/logs/request"
   },
   "tcp": {
-    "port": 80,
-    "redirect": false
+    "port": 8080
   }
 }
