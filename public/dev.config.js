@@ -1,6 +1,5 @@
 const Path = require('path');
-const ExtractTextPlugin = require('extract-text-webpack-plugin')
-const extractCSS = new ExtractTextPlugin({ filename: 'style.bundle.css' })
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
 module.exports = {
   mode: 'development',
@@ -11,11 +10,11 @@ module.exports = {
     filename: '[name].bundle.js',
     path: Path.resolve(__dirname, 'dist')
   },
-  node: {
-    fs: "empty"
-  },
   resolve: {
-    extensions: [".ts", ".js"]
+    extensions: [".ts", ".js"],
+    fallback: {
+      fs: false,
+    },
   },
   module: {
     rules: [{
@@ -24,13 +23,10 @@ module.exports = {
         exclude: [/node_modules/, /tests/]
       }, {
         test: /\.css$/,
-        use: extractCSS.extract({
-          fallback: 'style-loader',
-          use: [ 'css-loader' ]
-        })
+        use: [MiniCssExtractPlugin.loader, "css-loader"]
       }
     ]
   },
-  plugins: [ extractCSS ]
+  plugins: [ new MiniCssExtractPlugin({ filename: 'style.bundle.css' }) ]
 };
 

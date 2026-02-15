@@ -34,7 +34,7 @@
 
 (executable
  (name web)
- (public_name web)
+ (public_name cerberus-webserver)
  (package cerberus-web)
  (flags (:standard -w -27-69))
  (modules web)

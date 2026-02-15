@@ -116,16 +116,11 @@ $ cerberus-bmc --help
 Building the web server
 ---
 
-Install the common dependencies and the following extra ones:
-
-* lwt
-* fpath           (0.7.3)
-* ezgzip          (0.2.3)
-* cohttp-lwt-unix (5.0.0)
+Install the common dependencies and some backend specific ones (see [here](cerberus-web.opam) for details):
 
 
 ```bash
-$ opam install lwt fpath ezgzip cohttp-lwt-unix
+$ opam install --deps-only ./cerberus-web.opam ./cerberus-lib.opam
 ```
 
 Then:
@@ -134,37 +129,23 @@ Then:
 $ make web
 ```
 
-This installs all the available web instances as `webcerb.*` and the web server `cerberus-webserver`.
+This copies all the available web instances as `webcerb.*` and the web server as `cerberus-webserver` to the source root directory.
 
-To build the UI, install node package manager `npm` (sudo apt install nodejs npm
-) and:
+Next, build the webapp providing the UI (this requires the node package manager `npm`):
 
 ```bash
 $ make ui
 ```
 
-Edit the generated `config.json`.
+The first command sets up a deployment directory at `public/_deployment` containing a default configuration `config.json`.
 
-Run:
-
-```bash
-$ cerberus-server --help
-```
-
-Building the abstract interpreter
----
-
-Install the common dependencies and the APRON library (tested with v0.9.12).
+To run the server with that default configuration:
 
 ```bash
-$ opam install apron
+$ ./cerberus-webserver -c public/_deployment/config.json
 ```
 
-Then:
-
-```bash
-$ make absint
-```
+(If you intend to move and run the server binary to another location, you will need the `cerberus-lib` package to first be installed in with opam)
 
 All targets
 ---

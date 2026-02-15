@@ -19,25 +19,25 @@ sibylfs/generated
 # Elaboration PP tex generation
 generated_tex/
 
-public/node_modules/
-
+# Web app files
+/public/node_modules/
+/cerberus-webserver
+/webcerb.concrete
+/webcerb.symbolic
+/webcerb.vip
+/public/dist/main.bundle.js
+/public/dist/main.bundle.js.map
+/public/dist/style.bundle.css
+/public/dist/style.bundle.css.map
+/public/package-lock.json
+/public/_deployment/
 
 *~
-cerberus-webserver
-config.json
-webcerb.concrete
-webcerb.symbolic
-webcerb.vip
 .vscode/settings.json
 
 a.out
 /tests/csmith/**/LOG
 /tests/csmith/**/LOG.old
-public/dist/main.bundle.js
-public/dist/main.bundle.js.map
-public/dist/style.bundle.css
-public/dist/style.bundle.css.map
-public/package-lock.json
 /.ignore
 /backend/cheri/cerb.prof
 /cerb.prof

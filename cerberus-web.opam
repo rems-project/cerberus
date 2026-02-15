@@ -11,6 +11,7 @@ homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
   "cerberus-lib"
+  "z3"
   "fpath" {>= "0.7.3"}
   "ezgzip" {>= "0.2.3"}
   "cohttp-lwt-unix" {>= "4.0.0" & < "6.0.0"}
