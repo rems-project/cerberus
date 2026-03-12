@@ -206,6 +206,16 @@ citests=(
   0338-cast-pointer-to-_Bool.c
   0339-invalid-string-character.error.c
   0340-shl_promotion_to_signed.undef.c
+  0341-mem2reg_simple.c
+  0342-mem2reg_multi.c
+  0343-mem2reg_if.c
+  0344-mem2reg_if_one_branch.c
+  0345-mem2reg_loop.c
+  0346-mem2reg_no_promote_address.c
+  0347-mem2reg_no_promote_arg.c
+  0348-mem2reg_no_promote_loop_write.c
+  0349-mem2reg_struct.c
+  0350-mem2reg_mixed.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
