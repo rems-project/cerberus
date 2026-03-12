@@ -561,6 +561,11 @@ let core_passes (conf, io) ~filename core_file =
       Remove_unspecs.rewrite_file core_file
     else
       core_file in
+  let core_file =
+    if Switches.(has_switch SW_mem2reg) then
+      Core_mem2reg.transform_file core_file
+    else
+      core_file in
   Core_indet.hackish_order <$> begin
     if conf.sequentialise_core || conf.typecheck_core then
       typed_core_passes (conf, io) core_file >>= fun (core_file, typed_core_file) ->
