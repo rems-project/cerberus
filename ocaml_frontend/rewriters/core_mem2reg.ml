@@ -1,5 +1,267 @@
-(* mem2reg: promote function-local non-address-taken variables from
-   Create/Store0/Load0/Kill sequences to pure Core let-bindings.
-   This file currently contains only the stub (identity transform). *)
+open Core
 
-let transform_file file = file
+(* ------------------------------------------------------------------ *)
+(* Internal classification of how a pointer sym is used               *)
+(* ------------------------------------------------------------------ *)
+
+type use =
+  | Use_load   (* Load0(_, PEsym ptr, _)  — address argument *)
+  | Use_store  (* Store0(_, _, PEsym ptr, _, _) — address argument *)
+  | Use_kill   (* Kill(_, PEsym ptr) *)
+  | Use_other  (* any other occurrence *)
+
+let use_is_promotable = function
+  | Use_load | Use_store | Use_kill -> true
+  | Use_other -> false
+
+(* ------------------------------------------------------------------ *)
+(* Occurrence helpers                                                   *)
+(* ------------------------------------------------------------------ *)
+
+let is_pesym sym (Pexpr (_, _, pe_)) =
+  match pe_ with
+  | PEsym s -> Symbol.symbolEquality s sym
+  | _ -> false
+
+let rec sym_occurs_in_pexpr sym (Pexpr (_, _, pe_)) =
+  match pe_ with
+  | PEsym s -> Symbol.symbolEquality s sym
+  | PEval _ | PEimpl _ | PEundef _ | PEerror _ -> false
+  | PEctor (_, pes) | PEcall (_, pes) | PEmemop (_, pes) ->
+      List.exists (sym_occurs_in_pexpr sym) pes
+  | PEcase (pe, arms) ->
+      sym_occurs_in_pexpr sym pe
+      || List.exists (fun (_, pe2) -> sym_occurs_in_pexpr sym pe2) arms
+  | PEarray_shift (pe1, _, pe2) | PEop (_, pe1, pe2) ->
+      sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
+  | PElet (_, pe1, pe2) ->
+      sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
+  | PEwrapI (_, _, pe1, pe2) | PEcatch_exceptional_condition (_, _, pe1, pe2) ->
+      sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
+  | PEmember_shift (pe, _, _)
+  | PEconv_int (_, pe)
+  | PEnot pe
+  | PEis_scalar pe | PEis_integer pe | PEis_signed pe | PEis_unsigned pe
+  | PEmemberof (_, _, pe) | PEunion (_, _, pe) | PEcfunction pe
+  | PEbmc_assume pe ->
+      sym_occurs_in_pexpr sym pe
+  | PEif (pe1, pe2, pe3) ->
+      sym_occurs_in_pexpr sym pe1
+      || sym_occurs_in_pexpr sym pe2
+      || sym_occurs_in_pexpr sym pe3
+  | PEconstrained ivs ->
+      List.exists (fun (_, pe) -> sym_occurs_in_pexpr sym pe) ivs
+  | PEstruct (_, fields) ->
+      List.exists (fun (_, pe) -> sym_occurs_in_pexpr sym pe) fields
+  | PEare_compatible (pe1, pe2) ->
+      sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
+
+and sym_occurs_in_expr sym (Expr (_, e_)) =
+  match e_ with
+  | Epure pe -> sym_occurs_in_pexpr sym pe
+  | Eaction (Paction (_, Action (_, _, act_))) ->
+      sym_occurs_in_action sym act_
+  | Ememop (_, pes) -> List.exists (sym_occurs_in_pexpr sym) pes
+  | Ecase (pe, arms) ->
+      sym_occurs_in_pexpr sym pe
+      || List.exists (fun (_, e) -> sym_occurs_in_expr sym e) arms
+  | Elet (_, pe, e) ->
+      sym_occurs_in_pexpr sym pe || sym_occurs_in_expr sym e
+  | Eif (pe, e1, e2) ->
+      sym_occurs_in_pexpr sym pe
+      || sym_occurs_in_expr sym e1
+      || sym_occurs_in_expr sym e2
+  | Eccall (_, pe1, pe2, pes) ->
+      List.exists (sym_occurs_in_pexpr sym) (pe1 :: pe2 :: pes)
+  | Eproc (_, _, pes) | Erun (_, _, pes) ->
+      List.exists (sym_occurs_in_pexpr sym) pes
+  | Eunseq es | End es | Epar es ->
+      List.exists (sym_occurs_in_expr sym) es
+  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
+      sym_occurs_in_expr sym e1 || sym_occurs_in_expr sym e2
+  | Ebound e | Eannot (_, e) -> sym_occurs_in_expr sym e
+  | Esave (_, args, body) ->
+      List.exists (fun (_, (_, pe)) -> sym_occurs_in_pexpr sym pe) args
+      || sym_occurs_in_expr sym body
+  | Ewait _ | Eexcluded _ -> false
+
+and sym_occurs_in_action sym act_ =
+  match act_ with
+  | Create (pe1, pe2, _) ->
+      sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
+  | CreateReadOnly (pe1, pe2, pe3, _) ->
+      sym_occurs_in_pexpr sym pe1
+      || sym_occurs_in_pexpr sym pe2
+      || sym_occurs_in_pexpr sym pe3
+  | Alloc0 (pe1, pe2, _) ->
+      sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
+  | Kill (_, pe) -> sym_occurs_in_pexpr sym pe
+  | Load0 (_, pe, _) -> sym_occurs_in_pexpr sym pe
+  | Store0 (_, pe1, pe2, pe3, _) ->
+      sym_occurs_in_pexpr sym pe1
+      || sym_occurs_in_pexpr sym pe2
+      || sym_occurs_in_pexpr sym pe3
+  | Fence0 _ -> false
+  | SeqRMW (_, pe1, pe2, _, pe3) ->
+      sym_occurs_in_pexpr sym pe1
+      || sym_occurs_in_pexpr sym pe2
+      || sym_occurs_in_pexpr sym pe3
+  | RMW0 (pe1, pe2, pe3, pe4, _, _)
+  | CompareExchangeStrong (pe1, pe2, pe3, pe4, _, _)
+  | CompareExchangeWeak (pe1, pe2, pe3, pe4, _, _) ->
+      List.exists (sym_occurs_in_pexpr sym) [pe1; pe2; pe3; pe4]
+  | LinuxFence _ -> false
+  | LinuxLoad (pe1, pe2, _) ->
+      sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
+  | LinuxStore (pe1, pe2, pe3, _) | LinuxRMW (pe1, pe2, pe3, _) ->
+      List.exists (sym_occurs_in_pexpr sym) [pe1; pe2; pe3]
+
+(* ------------------------------------------------------------------ *)
+(* Classify a single action's uses of sym                              *)
+(* ------------------------------------------------------------------ *)
+
+let classify_action sym act_ : use list =
+  match act_ with
+  | Store0 (_, _ctype_pe, addr_pe, val_pe, _) ->
+      let addr_use =
+        if is_pesym sym addr_pe then [Use_store]
+        else if sym_occurs_in_pexpr sym addr_pe then [Use_other]
+        else []
+      in
+      let val_use =
+        if sym_occurs_in_pexpr sym val_pe then [Use_other] else []
+      in
+      addr_use @ val_use
+  | Load0 (_ctype_pe, addr_pe, _) ->
+      if is_pesym sym addr_pe then [Use_load]
+      else if sym_occurs_in_pexpr sym addr_pe then [Use_other]
+      else []
+  | Kill (_, addr_pe) ->
+      if is_pesym sym addr_pe then [Use_kill]
+      else if sym_occurs_in_pexpr sym addr_pe then [Use_other]
+      else []
+  | _ ->
+      if sym_occurs_in_action sym act_ then [Use_other] else []
+
+(* ------------------------------------------------------------------ *)
+(* collect_uses: gather all uses of sym in an expression              *)
+(* ------------------------------------------------------------------ *)
+
+let rec collect_uses sym (Expr (_, e_)) : use list =
+  match e_ with
+  | Eaction (Paction (_, Action (_, _, act_))) ->
+      classify_action sym act_
+  | Esave (_, args, body) ->
+      (* Conservative: any occurrence inside an Esave is Use_other,
+         since loop bodies may re-enter and store to the variable. *)
+      let in_args =
+        List.exists (fun (_, (_, pe)) -> sym_occurs_in_pexpr sym pe) args
+      in
+      let in_body = sym_occurs_in_expr sym body in
+      if in_args || in_body then [Use_other] else []
+  | Epure pe ->
+      if sym_occurs_in_pexpr sym pe then [Use_other] else []
+  | Ememop (_, pes) ->
+      if List.exists (sym_occurs_in_pexpr sym) pes then [Use_other] else []
+  | Elet (_, pe, e) ->
+      (if sym_occurs_in_pexpr sym pe then [Use_other] else [])
+      @ collect_uses sym e
+  | Ecase (pe, arms) ->
+      (if sym_occurs_in_pexpr sym pe then [Use_other] else [])
+      @ List.concat_map (fun (_, e) -> collect_uses sym e) arms
+  | Eif (pe, e1, e2) ->
+      (if sym_occurs_in_pexpr sym pe then [Use_other] else [])
+      @ collect_uses sym e1
+      @ collect_uses sym e2
+  | Eccall (_, fn_pe, arg_pe, pes) ->
+      if List.exists (sym_occurs_in_pexpr sym) (fn_pe :: arg_pe :: pes)
+      then [Use_other] else []
+  | Eproc (_, _, pes) | Erun (_, _, pes) ->
+      if List.exists (sym_occurs_in_pexpr sym) pes then [Use_other] else []
+  | Eunseq es | End es | Epar es ->
+      List.concat_map (collect_uses sym) es
+  | Ewseq (
+      Pattern (_, CaseBase (Some alias_sym, _)),
+      Expr (_, Epure (Pexpr (_, _, PEsym src_sym))),
+      body
+    ) when Symbol.symbolEquality src_sym sym ->
+      (* Core pattern: let weak alias = pure(sym) in body.
+         sym is being used as a pointer value to be copied into alias.
+         Classify sym's use here based on how alias is used in body. *)
+      collect_uses alias_sym body
+      @ collect_uses sym body
+  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
+      collect_uses sym e1 @ collect_uses sym e2
+  | Ebound e | Eannot (_, e) -> collect_uses sym e
+  | Ewait _ | Eexcluded _ -> []
+
+(* ------------------------------------------------------------------ *)
+(* collect_creates: find Create-bound ptr syms (PrefSource only)      *)
+(*                                                                     *)
+(* NOTE — calling-convention assumption: this pass only considers      *)
+(* Create(PrefSource _) bindings, i.e. C source-level local variables. *)
+(* It does NOT promote Proc parameter pointers, because under the      *)
+(* standard via-pointer argument-passing convention the caller owns    *)
+(* the argument slot and the callee merely receives a pointer to it.   *)
+(*                                                                     *)
+(* CN uses a value-passing convention instead: arguments are passed    *)
+(* directly as Core values, not as pointers.  Under that convention   *)
+(* a parameter whose address is never taken could also be promoted     *)
+(* here (its Create+Store preamble at function entry has exactly the   *)
+(* same Load/Store/Kill-only shape as a promotable local).  Extending  *)
+(* collect_creates to also yield PrefFunArg Create bindings would      *)
+(* enable that optimisation for CN.                                    *)
+(* ------------------------------------------------------------------ *)
+
+let rec collect_creates (Expr (_, e_)) : Symbol.sym list =
+  match e_ with
+  | Esseq (
+      Pattern (_, CaseBase (Some ptr_sym, _)),
+      Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _, Symbol.PrefSource _))))),
+      body
+    ) ->
+      ptr_sym :: collect_creates body
+  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
+      collect_creates e1 @ collect_creates e2
+  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
+      collect_creates e
+  | Eif (_, e1, e2) ->
+      collect_creates e1 @ collect_creates e2
+  | Ecase (_, arms) ->
+      List.concat_map (fun (_, e) -> collect_creates e) arms
+  | Esave (_, _, body) ->
+      collect_creates body
+  | Eunseq es | End es | Epar es ->
+      List.concat_map collect_creates es
+  | Epure _ | Eaction _ | Ememop _ | Eccall _ | Eproc _
+  | Erun _ | Ewait _ | Eexcluded _ -> []
+
+(* ------------------------------------------------------------------ *)
+(* Promotability analysis for a single procedure                       *)
+(* ------------------------------------------------------------------ *)
+
+let find_promotable f_sym body : Symbol.sym list =
+  let creates = collect_creates body in
+  let is_promotable s =
+    List.for_all use_is_promotable (collect_uses s body)
+  in
+  let promotable = List.filter is_promotable creates in
+  Cerb_debug.print_debug 3 [] (fun () ->
+    Printf.sprintf "[mem2reg] %s: %d promotable: [%s]"
+      (Pp_symbol.to_string_pretty f_sym)
+      (List.length promotable)
+      (String.concat ", " (List.map Pp_symbol.to_string_pretty promotable)));
+  promotable
+
+(* ------------------------------------------------------------------ *)
+(* transform_file: analysis phase only — file returned unchanged       *)
+(* ------------------------------------------------------------------ *)
+
+let transform_file file =
+  List.iter (fun (f_sym, decl) ->
+    match decl with
+    | Proc (_, _, _, _, body) ->
+        ignore (find_promotable f_sym body)
+    | Fun _ | ProcDecl _ | BuiltinDecl _ -> ()
+  ) (Pmap.bindings_list file.funs);
+  file
