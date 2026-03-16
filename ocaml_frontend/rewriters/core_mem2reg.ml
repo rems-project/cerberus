@@ -1,3 +1,6 @@
+(* This file implements an analysis to find 'promotable' variables,
+ * stack variables which can be promoted out of memory operations and
+ * into pure Core expressions. *)
 open Core
 
 (* ------------------------------------------------------------------ *)
@@ -5,17 +8,18 @@ open Core
 (* ------------------------------------------------------------------ *)
 
 type use =
-  | Use_load   (* Load0(_, PEsym ptr, _)  — address argument *)
-  | Use_store  (* Store0(_, _, PEsym ptr, _, _) — address argument *)
-  | Use_kill   (* Kill(_, PEsym ptr) *)
-  | Use_other  (* any other occurrence *)
+  | Use_load    (* Load0(_, PEsym ptr, _)  — address argument *)
+  | Use_store   (* Store0(_, _, PEsym ptr, _, _) — address argument *)
+  | Use_kill    (* Kill(_, PEsym ptr) *)
+  | Use_seqrmw  (* SeqRMW(_, _, PEsym ptr, tmp, upd) — ptr is the address argument *)
+  | Use_other   (* any other occurrence *)
 
 let use_is_promotable = function
-  | Use_load | Use_store | Use_kill -> true
+  | Use_load | Use_store | Use_kill | Use_seqrmw -> true
   | Use_other -> false
 
 (* ------------------------------------------------------------------ *)
-(* Occurrence helpers                                                   *)
+(* Occurrence helpers                                                 *)
 (* ------------------------------------------------------------------ *)
 
 let is_pesym sym (Pexpr (_, _, pe_)) =
@@ -117,7 +121,9 @@ and sym_occurs_in_action sym act_ =
       List.exists (sym_occurs_in_pexpr sym) [pe1; pe2; pe3]
 
 (* ------------------------------------------------------------------ *)
-(* Classify a single action's uses of sym                              *)
+(* Classify a single action's uses of sym                             *)
+(* Only plain uses of the symbol are allowed - e.g. member shifts are *)
+(* counted as other uses and not promoted.                            *)
 (* ------------------------------------------------------------------ *)
 
 let classify_action sym act_ : use list =
@@ -140,6 +146,20 @@ let classify_action sym act_ : use list =
       if is_pesym sym addr_pe then [Use_kill]
       else if sym_occurs_in_pexpr sym addr_pe then [Use_other]
       else []
+  | SeqRMW (_, _ty_pe, addr_pe, _tmp_sym, upd_pe) ->
+      let addr_use =
+        if is_pesym sym addr_pe then
+          [Use_seqrmw]
+        else if sym_occurs_in_pexpr sym addr_pe then
+          (* I think the elaboration ensures this case is impossible *)
+          [Use_other]
+        else
+          []
+      in
+      let upd_use =
+        if sym_occurs_in_pexpr sym upd_pe then [Use_other] else []
+      in
+      addr_use @ upd_use
   | _ ->
       if sym_occurs_in_action sym act_ then [Use_other] else []
 
@@ -231,6 +251,128 @@ let rec collect_creates ~also_fun_args (Expr (_, e_)) : Symbol.sym list =
   | Erun _ | Ewait _ | Eexcluded _ -> []
 
 (* ------------------------------------------------------------------ *)
+(* check_definitely_init                                               *)
+(*                                                                     *)
+(* Returns (safe, init_after):                                         *)
+(*   safe       – no load-before-store on any syntactic path           *)
+(*   init_after – on ALL paths through expr, at least one store        *)
+(*                has occurred (so a subsequent load would be safe)    *)
+(* ------------------------------------------------------------------ *)
+
+let rec check_definitely_init sym already_init (Expr (_, e_)) =
+  match e_ with
+  | Eaction (Paction (_, Action (_, _, act_))) ->
+      begin match act_ with
+      | Store0 (_, _, addr_pe, _, _) when is_pesym sym addr_pe ->
+          (true, true)
+      | Load0 (_, addr_pe, _) when is_pesym sym addr_pe ->
+          (already_init, already_init)
+      | Kill (_, addr_pe) when is_pesym sym addr_pe ->
+          (true, false)
+      | SeqRMW (_, _, addr_pe, _, _) when is_pesym sym addr_pe ->
+          (* Atomically reads then writes: safe iff already_init; always
+             initialises after. *)
+          (already_init, true)
+      | _ ->
+          (true, already_init)
+      end
+  | Esseq (_, e1, e2) ->
+      let (s1, ia1) = check_definitely_init sym already_init e1 in
+      let (s2, ia2) = check_definitely_init sym ia1 e2 in
+      (s1 && s2, ia2)
+  | Ewseq (_, e1, e2) ->
+      (* Neg actions in e1 are NOT sequenced before e2, so e2 cannot
+         rely on stores in e1.  Pass already_init (not ia1) to e2. *)
+      let (s1, ia1) = check_definitely_init sym already_init e1 in
+      let (s2, ia2) = check_definitely_init sym already_init e2 in
+      (s1 && s2, ia1 || ia2)
+  | Eunseq arms ->
+      (* No arm's result is visible to any sibling arm. *)
+      let results = List.map (check_definitely_init sym already_init) arms in
+      let safe      = List.for_all (fun (s, _) -> s) results in
+      let init_after = List.for_all (fun (_, ia) -> ia) results in
+      (safe, init_after)
+  | Eif (_, et, ef) ->
+      let (st, iat) = check_definitely_init sym already_init et in
+      let (sf, iaf) = check_definitely_init sym already_init ef in
+      (st && sf, iat && iaf)
+  | Ecase (_, arms) ->
+      let results =
+        List.map (fun (_, e) -> check_definitely_init sym already_init e) arms
+      in
+      let safe       = List.for_all (fun (s, _) -> s) results in
+      let init_after = List.for_all (fun (_, ia) -> ia) results in
+      (safe, init_after)
+  | Esave (_, args, body) ->
+      (* Conservative: a loop may re-enter without re-running the store. *)
+      if List.exists (fun (_, (_, pe)) -> sym_occurs_in_pexpr sym pe) args
+         || sym_occurs_in_expr sym body
+      then (false, already_init)
+      else (true, already_init)
+  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
+      check_definitely_init sym already_init e
+  | _ ->
+      (true, already_init)
+
+(* ------------------------------------------------------------------ *)
+(* expr_writes_sym: does expr contain a Store0 or SeqRMW whose        *)
+(* address is directly PEsym sym?                                      *)
+(* ------------------------------------------------------------------ *)
+
+let rec expr_writes_sym sym (Expr (_, e_)) =
+  match e_ with
+  | Eaction (Paction (_, Action (_, _, act_))) ->
+      begin match act_ with
+      | Store0 (_, _, addr_pe, _, _) -> is_pesym sym addr_pe
+      | SeqRMW (_, _, addr_pe, _, _) -> is_pesym sym addr_pe
+      | _ -> false
+      end
+  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
+      expr_writes_sym sym e1 || expr_writes_sym sym e2
+  | Eunseq es | End es | Epar es ->
+      List.exists (expr_writes_sym sym) es
+  | Eif (_, e1, e2) ->
+      expr_writes_sym sym e1 || expr_writes_sym sym e2
+  | Ecase (_, arms) ->
+      List.exists (fun (_, e) -> expr_writes_sym sym e) arms
+  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
+      expr_writes_sym sym e
+  | Esave (_, _, body) ->
+      expr_writes_sym sym body
+  | _ -> false
+
+(* ------------------------------------------------------------------ *)
+(* no_mixed_unseq_uses                                                 *)
+(*                                                                     *)
+(* Returns false if sym appears in a write arm AND ≥2 arms of any     *)
+(* Eunseq mention sym — which would mean promoting sym silently        *)
+(* removes a Store0/SeqRMW that Cerberus's sequencing-violation        *)
+(* detector would otherwise see.                                       *)
+(* ------------------------------------------------------------------ *)
+
+let rec no_mixed_unseq_uses sym (Expr (_, e_)) =
+  match e_ with
+  | Eunseq arms ->
+      let writing_arms   = List.filter (expr_writes_sym sym) arms in
+      let mentioning_arms = List.filter (sym_occurs_in_expr sym) arms in
+      let conflict = (match writing_arms with [] -> false | _ -> true)
+                     && List.length mentioning_arms >= 2 in
+      (not conflict) && List.for_all (no_mixed_unseq_uses sym) arms
+  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
+      no_mixed_unseq_uses sym e1 && no_mixed_unseq_uses sym e2
+  | Eif (_, e1, e2) ->
+      no_mixed_unseq_uses sym e1 && no_mixed_unseq_uses sym e2
+  | Ecase (_, arms) ->
+      List.for_all (fun (_, e) -> no_mixed_unseq_uses sym e) arms
+  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
+      no_mixed_unseq_uses sym e
+  | Esave (_, _, body) ->
+      no_mixed_unseq_uses sym body
+  | End es | Epar es ->
+      List.for_all (no_mixed_unseq_uses sym) es
+  | _ -> true
+
+(* ------------------------------------------------------------------ *)
 (* Promotability analysis for a single procedure                       *)
 (* ------------------------------------------------------------------ *)
 
@@ -238,6 +380,8 @@ let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
   let creates = collect_creates ~also_fun_args body in
   let is_promotable s =
     List.for_all use_is_promotable (collect_uses s body)
+    && fst (check_definitely_init s false body)
+    && no_mixed_unseq_uses s body
   in
   let promotable = List.filter is_promotable creates in
   Cerb_debug.print_debug 3 [] (fun () ->

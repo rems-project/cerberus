@@ -1,6 +1,6 @@
 #!/bin/bash
 # run-mem2reg-phase2.sh — elimination check
-# Verifies that --sw mem2reg removes promotable vars from Core IR (tests 0341–0350).
+# Verifies that --sw mem2reg removes promotable vars from Core IR (tests 0341–0356).
 
 TESTSDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 cd "$TESTSDIR"
@@ -38,6 +38,7 @@ echo "=== Phase 2: elimination (--sw mem2reg must remove promotable vars from Co
 # Update these as the implementation progresses; the fully-working pass targets:
 #   0341=0  0342=0  0343=0  0344=0  0345=1
 #   0346=2  0347=0  0348=2  0349=1  0350=1
+#   0351=1  0352=1  0353=0  0354=0  0355=0  0356=1
 declare -A elim_expected
 elim_expected=(
   [0341-mem2reg_simple.c]=1
@@ -50,6 +51,12 @@ elim_expected=(
   [0348-mem2reg_no_promote_loop_write.c]=2
   [0349-mem2reg_struct.c]=1
   [0350-mem2reg_mixed.c]=3
+  [0351-mem2reg_unseq_uninit.undef.c]=1
+  [0352-mem2reg_unseq_init.undef.c]=1
+  [0353-mem2reg_unseq_reads.c]=1
+  [0354-mem2reg_seqrmw_post.c]=1
+  [0355-mem2reg_seqrmw_pre.c]=1
+  [0356-mem2reg_unseq_seqrmw.undef.c]=1
 )
 
 for file in "${!elim_expected[@]}"; do
