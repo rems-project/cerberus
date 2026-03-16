@@ -195,44 +195,38 @@ let rec collect_uses sym (Expr (_, e_)) : use list =
   | Ebound e | Eannot (_, e) -> collect_uses sym e
   | Ewait _ | Eexcluded _ -> []
 
-(* ------------------------------------------------------------------ *)
-(* collect_creates: find Create-bound ptr syms (PrefSource only)      *)
-(*                                                                     *)
-(* NOTE — calling-convention assumption: this pass only considers      *)
-(* Create(PrefSource _) bindings, i.e. C source-level local variables. *)
-(* It does NOT promote Proc parameter pointers, because under the      *)
-(* standard via-pointer argument-passing convention the caller owns    *)
-(* the argument slot and the callee merely receives a pointer to it.   *)
-(*                                                                     *)
-(* CN uses a value-passing convention instead: arguments are passed    *)
-(* directly as Core values, not as pointers.  Under that convention   *)
-(* a parameter whose address is never taken could also be promoted     *)
-(* here (its Create+Store preamble at function entry has exactly the   *)
-(* same Load/Store/Kill-only shape as a promotable local).  Extending  *)
-(* collect_creates to also yield PrefFunArg Create bindings would      *)
-(* enable that optimisation for CN.                                    *)
-(* ------------------------------------------------------------------ *)
+(* collect_creates finds Create-bound syms that are candidates for
+   promotion.  Under Normal_callconv only PrefSource (C local variables)
+   are considered; under Inner_arg_callconv PrefFunArg (callee-owned
+   parameter temporaries) are also included, since in that convention
+   the callee creates and owns the argument slot.                      *)
 
-let rec collect_creates (Expr (_, e_)) : Symbol.sym list =
+let rec collect_creates ~also_fun_args (Expr (_, e_)) : Symbol.sym list =
   match e_ with
   | Esseq (
       Pattern (_, CaseBase (Some ptr_sym, _)),
       Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _, Symbol.PrefSource _))))),
       body
     ) ->
-      ptr_sym :: collect_creates body
+      ptr_sym :: collect_creates ~also_fun_args body
+  | Esseq (
+      Pattern (_, CaseBase (Some ptr_sym, _)),
+      Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _, Symbol.PrefFunArg _))))),
+      body
+    ) when also_fun_args ->
+      ptr_sym :: collect_creates ~also_fun_args body
   | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
-      collect_creates e1 @ collect_creates e2
+      collect_creates ~also_fun_args e1 @ collect_creates ~also_fun_args e2
   | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
-      collect_creates e
+      collect_creates ~also_fun_args e
   | Eif (_, e1, e2) ->
-      collect_creates e1 @ collect_creates e2
+      collect_creates ~also_fun_args e1 @ collect_creates ~also_fun_args e2
   | Ecase (_, arms) ->
-      List.concat_map (fun (_, e) -> collect_creates e) arms
+      List.concat_map (fun (_, e) -> collect_creates ~also_fun_args e) arms
   | Esave (_, _, body) ->
-      collect_creates body
+      collect_creates ~also_fun_args body
   | Eunseq es | End es | Epar es ->
-      List.concat_map collect_creates es
+      List.concat_map (collect_creates ~also_fun_args) es
   | Epure _ | Eaction _ | Ememop _ | Eccall _ | Eproc _
   | Erun _ | Ewait _ | Eexcluded _ -> []
 
@@ -240,8 +234,8 @@ let rec collect_creates (Expr (_, e_)) : Symbol.sym list =
 (* Promotability analysis for a single procedure                       *)
 (* ------------------------------------------------------------------ *)
 
-let find_promotable f_sym body : Symbol.sym list =
-  let creates = collect_creates body in
+let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
+  let creates = collect_creates ~also_fun_args body in
   let is_promotable s =
     List.for_all use_is_promotable (collect_uses s body)
   in
@@ -258,10 +252,14 @@ let find_promotable f_sym body : Symbol.sym list =
 (* ------------------------------------------------------------------ *)
 
 let transform_file file =
+  let also_fun_args = match file.calling_convention with
+    | Inner_arg_callconv -> true
+    | Normal_callconv    -> false
+  in
   List.iter (fun (f_sym, decl) ->
     match decl with
     | Proc (_, _, _, _, body) ->
-        ignore (find_promotable f_sym body)
+        ignore (find_promotable ~also_fun_args f_sym body)
     | Fun _ | ProcDecl _ | BuiltinDecl _ -> ()
   ) (Pmap.bindings_list file.funs);
   file
