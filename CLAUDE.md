@@ -5,9 +5,7 @@ Cerberus is a C semantics tool written in OCaml with a Dune build system.
 ## Build & run
 
 ```sh
-dune build                        # build everything
-dune build backend/driver/        # build the cerberus binary only
-./_build/default/backend/driver/cerberus --help
+make && make installl # buid everything and install it to the opam path
 
 # Common invocations
 cerberus file.c                   # parse + elaborate only
@@ -16,6 +14,8 @@ cerberus --pp core file.c         # pretty-print Core IR
 cerberus --typecheck-core file.c  # typecheck the Core IR
 cerberus --sw mem2reg file.c      # enable a switch
 ```
+
+Always use `make && make install` for building instead of dune commands.
 
 ## Architecture
 
@@ -61,10 +61,6 @@ automatically compiled into `cerb_frontend`.
        My_pass.transform_file core_file
      else core_file in
    ```
-
-## Buidling
-
-Always use `make && make install` for building instead of dune commands.
 
 ## Tests
 
