@@ -57,6 +57,10 @@ elim_expected=(
   [0354-mem2reg_seqrmw_post.c]=1
   [0355-mem2reg_seqrmw_pre.c]=1
   [0356-mem2reg_unseq_seqrmw.undef.c]=1
+  [0361-mem2reg_loop_read_preinit.c]=1
+  [0362-mem2reg_loop_escape.c]=2
+  [0363-mem2reg_nested_loops.c]=1
+  [0364-mem2reg_loop_uninit_load.undef.c]=1
 )
 
 for file in "${!elim_expected[@]}"; do

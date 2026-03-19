@@ -222,6 +222,10 @@ citests=(
   0354-mem2reg_seqrmw_post.c
   0355-mem2reg_seqrmw_pre.c
   0356-mem2reg_unseq_seqrmw.undef.c
+  0361-mem2reg_loop_read_preinit.c
+  0362-mem2reg_loop_escape.c
+  0363-mem2reg_nested_loops.c
+  0364-mem2reg_loop_uninit_load.undef.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
