@@ -39,6 +39,7 @@ echo "=== Phase 2: elimination (--sw mem2reg must remove promotable vars from Co
 #   0341=0  0342=0  0343=0  0344=0  0345=1
 #   0346=2  0347=0  0348=2  0349=1  0350=1
 #   0351=1  0352=1  0353=0  0354=0  0355=0  0356=1
+#   0365=0
 declare -A elim_expected
 elim_expected=(
   [0341-mem2reg_simple.c]=1
@@ -61,6 +62,7 @@ elim_expected=(
   [0362-mem2reg_loop_escape.c]=2
   [0363-mem2reg_nested_loops.c]=1
   [0364-mem2reg_loop_uninit_load.undef.c]=1
+  [0365-mem2reg_compound_lit.c]=2
 )
 
 for file in "${!elim_expected[@]}"; do
