@@ -562,6 +562,11 @@ let core_passes (conf, io) ~filename core_file =
     else
       core_file in
   let core_file =
+    if Switches.(has_switch SW_copy_prop) then
+      Copy_propagation.transform_file core_file
+    else
+      core_file in
+  let core_file =
     if Switches.(has_switch SW_mem2reg) then
       Core_mem2reg.transform_file core_file
     else
