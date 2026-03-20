@@ -1,39 +1,28 @@
 (* This file implements an analysis to find 'promotable' variables,
- * stack variables which can be promoted out of memory operations and
- * into pure Core expressions. *)
+   stack variables which can be promoted out of memory operations and
+   into pure Core expressions. *)
 open Core
 
 (* ------------------------------------------------------------------ *)
-(* Write_kind: lattice for "how strongly was sym initialized"          *)
-(*                                                                     *)
-(* No_write < Weak < Strong                                            *)
-(*   Strong   — Paction Pos store, committed before Esseq continuation *)
-(*   Weak     — Paction Neg store in Ewseq e1, unsequenced w.r.t. e2  *)
-(*   No_write — no store observed on this path                        *)
-(*                                                                     *)
-(* A Load0 or SeqRMW is only safe if sym was *strongly* initialized.  *)
+(* Mem_event: memory events observable on a single sym                *)
 (* ------------------------------------------------------------------ *)
 
-module Write_kind = struct
-  type t = No_write | Weak | Strong
-
-  (* join: least upper bound — goes up the lattice *)
-  let (||) a b = match a, b with
-    | No_write, x | x, No_write -> x
-    | Strong,   _ | _, Strong   -> Strong
-    | Weak,     Weak             -> Weak
-
-  (* meet: greatest lower bound — goes down the lattice *)
-  let (&&) a b = match a, b with
-    | Strong,   x | x, Strong   -> x
-    | No_write, _ | _, No_write -> No_write
-    | Weak,     Weak             -> Weak
-
-  let of_bool = function true -> Strong | false -> No_write
-
-  let is_strong   = function Strong   -> true | _ -> false
-  let is_write = function No_write -> false | _ -> true
+module Mem_event = struct
+  type t = Pos_store | Neg_store | Load | Kill
 end
+
+(* env: initialization state of sym at a given program point          *)
+(* Uninit      — no store observed yet on this path                   *)
+(* Init pe     — sym was last stored with committed value pe          *)
+(* DelayedInit — sym was stored (Neg polarity, Ewseq e1) but not yet  *)
+(*               committed; subsequent e2 must not observe this       *)
+(* Killed      — sym's allocation was freed                           *)
+type env = Uninit | Init of pexpr | DelayedInit of pexpr | Killed
+
+exception Not_sequentialisable
+exception Load_from_uninit
+
+let ( let* ) = Option.bind
 
 (* ------------------------------------------------------------------ *)
 (* Internal classification of how a pointer sym is used               *)
@@ -46,7 +35,7 @@ type use =
   | Use_seqrmw  (* SeqRMW(_, _, PEsym ptr, tmp, upd) — ptr is the address argument *)
   | Use_other   (* any other occurrence *)
 
-let use_is_promotable = function
+let addr_not_taken = function
   | Use_load | Use_store | Use_kill | Use_seqrmw -> true
   | Use_other -> false
 
@@ -92,36 +81,7 @@ let rec sym_occurs_in_pexpr sym (Pexpr (_, _, pe_)) =
   | PEare_compatible (pe1, pe2) ->
       sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
 
-and sym_occurs_in_expr sym (Expr (_, e_)) =
-  match e_ with
-  | Epure pe -> sym_occurs_in_pexpr sym pe
-  | Eaction (Paction (_, Action (_, _, act_))) ->
-      sym_occurs_in_action sym act_
-  | Ememop (_, pes) -> List.exists (sym_occurs_in_pexpr sym) pes
-  | Ecase (pe, arms) ->
-      sym_occurs_in_pexpr sym pe
-      || List.exists (fun (_, e) -> sym_occurs_in_expr sym e) arms
-  | Elet (_, pe, e) ->
-      sym_occurs_in_pexpr sym pe || sym_occurs_in_expr sym e
-  | Eif (pe, e1, e2) ->
-      sym_occurs_in_pexpr sym pe
-      || sym_occurs_in_expr sym e1
-      || sym_occurs_in_expr sym e2
-  | Eccall (_, pe1, pe2, pes) ->
-      List.exists (sym_occurs_in_pexpr sym) (pe1 :: pe2 :: pes)
-  | Eproc (_, _, pes) | Erun (_, _, pes) ->
-      List.exists (sym_occurs_in_pexpr sym) pes
-  | Eunseq es | End es | Epar es ->
-      List.exists (sym_occurs_in_expr sym) es
-  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
-      sym_occurs_in_expr sym e1 || sym_occurs_in_expr sym e2
-  | Ebound e | Eannot (_, e) -> sym_occurs_in_expr sym e
-  | Esave (_, args, body) ->
-      List.exists (fun (_, (_, pe)) -> sym_occurs_in_pexpr sym pe) args
-      || sym_occurs_in_expr sym body
-  | Ewait _ | Eexcluded _ -> false
-
-and sym_occurs_in_action sym act_ =
+let sym_occurs_in_action sym act_ =
   match act_ with
   | Create (pe1, pe2, _) ->
       sym_occurs_in_pexpr sym pe1 || sym_occurs_in_pexpr sym pe2
@@ -194,7 +154,7 @@ let classify_action sym act_ : use list =
 (* ------------------------------------------------------------------ *)
 (* Esave memo tables                                                   *)
 (*                                                                     *)
-(* Both collect_uses and check_definitely_init need to analyse Esave  *)
+(* Both collect_uses and sequentialisable need to analyse Esave        *)
 (* bodies: once via the default args and once per Erun call site.     *)
 (* Results are memoised per (label_sym, param_sym) to avoid redundant *)
 (* traversals and to terminate on back-edge Eruns.                    *)
@@ -206,10 +166,8 @@ type 'a esave_memo_entry = {
   results : (Symbol.sym, 'a) Pmap.map ref;        (* param_sym -> cached result, filled lazily *)
 }
 
-(* 'a = use list              for collect_uses                              *)
-(* 'a = bool * Write_kind.t  for check_definitely_init                     *)
-(*   fst = safe_uninit:  fst (check_definitely_init ... param_sym false body)  *)
-(*   snd = inits_param:  snd (check_definitely_init ... param_sym false body)  *)
+(* 'a = use list                              for collect_uses          *)
+(* 'a = bool * (Mem_event.t list * env) option  for sequentialisable   *)
 type 'a memo_save_info = (Symbol.sym, 'a esave_memo_entry) Pmap.map
 
 (* find_single_direct_alias sym pairs:
@@ -371,213 +329,282 @@ let rec collect_creates ~also_fun_args (Expr (_, e_)) : Symbol.sym list =
   | Erun _ | Ewait _ | Eexcluded _ -> []
 
 (* ------------------------------------------------------------------ *)
-(* check_definitely_init                                               *)
-(*                                                                     *)
-(* Returns (safe, init_after):                                         *)
-(*   safe       – no load-before-store on any syntactic path           *)
-(*   init_after – Write_kind describing how sym is initialized after   *)
-(*                this expression on ALL paths                         *)
-(*                                                                     *)
-(* strongly_init: sym is strongly initialized on entry (bool)         *)
+(* subst_pexpr: substitute PEsym tmp_sym -> replacement in pe         *)
+(* Used to track the value written by SeqRMW.                         *)
 (* ------------------------------------------------------------------ *)
 
-let rec check_definitely_init init_memo sym strongly_init (Expr (_, e_)) =
+let rec subst_pexpr (tmp_sym : Symbol.sym) (replacement : pexpr)
+    ((Pexpr (annots, bty, pe_)) as original : pexpr) : pexpr =
+  let sub pe = subst_pexpr tmp_sym replacement pe in
+  match pe_ with
+  | PEsym s when Symbol.symbolEquality s tmp_sym -> replacement
+  | PEsym _ | PEval _ | PEimpl _ | PEundef _ | PEerror _ -> original
+  | PEctor (ctor, pes) -> Pexpr (annots, bty, PEctor (ctor, List.map sub pes))
+  | PEcall (f, pes)    -> Pexpr (annots, bty, PEcall (f, List.map sub pes))
+  | PEmemop (op, pes)  -> Pexpr (annots, bty, PEmemop (op, List.map sub pes))
+  | PEcase (pe, arms)  ->
+      Pexpr (annots, bty,
+        PEcase (sub pe, List.map (fun (pat, pe2) -> (pat, sub pe2)) arms))
+  | PEarray_shift (pe1, ty, pe2) ->
+      Pexpr (annots, bty, PEarray_shift (sub pe1, ty, sub pe2))
+  | PEop (op, pe1, pe2) ->
+      Pexpr (annots, bty, PEop (op, sub pe1, sub pe2))
+  | PElet (pat, pe1, pe2) ->
+      Pexpr (annots, bty, PElet (pat, sub pe1, sub pe2))
+  | PEwrapI (ty1, ty2, pe1, pe2) ->
+      Pexpr (annots, bty, PEwrapI (ty1, ty2, sub pe1, sub pe2))
+  | PEcatch_exceptional_condition (ty1, ty2, pe1, pe2) ->
+      Pexpr (annots, bty, PEcatch_exceptional_condition (ty1, ty2, sub pe1, sub pe2))
+  | PEmember_shift (pe, tag, member) ->
+      Pexpr (annots, bty, PEmember_shift (sub pe, tag, member))
+  | PEconv_int (ty, pe)  -> Pexpr (annots, bty, PEconv_int (ty, sub pe))
+  | PEnot pe             -> Pexpr (annots, bty, PEnot (sub pe))
+  | PEis_scalar pe       -> Pexpr (annots, bty, PEis_scalar (sub pe))
+  | PEis_integer pe      -> Pexpr (annots, bty, PEis_integer (sub pe))
+  | PEis_signed pe       -> Pexpr (annots, bty, PEis_signed (sub pe))
+  | PEis_unsigned pe     -> Pexpr (annots, bty, PEis_unsigned (sub pe))
+  | PEmemberof (tag, member, pe) ->
+      Pexpr (annots, bty, PEmemberof (tag, member, sub pe))
+  | PEunion (tag, member, pe) ->
+      Pexpr (annots, bty, PEunion (tag, member, sub pe))
+  | PEcfunction pe   -> Pexpr (annots, bty, PEcfunction (sub pe))
+  | PEbmc_assume pe  -> Pexpr (annots, bty, PEbmc_assume (sub pe))
+  | PEif (pe1, pe2, pe3) ->
+      Pexpr (annots, bty, PEif (sub pe1, sub pe2, sub pe3))
+  | PEconstrained ivs ->
+      Pexpr (annots, bty, PEconstrained (List.map (fun (iv, pe) -> (iv, sub pe)) ivs))
+  | PEstruct (tag, fields) ->
+      Pexpr (annots, bty, PEstruct (tag, List.map (fun (id, pe) -> (id, sub pe)) fields))
+  | PEare_compatible (pe1, pe2) ->
+      Pexpr (annots, bty, PEare_compatible (sub pe1, sub pe2))
+
+(* ------------------------------------------------------------------ *)
+(* sequentialisable: unified promotability analysis                    *)
+(*                                                                     *)
+(* Returns:                                                            *)
+(*   None           — all control-flow paths end in Erun (vacuous)    *)
+(*   Some (ev, env') — events observed on sym and env after expr      *)
+(* Raises Not_sequentialisable on any conflict.                        *)
+(* Raises Load_from_uninit when a Load0/SeqRMW sees env=Uninit;       *)
+(*   caught by esave_needs_init to detect loops that need init.        *)
+(* ------------------------------------------------------------------ *)
+
+(* combine_branches pe_cond r1 r2: merge results from two branches.
+   pe_cond is used to construct PEif for the merged Init/DelayedInit pexpr. *)
+let combine_branches pe_cond r1 r2 =
+  match r1, r2 with
+  | None, None -> None
+  | None, (Some _ as result) | (Some _ as result), None -> result
+  | Some (ev1, env1), Some (ev2, env2) ->
+    let combined_env = match env1, env2 with
+      | Uninit, Uninit -> Uninit
+      | Killed, Killed -> Killed
+      | Init pe1, Init pe2 ->
+          Init (Pexpr ([], (), PEif (pe_cond, pe1, pe2)))
+      | DelayedInit pe1, DelayedInit pe2 ->
+          DelayedInit (Pexpr ([], (), PEif (pe_cond, pe1, pe2)))
+      | Init pe1, DelayedInit pe2 ->
+          DelayedInit (Pexpr ([], (), PEif (pe_cond, pe1, pe2)))
+      | DelayedInit pe1, Init pe2 ->
+          DelayedInit (Pexpr ([], (), PEif (pe_cond, pe1, pe2)))
+      | _ -> raise Not_sequentialisable
+    in
+    Some (ev1 @ ev2, combined_env)
+
+(* combine_case_branches pe arm_results:
+   Merges sequentialisable results from Ecase arms, building a PEcase node for the
+   combined Init/DelayedInit env.  pe is the case discriminant pexpr.
+   arm_results : (pattern * (Mem_event.t list * env) option) list
+   Note: arms whose result is None (all paths end in Erun) are filtered out, so the
+   resulting PEcase may have fewer arms than the original — i.e., the pattern may
+   be incomplete.  This is intentional: the pexpr is only used for value tracking
+   in the analysis/transform, not for execution. *)
+let combine_case_branches pe arm_results =
+  let live =
+    List.filter_map
+      (fun (pat, r) -> match r with None -> None | Some x -> Some (pat, x))
+      arm_results
+  in
+  match live with
+  | [] -> None
+  | _ ->
+      let all_evs = List.concat_map (fun (_, (ev, _)) -> ev) live in
+      let pat_envs = List.map (fun (pat, (_, e)) -> (pat, e)) live in
+      let all_uninit =
+        List.for_all (fun (_, e) -> match e with Uninit -> true | _ -> false) pat_envs
+      in
+      let all_killed =
+        List.for_all (fun (_, e) -> match e with Killed -> true | _ -> false) pat_envs
+      in
+      let combined_env =
+        if all_uninit then Uninit
+        else if all_killed then Killed
+        else
+          let pe_arms =
+            List.map (fun (pat, e) ->
+              match e with
+              | Init pe2 | DelayedInit pe2 -> (pat, pe2)
+              | _ -> raise Not_sequentialisable) pat_envs
+          in
+          let any_delayed =
+            List.exists
+              (fun (_, e) -> match e with DelayedInit _ -> true | _ -> false)
+              pat_envs
+          in
+          let case_pe = Pexpr ([], (), PEcase (pe, pe_arms)) in
+          if any_delayed then DelayedInit case_pe else Init case_pe
+      in
+      Some (all_evs, combined_env)
+
+(* seq_memo: memoises sequentialisable results per (label_sym, param_sym).
+   'a = bool * (Mem_event.t list * env) option
+     fst = init_needed: body requires Init _ env on entry (true) or
+           self-initialises (false)
+     snd = None while in progress or all paths end in Erun;
+           Some (ev, env') otherwise *)
+type seq_memo = (bool * (Mem_event.t list * env) option) memo_save_info
+
+let rec sequentialisable (seq_memo : seq_memo) sym env (Expr (_, e_))
+    : (Mem_event.t list * env) option =
   match e_ with
   | Eaction (Paction (polarity, Action (_, _, act_))) ->
       begin match act_ with
-      | Store0 (_, _, addr_pe, _, _) when is_pesym sym addr_pe ->
-          let wk = match polarity with Pos -> Write_kind.Strong | Neg -> Write_kind.Weak in
-          (true, wk)
+      | Store0 (_, _, addr_pe, val_pe, _) when is_pesym sym addr_pe ->
+          (match env with
+           | DelayedInit _ -> raise Not_sequentialisable
+           | _ ->
+               let ev, env' = match polarity with
+                 | Pos -> ([Mem_event.Pos_store], Init val_pe)
+                 | Neg -> ([Mem_event.Neg_store], DelayedInit val_pe)
+               in
+               Some (ev, env'))
       | Load0 (_, addr_pe, _) when is_pesym sym addr_pe ->
-          (strongly_init, Write_kind.of_bool strongly_init)
+          (match env with
+           | DelayedInit _ -> raise Not_sequentialisable
+           | Init _ -> Some ([Mem_event.Load], env)
+           | Uninit  -> raise Load_from_uninit
+           | _       -> raise Not_sequentialisable)
       | Kill (_, addr_pe) when is_pesym sym addr_pe ->
-          (true, Write_kind.No_write)
-      | SeqRMW (_, _, addr_pe, _, _) when is_pesym sym addr_pe ->
-          (* Atomically reads then writes: safe iff strongly_init; always
-             strongly initialises after. *)
-          (strongly_init, Write_kind.Strong)
+          (match env with
+           | DelayedInit _ -> raise Not_sequentialisable
+           | _ -> Some ([Mem_event.Kill], Killed))
+      | SeqRMW (_, _, addr_pe, tmp_sym, upd_pe) when is_pesym sym addr_pe ->
+          (match env with
+           | DelayedInit _ -> raise Not_sequentialisable
+           | Init pe ->
+               let stored = subst_pexpr tmp_sym pe upd_pe in
+               Some ([Mem_event.Load; Mem_event.Pos_store], Init stored)
+           | Uninit -> raise Load_from_uninit
+           | _      -> raise Not_sequentialisable)
       | _ ->
-          (* classify_action marks these cases as Use_other, which are filtered
-             out before this function is called. *)
-          (true, Write_kind.of_bool strongly_init)
+          Some ([], env)
       end
   | Esseq (_, e1, e2) ->
-      (* Strong sequencing: any write in e1 (even Weak/Neg) is committed
-         before e2 begins. *)
-      let (s1, ia1) = check_definitely_init init_memo sym strongly_init e1 in
-      let (s2, ia2) = check_definitely_init init_memo sym (Write_kind.is_write ia1) e2 in
-      (s1 && s2, ia2)
+      let* (ev1, env1) = sequentialisable seq_memo sym env e1 in
+      let env1' = match env1 with DelayedInit pe -> Init pe | _ -> env1 in
+      let* (ev2, env2) = sequentialisable seq_memo sym env1' e2 in
+      Some (ev1 @ ev2, env2)
   | Ewseq (_, e1, e2) ->
-      (* Weak sequencing: only Strong writes in e1 are committed before e2.
-         Weak (Neg) writes in e1 are unsequenced w.r.t. e2, so e2 sees
-         strongly_init unless ia1 is Strong. *)
-      let (s1, ia1) = check_definitely_init init_memo sym strongly_init e1 in
-      let strongly_init1 = (Write_kind.is_strong ia1 || strongly_init) in
-      let (s2, ia2) = check_definitely_init init_memo sym strongly_init1 e2 in
-      (s1 && s2, Write_kind.(ia1 || ia2))
-  | Eunseq arms ->
-      (* No arm's result is visible to any sibling arm. init_after is the
-         meet of all arms: all paths must initialize, weakest strength wins. *)
-      let results = List.map (check_definitely_init init_memo sym strongly_init) arms in
-      let safe     = List.for_all (fun (s, _) -> s) results in
-      let ia       =
-        List.fold_left
-          (fun acc (_, k) -> Write_kind.(acc && k))
-          Write_kind.Strong
-          results in
-      (safe, ia)
-  | Eif (_, et, ef) ->
-      let (st, iat) = check_definitely_init init_memo sym strongly_init et in
-      let (sf, iaf) = check_definitely_init init_memo sym strongly_init ef in
-      (st && sf, Write_kind.(iat && iaf))
-  | Ecase (_, arms) ->
-      let results =
-        List.map (fun (_, e) -> check_definitely_init init_memo sym strongly_init e) arms
+      (* If e1 returns DelayedInit, any action on sym in e2 will raise
+         Not_sequentialisable automatically via the DelayedInit guard. *)
+      let* (ev1, env1) = sequentialisable seq_memo sym env e1 in
+      let* (ev2, env2) = sequentialisable seq_memo sym env1 e2 in
+      Some (ev1 @ ev2, env2)
+  | Eif (pe, et, ef) ->
+      let rt = sequentialisable seq_memo sym env et in
+      let rf = sequentialisable seq_memo sym env ef in
+      combine_branches pe rt rf
+  | Ecase (pe, arms) ->
+      let arm_results =
+        List.map (fun (pat, e) -> (pat, sequentialisable seq_memo sym env e)) arms
       in
-      let safe       = List.for_all (fun (s, _) -> s) results in
-      let init_after =
-        List.fold_left
-          (fun acc (_, k) -> Write_kind.(acc && k))
-          Write_kind.Strong
-          results in
-      (safe, init_after)
-  | Esave ((label_sym, _), params, _body) ->
-      let entry = Pmap.find label_sym init_memo in
-      (match find_single_direct_alias sym
-               (List.map (fun (p, (_, pe)) -> (p, pe)) params) with
-      | None           -> (true, Write_kind.of_bool strongly_init)
-      | Some param_sym ->
-          let (safe_uninit, inits_param) =
-            match Pmap.lookup param_sym !(entry.results) with
-            | Some cached -> cached
-            | None ->
-                (* Sentinel (true, Strong): safe over-approximation for back-edge Eruns.
-                   Any load-before-store in the body is encountered sequentially
-                   *before* the back-edge Erun in the analysis.  That load sets
-                   safe=false, which propagates through && rules regardless of the
-                   sentinel.  The sentinel therefore cannot mask a real unsafety.
-                   Using (false, No_write) would over-conservatively reject safe
-                   loops; (true, Strong) is the minimal sound choice. *)
-                entry.results := Pmap.add param_sym (true, Write_kind.Strong) !(entry.results);
-                let r = check_definitely_init init_memo param_sym false entry.body in
-                entry.results := Pmap.add param_sym r !(entry.results);
-                r
+      combine_case_branches pe arm_results
+  | Eunseq arms ->
+      let with_events = List.filter_map
+        (fun arm ->
+          match sequentialisable seq_memo sym env arm with
+          | None | Some ([], _) -> None
+          | Some (ev, env')     -> Some (ev, env'))
+        arms
+      in
+      begin match with_events with
+      | [] -> Some ([], env)
+      | results ->
+          let all_reads =
+            List.for_all (fun (ev, _) ->
+              List.for_all (function Mem_event.Load -> true | _ -> false) ev) results
           in
-          (* strongly_init: the local var can be loaded during transform at this
-               default-arg use point (sym has been stored on all incoming paths).
-             safe_uninit: the parameter does not need to be initialized going in
-               (the body always stores before loading on every control-flow path).
-             The || says the transform can still proceed in either case:
-               - strongly_init: we can emit a Load here to pass the current value in
-               - safe_uninit  : we can drop this arg; the body self-initializes
-             inits_param: the body unconditionally writes param_sym before completion.
-             init_after: sym is init after Esave with the strength of inits_param,
-               or at least as strongly as it entered (of_bool strongly_init). *)
-          let safe       = strongly_init || safe_uninit in
-          let init_after = Write_kind.(of_bool strongly_init || inits_param) in
-          (safe, init_after))
-  | Erun (_, label_sym, args) ->
-      (* Erun unconditionally jumps to Esave L's body.
-         init_after = Strong: the sequential continuation is unreachable,
-         so Strong is vacuously correct.
-         Closedness guarantees all Erun args matching sym are direct PEsym aliases
-         (no structural occurrences), so no structural check is needed here. *)
-      let entry = Pmap.find label_sym init_memo in
-      let safe =
-        match find_single_direct_alias sym
-                (List.combine (List.map fst entry.params) args) with
-        | None           -> true   (* sym not in args; vacuously safe *)
-        | Some param_sym ->
-            let (safe_uninit, _) =
-              match Pmap.lookup param_sym !(entry.results) with
-              | Some cached -> cached
-              | None ->
-                  (* Sentinel (true, Strong): same reasoning as Esave case above. *)
-                  entry.results := Pmap.add param_sym (true, Write_kind.Strong) !(entry.results);
-                  let r = check_definitely_init init_memo param_sym false entry.body in
-                  entry.results := Pmap.add param_sym r !(entry.results);
-                  r
-            in
-            (* strongly_init: the local var can be loaded during transform at this
-                 Erun arg use point (sym has been stored on all incoming paths).
-               safe_uninit: the parameter does not need to be initialized going in.
-               The || says the transform can still proceed in either case:
-                 - strongly_init: we can emit a Load here to pass the current value
-                 - safe_uninit  : we can drop this arg; the body self-initializes *)
-            strongly_init || safe_uninit
-      in
-      (safe, Write_kind.Strong)
-  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
-      check_definitely_init init_memo sym strongly_init e
-  | _ ->
-      (true, Write_kind.of_bool strongly_init)
-
-(* ------------------------------------------------------------------ *)
-(* expr_writes_sym: does expr contain a Store0 or SeqRMW whose        *)
-(* address is directly PEsym sym?                                      *)
-(* ------------------------------------------------------------------ *)
-
-let rec expr_writes_sym sym (Expr (_, e_)) =
-  match e_ with
-  | Eaction (Paction (_, Action (_, _, act_))) ->
-      begin match act_ with
-      | Store0 (_, _, addr_pe, _, _) -> is_pesym sym addr_pe
-      | SeqRMW (_, _, addr_pe, _, _) -> is_pesym sym addr_pe
-      | _ ->
-          (* classify_action marks these cases as Use_other, which are filtered
-             out before this function is called. *)
-          false
+          if all_reads then
+            (* All arms only load; env is unchanged. *)
+            Some (List.concat_map fst results, env)
+          else
+            (* At most one write/kill arm, with no other arm having events. *)
+            begin match results with
+            | [(ev, env')] -> Some (ev, env')
+            | _            -> raise Not_sequentialisable
+            end
       end
-  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
-      expr_writes_sym sym e1 || expr_writes_sym sym e2
-  | Eunseq es | End es | Epar es ->
-      List.exists (expr_writes_sym sym) es
-  | Eif (_, e1, e2) ->
-      expr_writes_sym sym e1 || expr_writes_sym sym e2
-  | Ecase (_, arms) ->
-      List.exists (fun (_, e) -> expr_writes_sym sym e) arms
-  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
-      expr_writes_sym sym e
-  | Esave (_, params, body) ->
+  | Esave ((label_sym, _), params, _body) ->
       (match find_single_direct_alias sym
                (List.map (fun (p, (_, pe)) -> (p, pe)) params) with
-      | None           -> false
-      | Some param_sym -> expr_writes_sym param_sym body)
-  | _ -> false
-
-(* ------------------------------------------------------------------ *)
-(* no_mixed_unseq_uses                                                 *)
-(*                                                                     *)
-(* Returns false if sym appears in a write arm AND ≥2 arms of any     *)
-(* Eunseq mention sym — which would mean promoting sym silently        *)
-(* removes a Store0/SeqRMW that Cerberus's sequencing-violation        *)
-(* detector would otherwise see.                                       *)
-(* ------------------------------------------------------------------ *)
-
-let rec no_mixed_unseq_uses sym (Expr (_, e_)) =
-  match e_ with
-  | Eunseq arms ->
-      let writing_arms   = List.filter (expr_writes_sym sym) arms in
-      let mentioning_arms = List.filter (sym_occurs_in_expr sym) arms in
-      let conflict = (match writing_arms with [] -> false | _ -> true)
-                     && List.length mentioning_arms >= 2 in
-      (not conflict) && List.for_all (no_mixed_unseq_uses sym) arms
-  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
-      no_mixed_unseq_uses sym e1 && no_mixed_unseq_uses sym e2
-  | Eif (_, e1, e2) ->
-      no_mixed_unseq_uses sym e1 && no_mixed_unseq_uses sym e2
-  | Ecase (_, arms) ->
-      List.for_all (fun (_, e) -> no_mixed_unseq_uses sym e) arms
-  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
-      no_mixed_unseq_uses sym e
-  | Esave (_, params, body) ->
+       | None           -> Some ([], env)
+       | Some param_sym -> esave_needs_init seq_memo sym env label_sym param_sym)
+  | Erun (_, label_sym, args) ->
+      let entry = Pmap.find label_sym seq_memo in
       (match find_single_direct_alias sym
-               (List.map (fun (p, (_, pe)) -> (p, pe)) params) with
-      | None           -> true
-      | Some param_sym -> no_mixed_unseq_uses param_sym body)
+               (List.combine (List.map fst entry.params) args) with
+       | None           -> ()
+       | Some param_sym ->
+           ignore (esave_needs_init seq_memo sym env label_sym param_sym));
+      None
+  | Elet (_, _, e) | Eannot (_, e) ->
+      sequentialisable seq_memo sym env e
+  | Ebound e ->
+      (* Recurse for exception detection; discard events and env. *)
+      ignore (sequentialisable seq_memo sym env e);
+      Some ([], env)
   | End es | Epar es ->
-      List.for_all (no_mixed_unseq_uses sym) es
-  | _ -> true
+      (* Recurse for exception detection; discard results. *)
+      List.iter (fun e -> ignore (sequentialisable seq_memo sym env e)) es;
+      Some ([], env)
+  | Epure _ | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _ ->
+      Some ([], env)
+
+(* esave_needs_init seq_memo sym env label_sym param_sym:
+   Analyses the Esave body for (label_sym, param_sym) w.r.t. sym and
+   memoises the result.  Returns the body's sequentialisable result
+   (None if all paths end in Erun).
+
+   - Sentinel (false, None) is written before recursing so that back-edge
+     Erun calls find the entry and do not loop.
+   - If Load_from_uninit is raised (body reads sym before any store):
+       * If outer env = Init _: mark init_needed=true, re-run with outer env.
+       * Otherwise: re-raise Load_from_uninit.
+   - If already memoised with init_needed=true and env ≠ Init _: re-raise
+     Load_from_uninit. *)
+and esave_needs_init seq_memo sym env label_sym param_sym
+    : (Mem_event.t list * env) option =
+  let entry = Pmap.find label_sym seq_memo in
+  match Pmap.lookup param_sym !(entry.results) with
+  | Some (true, result) ->
+      (match env with
+       | Init _ -> result
+       | _      -> raise Load_from_uninit)
+  | Some (false, result) ->
+      result
+  | None ->
+      entry.results := Pmap.add param_sym (false, None) !(entry.results);
+      (try
+        let result = sequentialisable seq_memo param_sym Uninit entry.body in
+        entry.results := Pmap.add param_sym (false, result) !(entry.results);
+        result
+      with Load_from_uninit ->
+        match env with
+        | Init _ ->
+            let result = sequentialisable seq_memo param_sym env entry.body in
+            entry.results := Pmap.add param_sym (true, result) !(entry.results);
+            result
+        | _ -> raise Load_from_uninit)
 
 (* ------------------------------------------------------------------ *)
 (* Promotability analysis for a single procedure                       *)
@@ -585,14 +612,16 @@ let rec no_mixed_unseq_uses sym (Expr (_, e_)) =
 
 let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
   let use_memo  : use list memo_save_info = collect_esave_defs body in
-  let init_memo : (bool * Write_kind.t) memo_save_info =
+  let seq_memo  : seq_memo =
     Pmap.map (fun { params; body; _ } ->
       { params; body; results = ref (Pmap.empty Symbol.compare_sym) }) use_memo in
   let creates = collect_creates ~also_fun_args body in
   let is_promotable s =
-    List.for_all use_is_promotable (collect_uses use_memo s body)
-    && fst (check_definitely_init init_memo s false body)
-    && no_mixed_unseq_uses s body
+    List.for_all addr_not_taken (collect_uses use_memo s body)
+    && (match sequentialisable seq_memo s Uninit body with
+        | None | Some _ -> true
+        | exception Not_sequentialisable -> false
+        | exception Load_from_uninit    -> false)
   in
   let promotable = List.filter is_promotable creates in
   Cerb_debug.print_debug 3 [] (fun () ->
