@@ -274,3 +274,114 @@ cd tests
 USE_OPAM='' bash run-mem2reg-phase1.sh
 USE_OPAM='' bash run-mem2reg-phase2.sh
 ```
+
+---
+
+## Post-implementation addendum: Write_kind does not affect promotability counts
+
+After implementing the refactoring and adding `0365-mem2reg_compound_lit.c`, it
+was verified empirically (via `-d 3` debug output) that the old and new analyses
+produce **identical** promotable-variable counts on every test including `0365`.
+This section records why, and what would be needed to observe a real difference.
+
+### The alias indirection invariant
+
+C-generated Core **never** emits a bare `Load0(_, PEsym sym, _)` for a local
+variable.  Every load goes through an intermediate alias:
+
+```core
+let weak a_511: pointer = pure(x) in   (* Ewseq(a_511, Epure(PEsym x), …) *)
+load('signed int', a_511)              (* Load0(a_511) — a_511 ≠ x        *)
+```
+
+`collect_uses` has a dedicated arm that recognises this
+`Ewseq(alias, Epure(PEsym sym), body)` pattern and follows it, classifying the
+load as `Use_load` for `sym`.  `check_definitely_init` has **no such arm**: it
+only checks `Load0(_, PEsym sym, _)` directly.  Because the address in the load
+is always the alias (`a_511`), not `sym` itself, `check_definitely_init` falls
+through to the catch-all for every load of a C local and unconditionally returns
+`(true, of_bool strongly_init)`.
+
+Consequence: the `Ewseq` rule in `check_definitely_init` — the only place where
+old and new analyses differ — **never fires** on C-elaborated Core.  The
+Write_kind refactoring is therefore a soundness fix for a pattern that cannot
+currently arise, not an observable behavioural change.
+
+### Why `0365-mem2reg_compound_lit.c` does not demonstrate the difference
+
+The C source and its Core IR make this concrete:
+
+```c
+int main(void) {
+    int x = (int){ 42 };
+    return x;
+}
+```
+
+```core
+proc main (): eff loaded integer :=
+  let strong a_508: pointer = create(Ivalignof('signed int'), 'signed int') in
+  let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+  let strong a_507: loaded integer =
+    bound(
+      let weak a_510: pointer =
+        let weak a_509: loaded integer = pure(Specified(42)) in
+        let weak _: unit = store('signed int', a_508, a_509) in
+        pure(a_508) in
+      load('signed int', a_510)
+    ) in
+  store('signed int', x, conv_loaded_int('signed int', a_507)) ;
+  let strong a_512: loaded integer =
+    bound(
+      let weak a_511: pointer = pure(x) in
+      load('signed int', a_511)
+    ) in
+  kill('signed int', x) ;
+  run ret_506(conv_loaded_int('signed int', a_512)) ;
+  kill('signed int', x) ;
+  kill('signed int', a_508) ;
+  …
+```
+
+Two create-bound pointers appear: `a_508` (the compound-literal temporary) and
+`x` (the destination variable).
+
+**`a_508` is not promotable** — but not because of `check_definitely_init`.
+Its uses are classified by `collect_uses` as follows:
+
+- `store(a_508, a_509)` → `Use_store` ✓
+- `pure(a_508)` at the tail of the nested Ewseq chain → `sym_occurs_in_pexpr`
+  returns true inside an `Epure` that does **not** match the flat
+  `Ewseq(alias, Epure(PEsym sym), body)` alias pattern (it is the tail of a
+  three-level Ewseq chain, not a direct binding) → `Use_other` ✗
+
+`Use_other` disqualifies `a_508` before `check_definitely_init` is called.
+
+**`x` is promotable** in both old and new analysis:
+
+- `store(x, …)` → `Use_store` ✓
+- `let weak a_511 = pure(x) in load(a_511)` → flat alias pattern → `Use_load` ✓
+- `kill(x)` → `Use_kill` ✓
+
+`check_definitely_init` for `x` sees only catch-all nodes (no direct
+`Load0(PEsym x)`), so it always returns `safe = true`.
+
+Debug output (both old and new):
+```
+(debug 3): [mem2reg] main: 1 promotable: [x]
+```
+
+### What would actually trigger the difference
+
+The Write_kind `Ewseq` rule would change behaviour only for a Core pattern of
+the form:
+
+```core
+let weak _ = store(sym, val) in   (* Store0(Paction Pos, sym, val) in Ewseq e1 *)
+load(sym)                         (* Load0(sym) directly — no alias             *)
+```
+
+with `sym` itself as the load address.  Such a pattern does not arise from the
+current C→Core elaboration.  A future IR change, a hand-written Core test, or a
+non-C front-end could produce it; the Write_kind analysis is already correct for
+that case.
