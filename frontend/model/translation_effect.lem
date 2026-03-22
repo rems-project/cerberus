@@ -70,30 +70,6 @@ let wrapped_fresh_symbol_ descr bTy =
   let sym = Symbol.fresh_description descr in
   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
 
-
-(* TODO: this does not need to be in the monad *)
-(* val wrapped_fresh_symbol_descr: C.core_base_type -> Symbol.symbol_description -> elabM (Symbol.sym * C.pattern * C.pexpr)
- * let wrapped_fresh_symbol_descr bTy descr =
- *   let sym = Symbol.fresh_description descr in
- *   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym) *)
-
-(* register C objects from block scope. *)
-val push_block_objects: list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM unit
-let push_block_objects binds = fun st ->
-  ((), <| st with
-    visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
-    visible_objects= (List.map fst binds) :: st.visible_objects
-  |>)
-
-(* forget C objects from the most recent block. *)
-val pop_block_objects: elabM unit
-let pop_block_objects = fun st ->
-  ((), <| st with visible_objects=
-      match st.visible_objects with
-        | _ :: xs -> xs
-        | _       -> error "[Translation.E.pop_block_objects] found an ill-formed scope stack."
-      end |>)
-
 val cheri_const_alias_map: elabM (map Symbol.sym Symbol.sym)
 let cheri_const_alias_map = fun st ->
   (st.cheri_const_alias, st)
