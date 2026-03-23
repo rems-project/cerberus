@@ -10,6 +10,9 @@ let empty_env : env = Pmap.empty Symbol.compare_sym
 
 let extend_env env alias pe = Pmap.add alias pe env
 
+let extend_env_list env bindings =
+  List.fold_left (fun acc (s, pe) -> extend_env acc s pe) env bindings
+
 (* ------------------------------------------------------------------ *)
 (* pexpr_safe: conservative free-variable check                       *)
 (*                                                                    *)
@@ -64,25 +67,38 @@ let rec binders_of_pat (Pattern (_, pat_)) =
   | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
 
 (* ------------------------------------------------------------------ *)
-(* tail_pexpr: find the tail pure expression of an expression         *)
+(* pexpr_tree: rose tree of pexpr option mirroring Eunseq structure  *)
 (*                                                                    *)
-(* Returns [Some pe] when the expression's tail is [pure(pe)]        *)
-(* AND no free symbol of [pe] appears in the binders accumulated      *)
-(* along the linear chain leading to the tail.                        *)
+(* Leaf(Some pe) — this position has a known, safe-to-hoist pexpr.  *)
+(* Leaf None     — this position is opaque (action, unsafe, etc.).   *)
+(* Node ts       — this position is an Eunseq with children ts.      *)
+(* ------------------------------------------------------------------ *)
+
+type pexpr_tree =
+  | Leaf of pexpr option
+  | Node of pexpr_tree list
+
+(* ------------------------------------------------------------------ *)
+(* tail_pexpr: compute the pexpr_tree for the tail of an expression  *)
 (*                                                                    *)
-(* The accumulator [binders] collects every symbol introduced by a   *)
-(* binding pattern along the traversed chain.  At the leaf, if any  *)
-(* free symbol of [pe] is in [binders] it was defined locally and    *)
-(* must not escape.                                                   *)
+(* At [Epure pe]: returns Leaf(Some pe) when pe is safe to hoist     *)
+(* (no free symbol of pe appears in binders along the chain), else   *)
+(* Leaf None.                                                         *)
 (*                                                                    *)
-(* Returns [None] for branching nodes (Eif, Ecase, Eunseq, Esave,   *)
-(* Erun), actions, or when the tail pexpr is not safe to hoist.      *)
+(* At [Eunseq es]: returns Node(map tail_pexpr es), preserving the   *)
+(* nesting structure so that tuple patterns can be matched against    *)
+(* it element-wise.                                                   *)
+(*                                                                    *)
+(* Along binding chains (Ewseq/Esseq/Elet): accumulates binders and  *)
+(* recurses into the continuation.                                    *)
 (* ------------------------------------------------------------------ *)
 
 let rec tail_pexpr_acc binders (Expr (_, e_)) =
   match e_ with
   | Epure pe ->
-      if pexpr_safe binders pe then Some pe else None
+      Leaf (if pexpr_safe binders pe then Some pe else None)
+  | Eunseq es ->
+      Node (List.map (tail_pexpr_acc binders) es)
   | Ewseq (pat, _, e2) | Esseq (pat, _, e2) ->
       tail_pexpr_acc (binders_of_pat pat @ binders) e2
   | Elet (pat, _, e2) ->
@@ -90,9 +106,51 @@ let rec tail_pexpr_acc binders (Expr (_, e_)) =
   | Ebound e | Eannot (_, e) ->
       tail_pexpr_acc binders e
   | _ ->
-      None
+      Leaf None
 
 let tail_pexpr e = tail_pexpr_acc [] e
+
+(* ------------------------------------------------------------------ *)
+(* match_pat_tree: extract bindings by walking pattern and tree       *)
+(*                                                                    *)
+(* Returns (bindings, new_pattern) where:                             *)
+(*   bindings    — (sym, pexpr) pairs for extractable positions       *)
+(*   new_pattern — pattern with extracted positions wildcarded        *)
+(*                                                                    *)
+(* Partial: positions where the tree has Leaf None are left named.   *)
+(* ------------------------------------------------------------------ *)
+
+let rec match_pat_tree pat tree =
+  match pat, tree with
+
+  | Pattern (p_annots, CaseBase (Some s, cbty)), Leaf (Some pe) ->
+      ([(s, pe)], Pattern (p_annots, CaseBase (None, cbty)))
+
+  | Pattern (_, CaseBase (Some _, _)), (Leaf None | Node _) ->
+      ([], pat)
+
+  | Pattern (_, CaseBase (None, _)), _ ->
+      ([], pat)
+
+  (* Tuple pattern vs a matching-arity Node (Eunseq): recurse element-wise *)
+  | Pattern (p_annots, CaseCtor (Ctuple, pats)), Node trees
+    when List.length pats = List.length trees ->
+      let results = List.map2 match_pat_tree pats trees in
+      let bindings = List.concat_map fst results in
+      let new_pats = List.map snd results in
+      (bindings, Pattern (p_annots, CaseCtor (Ctuple, new_pats)))
+
+  (* Tuple pattern vs pure-tuple leaf: decompose the pexpr element-wise *)
+  | Pattern (p_annots, CaseCtor (Ctuple, pats)),
+    Leaf (Some (Pexpr (_, _, PEctor (Ctuple, pes))))
+    when List.length pats = List.length pes ->
+      let results = List.map2 (fun p pe -> match_pat_tree p (Leaf (Some pe))) pats pes in
+      let bindings = List.concat_map fst results in
+      let new_pats = List.map snd results in
+      (bindings, Pattern (p_annots, CaseCtor (Ctuple, new_pats)))
+
+  | _ ->
+      ([], pat)
 
 (* ------------------------------------------------------------------ *)
 (* Mutually recursive propagation functions.                          *)
@@ -239,12 +297,12 @@ and propagate_expr env (Expr (annots, e_) as expr) =
   | Ewseq (Pattern (p_annots, CaseBase (Some alias, cbty)), e1, body) ->
       let e1' = propagate_expr env e1 in
       begin match tail_pexpr e1' with
-      | Some pe_tail ->
+      | Leaf (Some pe_tail) ->
           Expr (annots,
             Ewseq (Pattern (p_annots, CaseBase (None, cbty)),
                    e1',
                    propagate_expr (extend_env env alias pe_tail) body))
-      | None ->
+      | _ ->
           Expr (annots,
             Ewseq (Pattern (p_annots, CaseBase (Some alias, cbty)),
                    e1',
@@ -254,12 +312,12 @@ and propagate_expr env (Expr (annots, e_) as expr) =
   | Esseq (Pattern (p_annots, CaseBase (Some alias, cbty)), e1, body) ->
       let e1' = propagate_expr env e1 in
       begin match tail_pexpr e1' with
-      | Some pe_tail ->
+      | Leaf (Some pe_tail) ->
           Expr (annots,
             Esseq (Pattern (p_annots, CaseBase (None, cbty)),
                    e1',
                    propagate_expr (extend_env env alias pe_tail) body))
-      | None ->
+      | _ ->
           Expr (annots,
             Esseq (Pattern (p_annots, CaseBase (Some alias, cbty)),
                    e1',
@@ -283,13 +341,24 @@ and propagate_expr env (Expr (annots, e_) as expr) =
                   propagate_expr env body))
       end
 
-  (* ---- Recurse into non-matching Ewseq/Esseq/Elet nodes ---- *)
-  | Ewseq (pat, e1, e2) ->
-      Expr (annots, Ewseq (pat, pe e1, pe e2))
-  | Esseq (pat, e1, e2) ->
-      Expr (annots, Esseq (pat, pe e1, pe e2))
-  | Elet (pat, pe1, e2) ->
-      Expr (annots, Elet (pat, pp pe1, pe e2))
+  (* ---- Catch-all Ewseq/Esseq/Elet: try tuple extraction via match_pat_tree ---- *)
+  | Ewseq (pat, e1, body) ->
+      let e1' = propagate_expr env e1 in
+      let (bindings, new_pat) = match_pat_tree pat (tail_pexpr e1') in
+      let env' = extend_env_list env bindings in
+      Expr (annots, Ewseq (new_pat, e1', propagate_expr env' body))
+
+  | Esseq (pat, e1, body) ->
+      let e1' = propagate_expr env e1 in
+      let (bindings, new_pat) = match_pat_tree pat (tail_pexpr e1') in
+      let env' = extend_env_list env bindings in
+      Expr (annots, Esseq (new_pat, e1', propagate_expr env' body))
+
+  | Elet (pat, pe1, body) ->
+      let pe1' = propagate_pexpr env pe1 in
+      let (bindings, new_pat) = match_pat_tree pat (Leaf (Some pe1')) in
+      let env' = extend_env_list env bindings in
+      Expr (annots, Elet (new_pat, pe1', propagate_expr env' body))
 
   (* ---- Other expression forms: recurse ---- *)
   | Epure pe1 ->
