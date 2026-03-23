@@ -46,7 +46,7 @@ let rec pexpr_safe binders (Pexpr (_, _, pe_)) =
   | PEconv_int (_, pe1)
   | PEis_scalar pe1 | PEis_integer pe1
   | PEis_signed pe1 | PEis_unsigned pe1
-  | PEbmc_assume pe1 | PEcfunction pe1
+  | PEbmc_assume pe1
   | PEunion (_, _, pe1) ->
       pexpr_safe binders pe1
   | PEmemop (_, pes) | PEcall (_, pes) ->
@@ -55,6 +55,8 @@ let rec pexpr_safe binders (Pexpr (_, _, pe_)) =
       List.for_all (fun (_, pe1) -> pexpr_safe binders pe1) fields
   | PEif _ | PElet _ | PEcase _ | PEconstrained _ ->
       false  (* conservative *)
+  | PEcfunction _ ->
+    false
 
 (* ------------------------------------------------------------------ *)
 (* binders_of_pat: collect all named symbols in a pattern             *)
@@ -93,20 +95,42 @@ type pexpr_tree =
 (* recurses into the continuation.                                    *)
 (* ------------------------------------------------------------------ *)
 
-let rec tail_pexpr_acc binders (Expr (_, e_)) =
+let safe_pexpr binders pe =
+  let ret_pe ~new_ ~old:(Pexpr (annot, a, _)) = Pexpr (annot, a, new_) in
+  let unit_pe = ret_pe ~new_:(PEval Vunit) ~old:pe in
+  let (tail, pe) =
+    if pexpr_safe binders pe then
+      (Some pe, unit_pe)
+    else
+      (None, pe) in
+  (tail, pe)
+
+let rec tail_pexpr_acc binders (Expr (annot, e_)) =
+  let ret_e e_ = (Expr (annot, e_)) in
   match e_ with
   | Epure pe ->
-      Leaf (if pexpr_safe binders pe then Some pe else None)
+    let (tail, pe) = safe_pexpr binders pe in
+    (Leaf tail, ret_e (Epure pe))
   | Eunseq es ->
-      Node (List.map (tail_pexpr_acc binders) es)
-  | Ewseq (pat, _, e2) | Esseq (pat, _, e2) ->
-      tail_pexpr_acc (binders_of_pat pat @ binders) e2
-  | Elet (pat, _, e2) ->
-      tail_pexpr_acc (binders_of_pat pat @ binders) e2
-  | Ebound e | Eannot (_, e) ->
-      tail_pexpr_acc binders e
+    let (tails, es') = List.split @@ List.map (tail_pexpr_acc binders) es in
+    (Node tails, ret_e (Eunseq es'))
+  | Ewseq (pat, e1, e2) ->
+    let (tail, e2) = tail_pexpr_acc (binders_of_pat pat @ binders) e2 in
+    (tail, ret_e (Ewseq (pat, e1, e2)))
+  | Esseq (pat, e1, e2) ->
+    let (tail, e2) = tail_pexpr_acc (binders_of_pat pat @ binders) e2 in
+    (tail, ret_e (Esseq (pat, e1, e2)))
+  | Elet (pat, pe1, e2) ->
+    let (tail, e2) = tail_pexpr_acc (binders_of_pat pat @ binders) e2 in
+    (tail, ret_e (Elet (pat, pe1, e2)))
+  | Ebound e ->
+      let (tail, e) = tail_pexpr_acc binders e in
+      (tail, ret_e (Ebound e))
+  | Eannot (al, e) ->
+      let (tail, e) = tail_pexpr_acc binders e in
+      (tail, ret_e (Eannot (al, e)))
   | _ ->
-      Leaf None
+      (Leaf None, ret_e e_)
 
 let tail_pexpr e = tail_pexpr_acc [] e
 
@@ -124,7 +148,10 @@ let rec match_pat_tree pat tree =
   match pat, tree with
 
   | Pattern (p_annots, CaseBase (Some s, cbty)), Leaf (Some pe) ->
-      ([(s, pe)], Pattern (p_annots, CaseBase (None, cbty)))
+      ([(s, pe)], Pattern (p_annots, CaseBase (None, BTy_unit)))
+
+  | Pattern (p_annots, CaseBase (None, _)), Leaf (Some _) ->
+      ([], Pattern (p_annots, CaseBase (None, BTy_unit)))
 
   | Pattern (_, CaseBase (Some _, _)), (Leaf None | Node _) ->
       ([], pat)
@@ -182,6 +209,11 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
                propagate_pexpr (extend_env env alias pe_src) body))
 
   | PElet (pat, pe1, pe2) ->
+      (* let pe1' = propagate_pexpr env pe1 in *)
+      (* let (tail, pe1') = safe_pexpr [] pe1' in *)
+      (* let (bindings, new_pat) = match_pat_tree pat (Leaf tail) in *)
+      (* let env' = extend_env_list env bindings in *)
+      (* Pexpr (annots, bty, PElet (new_pat, pe1', propagate_expr env' body)) *)
       Pexpr (annots, bty, PElet (pat,
         propagate_pexpr env pe1,
         propagate_pexpr env pe2))
@@ -294,69 +326,24 @@ and propagate_expr env (Expr (annots, e_) as expr) =
      propagate body.  The binding node is always preserved so that its
      annotations (source locations) are not lost.
      For Elet the RHS is a pexpr, so we match directly on PEsym.          ---- *)
-  | Ewseq (Pattern (p_annots, CaseBase (Some alias, cbty)), e1, body) ->
-      let e1' = propagate_expr env e1 in
-      begin match tail_pexpr e1' with
-      | Leaf (Some pe_tail) ->
-          Expr (annots,
-            Ewseq (Pattern (p_annots, CaseBase (None, cbty)),
-                   e1',
-                   propagate_expr (extend_env env alias pe_tail) body))
-      | _ ->
-          Expr (annots,
-            Ewseq (Pattern (p_annots, CaseBase (Some alias, cbty)),
-                   e1',
-                   propagate_expr env body))
-      end
-
-  | Esseq (Pattern (p_annots, CaseBase (Some alias, cbty)), e1, body) ->
-      let e1' = propagate_expr env e1 in
-      begin match tail_pexpr e1' with
-      | Leaf (Some pe_tail) ->
-          Expr (annots,
-            Esseq (Pattern (p_annots, CaseBase (None, cbty)),
-                   e1',
-                   propagate_expr (extend_env env alias pe_tail) body))
-      | _ ->
-          Expr (annots,
-            Esseq (Pattern (p_annots, CaseBase (Some alias, cbty)),
-                   e1',
-                   propagate_expr env body))
-      end
-
-  | Elet (Pattern (p_annots, CaseBase (Some alias, cbty)), pe1, body) ->
-      begin match pe1 with
-      | Pexpr (_, _, PEsym src) ->
-          let pe_src = match Pmap.lookup src env with
-                       | Some pe' -> pe'
-                       | None     -> pe1 in
-          Expr (annots,
-            Elet (Pattern (p_annots, CaseBase (None, cbty)),
-                  propagate_pexpr env pe1,
-                  propagate_expr (extend_env env alias pe_src) body))
-      | _ ->
-          Expr (annots,
-            Elet (Pattern (p_annots, CaseBase (Some alias, cbty)),
-                  propagate_pexpr env pe1,
-                  propagate_expr env body))
-      end
-
-  (* ---- Catch-all Ewseq/Esseq/Elet: try tuple extraction via match_pat_tree ---- *)
   | Ewseq (pat, e1, body) ->
       let e1' = propagate_expr env e1 in
-      let (bindings, new_pat) = match_pat_tree pat (tail_pexpr e1') in
+      let (tail, e1') = tail_pexpr e1' in
+      let (bindings, new_pat) = match_pat_tree pat tail in
       let env' = extend_env_list env bindings in
       Expr (annots, Ewseq (new_pat, e1', propagate_expr env' body))
 
   | Esseq (pat, e1, body) ->
       let e1' = propagate_expr env e1 in
-      let (bindings, new_pat) = match_pat_tree pat (tail_pexpr e1') in
+      let (tail, e1') = tail_pexpr e1' in
+      let (bindings, new_pat) = match_pat_tree pat tail in
       let env' = extend_env_list env bindings in
       Expr (annots, Esseq (new_pat, e1', propagate_expr env' body))
 
   | Elet (pat, pe1, body) ->
       let pe1' = propagate_pexpr env pe1 in
-      let (bindings, new_pat) = match_pat_tree pat (Leaf (Some pe1')) in
+      let (tail, pe1') = safe_pexpr [] pe1' in
+      let (bindings, new_pat) = match_pat_tree pat (Leaf tail) in
       let env' = extend_env_list env bindings in
       Expr (annots, Elet (new_pat, pe1', propagate_expr env' body))
 

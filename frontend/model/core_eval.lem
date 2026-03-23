@@ -1090,15 +1090,17 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
     | PEare_compatible pe1 pe2 ->
         self pe1 >>= fun pe1 ->
         self pe2 >>= fun pe2 ->
-        match (Caux.valueFromPexpr pe1, Caux.valueFromPexpr pe2) with
-          | (Just (Vctype ty1), Just (Vctype ty2)) ->
+        match (pe1, pe2) with
+          | (Pexpr _ _ (PEval (Vctype ty1)), Pexpr _ _ (PEval (Vctype ty2))) ->
               let are_compatible =
                 AilTypesAux.are_compatible
                   (Ctype.no_qualifiers, ty1)
                   (Ctype.no_qualifiers, ty2) in
               EU.return $ PEval (if are_compatible then Vtrue else Vfalse)
-          | (_, _) ->
+          | (Pexpr _ _ (PEval _), Pexpr _ _ (PEval _)) ->
               EU.fail $ Illformed_program "PEare_compatible: the operands should be ctypes"
+          | (_, _) ->
+              EU.return $ PEare_compatible pe1 pe2
         end
   end
   end
