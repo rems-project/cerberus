@@ -3,11 +3,6 @@
 - Started on mem2reg transform, but got stuck with save!
 - Started fixing save mem2reg analysis, but realised it needs simultaneous sym
   analysis avoid locally bound symbols escaping in the env.
-- Came up with an example to demonstrate the possibility, but then copy
-  propagation is not strong enough to trigger it.
-  + copy-prop does expressions
-  + copy-prop handles save properly
-  + copy-prop handles tuples and unseq
 
 ```c
 int main()

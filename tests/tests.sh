@@ -226,6 +226,7 @@ citests=(
   0362-mem2reg_loop_escape.c
   0363-mem2reg_nested_loops.c
   0364-mem2reg_loop_uninit_load.undef.c
+  0374-copy_prop_tuple.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

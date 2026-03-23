@@ -6,9 +6,13 @@
     annotations are not lost.
 
     Handles:
-    - {b Single named bindings} ([CaseBase(Some alias, _)]) against
-      [pure(sym)] (pure let) or effectful RHS whose tail is [pure(e)].
-      The tail [e] may be any pure expression, not just a symbol alias.
+    - {b Single named bindings} ([CaseBase(Some alias, _)]) against any
+      effectful RHS whose tail is [pure(e)], or [pure(sym)] (pure let).
+    - {b Tuple patterns} ([CaseCtor(Ctuple, pats)]) against [Eunseq(es)]
+      (effectful) or [PEctor(Ctuple, pes)] (pure), decomposed element-wise.
+      Nested [Eunseq] / [PEctor(Ctuple)] structures are handled recursively.
+      Extraction is partial: only elements with a known tail value are
+      wildcarded; others retain their name.
 
     No memory events, sequencing, or values are changed. *)
 
