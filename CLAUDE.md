@@ -94,7 +94,11 @@ Instructions to Claude for writing OCaml code:
       to be revised. Consult the user about how to proceed, and give them some options. 
 
    4. Copy each design document to a file `doc/history/YYYY-MM-DD_PLAN-NAME.md`, so the user can
-      read it, and new sessions can understand the changes. 
+      read it, and new sessions can understand the changes.
+
+   5. Write the plan FIRST before writing any code. Leave a "Post implementation addendum"
+      placeholder section and after the implementation and testing is done, and the user's
+      feedback on the code incorporated, append any changes from the plan to that section.
 
 # Writing OCaml code specifically
 
