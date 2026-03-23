@@ -1,70 +1,113 @@
 open Core
 
 (* ------------------------------------------------------------------ *)
-(* Environment: symbol → symbol renaming map                          *)
+(* Environment: symbol → pexpr map                                    *)
 (* ------------------------------------------------------------------ *)
 
-type env = (Symbol.sym, Symbol.sym) Pmap.map
+type env = (Symbol.sym, pexpr) Pmap.map
 
 let empty_env : env = Pmap.empty Symbol.compare_sym
 
-(* Follow the env: if [s] is mapped, return its target; else return [s]. *)
-let apply_env env s =
-  match Pmap.lookup s env with
-  | Some s' -> s'
-  | None    -> s
-
-let extend_env env alias src = Pmap.add alias src env
+let extend_env env alias pe = Pmap.add alias pe env
 
 (* ------------------------------------------------------------------ *)
-(* tail_sym: find the tail pure(sym) of an expression, if outer      *)
+(* pexpr_safe: conservative free-variable check                       *)
 (*                                                                    *)
-(* Returns [Some s] when the expression's tail is [pure(PEsym s)]    *)
-(* AND [s] is not bound along the linear chain leading to the tail   *)
-(* (i.e. [s] is an outer variable, safe to reference in the body).  *)
+(* Returns [true] when none of [pe]'s free symbols appear in         *)
+(* [binders].  Complex forms (PEif, PElet, PEcase, PEconstrained)    *)
+(* return [false] conservatively to avoid a full free-variable        *)
+(* analysis.                                                          *)
+(* ------------------------------------------------------------------ *)
+
+let sym_in binders s =
+  List.exists (fun b -> Symbol.compare_sym s b = 0) binders
+
+let rec pexpr_safe binders (Pexpr (_, _, pe_)) =
+  match pe_ with
+  | PEsym s ->
+      not (sym_in binders s)
+  | PEval _ | PEimpl _ | PEundef _ | PEerror _ ->
+      true
+  | PEctor (_, pes) ->
+      List.for_all (pexpr_safe binders) pes
+  | PEnot pe1 ->
+      pexpr_safe binders pe1
+  | PEop (_, pe1, pe2)
+  | PEwrapI (_, _, pe1, pe2)
+  | PEcatch_exceptional_condition (_, _, pe1, pe2)
+  | PEare_compatible (pe1, pe2)
+  | PEarray_shift (pe1, _, pe2) ->
+      pexpr_safe binders pe1 && pexpr_safe binders pe2
+  | PEmemberof (_, _, pe1)
+  | PEmember_shift (pe1, _, _)
+  | PEconv_int (_, pe1)
+  | PEis_scalar pe1 | PEis_integer pe1
+  | PEis_signed pe1 | PEis_unsigned pe1
+  | PEbmc_assume pe1 | PEcfunction pe1
+  | PEunion (_, _, pe1) ->
+      pexpr_safe binders pe1
+  | PEmemop (_, pes) | PEcall (_, pes) ->
+      List.for_all (pexpr_safe binders) pes
+  | PEstruct (_, fields) ->
+      List.for_all (fun (_, pe1) -> pexpr_safe binders pe1) fields
+  | PEif _ | PElet _ | PEcase _ | PEconstrained _ ->
+      false  (* conservative *)
+
+(* ------------------------------------------------------------------ *)
+(* binders_of_pat: collect all named symbols in a pattern             *)
+(* ------------------------------------------------------------------ *)
+
+let rec binders_of_pat (Pattern (_, pat_)) =
+  match pat_ with
+  | CaseBase (None, _)   -> []
+  | CaseBase (Some s, _) -> [s]
+  | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
+
+(* ------------------------------------------------------------------ *)
+(* tail_pexpr: find the tail pure expression of an expression         *)
+(*                                                                    *)
+(* Returns [Some pe] when the expression's tail is [pure(pe)]        *)
+(* AND no free symbol of [pe] appears in the binders accumulated      *)
+(* along the linear chain leading to the tail.                        *)
 (*                                                                    *)
 (* The accumulator [binders] collects every symbol introduced by a   *)
-(* binding pattern along the traversed chain.  At the leaf, if [s]  *)
-(* appears in [binders] it was defined locally and must not escape.  *)
+(* binding pattern along the traversed chain.  At the leaf, if any  *)
+(* free symbol of [pe] is in [binders] it was defined locally and    *)
+(* must not escape.                                                   *)
 (*                                                                    *)
 (* Returns [None] for branching nodes (Eif, Ecase, Eunseq, Esave,   *)
-(* Erun), actions, or when the tail sym is locally bound.            *)
+(* Erun), actions, or when the tail pexpr is not safe to hoist.      *)
 (* ------------------------------------------------------------------ *)
 
-let rec tail_sym_acc binders (Expr (_, e_)) =
+let rec tail_pexpr_acc binders (Expr (_, e_)) =
   match e_ with
-  | Epure (Pexpr (_, _, PEsym s)) ->
-      if List.exists (fun b -> Symbol.compare_sym s b = 0) binders
-      then None
-      else Some s
-  | Ewseq (Pattern (_, CaseBase (Some s, _)), _, e2)
-  | Esseq (Pattern (_, CaseBase (Some s, _)), _, e2) ->
-      tail_sym_acc (s :: binders) e2
-  | Ewseq (_, _, e2) | Esseq (_, _, e2) ->
-      tail_sym_acc binders e2
-  | Elet (Pattern (_, CaseBase (Some s, _)), _, e2) ->
-      tail_sym_acc (s :: binders) e2
-  | Elet (_, _, e2) ->
-      tail_sym_acc binders e2
+  | Epure pe ->
+      if pexpr_safe binders pe then Some pe else None
+  | Ewseq (pat, _, e2) | Esseq (pat, _, e2) ->
+      tail_pexpr_acc (binders_of_pat pat @ binders) e2
+  | Elet (pat, _, e2) ->
+      tail_pexpr_acc (binders_of_pat pat @ binders) e2
   | Ebound e | Eannot (_, e) ->
-      tail_sym_acc binders e
+      tail_pexpr_acc binders e
   | _ ->
       None
 
-let tail_sym e = tail_sym_acc [] e
+let tail_pexpr e = tail_pexpr_acc [] e
 
 (* ------------------------------------------------------------------ *)
 (* Mutually recursive propagation functions.                          *)
 (*                                                                    *)
 (* propagate_pexpr, propagate_action, propagate_expr thread an env   *)
-(* (alias → canonical sym) through the Core IR in a single top-down  *)
-(* pass, rewriting PEsym occurrences and dropping trivial bindings.  *)
+(* (alias → pexpr) through the Core IR in a single top-down pass,   *)
+(* rewriting PEsym occurrences and dropping trivial bindings.        *)
 (* ------------------------------------------------------------------ *)
 
 let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
   match pe_ with
   | PEsym s ->
-      Pexpr (annots, bty, PEsym (apply_env env s))
+      (match Pmap.lookup s env with
+       | Some pe' -> pe'
+       | None     -> Pexpr (annots, bty, PEsym s))
   | PEval _ | PEimpl _ | PEundef _ | PEerror _ | PEconstrained _ ->
       pe
 
@@ -72,11 +115,13 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
   | PElet (Pattern (p_annots, CaseBase (Some alias, cbty)),
            (Pexpr (_, _, PEsym src) as rhs),
            body) ->
-      let src' = apply_env env src in
+      let pe_src = match Pmap.lookup src env with
+                   | Some pe' -> pe'
+                   | None     -> rhs in
       Pexpr (annots, bty,
         PElet (Pattern (p_annots, CaseBase (None, cbty)),
                propagate_pexpr env rhs,
-               propagate_pexpr (extend_env env alias src') body))
+               propagate_pexpr (extend_env env alias pe_src) body))
 
   | PElet (pat, pe1, pe2) ->
       Pexpr (annots, bty, PElet (pat,
@@ -184,50 +229,53 @@ and propagate_expr env (Expr (annots, e_) as expr) =
   match e_ with
 
   (* ---- CaseBase bindings with a named pattern.
-     tail_sym handles both the bare pure(sym) case and the effectful-RHS
-     case (where the tail is pure(sym) with src not locally bound inside e1).
+     tail_pexpr handles both the bare pure(pe) case and the effectful-RHS
+     case (where the tail is pure(pe) with all free syms of pe not locally
+     bound inside e1).
      When it succeeds: replace the pattern with a wildcard, extend env, and
      propagate body.  The binding node is always preserved so that its
      annotations (source locations) are not lost.
      For Elet the RHS is a pexpr, so we match directly on PEsym.          ---- *)
   | Ewseq (Pattern (p_annots, CaseBase (Some alias, cbty)), e1, body) ->
-      begin match tail_sym e1 with
-      | Some src ->
-          let src' = apply_env env src in
+      let e1' = propagate_expr env e1 in
+      begin match tail_pexpr e1' with
+      | Some pe_tail ->
           Expr (annots,
             Ewseq (Pattern (p_annots, CaseBase (None, cbty)),
-                   propagate_expr env e1,
-                   propagate_expr (extend_env env alias src') body))
+                   e1',
+                   propagate_expr (extend_env env alias pe_tail) body))
       | None ->
           Expr (annots,
             Ewseq (Pattern (p_annots, CaseBase (Some alias, cbty)),
-                   propagate_expr env e1,
+                   e1',
                    propagate_expr env body))
       end
 
   | Esseq (Pattern (p_annots, CaseBase (Some alias, cbty)), e1, body) ->
-      begin match tail_sym e1 with
-      | Some src ->
-          let src' = apply_env env src in
+      let e1' = propagate_expr env e1 in
+      begin match tail_pexpr e1' with
+      | Some pe_tail ->
           Expr (annots,
             Esseq (Pattern (p_annots, CaseBase (None, cbty)),
-                   propagate_expr env e1,
-                   propagate_expr (extend_env env alias src') body))
+                   e1',
+                   propagate_expr (extend_env env alias pe_tail) body))
       | None ->
           Expr (annots,
             Esseq (Pattern (p_annots, CaseBase (Some alias, cbty)),
-                   propagate_expr env e1,
+                   e1',
                    propagate_expr env body))
       end
 
   | Elet (Pattern (p_annots, CaseBase (Some alias, cbty)), pe1, body) ->
       begin match pe1 with
       | Pexpr (_, _, PEsym src) ->
-          let src' = apply_env env src in
+          let pe_src = match Pmap.lookup src env with
+                       | Some pe' -> pe'
+                       | None     -> pe1 in
           Expr (annots,
             Elet (Pattern (p_annots, CaseBase (None, cbty)),
                   propagate_pexpr env pe1,
-                  propagate_expr (extend_env env alias src') body))
+                  propagate_expr (extend_env env alias pe_src) body))
       | _ ->
           Expr (annots,
             Elet (Pattern (p_annots, CaseBase (Some alias, cbty)),
