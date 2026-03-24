@@ -13,34 +13,40 @@ let extend_env env alias pe = Pmap.add alias pe env
 let extend_env_list env bindings =
   List.fold_left (fun acc (s, pe) -> extend_env acc s pe) env bindings
 
-(* ------------------------------------------------------------------ *)
-(* pexpr_safe: conservative free-variable check                       *)
-(*                                                                    *)
-(* Returns [true] when none of [pe]'s free symbols appear in         *)
-(* [binders].  Complex forms (PEif, PElet, PEcase, PEconstrained)    *)
-(* return [false] conservatively to avoid a full free-variable        *)
-(* analysis.                                                          *)
-(* ------------------------------------------------------------------ *)
+(* a conservative free-variable and replaceable-with-unit check
+ *
+ * no free variables because the expression will be substituted (propagated)
+ * into other contexts so needs to be well-formed
+ *
+ * replaceable with unit so that other analyses (like mem2reg) don't
+ * see mentions of the propagated value even though it's just rebound
+ * to a wildcard pattern
+ *
+ * cfunction returns a tuple when evaluated so should not be replaced with
+ * unit; ccall in practice does not, but could so is also left alone
+ *
+ * if, let and case could be checked more precisely but not worth the
+ * complexity *)
 
 let sym_in binders s =
   List.exists (fun b -> Symbol.compare_sym s b = 0) binders
 
-let rec pexpr_safe binders (Pexpr (_, _, pe_)) =
+let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
   match pe_ with
   | PEsym s ->
       not (sym_in binders s)
   | PEval _ | PEimpl _ | PEundef _ | PEerror _ ->
       true
   | PEctor (_, pes) ->
-      List.for_all (pexpr_safe binders) pes
+      List.for_all (can_prop_and_rm binders) pes
   | PEnot pe1 ->
-      pexpr_safe binders pe1
+      can_prop_and_rm binders pe1
   | PEop (_, pe1, pe2)
   | PEwrapI (_, _, pe1, pe2)
   | PEcatch_exceptional_condition (_, _, pe1, pe2)
   | PEare_compatible (pe1, pe2)
   | PEarray_shift (pe1, _, pe2) ->
-      pexpr_safe binders pe1 && pexpr_safe binders pe2
+      can_prop_and_rm binders pe1 && can_prop_and_rm binders pe2
   | PEmemberof (_, _, pe1)
   | PEmember_shift (pe1, _, _)
   | PEconv_int (_, pe1)
@@ -48,25 +54,31 @@ let rec pexpr_safe binders (Pexpr (_, _, pe_)) =
   | PEis_signed pe1 | PEis_unsigned pe1
   | PEbmc_assume pe1
   | PEunion (_, _, pe1) ->
-      pexpr_safe binders pe1
-  | PEmemop (_, pes) | PEcall (_, pes) ->
-      List.for_all (pexpr_safe binders) pes
+      can_prop_and_rm binders pe1
+  | PEmemop (_, pes) ->
+      List.for_all (can_prop_and_rm binders) pes
   | PEstruct (_, fields) ->
-      List.for_all (fun (_, pe1) -> pexpr_safe binders pe1) fields
+      List.for_all (fun (_, pe1) -> can_prop_and_rm binders pe1) fields
   | PEif _ | PElet _ | PEcase _ | PEconstrained _ ->
-      false  (* conservative *)
-  | PEcfunction _ ->
-    false
-
-(* ------------------------------------------------------------------ *)
-(* binders_of_pat: collect all named symbols in a pattern             *)
-(* ------------------------------------------------------------------ *)
+      false  (* not worth extra complexity *)
+   | PEcall _ | PEcfunction _ ->
+     false (* unsafe to replace with unit *)
 
 let rec binders_of_pat (Pattern (_, pat_)) =
   match pat_ with
   | CaseBase (None, _)   -> []
   | CaseBase (Some s, _) -> [s]
   | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
+
+let prop_and_rm binders pe =
+  let ret_pe ~new_ ~old:(Pexpr (annot, a, _)) = Pexpr (annot, a, new_) in
+  let unit_pe = ret_pe ~new_:(PEval Vunit) ~old:pe in
+  let (tail, pe) =
+    if can_prop_and_rm binders pe then
+      (Some pe, unit_pe)
+    else
+      (None, pe) in
+  (tail, pe)
 
 (* ------------------------------------------------------------------ *)
 (* pexpr_tree: rose tree of pexpr option mirroring Eunseq structure  *)
@@ -80,68 +92,64 @@ type pexpr_tree =
   | Leaf of pexpr option
   | Node of pexpr_tree list
 
-(* ------------------------------------------------------------------ *)
-(* tail_pexpr: compute the pexpr_tree for the tail of an expression  *)
-(*                                                                    *)
-(* At [Epure pe]: returns Leaf(Some pe) when pe is safe to hoist     *)
-(* (no free symbol of pe appears in binders along the chain), else   *)
-(* Leaf None.                                                         *)
-(*                                                                    *)
-(* At [Eunseq es]: returns Node(map tail_pexpr es), preserving the   *)
-(* nesting structure so that tuple patterns can be matched against    *)
-(* it element-wise.                                                   *)
-(*                                                                    *)
-(* Along binding chains (Ewseq/Esseq/Elet): accumulates binders and  *)
-(* recurses into the continuation.                                    *)
-(* ------------------------------------------------------------------ *)
+(* this is important to allow for fine-grained copy-prop inside
+ * elements of a tuple *)
+let rec split_tuple binders = function
+  | Pexpr (annot, ty, PEctor (Ctuple, pes)) ->
+    let (tails, pes') = List.split @@ List.map (split_tuple binders) pes in
+    (Node tails, Pexpr (annot, ty, PEctor (Ctuple, pes')))
+  | pe ->
+    let (tail, pe) = prop_and_rm binders pe in
+    (Leaf tail, pe)
 
-let safe_pexpr binders pe =
-  let ret_pe ~new_ ~old:(Pexpr (annot, a, _)) = Pexpr (annot, a, new_) in
-  let unit_pe = ret_pe ~new_:(PEval Vunit) ~old:pe in
-  let (tail, pe) =
-    if pexpr_safe binders pe then
-      (Some pe, unit_pe)
-    else
-      (None, pe) in
-  (tail, pe)
-
-let rec tail_pexpr_acc binders (Expr (annot, e_)) =
+(* A common pattern in elaborated Core is something like
+ * let pat = e1 in let pat e2 in .. pure(pe) or
+ * let pat = e1 in let pat e2 in .. unseq(pure(pe), ..)
+ * i.e. chains of bindings that eventually end in a pure value,
+ * which can be removed (replaced with a unit), and propagated
+ * under the conditions of can_prop_and_rm
+ *
+ * Hence, this function constructs the tuple-nesting structure,
+ * used later to match against nested tuple pattern matches,
+ * and also returns the expression but with the pure value
+ * replaced with a unit *)
+let rec eventually_pure binders (Expr (annot, e_)) =
   let ret_e e_ = (Expr (annot, e_)) in
   match e_ with
   | Epure pe ->
-    let (tail, pe) = safe_pexpr binders pe in
-    (Leaf tail, ret_e (Epure pe))
+    let (tail, pe) = split_tuple binders pe in
+    (tail, ret_e (Epure pe))
   | Eunseq es ->
-    let (tails, es') = List.split @@ List.map (tail_pexpr_acc binders) es in
+    let (tails, es') = List.split @@ List.map (eventually_pure binders) es in
     (Node tails, ret_e (Eunseq es'))
   | Ewseq (pat, e1, e2) ->
-    let (tail, e2) = tail_pexpr_acc (binders_of_pat pat @ binders) e2 in
+    let (tail, e2) = eventually_pure (binders_of_pat pat @ binders) e2 in
     (tail, ret_e (Ewseq (pat, e1, e2)))
   | Esseq (pat, e1, e2) ->
-    let (tail, e2) = tail_pexpr_acc (binders_of_pat pat @ binders) e2 in
+    let (tail, e2) = eventually_pure (binders_of_pat pat @ binders) e2 in
     (tail, ret_e (Esseq (pat, e1, e2)))
   | Elet (pat, pe1, e2) ->
-    let (tail, e2) = tail_pexpr_acc (binders_of_pat pat @ binders) e2 in
+    let (tail, e2) = eventually_pure (binders_of_pat pat @ binders) e2 in
     (tail, ret_e (Elet (pat, pe1, e2)))
   | Ebound e ->
-      let (tail, e) = tail_pexpr_acc binders e in
+      let (tail, e) = eventually_pure binders e in
       (tail, ret_e (Ebound e))
   | Eannot (al, e) ->
-      let (tail, e) = tail_pexpr_acc binders e in
+      let (tail, e) = eventually_pure binders e in
       (tail, ret_e (Eannot (al, e)))
   | _ ->
       (Leaf None, ret_e e_)
 
-let tail_pexpr e = tail_pexpr_acc [] e
+let tail_pexpr e = eventually_pure [] e
 
 (* ------------------------------------------------------------------ *)
 (* match_pat_tree: extract bindings by walking pattern and tree       *)
 (*                                                                    *)
 (* Returns (bindings, new_pattern) where:                             *)
 (*   bindings    — (sym, pexpr) pairs for extractable positions       *)
-(*   new_pattern — pattern with extracted positions wildcarded        *)
+(*   new_pattern — pattern with extracted positions as wildcard units *)
 (*                                                                    *)
-(* Partial: positions where the tree has Leaf None are left named.   *)
+(* Partial: positions where the tree has Leaf None are left named.    *)
 (* ------------------------------------------------------------------ *)
 
 let rec match_pat_tree pat tree =
@@ -153,28 +161,14 @@ let rec match_pat_tree pat tree =
   | Pattern (p_annots, CaseBase (None, _)), Leaf (Some _) ->
       ([], Pattern (p_annots, CaseBase (None, BTy_unit)))
 
-  | Pattern (_, CaseBase (Some _, _)), (Leaf None | Node _) ->
-      ([], pat)
-
-  | Pattern (_, CaseBase (None, _)), _ ->
-      ([], pat)
-
   (* Tuple pattern vs a matching-arity Node (Eunseq): recurse element-wise *)
-  | Pattern (p_annots, CaseCtor (Ctuple, pats)), Node trees
-    when List.length pats = List.length trees ->
-      let results = List.map2 match_pat_tree pats trees in
-      let bindings = List.concat_map fst results in
-      let new_pats = List.map snd results in
-      (bindings, Pattern (p_annots, CaseCtor (Ctuple, new_pats)))
-
-  (* Tuple pattern vs pure-tuple leaf: decompose the pexpr element-wise *)
-  | Pattern (p_annots, CaseCtor (Ctuple, pats)),
-    Leaf (Some (Pexpr (_, _, PEctor (Ctuple, pes))))
-    when List.length pats = List.length pes ->
-      let results = List.map2 (fun p pe -> match_pat_tree p (Leaf (Some pe))) pats pes in
-      let bindings = List.concat_map fst results in
-      let new_pats = List.map snd results in
-      (bindings, Pattern (p_annots, CaseCtor (Ctuple, new_pats)))
+  | Pattern (p_annots, CaseCtor (Ctuple, pats)), Node trees ->
+    (* they should have the same length otherwise there's a bug in the tree
+     * construction or the elaboration *)
+    let results = List.map2 match_pat_tree pats trees in
+    let bindings = List.concat_map fst results in
+    let new_pats = List.map snd results in
+    (bindings, Pattern (p_annots, CaseCtor (Ctuple, new_pats)))
 
   | _ ->
       ([], pat)
@@ -195,28 +189,12 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
        | None     -> Pexpr (annots, bty, PEsym s))
   | PEval _ | PEimpl _ | PEundef _ | PEerror _ | PEconstrained _ ->
       pe
-
-  (* Replace named pattern with wildcard, extend env; node is preserved. *)
-  | PElet (Pattern (p_annots, CaseBase (Some alias, cbty)),
-           (Pexpr (_, _, PEsym src) as rhs),
-           body) ->
-      let pe_src = match Pmap.lookup src env with
-                   | Some pe' -> pe'
-                   | None     -> rhs in
-      Pexpr (annots, bty,
-        PElet (Pattern (p_annots, CaseBase (None, cbty)),
-               propagate_pexpr env rhs,
-               propagate_pexpr (extend_env env alias pe_src) body))
-
   | PElet (pat, pe1, pe2) ->
-      (* let pe1' = propagate_pexpr env pe1 in *)
-      (* let (tail, pe1') = safe_pexpr [] pe1' in *)
-      (* let (bindings, new_pat) = match_pat_tree pat (Leaf tail) in *)
-      (* let env' = extend_env_list env bindings in *)
-      (* Pexpr (annots, bty, PElet (new_pat, pe1', propagate_expr env' body)) *)
-      Pexpr (annots, bty, PElet (pat,
-        propagate_pexpr env pe1,
-        propagate_pexpr env pe2))
+      let pe1' = propagate_pexpr env pe1 in
+      let (tail, pe1') = split_tuple [] pe1' in
+      let (bindings, new_pat) = match_pat_tree pat tail in
+      let env' = extend_env_list env bindings in
+      Pexpr (annots, bty, PElet (new_pat, pe1', propagate_pexpr env' pe2))
   | PEctor (c, pes) ->
       Pexpr (annots, bty, PEctor (c, List.map (propagate_pexpr env) pes))
   | PEcase (pe1, arms) ->
@@ -276,7 +254,7 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
         PEare_compatible (propagate_pexpr env pe1, propagate_pexpr env pe2))
 
 (* Propagate env into all pexprs inside an action. *)
-and propagate_action env (Paction (pol, Action (loc, a, act_))) =
+let propagate_action env (Paction (pol, Action (loc, a, act_))) =
   let pp = propagate_pexpr env in
   let act_' = match act_ with
     | Create (pe1, pe2, prefix) ->
@@ -313,19 +291,10 @@ and propagate_action env (Paction (pol, Action (loc, a, act_))) =
   Paction (pol, Action (loc, a, act_'))
 
 (* Single top-down pass threading the env through exprs *)
-and propagate_expr env (Expr (annots, e_) as expr) =
+let rec propagate_expr env (Expr (annots, e_) as expr) =
   let pp = propagate_pexpr env in
   let pe = propagate_expr  env in
   match e_ with
-
-  (* ---- CaseBase bindings with a named pattern.
-     tail_pexpr handles both the bare pure(pe) case and the effectful-RHS
-     case (where the tail is pure(pe) with all free syms of pe not locally
-     bound inside e1).
-     When it succeeds: replace the pattern with a wildcard, extend env, and
-     propagate body.  The binding node is always preserved so that its
-     annotations (source locations) are not lost.
-     For Elet the RHS is a pexpr, so we match directly on PEsym.          ---- *)
   | Ewseq (pat, e1, body) ->
       let e1' = propagate_expr env e1 in
       let (tail, e1') = tail_pexpr e1' in
@@ -342,8 +311,8 @@ and propagate_expr env (Expr (annots, e_) as expr) =
 
   | Elet (pat, pe1, body) ->
       let pe1' = propagate_pexpr env pe1 in
-      let (tail, pe1') = safe_pexpr [] pe1' in
-      let (bindings, new_pat) = match_pat_tree pat (Leaf tail) in
+      let (tail, pe1') = split_tuple [] pe1' in
+      let (bindings, new_pat) = match_pat_tree pat tail in
       let env' = extend_env_list env bindings in
       Expr (annots, Elet (new_pat, pe1', propagate_expr env' body))
 
