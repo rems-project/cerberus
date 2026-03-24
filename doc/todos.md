@@ -1,8 +1,8 @@
 # Todos
 
-- Started on mem2reg transform, but got stuck with save!
-- Started fixing save mem2reg analysis, but realised it needs simultaneous sym
-  analysis avoid locally bound symbols escaping in the env.
+- think more about analysis for Eif and Ecase
+- simplify nd() to take no args, and rename to nd_bool()
+- actually update analysis to handle nd like that
 
 ```c
 int main()
