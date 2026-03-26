@@ -4446,6 +4446,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                      (C.Proc loc (Just mrk) ret_bTy
                              ((*is_used_arg_type :: *)List.zip param_syms param_bTys ++ variadic_arg_type)
                              (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (add_prelude_and_epilogue core_body) core_return)
+                             []
                      ) facc
                   , Map.insert sym finfo finfoacc )
           end

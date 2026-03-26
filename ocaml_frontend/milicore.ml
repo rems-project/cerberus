@@ -18,7 +18,7 @@ type 'TY mi_label_defs = (symbol, ('TY mi_label_def)) Pmap.map
 
 type 'TY mi_fun_map_decl =
   | Mi_Fun of bt * (symbol * bt) list * Core.pexpr
-  | Mi_Proc of Cerb_location.t * int option * bt * (symbol * bt) list * 'TY Core.expr * 'TY mi_label_defs
+  | Mi_Proc of Cerb_location.t * int option * bt * (symbol * bt) list * 'TY Core.expr * 'TY mi_label_defs * symbol list
   | Mi_ProcDecl of Cerb_location.t * bt * bt list
   | Mi_BuiltinDecl of Cerb_location.t * bt * bt list
 
@@ -92,7 +92,7 @@ let core_to_micore__funmap_decl update_loc = function
   | Core.Fun (bt, args, pe) -> Mi_Fun (bt, args, pe)
   | Core.ProcDecl (loc, bt, bts) -> Mi_ProcDecl (loc, bt, bts)
   | Core.BuiltinDecl (loc, bt, bts) -> Mi_BuiltinDecl (loc, bt, bts)
-  | Core.Proc (loc, mrk, bt, args, e) ->
+  | Core.Proc (loc, mrk, bt, args, e, promotable) ->
      let saves =
        Pmap.map (fun (_,params,body,annots) ->
            let param_tys = 
@@ -125,7 +125,7 @@ let core_to_micore__funmap_decl update_loc = function
            else Mi_Label (lloc, param_tys, params, remove_save body, annots)
          ) (Core_aux.m_collect_saves e)
      in
-     Mi_Proc(loc, mrk, bt, args, remove_save e, saves)
+     Mi_Proc(loc, mrk, bt, args, remove_save e, saves, promotable)
 
 
 

@@ -1872,8 +1872,8 @@ let unsafe_subst_sym_fun_map sym pe' funs =
         ProcDecl loc bTy params
     | BuiltinDecl loc bTy params ->
         BuiltinDecl loc bTy params
-    | Proc loc mrk bTy params e ->
-        Proc loc mrk bTy params (unsafe_subst_sym_expr sym pe' e)
+    | Proc loc mrk bTy params e promotable ->
+        Proc loc mrk bTy params (unsafe_subst_sym_expr sym pe' e) promotable
   end) funs
 
 
@@ -2387,7 +2387,7 @@ let collect_labeled_continuations_NEW file =
           acc
       | BuiltinDecl _ _ _ ->
           acc
-      | Proc _ _ _ _ e ->
+      | Proc _ _ _ _ e _ ->
           Map.insert fun_sym (collect_saves e) acc
     end
   ) (Map.(union) file.stdlib file.funs) Map.empty
