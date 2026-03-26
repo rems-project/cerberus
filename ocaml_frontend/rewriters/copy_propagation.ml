@@ -365,7 +365,7 @@ let transform_file file =
     | IFun (bty, args, pe) -> IFun (bty, args, pp pe) in
   let rewrite_fun_map_decl = function
     | Fun (bty, args, pe)            -> Fun (bty, args, pp pe)
-    | Proc (loc, mrk, bty, args, e) -> Proc (loc, mrk, bty, args, pr e)
+    | Proc (loc, mrk, bty, args, e, promotable) -> Proc (loc, mrk, bty, args, pr e, promotable)
     | decl                           -> decl in
   let rewrite_globs = function
     | GlobalDef (bty_cty, e) -> GlobalDef (bty_cty, pr e)

@@ -1876,7 +1876,7 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDfun bTy (List.map snd sym_bTys)) acc
         | ProcDecl _ bTy bTys ->
             insert_tdecl (Sym sym) (TDproc bTy bTys) acc
-        | Proc _ _ bTy sym_bTys _ ->
+        | Proc _ _ bTy sym_bTys _ _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
         | BuiltinDecl _ bTy bTys ->
             let name = match sym with
@@ -1903,10 +1903,11 @@ let typecheck_program file =
             E.return (ProcDecl loc bTy bTys)
         | BuiltinDecl loc bTy bTys ->
             E.return (BuiltinDecl loc bTy bTys)
-        | Proc loc mrk bTy sym_bTys e ->
+        | Proc loc mrk bTy sym_bTys e promotable ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
+            typecheck_expr env' bTy e >>= fun e ->
+            E.return (Proc loc mrk bTy sym_bTys e promotable)
       end) file.stdlib >>= fun stdlib' ->
     
     (* Typechecking of the impl constants *)
@@ -1943,7 +1944,7 @@ let typecheck_program file =
               | _ -> error "typecheck_program: BuiltinDecl"
             end in
             insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc
-        | Proc _ _ bTy sym_bTys _ ->
+        | Proc _ _ bTy sym_bTys _ _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.funs env in
     (* and typechecking them *)
@@ -1956,10 +1957,11 @@ let typecheck_program file =
             E.return (ProcDecl loc bTy bTys)
         | BuiltinDecl loc bTy bTys ->
             E.return (BuiltinDecl loc bTy bTys)
-        | Proc loc mrk bTy sym_bTys e ->
+        | Proc loc mrk bTy sym_bTys e promotable ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
+            typecheck_expr env' bTy e >>= fun e ->
+            E.return (Proc loc mrk bTy sym_bTys e promotable)
       end) file.funs >>= fun funs' ->
     
     E.return <|

@@ -544,10 +544,11 @@ let transform_file file =
     | Inner_arg_callconv -> true
     | Normal_callconv    -> false
   in
-  List.iter (fun (f_sym, decl) ->
+  let funs = Pmap.mapi (fun f_sym decl ->
     match decl with
-    | Proc (_, _, _, _, body) ->
-        ignore (find_promotable ~also_fun_args f_sym body)
-    | Fun _ | ProcDecl _ | BuiltinDecl _ -> ()
-  ) (Pmap.bindings_list file.funs);
-  file
+    | Proc (loc, mrk, bTy, params, body, _promotable) ->
+      let promotable = find_promotable ~also_fun_args f_sym body in
+        Proc (loc, mrk, bTy, params, body, promotable)
+    | Fun _ | ProcDecl _ | BuiltinDecl _ -> decl
+  ) file.funs in
+  { file with funs }
