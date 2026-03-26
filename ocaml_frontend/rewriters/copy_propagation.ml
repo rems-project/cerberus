@@ -78,11 +78,45 @@ let rec binders_of_pat (Pattern (_, pat_)) =
 (* new_pat and new_pe are type-compatible with each other.           *)
 (* ------------------------------------------------------------------ *)
 
+let is_integer_annot = function
+  | Annot.Avalue (Ainteger ity) -> Some ity
+  | _ -> None
+
+let remove_integer_annot annots =
+  List.filter (fun a -> Option.is_none (is_integer_annot a)) annots
+
+(* integer annotations are used to figure out bit-vector (checking)
+ * types for pure expressions, of various kinds, so must be removed
+ * from units *)
 let unit_pexpr (Pexpr (annots, bty, _)) =
-  Pexpr (annots, bty, PEval Vunit)
+  Pexpr (remove_integer_annot annots, bty, PEval Vunit)
 
 let wildcard_pat (Pattern (p_annots, _)) =
   Pattern (p_annots, CaseBase (None, BTy_unit))
+
+let unit_pat_pe pat pe =
+  let Pattern (p_annots, pat_) = pat in
+  let Pexpr (annots, bty, pe_) = pe in
+  match pat_, pe_ with
+  | CaseBase (_, BTy_unit), PEval Vunit ->
+    true
+  | _ ->
+    false
+
+(* integer annotations are sometimes placed on the outside of an
+ * expression, such as
+ * {- cn_value: signed int -}pure(Specified(4))
+ *
+ * during pattern matching and substitution, these must be pushed
+ * in so that the substitution expression also carries the same *)
+let push_integer_annot annot pexpr =
+  match List.filter_map is_integer_annot annot with
+  | [] -> pexpr
+  | _ :: _ as itys ->
+    let annots = List.map (fun x -> Annot.Avalue (Ainteger x)) itys in
+    (* see https://github.com/rems-project/cerberus/issues/1000 *)
+    let Pexpr (inner_annots, inner_bty, inner_pe_) = pexpr in
+    Pexpr (annots @ inner_annots, inner_bty, inner_pe_)
 
 let rec analyze_pat_pexpr binders pat pe =
   let Pattern (p_annots, pat_) = pat in
@@ -109,14 +143,34 @@ let rec analyze_pat_pexpr binders pat pe =
 
   | CaseCtor (Cspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [inner_pe])) ->
-      let (bindings, new_inner_pat, new_inner_pe) =
-        analyze_pat_pexpr binders inner_pat inner_pe in
-      ( bindings
-      , Pattern (p_annots, CaseCtor (Cspecified, [new_inner_pat]))
-      , Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [new_inner_pe])) )
+      analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
+
+  | CaseCtor (Cspecified, [inner_pat]),
+    Pexpr (pe_annots, pe_bty, PEval (Vloaded (LVspecified ov))) ->
+      let inner_pe = Pexpr (pe_annots, pe_bty, PEval (Vobject ov)) in
+      analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
   | _ ->
       ([], pat, pe)
+
+and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe) =
+  (* so that the subsitution gets any annotations *)
+  let inner_pe = push_integer_annot pe_annots inner_pe in
+  let (bindings, new_inner_pat, new_inner_pe) =
+    analyze_pat_pexpr binders inner_pat inner_pe in
+  if unit_pat_pe new_inner_pat new_inner_pe then
+    let Pexpr (inner_annots, inner_bty, inner_pe_) = new_inner_pe in
+    (* but unit values have such annotations removed *)
+    let annots = remove_integer_annot (pe_annots @ inner_annots) in
+    let new_inner_pe = Pexpr (annots, inner_bty, inner_pe_) in
+    ( bindings , new_inner_pat , new_inner_pe )
+  else
+    (* if it's already been pushed inside, the outer will duplicate it *)
+    let pe_annots = remove_integer_annot pe_annots in
+    ( bindings
+    , Pattern (p_annots, CaseCtor (Cspecified, [new_inner_pat]))
+    , Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [new_inner_pe])) )
+
 
 (* ------------------------------------------------------------------ *)
 (* analyze_pat_expr: pattern-aware single-pass analysis for exprs    *)
@@ -126,12 +180,24 @@ let rec analyze_pat_pexpr binders pat pe =
 (* where new_pat and new_e are type-compatible.                       *)
 (* ------------------------------------------------------------------ *)
 
+let push_loc_annot annot pexpr =
+  match List.filter (function Annot.Aloc _ -> true | _ -> false)  annot with
+  | [] -> pexpr
+  | [ loc ] ->
+    let Pexpr (inner_annots, inner_bty, inner_pe_) = pexpr in
+    Pexpr (loc :: inner_annots, inner_bty, inner_pe_)
+  | _ :: _ :: _ -> assert (false)
+
 let rec analyze_pat_expr binders pat (Expr (annot, e_) as expr) =
   let ret_e e_ = Expr (annot, e_) in
   match e_ with
   | Epure pe ->
+      (* so that the subsitution gets any annotations *)
+      let pe = push_integer_annot annot pe in
+      let pe = push_loc_annot annot pe in
       let (bs, new_pat, new_pe) = analyze_pat_pexpr binders pat pe in
-      (bs, new_pat, ret_e (Epure new_pe))
+      (* if it's already been pushed inside, the outer will duplicate it *)
+      (bs, new_pat, Expr (remove_integer_annot annot, Epure new_pe))
 
   | Eunseq es ->
       let Pattern (p_annots, pat_) = pat in

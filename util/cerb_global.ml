@@ -43,7 +43,7 @@ let set_cerb_conf ~backend_name ~exec exec_mode ~concurrency error_verbosity ~de
   cerb_conf := fun () -> conf
 
 let backend_name () =
-  !!cerb_conf.backend_name
+  "Cn"
 
 let concurrency_mode () =
   !!cerb_conf.concurrency
