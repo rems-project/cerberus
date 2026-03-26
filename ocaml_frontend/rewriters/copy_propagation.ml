@@ -70,108 +70,108 @@ let rec binders_of_pat (Pattern (_, pat_)) =
   | CaseBase (Some s, _) -> [s]
   | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
 
-let prop_and_rm binders pe =
-  let ret_pe ~new_ ~old:(Pexpr (annot, a, _)) = Pexpr (annot, a, new_) in
-  let unit_pe = ret_pe ~new_:(PEval Vunit) ~old:pe in
-  let (tail, pe) =
-    if can_prop_and_rm binders pe then
-      (Some pe, unit_pe)
-    else
-      (None, pe) in
-  (tail, pe)
-
 (* ------------------------------------------------------------------ *)
-(* pexpr_tree: rose tree of pexpr option mirroring Eunseq structure  *)
+(* analyze_pat_pexpr: pattern-aware single-pass analysis for pexprs  *)
 (*                                                                    *)
-(* Leaf(Some pe) — this position has a known, safe-to-hoist pexpr.  *)
-(* Leaf None     — this position is opaque (action, unsafe, etc.).   *)
-(* Node ts       — this position is an Eunseq with children ts.      *)
+(* Takes the binding pattern alongside the RHS pure expression and   *)
+(* returns a coherent triple (bindings, new_pat, new_pe) where       *)
+(* new_pat and new_pe are type-compatible with each other.           *)
 (* ------------------------------------------------------------------ *)
 
-type pexpr_tree =
-  | Leaf of pexpr option
-  | Node of pexpr_tree list
+let unit_pexpr (Pexpr (annots, bty, _)) =
+  Pexpr (annots, bty, PEval Vunit)
 
-(* this is important to allow for fine-grained copy-prop inside
- * elements of a tuple *)
-let rec split_tuple binders = function
-  | Pexpr (annot, ty, PEctor (Ctuple, pes)) ->
-    let (tails, pes') = List.split @@ List.map (split_tuple binders) pes in
-    (Node tails, Pexpr (annot, ty, PEctor (Ctuple, pes')))
-  | pe ->
-    let (tail, pe) = prop_and_rm binders pe in
-    (Leaf tail, pe)
+let wildcard_pat (Pattern (p_annots, _)) =
+  Pattern (p_annots, CaseBase (None, BTy_unit))
 
-(* A common pattern in elaborated Core is something like
- * let pat = e1 in let pat e2 in .. pure(pe) or
- * let pat = e1 in let pat e2 in .. unseq(pure(pe), ..)
- * i.e. chains of bindings that eventually end in a pure value,
- * which can be removed (replaced with a unit), and propagated
- * under the conditions of can_prop_and_rm
- *
- * Hence, this function constructs the tuple-nesting structure,
- * used later to match against nested tuple pattern matches,
- * and also returns the expression but with the pure value
- * replaced with a unit *)
-let rec eventually_pure binders (Expr (annot, e_)) =
-  let ret_e e_ = (Expr (annot, e_)) in
+let rec analyze_pat_pexpr binders pat pe =
+  let Pattern (p_annots, pat_) = pat in
+  match pat_, pe with
+
+  | CaseBase (Some s, _), _ when can_prop_and_rm binders pe ->
+      ([(s, pe)], wildcard_pat pat, unit_pexpr pe)
+
+  | CaseBase (None, _), _ when can_prop_and_rm binders pe ->
+      ([], wildcard_pat pat, unit_pexpr pe)
+
+  | CaseBase (_, _), _ ->
+      ([], pat, pe)
+
+  | CaseCtor (Ctuple, pats), Pexpr (pe_annots, pe_bty, PEctor (Ctuple, pes))
+    when List.length pats = List.length pes ->
+      let results = List.map2 (analyze_pat_pexpr binders) pats pes in
+      let bindings  = List.concat_map (fun (bs, _, _) -> bs) results in
+      let new_pats  = List.map (fun (_, p, _) -> p) results in
+      let new_pes   = List.map (fun (_, _, e) -> e) results in
+      ( bindings
+      , Pattern (p_annots, CaseCtor (Ctuple, new_pats))
+      , Pexpr (pe_annots, pe_bty, PEctor (Ctuple, new_pes)) )
+
+  | CaseCtor (Cspecified, [inner_pat]),
+    Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [inner_pe])) ->
+      let (bindings, new_inner_pat, new_inner_pe) =
+        analyze_pat_pexpr binders inner_pat inner_pe in
+      ( bindings
+      , Pattern (p_annots, CaseCtor (Cspecified, [new_inner_pat]))
+      , Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [new_inner_pe])) )
+
+  | _ ->
+      ([], pat, pe)
+
+(* ------------------------------------------------------------------ *)
+(* analyze_pat_expr: pattern-aware single-pass analysis for exprs    *)
+(*                                                                    *)
+(* Descends through sequential chains to find the tail Epure, then   *)
+(* delegates to analyze_pat_pexpr. Returns (bindings, new_pat, new_e *)
+(* where new_pat and new_e are type-compatible.                       *)
+(* ------------------------------------------------------------------ *)
+
+let rec analyze_pat_expr binders pat (Expr (annot, e_) as expr) =
+  let ret_e e_ = Expr (annot, e_) in
   match e_ with
   | Epure pe ->
-    let (tail, pe) = split_tuple binders pe in
-    (tail, ret_e (Epure pe))
+      let (bs, new_pat, new_pe) = analyze_pat_pexpr binders pat pe in
+      (bs, new_pat, ret_e (Epure new_pe))
+
   | Eunseq es ->
-    let (tails, es') = List.split @@ List.map (eventually_pure binders) es in
-    (Node tails, ret_e (Eunseq es'))
-  | Ewseq (pat, e1, e2) ->
-    let (tail, e2) = eventually_pure (binders_of_pat pat @ binders) e2 in
-    (tail, ret_e (Ewseq (pat, e1, e2)))
-  | Esseq (pat, e1, e2) ->
-    let (tail, e2) = eventually_pure (binders_of_pat pat @ binders) e2 in
-    (tail, ret_e (Esseq (pat, e1, e2)))
-  | Elet (pat, pe1, e2) ->
-    let (tail, e2) = eventually_pure (binders_of_pat pat @ binders) e2 in
-    (tail, ret_e (Elet (pat, pe1, e2)))
+      let Pattern (p_annots, pat_) = pat in
+      (match pat_ with
+       | CaseCtor (Ctuple, pats) when List.length pats = List.length es ->
+           let results = List.map2 (analyze_pat_expr binders) pats es in
+           let bindings = List.concat_map (fun (bs, _, _) -> bs) results in
+           let new_pats = List.map (fun (_, p, _) -> p) results in
+           let new_es   = List.map (fun (_, _, e) -> e) results in
+           ( bindings
+           , Pattern (p_annots, CaseCtor (Ctuple, new_pats))
+           , ret_e (Eunseq new_es) )
+       | _ ->
+           ([], pat, expr))
+
+  | Ewseq (inner_pat, e1, e2) ->
+      let binders' = binders_of_pat inner_pat @ binders in
+      let (bs, new_outer_pat, new_e2) = analyze_pat_expr binders' pat e2 in
+      (bs, new_outer_pat, ret_e (Ewseq (inner_pat, e1, new_e2)))
+
+  | Esseq (inner_pat, e1, e2) ->
+      let binders' = binders_of_pat inner_pat @ binders in
+      let (bs, new_outer_pat, new_e2) = analyze_pat_expr binders' pat e2 in
+      (bs, new_outer_pat, ret_e (Esseq (inner_pat, e1, new_e2)))
+
+  | Elet (inner_pat, pe1, e2) ->
+      let binders' = binders_of_pat inner_pat @ binders in
+      let (bs, new_outer_pat, new_e2) = analyze_pat_expr binders' pat e2 in
+      (bs, new_outer_pat, ret_e (Elet (inner_pat, pe1, new_e2)))
+
   | Ebound e ->
-      let (tail, e) = eventually_pure binders e in
-      (tail, ret_e (Ebound e))
+      let (bs, new_pat, new_e) = analyze_pat_expr binders pat e in
+      (bs, new_pat, ret_e (Ebound new_e))
+
   | Eannot (al, e) ->
-      let (tail, e) = eventually_pure binders e in
-      (tail, ret_e (Eannot (al, e)))
-  | _ ->
-      (Leaf None, ret_e e_)
-
-let tail_pexpr e = eventually_pure [] e
-
-(* ------------------------------------------------------------------ *)
-(* match_pat_tree: extract bindings by walking pattern and tree       *)
-(*                                                                    *)
-(* Returns (bindings, new_pattern) where:                             *)
-(*   bindings    — (sym, pexpr) pairs for extractable positions       *)
-(*   new_pattern — pattern with extracted positions as wildcard units *)
-(*                                                                    *)
-(* Partial: positions where the tree has Leaf None are left named.    *)
-(* ------------------------------------------------------------------ *)
-
-let rec match_pat_tree pat tree =
-  match pat, tree with
-
-  | Pattern (p_annots, CaseBase (Some s, cbty)), Leaf (Some pe) ->
-      ([(s, pe)], Pattern (p_annots, CaseBase (None, BTy_unit)))
-
-  | Pattern (p_annots, CaseBase (None, _)), Leaf (Some _) ->
-      ([], Pattern (p_annots, CaseBase (None, BTy_unit)))
-
-  (* Tuple pattern vs a matching-arity Node (Eunseq): recurse element-wise *)
-  | Pattern (p_annots, CaseCtor (Ctuple, pats)), Node trees ->
-    (* they should have the same length otherwise there's a bug in the tree
-     * construction or the elaboration *)
-    let results = List.map2 match_pat_tree pats trees in
-    let bindings = List.concat_map fst results in
-    let new_pats = List.map snd results in
-    (bindings, Pattern (p_annots, CaseCtor (Ctuple, new_pats)))
+      let (bs, new_pat, new_e) = analyze_pat_expr binders pat e in
+      (bs, new_pat, ret_e (Eannot (al, new_e)))
 
   | _ ->
-      ([], pat)
+      ([], pat, expr)
 
 (* ------------------------------------------------------------------ *)
 (* Mutually recursive propagation functions.                          *)
@@ -191,10 +191,9 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
       pe
   | PElet (pat, pe1, pe2) ->
       let pe1' = propagate_pexpr env pe1 in
-      let (tail, pe1') = split_tuple [] pe1' in
-      let (bindings, new_pat) = match_pat_tree pat tail in
+      let (bindings, new_pat, pe1'') = analyze_pat_pexpr [] pat pe1' in
       let env' = extend_env_list env bindings in
-      Pexpr (annots, bty, PElet (new_pat, pe1', propagate_pexpr env' pe2))
+      Pexpr (annots, bty, PElet (new_pat, pe1'', propagate_pexpr env' pe2))
   | PEctor (c, pes) ->
       Pexpr (annots, bty, PEctor (c, List.map (propagate_pexpr env) pes))
   | PEcase (pe1, arms) ->
@@ -297,24 +296,21 @@ let rec propagate_expr env (Expr (annots, e_) as expr) =
   match e_ with
   | Ewseq (pat, e1, body) ->
       let e1' = propagate_expr env e1 in
-      let (tail, e1') = tail_pexpr e1' in
-      let (bindings, new_pat) = match_pat_tree pat tail in
+      let (bindings, new_pat, e1'') = analyze_pat_expr [] pat e1' in
       let env' = extend_env_list env bindings in
-      Expr (annots, Ewseq (new_pat, e1', propagate_expr env' body))
+      Expr (annots, Ewseq (new_pat, e1'', propagate_expr env' body))
 
   | Esseq (pat, e1, body) ->
       let e1' = propagate_expr env e1 in
-      let (tail, e1') = tail_pexpr e1' in
-      let (bindings, new_pat) = match_pat_tree pat tail in
+      let (bindings, new_pat, e1'') = analyze_pat_expr [] pat e1' in
       let env' = extend_env_list env bindings in
-      Expr (annots, Esseq (new_pat, e1', propagate_expr env' body))
+      Expr (annots, Esseq (new_pat, e1'', propagate_expr env' body))
 
   | Elet (pat, pe1, body) ->
       let pe1' = propagate_pexpr env pe1 in
-      let (tail, pe1') = split_tuple [] pe1' in
-      let (bindings, new_pat) = match_pat_tree pat tail in
+      let (bindings, new_pat, pe1'') = analyze_pat_pexpr [] pat pe1' in
       let env' = extend_env_list env bindings in
-      Expr (annots, Elet (new_pat, pe1', propagate_expr env' body))
+      Expr (annots, Elet (new_pat, pe1'', propagate_expr env' body))
 
   (* ---- Other expression forms: recurse ---- *)
   | Epure pe1 ->
