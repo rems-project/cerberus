@@ -40,6 +40,12 @@ type cerb_switch =
   (* set magic comment syntax to "/*$ ... $*/" *)
   | SW_magic_comment_char_dollar
 
+  (* promote function-local non-address-taken variables to Core let-bindings *)
+  | SW_mem2reg
+
+  (* eliminate pure symbol rebindings: let alias = pure(sym) → substitute sym *)
+  | SW_copy_prop
+
 
 let internal_ref =
   ref []
@@ -94,6 +100,10 @@ let set strs =
         Some SW_at_magic_comments
     | "magic_comment_char_dollar" ->
         Some (SW_magic_comment_char_dollar)
+    | "mem2reg" ->
+        Some SW_mem2reg
+    | "copy_prop" ->
+        Some SW_copy_prop
     | _ ->
         None in
   let pred x = function
@@ -122,7 +132,9 @@ let set strs =
     | SW_permissive_printf
     | SW_zero_initialised
     | SW_at_magic_comments
-    | SW_magic_comment_char_dollar as y ->
+    | SW_magic_comment_char_dollar
+    | SW_mem2reg
+    | SW_copy_prop as y ->
         x = y in
   List.iter (fun str ->
     match read_switch str with

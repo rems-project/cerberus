@@ -478,8 +478,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   let untype_generic_fun_map_decl = function
     | Fun (bty, xs, pe) ->
         Fun (bty, xs, untype_pexpr pe)
-    | Proc (loc, mrk, bTy, xs, e) ->
-        Proc (loc, mrk, bTy, xs, untype_expr e)
+    | Proc (loc, mrk, bTy, xs, e, promotable) ->
+        Proc (loc, mrk, bTy, xs, untype_expr e, promotable)
     | ProcDecl _ as decl ->
         decl
     | BuiltinDecl _ as decl ->
@@ -559,6 +559,16 @@ let core_passes (conf, io) ~filename core_file =
   let core_file =
     if Switches.(has_switch SW_strict_reads && not (is_CHERI ())) then
       Remove_unspecs.rewrite_file core_file
+    else
+      core_file in
+  let core_file =
+    if Switches.(has_switch SW_copy_prop) then
+      Copy_propagation.transform_file core_file
+    else
+      core_file in
+  let core_file =
+    if Switches.(has_switch SW_mem2reg) then
+      Core_mem2reg.transform_file core_file
     else
       core_file in
   Core_indet.hackish_order <$> begin

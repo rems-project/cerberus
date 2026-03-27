@@ -687,8 +687,8 @@ let convert_file file =
         ProcDecl loc bTy params
     | BuiltinDecl loc bTy params ->
         BuiltinDecl loc bTy params
-    | Proc loc mrk bTy params e ->
-        Proc loc mrk bTy params (convert_expr e)
+    | Proc loc mrk bTy params e  promotable ->
+        Proc loc mrk bTy params (convert_expr e) promotable
   end in
 
  <|

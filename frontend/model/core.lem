@@ -349,7 +349,7 @@ type generic_impl 'bty = map Implementation.implementation_constant (generic_imp
 
 type generic_fun_map_decl 'bty 'a =
   | Fun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'bty Symbol.sym
-  | Proc of Loc.t * maybe nat (* marker env *) * core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty Symbol.sym
+  | Proc of Loc.t * maybe nat (* marker env *) * core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty Symbol.sym * list Symbol.sym
   | ProcDecl of Loc.t * core_base_type * list core_base_type
   | BuiltinDecl of Loc.t * core_base_type * list core_base_type
 

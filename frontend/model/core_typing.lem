@@ -929,7 +929,16 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               E.fail loc (Mismatch "CivXOR" bTy (BTy_object OTy_integer))
           | (Cspecified, BTy_loaded oTy, [pe]) ->
               ret_ctor Cspecified <$> typecheck_pexpr tagDefs env (BTy_object oTy) pe
-          | (Cspecified, _, _) ->
+          | (Cspecified, BTy_storable, [pe]) ->
+              (* based on the infer_pexpr case for Cspecified, and the above *)
+              infer_pexpr tagDefs env pe >>= fun (Pexpr _ infer _ as pe') ->
+              match infer with
+                | InferredType_object oTy ->
+                    E.return (ret_ctor Cspecified pe')
+                | _ ->
+                    E.fail loc TooGeneral
+              end
+          | (Cspecified, _, pes) ->
               E.fail loc (MismatchExpected "Cspecified" bTy "loaded object")
           | (Cunspecified, BTy_loaded _, [pe]) ->
               ret_ctor Cunspecified <$> typecheck_pexpr tagDefs env BTy_ctype pe
@@ -1867,7 +1876,7 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDfun bTy (List.map snd sym_bTys)) acc
         | ProcDecl _ bTy bTys ->
             insert_tdecl (Sym sym) (TDproc bTy bTys) acc
-        | Proc _ _ bTy sym_bTys _ ->
+        | Proc _ _ bTy sym_bTys _ _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
         | BuiltinDecl _ bTy bTys ->
             let name = match sym with
@@ -1894,10 +1903,11 @@ let typecheck_program file =
             E.return (ProcDecl loc bTy bTys)
         | BuiltinDecl loc bTy bTys ->
             E.return (BuiltinDecl loc bTy bTys)
-        | Proc loc mrk bTy sym_bTys e ->
+        | Proc loc mrk bTy sym_bTys e promotable ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
+            typecheck_expr env' bTy e >>= fun e ->
+            E.return (Proc loc mrk bTy sym_bTys e promotable)
       end) file.stdlib >>= fun stdlib' ->
     
     (* Typechecking of the impl constants *)
@@ -1934,7 +1944,7 @@ let typecheck_program file =
               | _ -> error "typecheck_program: BuiltinDecl"
             end in
             insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc
-        | Proc _ _ bTy sym_bTys _ ->
+        | Proc _ _ bTy sym_bTys _ _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.funs env in
     (* and typechecking them *)
@@ -1947,10 +1957,11 @@ let typecheck_program file =
             E.return (ProcDecl loc bTy bTys)
         | BuiltinDecl loc bTy bTys ->
             E.return (BuiltinDecl loc bTy bTys)
-        | Proc loc mrk bTy sym_bTys e ->
+        | Proc loc mrk bTy sym_bTys e promotable ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
+            typecheck_expr env' bTy e >>= fun e ->
+            E.return (Proc loc mrk bTy sym_bTys e promotable)
       end) file.funs >>= fun funs' ->
     
     E.return <|
