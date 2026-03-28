@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env -S bash -euo pipefail
 
 ## This script deploy Cerberus UI and send it to the server
 ## PS: only works in my machine due to SSH credentials
