@@ -77,7 +77,7 @@ if [[ "${1:-}" == "--generate" ]]; then
       echo "  # $file: NOT FOUND" >&2
       continue
     fi
-    $CERB --nolibc -d 3 --pp core --sw copy_prop,mem2reg ci/$file >tmp/gen_stdout 2>tmp/gen_debug
+    $CERB --nolibc -d 3 --pp core --sw inner_arg_temps,copy_prop,mem2reg ci/$file >tmp/gen_stdout 2>tmp/gen_debug
     lines=$(extract_promotable_lines tmp/gen_debug)
     echo "  [$file]=\"$lines\""
   done
@@ -91,33 +91,32 @@ echo "=== Phase 2: promotable-symbol check (--sw copy_prop,mem2reg -d 3) ==="
 # Each value is the sorted, newline-joined set of [mem2reg] lines from -d 3 output.
 # Regenerate with: bash run-mem2reg-phase2.sh --generate
 declare -A promotable_expected
-# Regenerate with: bash run-mem2reg-phase2.sh --generate
 promotable_expected=(
-  [0341-mem2reg_simple.c]="[mem2reg] main: 1 promotable: [x_504]"
-  [0342-mem2reg_multi.c]="[mem2reg] main: 3 promotable: [x_504, y_505, z_506]"
-  [0343-mem2reg_if.c]="[mem2reg] main: 2 promotable: [x_504, cond_505]"
-  [0344-mem2reg_if_one_branch.c]="[mem2reg] main: 2 promotable: [x_504, cond_505]"
-  [0345-mem2reg_loop.c]="[mem2reg] main: 2 promotable: [x_504, i_505]"
-  [0346-mem2reg_no_promote_address.c]="[mem2reg] foo: 0 promotable: []
+  [0341-mem2reg_simple.c]="[mem2reg] main: 1 promotable: [x_423]"
+  [0342-mem2reg_multi.c]="[mem2reg] main: 3 promotable: [x_423, y_424, z_425]"
+  [0343-mem2reg_if.c]="[mem2reg] main: 2 promotable: [x_423, cond_424]"
+  [0344-mem2reg_if_one_branch.c]="[mem2reg] main: 2 promotable: [x_423, cond_424]"
+  [0345-mem2reg_loop.c]="[mem2reg] main: 2 promotable: [x_423, i_424]"
+  [0346-mem2reg_no_promote_address.c]="[mem2reg] foo: 1 promotable: [p_421]
 [mem2reg] main: 0 promotable: []"
-  [0347-mem2reg_no_promote_arg.c]="[mem2reg] id: 0 promotable: []
-[mem2reg] main: 1 promotable: [x_507]"
-  [0348-mem2reg_no_promote_loop_write.c]="[mem2reg] main: 2 promotable: [x_504, i_505]"
+  [0347-mem2reg_no_promote_arg.c]="[mem2reg] id: 1 promotable: [x_421]
+[mem2reg] main: 1 promotable: [x_426]"
+  [0348-mem2reg_no_promote_loop_write.c]="[mem2reg] main: 2 promotable: [x_423, i_424]"
   [0349-mem2reg_struct.c]="[mem2reg] main: 0 promotable: []"
-  [0350-mem2reg_mixed.c]="[mem2reg] main: 1 promotable: [promotable_507]
-[mem2reg] sink: 0 promotable: []"
+  [0350-mem2reg_mixed.c]="[mem2reg] main: 1 promotable: [promotable_426]
+[mem2reg] sink: 1 promotable: [p_421]"
   [0351-mem2reg_unseq_uninit.undef.c]="[mem2reg] main: 0 promotable: []"
   [0352-mem2reg_unseq_init.undef.c]="[mem2reg] main: 0 promotable: []"
-  [0353-mem2reg_unseq_reads.c]="[mem2reg] main: 1 promotable: [x_504]"
-  [0354-mem2reg_seqrmw_post.c]="[mem2reg] main: 1 promotable: [x_504]"
-  [0355-mem2reg_seqrmw_pre.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0353-mem2reg_unseq_reads.c]="[mem2reg] main: 1 promotable: [x_423]"
+  [0354-mem2reg_seqrmw_post.c]="[mem2reg] main: 1 promotable: [x_423]"
+  [0355-mem2reg_seqrmw_pre.c]="[mem2reg] main: 1 promotable: [x_423]"
   [0356-mem2reg_unseq_seqrmw.undef.c]="[mem2reg] main: 0 promotable: []"
-  [0361-mem2reg_loop_read_preinit.c]="[mem2reg] main: 1 promotable: [x_504]"
-  [0362-mem2reg_loop_escape.c]="[mem2reg] fn: 0 promotable: []
+  [0361-mem2reg_loop_read_preinit.c]="[mem2reg] main: 1 promotable: [x_423]"
+  [0362-mem2reg_loop_escape.c]="[mem2reg] fn: 1 promotable: [p_421]
 [mem2reg] main: 0 promotable: []"
-  [0363-mem2reg_nested_loops.c]="[mem2reg] main: 1 promotable: [x_504]"
-  [0364-mem2reg_loop_uninit_load.undef.c]="[mem2reg] main: 1 promotable: [x_504]"
-  [0365-mem2reg_compound_lit.c]="[mem2reg] main: 2 promotable: [a_508, x_504]"
+  [0363-mem2reg_nested_loops.c]="[mem2reg] main: 1 promotable: [x_423]"
+  [0364-mem2reg_loop_uninit_load.undef.c]="[mem2reg] main: 1 promotable: [x_423]"
+  [0365-mem2reg_compound_lit.c]="[mem2reg] main: 2 promotable: [a_427, x_423]"
 )
 
 for file in "${test_files[@]}"; do
@@ -132,7 +131,7 @@ for file in "${test_files[@]}"; do
     continue
   fi
 
-  $CERB --nolibc -d 3 --pp core --sw copy_prop,mem2reg ci/$file >/dev/null 2>tmp/debug_out
+  $CERB --nolibc -d 3 --pp core --sw inner_arg_temps,copy_prop,mem2reg ci/$file >/dev/null 2>tmp/debug_out
   actual_sorted=$(extract_promotable_lines tmp/debug_out)
   expected_sorted=$(printf '%s\n' "${promotable_expected[$file]}" | sort)
 
