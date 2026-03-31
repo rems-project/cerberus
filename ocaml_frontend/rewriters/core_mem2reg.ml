@@ -532,7 +532,7 @@ let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
     Printf.sprintf "[mem2reg] %s: %d promotable: [%s]"
       (Pp_symbol.to_string_pretty f_sym)
       (List.length promotable)
-      (String.concat ", " (List.map Pp_symbol.to_string_pretty promotable)));
+      (String.concat ", " (List.map Pp_symbol.to_string promotable)));
   promotable
 
 (* ------------------------------------------------------------------ *)

@@ -1,6 +1,11 @@
 #!/bin/bash
-# run-mem2reg-phase2.sh — elimination check
-# Verifies that --sw copy_prop,mem2reg removes promotable vars from Core IR (tests 0341–0350).
+# run-mem2reg-phase2.sh — promotable-symbol check
+# Verifies that --sw copy_prop,mem2reg identifies the right promotable vars
+# (checked via -d 3 debug output from core_mem2reg.ml).
+#
+# Usage:
+#   bash run-mem2reg-phase2.sh            # run checks
+#   bash run-mem2reg-phase2.sh --generate # print current promotable lines for all test files
 
 TESTSDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 cd "$TESTSDIR"
@@ -12,11 +17,10 @@ mkdir -p tmp
 pass=0
 fail=0
 
-# report <display-name> <file-for-type-check> <ret>
+# report <display-name> <ret>
 function report {
   local label=$1
-  local file=$2
-  local ret=$3
+  local ret=$2
   local res=$ret
 
   if [[ "$((res))" -eq "0" ]]; then
@@ -30,58 +34,114 @@ function report {
   echo -e "Test $label: $res"
 }
 
+# extract_promotable_lines <debug_output_file>
+# Strips ANSI codes + "(debug N): " prefix, keeps only [mem2reg].*promotable: lines.
+function extract_promotable_lines {
+  sed 's/\x1b\[[0-9;]*m//g; s/^(debug [0-9]*): //' "$1" \
+    | grep '^\[mem2reg\].*promotable:' \
+    | sort
+}
+
 set_cerberus_exec "cerberus"
 
-echo "=== Phase 2: elimination (--sw copy_prop,mem2reg must remove promotable vars from Core) ==="
-
-# Current expected create() counts reflect the stub (identity) pass.
-# Update these as the implementation progresses; the fully-working pass targets:
-#   0341=0  0342=0  0343=0  0344=0  0345=1
-#   0346=2  0347=0  0348=2  0349=1  0350=1
-#   0351=1  0352=1  0353=0  0354=0  0355=0  0356=1
-#   0365=0
-declare -A elim_expected
-elim_expected=(
-  [0341-mem2reg_simple.c]=1
-  [0342-mem2reg_multi.c]=3
-  [0343-mem2reg_if.c]=2
-  [0344-mem2reg_if_one_branch.c]=2
-  [0345-mem2reg_loop.c]=2
-  [0346-mem2reg_no_promote_address.c]=2
-  [0347-mem2reg_no_promote_arg.c]=2
-  [0348-mem2reg_no_promote_loop_write.c]=2
-  [0349-mem2reg_struct.c]=1
-  [0350-mem2reg_mixed.c]=3
-  [0351-mem2reg_unseq_uninit.undef.c]=1
-  [0352-mem2reg_unseq_init.undef.c]=1
-  [0353-mem2reg_unseq_reads.c]=1
-  [0354-mem2reg_seqrmw_post.c]=1
-  [0355-mem2reg_seqrmw_pre.c]=1
-  [0356-mem2reg_unseq_seqrmw.undef.c]=1
-  [0361-mem2reg_loop_read_preinit.c]=1
-  [0362-mem2reg_loop_escape.c]=2
-  [0363-mem2reg_nested_loops.c]=1
-  [0364-mem2reg_loop_uninit_load.undef.c]=1
-  [0365-mem2reg_compound_lit.c]=2
+# Ordered list of test files (same set as former elim_expected).
+test_files=(
+  0341-mem2reg_simple.c
+  0342-mem2reg_multi.c
+  0343-mem2reg_if.c
+  0344-mem2reg_if_one_branch.c
+  0345-mem2reg_loop.c
+  0346-mem2reg_no_promote_address.c
+  0347-mem2reg_no_promote_arg.c
+  0348-mem2reg_no_promote_loop_write.c
+  0349-mem2reg_struct.c
+  0350-mem2reg_mixed.c
+  0351-mem2reg_unseq_uninit.undef.c
+  0352-mem2reg_unseq_init.undef.c
+  0353-mem2reg_unseq_reads.c
+  0354-mem2reg_seqrmw_post.c
+  0355-mem2reg_seqrmw_pre.c
+  0356-mem2reg_unseq_seqrmw.undef.c
+  0361-mem2reg_loop_read_preinit.c
+  0362-mem2reg_loop_escape.c
+  0363-mem2reg_nested_loops.c
+  0364-mem2reg_loop_uninit_load.undef.c
+  0365-mem2reg_compound_lit.c
 )
 
-for file in "${!elim_expected[@]}"; do
-  expected_creates=${elim_expected[$file]}
+# --generate: print actual promotable lines for all test files and exit.
+if [[ "${1:-}" == "--generate" ]]; then
+  echo "promotable_expected=("
+  for file in "${test_files[@]}"; do
+    if [[ ! -f ./ci/$file ]]; then
+      echo "  # $file: NOT FOUND" >&2
+      continue
+    fi
+    $CERB --nolibc -d 3 --pp core --sw copy_prop,mem2reg ci/$file >tmp/gen_stdout 2>tmp/gen_debug
+    lines=$(extract_promotable_lines tmp/gen_debug)
+    echo "  [$file]=\"$lines\""
+  done
+  echo ")"
+  exit 0
+fi
 
+echo "=== Phase 2: promotable-symbol check (--sw copy_prop,mem2reg -d 3) ==="
+
+# Hardcoded expected promotable lines per test file.
+# Each value is the sorted, newline-joined set of [mem2reg] lines from -d 3 output.
+# Regenerate with: bash run-mem2reg-phase2.sh --generate
+declare -A promotable_expected
+# Regenerate with: bash run-mem2reg-phase2.sh --generate
+promotable_expected=(
+  [0341-mem2reg_simple.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0342-mem2reg_multi.c]="[mem2reg] main: 3 promotable: [x_504, y_505, z_506]"
+  [0343-mem2reg_if.c]="[mem2reg] main: 2 promotable: [x_504, cond_505]"
+  [0344-mem2reg_if_one_branch.c]="[mem2reg] main: 2 promotable: [x_504, cond_505]"
+  [0345-mem2reg_loop.c]="[mem2reg] main: 1 promotable: [i_505]"
+  [0346-mem2reg_no_promote_address.c]="[mem2reg] foo: 0 promotable: []
+[mem2reg] main: 0 promotable: []"
+  [0347-mem2reg_no_promote_arg.c]="[mem2reg] id: 0 promotable: []
+[mem2reg] main: 1 promotable: [x_507]"
+  [0348-mem2reg_no_promote_loop_write.c]="[mem2reg] main: 1 promotable: [i_505]"
+  [0349-mem2reg_struct.c]="[mem2reg] main: 0 promotable: []"
+  [0350-mem2reg_mixed.c]="[mem2reg] main: 1 promotable: [promotable_507]
+[mem2reg] sink: 0 promotable: []"
+  [0351-mem2reg_unseq_uninit.undef.c]="[mem2reg] main: 0 promotable: []"
+  [0352-mem2reg_unseq_init.undef.c]="[mem2reg] main: 0 promotable: []"
+  [0353-mem2reg_unseq_reads.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0354-mem2reg_seqrmw_post.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0355-mem2reg_seqrmw_pre.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0356-mem2reg_unseq_seqrmw.undef.c]="[mem2reg] main: 0 promotable: []"
+  [0361-mem2reg_loop_read_preinit.c]="[mem2reg] main: 0 promotable: []"
+  [0362-mem2reg_loop_escape.c]="[mem2reg] fn: 0 promotable: []
+[mem2reg] main: 0 promotable: []"
+  [0363-mem2reg_nested_loops.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0364-mem2reg_loop_uninit_load.undef.c]="[mem2reg] main: 0 promotable: []"
+  [0365-mem2reg_compound_lit.c]="[mem2reg] main: 1 promotable: [x_504]"
+)
+
+for file in "${test_files[@]}"; do
   if [[ ! -f ./ci/$file ]]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m"
     fail=$((fail+1))
     continue
   fi
 
-  $CERB --nolibc --pp core --sw copy_prop,mem2reg ci/$file > tmp/core_out 2>/dev/null
-  actual=$(grep -c 'create(' tmp/core_out || true)
+  if [[ -z "${promotable_expected[$file]+set}" ]]; then
+    echo -e "Test $file: \033[1m\033[33mSKIP\033[0m (no expected value)"
+    continue
+  fi
 
-  if [[ "$actual" -eq "$expected_creates" ]]; then
-    report "$file [create($actual)==$expected_creates]" "$file" 0
+  $CERB --nolibc -d 3 --pp core --sw copy_prop,mem2reg ci/$file >/dev/null 2>tmp/debug_out
+  actual_sorted=$(extract_promotable_lines tmp/debug_out)
+  expected_sorted=$(printf '%s\n' "${promotable_expected[$file]}" | sort)
+
+  if [[ "$actual_sorted" == "$expected_sorted" ]]; then
+    report "$file" 0
   else
-    echo "  → got create($actual), want $expected_creates"
-    report "$file [create($actual)!=$expected_creates]" "$file" 1
+    echo "  → got:      $actual_sorted"
+    echo "  → expected: $expected_sorted"
+    report "$file" 1
   fi
 done
 
