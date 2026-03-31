@@ -97,12 +97,12 @@ promotable_expected=(
   [0342-mem2reg_multi.c]="[mem2reg] main: 3 promotable: [x_504, y_505, z_506]"
   [0343-mem2reg_if.c]="[mem2reg] main: 2 promotable: [x_504, cond_505]"
   [0344-mem2reg_if_one_branch.c]="[mem2reg] main: 2 promotable: [x_504, cond_505]"
-  [0345-mem2reg_loop.c]="[mem2reg] main: 1 promotable: [i_505]"
+  [0345-mem2reg_loop.c]="[mem2reg] main: 2 promotable: [x_504, i_505]"
   [0346-mem2reg_no_promote_address.c]="[mem2reg] foo: 0 promotable: []
 [mem2reg] main: 0 promotable: []"
   [0347-mem2reg_no_promote_arg.c]="[mem2reg] id: 0 promotable: []
 [mem2reg] main: 1 promotable: [x_507]"
-  [0348-mem2reg_no_promote_loop_write.c]="[mem2reg] main: 1 promotable: [i_505]"
+  [0348-mem2reg_no_promote_loop_write.c]="[mem2reg] main: 2 promotable: [x_504, i_505]"
   [0349-mem2reg_struct.c]="[mem2reg] main: 0 promotable: []"
   [0350-mem2reg_mixed.c]="[mem2reg] main: 1 promotable: [promotable_507]
 [mem2reg] sink: 0 promotable: []"
@@ -112,12 +112,12 @@ promotable_expected=(
   [0354-mem2reg_seqrmw_post.c]="[mem2reg] main: 1 promotable: [x_504]"
   [0355-mem2reg_seqrmw_pre.c]="[mem2reg] main: 1 promotable: [x_504]"
   [0356-mem2reg_unseq_seqrmw.undef.c]="[mem2reg] main: 0 promotable: []"
-  [0361-mem2reg_loop_read_preinit.c]="[mem2reg] main: 0 promotable: []"
+  [0361-mem2reg_loop_read_preinit.c]="[mem2reg] main: 1 promotable: [x_504]"
   [0362-mem2reg_loop_escape.c]="[mem2reg] fn: 0 promotable: []
 [mem2reg] main: 0 promotable: []"
   [0363-mem2reg_nested_loops.c]="[mem2reg] main: 1 promotable: [x_504]"
-  [0364-mem2reg_loop_uninit_load.undef.c]="[mem2reg] main: 0 promotable: []"
-  [0365-mem2reg_compound_lit.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0364-mem2reg_loop_uninit_load.undef.c]="[mem2reg] main: 1 promotable: [x_504]"
+  [0365-mem2reg_compound_lit.c]="[mem2reg] main: 2 promotable: [a_508, x_504]"
 )
 
 for file in "${test_files[@]}"; do

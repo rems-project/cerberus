@@ -275,7 +275,8 @@ let rec collect_creates ~also_fun_args (Expr (_, e_)) : Symbol.sym list =
   match e_ with
   | Esseq (
       Pattern (_, CaseBase (Some ptr_sym, _)),
-      Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _, Symbol.PrefSource _))))),
+      Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _,
+          (Symbol.PrefSource _ | Symbol.PrefCompoundLiteral _)))))),
       body
     ) ->
       ptr_sym :: collect_creates ~also_fun_args body
@@ -367,7 +368,9 @@ let is_init_env needs_init ~param_env ~env =
     | Uninit -> raise Load_from_uninit
     | Init -> param_env)
   else
-     param_env
+    (match param_env with
+     | Uninit -> env            (* body didn't alter sym; outer state persists *)
+     | Init | Killed -> param_env)
 
 (* seq_memo: memoises sequentialisable results per (label_sym, param_sym).
    'a = bool * (Event_set.t * env) option
