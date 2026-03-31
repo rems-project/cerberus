@@ -14,6 +14,9 @@
       Extraction is partial: only elements with a known tail value are
       wildcarded; others retain their name.
 
+    unwrap_loaded must only be set to true if the remove-unspecs
+    pass/strict_reads switch has been done prior to this.
+
     No memory events, sequencing, or values are changed. *)
 
-val transform_file : unit Core.file -> unit Core.file
+val transform_file : unwrap_loaded:bool -> unit Core.file -> unit Core.file

@@ -13,16 +13,16 @@ let sym_in binders s =
   List.exists (fun b -> Symbol.compare_sym s b = 0) binders
 
 (* a conservative free-variable and replaceable-with-unit check
- *
- * no free variables because the expression will be substituted (propagated)
- * into other contexts so needs to be well-formed
- *
- * replaceable with unit is more a matter of taste - we don't want large
- * pure expressions repeated throughout the code, such as if, let, case,
- * ccall; also simpler to not check if, let and case more precisely
- *
- * cfunction always returns a tuple when evaluated so it's not worth checking
- * (i.e. analyze_pat_expr would always skip it) *)
+
+   no free variables because the expression will be substituted (propagated)
+   into other contexts so needs to be well-formed
+
+   replaceable with unit is more a matter of taste - we don't want large
+   pure expressions repeated throughout the code, such as if, let, case,
+   ccall; also simpler to not check if, let and case more precisely
+
+   cfunction always returns a tuple when evaluated so it's not worth checking
+   (i.e. analyze_pat_expr would always skip it) *)
 
 let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
   match pe_ with
@@ -64,11 +64,11 @@ let rec binders_of_pat (Pattern (_, pat_)) =
   | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
 
 (* ------------------------------------------------------------------ *)
-(* analyze_pat_pexpr: pattern-aware single-pass analysis for pexprs  *)
+(* analyze_pat_pexpr: pattern-aware single-pass analysis for pexprs   *)
 (*                                                                    *)
-(* Takes the binding pattern alongside the RHS pure expression and   *)
-(* returns a coherent triple (bindings, new_pat, new_pe) where       *)
-(* new_pat and new_pe are type-compatible with each other.           *)
+(* Takes the binding pattern alongside the RHS pure expression and    *)
+(* returns a coherent triple (bindings, new_pat, new_pe) where        *)
+(* new_pat and new_pe are type-compatible with each other.            *)
 (* ------------------------------------------------------------------ *)
 
 let is_integer_annot = function
@@ -97,11 +97,11 @@ let unit_pat_pe pat pe =
     false
 
 (* integer annotations are sometimes placed on the outside of an
- * expression, such as
- * {- cn_value: signed int -}pure(Specified(4))
- *
- * during pattern matching and substitution, these must be pushed
- * in so that the substitution expression also carries the same *)
+   expression, such as
+   {- cn_value: signed int -}pure(Specified(4))
+
+   during pattern matching and substitution, these must be pushed
+   in so that the substitution expression also carries the same *)
 let push_integer_annot annot pexpr =
   match List.filter_map is_integer_annot annot with
   | [] -> pexpr
@@ -166,10 +166,10 @@ and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty,
 
 
 (* ------------------------------------------------------------------ *)
-(* analyze_pat_expr: pattern-aware single-pass analysis for exprs    *)
+(* analyze_pat_expr: pattern-aware single-pass analysis for exprs     *)
 (*                                                                    *)
-(* Descends through sequential chains to find the tail Epure, then   *)
-(* delegates to analyze_pat_pexpr. Returns (bindings, new_pat, new_e *)
+(* Descends through sequential chains to find the tail Epure, then    *)
+(* delegates to analyze_pat_pexpr. Returns (bindings, new_pat, new_e  *)
 (* where new_pat and new_e are type-compatible.                       *)
 (* ------------------------------------------------------------------ *)
 
@@ -181,7 +181,32 @@ let push_loc_annot annot pexpr =
     Pexpr (loc :: inner_annots, inner_bty, inner_pe_)
   | _ :: _ :: _ -> assert (false)
 
-let rec analyze_pat_expr binders pat (Expr (annot, e_) as expr) =
+(* a bit cheeky, but works well:
+
+   let x: loaded integer = load(..) in
+   let Specified(x2 : integer) = x in ..
+   ==>
+   let Specified(x : integer) = load(..) in
+   let _: unit = Unit in .. *)
+
+let unwrap_loaded_pat ~enabled (subs, pat, expr) =
+  if enabled then
+    let Pattern (p_annots, pat_) = pat in
+    (match pat_ with
+     | CaseBase (Some s, BTy_loaded cbt) ->
+         let pe_sym = Pexpr ([], (), PEsym s) in
+         let pe = Pexpr ([], (), PEctor (Cspecified, [pe_sym])) in
+         let pattern = Pattern ([], CaseBase (Some s, BTy_object cbt)) in
+         let pattern = Pattern (p_annots, CaseCtor (Cspecified, [pattern])) in
+         (* re-using the same sym! *)
+         ((s, pe) :: subs, pattern, expr)
+     | _ ->
+         (subs, pat, expr))
+  else
+    (subs, pat, expr)
+
+let rec analyze_pat_expr ~unwrap_loaded binders pat (Expr (annot, e_) as expr) =
+  let analyze = analyze_pat_expr ~unwrap_loaded in
   let ret_e e_ = Expr (annot, e_) in
   match e_ with
   | Epure pe ->
@@ -190,13 +215,15 @@ let rec analyze_pat_expr binders pat (Expr (annot, e_) as expr) =
       let pe = push_loc_annot annot pe in
       let (bs, new_pat, new_pe) = analyze_pat_pexpr binders pat pe in
       (* if it's already been pushed inside, the outer will duplicate it *)
-      (bs, new_pat, Expr (remove_integer_annot annot, Epure new_pe))
+      unwrap_loaded_pat
+        ~enabled:unwrap_loaded
+        (bs, new_pat, Expr (remove_integer_annot annot, Epure new_pe))
 
   | Eunseq es ->
       let Pattern (p_annots, pat_) = pat in
       (match pat_ with
        | CaseCtor (Ctuple, pats) when List.length pats = List.length es ->
-           let results = List.map2 (analyze_pat_expr binders) pats es in
+           let results = List.map2 (analyze binders) pats es in
            let bindings = List.concat_map (fun (bs, _, _) -> bs) results in
            let new_pats = List.map (fun (_, p, _) -> p) results in
            let new_es   = List.map (fun (_, _, e) -> e) results in
@@ -208,29 +235,29 @@ let rec analyze_pat_expr binders pat (Expr (annot, e_) as expr) =
 
   | Ewseq (inner_pat, e1, e2) ->
       let binders' = binders_of_pat inner_pat @ binders in
-      let (bs, new_outer_pat, new_e2) = analyze_pat_expr binders' pat e2 in
+      let (bs, new_outer_pat, new_e2) = analyze binders' pat e2 in
       (bs, new_outer_pat, ret_e (Ewseq (inner_pat, e1, new_e2)))
 
   | Esseq (inner_pat, e1, e2) ->
       let binders' = binders_of_pat inner_pat @ binders in
-      let (bs, new_outer_pat, new_e2) = analyze_pat_expr binders' pat e2 in
+      let (bs, new_outer_pat, new_e2) = analyze binders' pat e2 in
       (bs, new_outer_pat, ret_e (Esseq (inner_pat, e1, new_e2)))
 
   | Elet (inner_pat, pe1, e2) ->
       let binders' = binders_of_pat inner_pat @ binders in
-      let (bs, new_outer_pat, new_e2) = analyze_pat_expr binders' pat e2 in
+      let (bs, new_outer_pat, new_e2) = analyze binders' pat e2 in
       (bs, new_outer_pat, ret_e (Elet (inner_pat, pe1, new_e2)))
 
   | Ebound e ->
-      let (bs, new_pat, new_e) = analyze_pat_expr binders pat e in
+      let (bs, new_pat, new_e) = analyze binders pat e in
       (bs, new_pat, ret_e (Ebound new_e))
 
   | Eannot (al, e) ->
-      let (bs, new_pat, new_e) = analyze_pat_expr binders pat e in
+      let (bs, new_pat, new_e) = analyze binders pat e in
       (bs, new_pat, ret_e (Eannot (al, new_e)))
 
   | _ ->
-      ([], pat, expr)
+      unwrap_loaded_pat ~enabled:unwrap_loaded ([], pat, expr)
 
 let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
   match pe_ with
@@ -341,27 +368,27 @@ let propagate_action env (Paction (pol, Action (loc, a, act_))) =
   Paction (pol, Action (loc, a, act_'))
 
 (* Single top-down pass threading the env through exprs *)
-let rec propagate_expr env (Expr (annots, e_) as expr) =
+let rec propagate_expr ~unwrap_loaded env (Expr (annots, e_) as expr) =
   let pp = propagate_pexpr env in
-  let pe = propagate_expr  env in
+  let propagate = propagate_expr ~unwrap_loaded in
   match e_ with
   | Ewseq (pat, e1, body) ->
-      let e1' = propagate_expr env e1 in
-      let (bindings, new_pat, e1'') = analyze_pat_expr [] pat e1' in
+      let e1' = propagate env e1 in
+      let (bindings, new_pat, e1'') = analyze_pat_expr ~unwrap_loaded [] pat e1' in
       let env' = extend_env_list env bindings in
-      Expr (annots, Ewseq (new_pat, e1'', propagate_expr env' body))
+      Expr (annots, Ewseq (new_pat, e1'', propagate env' body))
 
   | Esseq (pat, e1, body) ->
-      let e1' = propagate_expr env e1 in
-      let (bindings, new_pat, e1'') = analyze_pat_expr [] pat e1' in
+      let e1' = propagate env e1 in
+      let (bindings, new_pat, e1'') = analyze_pat_expr ~unwrap_loaded [] pat e1' in
       let env' = extend_env_list env bindings in
-      Expr (annots, Esseq (new_pat, e1'', propagate_expr env' body))
+      Expr (annots, Esseq (new_pat, e1'', propagate env' body))
 
   | Elet (pat, pe1, body) ->
       let pe1' = propagate_pexpr env pe1 in
       let (bindings, new_pat, pe1'') = analyze_pat_pexpr [] pat pe1' in
       let env' = extend_env_list env bindings in
-      Expr (annots, Elet (new_pat, pe1'', propagate_expr env' body))
+      Expr (annots, Elet (new_pat, pe1'', propagate env' body))
 
   (* ---- Other expression forms: recurse ---- *)
   | Epure pe1 ->
@@ -372,40 +399,36 @@ let rec propagate_expr env (Expr (annots, e_) as expr) =
       Expr (annots, Eaction (propagate_action env pact))
   | Ecase (pe1, arms) ->
       Expr (annots, Ecase (pp pe1,
-        List.map (fun (pat, e2) -> (pat, pe e2)) arms))
+        List.map (fun (pat, e2) -> (pat, propagate env e2)) arms))
   | Eif (pe1, e1, e2) ->
-      Expr (annots, Eif (pp pe1, pe e1, pe e2))
+      Expr (annots, Eif (pp pe1, propagate env e1, propagate env e2))
   | Eccall (a, pe1, pe2, pes) ->
       Expr (annots, Eccall (a, pp pe1, pp pe2, List.map pp pes))
   | Eproc (a, name, pes) ->
       Expr (annots, Eproc (a, name, List.map pp pes))
   | Eunseq es ->
-      Expr (annots, Eunseq (List.map pe es))
+      Expr (annots, Eunseq (List.map (propagate env) es))
   | Esave (sym_bty, args, body) ->
       Expr (annots, Esave (sym_bty,
         List.map (fun (s, (type_info, pe1)) -> (s, (type_info, pp pe1))) args,
-        pe body))
+        propagate env body))
   | Erun (a, lbl, pes) ->
       Expr (annots, Erun (a, lbl, List.map pp pes))
   | Ebound e ->
-      Expr (annots, Ebound (pe e))
+      Expr (annots, Ebound (propagate env e))
   | Eannot (fps, e) ->
-      Expr (annots, Eannot (fps, pe e))
+      Expr (annots, Eannot (fps, propagate env e))
   | End es ->
-      Expr (annots, End (List.map pe es))
+      Expr (annots, End (List.map (propagate env) es))
   | Epar es ->
-      Expr (annots, Epar (List.map pe es))
+      Expr (annots, Epar (List.map (propagate env) es))
   | Ewait _ ->
       expr
   | Eexcluded _ ->
       expr
 
-(* ------------------------------------------------------------------ *)
-(* Top-level file transform                                           *)
-(* ------------------------------------------------------------------ *)
-
-let transform_file file =
-  let pr e  = propagate_expr  empty_env e in
+let transform_file ~unwrap_loaded file =
+  let pr e  = propagate_expr ~unwrap_loaded  empty_env e in
   let pp pe = propagate_pexpr empty_env pe in
   let rewrite_impl_decl = function
     | Def (bty, pe)        -> Def (bty, pp pe)
