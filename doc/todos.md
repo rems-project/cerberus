@@ -1,6 +1,5 @@
 # Todos
 
-- think more about analysis for Eif and Ecase
 - simplify nd() to take no args, and rename to nd_bool()
 - actually update analysis to handle nd like that
 
