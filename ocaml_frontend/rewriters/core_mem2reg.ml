@@ -162,11 +162,12 @@ let find_single_direct_alias sym pairs =
   | [param_sym] -> Some param_sym
   | _ :: _ :: _ -> failwith "Core_mem2reg: multiple direct aliases for the same sym"
 
-(* collect_esave_defs: pre-walk the function body collecting all Esave
-   definitions into a memo table. *)
-let collect_esave_defs body =
-  (* Pre-walk: collect all Esave definitions *)
-  let memo = ref (Pmap.empty Symbol.compare_sym) in
+(* collect_info: single pass over the function body that simultaneously
+   (a) collects all Esave definitions into a memo table, and
+   (b) finds Create-bound syms that are candidates for promotion.    *)
+let collect_info ~also_fun_args body =
+  let esave_memo = ref (Pmap.empty Symbol.compare_sym) in
+  let creates    = ref (Pset.empty Symbol.compare_sym) in
   let rec walk (Expr (_, e_)) =
     match e_ with
     | Esave ((label_sym, _), params, esave_body) ->
@@ -175,8 +176,23 @@ let collect_esave_defs body =
           body    = esave_body;
           results = ref (Pmap.empty Symbol.compare_sym);
         } in
-        memo := Pmap.add label_sym entry !memo;
+        esave_memo := Pmap.add label_sym entry !esave_memo;
         walk esave_body
+    | Esseq (
+        Pattern (_, CaseBase (Some ptr_sym, _)),
+        Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _,
+            (Symbol.PrefSource _ | Symbol.PrefCompoundLiteral _)))))),
+        body
+      ) ->
+        creates := Pset.add ptr_sym !creates;
+        walk body
+    | Esseq (
+        Pattern (_, CaseBase (Some ptr_sym, _)),
+        Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _, Symbol.PrefFunArg _))))),
+        body
+      ) when also_fun_args ->
+        creates := Pset.add ptr_sym !creates;
+        walk body
     | Ewseq (_, e1, e2) | Esseq (_, e1, e2) -> walk e1; walk e2
     | Eif (_, e1, e2)                        -> walk e1; walk e2
     | Ecase (_, arms)   -> List.iter (fun (_, e) -> walk e) arms
@@ -186,7 +202,7 @@ let collect_esave_defs body =
     | Erun _ | Ewait _ | Eexcluded _        -> ()
   in
   walk body;
-  !memo
+  (!esave_memo, !creates)
 
 (* ------------------------------------------------------------------- *)
 (* collect_uses: gather all uses of sym in an expression               *)
@@ -264,42 +280,6 @@ let rec collect_uses use_memo sym (Expr (_, e_)) : use list =
       collect_uses use_memo sym e1 @ collect_uses use_memo sym e2
   | Ebound e | Eannot (_, e) -> collect_uses use_memo sym e
   | Ewait _ | Eexcluded _ -> []
-
-(* collect_creates finds Create-bound syms that are candidates for
-   promotion.  Under Normal_callconv only PrefSource (C local variables)
-   are considered; under Inner_arg_callconv PrefFunArg (callee-owned
-   parameter temporaries) are also included, since in that convention
-   the callee creates and owns the argument slot.                      *)
-
-let rec collect_creates ~also_fun_args (Expr (_, e_)) : Symbol.sym list =
-  match e_ with
-  | Esseq (
-      Pattern (_, CaseBase (Some ptr_sym, _)),
-      Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _,
-          (Symbol.PrefSource _ | Symbol.PrefCompoundLiteral _)))))),
-      body
-    ) ->
-      ptr_sym :: collect_creates ~also_fun_args body
-  | Esseq (
-      Pattern (_, CaseBase (Some ptr_sym, _)),
-      Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _, Symbol.PrefFunArg _))))),
-      body
-    ) when also_fun_args ->
-      ptr_sym :: collect_creates ~also_fun_args body
-  | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
-      collect_creates ~also_fun_args e1 @ collect_creates ~also_fun_args e2
-  | Elet (_, _, e) | Ebound e | Eannot (_, e) ->
-      collect_creates ~also_fun_args e
-  | Eif (_, e1, e2) ->
-      collect_creates ~also_fun_args e1 @ collect_creates ~also_fun_args e2
-  | Ecase (_, arms) ->
-      List.concat_map (fun (_, e) -> collect_creates ~also_fun_args e) arms
-  | Esave (_, _, body) ->
-      collect_creates ~also_fun_args body
-  | Eunseq es | End es | Epar es ->
-      List.concat_map (collect_creates ~also_fun_args) es
-  | Epure _ | Eaction _ | Ememop _ | Eccall _ | Eproc _
-  | Erun _ | Ewait _ | Eexcluded _ -> []
 
 (* ------------------------------------------------------------------ *)
 (* sequentialisable: unified promotability analysis                    *)
@@ -518,11 +498,10 @@ and save_param_needs_init seq_memo sym label_sym param_sym
 (* ------------------------------------------------------------------ *)
 
 let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
-  let use_memo  : use list memo_save_info = collect_esave_defs body in
+  let (use_memo : use list memo_save_info), creates = collect_info ~also_fun_args body in
   let seq_memo  : seq_memo =
     Pmap.map (fun { params; body; _ } ->
       { params; body; results = ref (Pmap.empty Symbol.compare_sym) }) use_memo in
-  let creates = collect_creates ~also_fun_args body in
   let is_promotable s =
     List.for_all addr_not_taken (collect_uses use_memo s body)
     && (match sequentialisable seq_memo s Uninit body with
@@ -530,7 +509,7 @@ let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
         | exception Not_sequentialisable -> false
         | exception Load_from_uninit    -> false)
   in
-  let promotable = List.filter is_promotable creates in
+  let promotable = List.filter is_promotable (Pset.elements creates) in
   Cerb_debug.print_debug 3 [] (fun () ->
     Printf.sprintf "[mem2reg] %s: %d promotable: [%s]"
       (Pp_symbol.to_string_pretty f_sym)

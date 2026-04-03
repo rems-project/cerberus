@@ -116,7 +116,7 @@ promotable_expected=(
 [mem2reg] main: 0 promotable: []"
   [0363-mem2reg_nested_loops.c]="[mem2reg] main: 1 promotable: [x_423]"
   [0364-mem2reg_loop_uninit_load.undef.c]="[mem2reg] main: 1 promotable: [x_423]"
-  [0365-mem2reg_compound_lit.c]="[mem2reg] main: 2 promotable: [a_427, x_423]"
+  [0365-mem2reg_compound_lit.c]="[mem2reg] main: 2 promotable: [x_423, a_427]"
 )
 
 for file in "${test_files[@]}"; do
