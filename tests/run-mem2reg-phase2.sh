@@ -44,7 +44,7 @@ function extract_promotable_lines {
 
 set_cerberus_exec "cerberus"
 
-# Ordered list of test files (same set as former elim_expected).
+# Ordered list of test files
 test_files=(
   0341-mem2reg_simple.c
   0342-mem2reg_multi.c
@@ -52,8 +52,8 @@ test_files=(
   0344-mem2reg_if_one_branch.c
   0345-mem2reg_loop.c
   0346-mem2reg_no_promote_address.c
-  0347-mem2reg_no_promote_arg.c
-  0348-mem2reg_no_promote_loop_write.c
+  0347-mem2reg_promote_arg.c
+  0348-mem2reg_promote_loop_write.c
   0349-mem2reg_struct.c
   0350-mem2reg_mixed.c
   0351-mem2reg_unseq_uninit.undef.c
@@ -67,6 +67,11 @@ test_files=(
   0363-mem2reg_nested_loops.c
   0364-mem2reg_loop_uninit_load.undef.c
   0365-mem2reg_compound_lit.c
+  0366-mem2reg_escaping_ret.c
+  0367-mem2reg_escape_in_label.c
+  0368-mem2reg-nested_save_chain.c
+  0369-mem2reg_first_lifetime_escapes.c
+  0370-mem2reg_second_lifetime_escapes_after_run.c
 )
 
 # --generate: print actual promotable lines for all test files and exit.
@@ -99,9 +104,9 @@ promotable_expected=(
   [0345-mem2reg_loop.c]="[mem2reg] main: 2 promotable: [x_423, i_424]"
   [0346-mem2reg_no_promote_address.c]="[mem2reg] foo: 1 promotable: [p_421]
 [mem2reg] main: 0 promotable: []"
-  [0347-mem2reg_no_promote_arg.c]="[mem2reg] id: 1 promotable: [x_421]
+  [0347-mem2reg_promote_arg.c]="[mem2reg] id: 1 promotable: [x_421]
 [mem2reg] main: 1 promotable: [x_426]"
-  [0348-mem2reg_no_promote_loop_write.c]="[mem2reg] main: 2 promotable: [x_423, i_424]"
+  [0348-mem2reg_promote_loop_write.c]="[mem2reg] main: 2 promotable: [x_423, i_424]"
   [0349-mem2reg_struct.c]="[mem2reg] main: 0 promotable: []"
   [0350-mem2reg_mixed.c]="[mem2reg] main: 1 promotable: [promotable_426]
 [mem2reg] sink: 1 promotable: [p_421]"
@@ -117,6 +122,14 @@ promotable_expected=(
   [0363-mem2reg_nested_loops.c]="[mem2reg] main: 1 promotable: [x_423]"
   [0364-mem2reg_loop_uninit_load.undef.c]="[mem2reg] main: 1 promotable: [x_423]"
   [0365-mem2reg_compound_lit.c]="[mem2reg] main: 2 promotable: [x_423, a_427]"
+  [0366-mem2reg_escaping_ret.c]="[mem2reg] id_escape: 1 promotable: [y_421]
+[mem2reg] main: 0 promotable: []"
+  [0367-mem2reg_escape_in_label.c]="[mem2reg] main: 1 promotable: [p_424]"
+  [0368-mem2reg-nested_save_chain.c]="[mem2reg] main: 2 promotable: [x_426, z_428]"
+  # 0369 is wrong!
+  [0369-mem2reg_first_lifetime_escapes.c]="[mem2reg] main: 1 promotable: [x_425]"
+  # 0370 is right for the wrong reason
+  [0370-mem2reg_second_lifetime_escapes_after_run.c]="[mem2reg] main: 2 promotable: [p_425, y_428]"
 )
 
 for file in "${test_files[@]}"; do

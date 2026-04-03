@@ -212,8 +212,8 @@ citests=(
   0344-mem2reg_if_one_branch.c
   0345-mem2reg_loop.c
   0346-mem2reg_no_promote_address.c
-  0347-mem2reg_no_promote_arg.c
-  0348-mem2reg_no_promote_loop_write.c
+  0347-mem2reg_promote_arg.c
+  0348-mem2reg_promote_loop_write.c
   0349-mem2reg_struct.c
   0350-mem2reg_mixed.c
   0351-mem2reg_unseq_uninit.undef.c
@@ -226,6 +226,12 @@ citests=(
   0362-mem2reg_loop_escape.c
   0363-mem2reg_nested_loops.c
   0364-mem2reg_loop_uninit_load.undef.c
+  0365-mem2reg_compound_lit.c
+  0366-mem2reg_escaping_ret.c
+  0367-mem2reg_escape_in_label.c
+  0368-mem2reg-nested_save_chain.c
+  0369-mem2reg_first_lifetime_escapes.c
+  0370-mem2reg_second_lifetime_escapes_after_run.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
