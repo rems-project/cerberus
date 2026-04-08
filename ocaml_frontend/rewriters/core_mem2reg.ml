@@ -3,14 +3,6 @@
    into pure Core expressions. *)
 open Core
 
-(* ------------------------------------------------------------------ *)
-(* Internal classification of how a pointer sym is used               *)
-(* ------------------------------------------------------------------ *)
-
-(* ------------------------------------------------------------------ *)
-(* Occurrence helpers                                                 *)
-(* ------------------------------------------------------------------ *)
-
 let is_pesym sym (Pexpr (_, _, pe_)) =
   match pe_ with
   | PEsym s -> Symbol.symbolEquality s sym
@@ -54,10 +46,10 @@ and pes_free_syms pes =
   List.fold_left (fun set pe ->
       Pset.union set (pe_free_syms pe)) sym_empty_set pes
 
-(* [action_escaping_vars creates act_] is the set of all vars which are
+(* [action_escaping_syms creates act_] is the set of all vars which are
    mentioned in non-direct-address positions. For Store0/Load0/Kill/SeqRMW the
    bare-PEsym address argument is excluded; everything else is included.  *)
-let action_escaping_vars act_ =
+let action_escaping_syms act_ =
   (* addr_indirect addr_pe: if not a bare PEsym, all syms in addr_pe are bad *)
   let addr_indirect addr_pe =
     match addr_pe with
@@ -100,37 +92,47 @@ type 'a esave_memo_entry = {
   results : (Symbol.sym, 'a) Pmap.map ref;        (* param_sym -> cached result, filled lazily *)
 }
 
+type escaped =
+  | Not_escaped
+  | Escaped
+
 (* Erun arguments, and default arguments to Esave are handled specially: if
    an argument is a bare PEsym AND the corresponding parameter is NOT escaped
    in the Esave body, then it's considered NOT escaped. *)
-let revisit_erun args params results =
-  (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
-     picked up by a handler in the parsers/c/c_lexer.mll of all places,
-     and the resulting backtrace is confusing *)
-  let param_escapes = List.map (fun (sym, _) ->
-      match Option.get @@ Pmap.lookup sym !results with
-      | `Non_escaped -> false
-      | `Escaped -> true) params in
+let run_escaping_syms args params results =
+  let is_pesym = function
+    | Pexpr (_, _, PEsym _) -> true
+    | _ -> false in
+  let is_escaped param =
+    (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
+       picked up by a handler in the parsers/c/c_lexer.mll of all places,
+       and the resulting backtrace is confusing *)
+    match Option.get @@ Pmap.lookup param results with
+      | Escaped -> true
+      | Not_escaped -> false in
   List.fold_left2
-    (fun escaped param_escapes arg ->
-      let arg_is_sym =
-        match arg with
-        | Pexpr (_, _, PEsym _) -> true
-        | _ -> false in
-      if not arg_is_sym || param_escapes then
+    (fun escaped param arg ->
+      if not (is_pesym arg) || is_escaped param then
         Pset.union escaped (pe_free_syms arg)
       else
         escaped)
     sym_empty_set
-    param_escapes
+    params
     args
+
+let mark_set status set map =
+  Pset.fold (fun sym map ->
+      if Pmap.mem sym map then
+        Pmap.add sym status map
+      else
+        map) set map
 
 (* Single pass over an expression that simultaneously
    (a) collects all Esave definitions into a memo table,
    (b) collects Create-bound syms that are candidates for promotion, and
    (c) removes from the candidate set any sym that appears in a non-direct-
        address position (i.e., not as the bare PEsym address argument of a
-       Store0/Load0/Kill/SeqRMW). Whatever remains in [promotables] after the
+       Store0/Load0/Kill/SeqRMW). Whatever remains in [create_syms] after the
        walk has been seen only in those safe positions.
 
    Note that symbols are NOT unique per binder: a pointer to a C local object
@@ -139,130 +141,164 @@ let revisit_erun args params results =
    to actually be flow-insenstive (e.g. ignore that control does not return
    after an Erun) to be correct: a symbol is promotable if ALL its lifetimes do
    not escape its address. *)
-let rec collect_info ~also_fun_args (esave_memo, promotables, pending_eruns) (Expr (annots, e_)) =
+let rec collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) (Expr (annots, e_)) =
   match e_ with
   | Esave ((label_sym, _), params, body) ->
       (* There's some subtlety around this case.
          1. Not all Esave params are pointers - the elaboration for a "return"
             will have one parameter whose type corresponds to that of the C
-            function's return type (which can be a pointer itself!).
-         2. In the non-return case, the default arguments are just the symbols
-            for the pointers to the visible objects in scope.
-         3. The binder/parameter for a C local object re-uses THE SAME SYMBOL.
+            function's return type (which can be a pointer itself, and thus
+            be a valid route of escaping!).
+         2. The binder/parameter for a C local object re-uses THE SAME SYMBOL as
+            the one binding the create.
          This makes calculating whether the _parameter_ escapes by itself
-         more fiddly. *)
+         in the body more fiddly: after recursing we have to patch up the
+         map of pointers. *)
       let params = List.map (fun (s, (_, pe)) -> (s, pe)) params in
       let (param_syms, def_args) = List.split params in
-      let param_set = Pset.from_list Symbol.compare_sym param_syms in
-      (* Re-add the param syms for analysis in the body, but remember
-         which ones, to remove again afterwards. *)
-      let escaped_earlier = Pset.diff param_set promotables in
-      let candidates = Pset.union promotables param_set in
-      let (esave_memo, non_escaped, pending_eruns) =
+      (* Unconditionally add the param syms for analysis in the body.
+         Note that for a return label, this adds the return value parameter
+         unconditionally regardless of whether it's a pointer or not. *)
+      let with_params = List.fold_left (fun map sym ->
+          Pmap.add sym Not_escaped map) create_syms param_syms in
+      let (esave_memo, post_body_with_params, pending_eruns) =
           collect_info
             ~also_fun_args
-            (esave_memo, candidates, pending_eruns)
+            (esave_memo, with_params, pending_eruns)
             body in
+      (* The results of whether the label parameter escapes are cached
+         for checking the default arguments and runs to that label. *)
       let results =
         ref @@
-        Pset.fold (fun sym results ->
-          let status =
-            if Pset.mem sym non_escaped then
-              `Non_escaped
-            else
-              `Escaped in
-          Pmap.add sym status results)
-          param_set
-          sym_empty_map in
+        List.fold_left (fun results sym ->
+            let status = Option.get @@ Pmap.lookup sym post_body_with_params in
+            Pmap.add sym status results)
+          sym_empty_map
+          param_syms in
       let esave_memo = Pmap.add label_sym { params; body; results } esave_memo in
-      (* Now that the body has been analysed on its own terms, check the default
-         arguments don't escape a pointer. *)
-      let promotables = Pset.diff non_escaped escaped_earlier in
-      let arg_escaped = revisit_erun def_args params results in
-      (esave_memo, Pset.diff promotables arg_escaped, pending_eruns)
+      (* If a param_sym had been
+         - Not_escaped before, but Escaped in the body, or
+         - Escaped before, but Not_escaped in the body, or
+         - a return value parameter
+         then map needs to be reset to what it was (including removing the
+         return value parameter). However, new syms (creates within the body)
+         need to be preserved.
+
+         Because the symbols for C local objects are re-used, such param syms
+         are guaranteed to be in the original create_syms map, which must then
+         be reset to its original value (before analysing its use via default
+         arguments). If a param sym is not the original create_syms map, then
+         it's a return param sym which must be removed. *)
+      let post_body_no_params =
+        List.fold_left (fun map sym ->
+            match Pmap.lookup sym create_syms with
+            | None -> Pmap.remove sym map
+            | Some status -> Pmap.add sym status map)
+          post_body_with_params
+          param_syms in
+      (* Now that we've computed whether the parameters are escaped by the
+         body, we can check the default arguments don't escape a pointer,
+         either directly or via its corresponding parameter. *)
+      let arg_escaped = run_escaping_syms def_args param_syms !results in
+      let create_syms = mark_set Escaped arg_escaped post_body_no_params in
+      (esave_memo, create_syms, pending_eruns)
   | Esseq (
-      Pattern (_, CaseBase (Some ptr_sym, _)),
+      Pattern (_, CaseBase (Some sym, _)),
       Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _,
           (Symbol.PrefSource _ | Symbol.PrefCompoundLiteral _)))))),
       body
     ) ->
-      let promotables = Pset.add ptr_sym promotables in
-      collect_info ~also_fun_args (esave_memo, promotables, pending_eruns) body
+      let create_syms =
+        (* Symbols are re-used across different lifetimes, so need to
+           be careful to not override information of prior ones. *)
+        if not (Pmap.mem sym create_syms) then
+            Pmap.add sym Not_escaped create_syms
+        else
+          create_syms
+      in
+      collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) body
   | Esseq (
-      Pattern (_, CaseBase (Some ptr_sym, _)),
+      Pattern (_, CaseBase (Some sym, _)),
       Expr (_, Eaction (Paction (_, Action (_, _, Create (_, _, Symbol.PrefFunArg _))))),
       body
     ) when also_fun_args ->
-      let promotables = Pset.add ptr_sym promotables in
-      collect_info ~also_fun_args (esave_memo, promotables, pending_eruns) body
+      let create_syms =
+        (* Symbols are re-used across different lifetimes, so need to
+           be careful to not override information of prior ones. *)
+        if not (Pmap.mem sym create_syms) then
+            Pmap.add sym Not_escaped create_syms
+        else
+          create_syms
+      in
+      collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) body
   | Eaction (Paction (_, Action (_, _, act_))) ->
-      (esave_memo, Pset.diff promotables (action_escaping_vars act_), pending_eruns)
+      (esave_memo, mark_set Escaped (action_escaping_syms act_) create_syms, pending_eruns)
   | Epure pe ->
-      (esave_memo, Pset.diff promotables (pe_free_syms pe), pending_eruns)
+      (esave_memo, mark_set Escaped (pe_free_syms pe) create_syms, pending_eruns)
   | Ememop (_, pes) ->
-      (esave_memo, Pset.diff promotables (pes_free_syms pes), pending_eruns)
+      (esave_memo, mark_set Escaped (pes_free_syms pes) create_syms, pending_eruns)
   | Elet (_, pe, e) ->
-      let promotables = Pset.diff promotables (pe_free_syms pe) in
-      collect_info ~also_fun_args (esave_memo, promotables, pending_eruns) e
+      let create_syms = mark_set Escaped (pe_free_syms pe) create_syms in
+      collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) e
   | Ecase (pe, arms) ->
       collect_info_list
         ~also_fun_args
-        (esave_memo, Pset.diff promotables (pe_free_syms pe), pending_eruns)
+        (esave_memo, mark_set Escaped (pe_free_syms pe) create_syms, pending_eruns)
         (List.map snd arms)
   | Eif (pe, e1, e2) ->
       collect_info_list
         ~also_fun_args
-        (esave_memo, Pset.diff promotables (pe_free_syms pe), pending_eruns)
+        (esave_memo, mark_set Escaped (pe_free_syms pe) create_syms, pending_eruns)
         [e1; e2]
   | Eccall (_, fn_pe, arg_pe, pes) ->
-      let promotables = Pset.diff promotables (pes_free_syms ([fn_pe; arg_pe] @ pes)) in
-      (esave_memo, promotables, pending_eruns)
+      let create_syms = mark_set Escaped (pes_free_syms ([fn_pe; arg_pe] @ pes)) create_syms in
+      (esave_memo, create_syms, pending_eruns)
   | Eproc (_, _, pes) ->
-      (esave_memo, Pset.diff promotables (pes_free_syms pes), pending_eruns)
+      (esave_memo, mark_set Escaped (pes_free_syms pes) create_syms, pending_eruns)
   | Erun (_, label_sym, args) ->
       (match Pmap.lookup label_sym esave_memo with
         | Some { params; body = _; results } ->
-          let escaped_syms = revisit_erun args params results in
-          (esave_memo, Pset.diff promotables escaped_syms, pending_eruns)
+          let escaped_syms = run_escaping_syms args (List.map fst params) !results in
+          (esave_memo, mark_set Escaped escaped_syms create_syms, pending_eruns)
       | None ->
-        (esave_memo, promotables, (label_sym, args) :: pending_eruns))
+        (esave_memo, create_syms, (label_sym, args) :: pending_eruns))
   | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
     collect_info_list
       ~also_fun_args
-      (esave_memo, promotables, pending_eruns)
+      (esave_memo, create_syms, pending_eruns)
       [e1; e2]
   | Ebound e | Eannot (_, e) ->
-    collect_info ~also_fun_args (esave_memo, promotables, pending_eruns) e
+    collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) e
   | Eunseq es | End es | Epar es ->
     collect_info_list
       ~also_fun_args
-      (esave_memo, promotables, pending_eruns)
+      (esave_memo, create_syms, pending_eruns)
       es
   | Ewait _ | Eexcluded _ ->
-    (esave_memo, promotables, pending_eruns)
+    (esave_memo, create_syms, pending_eruns)
 
-and collect_info_list ~also_fun_args (esave_memo, promotables, pending_eruns) es =
-  List.fold_left (fun (esave_memo, promotables, pending_eruns) e ->
-      collect_info ~also_fun_args (esave_memo, promotables, pending_eruns) e)
-    (esave_memo, promotables, pending_eruns)
+and collect_info_list ~also_fun_args (esave_memo, create_syms, pending_eruns) es =
+  List.fold_left (fun (esave_memo, create_syms, pending_eruns) e ->
+      collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) e)
+    (esave_memo, create_syms, pending_eruns)
     es
 
 let collect_info ~also_fun_args body =
-  let (esave_memo, promotables, pending_eruns) =
-    collect_info ~also_fun_args (sym_empty_map, sym_empty_set, []) body
+  let (esave_memo, create_syms, pending_eruns) =
+    collect_info ~also_fun_args (sym_empty_map, sym_empty_map, []) body
   in
-  let promotables =
-    List.fold_left (fun promotables (label_sym, args) ->
+  let create_syms =
+    List.fold_left (fun create_syms (label_sym, args) ->
         let { params; body = _; results } =
           (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
              picked up by a handler in the parsers/c/c_lexer.mll of all places,
              and the resulting backtrace is confusing *)
           Option.get @@ Pmap.lookup label_sym esave_memo in
-        let escaped_syms = revisit_erun args params results in
-        Pset.diff promotables escaped_syms)
-      promotables
+        let escaped_syms = run_escaping_syms args (List.map fst params) !results in
+        mark_set Escaped escaped_syms create_syms)
+      create_syms
       pending_eruns in
-  (esave_memo, promotables)
+  (esave_memo, create_syms)
 
 (* ------------------------------------------------------------------ *)
 (* sequentialisable: unified promotability analysis                    *)
@@ -482,7 +518,10 @@ let rec sequentialisable (seq_memo : seq_memo) sym env (Expr (_, e_))
      Load_from_uninit. *)
 and save_param_needs_init seq_memo sym label_sym param_sym
     : bool * (Event_set.t * env) option =
-  let entry = Pmap.find label_sym seq_memo in
+  (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
+     picked up by a handler in the parsers/c/c_lexer.mll of all places,
+     and the resulting backtrace is confusing *)
+  let entry = Option.get @@ Pmap.lookup label_sym seq_memo in
   match Pmap.lookup param_sym !(entry.results) with
   | Some result -> result
   | None ->
@@ -511,7 +550,11 @@ let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
     | exception Not_sequentialisable -> false
     | exception Load_from_uninit    -> false
   in
-  let promotable = List.filter is_promotable (Pset.elements creates) in
+  let (not_esc, _) =
+    Pmap.partition
+      (fun _ -> function Not_escaped -> true | Escaped -> false)
+      creates in
+  let promotable = List.filter is_promotable (Pset.elements @@ Pmap.domain not_esc) in
   Cerb_debug.print_debug 3 [] (fun () ->
     Printf.sprintf "[mem2reg] %s: %d promotable: [%s]"
       (Pp_symbol.to_string_pretty f_sym)

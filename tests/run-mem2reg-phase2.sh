@@ -126,9 +126,7 @@ promotable_expected=(
 [mem2reg] main: 0 promotable: []"
   [0367-mem2reg_escape_in_label.c]="[mem2reg] main: 1 promotable: [p_424]"
   [0368-mem2reg-nested_save_chain.c]="[mem2reg] main: 2 promotable: [x_426, z_428]"
-  # 0369 is wrong!
-  [0369-mem2reg_first_lifetime_escapes.c]="[mem2reg] main: 1 promotable: [x_425]"
-  # 0370 is right for the wrong reason
+  [0369-mem2reg_first_lifetime_escapes.c]="[mem2reg] main: 0 promotable: []"
   [0370-mem2reg_second_lifetime_escapes_after_run.c]="[mem2reg] main: 2 promotable: [p_425, y_428]"
 )
 
