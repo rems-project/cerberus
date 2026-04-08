@@ -339,8 +339,9 @@ let is_uninit = function Uninit -> true | _ -> false
 let is_killed = function Killed -> true | _ -> false
 let is_init   = function Init   -> true | _ -> false
 
-exception Not_sequentialisable
-exception Load_from_uninit
+type seq_error =
+  | Not_sequentialisable
+  | Load_from_uninit
 
 (* merges sequentialisable results from Eif/Ecase arms if they all agree
  * Note: this is fine for transforming too because we can use PEundef
@@ -349,27 +350,27 @@ let combine_branches arm_results =
   let branches = List.filter_map Fun.id arm_results in
   let all_evs, all_env = List.split branches in
   let all_evs = List.fold_left Event_set.union Event_set.empty all_evs in
-  let combined_env =
-    if List.for_all is_uninit all_env then
-      Uninit
+  Result.bind
+    (if List.for_all is_uninit all_env then
+      Result.ok (Some Uninit)
     else if List.for_all is_killed all_env then
-      Killed
+      Result.ok (Some Killed)
     else if List.for_all is_init all_env then
-       Init
+       Result.ok (Some Init)
     else
-       raise Not_sequentialisable in
-  (all_evs, combined_env)
+       Result.error Not_sequentialisable)
+  (fun combined_env -> Result.ok (Option.map (fun c -> (all_evs, c)) combined_env))
 
 let is_init_env needs_init ~param_env ~env =
   if needs_init then
     (match env with
-    | Killed -> raise Not_sequentialisable
-    | Uninit -> raise Load_from_uninit
-    | Init -> param_env)
+    | Killed -> Result.error Not_sequentialisable
+    | Uninit -> Result.error Load_from_uninit
+    | Init -> Result.ok param_env)
   else
     (match param_env with
-     | Uninit -> env            (* body didn't alter sym; outer state persists *)
-     | Init | Killed -> param_env)
+     | Uninit -> Result.ok env            (* body didn't alter sym; outer state persists *)
+     | Init | Killed -> Result.ok param_env)
 
 type 'a memo_save_info = (Symbol.sym, 'a esave_memo_entry) Pmap.map
 
@@ -380,7 +381,7 @@ type 'a memo_save_info = (Symbol.sym, 'a esave_memo_entry) Pmap.map
      snd = None while in progress or all paths end in Erun;
            Some (ev, env') otherwise *)
 
-type seq_memo = (bool * (Event_set.t * env) option) memo_save_info
+type seq_memo = ((bool * (Event_set.t * env) option), seq_error) result memo_save_info
 
 (* find_single_direct_alias sym pairs:
    Given an association list of (param_sym, pe) pairs, returns:
@@ -395,13 +396,38 @@ let find_single_direct_alias sym pairs =
   | [param_sym] -> Some param_sym
   | _ :: _ :: _ -> failwith "Core_mem2reg: multiple direct aliases for the same sym"
 
+type sym_info = ((Event_set.t * env) option, seq_error) result
+
 let rec sequentialisable (seq_memo : seq_memo) sym env (Expr (_, e_))
-    : (Event_set.t * env) option =
+    : sym_info =
   let module Es = Event_set in
-  let ( let* ) = Option.bind in
+  let return x = Result.ok (Some x) in
+  let raise x = Result.error x in
+  let ( let@ ) = Result.bind in
+  let ( let* ) x f =
+    match x with
+      | Error e -> Error e
+      | Ok None -> Ok None
+      | Ok (Some x) -> f x in
   let must_return = function
-    | None -> raise Not_sequentialisable
-    | Some (ev, env) -> (ev, env) in
+    | Error e -> Error e
+    | Ok None -> raise Not_sequentialisable
+    | Ok (Some (ev, env)) -> Ok (ev, env) in
+  let rec mapM f = function
+    | [] -> Ok []
+    | x :: xs ->
+      let@ y = f x in
+      let@ ys = mapM f xs in
+      Ok (y :: ys) in
+  let rec filter_mapM f = function
+    | [] -> Ok []
+    | x :: xs ->
+      let@ y = f x in
+      match y with
+      | None -> filter_mapM f xs
+      | Some y ->
+        let@ ys = filter_mapM f xs in
+        Ok (y :: ys) in
   match e_ with
   | Eaction (Paction (polarity, Action (_, _, act_))) ->
       begin match act_ with
@@ -409,78 +435,81 @@ let rec sequentialisable (seq_memo : seq_memo) sym env (Expr (_, e_))
           let ev = match polarity with
             | Pos -> Event.Pos_store
             | Neg -> Event.Neg_store in
-        Some (Es.singleton ev, Init)
+        return (Es.singleton ev, Init)
       | Load0 (_, addr_pe, _) when is_pesym sym addr_pe ->
           (match env with
-           | Init   -> Some (Es.singleton Event.Load, env)
+           | Init   -> return (Es.singleton Event.Load, env)
            | Uninit  -> raise Load_from_uninit
            | Killed  -> raise Not_sequentialisable)
       | Kill (_, addr_pe) when is_pesym sym addr_pe ->
-          Some (Es.singleton Event.Kill, Killed)
+          return (Es.singleton Event.Kill, Killed)
       | SeqRMW (_, _, addr_pe, tmp_sym, upd_pe) when is_pesym sym addr_pe ->
           (match env with
-           | Init -> Some (Es.of_list [Event.Load; Event.Pos_store], Init)
+           | Init -> return (Es.of_list [Event.Load; Event.Pos_store], Init)
            | Uninit -> raise Load_from_uninit
            | Killed -> raise Not_sequentialisable)
       | _ ->
         (* sym was verified to appear only as a direct address argument
          * (collect_info left it in creates), so non-address actions are
          * irrelevant and can be skipped. *)
-        Some (Es.empty, env)
+        return (Es.empty, env)
       end
   | Esseq (_, e1, e2) ->
       let* (ev1, env1) = sequentialisable seq_memo sym env e1 in
       let* (ev2, env2) = sequentialisable seq_memo sym env1 e2 in
-      Some (Es.union ev1 ev2, env2)
+      return (Es.union ev1 ev2, env2)
   | Ewseq (_, e1, e2) ->
       (* race-condition analysis is invalid if e1/e2 don't return
        * or, assume definite race if either expression doesn't return *)
-    let (ev1, env1) = must_return @@ sequentialisable seq_memo sym env e1 in
-    let (ev2, env2) = must_return @@ sequentialisable seq_memo sym env1 e2 in
-    if Es.exists Event.is_neg_store ev1
-        && not (Es.is_empty ev2) then
-      raise Not_sequentialisable
-    else
-      Some (Es.union ev1 ev2, env2)
-  | Eif (pe, et, ef) ->
-      let rt = sequentialisable seq_memo sym env et in
-      let rf = sequentialisable seq_memo sym env ef in
-      Some (combine_branches [rt; rf])
-  | Ecase (pe, arms) ->
-      let arm_results =
-        List.map (fun (_, e) -> sequentialisable seq_memo sym env e) arms
+      let@ (ev1, env1) = must_return @@ sequentialisable seq_memo sym env e1 in
+      let@ (ev2, env2) = must_return @@ sequentialisable seq_memo sym env1 e2 in
+      if Es.exists Event.is_neg_store ev1
+          && not (Es.is_empty ev2) then
+        raise Not_sequentialisable
+      else
+        return (Es.union ev1 ev2, env2)
+  | Eif (_, et, ef) ->
+      let@ rt = sequentialisable seq_memo sym env et in
+      let@ rf = sequentialisable seq_memo sym env ef in
+      combine_branches [rt; rf]
+  | Ecase (_, arms) ->
+      let@ arm_results =
+        mapM (fun (_, e) -> sequentialisable seq_memo sym env e) arms
       in
-      Some (combine_branches arm_results)
+      combine_branches arm_results
   | End arms | Epar arms | Eunseq arms ->
-      let eventful_arms = List.filter_map
+      let@ eventful_arms = filter_mapM
         (fun arm ->
           (* race-condition analysis is invalid if e1/e2 don't return or,
            * assume definite race if either expression doesn't return *)
-          let (ev, env') = must_return @@ sequentialisable seq_memo sym env arm in
-          if Es.is_empty ev then None else Some (ev, env'))
+          let@ (ev, env') = must_return @@ sequentialisable seq_memo sym env arm in
+          if Es.is_empty ev then Ok None else Result.ok @@ Some (ev, env'))
         arms in
       let all_reads =
         List.for_all (fun (ev, _) ->
             Es.for_all Event.is_load ev) eventful_arms in
       if all_reads then
         (* All arms only load; env is unchanged. *)
-        Some (Es.singleton Event.Load, env)
+        return (Es.singleton Event.Load, env)
       else
         (* At most one write/kill arm, with no other arm having events. *)
         begin match eventful_arms with
-          | [(ev, env')] -> Some (ev, env')
+          | [(ev, env')] -> return (ev, env')
           | []           -> assert false (* handled by all_reads = true *)
           | _ :: _ :: _  -> raise Not_sequentialisable
         end
   | Esave ((label_sym, _), params, _body) ->
       (match find_single_direct_alias sym
                (List.map (fun (p, (_, pe)) -> (p, pe)) params) with
-       | None           -> Some (Es.empty, env)
+       | None           -> return (Es.empty, env)
        | Some param_sym ->
-         let (needs_init, result) =
+         let@ (needs_init, result) =
              save_param_needs_init seq_memo sym label_sym param_sym in
-         let* (ev, param_env) = result in
-         Some (ev, is_init_env needs_init ~env ~param_env))
+         match result with
+           | None -> Ok None
+           | Some (ev, param_env) ->
+             let@ env = is_init_env needs_init ~env ~param_env in
+             return (ev, env))
   | Erun (_, label_sym, args) ->
       (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
          picked up by a handler in the parsers/c/c_lexer.mll of all places,
@@ -488,21 +517,22 @@ let rec sequentialisable (seq_memo : seq_memo) sym env (Expr (_, e_))
       let entry = Option.get @@ Pmap.lookup label_sym seq_memo in
       (match find_single_direct_alias sym
                (List.combine (List.map fst entry.params) args) with
-       | None           -> ()
+       | None           -> Ok None
        | Some param_sym ->
-         let (needs_init, result) =
+         let@ (needs_init, result) =
            save_param_needs_init seq_memo sym label_sym param_sym in
-         Option.iter (fun (ev, param_env) ->
-             ignore (is_init_env needs_init ~env ~param_env))
-           result);
-         None
+         match result with
+           | None -> Ok None
+           | Some (ev, param_env) ->
+             let@ env = is_init_env needs_init ~env ~param_env in
+             Ok (Some (ev, env)))
   | Elet (_, _, e) | Eannot (_, e) ->
       sequentialisable seq_memo sym env e
   | Ebound e ->
-    let* (_, env) = sequentialisable seq_memo sym env e in
-    Some (Es.empty, env)
+      let* (_, env) = sequentialisable seq_memo sym env e in
+      return (Es.empty, env)
   | Epure _ | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _ ->
-      Some (Es.empty, env)
+      return (Es.empty, env)
 
 (* save_param_needs_init seq_memo sym env label_sym param_sym:
    Analyses the Esave body for (label_sym, param_sym) w.r.t. sym and
@@ -517,7 +547,7 @@ let rec sequentialisable (seq_memo : seq_memo) sym env (Expr (_, e_))
    - If already memoised with init_needed=true and env ≠ Init: re-raise
      Load_from_uninit. *)
 and save_param_needs_init seq_memo sym label_sym param_sym
-    : bool * (Event_set.t * env) option =
+    : (bool * (Event_set.t * env) option, seq_error) result =
   (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
      picked up by a handler in the parsers/c/c_lexer.mll of all places,
      and the resulting backtrace is confusing *)
@@ -525,15 +555,20 @@ and save_param_needs_init seq_memo sym label_sym param_sym
   match Pmap.lookup param_sym !(entry.results) with
   | Some result -> result
   | None ->
-      entry.results := Pmap.add param_sym (false, None) !(entry.results);
-      (try
-        let result = sequentialisable seq_memo param_sym Uninit entry.body in
-        entry.results := Pmap.add param_sym (false, result) !(entry.results);
-        (false, result)
-      with Load_from_uninit ->
-        let result = sequentialisable seq_memo param_sym Init entry.body in
-        entry.results := Pmap.add param_sym (true, result) !(entry.results);
-        (true, result))
+      entry.results := Pmap.add param_sym (Ok (false, None)) !(entry.results);
+      (match sequentialisable seq_memo param_sym Uninit entry.body with
+       | Ok result ->
+           entry.results := Pmap.add param_sym (Ok (false, result)) !(entry.results);
+           Ok (false, result)
+       | Error Load_from_uninit ->
+           let result =
+             Result.map (fun r -> (true, r)) @@
+             sequentialisable seq_memo param_sym Init entry.body in
+           entry.results := Pmap.add param_sym result !(entry.results);
+           result
+       | Error Not_sequentialisable as result ->
+           entry.results := Pmap.add param_sym result !(entry.results);
+           Error Not_sequentialisable)
 
 (* ------------------------------------------------------------------ *)
 (* Promotability analysis for a single procedure                       *)
@@ -546,9 +581,9 @@ let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
       { params; body; results = ref (Pmap.empty Symbol.compare_sym) }) esave_memo in
   let is_promotable s =
     match sequentialisable seq_memo s Uninit body with
-    | None | Some _ -> true
-    | exception Not_sequentialisable -> false
-    | exception Load_from_uninit    -> false
+    | Ok None | Ok (Some _) -> true
+    | Error Not_sequentialisable -> false
+    | Error Load_from_uninit    -> false
   in
   let (not_esc, _) =
     Pmap.partition
