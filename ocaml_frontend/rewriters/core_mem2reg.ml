@@ -3,11 +3,6 @@
    into pure Core expressions. *)
 open Core
 
-let is_pesym sym (Pexpr (_, _, pe_)) =
-  match pe_ with
-  | PEsym s -> Symbol.symbolEquality s sym
-  | _ -> false
-
 let sym_empty_set = Pset.empty Symbol.compare_sym
 
 let sym_empty_map = Pmap.empty Symbol.compare_sym
@@ -77,19 +72,10 @@ let action_escaping_syms act_ =
   | CompareExchangeWeak (pe1, pe2, pe3, pe4, _, _) ->
       pes_free_syms [pe1; pe2; pe3; pe4]
 
-(* ------------------------------------------------------------------ *)
-(* Esave memo tables                                                  *)
-(*                                                                    *)
-(* sequentialisable analyses Esave bodies once via the default args   *)
-(* and once per Erun call site.  Results are memoised per             *)
-(* (label_sym, param_sym) to avoid redundant traversals and to        *)
-(* terminate on back-edge Eruns.                                      *)
-(* ------------------------------------------------------------------ *)
-
-type 'a esave_memo_entry = {
-  params  : (Symbol.sym * pexpr) list;            (* (param_sym, default_pe) by position *)
+type 'a collect_saves_entry = {
+  params  : (Symbol.sym * pexpr) list;
   body    : (unit, unit, Symbol.sym) generic_expr;
-  results : (Symbol.sym, 'a) Pmap.map ref;        (* param_sym -> cached result, filled lazily *)
+  results : (Symbol.sym, 'a) Pmap.map;
 }
 
 type escaped =
@@ -169,7 +155,6 @@ let rec collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) (Ex
       (* The results of whether the label parameter escapes are cached
          for checking the default arguments and runs to that label. *)
       let results =
-        ref @@
         List.fold_left (fun results sym ->
             let status = Option.get @@ Pmap.lookup sym post_body_with_params in
             Pmap.add sym status results)
@@ -199,7 +184,7 @@ let rec collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) (Ex
       (* Now that we've computed whether the parameters are escaped by the
          body, we can check the default arguments don't escape a pointer,
          either directly or via its corresponding parameter. *)
-      let arg_escaped = run_escaping_syms def_args param_syms !results in
+      let arg_escaped = run_escaping_syms def_args param_syms results in
       let create_syms = mark_set Escaped arg_escaped post_body_no_params in
       (esave_memo, create_syms, pending_eruns)
   | Esseq (
@@ -258,7 +243,7 @@ let rec collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) (Ex
   | Erun (_, label_sym, args) ->
       (match Pmap.lookup label_sym esave_memo with
         | Some { params; body = _; results } ->
-          let escaped_syms = run_escaping_syms args (List.map fst params) !results in
+          let escaped_syms = run_escaping_syms args (List.map fst params) results in
           (esave_memo, mark_set Escaped escaped_syms create_syms, pending_eruns)
       | None ->
         (esave_memo, create_syms, (label_sym, args) :: pending_eruns))
@@ -294,312 +279,211 @@ let collect_info ~also_fun_args body =
              picked up by a handler in the parsers/c/c_lexer.mll of all places,
              and the resulting backtrace is confusing *)
           Option.get @@ Pmap.lookup label_sym esave_memo in
-        let escaped_syms = run_escaping_syms args (List.map fst params) !results in
+        let escaped_syms = run_escaping_syms args (List.map fst params) results in
         mark_set Escaped escaped_syms create_syms)
       create_syms
       pending_eruns in
-  (esave_memo, create_syms)
+  create_syms
 
-(* ------------------------------------------------------------------ *)
-(* sequentialisable: unified promotability analysis                    *)
-(*                                                                     *)
-(* Returns:                                                            *)
-(*   None           — all control-flow paths end in Erun (vacuous)    *)
-(*   Some (ev, env') — events observed on sym and env after expr      *)
-(* Raises Not_sequentialisable on any conflict.                        *)
-(* Raises Load_from_uninit when a Load0/SeqRMW sees env=Uninit;       *)
-(*   caught by save_param_needs_init to detect loops that need init.        *)
-(* ------------------------------------------------------------------ *)
+let pesym_mem (Pexpr (_, _, pe_)) set =
+  match pe_ with
+  | PEsym s -> Pset.mem s set
+  | _ -> false
 
-(* ------------------------------------------------------------------ *)
-(* Event: memory events observable on a single sym                *)
-(* ------------------------------------------------------------------ *)
+let get_sym (Pexpr (_, _, pe_)) =
+  match pe_ with
+  | PEsym s -> s
+  | _ -> assert false
+
+let update_syms syms footprint =
+  Pmap.fold (fun sym f syms ->
+      match f with
+      | Ok _ ->
+          Pset.add sym syms
+      | Error _ ->
+          Pset.remove sym syms)
+    footprint
+    syms
 
 module Event = struct
-  type t = Pos_store | Neg_store | Load | Kill
+  type t = Neg_store | Pos_store | Load
   let is_neg_store = function Neg_store -> true | _ -> false
   let is_load = function Load -> true | _ -> false
   let compare x y =
     let num = function
-    | Pos_store -> 0
-    | Neg_store -> 1
-    | Load -> 2
-    | Kill -> 3 in
+    | Neg_store -> 0
+    | Pos_store -> 1
+    | Load -> 2 in
     Int.compare (num x) (num y)
+
+  let _to_string = function
+    | Neg_store -> "N"
+    | Pos_store -> "P"
+    | Load -> "O"
 end
 
 module Event_set = Set.Make(Event)
 
-(* env: initialization state of sym at a given program point          *)
-(* Uninit      — no store observed yet on this path                   *)
-(* Init        — sym was last stored with committed value pe          *)
-(* Killed      — sym's allocation was freed                           *)
-type env = Uninit | Init | Killed
-let is_uninit = function Uninit -> true | _ -> false
-let is_killed = function Killed -> true | _ -> false
-let is_init   = function Init   -> true | _ -> false
+let opt_lift2 f x y =
+  match x, y with
+  | None, None -> None
+  | Some _ as s, None | None, (Some _ as s) -> s
+  | Some x, Some y -> Some (f x y)
 
-type seq_error =
-  | Not_sequentialisable
-  | Load_from_uninit
+let res_lift2 f x y =
+  Result.bind x (fun x ->
+      Result.bind y (fun y ->
+          Ok (f x y)))
 
-(* merges sequentialisable results from Eif/Ecase arms if they all agree
- * Note: this is fine for transforming too because we can use PEundef
- * as values for non-returning branches *)
-let combine_branches arm_results =
-  let branches = List.filter_map Fun.id arm_results in
-  let all_evs, all_env = List.split branches in
-  let all_evs = List.fold_left Event_set.union Event_set.empty all_evs in
-  Result.bind
-    (if List.for_all is_uninit all_env then
-      Result.ok (Some Uninit)
-    else if List.for_all is_killed all_env then
-      Result.ok (Some Killed)
-    else if List.for_all is_init all_env then
-       Result.ok (Some Init)
-    else
-       Result.error Not_sequentialisable)
-  (fun combined_env -> Result.ok (Option.map (fun c -> (all_evs, c)) combined_env))
+let combine_map f =
+  Pmap.merge (Fun.const (opt_lift2 f))
 
-let is_init_env needs_init ~param_env ~env =
-  if needs_init then
-    (match env with
-    | Killed -> Result.error Not_sequentialisable
-    | Uninit -> Result.error Load_from_uninit
-    | Init -> Result.ok param_env)
-  else
-    (match param_env with
-     | Uninit -> Result.ok env            (* body didn't alter sym; outer state persists *)
-     | Init | Killed -> Result.ok param_env)
+let union_footprint = function
+    | [] -> assert false
+    | m :: ms ->
+      List.fold_left (combine_map (res_lift2 Event_set.union)) m ms
 
-type 'a memo_save_info = (Symbol.sym, 'a esave_memo_entry) Pmap.map
-
-(* seq_memo: memoises sequentialisable results per (label_sym, param_sym).
-   'a = bool * (Event_set.t * env) option
-     fst = init_needed: body requires Init env on entry (true) or
-           self-initialises (false)
-     snd = None while in progress or all paths end in Erun;
-           Some (ev, env') otherwise *)
-
-type seq_memo = ((bool * (Event_set.t * env) option), seq_error) result memo_save_info
-
-(* find_single_direct_alias sym pairs:
-   Given an association list of (param_sym, pe) pairs, returns:
-     None           — sym does not appear as a bare PEsym in any pe
-     Some param_sym — sym appears as a bare PEsym in exactly one pe
-   Raises failwith if sym appears in more than one pe (invariant violation). *)
-let find_single_direct_alias sym pairs =
-  match List.filter_map (fun (param_sym, pe) ->
-    if is_pesym sym pe then Some param_sym else None) pairs
-  with
-  | []          -> None
-  | [param_sym] -> Some param_sym
-  | _ :: _ :: _ -> failwith "Core_mem2reg: multiple direct aliases for the same sym"
-
-type sym_info = ((Event_set.t * env) option, seq_error) result
-
-let rec sequentialisable (seq_memo : seq_memo) sym env (Expr (_, e_))
-    : sym_info =
+(* [sequence syms e] returns a map whose keys are a subset of [syms] touched by
+   [e]. The values of the map are either error, signalling that the symbol is
+   not sequentialisable, or an event set of memory events. *)
+let rec sequence syms (Expr (annots, e_) as _e) =
   let module Es = Event_set in
-  let return x = Result.ok (Some x) in
-  let raise x = Result.error x in
-  let ( let@ ) = Result.bind in
-  let ( let* ) x f =
-    match x with
-      | Error e -> Error e
-      | Ok None -> Ok None
-      | Ok (Some x) -> f x in
-  let must_return = function
-    | Error e -> Error e
-    | Ok None -> raise Not_sequentialisable
-    | Ok (Some (ev, env)) -> Ok (ev, env) in
-  let rec mapM f = function
-    | [] -> Ok []
-    | x :: xs ->
-      let@ y = f x in
-      let@ ys = mapM f xs in
-      Ok (y :: ys) in
-  let rec filter_mapM f = function
-    | [] -> Ok []
-    | x :: xs ->
-      let@ y = f x in
-      match y with
-      | None -> filter_mapM f xs
-      | Some y ->
-        let@ ys = filter_mapM f xs in
-        Ok (y :: ys) in
   match e_ with
   | Eaction (Paction (polarity, Action (_, _, act_))) ->
       begin match act_ with
-      | Store0 (_, _, addr_pe, val_pe, _) when is_pesym sym addr_pe ->
-          let ev = match polarity with
-            | Pos -> Event.Pos_store
-            | Neg -> Event.Neg_store in
-        return (Es.singleton ev, Init)
-      | Load0 (_, addr_pe, _) when is_pesym sym addr_pe ->
-          (match env with
-           | Init   -> return (Es.singleton Event.Load, env)
-           | Uninit  -> raise Load_from_uninit
-           | Killed  -> raise Not_sequentialisable)
-      | Kill (_, addr_pe) when is_pesym sym addr_pe ->
-          return (Es.singleton Event.Kill, Killed)
-      | SeqRMW (_, _, addr_pe, tmp_sym, upd_pe) when is_pesym sym addr_pe ->
-          (match env with
-           | Init -> return (Es.of_list [Event.Load; Event.Pos_store], Init)
-           | Uninit -> raise Load_from_uninit
-           | Killed -> raise Not_sequentialisable)
+      | Store0 (_, _, addr_pe, val_pe, _)
+        when pesym_mem addr_pe syms ->
+          Pmap.add
+            (get_sym addr_pe)
+            (let ev = match polarity with
+                | Pos -> Event.Pos_store
+                | Neg -> Event.Neg_store in
+             Ok (Es.singleton ev))
+            sym_empty_map
+      | Load0 (_, addr_pe, _)
+        when pesym_mem addr_pe syms ->
+          Pmap.add
+            (get_sym addr_pe)
+            (Ok (Es.singleton Event.Load))
+             sym_empty_map
+      | SeqRMW (_, _, addr_pe, _, _)
+        when pesym_mem addr_pe syms ->
+          Pmap.add
+            (get_sym addr_pe)
+            (Ok (Es.of_list [Event.Pos_store; Event.Load]))
+             sym_empty_map
       | _ ->
-        (* sym was verified to appear only as a direct address argument
-         * (collect_info left it in creates), so non-address actions are
-         * irrelevant and can be skipped. *)
-        return (Es.empty, env)
+          sym_empty_map
       end
+
   | Esseq (_, e1, e2) ->
-      let* (ev1, env1) = sequentialisable seq_memo sym env e1 in
-      let* (ev2, env2) = sequentialisable seq_memo sym env1 e2 in
-      return (Es.union ev1 ev2, env2)
+      let footprint1 = sequence syms e1 in
+      let syms1 = update_syms syms footprint1 in
+      let footprint2 = sequence syms1 e2 in
+      union_footprint [footprint1; footprint2]
+
   | Ewseq (_, e1, e2) ->
-      (* race-condition analysis is invalid if e1/e2 don't return
-       * or, assume definite race if either expression doesn't return *)
-      let@ (ev1, env1) = must_return @@ sequentialisable seq_memo sym env e1 in
-      let@ (ev2, env2) = must_return @@ sequentialisable seq_memo sym env1 e2 in
-      if Es.exists Event.is_neg_store ev1
-          && not (Es.is_empty ev2) then
-        raise Not_sequentialisable
-      else
-        return (Es.union ev1 ev2, env2)
-  | Eif (_, et, ef) ->
-      let@ rt = sequentialisable seq_memo sym env et in
-      let@ rf = sequentialisable seq_memo sym env ef in
-      combine_branches [rt; rf]
-  | Ecase (_, arms) ->
-      let@ arm_results =
-        mapM (fun (_, e) -> sequentialisable seq_memo sym env e) arms
-      in
-      combine_branches arm_results
-  | End arms | Epar arms | Eunseq arms ->
-      let@ eventful_arms = filter_mapM
-        (fun arm ->
-          (* race-condition analysis is invalid if e1/e2 don't return or,
-           * assume definite race if either expression doesn't return *)
-          let@ (ev, env') = must_return @@ sequentialisable seq_memo sym env arm in
-          if Es.is_empty ev then Ok None else Result.ok @@ Some (ev, env'))
-        arms in
-      let all_reads =
-        List.for_all (fun (ev, _) ->
-            Es.for_all Event.is_load ev) eventful_arms in
-      if all_reads then
-        (* All arms only load; env is unchanged. *)
-        return (Es.singleton Event.Load, env)
-      else
-        (* At most one write/kill arm, with no other arm having events. *)
-        begin match eventful_arms with
-          | [(ev, env')] -> return (ev, env')
-          | []           -> assert false (* handled by all_reads = true *)
-          | _ :: _ :: _  -> raise Not_sequentialisable
-        end
-  | Esave ((label_sym, _), params, _body) ->
-      (match find_single_direct_alias sym
-               (List.map (fun (p, (_, pe)) -> (p, pe)) params) with
-       | None           -> return (Es.empty, env)
-       | Some param_sym ->
-         let@ (needs_init, result) =
-             save_param_needs_init seq_memo sym label_sym param_sym in
-         match result with
-           | None -> Ok None
-           | Some (ev, param_env) ->
-             let@ env = is_init_env needs_init ~env ~param_env in
-             return (ev, env))
-  | Erun (_, label_sym, args) ->
-      (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
-         picked up by a handler in the parsers/c/c_lexer.mll of all places,
-         and the resulting backtrace is confusing *)
-      let entry = Option.get @@ Pmap.lookup label_sym seq_memo in
-      (match find_single_direct_alias sym
-               (List.combine (List.map fst entry.params) args) with
-       | None           -> Ok None
-       | Some param_sym ->
-         let@ (needs_init, result) =
-           save_param_needs_init seq_memo sym label_sym param_sym in
-         match result with
-           | None -> Ok None
-           | Some (ev, param_env) ->
-             let@ env = is_init_env needs_init ~env ~param_env in
-             Ok (Some (ev, env)))
-  | Elet (_, _, e) | Eannot (_, e) ->
-      sequentialisable seq_memo sym env e
-  | Ebound e ->
-      let* (_, env) = sequentialisable seq_memo sym env e in
-      return (Es.empty, env)
+      let footprint1 = sequence syms e1 in
+      let syms1 = update_syms syms footprint1 in
+      let footprint2 = sequence syms1 e2 in
+      let union_if_no_race ev1 ev2 =
+        let ( let* ) = Result.bind in
+        let* ev1 in
+        let* ev2 in
+        if Es.exists Event.is_neg_store ev1 && not (Es.is_empty ev2) then
+          Error ()
+        else
+          Ok (Es.union ev1 ev2) in
+      combine_map union_if_no_race footprint1 footprint2
+
   | Epure _ | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _ ->
-      return (Es.empty, env)
+      sym_empty_map
 
-(* save_param_needs_init seq_memo sym env label_sym param_sym:
-   Analyses the Esave body for (label_sym, param_sym) w.r.t. sym and
-   memoises the result.  Returns the body's sequentialisable result
-   (None if all paths end in Erun).
+  | Elet (_, _, e) | Eannot (_, e) ->
+      sequence syms e
 
-   - Sentinel (false, None) is written before recursing so that back-edge
-     Erun calls find the entry and do not loop.
-   - If Load_from_uninit is raised (body reads sym before any store):
-       * If outer env = Init: mark init_needed=true, re-run with outer env.
-       * Otherwise: re-raise Load_from_uninit.
-   - If already memoised with init_needed=true and env ≠ Init: re-raise
-     Load_from_uninit. *)
-and save_param_needs_init seq_memo sym label_sym param_sym
-    : (bool * (Event_set.t * env) option, seq_error) result =
-  (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
-     picked up by a handler in the parsers/c/c_lexer.mll of all places,
-     and the resulting backtrace is confusing *)
-  let entry = Option.get @@ Pmap.lookup label_sym seq_memo in
-  match Pmap.lookup param_sym !(entry.results) with
-  | Some result -> result
-  | None ->
-      entry.results := Pmap.add param_sym (Ok (false, None)) !(entry.results);
-      (match sequentialisable seq_memo param_sym Uninit entry.body with
-       | Ok result ->
-           entry.results := Pmap.add param_sym (Ok (false, result)) !(entry.results);
-           Ok (false, result)
-       | Error Load_from_uninit ->
-           let result =
-             Result.map (fun r -> (true, r)) @@
-             sequentialisable seq_memo param_sym Init entry.body in
-           entry.results := Pmap.add param_sym result !(entry.results);
-           result
-       | Error Not_sequentialisable as result ->
-           entry.results := Pmap.add param_sym result !(entry.results);
-           Error Not_sequentialisable)
+  | Ebound e ->
+      Pmap.map (Result.map (fun _ -> Es.empty)) @@
+      sequence syms e
 
-(* ------------------------------------------------------------------ *)
-(* Promotability analysis for a single procedure                       *)
-(* ------------------------------------------------------------------ *)
+  | Eif (_, e1, e2) ->
+      union_footprint @@ List.map (sequence syms) [e1; e2]
+
+  | Ecase (_, arms) ->
+      union_footprint @@ List.map (fun (_, e) -> sequence syms e) arms
+
+  | End arms | Epar arms | Eunseq arms ->
+      arms
+      |> List.map (sequence syms)
+      |> List.map (Pmap.map (Result.map (fun x -> [x])))
+      |> List.fold_left (combine_map (res_lift2 List.append)) (sym_empty_map)
+      |> Pmap.map (fun fs ->
+          Result.bind fs (fun fs ->
+              let eventful = List.filter (fun s -> not (Es.is_empty s)) fs in
+              let all_reads =
+                List.for_all (Es.for_all Event.is_load) eventful in
+              if all_reads then
+                Ok (Es.singleton Event.Load)
+              else
+                begin match eventful with
+                  | [ev] -> Ok ev
+                  | [] -> assert false (* handled by all_reads = true *)
+                  | _ :: _ :: _ -> Error ()
+                end))
+
+  | Esave (_, params, body) ->
+      (* This relies on the fact that
+           1. C local var symbols are re-used across Esave-parameters,
+              Esave arguments, and Erun arguments.
+           2. [collect_info] ensures that the arguments are plain symbols.
+         This means we can
+           1. Ignore any parameter which is not in [syms].
+           2. Conflate the parameter symbols of the Esave, with the default
+              arguments of the Esave (for non-return Esaves).
+         NOTE: For return Esaves, since the body is always a pure expression,
+         the return parameter symbol will not end up in the footprint. *)
+      let params = List.filter_map (fun (sym, _) ->
+        if Pset.mem sym syms then Some sym else None) params in
+      let param_syms = Pset.union syms (Pset.from_list Symbol.compare_sym params) in
+      sequence param_syms body
+
+  | Erun (_, label_sym, args) ->
+      (* This relies on the fact that
+           1. C local var symbols are re-used across Esave-parameters.
+           2. [collect_info] ensures that the arguments are plain symbols.
+         This means we can conflate the parameter symbols of the Esave,
+         with the arguments of the Erun.
+         Because control does not return from an Erun, we don't care
+         about the footprint of sequence-able symbols.
+         And because the symbols are conflated, any non-sequence-able
+         symbols will be caught by the Esave analysis. *)
+      sym_empty_map
 
 let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
-  let esave_memo, creates = collect_info ~also_fun_args body in
-  let seq_memo  : seq_memo =
-    Pmap.map (fun { params; body; _ } ->
-      { params; body; results = ref (Pmap.empty Symbol.compare_sym) }) esave_memo in
-  let is_promotable s =
-    match sequentialisable seq_memo s Uninit body with
-    | Ok None | Ok (Some _) -> true
-    | Error Not_sequentialisable -> false
-    | Error Load_from_uninit    -> false
-  in
-  let (not_esc, _) =
-    Pmap.partition
+  let creates = collect_info ~also_fun_args body in
+  let not_esc =
+    Pmap.domain @@
+    Pmap.filter
       (fun _ -> function Not_escaped -> true | Escaped -> false)
       creates in
-  let promotable = List.filter is_promotable (Pset.elements @@ Pmap.domain not_esc) in
+  let not_seq =
+      Pmap.domain @@
+      Pmap.filter
+        (fun _ -> function Error _ -> true | (Ok _) -> false)
+        (sequence not_esc body) in
+  assert (Pset.subset not_seq not_esc);
+  (* The usual elaboration ensures that all C local var symbols are written to
+     at least once, but not for the CN backend. This means that totally unused
+     C local vars would have no footprint and not show up in the domain of the
+     syms mapped to [Ok _]. Hence starting with not-escaped vars and removing
+     not-sequence-able ones instead. *)
+  let promotable = Pset.elements (Pset.diff not_esc not_seq) in
   Cerb_debug.print_debug 3 [] (fun () ->
     Printf.sprintf "[mem2reg] %s: %d promotable: [%s]"
       (Pp_symbol.to_string_pretty f_sym)
       (List.length promotable)
       (String.concat ", " (List.map Pp_symbol.to_string promotable)));
   promotable
-
-(* ------------------------------------------------------------------ *)
-(* transform_file: analysis phase only — file returned unchanged       *)
-(* ------------------------------------------------------------------ *)
 
 let transform_file file =
   let also_fun_args = match file.calling_convention with

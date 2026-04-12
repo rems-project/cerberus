@@ -1,10 +1,10 @@
 int main()
 { 
-    int x = 0;
+    int x;
     goto step1;
 step1:
     {
-        x =1;
+        x = 1;
         int y = 1;
         goto step2;
     step2:

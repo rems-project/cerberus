@@ -69,9 +69,10 @@ test_files=(
   0365-mem2reg_compound_lit.c
   0366-mem2reg_escaping_ret.c
   0367-mem2reg_escape_in_label.c
-  0368-mem2reg-nested_save_chain.c
+  0368-mem2reg_nested_save_chain.c
   0369-mem2reg_first_lifetime_escapes.c
-  0370-mem2reg_second_lifetime_escapes_after_run.c
+  0370-mem2reg_second_lifetime_escapes_after_run.undef.c
+  0371-mem2reg_uninit_cn.c
 )
 
 # --generate: print actual promotable lines for all test files and exit.
@@ -125,9 +126,10 @@ promotable_expected=(
   [0366-mem2reg_escaping_ret.c]="[mem2reg] id_escape: 1 promotable: [y_421]
 [mem2reg] main: 0 promotable: []"
   [0367-mem2reg_escape_in_label.c]="[mem2reg] main: 1 promotable: [p_424]"
-  [0368-mem2reg-nested_save_chain.c]="[mem2reg] main: 2 promotable: [x_426, z_428]"
+  [0368-mem2reg_nested_save_chain.c]="[mem2reg] main: 2 promotable: [x_426, z_428]"
   [0369-mem2reg_first_lifetime_escapes.c]="[mem2reg] main: 0 promotable: []"
-  [0370-mem2reg_second_lifetime_escapes_after_run.c]="[mem2reg] main: 2 promotable: [p_425, y_428]"
+  [0370-mem2reg_second_lifetime_escapes_after_run.undef.c]="[mem2reg] main: 2 promotable: [p_425, y_428]"
+  [0371-mem2reg_uninit_cn.c]="[mem2reg] main: 1 promotable: [x_423]"
 )
 
 for file in "${test_files[@]}"; do

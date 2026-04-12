@@ -229,9 +229,10 @@ citests=(
   0365-mem2reg_compound_lit.c
   0366-mem2reg_escaping_ret.c
   0367-mem2reg_escape_in_label.c
-  0368-mem2reg-nested_save_chain.c
+  0368-mem2reg_nested_save_chain.c
   0369-mem2reg_first_lifetime_escapes.c
-  0370-mem2reg_second_lifetime_escapes_after_run.c
+  0370-mem2reg_second_lifetime_escapes_after_run.undef.c
+  0371-mem2reg_uninit_cn.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
