@@ -254,12 +254,12 @@ let rec collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) (Ex
       [e1; e2]
   | Ebound e | Eannot (_, e) ->
     collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) e
-  | Eunseq es | End es | Epar es ->
+  | Eunseq es | Epar es ->
     collect_info_list
       ~also_fun_args
       (esave_memo, create_syms, pending_eruns)
       es
-  | Ewait _ | Eexcluded _ ->
+  | End _ (* always true/false *) | Ewait _ | Eexcluded _ ->
     (esave_memo, create_syms, pending_eruns)
 
 and collect_info_list ~also_fun_args (esave_memo, create_syms, pending_eruns) es =
@@ -396,7 +396,8 @@ let rec sequence syms (Expr (annots, e_) as _e) =
           Ok (Es.union ev1 ev2) in
       combine_map union_if_no_race footprint1 footprint2
 
-  | Epure _ | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _ ->
+  | Epure _ | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _
+  | End _ (* always true/false *) ->
       sym_empty_map
 
   | Elet (_, _, e) | Eannot (_, e) ->
@@ -412,7 +413,7 @@ let rec sequence syms (Expr (annots, e_) as _e) =
   | Ecase (_, arms) ->
       union_footprint @@ List.map (fun (_, e) -> sequence syms e) arms
 
-  | End arms | Epar arms | Eunseq arms ->
+  | Epar arms | Eunseq arms ->
       arms
       |> List.map (sequence syms)
       |> List.map (Pmap.map (Result.map (fun x -> [x])))
@@ -485,6 +486,216 @@ let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
       (String.concat ", " (List.map Pp_symbol.to_string promotable)));
   promotable
 
+let get_ct (Pexpr (_, _, e_)) =
+  match e_ with
+  | PEval (Vctype ct) -> ct
+  | _ -> assert false
+
+let is_unit_pat (Pattern (_, pat_)) =
+  match pat_ with
+  | CaseBase (None, BTy_unit) -> true
+  | _ -> false
+
+let is_unit_pe (Pexpr (_, _, pe_)) =
+  match pe_ with
+  | PEval Vunit -> true
+  | _ -> false
+
+let extend_pat bty_env to_bind pat =
+  Cerb_debug.print_debug 3 [] (fun () ->
+      let to_bind = Pset.elements to_bind |> List.map Pp_symbol.to_string in
+      let dom = Pmap.domain bty_env |> Pset.elements |> List.map Pp_symbol.to_string in
+      "[mem2reg-bind] " ^ (String.concat "," to_bind) ^ "\n" ^
+      "[mem2reg-domn] " ^ (String.concat "," dom)
+  );
+  let new_sym sym =
+    let str = Pp_symbol.to_string sym in
+    let parts = String.split_on_char '_' str in
+    Symbol.fresh_pretty (List.hd parts) in
+  let Pattern (p_annots, pat_) = pat in
+  let matched = Pset.elements to_bind |> List.map (fun x -> (x, new_sym x)) in
+  let binders = List.map (fun (sym, new_sym) ->
+      let bty = Option.get @@ Pmap.lookup sym bty_env in
+      (* let bty = BTy_storable in *)
+      Pattern ([], CaseBase (Some new_sym, bty))) matched in
+  if List.is_empty binders then
+    (matched, pat)
+  else if is_unit_pat pat then
+    (matched, Pattern ([], CaseCtor (Ctuple, binders)))
+  else
+    (matched, Pattern ([], CaseCtor (Ctuple, binders @ [pat])))
+
+(*
+type 'a nested =
+  | Base of 'a
+  | Tuple of 'a nested list
+
+let rec nested_pat bty_env to_bind pat =
+  match to_bind, pat with
+  | Base to_bind, _ -> [extend_pat bty_env to_bind pat]
+  | Tuple nested, Pattern ([], CaseCtor (Ctuple, pat)) ->
+    List.concat @@ List.map2 (nested_pat bty_env) nested pat
+  | _, _ -> assert false
+
+let extend_pat bty_env to_bind pat =
+  let pats = nested_pat bty_env to_bind pat in
+  let (matched, pat) = List.fold_right (fun (m, p) (ms, ps) -> (m @ ms, p :: ps)) pats ([], []) in
+  (matched, Pattern ([], CaseCtor (Ctuple, pat)))
+
+let rec union_nested = function
+  | Base to_bind -> to_bind
+  | Tuple nested ->
+    List.fold_left Pset.union sym_empty_set (List.map union_nested nested)
+*)
+
+let extend_pe pe env written =
+  let pes = Pset.elements written |> List.map (fun sym -> Option.get @@ Pmap.lookup sym env) in
+  if List.is_empty pes then
+    Epure pe
+  else if is_unit_pe pe then
+    Epure (Pexpr ([], (), PEctor (Ctuple, pes)))
+  else
+    Epure (Pexpr ([], (), PEctor (Ctuple, pes @ [pe])))
+
+let update_env env matched =
+  List.fold_left (fun env (old, new_) ->
+      let pe = Pexpr ([], (), PEsym new_) in
+      Pmap.add old pe env) env matched
+
+let transform_fun syms e =
+  let cbt_to_bty x = BTy_loaded (Option.get @@ Core_aux.core_object_type_of_ctype x) in
+  let bty_env = ref sym_empty_map in
+  let rec transform val_env written (Expr (e_annot, e_)) =
+    match e_ with
+    | Esave ((label_sym, cbt), params, body) ->
+      let is_return =
+        List.exists (function Annot.Alabel LAreturn -> true | _ -> false) e_annot in
+      if is_return then
+        (Expr (e_annot, Esave ((label_sym, cbt), params, body)), sym_empty_set)
+      else
+        let sub_arg (sym, (info, arg)) =
+          match Pmap.lookup sym val_env with
+          | None -> (sym, (info, arg))
+          | Some arg -> (sym, (info, arg)) in
+        let (body, to_bind) = transform val_env written body in
+        (Expr (e_annot, Esave ((label_sym, cbt), List.map sub_arg params, body)), to_bind)
+
+    | Esseq (
+        Pattern (_, CaseBase (Some sym, _)),
+        Expr (e_annot, Eaction (Paction (_, Action (_, _, Create (_, ct, _))))),
+        body
+      ) ->
+        let val_env =
+          if Pset.mem sym syms then
+            let ct = get_ct ct in
+            let peval = Pexpr ([], (), PEval (Vloaded (LVunspecified ct))) in
+            bty_env := Pmap.add sym (cbt_to_bty ct) !bty_env;
+            Pmap.add sym peval val_env
+          else
+            val_env in
+        transform val_env written body
+
+    | Eaction (Paction (_, Action (_, _, act_))) ->
+        begin match act_ with
+        | Store0 (_, _, addr_pe, val_pe, _)
+          when pesym_mem addr_pe syms ->
+            let pe = Pexpr ([], (), PEctor (Ctuple, [val_pe])) in
+            assert (Pmap.mem (get_sym addr_pe) !bty_env && Pmap.mem (get_sym addr_pe) val_env);
+            let to_bind = (Pset.singleton Symbol.compare_sym (get_sym addr_pe)) in
+            (Expr (e_annot, Epure pe), to_bind)
+
+        | Load0 (_, addr_pe, _)
+          when pesym_mem addr_pe syms ->
+            let pexpr = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
+            (Expr (e_annot, Epure pexpr), sym_empty_set)
+
+        | SeqRMW (_, _, addr_pe, x_sym, new_pe)
+          when pesym_mem addr_pe syms ->
+            let prev_pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
+            let new_pe = Core_aux.unsafe_subst_sym_pexpr x_sym prev_pe new_pe in
+            assert (Pmap.mem (get_sym addr_pe) !bty_env && Pmap.mem (get_sym addr_pe) val_env);
+            let to_bind = (Pset.singleton Symbol.compare_sym (get_sym addr_pe)) in
+            (Expr (e_annot, Epure new_pe), to_bind)
+
+        | Kill (_, addr_pe)
+          when pesym_mem addr_pe syms ->
+           (Expr (e_annot, Epure (Pexpr ([], (), PEval Vunit))), sym_empty_set)
+
+        | _ ->
+            (Expr (e_annot, e_), sym_empty_set)
+        end
+
+    | Epure pe ->
+        (Expr (e_annot, extend_pe pe val_env written), written)
+
+    | Elet (pat, pe, e) ->
+        let (e, to_bind) = transform val_env written e in
+        (Expr (e_annot, Elet (pat, pe, e)), to_bind)
+
+    | Ecase (pe, arms) ->
+        (* TODO *)
+        (Expr (e_annot, e_), sym_empty_set)
+
+    | Eunseq es | Epar es ->
+        (* TODO *)
+        (Expr (e_annot, e_), sym_empty_set)
+
+    | Eif (pe, e1, e2) ->
+        let (e1, to_bind1) = transform val_env written e1 in
+        let unit_pat = Pattern ([], CaseBase (None, BTy_unit)) in
+        let (matched1, pat1) = extend_pat !bty_env to_bind1 unit_pat in
+        let env1 = update_env val_env matched1 in
+        let (e2, to_bind2) = transform val_env written e2 in
+        let (matched2, pat2) = extend_pat !bty_env to_bind2 unit_pat in
+        let env2 = update_env val_env matched2 in
+        let all_bound = Pset.union to_bind1 to_bind2 in
+        let pe1 = extend_pe (Pexpr ([], (), PEval Vunit)) env1 all_bound in
+        let pe2 = extend_pe (Pexpr ([], (), PEval Vunit)) env2 all_bound in
+        let wrapped1 = Expr ([], Esseq (pat1, e1, Expr ([], pe1))) in
+        let wrapped2 = Expr ([], Esseq (pat2, e2, Expr ([], pe2))) in
+        (Expr (e_annot, Eif (pe, wrapped1, wrapped2)), all_bound)
+
+    | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _
+    | End _ (* always true/false *) ->
+        (Expr (e_annot, e_), sym_empty_set)
+
+    | Erun (a, label_sym, args) ->
+      let replace = function
+        | Pexpr ([], (), PEsym sym) as arg ->
+            (match Pmap.lookup sym val_env with
+              | None -> arg
+              | Some pe -> pe)
+        | arg -> arg in
+      (Expr (e_annot, Erun (a, label_sym, List.map replace args)), sym_empty_set)
+
+    | Ewseq (pat, e1, e2) ->
+       let (e1, to_bind) = transform val_env written e1 in
+       let (matched, pat) = extend_pat !bty_env to_bind pat in
+       let written = Pset.union to_bind written in
+       let val_env = update_env val_env matched in
+       let (e2, to_bind) = transform val_env written e2 in
+       (Expr (e_annot, Ewseq (pat, e1, e2)), to_bind)
+
+    | Esseq (pat, e1, e2) ->
+       let (e1, to_bind) = transform val_env written e1 in
+       let (matched, pat) = extend_pat !bty_env to_bind pat in
+       let written = Pset.union to_bind written in
+       let val_env = update_env val_env matched in
+       let (e2, to_bind) = transform val_env written e2 in
+       (Expr (e_annot, Esseq (pat, e1, e2)), to_bind)
+
+    | Ebound e ->
+        let (e, to_bind) = transform val_env written e in
+        (Expr (e_annot, Ebound e), to_bind)
+
+    | Eannot (a, e) ->
+        let (e, to_bind) = transform val_env written e in
+        (Expr (e_annot, Eannot (a, e)), to_bind)
+
+  in
+  transform sym_empty_map sym_empty_set e
+
+
 let transform_file file =
   let also_fun_args = match file.calling_convention with
     | Inner_arg_callconv -> true
@@ -494,6 +705,7 @@ let transform_file file =
     match decl with
     | Proc (loc, env_marker, ret_bt, args, body, _) ->
         let promotable = find_promotable ~also_fun_args f_sym body in
+        let (body, _) = transform_fun (Pset.from_list Symbol.compare_sym promotable) body in
         Proc (loc, env_marker, ret_bt, args, body, promotable)
     | Fun _ | ProcDecl _ | BuiltinDecl _ ->
         decl) file.funs in

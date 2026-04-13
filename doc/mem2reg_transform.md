@@ -1,53 +1,41 @@
 Let's iterate on a plan (strictly as per CLAUDE.md) to implement the transform
 step for mem2reg.
 
-Inputs: 
-- expression to transform
-- set/list of promotable variables (from the analysis)
-- memo table for the saves
-- environment mapping symbols to symbol options
-- set of symbols which have been written so far
+Inputs:
+- sym => loaded t (unspec/spec pexpr) env
+- set of syms written so far
+- expression
 
 Outputs:
 - transformed expressions
-- set of symbols which have been written (for pattern matching)
+- sym set to be bound
 
-First thing it needs to do is to combine and return both seq_memo from the
-analysis to construct a map from label_sym to (param_sym * bool) list. The
-boolean represents whether the parameter is promoted or not, based on whether
-use_memo has has a Use_other for that parameter in its cached result. The
-boolean should be true if it has the entry and no Use_other, and false
-otherwise.
 
-Memory actions will be transformed as follows. I use let* to mean either
-Ewseq, or Esseq.
+[load(p)] =>
+    (env(p), None, so_far)
 
-let* x: pointer = create(..) in e2 ==>
-    e2'                            
-    where env'(x) = None if x is promotable
-    and e2' is the result of recursing on e2
+[store(p, v)] =>
+    (v, Some { p }, so_far u { p } )
 
-let* v: ty = load(x) in e2 ==>
-    let* v: ty = Specified(pexpr) in e2'
-    where env(x) = Some (pexpr),
-    and e2' is the result from recursing
+[kill(p)] => (Unit, None, so_far)
 
-let* _: unit = store(x, pexpr) in e2 ==>
-    e2'
-    env(x) exists and is updated so that env'(x) = Some pexpr
-    and x is added to the set of variables which is written
-    and e2' is the result from recursing,
+[let* x = create() in e] =>
+    e
 
-let* _: unit = kill(x) in e2 ==>
-    e2'
-    env(x) is removed
-    x is removed from the set of variables which is written
-    and e2' is the result from recursing
+[pure(pe)] =>
+  (pure((pe, env(x1), ..) ), Some so_far, 
+  where x1 .. in so_far
 
-Handle seqrmw based on the above (remember that it's binds a variable mentioned
-in its updated expression).
-
-For the expressions:
+[let* pat = e1 in e2] =>
+  let (e1', set_opt, so_far) = rec e1 in
+  match set_opt with
+  | None -> let (e2', set_opt, so_far) = rec e2 in (let* pat = e1 in e2, set_opt, so_far)
+  | Some vars ->
+      let splatted = splat set_opt in
+      let update_env = update env set_opt splatted in
+      let pat1 = Option.fold set_opt ~none:pat ~some:(fun set -> splat set, pat) in
+      let (e2', set_opt, so_far) = rec e2 update_env so_far in
+      ([let* pat1 = e1' in e2', set_opt, so_far)
 
 pure(pe) ==>
     pure((pe,pe1,..,pen))
