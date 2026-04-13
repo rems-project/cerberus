@@ -501,13 +501,10 @@ let is_unit_pe (Pexpr (_, _, pe_)) =
   | PEval Vunit -> true
   | _ -> false
 
+let sym_set_to_string sym_set =
+    "{" ^ (String.concat ", " @@ List.map Pp_symbol.to_string @@ Pset.elements sym_set) ^ "}"
+
 let extend_pat bty_env to_bind pat =
-  Cerb_debug.print_debug 3 [] (fun () ->
-      let to_bind = Pset.elements to_bind |> List.map Pp_symbol.to_string in
-      let dom = Pmap.domain bty_env |> Pset.elements |> List.map Pp_symbol.to_string in
-      "[mem2reg-bind] " ^ (String.concat "," to_bind) ^ "\n" ^
-      "[mem2reg-domn] " ^ (String.concat "," dom)
-  );
   let new_sym sym =
     let str = Pp_symbol.to_string sym in
     let parts = String.split_on_char '_' str in
@@ -528,11 +525,16 @@ type 'a nested =
   | Base of 'a
   | Tuple of 'a nested list
 
+let rec _nested_to_string = function
+  | Base sym_set -> sym_set_to_string sym_set
+  | Tuple nested ->
+    "(" ^ (String.concat " * " @@ List.map _nested_to_string nested) ^ ")"
+
 let rec nested_pat bty_env to_bind pat =
   match to_bind, pat with
   | Base to_bind, _ -> extend_pat bty_env to_bind pat
   | Tuple nested, Pattern (annot, CaseCtor (Ctuple, pat)) ->
-    let (ms, pats) =
+    let (ms, pat) =
       List.map2 (nested_pat bty_env) nested pat |> List.split in
     (List.concat ms, Pattern (annot, CaseCtor (Ctuple, pat)))
   | Tuple nested, Pattern (annot, CaseBase (None, BTy_tuple btys))  ->
@@ -582,9 +584,9 @@ let transform_fun syms e =
             let val_env = Pmap.add sym self val_env in
             ((sym, ((bty, opt), arg)) :: params, val_env) in
         let (params, val_env) = List.fold_right sub_arg params ([], val_env) in
-        let (body, to_bind) = transform val_env sym_empty_set body in
+        let (body, to_bind) = transform val_env written body in
         (* TODO correct cbt based on to_bind? *)
-        (Expr (e_annot, Esave ((label_sym, BTy_boolean), params, body)), to_bind)
+        (Expr (e_annot, Esave ((label_sym, cbt), params, body)), to_bind)
 
     | Esseq (
         (Pattern (_, CaseBase (Some sym, _)) as pat),
@@ -600,7 +602,7 @@ let transform_fun syms e =
           else
             let (body, to_bind) = transform val_env written body in
             (Expr (e_annot, Esseq (pat, e1, body)), to_bind)
-            
+
     | Eaction (Paction (_, Action (_, _, act_))) ->
         begin match act_ with
         | Store0 (_, _, addr_pe, val_pe, _)
@@ -619,6 +621,7 @@ let transform_fun syms e =
           when pesym_mem addr_pe syms ->
             let prev_pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
             let pe =
+              (* TODO use PElet to avoid double-eval of val_pe *)
               let val_pe = Core_aux.unsafe_subst_sym_pexpr x_sym prev_pe new_pe in
               let old_pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
               let fwd_pe = if fwd then val_pe else old_pe in
@@ -642,38 +645,54 @@ let transform_fun syms e =
         let (e, to_bind) = transform val_env written e in
         (Expr (e_annot, Elet (pat, pe, e)), to_bind)
 
-    | Ecase (pe, arms) ->
-        (* TODO *)
-        (Expr (e_annot, e_), Base sym_empty_set)
-
     | Eunseq es ->
-        (* written = sym_empty_set, is that right? *)
-        let (es, to_binds) = List.split @@ List.map (transform val_env sym_empty_set) es in
+        assert (Pset.is_empty written);
+        let (es, to_binds) = List.split @@ List.map (transform val_env written) es in
         (Expr (e_annot, Eunseq es), Tuple to_binds)
 
     | Epar es ->
-      (* TODO *)
-      (Expr (e_annot, Epar es), Base sym_empty_set)
+        (* TODO *)
+        (Expr (e_annot, Epar es), Base sym_empty_set)
 
     | Eif (pe, e1, e2) ->
-        let (e1, to_bind1) = transform val_env sym_empty_set e1 in
-        let unit_pat = Pattern ([], CaseBase (None, BTy_unit)) in
-        let (e2, to_bind2) = transform val_env sym_empty_set e2 in
+        let (e1, to_bind1) = transform val_env written e1 in
+        let (e2, to_bind2) = transform val_env written e2 in
         let all_bound = union_nested (Tuple [to_bind1; to_bind2]) in
         if Pset.is_empty all_bound then
           (Expr (e_annot, Eif (pe, e1, e2)), Base all_bound)
         else
+          let unit_pat = Pattern ([], CaseBase (None, BTy_unit)) in
+          let unit_pe = Pexpr ([], (), PEval Vunit) in
           let wrapped1 =
               let (matched1, pat1) = extend_pat !bty_env to_bind1 unit_pat in
               let env1 = update_env val_env matched1 in
-              let pe1 = extend_pe (Pexpr ([], (), PEval Vunit)) env1 all_bound in
+              let pe1 = extend_pe unit_pe env1 all_bound in
               Expr ([], Esseq (pat1, e1, Expr ([], pe1))) in
           let wrapped2 =
             let (matched2, pat2) = extend_pat !bty_env to_bind2 unit_pat in
             let env2 = update_env val_env matched2 in
-            let pe2 = extend_pe (Pexpr ([], (), PEval Vunit)) env2 all_bound in
+            let pe2 = extend_pe unit_pe env2 all_bound in
             Expr ([], Esseq (pat2, e2, Expr ([], pe2))) in
           (Expr (e_annot, Eif (pe, wrapped1, wrapped2)), Base all_bound)
+
+    | Ecase (pe, arms) ->
+        let arms = List.map (fun (pat, e) ->
+          (pat, transform val_env written e)) arms in
+        let pats, es_binds = List.split arms in
+        let es, binds = List.split es_binds in
+        let all_bound = union_nested (Tuple binds) in
+        if Pset.is_empty all_bound then
+            (Expr (e_annot, Ecase (pe, List.combine pats es)), Base all_bound)
+        else
+          let unit_pat = Pattern ([], CaseBase (None, BTy_unit)) in
+          let unit_pe = Pexpr ([], (), PEval Vunit) in
+          let wrappeds =
+            List.map (fun (e, to_bind) ->
+                let (matched, pat) = extend_pat !bty_env to_bind unit_pat in
+                let env = update_env val_env matched in
+                let pe = extend_pe unit_pe env all_bound in
+                Expr ([], Esseq (pat, e, Expr ([], pe)))) es_binds in
+          (Expr (e_annot, Ecase (pe, List.combine pats wrappeds)), Base all_bound)
 
     | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _
     | End _ (* always true/false *) ->
@@ -725,8 +744,8 @@ let transform_file file =
     match decl with
     | Proc (loc, env_marker, ret_bt, args, body, _) ->
         let promotable = find_promotable ~also_fun_args f_sym body in
-        (* let (body, _) = transform_fun (Pset.from_list Symbol.compare_sym promotable) body in *)
-        let (body, _) = transform_fun sym_empty_set body in
+        let (body, _) = transform_fun (Pset.from_list Symbol.compare_sym promotable) body in
+        (* let (body, _) = transform_fun sym_empty_set body in *)
         Proc (loc, env_marker, ret_bt, args, body, promotable)
     | Fun _ | ProcDecl _ | BuiltinDecl _ ->
         decl) file.funs in
