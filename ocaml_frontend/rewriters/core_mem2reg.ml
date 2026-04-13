@@ -525,28 +525,25 @@ let extend_pat bty_env to_bind pat =
   else
     (matched, Pattern ([], CaseCtor (Ctuple, binders @ [pat])))
 
-(*
 type 'a nested =
   | Base of 'a
   | Tuple of 'a nested list
 
 let rec nested_pat bty_env to_bind pat =
   match to_bind, pat with
-  | Base to_bind, _ -> [extend_pat bty_env to_bind pat]
+  | Base to_bind, _ -> extend_pat bty_env to_bind pat
   | Tuple nested, Pattern ([], CaseCtor (Ctuple, pat)) ->
-    List.concat @@ List.map2 (nested_pat bty_env) nested pat
+    let (ms, pats) =
+      List.map2 (nested_pat bty_env) nested pat |> List.split in
+    (List.concat ms, Pattern ([], CaseCtor (Ctuple, pat)))
   | _, _ -> assert false
 
-let extend_pat bty_env to_bind pat =
-  let pats = nested_pat bty_env to_bind pat in
-  let (matched, pat) = List.fold_right (fun (m, p) (ms, ps) -> (m @ ms, p :: ps)) pats ([], []) in
-  (matched, Pattern ([], CaseCtor (Ctuple, pat)))
+let extend_pat = nested_pat
 
 let rec union_nested = function
   | Base to_bind -> to_bind
   | Tuple nested ->
     List.fold_left Pset.union sym_empty_set (List.map union_nested nested)
-*)
 
 let extend_pe pe env written =
   let pes = Pset.elements written |> List.map (fun sym -> Option.get @@ Pmap.lookup sym env) in
@@ -571,7 +568,7 @@ let transform_fun syms e =
       let is_return =
         List.exists (function Annot.Alabel LAreturn -> true | _ -> false) e_annot in
       if is_return then
-        (Expr (e_annot, Esave ((label_sym, cbt), params, body)), sym_empty_set)
+        (Expr (e_annot, Esave ((label_sym, cbt), params, body)), Base sym_empty_set)
       else
         let sub_arg (sym, (info, arg)) =
           match Pmap.lookup sym val_env with
@@ -601,32 +598,32 @@ let transform_fun syms e =
           when pesym_mem addr_pe syms ->
             let pe = Pexpr ([], (), PEctor (Ctuple, [val_pe])) in
             assert (Pmap.mem (get_sym addr_pe) !bty_env && Pmap.mem (get_sym addr_pe) val_env);
-            let to_bind = (Pset.singleton Symbol.compare_sym (get_sym addr_pe)) in
+            let to_bind = Base (Pset.singleton Symbol.compare_sym (get_sym addr_pe)) in
             (Expr (e_annot, Epure pe), to_bind)
 
         | Load0 (_, addr_pe, _)
           when pesym_mem addr_pe syms ->
             let pexpr = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
-            (Expr (e_annot, Epure pexpr), sym_empty_set)
+            (Expr (e_annot, Epure pexpr), Base sym_empty_set)
 
         | SeqRMW (_, _, addr_pe, x_sym, new_pe)
           when pesym_mem addr_pe syms ->
             let prev_pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
             let new_pe = Core_aux.unsafe_subst_sym_pexpr x_sym prev_pe new_pe in
             assert (Pmap.mem (get_sym addr_pe) !bty_env && Pmap.mem (get_sym addr_pe) val_env);
-            let to_bind = (Pset.singleton Symbol.compare_sym (get_sym addr_pe)) in
+            let to_bind = Base (Pset.singleton Symbol.compare_sym (get_sym addr_pe)) in
             (Expr (e_annot, Epure new_pe), to_bind)
 
         | Kill (_, addr_pe)
           when pesym_mem addr_pe syms ->
-           (Expr (e_annot, Epure (Pexpr ([], (), PEval Vunit))), sym_empty_set)
+           (Expr (e_annot, Epure (Pexpr ([], (), PEval Vunit))), Base sym_empty_set)
 
         | _ ->
-            (Expr (e_annot, e_), sym_empty_set)
+            (Expr (e_annot, e_), Base sym_empty_set)
         end
 
     | Epure pe ->
-        (Expr (e_annot, extend_pe pe val_env written), written)
+        (Expr (e_annot, extend_pe pe val_env written), Base written)
 
     | Elet (pat, pe, e) ->
         let (e, to_bind) = transform val_env written e in
@@ -634,11 +631,11 @@ let transform_fun syms e =
 
     | Ecase (pe, arms) ->
         (* TODO *)
-        (Expr (e_annot, e_), sym_empty_set)
+        (Expr (e_annot, e_), Base sym_empty_set)
 
     | Eunseq es | Epar es ->
         (* TODO *)
-        (Expr (e_annot, e_), sym_empty_set)
+        (Expr (e_annot, e_), Base sym_empty_set)
 
     | Eif (pe, e1, e2) ->
         let (e1, to_bind1) = transform val_env written e1 in
@@ -648,16 +645,16 @@ let transform_fun syms e =
         let (e2, to_bind2) = transform val_env written e2 in
         let (matched2, pat2) = extend_pat !bty_env to_bind2 unit_pat in
         let env2 = update_env val_env matched2 in
-        let all_bound = Pset.union to_bind1 to_bind2 in
+        let all_bound = union_nested (Tuple [to_bind1; to_bind2]) in
         let pe1 = extend_pe (Pexpr ([], (), PEval Vunit)) env1 all_bound in
         let pe2 = extend_pe (Pexpr ([], (), PEval Vunit)) env2 all_bound in
         let wrapped1 = Expr ([], Esseq (pat1, e1, Expr ([], pe1))) in
         let wrapped2 = Expr ([], Esseq (pat2, e2, Expr ([], pe2))) in
-        (Expr (e_annot, Eif (pe, wrapped1, wrapped2)), all_bound)
+        (Expr (e_annot, Eif (pe, wrapped1, wrapped2)), Base all_bound)
 
     | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _
     | End _ (* always true/false *) ->
-        (Expr (e_annot, e_), sym_empty_set)
+        (Expr (e_annot, e_), Base sym_empty_set)
 
     | Erun (a, label_sym, args) ->
       let replace = function
@@ -666,12 +663,12 @@ let transform_fun syms e =
               | None -> arg
               | Some pe -> pe)
         | arg -> arg in
-      (Expr (e_annot, Erun (a, label_sym, List.map replace args)), sym_empty_set)
+      (Expr (e_annot, Erun (a, label_sym, List.map replace args)), Base sym_empty_set)
 
     | Ewseq (pat, e1, e2) ->
        let (e1, to_bind) = transform val_env written e1 in
        let (matched, pat) = extend_pat !bty_env to_bind pat in
-       let written = Pset.union to_bind written in
+       let written = Pset.union (union_nested to_bind) written in
        let val_env = update_env val_env matched in
        let (e2, to_bind) = transform val_env written e2 in
        (Expr (e_annot, Ewseq (pat, e1, e2)), to_bind)
@@ -679,7 +676,7 @@ let transform_fun syms e =
     | Esseq (pat, e1, e2) ->
        let (e1, to_bind) = transform val_env written e1 in
        let (matched, pat) = extend_pat !bty_env to_bind pat in
-       let written = Pset.union to_bind written in
+       let written = Pset.union (union_nested to_bind) written in
        let val_env = update_env val_env matched in
        let (e2, to_bind) = transform val_env written e2 in
        (Expr (e_annot, Esseq (pat, e1, e2)), to_bind)
