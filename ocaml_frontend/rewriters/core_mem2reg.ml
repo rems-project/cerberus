@@ -495,6 +495,10 @@ let get_ct (Pexpr (_, _, e_)) =
   | PEval (Vctype ct) -> ct
   | _ -> assert false
 
+let is_unit_bty = function
+  | BTy_unit -> true
+  | _ -> false
+
 let is_unit_pe (Pexpr (_, _, pe_)) =
   match pe_ with
   | PEval Vunit -> true
@@ -516,7 +520,7 @@ type extension = {
 type delta_pat =
   | Extended of extension option
   | Tuple of delta_pat list
- 
+
 let rec update_pat pat delta =
   match delta with
   | Extended None -> ([], pat)
@@ -571,35 +575,36 @@ let transform_fun bty syms e =
   let rec transform bty val_env written (Expr (e_annot, e_)) =
     match e_ with
     | Esave ((label_sym, cbt), params, body) ->
-      let is_return =
-        List.exists (function Annot.Alabel LAreturn -> true | _ -> false) e_annot in
-      if is_return then
-        (Expr (e_annot, Esave ((label_sym, cbt), params, body)), existing)
-      else
-        let sub_arg (sym, ((_, opt) as info, arg)) (params, val_env) =
-          match Pmap.lookup sym val_env with
-          | None -> ((sym, (info, arg)) :: params, val_env)
-          | Some arg ->
-            let bty = Option.get @@ Pmap.lookup sym !bty_env in
-            let self = Pexpr ([], (), PEsym sym) in
-            let val_env = Pmap.add sym self val_env in
-            ((sym, ((bty, opt), arg)) :: params, val_env) in
-        let (params, val_env) = List.fold_right sub_arg params ([], val_env) in
-        let param_set = sym_set_of_list (List.map fst params) in
-        assert (Pset.subset written param_set);
-        (* It's important to ship out all promoted params!
-	   `-Esseq
-	     |-Esave <line:4:2, line:10:3> __cerb_continue0{506}: unit
-	     | `-Epure <line:4:2, line:10:3>
-	     |   `-PEval
-	     |     `-Vunit
-	     `-Epure
-	       `-PEctor Tuple
-	         |-PEsym ret{572} -- out of scope after a run!
-	         `-PEsym n{573} *)
-        let (body, delta) = transform bty val_env param_set body in
-        (* TODO correct cbt based on delta? *)
-        (Expr (e_annot, Esave ((label_sym, cbt), params, body)), delta)
+        let is_return =
+          List.exists (function Annot.Alabel LAreturn -> true | _ -> false) e_annot in
+        if is_return then
+          (Expr (e_annot, Esave ((label_sym, cbt), params, body)), existing)
+        else
+          let sub_arg (sym, ((_, opt) as info, arg)) (params, val_env) =
+            match Pmap.lookup sym val_env with
+            | None -> ((sym, (info, arg)) :: params, val_env)
+            | Some arg ->
+              let bty = Option.get @@ Pmap.lookup sym !bty_env in
+              let self = Pexpr ([], (), PEsym sym) in
+              let val_env = Pmap.add sym self val_env in
+              ((sym, ((bty, opt), arg)) :: params, val_env) in
+          let (params, val_env) = List.fold_right sub_arg params ([], val_env) in
+          let param_set = sym_set_of_list (List.map fst params) in
+          assert (Pset.subset written param_set);
+          (* It's important to ship out all promoted params!
+             `-Esseq
+               |-Esave <line:4:2, line:10:3> __cerb_continue0{506}: unit
+               | `-Epure <line:4:2, line:10:3>
+               |   `-PEval
+               |     `-Vunit
+               `-Epure
+                 `-PEctor Tuple
+                   |-PEsym ret{572} -- out of scope after a run!
+                   `-PEsym n{573} *)
+          let (body, delta) = transform bty val_env param_set body in
+          (* cbt annotation seems to be unused for type-checking, so not
+             worth computing a new one based on delta *)
+          (Expr (e_annot, Esave ((label_sym, cbt), params, body)), delta)
 
     | Esseq (
         (Pattern (_, CaseBase (Some sym, _)) as pat),
@@ -635,7 +640,7 @@ let transform_fun bty syms e =
 
         | SeqRMW (fwd, _, addr_pe, x_sym, new_pe)
           when pesym_mem addr_pe syms ->
-            let sym = get_sym addr_pe in 
+            let sym = get_sym addr_pe in
             assert (Pmap.mem sym !bty_env && Pmap.mem sym val_env);
             let prev_pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
             let written = Pset.add sym written in
@@ -653,8 +658,14 @@ let transform_fun bty syms e =
             (Expr (e_annot, Epure pe), delta)
 
         | _ ->
-            assert (Pset.is_empty written);
-            (Expr (e_annot, e_), existing)
+            if Pset.is_empty written then
+              (Expr (e_annot, e_), existing)
+            else
+              let sym = Symbol.fresh_pretty "act" in
+              let pe = Pexpr ([], (), if is_unit_bty bty then (PEval Vunit) else (PEsym sym)) in
+              let pat = Pattern ([], CaseBase (Some sym, bty)) in
+              let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
+              (Expr ([], Ewseq (pat, Expr (e_annot, e_), Expr ([], Epure pe))), delta)
         end
 
     | Epure pe ->
@@ -668,8 +679,9 @@ let transform_fun bty syms e =
     | Eunseq es ->
         assert (Pset.is_empty written);
         begin match bty with
-        | BTy_tuple btys -> 
-            let (es, deltas) = List.split @@ List.map2 (fun bty e -> transform bty val_env written e) btys es in
+        | BTy_tuple btys ->
+            let (es, deltas) = List.split @@ List.map2 (fun bty e ->
+                transform bty val_env written e) btys es in
             (Expr (e_annot, Eunseq es), Tuple deltas)
         | _ -> assert false
         end
@@ -690,16 +702,17 @@ let transform_fun bty syms e =
           ((res_sym, val_env, pat, e), written)) [e1; e2] in
         let written = List.fold_left Pset.union written inner_w in
         if Pset.is_empty written then
-          (Expr (e_annot, Eif (pe, e1, e2)), existing)
+          let es = List.map (fun (_, _, _, e) -> e) wrap_info in
+          (Expr (e_annot, Eif (pe, List.nth es 0, List.nth es 1)), existing)
         else
           let (es, deltas) = List.split @@ List.map (fun (res_sym, val_env, pat, e) ->
-              let pe = Pexpr ([], (), PEsym res_sym) in
+              let pe = Pexpr ([], (), if is_unit_bty bty then (PEval Vunit) else (PEsym res_sym)) in
               let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
               (Expr ([], Ewseq (pat, e, Expr ([], Epure pe))), delta)) wrap_info in
           (Expr (e_annot, Eif (pe, List.nth es 0, List.nth es 1)), List.hd deltas)
 
     | Ecase (pe, arms) ->
-        let (pats, es_deltas) = List.split @@ List.map (fun (pat, e) -> 
+        let (pats, es_deltas) = List.split @@ List.map (fun (pat, e) ->
           (pat, transform bty val_env sym_empty_set e)) arms in
         let (wrap_info, inner_w) = List.split @@ List.map (fun (e, delta) ->
           let res_sym = Symbol.fresh_pretty "case" in
@@ -710,10 +723,11 @@ let transform_fun bty syms e =
           ((res_sym, val_env, pat, e), written)) es_deltas in
         let written = List.fold_left Pset.union written inner_w in
         if Pset.is_empty written then
-          (Expr (e_annot, Ecase (pe, arms)), existing)
+          let es = List.map (fun (_, _, _, e) -> e) wrap_info in
+          (Expr (e_annot, Ecase (pe, List.combine pats es)), existing)
         else
           let (es, deltas) = List.split @@ List.map (fun (res_sym, val_env, pat, e) ->
-              let pe = Pexpr ([], (), PEsym res_sym) in
+              let pe = Pexpr ([], (), if is_unit_bty bty then (PEval Vunit) else (PEsym res_sym)) in
               let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
               (Expr ([], Ewseq (pat, e, Expr ([], Epure pe))), delta)) wrap_info in
           (Expr (e_annot, Ecase (pe, List.combine pats es)), List.hd deltas)
@@ -724,13 +738,13 @@ let transform_fun bty syms e =
         (Expr (e_annot, e_), existing)
 
     | Erun (a, label_sym, args) ->
-      let replace = function
-        | Pexpr ([], (), PEsym sym) as arg ->
-            (match Pmap.lookup sym val_env with
-              | None -> arg
-              | Some pe -> pe)
-        | arg -> arg in
-      (Expr (e_annot, Erun (a, label_sym, List.map replace args)), existing)
+        let replace = function
+          | Pexpr ([], (), PEsym sym) as arg ->
+              (match Pmap.lookup sym val_env with
+                | None -> arg
+                | Some pe -> pe)
+          | arg -> arg in
+        (Expr (e_annot, Erun (a, label_sym, List.map replace args)), existing)
 
     | Ewseq (pat, e1, e2) ->
        let (e1, delta) = transform (bty_of_pat pat) val_env sym_empty_set e1 in
@@ -770,7 +784,6 @@ let transform_file file =
     | Proc (loc, env_marker, ret_bt, args, body, _) ->
         let promotable = find_promotable ~also_fun_args f_sym body in
         let (body, _) = transform_fun ret_bt (sym_set_of_list promotable) body in
-        (* let (body, _) = transform_fun sym_empty_set body in *)
         Proc (loc, env_marker, ret_bt, args, body, promotable)
     | Fun _ | ProcDecl _ | BuiltinDecl _ ->
         decl) file.funs in
