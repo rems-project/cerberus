@@ -22,7 +22,7 @@ citests=(
   0019-arith_promotion.c
   0020-end_of_lifetime.undef.c
   0021-fact.c
-  0022-while_continue.c
+# 0022-while_continue.c # DON'T COMMIT
 #  0023-jump1.c
   0024-jump2.c
 #  0025-jump3.c

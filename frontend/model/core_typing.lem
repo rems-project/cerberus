@@ -180,10 +180,13 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
             error "typecheck_pattern: Ccons: wrong number of arguments"
 
         | (Ctuple, BTy_tuple bTys, _) ->
-            List.unzip <$> E.mapM (fun (bTy, pat) ->
-              typecheck_pattern bTy pat
-            ) (List.zip bTys pats) >>= fun (envs, tpats) ->
-            E.return (env_unions envs, Pattern annots (CaseCtor Ctuple tpats))
+            if List.length bTys <> List.length pats then
+              E.fail loc (MismatchExpected "Ctuple" expected_bTy "tuple")
+            else
+              List.unzip <$> E.mapM (fun (bTy, pat) ->
+                typecheck_pattern bTy pat
+              ) (List.zip bTys pats) >>= fun (envs, tpats) ->
+              E.return (env_unions envs, Pattern annots (CaseCtor Ctuple tpats))
         | (Ctuple, _, _) ->
             E.fail loc (MismatchExpected "Ctuple" expected_bTy "tuple")
 
@@ -873,9 +876,12 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
           | (Ccons, _, _) ->
               E.fail loc (MismatchExpected "Ccons" bTy "list")
           | (Ctuple, BTy_tuple bTys, _) ->
-              E.mapM (fun (bTy, pe) -> typecheck_pexpr tagDefs env bTy pe)
-                (List.zip bTys pes) >>=
-              (fun pes' -> E.return (PEctor Ctuple pes'))
+              if List.length bTys <> List.length pes then
+                E.fail loc (MismatchExpected "Ctuple" bTy "tuple")
+              else
+                E.mapM (fun (bTy, pe) -> typecheck_pexpr tagDefs env bTy pe)
+                  (List.zip bTys pes) >>=
+                (fun pes' -> E.return (PEctor Ctuple pes'))
           | (Ctuple, _, _) ->
               E.fail loc (MismatchExpected "Ctuple" bTy "tuple")
           | (Carray, BTy_object (OTy_array oTy), pes) ->
