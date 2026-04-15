@@ -1,6 +1,6 @@
 #!/bin/bash
 # run-mem2reg-phase1.sh — regression check
-# Verifies that --sw copy_prop,mem2reg does not change output of existing CI tests (0001–0340).
+# Verifies that --sw copy_prop,mem2reg does not change output of existing CI tests.
 
 TESTSDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 cd "$TESTSDIR"
@@ -55,9 +55,6 @@ set_cerberus_exec "cerberus"
 echo "=== Phase 1: regression (--sw mem2reg must not change output of tests 0001–0340) ==="
 
 for file in "${citests[@]}"; do
-  # skip the mem2reg-specific tests — handled in phase 2
-  [[ $file == *mem2reg* ]] && continue
-
   if [[ ! -f ./ci/$file ]]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m"
     fail=$((fail+1))

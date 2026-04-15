@@ -206,33 +206,6 @@ citests=(
   0338-cast-pointer-to-_Bool.c
   0339-invalid-string-character.error.c
   0340-shl_promotion_to_signed.undef.c
-  0341-mem2reg_simple.c
-  0342-mem2reg_multi.c
-  0343-mem2reg_if.c
-  0344-mem2reg_if_one_branch.c
-  0345-mem2reg_loop.c
-  0346-mem2reg_no_promote_address.c
-  0347-mem2reg_promote_arg.c
-  0348-mem2reg_promote_loop_write.c
-  0349-mem2reg_struct.c
-  0350-mem2reg_mixed.c
-  0351-mem2reg_unseq_uninit.undef.c
-  0352-mem2reg_unseq_init.undef.c
-  0353-mem2reg_unseq_reads.c
-  0354-mem2reg_seqrmw_post.c
-  0355-mem2reg_seqrmw_pre.c
-  0356-mem2reg_unseq_seqrmw.undef.c
-  0361-mem2reg_loop_read_preinit.c
-  0362-mem2reg_loop_escape.c
-  0363-mem2reg_nested_loops.c
-  0364-mem2reg_loop_uninit_load.undef.c
-  0365-mem2reg_compound_lit.c
-  0366-mem2reg_escaping_ret.c
-  0367-mem2reg_escape_in_label.c
-  0368-mem2reg_nested_save_chain.c
-  0369-mem2reg_first_lifetime_escapes.c
-  0370-mem2reg_second_lifetime_escapes_after_run.undef.c
-  0371-mem2reg_uninit_cn.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
