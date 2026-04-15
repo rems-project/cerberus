@@ -580,17 +580,17 @@ let transform_fun bty syms e =
         if is_return then
           (Expr (e_annot, Esave ((label_sym, cbt), params, body)), existing)
         else
-          let sub_arg (sym, ((_, opt) as info, arg)) (params, val_env) =
+          let sub_arg (sym, ((_, opt) as info, arg)) (promoted, params, val_env) =
             match Pmap.lookup sym val_env with
-            | None -> ((sym, (info, arg)) :: params, val_env)
+            | None -> (promoted, (sym, (info, arg)) :: params, val_env)
             | Some arg ->
-              let bty = Option.get @@ Pmap.lookup sym !bty_env in
-              let self = Pexpr ([], (), PEsym sym) in
-              let val_env = Pmap.add sym self val_env in
-              ((sym, ((bty, opt), arg)) :: params, val_env) in
-          let (params, val_env) = List.fold_right sub_arg params ([], val_env) in
-          let param_set = sym_set_of_list (List.map fst params) in
-          assert (Pset.subset written param_set);
+                let bty = Option.get @@ Pmap.lookup sym !bty_env in
+                let self = Pexpr ([], (), PEsym sym) in
+                let val_env = Pmap.add sym self val_env in
+                (sym :: promoted, (sym, ((bty, opt), arg)) :: params, val_env) in
+          let (promoted, params, val_env) = List.fold_right sub_arg params ([], [], val_env) in
+          let promoted_set = sym_set_of_list promoted in
+          assert (Pset.subset written promoted_set);
           (* It's important to ship out all promoted params!
              `-Esseq
                |-Esave <line:4:2, line:10:3> __cerb_continue0{506}: unit
@@ -601,7 +601,7 @@ let transform_fun bty syms e =
                  `-PEctor Tuple
                    |-PEsym ret{572} -- out of scope after a run!
                    `-PEsym n{573} *)
-          let (body, delta) = transform bty val_env param_set body in
+          let (body, delta) = transform bty val_env promoted_set body in
           (* cbt annotation seems to be unused for type-checking, so not
              worth computing a new one based on delta *)
           (Expr (e_annot, Esave ((label_sym, cbt), params, body)), delta)
