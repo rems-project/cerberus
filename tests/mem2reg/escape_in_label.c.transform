@@ -1,2 +1,57 @@
 return code: 0
+proc main (): eff loaded integer :=
+  let strong (p: loaded pointer) =
+    let strong houdini: pointer =
+      create(Ivalignof('signed int'), 'signed int') in
+    let strong (p: loaded pointer) = pure((Unspecified('void*'))) in
+    store('signed int', houdini, Unspecified('signed int')) ;
+    let strong (p: loaded pointer) =
+      save escape: unit (p: loaded pointer:= p, houdini: pointer:= houdini) in
+        let strong (p: loaded pointer) =
+          bound(
+            let weak (_: unit, _: unit) =
+              unseq(
+                pure(Unit)
+              ,
+                let weak _: unit = pure(Unit) in
+                pure(Unit)
+              ) in
+            let weak (p: loaded pointer) = pure((Specified(houdini))) in
+            pure((p))
+          ) in
+        pure((p)) in
+    let strong a_520: loaded integer =
+      bound(
+        let strong a_516: loaded integer =
+          let weak a_513: loaded pointer =
+            let weak _: unit = pure(Unit) in
+            pure(p) in
+          case a_513 of
+            | Specified(a_514: pointer) =>
+                let weak a_515: boolean = memop(PtrEq, a_514, NULL(void*)) in
+                pure(if a_515 then Specified(1) else Specified(0))
+            | _: loaded pointer =>
+                pure(undef(<<UB_CERB004_unspecified__equality_ptr_vs_NULL>>))
+          end in
+        case a_516 of
+          | Specified(a_517: integer) =>
+              if a_517 = 0 then
+                pure(Unit) ;
+                pure(conv_loaded_int('signed int', Specified(0)))
+              else
+                pure(Unit) ;
+                pure(conv_loaded_int('signed int', Specified(1)))
+          | Unspecified(_: ctype) =>
+              pure(undef(<<UB_CERB004_unspecified__conditional>>))
+        end
+      ) in
+    pure(Unit) ;
+    kill('signed int', houdini) ;
+    run ret_508(conv_loaded_int('signed int', a_520)) ;
+    pure(Unit) ;
+    kill('signed int', houdini) ;
+    pure((p)) in
+  save ret_508: loaded integer (a_521: loaded integer:= Specified(0)) in
+    pure(a_521)
+
 Defined {value: "Specified(0)", stdout: "", stderr: "", blocked: "false"}

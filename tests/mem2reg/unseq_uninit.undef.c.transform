@@ -1,2 +1,34 @@
 return code: 1
+proc main (): eff loaded integer :=
+  let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+  store('signed int', x, Unspecified('signed int')) ;
+  let strong a_515: loaded integer =
+    bound(
+      let weak (a_507: loaded integer, a_508: loaded integer) =
+        unseq(
+          let weak _: unit = pure(Unit) in
+          load('signed int', x)
+        ,
+          let weak (_: unit, _: unit) = unseq(pure(Unit), pure(Unit)) in
+          let weak _: unit =
+            neg(store('signed int', x,
+            conv_loaded_int('signed int', Specified(42)))) in
+          pure(conv_loaded_int('signed int', Specified(42)))
+        ) in
+      pure(
+        case (a_507, a_508) of
+          | (Specified(a_509: integer), Specified(a_510: integer)) =>
+              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_509), __conv_int__('signed int', a_510)))
+          | _: (loaded integer,loaded integer) =>
+              undef(<<UB036_exceptional_condition>>)
+        end
+      )
+    ) in
+  kill('signed int', x) ;
+  run ret_506(conv_loaded_int('signed int', a_515)) ;
+  kill('signed int', x) ;
+  pure(Unit) ;
+  save ret_506: loaded integer (a_516: loaded integer:= Specified(0)) in
+    pure(a_516)
+
 Undefined {ub: "UB036_exceptional_condition", stderr: "", loc: "<3:12--3:24>"}

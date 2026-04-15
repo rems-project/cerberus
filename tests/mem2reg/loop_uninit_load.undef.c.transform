@@ -1,2 +1,67 @@
 return code: 1
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer) =
+    let strong (x: loaded integer) = pure((Unspecified('signed int'))) in
+    let strong (x: loaded integer) =
+      let strong (x: loaded integer) =
+        save do_512: unit (x: loaded integer:= x) in
+          let strong (x: loaded integer) =
+            bound(
+              let weak a_521: loaded integer =
+                let weak _: unit = pure(Unit) in
+                pure(x) in
+              pure(Unit)
+            ) ;
+            pure(Unit) ;
+            pure(Unit) ;
+            let strong (x: loaded integer) =
+              save continue_510: unit (x: loaded integer:= x) in  pure((x)) in
+            pure((x)) in
+          let strong a_514: loaded integer =
+            bound(
+              let weak (a_516: loaded integer, _: unit) =
+                unseq(
+                  let weak _: unit = pure(Unit) in
+                  pure(x)
+                ,
+                  pure(Unit)
+                ) in
+              case (a_516, Specified(0)) of
+                | (Specified(a_518: integer), Specified(_: integer)) =>
+                    pure(
+                      if conv_int('signed int', a_518) >
+                      conv_int('signed int', 0) then
+                        Specified(1)
+                      else
+                        Specified(0)
+                    )
+                | _: (loaded integer,loaded integer) =>
+                    pure(Unspecified('signed int'))
+              end
+            ) in
+          case a_514 of
+            | Specified(a_513: integer) =>
+                let weak case: unit =
+                  if not(a_513 = 0) then run do_512(x) else pure(Unit) in
+                pure((x))
+            | Unspecified(_: ctype) =>
+                let weak case: unit =
+                  pure(undef(<<DUMMY(unspecified AilSdo)>>)) in
+                pure((x))
+          end in
+      let strong (x: loaded integer) =
+        save break_511: unit (x: loaded integer:= x) in  pure((x)) in
+      pure((x)) in
+    let strong a_526: loaded integer =
+      bound(
+        let weak _: unit = pure(Unit) in
+        pure(x)
+      ) in
+    pure(Unit) ;
+    run ret_509(conv_loaded_int('signed int', a_526)) ;
+    pure(Unit) ;
+    pure((x)) in
+  save ret_509: loaded integer (a_527: loaded integer:= Specified(0)) in
+    pure(a_527)
+
 Undefined {ub: "DUMMY(unspecified AilSdo)", stderr: "", loc: "<3:5--3:35>"}

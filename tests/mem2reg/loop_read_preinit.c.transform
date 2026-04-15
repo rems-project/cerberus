@@ -1,2 +1,48 @@
 return code: 0
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer) =
+    let strong (x: loaded integer) =
+      bound(pure(Unit)) ;
+      pure((conv_loaded_int('signed int', Specified(42)))) in
+    let strong (x: loaded integer) =
+      let strong (x: loaded integer) =
+        save do_512: unit (x: loaded integer:= x) in
+          let strong (x: loaded integer) =
+            bound(
+              let weak a_516: loaded integer =
+                let weak _: unit = pure(Unit) in
+                pure(x) in
+              pure(Unit)
+            ) ;
+            pure(Unit) ;
+            pure(Unit) ;
+            let strong (x: loaded integer) =
+              save continue_510: unit (x: loaded integer:= x) in  pure((x)) in
+            pure((x)) in
+          bound(pure(Unit)) ;
+          case Specified(0) of
+            | Specified(_: integer) =>
+                let weak case: unit =
+                  if not(0 = 0) then run do_512(x) else pure(Unit) in
+                pure((x))
+            | Unspecified(_: ctype) =>
+                let weak case: unit =
+                  pure(undef(<<DUMMY(unspecified AilSdo)>>)) in
+                pure((x))
+          end in
+      let strong (x: loaded integer) =
+        save break_511: unit (x: loaded integer:= x) in  pure((x)) in
+      pure((x)) in
+    let strong a_521: loaded integer =
+      bound(
+        let weak _: unit = pure(Unit) in
+        pure(x)
+      ) in
+    pure(Unit) ;
+    run ret_509(conv_loaded_int('signed int', a_521)) ;
+    pure(Unit) ;
+    pure((x)) in
+  save ret_509: loaded integer (a_522: loaded integer:= Specified(0)) in
+    pure(a_522)
+
 Defined {value: "Specified(42)", stdout: "", stderr: "", blocked: "false"}

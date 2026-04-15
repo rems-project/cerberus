@@ -1,2 +1,33 @@
 return code: 0
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer) =
+    let strong (x: loaded integer) =
+      bound(pure(Unit)) ;
+      pure((conv_loaded_int('signed int', Specified(7)))) in
+    let strong a_515: loaded integer =
+      bound(
+        let weak (a_508: loaded integer, a_509: loaded integer) =
+          unseq(
+            let weak _: unit = pure(Unit) in
+            pure(x)
+          ,
+            let weak _: unit = pure(Unit) in
+            pure(x)
+          ) in
+        pure(
+          case (a_508, a_509) of
+            | (Specified(a_510: integer), Specified(a_511: integer)) =>
+                Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_510), __conv_int__('signed int', a_511)))
+            | _: (loaded integer,loaded integer) =>
+                undef(<<UB036_exceptional_condition>>)
+          end
+        )
+      ) in
+    pure(Unit) ;
+    run ret_506(conv_loaded_int('signed int', a_515)) ;
+    pure(Unit) ;
+    pure((x)) in
+  save ret_506: loaded integer (a_516: loaded integer:= Specified(0)) in
+    pure(a_516)
+
 Defined {value: "Specified(14)", stdout: "", stderr: "", blocked: "false"}
