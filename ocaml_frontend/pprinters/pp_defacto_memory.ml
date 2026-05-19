@@ -73,7 +73,7 @@ and pp_integer_value_base = function
   | IVunspecified ->
       !^ "IVunspecified"
   | IVconcrete n ->
-      !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
+      !^ "IVconcrete" ^^ P.parens (!^ (Z.to_string n))
   | IVaddress (alloc_id, pref) ->
       !^ "IVaddress" ^^ P.parens (!^ (string_of_int alloc_id) ^^ Pp_symbol.pp_prefix pref)
   | IVfromptr (ty, ity, ptr_val_, sh) ->
@@ -275,7 +275,7 @@ let pp_pretty_mem_value ?basis ~use_upper = function
 let pp_integer_value_for_core (IV (prov, ival_)) =
   match ival_ with
     | IVconcrete n ->
-        !^ (Nat_big_num.to_string n)
+        !^ (Z.to_string n)
     | IVmax ity ->
         !^ "Ivmax" ^^ P.parens (P.dquotes (Pp_ail.pp_integerType ity))
     | IVmin ity ->

@@ -78,7 +78,7 @@ let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
   | Array(ty2, Some n) ->
       (* TODO *)
       let sort = ctype_to_bmcz3sort ty2 file in
-      CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
+      CaseSortList (repeat_n (Z.to_int n) sort)
   | Array(_, None) ->
       assert false
   | Function _
@@ -434,17 +434,17 @@ module ImplFunctions = struct
       let prec_minus_one = prec - 1 in
       (match impl.impl_binary_mode with
        | Two'sComplement ->
-          (Nat_big_num.sub (Nat_big_num.of_int 0)
-                           (Nat_big_num.pow_int (Nat_big_num.of_int 2)
+          (Z.sub Z.zero
+                           (Z.pow (Z.of_int 2)
                                                 prec_minus_one)),
-          (Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2)
+          (Z.sub (Z.pow (Z.of_int 2)
                                                 prec_minus_one)
-                           (Nat_big_num.of_int 1))
+                           Z.one)
        | _ -> assert false)
     else
-     Nat_big_num.of_int 0,
-     Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) prec)
-                     (Nat_big_num.of_int 1)
+     Z.zero,
+     Z.sub (Z.pow (Z.of_int 2) prec)
+                     Z.one
   let ibt_list = [Ichar; Short; Int_; Long; LongLong; Intptr_t]
   let signed_ibt_list = List.map (fun ty -> Signed ty) ibt_list
   let unsigned_ibt_list = List.map (fun ty -> Unsigned ty) ibt_list

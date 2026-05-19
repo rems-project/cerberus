@@ -288,7 +288,7 @@ and main = parse
   
   (* integer constants *)
   | ['0'-'9']+ as integer
-      { T.INT_CONST (Nat_big_num.of_string integer) }
+      { T.INT_CONST (Z.of_string integer) }
   (* C-like strings *)
   | '"'
       { let strs = cstring lexbuf in

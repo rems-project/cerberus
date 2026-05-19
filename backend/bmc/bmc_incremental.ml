@@ -4577,7 +4577,7 @@ module BmcConcActions = struct
           let loaded_value = TODO_LoadedSort.get_specified_value value in
 
           let assertions =
-            List.init (Nat_big_num.to_int n) (fun i ->
+            List.init (Z.to_int n) (fun i ->
               (*let new_base = base_index + (i * size_of_bmcz3sort_ctype') in*)
               let new_base = base_index + (i * size_of_ctype') in
               let subobj = Z3Array.mk_select g_ctx loaded_value (int_to_z3 i) in

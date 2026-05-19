@@ -24,7 +24,7 @@ type implementation = {
   sizeof_fty: floatingType -> int option;
   alignof_ity: integerType -> int option;
   alignof_fty: floatingType -> int option;
-  register_enum: Symbol.sym -> Nat_big_num.num list -> bool;
+  register_enum: Symbol.sym -> Z.t list -> bool;
   typeof_enum: Symbol.sym -> integerType;
   type_alias_map: type_alias_map;
 }

@@ -132,7 +132,7 @@ type token =
   | SYM of _sym
   | IMPL of Implementation.implementation_constant
   | UB of Undefined.undefined_behaviour
-  | INT_CONST of Nat_big_num.num
+  | INT_CONST of Z.t
   
   | SQUOTE
   

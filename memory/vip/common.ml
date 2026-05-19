@@ -57,7 +57,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         end
     | Array (elem_ty, Some n) ->
         (* TODO: what if too big? *)
-        Nat_big_num.to_int n * sizeof ~tagDefs elem_ty
+        Z.to_int n * sizeof ~tagDefs elem_ty
     | Pointer _ ->
         begin match (Ocaml_implementation.get ()).sizeof_pointer with
           | Some n ->
@@ -182,13 +182,13 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         1
 
 let ity_max ity =
-  let open Nat_big_num in
+  let open Z in
   match (Ocaml_implementation.get ()).sizeof_ity ity with
     | Some n ->
         let signed_max =
-          sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
+          sub (pow (of_int 2) Stdlib.(8*n-1)) one in
         let unsigned_max =
-          sub (pow_int (of_int 2) (8*n)) (of_int 1) in
+          sub (pow (of_int 2) Stdlib.(8*n)) one in
         let ity = match ity with
           | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
           | _ -> ity
@@ -219,7 +219,7 @@ let ity_max ity =
         failwith "the VIP memory model requires a complete implementation MAX"
 
 let ity_min ity =
-  let open Nat_big_num in
+  let open Z in
   let ity = match ity with
     | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
     | _ -> ity
@@ -227,7 +227,7 @@ let ity_min ity =
   match ity with
     | Char ->
         if (Ocaml_implementation.get ()).is_signed_ity Char then
-          negate (pow_int (of_int 2) (8-1))
+          neg (pow (of_int 2) Stdlib.(8-1))
         else
           zero
     | Bool
@@ -242,7 +242,7 @@ let ity_min ity =
         (* and all of these are signed *)
         begin match (Ocaml_implementation.get ()).sizeof_ity ity with
           | Some n ->
-              negate (pow_int (of_int 2) (8*n-1))
+              neg (pow (of_int 2) Stdlib.(8*n-1))
           | None ->
               failwith "the VIP memory model requires a complete implementation MIN"
         end

@@ -322,7 +322,7 @@ let rec ctype_to_expr slvSt (Ctype.Ctype (_, ty)) =
           assert false
       | Array (elem_ty, Some n) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 2)
-            [ctype_to_expr slvSt elem_ty; Arithmetic.Integer.mk_numeral_i slvSt.ctx (Nat_big_num.to_int n)]
+            [ctype_to_expr slvSt elem_ty; Arithmetic.Integer.mk_numeral_i slvSt.ctx (Z.to_int n)]
       | Pointer (_, ref_ty) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 3)
             [ctype_to_expr slvSt ref_ty]
@@ -361,7 +361,7 @@ let integer_value_base_to_expr slvSt ival_ =
     | Defacto_memory_types.IVconcurRead _ ->
         failwith "Smt.integer_value_base_to_expr: IVconcurRead"
     | Defacto_memory_types.IVconcrete n ->
-        Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
+        Arithmetic.Integer.mk_numeral_s slvSt.ctx (Z.to_string n)
     | Defacto_memory_types.IVaddress (alloc_id, _) ->
         Expr.mk_const_s slvSt.ctx ("addr_" ^ string_of_int alloc_id) slvSt.addrSort
     | Defacto_memory_types.IVfromptr (ty, ity, ptrval_, sh) ->

@@ -11,7 +11,7 @@ module type Implementation = sig
   val sizeof_fty: floatingType -> int option
   val alignof_ity: integerType -> int option
   val alignof_fty: floatingType -> int option
-  val register_enum: Symbol.sym -> Nat_big_num.num list -> bool
+  val register_enum: Symbol.sym -> Z.t list -> bool
   val typeof_enum: Symbol.sym -> integerType option
 end
 
@@ -173,7 +173,7 @@ module DefaultImpl: Implementation = struct
   let register_enum tag_sym ns =
     (* NOTE: we don't support GCC's -fshort-enums option *)
     let ity =
-      if List.exists (fun n -> Nat_big_num.less n Nat_big_num.zero) ns then
+      if List.exists (fun n -> Z.lt n Z.zero) ns then
         Signed Int_
       else
         Unsigned Int_ in

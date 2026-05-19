@@ -12,7 +12,7 @@ let pp_pointer_shift ptr_sh =
     | [] ->
         P.empty
     | (ty, n) :: ptr_sh' ->
-        Pp_core_ctype.pp_ctype ty ^^^ !^ "x" ^^^ !^ (Nat_big_num.to_string n) ^^ P.comma ^^^
+        Pp_core_ctype.pp_ctype ty ^^^ !^ "x" ^^^ !^ (Z.to_string n) ^^ P.comma ^^^
         aux ptr_sh'
   in
   P.brackets (aux ptr_sh)
@@ -51,7 +51,7 @@ let pp_integer_value =
     let nonvalid = if is_nonvalid then fun z -> z else nonvalid in
     match ival with
       | IVinteger n ->
-          !^ (Nat_big_num.to_string n)
+          !^ (Z.to_string n)
       | IVsymbolic symb ->
           nonvalid (Pp_symbolic.pp_symbolic symb)
       | IVptrdiff0 (ptr_val1, ptr_val2) ->

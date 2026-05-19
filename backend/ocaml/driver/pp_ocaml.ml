@@ -100,13 +100,13 @@ let print_list pp xs = P.brackets (P.separate_map (P.semi ^^ P.space) pp xs)
 
 let print_tuple xs = P.parens (P.separate_map comma_space id xs)
 
-let max_int_big_num = Nat_big_num.of_int max_int
+let max_int_big_num = Z.of_int max_int
 
 let print_num n =
-  if Nat_big_num.less n max_int_big_num then
-    !^"N.of_int" ^^^ print_int (Nat_big_num.to_int n)
+  if Z.lt n max_int_big_num then
+    !^"N.of_int" ^^^ print_int (Z.to_int n)
   else
-    !^"N.of_string" ^^^ P.dquotes (!^(Nat_big_num.to_string n))
+    !^"N.of_string" ^^^ P.dquotes (!^(Z.to_string n))
 
 let print_ref x = tref ^^^ P.parens x
 
@@ -335,7 +335,7 @@ let rec print_ctype = function
 
 let print_integer_value iv =
   Impl_mem.case_integer_value iv
-    (fun n -> !^"RT.mk_int" ^^^ P.dquotes (!^(Nat_big_num.to_string n)))
+    (fun n -> !^"RT.mk_int" ^^^ P.dquotes (!^(Z.to_string n)))
     (fun _ -> raise (Unexpected "iv value"))
 
 let print_float_value fv =
@@ -348,8 +348,8 @@ let print_pointer_value pv =
     (fun _ -> !^"RT.mk_null_void")
     (fun _ -> !^ "print_pointer_value: ERROR")
     (fun opt_i addr -> !^"RT.mk_pointer"
-                       ^^^ print_option (fun n -> P.dquotes (!^(Nat_big_num.to_string n))) opt_i
-                       ^^^ P.dquotes (!^(Nat_big_num.to_string addr)))
+                       ^^^ print_option (fun n -> P.dquotes (!^(Z.to_string n))) opt_i
+                       ^^^ P.dquotes (!^(Z.to_string addr)))
     (fun _ -> raise (Unexpected "ptr value"))
 
 (* Core Types *)

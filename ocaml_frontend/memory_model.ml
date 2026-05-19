@@ -71,11 +71,11 @@ module type Memory = sig
   val fun_ptrval: Symbol.sym -> pointer_value
 
   (*TODO: revise that, just a hack for codegen*)
-  val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
+  val concrete_ptrval: Z.t -> Z.t -> pointer_value
   val case_ptrval: pointer_value ->
    (* null pointer *) (Ctype.ctype -> 'a) ->
    (* function pointer *) (Symbol.sym option -> 'a) ->
-   (* concrete pointer *) (Nat_big_num.num option -> Nat_big_num.num -> 'a) -> 'a
+   (* concrete pointer *) (Z.t option -> Z.t -> 'a) -> 'a
   val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
 
   (* Operations on pointer values *)
@@ -120,7 +120,7 @@ module type Memory = sig
   val va_copy: integer_value -> integer_value memM
   val va_arg: integer_value -> Ctype.ctype -> pointer_value memM
   val va_end: integer_value -> unit memM
-  val va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM
+  val va_list: Z.t -> ((Ctype.ctype * pointer_value) list) memM
 
   val copy_alloc_id: integer_value -> pointer_value -> pointer_value memM
 
@@ -131,7 +131,7 @@ module type Memory = sig
   
   (* Integer value constructors *)
   val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value
-  val integer_ival: Nat_big_num.num -> integer_value
+  val integer_ival: Z.t -> integer_value
   val max_ival: Ctype.integerType -> integer_value
   val min_ival: Ctype.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
@@ -147,7 +147,7 @@ module type Memory = sig
   
   val case_integer_value: (* TODO: expose more ctors *)
     integer_value ->
-    (Nat_big_num.num -> 'a) ->
+    (Z.t -> 'a) ->
     (unit -> 'a) ->
     'a
   
