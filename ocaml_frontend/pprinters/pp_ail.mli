@@ -24,7 +24,7 @@ val pp_floatingType: floatingType -> PPrint.document
 
 val pp_basicType: basicType -> PPrint.document
 
-val pp_integer: Nat_big_num.num -> PPrint.document
+val pp_integer: Z.t -> PPrint.document
 
 val pp_tag_definition: union_tag * (Cerb_location.t * Annot.attributes * tag_definition) -> PPrint.document
 (*

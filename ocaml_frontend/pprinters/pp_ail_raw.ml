@@ -87,7 +87,7 @@ let pp_qualifiers_raw qs =
     ) P.empty [("const", qs.const); ("restrict", qs.restrict); ("volatile", qs.volatile) (*; ("atomic", qs.atomic)*)]
  )
 
-let pp_integer i = P.string (Nat_big_num.to_string i)
+let pp_integer i = P.string (Z.to_string i)
 
 let rec pp_ctype_raw (Ctype (_,cty)) =
   match cty with

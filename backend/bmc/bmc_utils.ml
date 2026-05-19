@@ -53,13 +53,13 @@ let z3num_to_int (expr: Expr.expr) =
      Z.to_int (Integer.get_big_int expr))
 
 (* =========== Z3 HELPER FUNCTIONS =========== *)
-let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
+let big_num_to_z3 (i: Z.t) : Expr.expr =
   if g_bv then
-    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
-  else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
+    BitVector.mk_numeral g_ctx (Z.to_string i) g_bv_precision
+  else Integer.mk_numeral_s g_ctx (Z.to_string i)
 
 let int_to_z3 (i: int) : Expr.expr =
-  big_num_to_z3 (Nat_big_num.of_int i)
+  big_num_to_z3 (Z.of_int i)
 
 (* ======= OpExpFunctions ======= *)
 (* Powers of two *)

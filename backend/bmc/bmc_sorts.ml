@@ -320,7 +320,7 @@ module AddressSortPNVI = struct
     | Void -> assert false
     | Basic (Integer ity) ->
         sizeof_ity ity
-    | Array(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
+    | Array(ty, Some n) -> (Z.to_int n) * (type_size ty file)
     | Array _ -> assert false
     | Function _ -> assert false
     | Pointer _ -> Option.get ((Ocaml_implementation.get ()).sizeof_pointer)
@@ -489,7 +489,7 @@ module AddressSortConcrete = struct
     match ctype with
     | Void0 -> assert false
     | Basic0 _ -> 1
-    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
+    | Array0(ty, Some n) -> (Z.to_int n) * (type_size ty file)
     | Array0 _ -> assert false
     | Function0 _ -> assert false
     | Pointer0 _ -> 1

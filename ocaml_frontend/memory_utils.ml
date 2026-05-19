@@ -1,15 +1,4 @@
-module N = struct
-  include Nat_big_num
-  let of_float = Z.of_float
-end
-
-module IntMap = Map.Make(struct
-  type t = Nat_big_num.num
-  let compare = Nat_big_num.compare
-end)
-
-
-
+module IntMap = Map.Make(Z)
 
 let serialise_prefix = function
   | Symbol.PrefOther s ->

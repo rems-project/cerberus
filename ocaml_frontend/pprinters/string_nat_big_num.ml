@@ -1,5 +1,3 @@
-open Nat_big_num
-
 let chars_of_num_with_basis b use_upper n =
   let char_of_digit = function
       | 10 -> if use_upper then 'A' else 'a'
@@ -10,20 +8,20 @@ let chars_of_num_with_basis b use_upper n =
       | 15 -> if use_upper then 'F' else 'f'
       | r  -> char_of_int (r + 48) in
   let rec f n acc =
-    let (n', r) = quomod n (of_int b) in
-    let c = char_of_digit (to_int r) in
-    if equal n' (of_int 0) then
+    let (n', r) = Z.(ediv_rem n (of_int b)) in
+    let c = char_of_digit (Z.to_int r) in
+    if Z.(equal n' zero) then
       c :: acc
     else
       f n' (c :: acc) in
-  if less n zero then
-    '-' :: f (negate n) []
+  if Z.(lt n zero) then
+    '-' :: f (Z.neg n) []
   else
     f n []
 
 
 let string_of_octal n =
-  if equal n (of_int 0) then
+  if Z.(equal n zero) then
     "0"
   else
     let l = chars_of_num_with_basis 8 false n in
@@ -36,7 +34,7 @@ let string_of_octal n =
 
 
 let string_of_decimal n =
-  to_string n
+  Z.to_string n
 
 
 let string_of_hexadecimal n =

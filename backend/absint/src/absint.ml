@@ -4,8 +4,6 @@ open Core
 
 open Apron
 
-module N = Nat_big_num
-
 let debug msg = Cerb_debug.print_debug 2 [] (fun _ -> msg)
 
 let empty_env = Environment.make [||] [||]
@@ -228,7 +226,7 @@ let rec absvalue_of_texpr ~with_sym core man = function
       | Vobject (OVinteger i)
       | Vloaded (LVspecified (OVinteger i)) ->
         let n = Impl_mem.case_integer_value i
-          (fun n -> Coeff.s_of_int (N.to_int n))
+          (fun n -> Coeff.s_of_int (Z.to_int n))
           (fun _ -> assert false)
         in
         return @@ ATexpr (Texpr1.cst env n)

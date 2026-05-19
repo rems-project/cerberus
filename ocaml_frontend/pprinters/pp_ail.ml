@@ -100,7 +100,7 @@ let pp_id_type ?(is_human=false) id = !^ (ansi_format [Green] (Pp_symbol.to_stri
 let pp_id_func id = !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty id))
 
 
-let pp_integer i = P.string (Nat_big_num.to_string i)
+let pp_integer i = P.string (Z.to_string i)
 
 
 (* -- TYPES -- *)

@@ -1081,7 +1081,7 @@ let mk_file decls =
 
 %}
 
-%token <Nat_big_num.num> INT_CONST
+%token <Z.t> INT_CONST
 %token <Core_parser_util._sym> SYM
 %token <Implementation.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
@@ -1362,13 +1362,13 @@ core_object_type:
     { OTy_pointer }
 (*
 | CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST RPAREN
-    { OTy_cfunction (None, Nat_big_num.to_int nparams, false) }
+    { OTy_cfunction (None, Z.to_int nparams, false) }
 | CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST COMMA DOTS RPAREN
-    { OTy_cfunction (None, Nat_big_num.to_int nparams, true) }
+    { OTy_cfunction (None, Z.to_int nparams, true) }
 | CFUNCTION LPAREN ret_oTy= core_object_type COMMA nparams= INT_CONST RPAREN
-    { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, false) }
+    { OTy_cfunction (Some ret_oTy, Z.to_int nparams, false) }
 | CFUNCTION LPAREN ret_oTy= core_object_type COMMA nparams= INT_CONST COMMA DOTS RPAREN
-    { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, true) }
+    { OTy_cfunction (Some ret_oTy, Z.to_int nparams, true) }
    *)
 (*
 | CFUNCTION LPAREN UNDERSCORE COMMA oTys= separated_list(COMMA, core_object_type) RPAREN
@@ -1594,7 +1594,7 @@ pexpr:
     { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor $startpos($1)))], (), PEnot _pe) }
 | MINUS _pe= pexpr
     { let loc = region ($startpos, $endpos) (pointCursor $startpos($1)) in
-      Pexpr ([Aloc loc], (), PEop (OpSub, Pexpr ([Aloc loc], (), PEval (Vobject (OVinteger (Impl_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
+      Pexpr ([Aloc loc], (), PEop (OpSub, Pexpr ([Aloc loc], (), PEval (Vobject (OVinteger (Impl_mem.integer_ival Z.zero)))), _pe)) }
 | CFUNCTION _pe = delimited(LPAREN, pexpr, RPAREN)
     { Pexpr ([Aloc (region ($startpos, $endpos) (pointCursor $startpos($1)))], (), PEcfunction _pe) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr

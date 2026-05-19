@@ -171,13 +171,13 @@ let get_union m =
 
 let case_loaded_mval f = case_loaded f M.unspecified_mval
 
-let mk_int s = M.integer_ival (Nat_big_num.of_string s)
+let mk_int s = M.integer_ival (Z.of_string s)
 let mk_float s = M.str_fval s
 let mk_array xs = (*M.array_mval*) (List.map (case_loaded_mval id) xs)
 
 let mk_pointer alloc_id addr =
-  M.concrete_ptrval (Nat_big_num.of_string alloc_id)
-                    (Nat_big_num.of_string addr)
+  M.concrete_ptrval (Z.of_string alloc_id)
+                    (Z.of_string addr)
 
 let mk_null cty = M.null_ptrval cty
 let mk_null_void = mk_null C.Void0
@@ -300,8 +300,8 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
       let output = String.init n (List.nth xs) in
       if batch then stdout := !stdout ^ String.escaped output
       else print_string output;
-      return (Specified (M.integer_ival (Nat_big_num.of_int n)))
-      (*return (M.integer_ival (Nat_big_num.of_int n))*)
+      return (Specified (M.integer_ival (Z.of_int n)))
+      (*return (M.integer_ival (Z.of_int n))*)
     | Either.Right (Undefined.Undef (_, xs) ) ->
       raise (Error (String.concat "," 
                       (List.map Undefined.stringFromUndefined_behaviour xs)))
@@ -331,7 +331,7 @@ let print_err_batch e =
   Printf.sprintf "Killed {msg: memory layout error (%s seq) ==> %s}" (show_memop !last_memop) err
 
 let string_of_specified n =
-  Printf.sprintf "Specified(%s)" (Nat_big_num.to_string n)
+  Printf.sprintf "Specified(%s)" (Z.to_string n)
 
 let string_of_unspec cty =
   Printf.sprintf "Unspecified(\"%s\")" (String_core_ctype.string_of_ctype cty)
@@ -362,7 +362,7 @@ let quit f =
      | Specified x ->
        let n = M.eval_integer_value x |> Option.get in
        if batch then print_batch 0 (string_of_specified n);
-       exit (Nat_big_num.to_int n)
+       exit (Z.to_int n)
      | Unspecified cty ->
        if batch then print_batch 0 (string_of_unspec cty);
        exit(-1)

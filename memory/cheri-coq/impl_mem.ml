@@ -249,11 +249,6 @@ end
 module MM = CheriMemoryExe(MemCommonExe)(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs:CoqTags.TagDefs)(CerbSwitchesProxy)
 module C = MorelloCapabilityWithStrfcap
 
-module Z = struct
-  include Nat_big_num
-  let format = Z.format
-end
-
 module L = struct
   include List
   include Lem_list
@@ -1031,7 +1026,7 @@ module CHERIMorello : Memory = struct
         (pref: Symbol.prefix)
         (int_val: integer_value)
         (ty: Ctype.ctype)
-        (_: Z.num option)
+        (_: Z.t option)
         (init_opt: mem_value option): pointer_value memM
     =
     get >>= fun st ->
@@ -1110,7 +1105,7 @@ module CHERIMorello : Memory = struct
     lift_coq_serr (MM.fun_ptrval (toCoq_Symbol_sym s))
 
   (* Pointer value constructors *)
-  let concrete_ptrval (i:Nat_big_num.num) (addr:Nat_big_num.num): pointer_value
+  let concrete_ptrval (i:Z.t) (addr:Z.t): pointer_value
     = lift_coq_serr (MM.concrete_ptrval i addr)
 
   (* We have this one implemented in Coq but it looks like
@@ -1194,7 +1189,7 @@ module CHERIMorello : Memory = struct
          in find offs
       | Some (Ctype (_, Array (ty, _))) ->
          let offset = Z.sub addr alloc.base in
-         if Z.less offset alloc.size then
+         if Z.lt offset alloc.size then
            let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (Some (CerbTagDefs.tagDefs ())) (toCoq_ctype ty)) in
            let n = Z.div offset sz in
            Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ "[" ^ Z.to_string n ^ "]")
@@ -1281,7 +1276,7 @@ module CHERIMorello : Memory = struct
   let va_end (va:integer_value): unit memM =
     lift_coq_memM "va_end" (MM.va_end va)
 
-  let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM =
+  let va_list (va_idx:Z.t): ((Ctype.ctype * pointer_value) list) memM =
     lift_coq_memM "va_list" (MM.va_list va_idx) >>= fun res ->
     return (List.map (fun (t,p) -> (fromCoq_ctype t, p)) res)
 

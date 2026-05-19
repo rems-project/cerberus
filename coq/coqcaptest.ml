@@ -6,14 +6,9 @@
 open OUnit2
 open Strfcap
 
-module Z = struct
-  include Nat_big_num
-  let format = Z.format
-end
-
 module EZ =
 struct
-  type t = Z.num
+  type t = Z.t
   let compare = Z.compare
   let pp_printer f z =
     Format.pp_print_string f (Z.format "%#x" z)

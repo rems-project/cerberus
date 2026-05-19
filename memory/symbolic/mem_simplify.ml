@@ -3,7 +3,15 @@ open Defacto_memory_types
 open Mem_common
 
 open Ctype
-open Nat_big_num
+
+module Z = struct
+  include Z
+  let quomod = ediv_rem
+  let modulus = erem
+  let integerRem_t = (mod)
+  let integerRem_f = Big_int_Z.mod_big_int
+end
+open Z
 
 open Either
 
@@ -39,13 +47,13 @@ let rec simplify_integer_value_base ival_ =
           | IntMul ->
               mul
           | IntDiv ->
-              fun x y -> if equal y (of_int 0) then of_int 0 else integerDiv_t x y
+              fun x y -> if equal y (of_int 0) then of_int 0 else div x y
           | IntRem_t ->
               fun x y -> if equal y (of_int 0) then of_int 0 else integerRem_t x y
           | IntRem_f ->
               fun x y -> if equal y (of_int 0) then of_int 0 else integerRem_f x y
           | IntExp ->
-              fun x y -> pow_int x (Stdlib.abs (to_int y))
+              fun x y -> pow x (Stdlib.abs (to_int y))
         in
         begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
           | (Left n1, Left n2) ->
@@ -61,7 +69,7 @@ let rec simplify_integer_value_base ival_ =
         begin match ity with
           | Char ->
               if (Ocaml_implementation.get()).is_signed_ity Char then
-                Left (negate (pow_int (of_int 2) (8-1)))
+                Left (neg (pow (of_int 2) Stdlib.(8-1)))
               else
                 Left (of_int 0)
           | Bool
@@ -78,7 +86,7 @@ let rec simplify_integer_value_base ival_ =
               (* and all of these are signed *)
               begin match (Ocaml_implementation.get()).sizeof_ity ity with
                 | Some n ->
-                    Left (negate (pow_int (of_int 2) (8*n-1)))
+                    Left (neg (pow (of_int 2) Stdlib.(8*n-1)))
                 | None ->
                     Right ival_
               end
@@ -92,7 +100,7 @@ let rec simplify_integer_value_base ival_ =
                 (* and all of these are signed *)
                 begin match (Ocaml_implementation.get()).sizeof_ity ity with
                   | Some n ->
-                      Left (negate (pow_int (of_int 2) (8*n-1)))
+                      Left (neg (pow (of_int 2) Stdlib.(8*n-1)))
                   | None ->
                       Right ival_
                 end
@@ -110,9 +118,9 @@ let rec simplify_integer_value_base ival_ =
         else begin match (Ocaml_implementation.get()).sizeof_ity ity with
           | Some n ->
               let signed_max =
-                (sub (pow_int (of_int 2) (8*n-1)) (of_int 1)) in
+                (sub (pow (of_int 2) Stdlib.(8*n-1)) (of_int 1)) in
               let unsigned_max =
-                (sub (pow_int (of_int 2) (8*n)) (of_int 1)) in
+                (sub (pow (of_int 2) Stdlib.(8*n)) (of_int 1)) in
               begin match ity with
                 | Char ->
                     Left (if (Ocaml_implementation.get()).is_signed_ity Char then
@@ -332,7 +340,7 @@ let byteof i n = let n' = n `div` (2 ^ (i * 8)) in mod n' 256
     | IVbitwise (ity, BW_AND (ival_1, ival_2)) ->
         begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
           | (Left n1, Left n2) ->
-              Left (Nat_big_num.bitwise_and n1 n2)
+              Left (Z.logand n1 n2)
           | (x, y) ->
               let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
               Right (IVbitwise (ity, BW_AND (f x, f y)))
@@ -340,7 +348,7 @@ let byteof i n = let n' = n `div` (2 ^ (i * 8)) in mod n' 256
     | IVbitwise (ity, BW_OR (ival_1, ival_2)) ->
         begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
           | (Left n1, Left n2) ->
-              Left (Nat_big_num.bitwise_or n1 n2)
+              Left (Z.logor n1 n2)
           | (x, y) ->
               let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
               Right (IVbitwise (ity, BW_OR (f x, f y)))
@@ -348,7 +356,7 @@ let byteof i n = let n' = n `div` (2 ^ (i * 8)) in mod n' 256
     | IVbitwise (ity, BW_XOR (ival_1, ival_2)) ->
         begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
           | (Left n1, Left n2) ->
-              Left (Nat_big_num.bitwise_xor n1 n2)
+              Left (Z.logxor n1 n2)
           | (x, y) ->
               let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
               Right (IVbitwise (ity, BW_XOR (f x, f y)))
@@ -362,7 +370,7 @@ let lifted_simplify_integer_value_base ival_ =
     (simplify_integer_value_base ival_)
 
 
-let simplify_integer_value (IV (prov, ival_)) : (num, impl_integer_value) either =
+let simplify_integer_value (IV (prov, ival_)) : (Z.t, impl_integer_value) either =
   match simplify_integer_value_base ival_ with
     | Left n ->
         Left n

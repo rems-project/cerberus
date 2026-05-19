@@ -76,7 +76,7 @@ let remove_prefix ~prefix ?(trim_end=0) str =
   else
     None
 
-let is_power_of_two (n: Nat_big_num.num) : bool =
+let is_power_of_two (n: Z.t) : bool =
   let open Z in
   if equal n zero then
     false
