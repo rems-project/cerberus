@@ -1413,14 +1413,6 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         full_eval_pexpr' pe >>= fun cval ->
                         E.return (update_env (Caux.mk_sym_pat sym bTy) cval acc)
                       ) th_st.env (List.zip sym_bTys pes) >>= fun env' ->
-                      let _ =
-                        List.map (fun map ->
-                          Map.mapi (fun sym value ->
-                                Debug.print_debug 2 [Debug.DB_core_dynamics] (fun () ->
-                                    show sym ^ " = " ^ Pp.stringFromCore_value value)
-                            ) map
-                        ) env'
-                      in
                       E.return <| th_st with arena= cont_expr; env= env' |>
                 end
               end

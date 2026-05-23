@@ -1132,9 +1132,6 @@ with
         step_eval_pexpr 0 loc current_call_loc_opt core_extern env mem_st_opt file false pulled_pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
-  let () = Debug.print_debug 5 [] (fun () ->
-    "value ==> " ^ Pp.stringFromCore_value cval
-  ) in
               EU.return (Right cval)
           | Nothing ->
               eval_pexpr_aux2 loc current_call_loc_opt core_extern env mem_st_opt file pe'

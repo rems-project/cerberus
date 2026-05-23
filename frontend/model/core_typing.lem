@@ -1914,8 +1914,7 @@ let typecheck_program file =
         | Proc loc mrk bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            typecheck_expr env' bTy e >>= fun e ->
-            E.return (Proc loc mrk bTy sym_bTys e)
+            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
       end) file.stdlib >>= fun stdlib' ->
     
     (* Typechecking of the impl constants *)
@@ -1968,8 +1967,7 @@ let typecheck_program file =
         | Proc loc mrk bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            typecheck_expr env' bTy e >>= fun e ->
-            E.return (Proc loc mrk bTy sym_bTys e)
+            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
       end) file.funs >>= fun funs' ->
     
     E.return <|
