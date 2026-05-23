@@ -1,69 +1,71 @@
 return code: 0
 proc main (): eff loaded integer :=
   let strong (x: loaded integer, cond: loaded integer) =
-    let strong (x: loaded integer) =
-      bound(pure(Unit)) ;
-      pure((conv_loaded_int('signed int', Specified(3)))) in
-    let strong (cond: loaded integer) =
-      bound(pure(Unit)) ;
-      pure((conv_loaded_int('signed int', Specified(0)))) in
-    let strong (x: loaded integer) =
-      let strong a_511: loaded integer =
-        bound(
-          let weak (a_513: loaded integer, _: unit) =
-            unseq(
-              let weak _: unit = pure(Unit) in
-              pure(cond)
-            ,
-              pure(Unit)
-            ) in
-          pure(
-            case (a_513, Specified(0)) of
-              | (Specified(a_515: integer), Specified(_: integer)) =>
-                  if conv_int('signed int', a_515) = conv_int('signed int', 0) then
-                    Specified(1)
-                  else
-                    Specified(0)
-              | _: (loaded integer,loaded integer) =>
-                  Unspecified('signed int')
-            end
-          )
-        ) in
-      let strong a_508: boolean =
-        case a_511 of
-          | Specified(a_512: integer) =>
-              pure(if not(a_512 = 1) then True else False)
-          | Unspecified(_: ctype) =>
-              nd(pure(True), pure(False))
-        end in
-      if a_508 then
-        let weak (x: loaded integer) =
-          let strong (x: loaded integer) =
-            let strong (x: loaded integer, _: loaded integer) =
-              bound(
-                let weak (_: unit, _: unit) = unseq(pure(Unit), pure(Unit)) in
-                let weak (x: loaded integer) =
-                  pure((conv_loaded_int('signed int', Specified(99)))) in
-                pure((x, conv_loaded_int('signed int', Specified(99))))
+    let strong (x: loaded integer, cond: loaded integer) =
+      let strong (x: loaded integer) =
+        bound(pure(Unit)) ;
+        pure((conv_loaded_int('signed int', Specified(3)))) in
+      let strong (cond: loaded integer) =
+        bound(pure(Unit)) ;
+        pure((conv_loaded_int('signed int', Specified(0)))) in
+      let strong (x: loaded integer) =
+        let strong a_430: loaded integer =
+          bound(
+            let weak (a_432: loaded integer, _: unit) =
+              unseq(
+                let weak _: unit = pure(Unit) in
+                pure(cond)
+              ,
+                pure(Unit)
               ) in
+            pure(
+              case (a_432, Specified(0)) of
+                | (Specified(a_434: integer), Specified(_: integer)) =>
+                    if conv_int('signed int', a_434) = conv_int('signed int', 0) then
+                      Specified(1)
+                    else
+                      Specified(0)
+                | _: (loaded integer,loaded integer) =>
+                    Unspecified('signed int')
+              end
+            )
+          ) in
+        let strong a_427: boolean =
+          case a_430 of
+            | Specified(a_431: integer) =>
+                pure(if not(a_431 = 1) then True else False)
+            | Unspecified(_: ctype) =>
+                nd(pure(True), pure(False))
+          end in
+        if a_427 then
+          let weak (x: loaded integer) =
+            let strong (x: loaded integer) =
+              let strong (x: loaded integer, _: loaded integer) =
+                bound(
+                  let weak (_: unit, _: unit) = unseq(pure(Unit), pure(Unit)) in
+                  let weak (x: loaded integer) =
+                    pure((conv_loaded_int('signed int', Specified(99)))) in
+                  pure((x, conv_loaded_int('signed int', Specified(99))))
+                ) in
+              pure((x)) in
             pure((x)) in
+          pure((x))
+        else
+          let weak if: unit = pure(Unit) in
           pure((x)) in
-        pure((x))
-      else
-        let weak if: unit = pure(Unit) in
-        pure((x)) in
-    let strong a_522: loaded integer =
-      bound(
-        let weak _: unit = pure(Unit) in
-        pure(x)
-      ) in
-    pure(Unit) ;
-    pure(Unit) ;
-    run ret_507(conv_loaded_int('signed int', a_522)) ;
-    pure(Unit) ;
-    pure(Unit) ;
+      let strong a_441: loaded integer =
+        bound(
+          let weak _: unit = pure(Unit) in
+          pure(x)
+        ) in
+      pure(Unit) ;
+      pure(Unit) ;
+      run ret_426(conv_loaded_int('signed int', a_441)) ;
+      pure(Unit) ;
+      pure(Unit) ;
+      pure((x, cond)) in
     pure((x, cond)) in
-  save ret_507: loaded integer (a_523: loaded integer:= Specified(0)) in
-    pure(a_523)
+  save ret_426: loaded integer (a_442: loaded integer:= Specified(0)) in
+    pure(a_442)
 
 Defined {value: "Specified(3)", stdout: "", stderr: "", blocked: "false"}

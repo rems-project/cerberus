@@ -38,9 +38,9 @@ proc main (): eff loaded integer :=
       pure(conv_loaded_int('signed int', Specified(4)))
     ) in
   pure(Unit) ;
-  let strong a_523: loaded integer =
+  let strong a_442: loaded integer =
     bound(
-      let weak (a_514: loaded integer, a_515: loaded integer) =
+      let weak (a_433: loaded integer, a_434: loaded integer) =
         unseq(
           let weak _: unit =
             pure(Unit) ;
@@ -53,19 +53,20 @@ proc main (): eff loaded integer :=
           load('signed int', member_shift(p, Point, .y))
         ) in
       pure(
-        case (a_514, a_515) of
-          | (Specified(a_516: integer), Specified(a_517: integer)) =>
-              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_516), __conv_int__('signed int', a_517)))
+        case (a_433, a_434) of
+          | (Specified(a_435: integer), Specified(a_436: integer)) =>
+              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_435), __conv_int__('signed int', a_436)))
           | _: (loaded integer,loaded integer) =>
               undef(<<UB036_exceptional_condition>>)
         end
       )
     ) in
   kill('struct Point', p) ;
-  run ret_507(conv_loaded_int('signed int', a_523)) ;
+  run ret_426(conv_loaded_int('signed int', a_442)) ;
   kill('struct Point', p) ;
   pure(Unit) ;
-  save ret_507: loaded integer (a_524: loaded integer:= Specified(0)) in
-    pure(a_524)
+  pure(Unit) ;
+  save ret_426: loaded integer (a_443: loaded integer:= Specified(0)) in
+    pure(a_443)
 
 Defined {value: "Specified(7)", stdout: "", stderr: "", blocked: "false"}

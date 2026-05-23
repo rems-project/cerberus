@@ -74,3 +74,6 @@ jobs:
         USE_OPAM='' ./run-const-prop.sh
         ./diff-prog.py cerberus bytes/elab.json
         ./diff-prog.py cerberus bytes/exec.json
+        cd tests; USE_OPAM='' ./run-copy-prop.sh
+        cd tests; USE_OPAM='' ./run-mem2reg.sh
+        tests/diff-prog.py tests/mem2reg/filter_time_spent.sh tests/mem2reg/transform.json

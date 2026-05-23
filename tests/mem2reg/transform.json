@@ -1,6 +1,6 @@
 {
     "name": "transform",
-    "args": ["--sw", "const_prop,mem2reg", "--typecheck-core", "--exec", "--batch", "--pp", "core"],
+    "args": ["--sw", "inner_arg_temps,const_prop,mem2reg", "--typecheck-core", "--exec", "--batch", "--pp", "core"],
     "filter": "^(.*\\.c)$",
     "timeout": 5
 }

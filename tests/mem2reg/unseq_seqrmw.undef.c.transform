@@ -3,37 +3,38 @@ proc main (): eff loaded integer :=
   let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
   bound(pure(Unit)) ;
   store('signed int', x, conv_loaded_int('signed int', Specified(0))) ;
-  let strong a_517: loaded integer =
+  let strong a_436: loaded integer =
     bound(
-      let weak (a_508: loaded integer, a_509: loaded integer) =
+      let weak (a_427: loaded integer, a_428: loaded integer) =
         unseq(
           let weak _: unit = pure(Unit) in
           load('signed int', x)
         ,
           let weak _: unit = pure(Unit) in
-          seq_rmw('signed int', x, a_515 => case a_515 of
-            | Specified(a_516: integer) =>
+          seq_rmw('signed int', x, a_434 => case a_434 of
+            | Specified(a_435: integer) =>
                 Specified(conv_int('signed int',
                 catch_exceptional_condition_add('signed int', conv_int('signed int',
-                a_516), 1)))
+                a_435), 1)))
             | Unspecified(_: ctype) =>
                 Unspecified('signed int')
           end)
         ) in
       pure(
-        case (a_508, a_509) of
-          | (Specified(a_510: integer), Specified(a_511: integer)) =>
-              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_510), __conv_int__('signed int', a_511)))
+        case (a_427, a_428) of
+          | (Specified(a_429: integer), Specified(a_430: integer)) =>
+              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_429), __conv_int__('signed int', a_430)))
           | _: (loaded integer,loaded integer) =>
               undef(<<UB036_exceptional_condition>>)
         end
       )
     ) in
   kill('signed int', x) ;
-  run ret_506(conv_loaded_int('signed int', a_517)) ;
+  run ret_425(conv_loaded_int('signed int', a_436)) ;
   kill('signed int', x) ;
   pure(Unit) ;
-  save ret_506: loaded integer (a_518: loaded integer:= Specified(0)) in
-    pure(a_518)
+  pure(Unit) ;
+  save ret_425: loaded integer (a_437: loaded integer:= Specified(0)) in
+    pure(a_437)
 
 Undefined {ub: "UB035_unsequenced_race", stderr: "", loc: "<3:12--3:21>"}
