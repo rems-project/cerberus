@@ -654,6 +654,7 @@ let transform_fun bty syms e =
         | Kill (_, addr_pe)
           when pesym_mem addr_pe syms ->
             let pe = Pexpr ([], (), PEval Vunit) in
+            let written = Pset.remove (get_sym addr_pe) written in
             let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
             (Expr (e_annot, Epure pe), delta)
 
@@ -687,9 +688,14 @@ let transform_fun bty syms e =
         end
 
     | Epar es ->
-        (* TODO *)
         assert (Pset.is_empty written);
-        (Expr (e_annot, Epar es), existing)
+        begin match bty with
+        | BTy_tuple btys ->
+            let (es, deltas) = List.split @@ List.map2 (fun bty e ->
+                transform bty val_env written e) btys es in
+            (Expr (e_annot, Epar es), Tuple deltas)
+        | _ -> assert false
+        end
 
     | Eif (pe, e1, e2) ->
         let (wrap_info, inner_w) = List.split @@ List.map (fun e ->
