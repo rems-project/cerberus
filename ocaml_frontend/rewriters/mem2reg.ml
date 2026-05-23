@@ -482,13 +482,7 @@ let find_promotable ~also_fun_args f_sym body : Symbol.sym list =
      C local vars would have no footprint and not show up in the domain of the
      syms mapped to [Ok _]. Hence starting with not-escaped vars and removing
      not-sequence-able ones instead. *)
-  let promotable = Pset.elements (Pset.diff not_esc not_seq) in
-  Cerb_debug.print_debug 3 [] (fun () ->
-    Printf.sprintf "[mem2reg] %s: %d promotable: [%s]"
-      (Pp_symbol.to_string_pretty f_sym)
-      (List.length promotable)
-      (String.concat ", " (List.map Pp_symbol.to_string promotable)));
-  promotable
+  Pset.elements (Pset.diff not_esc not_seq)
 
 let get_ct (Pexpr (_, _, e_)) =
   match e_ with
@@ -779,18 +773,35 @@ let transform_fun bty syms e =
   in
   transform bty sym_empty_map sym_empty_set e
 
-
-let transform_file file =
+let analyse_file file =
   let also_fun_args = match file.calling_convention with
     | Inner_arg_callconv -> true
     | Normal_callconv    -> false
   in
+  Pmap.fold (fun f_sym decl map ->
+    match decl with
+    | Proc (loc, env_marker, ret_bt, args, body) ->
+        let promotable = find_promotable ~also_fun_args f_sym body in
+        if List.is_empty promotable then
+          map
+        else
+          Pmap.add f_sym promotable map
+    | Fun _ | ProcDecl _ | BuiltinDecl _ ->
+        map) file.funs sym_empty_map
+
+let transform_file file =
+  let analysis = analyse_file file in
   let funs = Pmap.mapi (fun f_sym decl ->
     match decl with
-    | Proc (loc, env_marker, ret_bt, args, body, _) ->
-        let promotable = find_promotable ~also_fun_args f_sym body in
-        let (body, _) = transform_fun ret_bt (sym_set_of_list promotable) body in
-        Proc (loc, env_marker, ret_bt, args, body, promotable)
+    | Proc (loc, env_marker, ret_bt, args, body) ->
+        let promotable = Pmap.lookup f_sym analysis in
+        begin match promotable with
+        | None ->
+            decl
+        | Some promotable ->
+            let (body, _) = transform_fun ret_bt (sym_set_of_list promotable) body in
+            Proc (loc, env_marker, ret_bt, args, body)
+        end
     | Fun _ | ProcDecl _ | BuiltinDecl _ ->
         decl) file.funs in
   { file with funs }

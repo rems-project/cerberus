@@ -489,12 +489,10 @@ let dtree_of_funs xs =
           Dnode ( pp_field "Fun" ^^^ pp_symbol sym ^^ P.colon ^^^ Pp_core.Basic.pp_core_base_type bTy
                 , [ Dnode (pp_field ".params", List.map dtree_of_param params)
                   ; Dnode (pp_field ".body", [dtree_of_pexpr pe]) ] )
-      | Proc (loc, _mrk, bTy, params, e, promotable) ->
+      | Proc (loc, _mrk, bTy, params, e) ->
           Dnode ( pp_field "Proc" ^^^ pp_symbol sym ^^ P.colon ^^^ Pp_core.Basic.pp_core_base_type bTy
                 , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                  ; Dnode (pp_field ".body", [dtree_of_expr e]) 
-                  ; Dnode (pp_field ".promotable", [
-                        Dleaf (P.braces (P.separate_map (P.comma ^^ P.space) pp_symbol promotable)) ] ) ] )
+                  ; Dnode (pp_field ".body", [dtree_of_expr e]) ] )
       | ProcDecl (loc, ret_bTy, params_bTys) ->
           (* TODO: loc*)
           Dleaf ( pp_field "ProcDecl" ^^^ pp_symbol sym ^^ P.colon ^^^
