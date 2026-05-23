@@ -126,7 +126,7 @@ let mark_set status set map =
        walk has been seen only in those safe positions.
 
    Note that symbols are NOT unique per binder: a pointer to a C local object
-   will have the same symbol, regardless of how Tuple times it is bound (in an
+   will have the same symbol, regardless of how many times it is bound (in an
    Esave, or across different Creates/lifetimes). This means the analysis needs
    to actually be flow-insenstive (e.g. ignore that control does not return
    after an Erun) to be correct: a symbol is promotable if ALL its lifetimes do
@@ -639,7 +639,7 @@ let transform_fun bty syms e =
             let prev_pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
             let written = Pset.add sym written in
             let (val_env, pe) =
-              (* use Elet to avoid double-eval of val_pe? *)
+              (* could use Elet to avoid double-eval of val_pe if fwd = true *)
               let val_pe = Core_aux.unsafe_subst_sym_pexpr x_sym prev_pe new_pe in
               (Pmap.add sym val_pe val_env, if fwd then val_pe else prev_pe) in
             let (pe, delta) = extend_pe_delta pe !bty_env val_env (Pset.add sym written) in
