@@ -929,7 +929,18 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               E.fail loc (Mismatch "CivXOR" bTy (BTy_object OTy_integer))
           | (Cspecified, BTy_loaded oTy, [pe]) ->
               ret_ctor Cspecified <$> typecheck_pexpr tagDefs env (BTy_object oTy) pe
-          | (Cspecified, _, _) ->
+          | (Cspecified, BTy_storable, [pe]) ->
+              (* storable is like (exists oTy. loaded oTy), so a Specified(pe)
+                 checks agains storable if we can _infer_ an oTy for pe;
+                 logic is the same as the infer_pexpr case for Cspecified *)
+              infer_pexpr tagDefs env pe >>= fun (Pexpr _ infer _ as pe') ->
+              match infer with
+                | InferredType_object oTy ->
+                    E.return (ret_ctor Cspecified pe')
+                | _ ->
+                    E.fail loc TooGeneral
+              end
+          | (Cspecified, _, pes) ->
               E.fail loc (MismatchExpected "Cspecified" bTy "loaded object")
           | (Cunspecified, BTy_loaded _, [pe]) ->
               ret_ctor Cunspecified <$> typecheck_pexpr tagDefs env BTy_ctype pe
