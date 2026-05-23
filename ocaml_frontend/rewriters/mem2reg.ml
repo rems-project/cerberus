@@ -519,7 +519,7 @@ let rec update_pat pat delta =
   match delta with
   | Extended None -> ([], pat)
   | Extended (Some { written; existing }) ->
-    assert (not (List.is_empty written));
+    assert ([] <> written);
     let (matched, pats) = List.split @@ List.map (fun (sym, bty) ->
         let new_ = new_sym sym in
         ((sym, new_), Pattern ([], CaseBase (Some new_, bty)))) written in
@@ -543,7 +543,7 @@ let extend_pe_delta pe bty_env val_env written =
   let written = Pset.elements written in
   let pes = written |> List.map (fun sym -> Option.get @@ Pmap.lookup sym val_env) in
   let written = written |> List.map (fun sym -> (sym, Option.get @@ Pmap.lookup sym bty_env)) in
-  if List.is_empty pes then
+  if [] = pes then
     (pe, Extended None)
   else if is_unit_pe pe then
     ((Pexpr ([], (), PEctor (Ctuple, pes))), Extended (Some { written; existing = false }))
@@ -782,7 +782,7 @@ let analyse_file file =
     match decl with
     | Proc (loc, env_marker, ret_bt, args, body) ->
         let promotable = find_promotable ~also_fun_args f_sym body in
-        if List.is_empty promotable then
+        if [] = promotable then
           map
         else
           Pmap.add f_sym promotable map
