@@ -332,9 +332,9 @@ let rec explode_expr env (Expr annot expr_ as expr) =
     | Erun _ _ _ ->
         expr
     | Ejump _ _ _ ->
-        error "TODO explode_expr Ejump"
+        expr
     | Ewhere _ _ ->
-        error "TODO explode_expr Ewhere"
+        expr
     | Epar es ->
         wrap (Epar (List.map self es))
     | Ewait _ ->
