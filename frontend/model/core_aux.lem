@@ -1034,7 +1034,7 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
     | Ewhere e defs ->
         let defs' = List.map (fun (sym_ty, params, body) ->
           (sym_ty, params,
-           (* TODO: revisit this - ideally labels are closed or close *)
+           (* TODO: revisit when scoping is clearer (ideally labels are closed) *)
            if List.any (fun (z, _) -> sym = z) params then body
            else subst_sym_expr sym cval body)
         ) defs in
@@ -1313,7 +1313,7 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
     | Ewhere e defs ->
         let defs' = List.map (fun (sym_ty, params, body) ->
           (sym_ty, params,
-           (* TODO: revisit this - ideally labels are closed or close *)
+           (* TODO: revisit when scoping is clearer (ideally labels are closed) *)
            if List.any (fun (z, _) -> sym = z) params then body
            else unsafe_subst_sym_expr sym pe' body)
         ) defs in

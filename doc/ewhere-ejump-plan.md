@@ -502,6 +502,16 @@ log deviations.
 
 - The plan's description implied `core_rewriter` was used by `copy_propagation.ml`; it is not. `core_rewriter.ml` is used only by `remove_unspecs.ml` and `core_peval.ml`. The commit message was corrected to reflect the actual callers.
 
+### Commit 12 (core_peval.ml) deviations
+
+- `core_peval.ml` is only called from `backend/playground/main.ml`; it
+  is not part of the main pipeline. Implemented anyway.
+- `Ejump` mirrors `Erun` exactly.
+- `Ewhere` mirrors `Esave`: skip body substitution if `sym` is shadowed
+  by that def's params. Unlike `Esave`, `Ewhere` params carry no pexprs
+  (no initial values), so there is nothing to substitute in the params
+  themselves.
+
 ### Commit 11 (copy_propagation.ml) deviations
 
 - A comment and `assert` were added to the `Esave` case explaining why
