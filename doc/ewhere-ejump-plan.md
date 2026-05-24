@@ -504,4 +504,12 @@ log deviations.
 
 ### Commit 11 (copy_propagation.ml) deviations
 
-- No deviations. `Ejump` maps `pp` (the local pexpr propagator) over its pexpr list, identical to the `Erun` case. `Ewhere` propagates through the main expression and each label body with `env` passed unchanged (label params shadow outer bindings but are not substituted by this pass).
+- A comment and `assert` were added to the `Esave` case explaining why
+  passing `env` unchanged into the body is safe: the elaboration re-uses
+  local var syms across `Esave` binder boundaries, but those syms are
+  never re-bound to a different pure value, so they are never present in
+  `env`. The `assert` checks this at runtime.
+- `Ewhere` mirrors the pattern exactly, including its own `assert` on
+  each def's params. Whether the invariant is guaranteed to hold for
+  `Ewhere` label parameters has not been confirmed; both the comment and
+  assert are intentionally tentative.
