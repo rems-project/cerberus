@@ -458,3 +458,15 @@ log deviations.
 - **`parsers/core/core_parser.mly`**: Not in the original plan; added as Commit 14. Has two match blocks on `generic_expr_`; added `| Ejump _ -> failwith "TODO Ejump"` + `| Ewhere _ -> failwith "TODO Ewhere"` to `symbolify_expr`, and added `| Ejump _ | Ewhere _` to the no-op group in `register_labels`.
 - **`backend/common/pipeline.ml`**: Not in the original plan; added as Commit 15. Has an `untype_expr` function that pattern-matches exhaustively; added stubs there.
 - **`core_aux.lem` rows 5–9** (`find_labeled_continuation`, `find_labeled_continuation2_aux`, `collect_labeled_continuations`, `collect_saves_aux`, `m_collect_saves_aux`): originally planned as trivial returns (correct by mutual-exclusivity invariant), now uniformly use error stubs like all other cases.
+
+### Commit 2 (core_sequentialise.lem) deviations
+
+- Removed the temporary `import Utils` added in Commit 1 (no longer needed once real implementation is in place; `error` is not called).
+
+### Commit 3 (core_unstruct.lem) deviations
+
+- `explode_expr` is dead code — `explode_file` is never called from the pipeline. The code also appears incomplete or potentially incorrect for `Esave` (whose arguments are always pointers to local variables, thus could be pointers to structs). Both new cases return `expr` unchanged, consistent with how `Esave` and `Erun` are handled.
+
+### Commit 4 (core_indet.lem) — SKIPPED
+
+- `core_indet.lem` is almost entirely commented out; only ~11 lines are live and `hackish_order` (the pipeline entry point) is a no-op stub. There is nothing meaningful to implement. The Commit 1 stubs already satisfy the exhaustiveness requirement. Skipped entirely; no implementation commit for this file.
