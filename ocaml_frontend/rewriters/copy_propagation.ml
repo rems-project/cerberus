@@ -414,6 +414,8 @@ let rec propagate_expr ~unwrap_loaded env (Expr (annots, e_) as expr) =
         propagate env body))
   | Erun (a, lbl, pes) ->
       Expr (annots, Erun (a, lbl, List.map pp pes))
+  | Ejump _ -> failwith "TODO Ejump"
+  | Ewhere _ -> failwith "TODO Ewhere"
   | Ebound e ->
       Expr (annots, Ebound (propagate env e))
   | Eannot (fps, e) ->

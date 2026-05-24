@@ -312,6 +312,8 @@ type expr_alg 'sym 'bty 'ov 'lv 'value 'pexpr 'a 'action_ 'action 'paction 'expr
    ; a_End : list 'expr -> exceptM 'expr_ msg
    ; a_Esave : ('sym * core_base_type) -> list ('sym * (core_base_type * generic_pexpr 'bty 'sym)) -> 'expr -> exceptM 'expr_ msg
    ; a_Erun : 'a -> 'sym -> list 'pexpr -> exceptM 'expr_ msg
+   ; a_Ewhere : 'expr -> list (('sym * core_base_type) * list ('sym * (core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer))) * 'expr) -> exceptM 'expr_ msg
+   ; a_Ejump : 'a -> 'sym -> list 'pexpr -> exceptM 'expr_ msg
    ; a_Epar : list 'expr -> exceptM 'expr_ msg
    ; a_Ewait : Mem_common.thread_id -> exceptM 'expr_ msg
    ; a_Epack : Symbol.identifier -> list 'pexpr -> exceptM 'expr_ msg
@@ -384,6 +386,10 @@ let rec fold_expr alg e =
   | Erun a s pes ->
      (mapM (fold_pexpr alg.pexpr_alg) pes) >>= fun pes ->
      wrap (alg.a_Erun a s pes)
+  | Ewhere _ _ ->
+     error "TODO fold_expr Ewhere"
+  | Ejump _ _ _ ->
+     error "TODO fold_expr Ejump"
   | Epar es ->
      (mapM (fold_expr alg) es) >>= fun es ->
      wrap (alg.a_Epar es)
@@ -499,6 +505,8 @@ let id_expr_alg action_alg pexpr_alg =
    ; a_End = fun a -> return (End a)
    ; a_Esave = fun a b c -> return (Esave a b c)
    ; a_Erun = fun a b c -> return (Erun a b c)
+   ; a_Ewhere = fun _ _ -> error "TODO id_expr_alg a_Ewhere"
+   ; a_Ejump = fun _ _ _ -> error "TODO id_expr_alg a_Ejump"
    ; a_Epar = fun a -> return (Epar a)
    ; a_Ewait = fun a -> return (Ewait a)
    ; a_Epack = fun id es -> return (Epack id es)
@@ -674,6 +682,8 @@ let pfp_expr_alg action_alg pexpr_alg =
    ; a_End = fun a -> return (End a)
    ; a_Esave = fun a b c -> return (Esave a b c)
    ; a_Erun = fun a b c -> return (Erun a b c)
+   ; a_Ewhere = fun _ _ -> error "TODO pfp_expr_alg a_Ewhere"
+   ; a_Ejump = fun _ _ _ -> error "TODO pfp_expr_alg a_Ejump"
    ; a_Epar = fun a -> return (Epar a)
    ; a_Ewait = fun a -> return (Ewait a)
    ; a_Epack = fun id es -> return (Epack id es)

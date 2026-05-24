@@ -377,6 +377,8 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                   Esave (lab_sym, sym_bTy_pes', subst_sym_expr2 sym z e)
             | Erun (annot, lab_sym, pes) ->
                 Erun (annot, lab_sym, List.map (subst_sym_pexpr2 sym z) pes)
+            | Ejump _ -> failwith "TODO Ejump"
+            | Ewhere _ -> failwith "TODO Ewhere"
             | End es ->
                 End (List.map (subst_sym_expr2 sym z) es)
             | Epar es ->

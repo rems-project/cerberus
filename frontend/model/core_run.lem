@@ -1500,12 +1500,16 @@ BEFORE EVAL_PEXPR2
           E.return <| th_st with arena= e' |>
         )
     
+    | (Ewhere _ _, _) ->
+        error "TODO Ewhere"
+    | (Ejump _ _ _, _) ->
+        error "TODO Ejump"
     | (Erun _ _ _, Stack_empty) ->
         error "reached empty stack with an Erun"
-    
+
     | (Erun _ _ _, Stack_cons Nothing _ _) ->
         error "found a Erun outside of a procedure"
-    
+
     | (Erun annots sym pes, Stack_cons (Just current_proc) cont sk) ->
         one $ Step_tau "Erun" TSK_Misc begin
           SEU.read (fun st ->

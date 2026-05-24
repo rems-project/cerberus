@@ -658,6 +658,8 @@ let rec pp_expr expr =
             P.nest 2 (P.break 1 ^^ pp e)
         | Erun (_, sym, pes) ->
             pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
+        | Ejump _ -> failwith "TODO Ejump"
+        | Ewhere _ -> failwith "TODO Ewhere"
         | Epar es ->
             with_grouped_args (pp_keyword "par") (List.map pp es)
         | Ewait tid ->

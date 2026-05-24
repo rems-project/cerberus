@@ -734,6 +734,8 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
              Eff.mapM symbolify_pexpr _pes >>= fun pes ->
              Eff.return (Erun ((), sym, pes))
        end
+   | Ejump _ -> failwith "TODO Ejump"
+   | Ewhere _ -> failwith "TODO Ewhere"
    | Epar _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (Epar es)
@@ -839,6 +841,8 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Eccall _
     | Eproc _
     | Erun _
+    | Ejump _
+    | Ewhere _
     | Ewait _
       ->
         Eff.return ()

@@ -80,6 +80,8 @@ let rec remove_save expr =
      let args = List.map (fun (_, (_, pe)) -> pe) args in
      wrap (Erun ((), sym, args))
   | Erun _ -> expr
+  | Ejump _ -> expr
+  | Ewhere _ -> failwith "TODO Ewhere"
   | Epar es -> wrap (Epar (List.map remove_save es))
   | Ewait _ -> expr
   | Eannot (fps, e) -> wrap (Eannot (fps, remove_save e))

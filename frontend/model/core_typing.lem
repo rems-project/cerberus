@@ -1641,6 +1641,10 @@ let rec collect_labels env (Expr _ expr_) =
         collect_labels <| env with labs= Map.insert sym (bTy, List.map (fun (_, ((z,_), _)) -> z) sym_bTy_pes) env.labs |> e
     | Erun _ _ _ ->
         E.return env
+    | Ejump _ _ _ ->
+        E.return env
+    | Ewhere _ _ ->
+        error "TODO collect_labels Ewhere"
     | Epar es ->
         E.foldlM (fun env' e ->
           collect_labels env' e
@@ -1836,6 +1840,10 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
           | Nothing ->
               E.fail loc (CoreTyping_TODO "Erun, undeclared label")
         end
+    | Ejump _ _ _ ->
+        error "TODO typecheck_expr Ejump"
+    | Ewhere _ _ ->
+        error "TODO typecheck_expr Ewhere"
     | Epar es ->
         if List.length es < 2 then
           E.fail loc (CoreTyping_TODO "Epar must have at least 2 operands")

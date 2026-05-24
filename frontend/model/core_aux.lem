@@ -1029,6 +1029,10 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
           Esave lab_sym sym_bTy_pes' (subst_sym_expr sym cval e)
     | Erun annot lab_sym pes ->
         Erun annot lab_sym (List.map (subst_sym_pexpr sym cval) pes)
+    | Ejump _ _ _ ->
+        error "TODO subst_sym_expr Ejump"
+    | Ewhere _ _ ->
+        error "TODO subst_sym_expr Ewhere"
     | End es ->
         End (List.map (subst_sym_expr sym cval) es)
     | Epar es ->
@@ -1298,6 +1302,10 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
           Esave lab_sym sym_bTy_pes' (unsafe_subst_sym_expr sym pe' e)
     | Erun annot lab_sym pes ->
         Erun annot lab_sym (List.map (unsafe_subst_sym_pexpr sym pe') pes)
+    | Ejump _ _ _ ->
+        error "TODO unsafe_subst_sym_expr Ejump"
+    | Ewhere _ _ ->
+        error "TODO unsafe_subst_sym_expr Ewhere"
     | End es ->
         End (List.map (unsafe_subst_sym_expr sym pe') es)
     | Epar es ->
@@ -1573,6 +1581,10 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Nothing
     | Erun _ _ _ ->
         Nothing
+    | Ejump _ _ _ ->
+        error "TODO to_pure Ejump"
+    | Ewhere _ _ ->
+        error "TODO to_pure Ewhere"
     | End _ ->
         Nothing
     | Epar _ ->
@@ -1648,6 +1660,10 @@ let rec subst_wait tid v (Expr annot expr_) =
        Esave sym sym_bTys (subst_wait tid v e)
    | Erun _ _ _ ->
        expr_
+   | Ejump _ _ _ ->
+       error "TODO subst_wait Ejump"
+   | Ewhere _ _ ->
+       error "TODO Ewhere"
    | End es ->
        End (List.map (subst_wait tid v) es)
    | Epar es ->
@@ -1747,6 +1763,10 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
           find_labeled_continuation sym e
     | Erun annot sym pes ->
         Nothing
+    | Ejump _ _ _ ->
+        error "TODO find_labeled_continuation Ejump"
+    | Ewhere _ _ ->
+        error "TODO find_labeled_continuation Ewhere"
     | Epar es ->
         let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes there are no Esave inside par()") in
         Nothing
@@ -1826,6 +1846,10 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
           find_labeled_continuation2_aux (Map.insert sym' (List.map fst sym_bTys, e) acc) sym e
     | Erun annot sym pes ->
         acc
+    | Ejump _ _ _ ->
+        error "TODO find_labeled_continuation2_aux Ejump"
+    | Ewhere _ _ ->
+        error "TODO find_labeled_continuation2_aux Ewhere"
     | Epar es ->
         let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation2_aux assumes there are no Esave inside par()") in
         acc
@@ -1910,6 +1934,10 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         Map.insert sym_lab (List.map fst sym_bTys, e) $ collect_labeled_continuations e
     | Erun _ _ _ ->
         Map.empty
+    | Ejump _ _ _ ->
+        error "TODO collect_labeled_continuations Ejump"
+    | Ewhere _ _ ->
+        error "TODO collect_labeled_continuations Ewhere"
     | End _ ->
         (* TODO: check *)
         Map.empty
@@ -2239,6 +2267,10 @@ let rec collect_saves_aux st (Expr annots expr_) =
           e
     | Erun _ _ _ ->
         st
+    | Ejump _ _ _ ->
+        error "TODO collect_saves_aux Ejump"
+    | Ewhere _ _ ->
+        error "TODO collect_saves_aux Ewhere"
     | Epar es ->
         let acc = List.foldl collect_saves_aux
           empty_saves es in
@@ -2351,6 +2383,10 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
           e
     | Erun _ _ _ ->
         st
+    | Ejump _ _ _ ->
+        error "TODO m_collect_saves_aux Ejump"
+    | Ewhere _ _ ->
+        error "TODO m_collect_saves_aux Ewhere"
     | Epar es ->
         let acc = List.foldl m_collect_saves_aux
           m_empty_saves es in

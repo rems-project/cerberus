@@ -333,6 +333,8 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Esave of ('sym * core_base_type) * list ('sym * ((core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)) * generic_pexpr 'bty 'sym)) * (generic_expr 'a 'bty 'sym) (* save label *)
  | Erun of 'a * 'sym * list (generic_pexpr 'bty 'sym) (* run from label *)
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem-like thread creation *)
+ | Ewhere of (generic_expr 'a 'bty 'sym) * list (('sym * core_base_type) * list ('sym * (core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer))) * (generic_expr 'a 'bty 'sym))
+ | Ejump of 'a * 'sym * list (generic_pexpr 'bty 'sym)
  (* This two only exists during the execution *)
  | Ewait of Mem_common.thread_id (* wait for thread termination *)
   

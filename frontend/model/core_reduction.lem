@@ -474,6 +474,10 @@ let rec has_ccall (Expr _ expr_) =
         has_ccall e (* NOTE: this function should never see this case (for a C program) *)
     | Erun _ _ _ ->
         false (* NOTE: this function should never see this case (for a C program) *)
+    | Ejump _ _ _ ->
+        error "TODO has_ccall Ejump"
+    | Ewhere _ _ ->
+        error "TODO has_ccall Ewhere"
     | Epar _ ->
         false (* because any ccall is in the body of another thread *)
     | Ewait _ ->
@@ -559,6 +563,10 @@ let rec get_ctx (Expr annot expr_ as expr) =
         [(CTX, expr)]
     | Erun _ _ _ ->
         [(CTX, expr)]
+    | Ejump _ _ _ ->
+        error "TODO get_ctx Ejump"
+    | Ewhere _ _ ->
+        error "TODO get_ctx Ewhere"
     | Epar _ ->
         [(CTX, expr)]
     | Ewait _ ->
@@ -1390,6 +1398,12 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 let wrap_proc xs = wrap_expr (Expr e_annots (Eproc a (Impl iCst) xs)) in
                 process_impl_proc full_eval_pexpr' wrap_proc wrap_expr th_st iCst pes
 
+          | Ewhere _ _ ->
+              (* TODO: implement Ewhere reduction semantics *)
+              error "TODO Ewhere reduction"
+          | Ejump _ _ _ ->
+              (* TODO: implement Ejump reduction semantics (analogous to Erun) *)
+              error "TODO Ejump reduction"
           | Erun run_annots sym pes ->
               let current_proc =
                 match th_st.current_proc_opt with
