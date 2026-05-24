@@ -502,16 +502,6 @@ log deviations.
 
 - The plan's description implied `core_rewriter` was used by `copy_propagation.ml`; it is not. `core_rewriter.ml` is used only by `remove_unspecs.ml` and `core_peval.ml`. The commit message was corrected to reflect the actual callers.
 
-### Commit 12 (core_peval.ml) deviations
-
-- `core_peval.ml` is only called from `backend/playground/main.ml`; it
-  is not part of the main pipeline. Implemented anyway.
-- `Ejump` mirrors `Erun` exactly.
-- `Ewhere` mirrors `Esave`: skip body substitution if `sym` is shadowed
-  by that def's params. Unlike `Esave`, `Ewhere` params carry no pexprs
-  (no initial values), so there is nothing to substitute in the params
-  themselves.
-
 ### Commit 11 (copy_propagation.ml) deviations
 
 - A comment and `assert` were added to the `Esave` case explaining why
@@ -523,3 +513,27 @@ log deviations.
   each def's params. Whether the invariant is guaranteed to hold for
   `Ewhere` label parameters has not been confirmed; both the comment and
   assert are intentionally tentative.
+
+### Commit 12 (core_peval.ml) deviations
+
+- `core_peval.ml` is only called from `backend/playground/main.ml`; it
+  is not part of the main pipeline. Implemented anyway.
+- `Ejump` mirrors `Erun` exactly.
+- `Ewhere` mirrors `Esave`: skip body substitution if `sym` is shadowed
+  by that def's params. Unlike `Esave`, `Ewhere` params carry no pexprs
+  (no initial values), so there is nothing to substitute in the params
+  themselves.
+
+### Commit 13 (milicore.ml) deviations
+
+- The plan proposed `remove_save e` for `Ewhere`, treating label defs as
+  pre-registered via `m_collect_saves`. This is incorrect: our
+  `m_collect_saves_aux` returns `st` (no-op) for `Ewhere` because
+  `Ewhere`/`Ejump` and `Esave`/`Erun` are mutually exclusive.
+- The Commit 1 stub had `Ejump _ -> expr` (pass-through) and
+  `Ewhere _ -> failwith "TODO Ewhere"` as separate cases. Both were
+  replaced with a single combined case at the end of the match:
+  `| Ejump _ | Ewhere _ -> failwith "should not have Ejump/Ewhere in
+  same program has Erun/Esave"`, making the mutual-exclusivity
+  invariant explicit.
+

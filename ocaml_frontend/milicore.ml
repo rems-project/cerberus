@@ -80,14 +80,14 @@ let rec remove_save expr =
      let args = List.map (fun (_, (_, pe)) -> pe) args in
      wrap (Erun ((), sym, args))
   | Erun _ -> expr
-  | Ejump _ -> expr
-  | Ewhere _ -> failwith "TODO Ewhere"
   | Epar es -> wrap (Epar (List.map remove_save es))
   | Ewait _ -> expr
   | Eannot (fps, e) -> wrap (Eannot (fps, remove_save e))
   | Eexcluded _ -> expr
   | End es ->
       wrap (End (List.map remove_save es))
+  | Ejump _ | Ewhere _ ->
+      failwith "should not have Ejump/Ewhere in same program has Erun/Esave"
 
 
 let core_to_micore__funmap_decl update_loc = function
