@@ -51,8 +51,6 @@ fi
 
 set_cerberus_exec "cerberus"
 
-echo "=== Phase 1: regression (--switches const_prop must not change output of existing tests) ==="
-
 for file in "${citests[@]}"; do
   if [[ ! -f ./ci/$file ]]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m"

@@ -52,8 +52,6 @@ fi
 
 set_cerberus_exec "cerberus"
 
-echo "=== Phase 1: regression (--switches mem2reg must not change output of tests 0001–0340) ==="
-
 for file in "${citests[@]}"; do
   if [[ ! -f ./ci/$file ]]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m"
@@ -101,6 +99,6 @@ for file in "${citests[@]}"; do
 done
 
 echo ""
-echo "MEM2REG PHASE 1 PASSED: $pass"
-echo "MEM2REG PHASE 1 FAILED: $fail"
+echo "MEM2REG PASSED: $pass"
+echo "MEM2REG FAILED: $fail"
 [ $fail -eq 0 ]
