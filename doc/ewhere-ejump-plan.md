@@ -1,3 +1,8 @@
+Resume session with 
+```
+claude --resume "add-ewhere-ejump-core-ir"
+```
+
 # Plan: Add `Ewhere` / `Ejump` to Core IR
 
 ## Context
@@ -380,7 +385,12 @@ dune build    # should now succeed (ignoring unrelated absint/coq errors)
 
 ### Workflow
 
+Make sure to `make && make install` to build and `cd tests && ./run-ci.sh && cd ..` too.
 After reviewing each change (but **before** committing): update the **Change log** section at the bottom of this document to note any deviations from the plan above.
+
+Each commit message header should be 50 characters wide or less.
+Each commit message body should be wrapped to lines of length 72 characters.
+Each commit should end with "Assisted-By: Claude Sonnet 4.6 <noreply@anthropic.com>".
 
 ---
 
