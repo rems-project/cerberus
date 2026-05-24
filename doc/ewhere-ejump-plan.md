@@ -470,3 +470,38 @@ log deviations.
 ### Commit 4 (core_indet.lem) — SKIPPED
 
 - `core_indet.lem` is almost entirely commented out; only ~11 lines are live and `hackish_order` (the pipeline entry point) is a no-op stub. There is nothing meaningful to implement. The Commit 1 stubs already satisfy the exhaustiveness requirement. Skipped entirely; no implementation commit for this file.
+
+### Commit 5 (core_rewrite.lem) deviations
+
+- `remove_dead_aux` turned out to be dead code — it is commented out of `rewrite_expr` along with four other functions (`remove_skips`, `remove_unseqs`, `sequentialise_creates_kills`, `simpl_case`). Only `flatten_seqs` and `pure_propagation2` are actually called from the pipeline. All 8 functions were implemented regardless (the dead ones still need to compile), but the commit message documents which are live vs. dead.
+- For `remove_dead_aux`, `Ejump` returns `Left expr` (like `Erun`) and `Ewhere` determines `Left`/`Right` based on its main expression `e`, with label bodies traversed in both branches.
+
+### Commit 6 (core_rewrite2.lem) deviations
+
+- The entire file is dead: `Core_rewrite2.rw_file` is commented out in `pipeline.ml` and nothing else calls `fold_expr`, `id_expr_alg`, or `pfp_expr_alg`. The plan did not note this; all three locations were implemented regardless (the file still needs to compile).
+- The plan described adding `a_Ewhere` / `a_Ejump` fields to the `alg_type` record type. This was done correctly. The plan's code snippets for `id_expr_alg` and `pfp_expr_alg` used the name `pfp_expr_alg`; the actual names in the file match.
+
+### Commit 7 (core_aux.lem) deviations
+
+- Rows 5–9 (`find_labeled_continuation`, `find_labeled_continuation2_aux`, `collect_labeled_continuations`, `collect_saves_aux`, `m_collect_saves_aux`) were changed from error stubs (added in Commit 1) to proper error messages explaining that those cases should not be see in the programs where `Esave/Erun` exist. They could be implemented with the trivial "no match" returns originally planned if need be/required later.
+
+### Commit 8 (pp_core.ml) deviations
+
+- The plan's proposed layout (`pp_keyword "where" ^^^ ... pp_control "with" ^^^ ...`) was rejected after review. The final format was redesigned based on user feedback through several iterations:
+  - `e` appears first (not inside a `where` wrapper)
+  - The first label definition uses `where` as its keyword, indented on a new line (via `P.nest 2 (P.hardline ^^ ...)`)
+  - Subsequent definitions use `and` (like OCaml's `let rec ... and ...`)
+  - No surrounding `[` `]` brackets, no `pp_control "with"`, no `eff` keyword before the return type
+- A local helper `pp_def` was introduced to avoid repeating the per-definition layout.
+
+### Commit 9 (pp_core_ast.ml) deviations
+
+- The plan said to add after `Esave` (~line 397). In practice, `pp_core_ast.ml` was not modified in Commit 1 (no stubs were added because the existing `| _ -> Dleaf (TODO_expr ...)` catch-all kept the file buildable). The new cases were added immediately before that catch-all.
+
+### Commit 10 (core_rewriter.ml) deviations
+
+- The plan's description implied `core_rewriter` was used by `copy_propagation.ml`; it is not. `core_rewriter.ml` is used only by `remove_unspecs.ml` and `core_peval.ml`. The commit message was corrected to reflect the actual callers.
+
+### Commit 11 (copy_propagation.ml) deviations
+
+- No deviations. `Ejump` maps `pp` (the local pexpr propagator) over its pexpr list, identical to the `Erun` case. `Ewhere` propagates through the main expression and each label body with `env` passed unchanged (label params shadow outer bindings but are not substituted by this pass).
