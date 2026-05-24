@@ -386,10 +386,15 @@ let rec fold_expr alg e =
   | Erun a s pes ->
      (mapM (fold_pexpr alg.pexpr_alg) pes) >>= fun pes ->
      wrap (alg.a_Erun a s pes)
-  | Ewhere _ _ ->
-     error "TODO fold_expr Ewhere"
-  | Ejump _ _ _ ->
-     error "TODO fold_expr Ejump"
+  | Ewhere e defs ->
+     (fold_expr alg e) >>= fun e ->
+     (mapM (fun (sym_ty, params, body) ->
+       fold_expr alg body >>= fun body' -> return (sym_ty, params, body')
+     ) defs) >>= fun defs' ->
+     wrap (alg.a_Ewhere e defs')
+  | Ejump a s pes ->
+     (mapM (fold_pexpr alg.pexpr_alg) pes) >>= fun pes ->
+     wrap (alg.a_Ejump a s pes)
   | Epar es ->
      (mapM (fold_expr alg) es) >>= fun es ->
      wrap (alg.a_Epar es)
@@ -505,8 +510,8 @@ let id_expr_alg action_alg pexpr_alg =
    ; a_End = fun a -> return (End a)
    ; a_Esave = fun a b c -> return (Esave a b c)
    ; a_Erun = fun a b c -> return (Erun a b c)
-   ; a_Ewhere = fun _ _ -> error "TODO id_expr_alg a_Ewhere"
-   ; a_Ejump = fun _ _ _ -> error "TODO id_expr_alg a_Ejump"
+   ; a_Ewhere = fun e defs -> return (Ewhere e defs)
+   ; a_Ejump = fun a b c -> return (Ejump a b c)
    ; a_Epar = fun a -> return (Epar a)
    ; a_Ewait = fun a -> return (Ewait a)
    ; a_Epack = fun id es -> return (Epack id es)
@@ -682,8 +687,8 @@ let pfp_expr_alg action_alg pexpr_alg =
    ; a_End = fun a -> return (End a)
    ; a_Esave = fun a b c -> return (Esave a b c)
    ; a_Erun = fun a b c -> return (Erun a b c)
-   ; a_Ewhere = fun _ _ -> error "TODO pfp_expr_alg a_Ewhere"
-   ; a_Ejump = fun _ _ _ -> error "TODO pfp_expr_alg a_Ejump"
+   ; a_Ewhere = fun e defs -> return (Ewhere e defs)
+   ; a_Ejump = fun a b c -> return (Ejump a b c)
    ; a_Epar = fun a -> return (Epar a)
    ; a_Ewait = fun a -> return (Ewait a)
    ; a_Epack = fun id es -> return (Epack id es)
