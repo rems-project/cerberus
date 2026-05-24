@@ -544,6 +544,8 @@ let pp_pexpr pe =
     end
   end in pp None pe
 
+let pp_argument (sym, bTy) =
+  pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 
 let rec pp_expr expr =
   let rec pp (*is_semi prec*) (Expr (annot, e)) =
@@ -658,8 +660,39 @@ let rec pp_expr expr =
             P.nest 2 (P.break 1 ^^ pp e)
         | Erun (_, sym, pes) ->
             pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
-        | Ejump _ -> failwith "TODO Ejump"
-        | Ewhere _ -> failwith "TODO Ewhere"
+        | Ejump (_, sym, pes) ->
+            pp_keyword "jump" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
+        | Ewhere (e, defs) ->
+            (* "where" keyword binds tightest to exprs *)
+            let needs_paren =
+              let (Expr (_, expr_)) = e in
+              match expr_ with
+                | Eif _ | Esseq _ | Ewseq _ | Esave _ | Elet _ ->
+                  (* end with an expr *)
+                  true
+                | Epure _ | Ememop _ | Eaction _ | Ecase _ | Eccall _
+                | Eproc _ | Eunseq _ | Ebound _ | End _ | Erun _ | Epar _
+                | Ewhere _ | Ejump _ | Ewait _ | Eannot _ | Eexcluded _ ->
+                  (* end with a token *)
+                  false in
+            let pp_def kw ((sym, bTy), params, body) =
+              kw ^^^ pp_symbol sym ^^^
+              P.parens (comma_list (fun (s, (sBTy, _)) -> pp_argument (s, sBTy)) params) ^^^
+              P.colon ^^^ pp_core_base_type bTy ^^^
+              P.colon ^^ P.equals ^^
+              P.nest 2 (P.break 1 ^^ pp body)
+            in
+            (match defs with
+            | [] -> assert false
+            | first :: rest ->
+                (if needs_paren then P.parens else Fun.id) (pp e) ^^
+                P.nest 2 (
+                  P.hardline ^^ pp_def (pp_control "where") first ^^
+                  P.concat (List.map (fun def ->
+                    P.hardline ^^ pp_def (pp_keyword "and") def
+                  ) rest)
+                )
+            )
         | Epar es ->
             with_grouped_args (pp_keyword "par") (List.map pp es)
         | Ewait tid ->
@@ -767,9 +800,6 @@ let pp_tagDefinitions tagDefs =
     pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
     ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
   in P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
-
-let pp_argument (sym, bTy) =
-  pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 
 let pp_params params =
   P.parens (comma_list pp_argument params)
