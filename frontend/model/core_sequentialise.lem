@@ -1,4 +1,3 @@
-import Utils
 open import Core
 
 val     sequentialise_expr: typed_expr unit -> typed_expr unit
@@ -56,10 +55,11 @@ let rec sequentialise_expr (Expr annot expr_) =
         Esave sym_ty xs (sequentialise_expr e)
     | Erun () sym es ->
         expr_
-    | Ejump _ _ _ ->
-        Utils.error "TODO sequentialise_expr Ejump"
-    | Ewhere _ _ ->
-        Utils.error "TODO sequentialise_expr Ewhere"
+    | Ejump () sym es ->
+        expr_
+    | Ewhere e cases ->
+        Ewhere (sequentialise_expr e)
+          (List.map (fun (sym_ty, params, body) -> (sym_ty, params, sequentialise_expr body)) cases)
     | Epar es ->
         Epar (List.map sequentialise_expr es)
     | Ewait _ ->
