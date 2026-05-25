@@ -450,8 +450,8 @@ log deviations.
 | 13 | `ocaml_frontend/milicore.ml` | |
 | 14 | `parsers/core/core_parser.mly` | `symbolify_expr` + `register_labels` |
 | 15 | `backend/common/pipeline.ml` | `untype_expr` |
-| 16 | `frontend/model/core_run_aux.lem` | 3 locations |
-| 17 | `frontend/model/core_linking.lem` | Explain and ask |
+| 16 | `frontend/model/core_linking.lem` | Explain and ask |
+| 17 | `frontend/model/core_run_aux.lem` | 3 functions |
 | 18 | `frontend/model/core_run.lem` | Explain and ask |
 | 19 | `frontend/model/core_reduction.lem` | Explain and ask |
 | 20 | `frontend/model/core_typing.lem` | Explain and ask |
@@ -585,4 +585,8 @@ log deviations.
   `untype_pexpr` over `pes`.
 - `untype_expr` for `Ewhere`: recurse `untype_expr` on `e` and each
   def's body; `params` have no pexprs so they are copied unchanged.
+
+### Commit 16 (core_linking.lem) deviations
+
+Globals cannot contain Esave/Erun, so Ejump/Ewhere are treated similarly.
 

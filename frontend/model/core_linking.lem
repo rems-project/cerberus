@@ -214,8 +214,10 @@ let rec free_expr acc (Expr _ e) =
       (* globals should not depend on Erun *)
       error ("TODO: free_expr Erun")
   | Ewhere _ _ ->
+      (* globals should not depend on Ewhere *)
       error ("TODO: free_expr Ewhere")
   | Ejump _ _ _  ->
+      (* globals should not depend on Ejump *)
       error ("TODO: free_expr Ejump")
   | Epar es ->
       List.foldl free_expr acc es
