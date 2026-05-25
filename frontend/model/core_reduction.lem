@@ -475,9 +475,10 @@ let rec has_ccall (Expr _ expr_) =
     | Erun _ _ _ ->
         false (* NOTE: this function should never see this case (for a C program) *)
     | Ejump _ _ _ ->
-        error "TODO has_ccall Ejump"
-    | Ewhere _ _ ->
-        error "TODO has_ccall Ewhere"
+        false
+    | Ewhere e defs ->
+        (* NOTE: this function should never see this case (for a C program) *)
+        has_ccall e || List.any (fun (_, _, body) -> has_ccall body) defs
     | Epar _ ->
         false (* because any ccall is in the body of another thread *)
     | Ewait _ ->
@@ -502,6 +503,10 @@ let rec is_unseq_with_ccall_aux acc = function
       is_unseq_with_ccall_aux acc ctx'
   | Cbound _ ctx' ->
       is_unseq_with_ccall_aux false ctx'
+  | Cwhere _ _ ctx' ->
+      (* NOTE: this function should never see this case (for a C program):
+         no `where` inside `unseq` *)
+      is_unseq_with_ccall_aux acc ctx'
 end
 
 val is_unseq_with_ccall: Core_run.context -> bool
@@ -564,9 +569,14 @@ let rec get_ctx (Expr annot expr_ as expr) =
     | Erun _ _ _ ->
         [(CTX, expr)]
     | Ejump _ _ _ ->
-        error "TODO get_ctx Ejump"
-    | Ewhere _ _ ->
-        error "TODO get_ctx Ewhere"
+        [(CTX, expr)]
+    | Ewhere e defs ->
+        if is_irreducible e then
+          [(CTX, expr)]
+        else
+          List.map (fun (ctx, e') ->
+            (Cwhere annot defs ctx, e')
+          ) (get_ctx e)
     | Epar _ ->
         [(CTX, expr)]
     | Ewait _ ->
@@ -611,6 +621,8 @@ let rec apply_ctx ctx expr =
         Expr annot (Eannot xs (apply_ctx ctx' expr))
     | Cbound annot ctx' ->
         Expr annot (Ebound (apply_ctx ctx' expr))
+    | Cwhere annot defs ctx' ->
+        Expr annot (Ewhere (apply_ctx ctx' expr) defs)
   end
 
 
@@ -852,6 +864,13 @@ let rec break_at_sseq ctx =
               Just (Cbound annots ctxA, sseq_pat, ctxB, sseq_e2)
         end
 *)
+    | Cwhere annots defs ctx' ->
+        match break_at_sseq ctx' with
+          | Nothing ->
+              Nothing
+          | Just (ctxA, sseq_pat, ctxB, sseq_e2) ->
+              Just (Cwhere annots defs ctxA, sseq_pat, ctxB, sseq_e2)
+        end
   end
 
 type break =
@@ -906,6 +925,15 @@ let rec break_at_bound_and_sseq ctx =
           | Just (ctxA, sseq_pat, ctxB, sseq_e2) ->
               BOUND_WITH_SSEQ (Cbound annots CTX) ctxA sseq_pat ctxB sseq_e2
         end
+    | Cwhere annots defs ctx' ->
+        match break_at_bound_and_sseq ctx' with
+          | NO_BOUND ->
+              NO_BOUND
+          | BOUND_NO_SSEQ ctxA ctxB ->
+              BOUND_NO_SSEQ (Cwhere annots defs ctxA) ctxB
+          | BOUND_WITH_SSEQ ctxA ctxB sseq_pat ctxC e2_sseq ->
+              BOUND_WITH_SSEQ (Cwhere annots defs ctxA) ctxB sseq_pat ctxC e2_sseq
+        end
   end
 
 
@@ -928,6 +956,9 @@ let rec pull_dyn_annotations z =
     | Cbound annots ctx ->
         let (acc, ctx') = pull_dyn_annotations ctx in
         (acc, Cbound annots ctx')
+    | Cwhere annots defs ctx ->
+        let (acc, ctx') = pull_dyn_annotations ctx in
+        (acc, Cwhere annots defs ctx')
   end
 
 let rec add_exclusion n = function
@@ -949,6 +980,10 @@ let rec add_exclusion n = function
       Cannot annots xs' (add_exclusion n ctx')
   | Cbound annots ctx' ->
       Cbound annots (add_exclusion n ctx')
+  | Cwhere annots defs ctx' ->
+      (* NOTE: this function should never see this case (for a C program):
+        no `where` inside `bound`, and exclusions are only added inside `bound`s *)
+      Cwhere annots defs (add_exclusion n ctx')
 end
 
 

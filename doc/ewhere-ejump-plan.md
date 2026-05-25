@@ -624,3 +624,23 @@ time and effort).
 - core\_run.lem is dead code - noted in error strings explicitly
   "Core_run is dead code" so future readers are not confused.
 
+### Commit 19a (core_run_aux.lem + core_reduction.lem helpers) deviations
+
+- Planned commit 19 was split in two: this commit covers the `Cwhere`
+  context type and all helper-function updates; the operational reduction
+  rules (Ewhere-Pure, Ejump-Sub/Where/Let) follow in commit 19b.
+- `apply_ctx` and `get_ctx` are straightforward
+- `has_ccall` and `is_unseq_with_ccall_aux` (latter calls former) cases are
+  also straightforward, but should be impossible for a C program (no wheres
+  inside an unseq) and so are commented as such
+- Next 3 are simple context traversals: recurse and reconstruct
+  - `break_at_sseq`: locates the innermost `Csseq` in a context chain
+  - `break_at_bound_and_sseq`: uses `break_at_seq`, locates the nearest
+    `Cbound` and optionally a `Csseq` within it
+  - `pull_dyn_annotations` is dead: strips `Cannot` nodes from the context,
+    returning the annotations and a cleaned context
+- `add_exclusion`: adds an exclusion ID to every `Cannot` node in the
+   context. `Cwhere` case recurses into the inner context and reconstructs.
+   That being said, the function should never see this case for a C program:
+   no `where` inside `bound`, and exclusions are only added inside `bound`s
+

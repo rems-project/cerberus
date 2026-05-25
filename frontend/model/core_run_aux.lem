@@ -32,6 +32,11 @@ type context (* core_run_annotation unit Symbol.sym *) =
   | Csseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
   | Cannot of list Annot.annot * list Core.dyn_annotation * context
   | Cbound of list Annot.annot * context
+  | Cwhere of list Annot.annot
+            * list ((Symbol.sym * core_base_type)
+                  * list (Symbol.sym * (core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)))
+                  * Core.expr core_run_annotation)
+            * context
 
 let rec stringFromContext ctx =
   match ctx with
@@ -47,6 +52,8 @@ let rec stringFromContext ctx =
         "Cannot[" ^ stringFromContext ctx' ^ "]"
     | Cbound _ ctx' ->
         "Cbound[" ^ stringFromContext ctx' ^ "]"
+    | Cwhere _ _ ctx' ->
+        "Cwhere[" ^ stringFromContext ctx' ^ "]"
   end
 instance (Show context)
   let show ctx = stringFromContext ctx
