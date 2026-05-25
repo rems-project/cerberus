@@ -247,22 +247,45 @@ Explain the context and then ask the user how to proceed for all of these.
     (* explain and ask *)
 ```
 
+#### `frontend/model/core_reduction.lem`
+
+The dynamics of the where-expressions are informally captured by the
+following rules. The semantics are reminiscent of checked exceptions:
+`Ejump` propagates outward through let-strong continuations until caught
+by a matching `Ewhere`, or escapes entirely.
+
+```
+pe => val
+---------------------------------- [Where-Pure]
+pure(pe) where [..] --> pure(val)
+
+
+exists k . l = lk
+pe => val
+--------------------------------------------------- [Run-Sub]
+run l(pe) where [l1 (x1) . E1, .., ln (xn) . En] ->
+    {val/xk} Ek where [l1 (x1) . E1, .., ln (xn) . En]
+
+
+forall k . l <> lk
+--------------------------------------------------- [Run-Where]
+run l(pe) where [l1 (x1) . E1, .., ln (xn) . En] ->
+    run l(pe)
+
+
+--------------------------------------------- [Run-Let]
+let strong pat = run l(pe) in E --> run l(pe)
+```
+
 Also add to `has_ccall` (after `Erun`, ~line 476):
 ```lem
 | Ejump _ _ _ -> false
 | Ewhere e defs -> has_ccall e || List.any (fun (_, _, body) -> has_ccall body) defs
 ```
 
-#### `frontend/model/core_reduction.lem`
+#### `frontend/model/core_typing.lem`
 
-Explain the context and then ask the user how to proceed for all of these.
-
-```lem
-| Ewhere _ _ ->
-    (* explain and ask *)
-| Ejump _ _ _ ->
-    (* explain and ask *)
-```
+Explain the context and then ask the user how to proceed.
 
 ---
 
