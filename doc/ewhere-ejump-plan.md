@@ -579,3 +579,10 @@ log deviations.
 - `symbolify_expr` for `Ejump`: uses `lookup_sym` (not `lookup_label`)
   since where-labels live in `sym_scopes`, not the flat `st.labels` map.
 
+### Commit 15 (pipeline.ml) deviations
+
+- `untype_expr` for `Ejump`: same as `Erun` — annotate unchanged, map
+  `untype_pexpr` over `pes`.
+- `untype_expr` for `Ewhere`: recurse `untype_expr` on `e` and each
+  def's body; `params` have no pexprs so they are copied unchanged.
+

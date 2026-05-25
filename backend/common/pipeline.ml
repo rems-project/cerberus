@@ -468,8 +468,11 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Esave (sym_bTy, List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, untype_pexpr pe))) xs, untype_expr e)
       | Erun (a, sym, pes) ->
           Erun (a, sym, List.map untype_pexpr pes)
-      | Ejump _ -> failwith "TODO Ejump"
-      | Ewhere _ -> failwith "TODO Ewhere"
+      | Ejump (a, sym, pes) ->
+          Ejump (a, sym, List.map untype_pexpr pes)
+      | Ewhere (e, defs) ->
+          Ewhere (untype_expr e,
+            List.map (fun (sym_bTy, params, body) -> (sym_bTy, params, untype_expr body)) defs)
       | Epar es ->
           Epar (List.map untype_expr es)
       | Ewait tid ->
