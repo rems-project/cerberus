@@ -596,3 +596,8 @@ No deviations from plan; though it should be noted that this code is dead.
 (Kayvan please delete or move dead code, it costs me and Claude too much
 time and effort).
 
+### Commit 18 (core_run.lem) deviations
+
+- core\_run.lem is dead code - noted in error strings explicitly
+  "Core_run is dead code" so future readers are not confused.
+

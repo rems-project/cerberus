@@ -1501,9 +1501,9 @@ BEFORE EVAL_PEXPR2
         )
     
     | (Ewhere _ _, _) ->
-        error "TODO Ewhere"
+        error "Core_run.core_thread_step2: Ewhere not implemented (was dead code)"
     | (Ejump _ _ _, _) ->
-        error "TODO Ejump"
+        error "Core_run.core_thread_step2: Ejump not implemented (was dead code)"
     | (Erun _ _ _, Stack_empty) ->
         error "reached empty stack with an Erun"
 
