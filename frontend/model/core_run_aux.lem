@@ -348,10 +348,12 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
           Esave sym_bTy xs (add_to_sb p_aids e)
       | Erun annots sym pes ->
           Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> sym pes
-      | Ejump _ _ _ ->
-          error "TODO add_to_sb Ejump"
-      | Ewhere _ _ ->
-          error "TODO add_to_sb Ewhere"
+      | Ejump annots sym pes ->
+          Ejump <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> sym pes
+      | Ewhere e defs ->
+          Ewhere (add_to_sb p_aids e)
+            (List.map (fun (sym_ty, params, body) ->
+              (sym_ty, params, add_to_sb p_aids body)) defs)
       | Epar es ->
           Epar (List.map (add_to_sb p_aids) es)
       | Ewait _ ->
@@ -437,10 +439,12 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           Esave sym_bTy xs (add_to_asw aids e)
       | Erun annots sym pes ->
           Erun <| annots with asw_before= aids union annots.asw_before |> sym pes
-      | Ejump _ _ _ ->
-          error "TODO add_to_asw Ejump"
-      | Ewhere _ _ ->
-          error "TODO add_to_asw Ewhere"
+      | Ejump annots sym pes ->
+          Ejump <| annots with asw_before= aids union annots.asw_before |> sym pes
+      | Ewhere e defs ->
+          Ewhere (add_to_asw aids e)
+            (List.map (fun (sym_ty, params, body) ->
+              (sym_ty, params, add_to_asw aids body)) defs)
       | End es ->
           End (List.map (add_to_asw aids) es)
       | Epar es ->
@@ -606,10 +610,12 @@ let rec convert_expr (Expr annot expr_) =
         Esave sym (List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, convert_pexpr pe))) xs) (convert_expr e)
     | Erun _ sym pes ->
         Erun empty_annotation sym (List.map convert_pexpr pes)
-    | Ejump _ _ _ ->
-        error "TODO convert_expr Ejump"
-    | Ewhere _ _ ->
-        error "TODO convert_expr Ewhere"
+    | Ejump _ sym pes ->
+        Ejump empty_annotation sym (List.map convert_pexpr pes)
+    | Ewhere e defs ->
+        Ewhere (convert_expr e)
+          (List.map (fun (sym_ty, params, body) ->
+            (sym_ty, params, convert_expr body)) defs)
     | End es ->
         End (List.map convert_expr es)
     | Epar es ->

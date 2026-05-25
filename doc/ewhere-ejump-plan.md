@@ -590,3 +590,9 @@ log deviations.
 
 Globals cannot contain Esave/Erun, so Ejump/Ewhere are treated similarly.
 
+### Commit 17 (core_run_aux.lem) deviations
+
+No deviations from plan; though it should be noted that this code is dead.
+(Kayvan please delete or move dead code, it costs me and Claude too much
+time and effort).
+
