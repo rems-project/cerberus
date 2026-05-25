@@ -547,3 +547,35 @@ log deviations.
   same program has Erun/Esave"`, making the mutual-exclusivity
   invariant explicit.
 
+### Commit 14 (core_parser.mly) deviations
+
+- The original plan described two match blocks (`symbolify_expr` and
+  `register_labels`) with stubs. The actual commit went further and
+  added full surface syntax so that `--pp core` output can round-trip
+  through the parser.
+- Three new tokens added to `core_parser_util.ml` and exer: `JUMP`,
+  `WHERE`, `AND`. Keywords: `"jump"`, `"where"`, `"and"`.
+- One new precedence level: `%nonassoc WHERE` before `%nonassoc ELSE`,
+  so `WHERE` terminates any if-then-else or let-in before attaching.
+- Two new non-terminals: `where_def` and `where_param`. Params use
+  `None` for the `ctype` annotation field (no surface syntax for it).
+- The `Ewhere` grammar closes the def list with `END` (reusing the
+  existing token from `case...of...end`), eliminating the SR ambiguity
+  that arises from `AND` appearing at multiple nesting levels. No new
+  conflicts; count matches the pre-existing baseline.
+- `pp_core.ml` updated: `pp_keyword "end"` appended after the defs list
+  so the printed form round-trips correctly.
+- `register_labels`: `Ewhere _` is extracted from the no-op group and
+  given its own case that recurses into `_e` and each def's body, with
+  a TODO comment matching the `Eunseq` style: "save/run and jump/where
+  should not occur in the same program". Label syms for Ewhere are not
+  registered here (no `register_label` call); they are registered in
+  `symbolify_expr` via `under_scope` + `register_sym`.
+- `symbolify_expr` for `Ewhere`: opens an outer `under_scope` for all
+  where-labels (visible to `e` and all bodies, out of scope outside the
+  block). Two passes: (1) register all label syms so mutual/forward
+  references resolve; (2) for each def, inner `under_scope` for params,
+  then symbolify body.
+- `symbolify_expr` for `Ejump`: uses `lookup_sym` (not `lookup_label`)
+  since where-labels live in `sym_scopes`, not the flat `st.labels` map.
+

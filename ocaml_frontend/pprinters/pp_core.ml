@@ -690,7 +690,8 @@ let rec pp_expr expr =
                   P.hardline ^^ pp_def (pp_control "where") first ^^
                   P.concat (List.map (fun def ->
                     P.hardline ^^ pp_def (pp_keyword "and") def
-                  ) rest)
+                  ) rest) ^^
+                  P.hardline ^^ pp_keyword "end"
                 )
             )
         | Epar es ->
