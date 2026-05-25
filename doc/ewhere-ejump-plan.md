@@ -262,18 +262,18 @@ pure(pe) where [..] --> pure(val)
 
 exists k . l = lk
 pe => val
---------------------------------------------------- [Run-Sub]
+--------------------------------------------------- [Jump-Sub]
 run l(pe) where [l1 (x1) . E1, .., ln (xn) . En] ->
     {val/xk} Ek where [l1 (x1) . E1, .., ln (xn) . En]
 
 
 forall k . l <> lk
---------------------------------------------------- [Run-Where]
+--------------------------------------------------- [Jump-Where]
 run l(pe) where [l1 (x1) . E1, .., ln (xn) . En] ->
     run l(pe)
 
 
---------------------------------------------- [Run-Let]
+--------------------------------------------- [Jump-Let]
 let strong pat = run l(pe) in E --> run l(pe)
 ```
 
@@ -643,4 +643,15 @@ time and effort).
    context. `Cwhere` case recurses into the inner context and reconstructs.
    That being said, the function should never see this case for a C program:
    no `where` inside `bound`, and exclusions are only added inside `bound`s
+
+### Commit 19b (core_reduction.lem reductions) deviations
+
+- The plan described Ejump reductions as explicit arms in `step_ctx`
+  matching on `ctx` (`| Cwhere ...`, `| Csseq ...`). The actual
+  implementation uses one-level patterns in `one_step` instead, matching
+  on expression structure like the existing `Esseq(pure value)` cases.
+- A new `is_ejump` predicate drives `get_ctx` to treat `Esseq pat (Ejump)
+  e2` and `Ewhere (Ejump) defs` as atomic redexes, so `ctx = CTX` for all
+  three rules. The existing `TAU` and `TAU_WITH_RUNSTATE` constructors
+  suffice — no new constructors or ctx parameter were needed.
 

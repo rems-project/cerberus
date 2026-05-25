@@ -193,6 +193,12 @@ let is_irreducible = function
       false
 end
 
+let is_ejump = function
+  | Expr _ (Eannot _ (Expr _ (Ejump _ _ _))) -> true
+  | Expr _ (Ejump _ _ _) -> true
+  | _ -> false
+end
+
 
 import Debug
 
@@ -434,6 +440,49 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
         (* reduction: ND *)
         Just (ND es)
 
+    | Ewhere (Expr _ (Eannot _ (Expr _ (Ejump jump_annots sym pes) as ejump_e))) defs ->
+        Just match List.find (fun ((sym', _), _, _) -> sym = sym') defs with
+          | Just ((_, _), params, body) ->
+              (* [Jump-Sub]: evaluate args, update env, continue in where context *)
+              TAU_WITH_RUNSTATE "Ejump-Sub" begin
+                E.foldlM (fun acc ((psym, (bTy, _)), pe) ->
+                  full_eval_pexpr pe >>= fun cval ->
+                  E.return (update_env (Caux.mk_sym_pat psym bTy) cval acc)
+                ) env (List.zip params pes) >>= fun env' ->
+                E.return (env', Expr annots (Ewhere body defs))
+              end
+          | Nothing ->
+              (* [Jump-Where]: label not in defs, jump escapes where block *)
+              TAU "Ejump-Where" env ejump_e
+        end
+
+    | Ewhere (Expr _ (Ejump jump_annots sym pes) as ejump_e) defs ->
+        Just match List.find (fun ((sym', _), _, _) -> sym = sym') defs with
+          | Just ((_, _), params, body) ->
+              (* [Jump-Sub]: evaluate args, update env, continue in where context *)
+              TAU_WITH_RUNSTATE "Ejump-Sub" begin
+                E.foldlM (fun acc ((psym, (bTy, _)), pe) ->
+                  full_eval_pexpr pe >>= fun cval ->
+                  E.return (update_env (Caux.mk_sym_pat psym bTy) cval acc)
+                ) env (List.zip params pes) >>= fun env' ->
+                E.return (env', Expr annots (Ewhere body defs))
+              end
+          | Nothing ->
+              (* [Jump-Where]: label not in defs, jump escapes where block *)
+              TAU "Ejump-Where" env ejump_e
+        end
+
+    | Ewhere e _ ->
+        (* [Where-Pure]: e is a value — guaranteed by get_ctx *)
+        Just (TAU "Ewhere-Pure" env e)
+
+    | Esseq _ (Expr _ (Eannot _ (Expr _ (Ejump _ _ _ ) as ejump_e))) _ ->
+        (* [Jump-Let]: jump discards let-strong continuation *)
+        Just (TAU "Ejump-Let" env ejump_e)
+    | Esseq _ (Expr _ (Ejump _ _ _) as ejump_e) _ ->
+        (* [Jump-Let]: jump discards let-strong continuation *)
+        Just (TAU "Ejump-Let" env ejump_e)
+
     | _ ->
         Nothing
   end
@@ -549,7 +598,7 @@ let rec get_ctx (Expr annot expr_ as expr) =
             (Cwseq annot pat ctx e2, e)
           ) (get_ctx e1)
     | Esseq pat e1 e2 ->
-        if is_irreducible e1 then
+        if is_irreducible e1 || is_ejump e1 then
           [(CTX, expr)]
         else
           List.map (fun (ctx, e) ->
@@ -571,7 +620,7 @@ let rec get_ctx (Expr annot expr_ as expr) =
     | Ejump _ _ _ ->
         [(CTX, expr)]
     | Ewhere e defs ->
-        if is_irreducible e then
+        if is_irreducible e || is_ejump e then
           [(CTX, expr)]
         else
           List.map (fun (ctx, e') ->
@@ -1433,12 +1482,6 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 let wrap_proc xs = wrap_expr (Expr e_annots (Eproc a (Impl iCst) xs)) in
                 process_impl_proc full_eval_pexpr' wrap_proc wrap_expr th_st iCst pes
 
-          | Ewhere _ _ ->
-              (* TODO: implement Ewhere reduction semantics *)
-              error "TODO Ewhere reduction"
-          | Ejump _ _ _ ->
-              (* TODO: implement Ejump reduction semantics (analogous to Erun) *)
-              error "TODO Ejump reduction"
           | Erun run_annots sym pes ->
               let current_proc =
                 match th_st.current_proc_opt with
