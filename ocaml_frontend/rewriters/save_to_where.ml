@@ -64,24 +64,23 @@ type 'info where = {
 }
 
 and 'info where_ =
-  | Base of expr
+  | Base of (unit, unit, Symbol.sym) generic_expr_
   | If of pexpr * 'info where * 'info where
   | Sseq of pattern * 'info where * 'info where
   | Case of pexpr * (pattern * 'info where) list
   | Run of Symbol.sym * pexpr list
   | Jump of Symbol.sym * pexpr list
-  | Where of {
-      body : 'info where;
-      defs : (unit param list * 'info where) list;
-     }
-  | Save of { 
-      label : Symbol.sym;
-      ret_bty : core_base_type;
-      params : pexpr param list;
-      body : 'info where
-    }
+  | Where of 'info where * ('info, unit) label_def list
+  | Save of ('info, pexpr) label_def
 
-type count_labels = (Symbol.sym, int) Pmap.map 
+and ('info, 'pexpr) label_def = {
+  label : Symbol.sym;
+  ret_bty : core_base_type;
+  params : 'pexpr param list;
+  body : 'info where
+}
+
+type count_labels = (Symbol.sym, int) Pmap.map
 
 let add_counts sym int_opt1 int_opt2 =
   match int_opt1, int_opt2 with
@@ -92,4 +91,48 @@ let add_counts sym int_opt1 int_opt2 =
 
 let merge_counts count1 count2 = Pmap.merge add_counts count1 count2
 
-let transform_file core_file = core_file
+let empty_counts : count_labels = Pmap.empty Symbol.compare_sym
+
+let singleton_count sym : count_labels = Pmap.add sym 1 empty_counts
+
+let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
+  let base () = { info = empty_counts; annot; node = Base expr_ } in
+  match expr_ with
+  | Eif (pe, e1, e2) ->
+    let w1 = count_labels e1 in
+    let w2 = count_labels e2 in
+    { info = merge_counts w1.info w2.info; annot; node = If (pe, w1, w2) }
+  | Esseq (pat, e1, e2) ->
+    let w1 = count_labels e1 in
+    let w2 = count_labels e2 in
+    { info = merge_counts w1.info w2.info; annot; node = Sseq (pat, w1, w2) }
+  | Ecase (pe, cases) ->
+    let wcases = List.map (fun (pat, e) -> (pat, count_labels e)) cases in
+    let info = List.fold_left
+      (fun acc (_, w) -> merge_counts acc w.info)
+      empty_counts wcases in
+    { info; annot; node = Case (pe, wcases) }
+  | Erun ((), sym, pes) ->
+    { info = singleton_count sym; annot; node = Run (sym, pes) }
+  | Esave ((sym, ret_bty), params_list, body) ->
+    let wbody = count_labels body in
+    let params = List.map (fun (name, ((bTy, optCTy), pe)) ->
+      { name; bTy; optCTy; pexpr = pe }
+    ) params_list in
+    { info = merge_counts wbody.info (singleton_count sym);
+      annot;
+      node = Save { label = sym; ret_bty; params; body = wbody } }
+  | Ejump _ -> assert false
+  | Ewhere _ -> assert false
+  | _ ->
+    base ()
+
+let transform_expr _bty expr =
+  let _ = count_labels expr in
+  expr
+
+let transform_file file =
+  let rewrite_fun_map_decl = function
+    | Proc (loc, mrk, bty, args, e) -> Proc (loc, mrk, bty, args, transform_expr bty e)
+    | decl                           -> decl in
+  { file with funs = Pmap.map rewrite_fun_map_decl file.funs }
