@@ -655,3 +655,6 @@ time and effort).
   three rules. The existing `TAU` and `TAU_WITH_RUNSTATE` constructors
   suffice — no new constructors or ctx parameter were needed.
 
+### Commit 20 (core_typing.lem) deviations
+
+No surprises.

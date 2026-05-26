@@ -1644,7 +1644,7 @@ let rec collect_labels env (Expr _ expr_) =
     | Ejump _ _ _ ->
         E.return env
     | Ewhere _ _ ->
-        error "TODO collect_labels Ewhere"
+        E.return env
     | Epar es ->
         E.foldlM (fun env' e ->
           collect_labels env' e
@@ -1840,10 +1840,26 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
           | Nothing ->
               E.fail loc (CoreTyping_TODO "Erun, undeclared label")
         end
-    | Ejump _ _ _ ->
-        error "TODO typecheck_expr Ejump"
-    | Ewhere _ _ ->
-        error "TODO typecheck_expr Ewhere"
+    | Ejump annot sym pes ->
+        match Map.lookup sym env.labs with
+          | Just (_, bTys) ->
+              Ejump annot sym <$> E.mapM (fun (bTy, pe) ->
+                typecheck_pexpr tagDefs env bTy pe >>= export_pexpr
+              ) (List.zip bTys pes)
+          | Nothing ->
+              E.fail loc (CoreTyping_TODO "Ejump, undeclared label")
+        end
+    | Ewhere e defs ->
+        let labs_env = List.foldl (fun acc ((sym, bTy), params, _) ->
+          <| acc with labs= Map.insert sym (bTy, List.map (fun (_, (z, _)) -> z) params) acc.labs |>
+        ) env defs in
+        E.mapM (fun ((sym, bTy), params, body) ->
+          let params_decls = List.map (fun (z, (z_bTy, _)) -> (Sym z, TDsym z_bTy)) params in
+          let env' = <| labs_env with decls= Map.(union) (Map.fromList params_decls) labs_env.decls |> in
+          typecheck_expr env' bTy body >>= fun body' ->
+          E.return ((sym, bTy), params, body')
+        ) defs >>= fun defs' ->
+        Ewhere <$> typecheck_expr labs_env expected_bTy e <*> E.return defs'
     | Epar es ->
         if List.length es < 2 then
           E.fail loc (CoreTyping_TODO "Epar must have at least 2 operands")
