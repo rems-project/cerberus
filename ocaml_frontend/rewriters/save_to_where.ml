@@ -42,4 +42,54 @@
    expressions) labels only occur inside some combination of Esseq,
    Eif, Ecase, Esave. *)
 
+open Core
+
+type pattern = Symbol.sym generic_pattern
+
+type pexpr = (unit, Symbol.sym) generic_pexpr
+
+type expr = (unit, unit, Symbol.sym) generic_expr
+
+type 'a param = {
+  name : Symbol.sym;
+  bTy : core_base_type;
+  optCTy : (Ctype.ctype * pass_by_value_or_pointer) option;
+  pexpr : 'a;
+}
+
+type 'info where = {
+  info : 'info;
+  annot : Annot.annot list;
+  node : 'info where_
+}
+
+and 'info where_ =
+  | Base of expr
+  | If of pexpr * 'info where * 'info where
+  | Sseq of pattern * 'info where * 'info where
+  | Case of pexpr * (pattern * 'info where) list
+  | Run of Symbol.sym * pexpr list
+  | Jump of Symbol.sym * pexpr list
+  | Where of {
+      body : 'info where;
+      defs : (unit param list * 'info where) list;
+     }
+  | Save of { 
+      label : Symbol.sym;
+      ret_bty : core_base_type;
+      params : pexpr param list;
+      body : 'info where
+    }
+
+type count_labels = (Symbol.sym, int) Pmap.map 
+
+let add_counts sym int_opt1 int_opt2 =
+  match int_opt1, int_opt2 with
+  | None, None -> assert false
+  | Some _, None
+  | None, Some _ -> Some 1
+  | Some _, Some _ -> Some 2
+
+let merge_counts count1 count2 = Pmap.merge add_counts count1 count2
+
 let transform_file core_file = core_file
