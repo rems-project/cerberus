@@ -3,18 +3,19 @@
    following semantics (plus context reduction, omitted).
 
      [Where-Pure]
-     ------------------------------
-     pure(v) where defs --> pure(v)
+     pe => val
+     ---------------------------------
+     pure(pe) where defs end --> pure(val)
 
      [Jump-Sub]
-     ( defs(l) = x . E )
+     defs(l) = x . E
      ----------------------------------------------
-     jump l(pe) where defs --> {val/x} E where defs
+     jump l(pe) where defs end --> {val/x} E where defs
 
      [Jump-Where]
-     (l not in defs)
+     l not in defs
      ------------------------------------
-     jump l(pe) where defs --> jump l(pe)
+     jump l(pe) where defs end --> jump l(pe)
 
      [Jump-Let]
      ---------------------------------------
@@ -43,6 +44,9 @@
    Eif, Ecase, Esave. *)
 
 open Core
+
+open Cerb_colour
+open Cerb_pp_prelude
 
 type pattern = Symbol.sym generic_pattern
 
@@ -80,7 +84,105 @@ and ('info, 'pexpr) label_def = {
   body : 'info where
 }
 
+let pp_sym s = !^ (Pp_symbol.to_string_pretty s)
+
+let pp_where pp_info w =
+  let open Cerb_pp_prelude in
+  let pp_keyword w = pp_ansi_format [Bold; Magenta] (fun () -> !^ w) in
+  let pp_control w = pp_ansi_format [Bold; Blue] (fun () -> !^ w) in
+  let pp_pexpr pe = Pp_core.All.pp_pexpr pe in
+  let pp_pat pat = Pp_core.All.pp_pattern pat in
+  let pp_bty bty = Pp_core.Basic.pp_core_base_type bty in
+  let rec pp w =
+    let info = pp_info w.info in
+    let some x = pp_ansi_format [Green] (fun () -> P.enclose P.space P.space (P.brackets x)) in
+    let info = Option.fold ~none:P.space ~some info in
+    match w.node with
+    | Base _ ->
+        !^ "..."
+    | If (pe, w1, w2) ->
+        pp_control "if" ^^ info ^^ pp_pexpr pe ^^^ pp_control "then" ^^
+        P.nest 2 (P.break 1 ^^ pp w1) ^^ P.break 1 ^^
+        pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp w2)
+    | Sseq (pat, w1, w2) ->
+        P.group begin
+          (pp_control "let" ^^ info ^^ pp_pat pat ^^^ P.equals) ^//^
+            (pp w1 ^^^ pp_control "in")
+        end ^^ P.hardline ^^ pp w2
+    | Case (pe, cases) ->
+        pp_control "case" ^^ info ^^ pp_pexpr pe ^^^ pp_control "of" ^^
+        P.nest 2 (
+          P.hardline ^^
+          P.separate_map P.hardline (fun (pat, wc) ->
+            P.bar ^^^ pp_pat pat ^^^ P.equals ^^ P.rangle ^^
+            P.nest 4 (P.hardline ^^ pp wc)
+          ) cases ^^
+          P.hardline ^^ pp_keyword "end")
+    | Run (sym, pes) ->
+        pp_keyword "run" ^^ info ^^ pp_sym sym ^^ P.parens (comma_list pp_pexpr pes)
+    | Jump (sym, pes) ->
+        pp_keyword "jump" ^^ info ^^ pp_sym sym ^^ P.parens (comma_list pp_pexpr pes)
+    | Save ld ->
+        pp_keyword "save" ^^ info ^^ pp_sym ld.label ^^ P.colon ^^^ pp_bty ld.ret_bty ^^^
+        P.parens (comma_list (fun p ->
+          pp_sym p.name ^^ P.colon ^^^ pp_bty p.bTy ^^
+          P.colon ^^ P.equals ^^^ !^ ".."
+        ) ld.params) ^^^
+        pp_control "in" ^^^
+        P.nest 2 (P.break 1 ^^ pp ld.body)
+    | Where (body, defs) ->
+        (* "where" keyword binds tightest to exprs *)
+        let needs_paren =
+          let { info = _; annot = _; node } = body in
+          let base = function
+            | Eif _ | Esseq _ | Ewseq _ | Esave _ | Elet _ ->
+              (* end with an expr *)
+              true
+            | Epure _ | Ememop _ | Eaction _ | Ecase _ | Eccall _
+            | Eproc _ | Eunseq _ | Ebound _ | End _ | Erun _ | Epar _
+            | Ewhere _ | Ejump _ | Ewait _ | Eannot _ | Eexcluded _ ->
+              (* end with a token *)
+              false in
+          match node with
+          | If _ | Sseq _ | Save _ ->
+            true
+          | Base expr -> base expr
+          | Case (_, _) | Run (_, _) | Jump (_, _) | Where (_, _) ->
+            false in
+        let pp_def kw ld =
+          kw ^^ info ^^ pp_sym ld.label ^^^
+          P.parens (comma_list (fun p ->
+            pp_sym p.name ^^ P.colon ^^^ pp_bty p.bTy
+          ) ld.params) ^^^
+          P.colon ^^^ pp_bty ld.ret_bty ^^^
+          P.colon ^^ P.equals ^^
+          P.nest 2 (P.break 1 ^^ pp ld.body)
+        in
+        begin match defs with
+        | [] -> assert false
+        | first :: rest ->
+            (if needs_paren then P.parens else Fun.id) (pp body) ^^
+            P.nest 2 (
+              P.hardline ^^ pp_def (pp_control "where") first ^^
+              P.concat (List.map (fun d ->
+                P.hardline ^^ pp_def (pp_keyword "and") d
+              ) rest)
+            ) ^^
+            P.hardline ^^ pp_keyword "end"
+        end
+  in
+  pp w
+
 type count_labels = (Symbol.sym, int) Pmap.map
+
+let pp_int x = !^ (string_of_int x)
+
+let pp_count_map map =
+  if Pmap.is_empty map then
+    None
+  else
+    let pp_bind (sym, count) = pp_sym sym ^^ P.colon ^^ pp_int count in
+    Some (P.separate_map (P.comma ^^ P.space) pp_bind @@ Pmap.bindings_list map)
 
 let add_counts sym int_opt1 int_opt2 =
   match int_opt1, int_opt2 with
@@ -96,7 +198,6 @@ let empty_counts : count_labels = Pmap.empty Symbol.compare_sym
 let singleton_count sym : count_labels = Pmap.add sym 1 empty_counts
 
 let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
-  let base () = { info = empty_counts; annot; node = Base expr_ } in
   match expr_ with
   | Eif (pe, e1, e2) ->
     let w1 = count_labels e1 in
@@ -125,10 +226,34 @@ let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
   | Ejump _ -> assert false
   | Ewhere _ -> assert false
   | _ ->
-    base ()
+    { info = empty_counts; annot; node = Base expr_ }
 
-let transform_expr _bty expr =
-  let _ = count_labels expr in
+module Debug = struct
+  let pat bty = Pattern ([], CaseBase (None, bty))
+
+  let epure pe = Expr ([], Epure pe)
+
+  let pe v = Pexpr ([], (), PEval v)
+
+  let wrap_sseq1 bty expr =
+    Expr ([], Esseq (pat bty, expr, epure (pe Vunit)))
+
+  let wrap_sseq2 _bty expr =
+    Expr ([], Esseq (pat BTy_unit, epure (pe Vunit), expr))
+
+  let wrap_if1 bty expr =
+    Expr ([], Eif (pe Vtrue, wrap_sseq1 bty expr, Expr ([], Epure (Pexpr ([], (), PEval Vunit)))))
+
+  let wrap_if2 bty expr =
+    Expr ([], Eif (pe Vfalse, epure (pe Vunit), wrap_sseq1 bty expr))
+end
+
+let transform_expr bty expr =
+  (* let expr = Debug.wrap_sseq1 bty expr in *)
+  let counted = count_labels expr in
+  let () = Cerb_debug.print_debug 1 []
+    (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
+      (pp_where pp_count_map counted)) in
   expr
 
 let transform_file file =

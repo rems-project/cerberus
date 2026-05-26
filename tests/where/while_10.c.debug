@@ -1,0 +1,39 @@
+return code: 0
+let [ret_509:2, continue_510:1, break_511:1, while_512:1] _: unit =
+  let [ret_509:1, continue_510:1, break_511:1, while_512:1] n: pointer = ... in
+  let [ret_509:1, continue_510:1, break_511:1, while_512:1] _: unit =
+    let a_514: loaded integer = ... in
+    ... in
+  let [ret_509:1, continue_510:1, break_511:1, while_512:1] _: unit =
+    let [continue_510:1, break_511:1, while_512:1] _: unit =
+      save [continue_510:1, while_512:2] while_512: unit (n: pointer:= ..) in
+        let [continue_510:1, while_512:1] a_515: loaded integer = ... in
+        let [continue_510:1, while_512:1] a_513: boolean =
+          case a_515 of
+            | Specified(a_516: integer) =>
+                ...
+            | Unspecified(_: ctype) =>
+                ...
+            end in
+        if [continue_510:1, while_512:1] a_513 then
+          let [continue_510:1, while_512:1] _: unit =
+            let [continue_510:1] _: unit =
+              let _: unit =
+                let _: loaded integer = ... in
+                ... in
+              ... in
+            let [continue_510:1] _: unit = save [continue_510:1] continue_510: unit (n: pointer:= ..) in  ... in
+            ... in
+          run [while_512:1] while_512(n)
+        else
+          ... in
+    let [break_511:1] _: unit = save [break_511:1] break_511: unit (n: pointer:= ..) in  ... in
+    ... in
+  let [ret_509:1] _: unit =
+    let [ret_509:1] a_537: loaded integer = ... in
+    let [ret_509:1] _: unit = ... in
+    run [ret_509:1] ret_509(conv_loaded_int('signed int', a_537)) in
+  let _: unit = ... in
+  ... in
+save [ret_509:1] ret_509: loaded integer (a_538: loaded integer:= ..) in
+  ...

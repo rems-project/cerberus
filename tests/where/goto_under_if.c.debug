@@ -1,0 +1,45 @@
+return code: 0
+let [inner:1, ret_507:2] _: unit =
+  let [inner:1, ret_507:1] x: pointer = ... in
+  let [inner:1, ret_507:1] _: unit =
+    let a_510: loaded integer = ... in
+    ... in
+  let [inner:2, ret_507:1] _: unit =
+    let [inner:1] a_511: loaded integer = ... in
+    let [inner:1] a_509: boolean =
+      case a_511 of
+        | Specified(a_512: integer) =>
+            ...
+        | Unspecified(_: ctype) =>
+            ...
+        end in
+    if [inner:1] a_509 then
+      let [inner:1] _: unit =
+        save [inner:1] inner: unit (x: pointer:= ..) in
+          let _: loaded integer = ... in
+          ... in
+      ...
+    else
+      ... in
+  let [inner:1, ret_507:1] _: unit =
+    let [inner:1] a_527: loaded integer = ... in
+    let [inner:1] a_508: boolean =
+      case a_527 of
+        | Specified(a_528: integer) =>
+            ...
+        | Unspecified(_: ctype) =>
+            ...
+        end in
+    if [inner:1] a_508 then
+      let [inner:1] _: unit = run [inner:1] inner(x) in
+      ...
+    else
+      ... in
+  let [ret_507:1] _: unit =
+    let [ret_507:1] a_541: loaded integer = ... in
+    let [ret_507:1] _: unit = ... in
+    run [ret_507:1] ret_507(conv_loaded_int('signed int', a_541)) in
+  let _: unit = ... in
+  ... in
+save [ret_507:1] ret_507: loaded integer (a_542: loaded integer:= ..) in
+  ...

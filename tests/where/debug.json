@@ -1,0 +1,6 @@
+{
+    "name": "debug",
+    "args": ["--switches", "save_to_where", "-d", "1"],
+    "filter": "^(.*\\.c)$",
+    "timeout": 5
+}
