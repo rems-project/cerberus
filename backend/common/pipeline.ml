@@ -572,6 +572,11 @@ let core_passes (conf, io) ~filename core_file =
       Copy_propagation.transform_file ~unwrap_loaded:rm_unspecs core_file
     else
       core_file in
+  let core_file =
+    if Switches.(has_switch SW_save_to_where) then
+      Save_to_where.transform_file core_file
+    else
+      core_file in
   Core_indet.hackish_order <$> begin
     if conf.sequentialise_core || conf.typecheck_core then
       typed_core_passes (conf, io) core_file >>= fun (core_file, typed_core_file) ->
