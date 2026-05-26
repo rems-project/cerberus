@@ -1599,6 +1599,112 @@ let memop_signature = function
 end
 
 
+type expr_style =
+  | ExprStyle_save
+  | ExprStyle_where
+
+val merge_styles: Loc.t -> maybe expr_style -> maybe expr_style -> E.eff (maybe expr_style)
+let merge_styles loc s1 s2 =
+  match (s1, s2) with
+    | (Nothing, _) -> E.return s2
+    | (_, Nothing) -> E.return s1
+    | (Just ExprStyle_save,  Just ExprStyle_save)  -> E.return (Just ExprStyle_save)
+    | (Just ExprStyle_where, Just ExprStyle_where) -> E.return (Just ExprStyle_where)
+    | _ -> E.fail loc (CoreTyping_TODO "mixed Erun/Esave and Ejump/Ewhere in same procedure")
+  end
+
+val check_label_style_aux: forall 'a 'bty. Core.generic_expr 'a 'bty Symbol.sym -> bool -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
+let rec check_label_style_aux top_e in_ctx (Expr annots expr_) =
+  let loc = Annot.get_loc_ annots in
+  match expr_ with
+    | Epure _ ->
+        E.return Nothing
+    | Ememop _ _ ->
+        E.return Nothing
+    | Eaction _ ->
+        E.return Nothing
+    | Eccall _ _ _ _ ->
+        E.return Nothing
+    | Eproc _ _ _ ->
+        E.return Nothing
+    | Ewait _ ->
+        E.return Nothing
+    | Eexcluded _ _ ->
+        E.return Nothing
+    | Eannot _ e ->
+        check_label_style_aux top_e in_ctx e
+    | Eif _ e1 e2 ->
+        check_label_style_aux top_e in_ctx e1 >>= fun s1 ->
+        check_label_style_aux top_e in_ctx e2 >>= fun s2 ->
+        merge_styles loc s1 s2
+    | Esseq _ e1 e2 ->
+        check_label_style_aux top_e in_ctx e1 >>= fun s1 ->
+        check_label_style_aux top_e in_ctx e2 >>= fun s2 ->
+        merge_styles loc s1 s2
+    | Elet _ _ e ->
+        check_label_style_aux top_e false e
+    | Ewseq _ e1 e2 ->
+        check_label_style_aux top_e false e1 >>= fun s1 ->
+        check_label_style_aux top_e false e2 >>= fun s2 ->
+        merge_styles loc s1 s2
+    | Ecase _ cases ->
+        E.foldlM (fun acc (_, e) ->
+          check_label_style_aux top_e in_ctx e >>= fun s ->
+          merge_styles loc acc s
+        ) Nothing cases
+    | Ebound e ->
+        check_label_style_aux top_e false e
+    | End es ->
+        E.foldlM (fun acc e ->
+          check_label_style_aux top_e false e >>= fun s ->
+          merge_styles loc acc s
+        ) Nothing es
+    | Eunseq es ->
+        E.foldlM (fun acc e ->
+          check_label_style_aux top_e false e >>= fun s ->
+          merge_styles loc acc s
+        ) Nothing es
+    | Epar es ->
+        E.foldlM (fun acc e ->
+          check_label_style_aux top_e false e >>= fun s ->
+          merge_styles loc acc s
+        ) Nothing es
+    | Erun _ _ _ ->
+        if not in_ctx then
+          let dump = Pp.stringFromCore_expr top_e in
+          E.fail loc (CoreTyping_TODO ("Erun outside allowed context (Eif/Esseq/Esave) in:\n" ^ dump))
+        else
+          E.return (Just ExprStyle_save)
+    | Esave _ _ e ->
+        if not in_ctx then
+          let dump = Pp.stringFromCore_expr top_e in
+          E.fail loc (CoreTyping_TODO ("Esave outside allowed context (Eif/Esseq/Esave) in:\n" ^ dump))
+        else
+          check_label_style_aux top_e true e >>= fun s ->
+          merge_styles loc (Just ExprStyle_save) s
+    | Ejump _ _ _ ->
+        if not in_ctx then
+          let dump = Pp.stringFromCore_expr top_e in
+          E.fail loc (CoreTyping_TODO ("Ejump outside allowed context (Eif/Esseq/Ewhere) in:\n" ^ dump))
+        else
+          E.return (Just ExprStyle_where)
+    | Ewhere e defs ->
+        if not in_ctx then
+          let dump = Pp.stringFromCore_expr top_e in
+          E.fail loc (CoreTyping_TODO ("Ewhere outside allowed context (Eif/Esseq/Ewhere) in:\n" ^ dump))
+        else
+          check_label_style_aux top_e true e >>= fun s ->
+          E.foldlM (fun acc (_, _, body) ->
+            check_label_style_aux top_e true body >>= fun s' ->
+            merge_styles loc acc s'
+          ) s defs >>= fun s_defs ->
+          merge_styles loc (Just ExprStyle_where) s_defs
+  end
+
+val check_label_style: forall 'a 'bty. Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
+let check_label_style top_e = check_label_style_aux top_e true top_e
+
+
 val     collect_labels: forall 'bty 'a. typing_env -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff typing_env
 let rec collect_labels env (Expr _ expr_) =
   match expr_ with
@@ -1931,7 +2037,11 @@ let typecheck_program file =
             E.return (BuiltinDecl loc bTy bTys)
         | Proc loc mrk bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
-            collect_labels env' e >>= fun env' ->
+            check_label_style e >>= fun style ->
+            (match style with
+              | Just ExprStyle_where -> E.return env'
+              | _ -> collect_labels env' e
+            end) >>= fun env' ->
             Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
       end) file.stdlib >>= fun stdlib' ->
     
@@ -1949,7 +2059,11 @@ let typecheck_program file =
     E.foldlM (fun (env_acc, acc) (sym, decl) ->
       match decl with
         | GlobalDef (bTy, ct) e ->
-            collect_labels env_acc e >>= fun env_acc' ->
+            check_label_style e >>= fun style ->
+            (match style with
+              | Just ExprStyle_where -> E.return env_acc
+              | _ -> collect_labels env_acc e
+            end) >>= fun env_acc' ->
             typecheck_expr env_acc' bTy e >>= fun te ->
             E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, GlobalDef (bTy, ct) te) :: acc)
         | GlobalDecl (bTy, ct) ->
@@ -1984,7 +2098,11 @@ let typecheck_program file =
             E.return (BuiltinDecl loc bTy bTys)
         | Proc loc mrk bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
-            collect_labels env' e >>= fun env' ->
+            check_label_style e >>= fun style ->
+            (match style with
+              | Just ExprStyle_where -> E.return env'
+              | _ -> collect_labels env' e
+            end) >>= fun env' ->
             Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
       end) file.funs >>= fun funs' ->
     
