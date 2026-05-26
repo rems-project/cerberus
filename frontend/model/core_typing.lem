@@ -1610,11 +1610,11 @@ let merge_styles loc s1 s2 =
     | (_, Nothing) -> E.return s1
     | (Just ExprStyle_save,  Just ExprStyle_save)  -> E.return (Just ExprStyle_save)
     | (Just ExprStyle_where, Just ExprStyle_where) -> E.return (Just ExprStyle_where)
-    | _ -> E.fail loc (CoreTyping_TODO "mixed Erun/Esave and Ejump/Ewhere in same procedure")
+    | _ -> E.fail loc MixedLabelStyles
   end
 
-val check_label_style_aux: forall 'a 'bty. Core.generic_expr 'a 'bty Symbol.sym -> bool -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
-let rec check_label_style_aux top_e in_ctx (Expr annots expr_) =
+val check_label_style_aux: forall 'a 'bty. bool -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
+let rec check_label_style_aux in_ctx (Expr annots expr_) =
   let loc = Annot.get_loc_ annots in
   match expr_ with
     | Epure _ ->
@@ -1632,77 +1632,73 @@ let rec check_label_style_aux top_e in_ctx (Expr annots expr_) =
     | Eexcluded _ _ ->
         E.return Nothing
     | Eannot _ e ->
-        check_label_style_aux top_e in_ctx e
+        check_label_style_aux in_ctx e
     | Eif _ e1 e2 ->
-        check_label_style_aux top_e in_ctx e1 >>= fun s1 ->
-        check_label_style_aux top_e in_ctx e2 >>= fun s2 ->
+        check_label_style_aux in_ctx e1 >>= fun s1 ->
+        check_label_style_aux in_ctx e2 >>= fun s2 ->
         merge_styles loc s1 s2
     | Esseq _ e1 e2 ->
-        check_label_style_aux top_e in_ctx e1 >>= fun s1 ->
-        check_label_style_aux top_e in_ctx e2 >>= fun s2 ->
+        check_label_style_aux in_ctx e1 >>= fun s1 ->
+        check_label_style_aux in_ctx e2 >>= fun s2 ->
         merge_styles loc s1 s2
     | Elet _ _ e ->
-        check_label_style_aux top_e false e
+        check_label_style_aux false e
     | Ewseq _ e1 e2 ->
-        check_label_style_aux top_e false e1 >>= fun s1 ->
-        check_label_style_aux top_e false e2 >>= fun s2 ->
+        check_label_style_aux false e1 >>= fun s1 ->
+        check_label_style_aux false e2 >>= fun s2 ->
         merge_styles loc s1 s2
     | Ecase _ cases ->
         E.foldlM (fun acc (_, e) ->
-          check_label_style_aux top_e in_ctx e >>= fun s ->
+          check_label_style_aux in_ctx e >>= fun s ->
           merge_styles loc acc s
         ) Nothing cases
     | Ebound e ->
-        check_label_style_aux top_e false e
+        check_label_style_aux false e
     | End es ->
         E.foldlM (fun acc e ->
-          check_label_style_aux top_e false e >>= fun s ->
+          check_label_style_aux false e >>= fun s ->
           merge_styles loc acc s
         ) Nothing es
     | Eunseq es ->
         E.foldlM (fun acc e ->
-          check_label_style_aux top_e false e >>= fun s ->
+          check_label_style_aux false e >>= fun s ->
           merge_styles loc acc s
         ) Nothing es
     | Epar es ->
         E.foldlM (fun acc e ->
-          check_label_style_aux top_e false e >>= fun s ->
+          check_label_style_aux false e >>= fun s ->
           merge_styles loc acc s
         ) Nothing es
     | Erun _ _ _ ->
         if not in_ctx then
-          let dump = Pp.stringFromCore_expr top_e in
-          E.fail loc (CoreTyping_TODO ("Erun outside allowed context (Eif/Esseq/Esave) in:\n" ^ dump))
+          E.fail loc (LabelOutsideContext "Erun")
         else
           E.return (Just ExprStyle_save)
     | Esave _ _ e ->
         if not in_ctx then
-          let dump = Pp.stringFromCore_expr top_e in
-          E.fail loc (CoreTyping_TODO ("Esave outside allowed context (Eif/Esseq/Esave) in:\n" ^ dump))
+          E.fail loc (LabelOutsideContext "Esave")
         else
-          check_label_style_aux top_e true e >>= fun s ->
+          check_label_style_aux true e >>= fun s ->
           merge_styles loc (Just ExprStyle_save) s
     | Ejump _ _ _ ->
         if not in_ctx then
-          let dump = Pp.stringFromCore_expr top_e in
-          E.fail loc (CoreTyping_TODO ("Ejump outside allowed context (Eif/Esseq/Ewhere) in:\n" ^ dump))
+          E.fail loc (LabelOutsideContext "Ejump")
         else
           E.return (Just ExprStyle_where)
     | Ewhere e defs ->
         if not in_ctx then
-          let dump = Pp.stringFromCore_expr top_e in
-          E.fail loc (CoreTyping_TODO ("Ewhere outside allowed context (Eif/Esseq/Ewhere) in:\n" ^ dump))
+          E.fail loc (LabelOutsideContext "Ewhere")
         else
-          check_label_style_aux top_e true e >>= fun s ->
+          check_label_style_aux true e >>= fun s ->
           E.foldlM (fun acc (_, _, body) ->
-            check_label_style_aux top_e true body >>= fun s' ->
+            check_label_style_aux true body >>= fun s' ->
             merge_styles loc acc s'
           ) s defs >>= fun s_defs ->
           merge_styles loc (Just ExprStyle_where) s_defs
   end
 
 val check_label_style: forall 'a 'bty. Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
-let check_label_style top_e = check_label_style_aux top_e true top_e
+let check_label_style e = check_label_style_aux true e
 
 
 val     collect_labels: forall 'bty 'a. typing_env -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff typing_env
@@ -1944,7 +1940,7 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
                 ) (List.zip bTys pes)
               end
           | Nothing ->
-              E.fail loc (CoreTyping_TODO "Erun, undeclared label")
+              E.fail loc (UndeclaredLabel sym)
         end
     | Ejump annot sym pes ->
         match Map.lookup sym env.labs with
@@ -1953,7 +1949,7 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
                 typecheck_pexpr tagDefs env bTy pe >>= export_pexpr
               ) (List.zip bTys pes)
           | Nothing ->
-              E.fail loc (CoreTyping_TODO "Ejump, undeclared label")
+              E.fail loc (UndeclaredLabel sym)
         end
     | Ewhere e defs ->
         let labs_env = List.foldl (fun acc ((sym, bTy), params, _) ->
