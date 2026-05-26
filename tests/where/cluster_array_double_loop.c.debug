@@ -128,3 +128,127 @@ let [__cerb_continue0:1, __cerb_continue1:1, ret_519:2, continue_520:1, break_52
   ... in
 save [ret_519:1] ret_519: loaded integer (a_657: loaded integer:= ..) in
   ...
+let [ret_519] _: unit =
+  let total: pointer = ... in
+  let _: unit =
+    let a_527: loaded integer = ... in
+    ... in
+  let _: unit =
+    let k: pointer = ... in
+    let _: unit =
+      let a_528: loaded integer = ... in
+      ... in
+    let _: unit =
+      let _: unit =
+        save [while_525] while_525: unit (k: pointer:= .., total: pointer:= ..) in
+          let a_529: loaded integer = ... in
+          let a_526: boolean =
+            case a_529 of
+              | Specified(a_530: integer) =>
+                  ...
+              | Unspecified(_: ctype) =>
+                  ...
+              end in
+          if a_526 then
+            let _: unit =
+              let _: unit =
+                let cluster_k: pointer = ... in
+                let _: unit =
+                  let a_544: loaded pointer = ... in
+                  ... in
+                let _: unit =
+                  let i: pointer = ... in
+                  let _: unit =
+                    let a_552: loaded integer = ... in
+                    ... in
+                  let _: unit =
+                    let _: unit =
+                      save [while_542] while_542: unit (i: pointer:= .., cluster_k: pointer:= .., k: pointer:= .., total: pointer:= ..) in
+                        let a_553: loaded integer = ... in
+                        let a_543: boolean =
+                          case a_553 of
+                            | Specified(a_554: integer) =>
+                                ...
+                            | Unspecified(_: ctype) =>
+                                ...
+                            end in
+                        if a_543 then
+                          let _: unit =
+                            let _: unit =
+                              let _: unit =
+                                let a_573: loaded integer = ... in
+                                let a_572: boolean =
+                                  case a_573 of
+                                    | Specified(a_574: integer) =>
+                                        ...
+                                    | Unspecified(_: ctype) =>
+                                        ...
+                                    end in
+                                if a_572 then
+                                  let a_603: loaded integer = ... in
+                                  let _: unit = ... in
+                                  let _: unit = ... in
+                                  let _: unit = ... in
+                                  let _: unit = ... in
+                                  run ret_519(conv_loaded_int('signed int', a_603))
+                                else
+                                  ... in
+                              let _: unit =
+                                let _: loaded integer = ... in
+                                ... in
+                              let _: unit =
+                                save [!__cerb_continue1] __cerb_continue1: unit (i: pointer:= .., cluster_k: pointer:= .., k: pointer:= ..,
+                                total: pointer:= ..) in
+                                  let _: loaded integer = ... in
+                                  ... in
+                              ... in
+                            let _: unit =
+                              save [!continue_522] continue_522: unit (i: pointer:= .., cluster_k: pointer:= .., k: pointer:= .., total: pointer:= ..) in
+                                ... in
+                            ... in
+                          run while_542(i, cluster_k, k, total)
+                        else
+                          ... in
+                    let _: unit =
+                      save [!break_523] break_523: unit (i: pointer:= .., cluster_k: pointer:= .., k: pointer:= .., total: pointer:= ..) in
+                        ... in
+                    ... in
+                  let _: unit = ... in
+                  ... in
+                let _: unit =
+                  save [!__cerb_continue0] __cerb_continue0: unit (cluster_k: pointer:= .., k: pointer:= .., total: pointer:= ..) in
+                    let _: loaded integer = ... in
+                    ... in
+                let _: unit = ... in
+                ... in
+              let _: unit = save [!continue_520] continue_520: unit (k: pointer:= .., total: pointer:= ..) in  ... in
+              ... in
+            run while_525(k, total)
+          else
+            ... in
+      let _: unit = save [!break_521] break_521: unit (k: pointer:= .., total: pointer:= ..) in  ... in
+      ... in
+    let _: unit = ... in
+    ... in
+  let _: unit =
+    let a_634: loaded integer = ... in
+    let a_524: boolean =
+      case a_634 of
+        | Specified(a_635: integer) =>
+            ...
+        | Unspecified(_: ctype) =>
+            ...
+        end in
+    if a_524 then
+      let _: loaded integer = ... in
+      ...
+    else
+      ... in
+  let _: unit =
+    let a_656: loaded integer = ... in
+    let _: unit = ... in
+    run ret_519(conv_loaded_int('signed int', a_656)) in
+  let _: unit = ... in
+  ... in
+save ret_519: loaded integer (a_657: loaded integer:= ..) in
+  ...

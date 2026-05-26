@@ -121,6 +121,91 @@ let [ret_724:1, break_726:1, continue_727:1, break_728:1, case_752:1, case_753:1
   ... in
 save [ret_724:1] ret_724: unit (a_897: unit:= ..) in
   ...
+let _: unit =
+  let n: pointer = ... in
+  let _: unit =
+    let a_729: loaded integer = ... in
+    ... in
+  let _: unit =
+    let [break_726] _: unit =
+      let a_749: loaded integer = ... in
+      case a_749 of
+        | Specified(a_750: integer) =>
+            let a_751: integer = ... in
+            let [case_759] _: unit = if a_751 = 0 then run case_759(n) else ... in
+            let [case_758] _: unit = if a_751 = 7 then run case_758(n) else ... in
+            let [case_757] _: unit = if a_751 = 6 then run case_757(n) else ... in
+            let [case_756] _: unit = if a_751 = 5 then run case_756(n) else ... in
+            let [case_755] _: unit = if a_751 = 4 then run case_755(n) else ... in
+            let [case_754] _: unit = if a_751 = 3 then run case_754(n) else ... in
+            let [case_753] _: unit = if a_751 = 2 then run case_753(n) else ... in
+            let [case_752] _: unit = if a_751 = 1 then run case_752(n) else ... in
+            let _: unit = ... in
+            let _: unit = run break_726(n) in
+            let _: unit =
+              let _: unit =
+                save case_759: unit (n: pointer:= ..) in
+                  let _: unit =
+                    save [do_761] do_761: unit (n: pointer:= ..) in
+                      let _: unit =
+                        let _: unit =
+                          let _: unit =
+                            let _: loaded integer = ... in
+                            ... in
+                          let _: unit =
+                            save case_758: unit (n: pointer:= ..) in
+                              let _: loaded integer = ... in
+                              ... in
+                          let _: unit =
+                            save case_757: unit (n: pointer:= ..) in
+                              let _: loaded integer = ... in
+                              ... in
+                          let _: unit =
+                            save case_756: unit (n: pointer:= ..) in
+                              let _: loaded integer = ... in
+                              ... in
+                          let _: unit =
+                            save case_755: unit (n: pointer:= ..) in
+                              let _: loaded integer = ... in
+                              ... in
+                          let _: unit =
+                            save case_754: unit (n: pointer:= ..) in
+                              let _: loaded integer = ... in
+                              ... in
+                          let _: unit =
+                            save case_753: unit (n: pointer:= ..) in
+                              let _: loaded integer = ... in
+                              ... in
+                          let _: unit =
+                            save case_752: unit (n: pointer:= ..) in
+                              let _: loaded integer = ... in
+                              ... in
+                          ... in
+                        let _: unit = save [!continue_727] continue_727: unit (n: pointer:= ..) in  ... in
+                        ... in
+                      let a_763: loaded integer = ... in
+                      case a_763 of
+                        | Specified(a_762: integer) =>
+                            if not(a_762 = 0) then
+                              run do_761(n)
+                            else
+                              ...
+                        | Unspecified(_: ctype) =>
+                            ...
+                        end in
+                  let _: unit = save [!break_728] break_728: unit (n: pointer:= ..) in  ... in
+                  ... in
+              ... in
+            ...
+        | Unspecified(_: ctype) =>
+            ...
+        end in
+    let _: unit = save break_726: unit (n: pointer:= ..) in  ... in
+    ... in
+  let _: unit = ... in
+  ... in
+save [!ret_724] ret_724: unit (a_897: unit:= ..) in
+  ...
 let [ret_675:1] _: unit =
   let from: pointer = ... in
   let to: pointer = ... in
@@ -138,4 +223,22 @@ let [ret_675:1] _: unit =
   let _: unit = ... in
   ... in
 save [ret_675:1] ret_675: loaded integer (a_720: loaded integer:= ..) in
+  ...
+let _: unit =
+  let from: pointer = ... in
+  let to: pointer = ... in
+  let _: unit =
+    let a_676: loaded pointer = ... in
+    ... in
+  let _: unit = ... in
+  let _: unit =
+    let _: unit = ... in
+    ... in
+  let _: unit =
+    let _: loaded integer = ... in
+    ... in
+  let _: unit = ... in
+  let _: unit = ... in
+  ... in
+save [!ret_675] ret_675: loaded integer (a_720: loaded integer:= ..) in
   ...

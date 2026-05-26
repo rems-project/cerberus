@@ -43,3 +43,47 @@ let [inner:1, ret_507:2] _: unit =
   ... in
 save [ret_507:1] ret_507: loaded integer (a_542: loaded integer:= ..) in
   ...
+let [ret_507] _: unit =
+  let x: pointer = ... in
+  let _: unit =
+    let a_510: loaded integer = ... in
+    ... in
+  let [inner] _: unit =
+    let a_511: loaded integer = ... in
+    let a_509: boolean =
+      case a_511 of
+        | Specified(a_512: integer) =>
+            ...
+        | Unspecified(_: ctype) =>
+            ...
+        end in
+    if a_509 then
+      let _: unit =
+        save inner: unit (x: pointer:= ..) in
+          let _: loaded integer = ... in
+          ... in
+      ...
+    else
+      ... in
+  let _: unit =
+    let a_527: loaded integer = ... in
+    let a_508: boolean =
+      case a_527 of
+        | Specified(a_528: integer) =>
+            ...
+        | Unspecified(_: ctype) =>
+            ...
+        end in
+    if a_508 then
+      let _: unit = run inner(x) in
+      ...
+    else
+      ... in
+  let _: unit =
+    let a_541: loaded integer = ... in
+    let _: unit = ... in
+    run ret_507(conv_loaded_int('signed int', a_541)) in
+  let _: unit = ... in
+  ... in
+save ret_507: loaded integer (a_542: loaded integer:= ..) in
+  ...

@@ -40,3 +40,44 @@ let [ret_513:2, continue_514:1, break_515:1, while_516:1] _: unit =
   ... in
 save [ret_513:1] ret_513: loaded integer (a_552: loaded integer:= ..) in
   ...
+let [ret_513] _: unit =
+  let sum: pointer = ... in
+  let _: unit =
+    let a_518: loaded integer = ... in
+    ... in
+  let _: unit =
+    let _: unit =
+      save [while_516] while_516: unit (sum: pointer:= ..) in
+        let a_519: loaded integer = ... in
+        let a_517: boolean =
+          case a_519 of
+            | Specified(a_520: integer) =>
+                ...
+            | Unspecified(_: ctype) =>
+                ...
+            end in
+        if a_517 then
+          let _: unit =
+            let _: unit =
+              let _: unit =
+                let _: loaded integer = ... in
+                ... in
+              let _: unit =
+                let _: loaded integer = ... in
+                ... in
+              ... in
+            let _: unit = save [!continue_514] continue_514: unit (sum: pointer:= ..) in  ... in
+            ... in
+          run while_516(sum)
+        else
+          ... in
+    let _: unit = save [!break_515] break_515: unit (sum: pointer:= ..) in  ... in
+    ... in
+  let _: unit =
+    let a_551: loaded integer = ... in
+    let _: unit = ... in
+    run ret_513(conv_loaded_int('signed int', a_551)) in
+  let _: unit = ... in
+  ... in
+save ret_513: loaded integer (a_552: loaded integer:= ..) in
+  ...

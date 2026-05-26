@@ -49,3 +49,53 @@ let [l1:1, l2:1, ret_512:2, continue_513:1, break_514:1, while_515:1] _: unit =
   ... in
 save [ret_512:1] ret_512: loaded integer (a_534: loaded integer:= ..) in
   ...
+let [ret_512] _: unit =
+  let p: pointer = ... in
+  let _: unit = ... in
+  let [l2] _: unit =
+    let x: pointer = ... in
+    run l2(x, p) in
+  let _: unit =
+    save [l1] l1: unit (p: pointer:= ..) in
+      let _: unit =
+        save [while_515] while_515: unit (p: pointer:= ..) in
+          let a_517: loaded integer = ... in
+          let a_516: boolean =
+            case a_517 of
+              | Specified(a_518: integer) =>
+                  ...
+              | Unspecified(_: ctype) =>
+                  ...
+              end in
+          if a_516 then
+            let _: unit =
+              let _: unit =
+                let x: pointer = ... in
+                let _: unit =
+                  let a_524: loaded integer = ... in
+                  ... in
+                let _: unit =
+                  let a_530: loaded integer = ... in
+                  let _: unit = ... in
+                  let _: unit = ... in
+                  run ret_512(conv_loaded_int('signed int', a_530)) in
+                let _: unit =
+                  save l2: unit (x: pointer:= .., p: pointer:= ..) in
+                    let _: loaded pointer = ... in
+                    ... in
+                let _: unit =
+                  let _: unit = ... in
+                  run l1(p) in
+                let _: unit = ... in
+                ... in
+              let _: unit = save [!continue_513] continue_513: unit (p: pointer:= ..) in  ... in
+              ... in
+            run while_515(p)
+          else
+            ... in
+      let _: unit = save [!break_514] break_514: unit (p: pointer:= ..) in  ... in
+      ... in
+  let _: unit = ... in
+  ... in
+save ret_512: loaded integer (a_534: loaded integer:= ..) in
+  ...

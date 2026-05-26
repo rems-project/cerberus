@@ -193,9 +193,9 @@ let add_counts sym int_opt1 int_opt2 =
 
 let merge_counts count1 count2 = Pmap.merge add_counts count1 count2
 
-let empty_counts : count_labels = Pmap.empty Symbol.compare_sym
+let empty_counts = Pmap.empty Symbol.compare_sym
 
-let singleton_count sym : count_labels = Pmap.add sym 1 empty_counts
+let singleton_count sym = Pmap.add sym 1 empty_counts
 
 let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
   match expr_ with
@@ -228,6 +228,84 @@ let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
   | _ ->
     { info = empty_counts; annot; node = Base expr_ }
 
+(* We could skip this and just use plain [Symbol.sym Pset.set],
+   but this will allow us to tidy up unused, auto-generated nodes. *)
+type usage = Used | Unused
+type dominates = (Symbol.sym, usage) Pmap.map
+
+let pp_dom_map map =
+  if Pmap.is_empty map then
+    None
+  else
+    let pp_bind (sym, used) =
+      (match used with
+      | Used -> P.empty
+      | Unused -> P.bang)
+      ^^ pp_sym sym in
+    Some (P.separate_map (P.comma ^^ P.space) pp_bind @@ Pmap.bindings_list map)
+
+let union_dom sym int_opt1 int_opt2 =
+  match int_opt1, int_opt2 with
+  | None, None -> assert false
+  | Some _, Some _ ->
+    (* A label is dominated exactly once, so this case is impossible *)
+    assert false
+  | Some x, None
+  | None, Some x ->
+    Some x
+
+let union_dom = Pmap.merge union_dom
+
+let empty_dom = Pmap.empty Symbol.compare_sym
+
+let singleton_dom sym used = Pmap.add sym used empty_dom
+
+let rec dominates dominated ({ info; annot; node } : count_labels where) : dominates where =
+  let ones, manys =
+    info
+    |> Pmap.filter (fun sym _ -> not (Pmap.mem sym dominated))
+    |> Pmap.partition (fun _ count -> count = 1) in
+  let info = Pmap.map (fun _ -> Used) manys in
+  let dominated = union_dom dominated info in
+  let wrap node = { info; annot; node } in
+  match node with
+  | If (pexpr, true_, false_) ->
+    let true_ = dominates dominated true_ in
+    let false_ = dominates dominated false_ in
+    wrap (If (pexpr, true_, false_))
+  | Sseq (pat, e1, e2) ->
+    let e1 = dominates dominated e1 in
+    let e2 = dominates dominated e2 in
+    wrap (Sseq (pat, e1, e2))
+  | Case (pexpr, branches) ->
+    let dom_snd (pat, e) = (pat, dominates dominated e) in
+    wrap (Case (pexpr, List.map dom_snd branches))
+  | Run (label, pexprs) ->
+    assert (Pmap.is_empty info);
+    wrap (Run (label, pexprs))
+  | Save { label; ret_bty; params; body } ->
+    let info =
+      if not (Pmap.mem label dominated) then
+        (* At this point we know:
+           1. Label was not used outside of the save
+              (shadowed [dominated] value).
+           2. Label was not used inside the save
+              (otherwise it would have been in [manys]).
+           Hence, the label is [Unused] (in [ones]). *)
+        (assert (Pmap.mem label ones);
+        Pmap.add label Unused info)
+      else
+        info in
+    let body = dominates dominated body in
+    let node = Save { label; ret_bty; params; body } in
+    { info; annot; node }
+  | Base expr ->
+    assert (Pmap.is_empty info);
+    wrap (Base expr)
+  | Jump (_, _) -> assert false
+  | Where _ -> assert false
+
+
 module Debug = struct
   let pat bty = Pattern ([], CaseBase (None, bty))
 
@@ -254,6 +332,10 @@ let transform_expr bty expr =
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
       (pp_where pp_count_map counted)) in
+  let dominated = dominates empty_dom counted in
+  let () = Cerb_debug.print_debug 1 []
+    (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
+      (pp_where pp_dom_map dominated)) in
   expr
 
 let transform_file file =
