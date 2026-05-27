@@ -551,6 +551,41 @@ let to_where bTy dominated =
   | None -> whered
   | Some _ -> assert false
 
+let rec to_expr { info; annot; node } =
+  let wrap expr = Expr (annot, expr) in
+  wrap @@
+  begin match node with
+  | If (pexpr, true_, false_) ->
+    Eif (pexpr, to_expr true_, to_expr false_)
+  | Sseq ((Pattern ([], CaseCtor (Ctuple, pats)) as pat),
+          { info = (); annot = [];
+            node = Base (Epure (Pexpr ([], (), PEctor (Ctuple, pexprs)) as pexpr)) },
+          e2) ->
+    (* Tidy up the unused label case *)
+    let pat, pexpr =
+      match pats, pexprs with
+      | [ pat ], [ pexpr ] -> (pat, pexpr)
+      | _ -> (pat, pexpr) in
+      Elet (pat, pexpr, to_expr e2)
+  | Sseq (pat, e1, e2) ->
+    Esseq (pat, to_expr e1, to_expr e2)
+  | Case (pexpr, branches) ->
+    Ecase (pexpr, List.map (fun (pat, e) -> (pat, to_expr e)) branches)
+  | Base expr ->
+    expr
+  | Jump (label, pexprs) ->
+    Ejump ((), label, pexprs)
+  | Where (e, defs) ->
+    let def { label; ret_bTy; params; body } =
+      let param { name; bTy; optCTy; pexpr = () } =
+      (name, (bTy, optCTy)) in
+      ((label, ret_bTy), List.map param params, to_expr body) in
+    Ewhere (to_expr e, List.map def defs)
+  | Run _
+  | Save _ ->
+    assert false
+  end
+
 let transform_expr bTy expr =
   let counted = count_labels expr in
   let () = Cerb_debug.print_debug 1 []
@@ -564,7 +599,7 @@ let transform_expr bTy expr =
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
       (pp_where (fun () -> None) whered)) in
-  expr
+  to_expr whered
 
 let transform_file file =
   let rewrite_fun_map_decl = function
