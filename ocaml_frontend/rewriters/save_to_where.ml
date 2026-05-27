@@ -61,6 +61,9 @@ type 'a param = {
   pexpr : 'a;
 }
 
+let param_map f { name; bTy; optCTy; pexpr } =
+  { name; bTy; optCTy; pexpr = f pexpr }
+
 type 'info where = {
   info : 'info;
   annot : Annot.annot list;
@@ -79,7 +82,7 @@ and 'info where_ =
 
 and ('info, 'pexpr) label_def = {
   label : Symbol.sym;
-  ret_bty : core_base_type;
+  ret_bTy : core_base_type;
   params : 'pexpr param list;
   body : 'info where
 }
@@ -92,7 +95,7 @@ let pp_where pp_info w =
   let pp_control w = pp_ansi_format [Bold; Blue] (fun () -> !^ w) in
   let pp_pexpr pe = Pp_core.All.pp_pexpr pe in
   let pp_pat pat = Pp_core.All.pp_pattern pat in
-  let pp_bty bty = Pp_core.Basic.pp_core_base_type bty in
+  let pp_bty bTy = Pp_core.Basic.pp_core_base_type bTy in
   let rec pp w =
     let info = pp_info w.info in
     let some x = pp_ansi_format [Green] (fun () -> P.enclose P.space P.space (P.brackets x)) in
@@ -123,7 +126,7 @@ let pp_where pp_info w =
     | Jump (sym, pes) ->
         pp_keyword "jump" ^^ info ^^ pp_sym sym ^^ P.parens (comma_list pp_pexpr pes)
     | Save ld ->
-        pp_keyword "save" ^^ info ^^ pp_sym ld.label ^^ P.colon ^^^ pp_bty ld.ret_bty ^^^
+        pp_keyword "save" ^^ info ^^ pp_sym ld.label ^^ P.colon ^^^ pp_bty ld.ret_bTy ^^^
         P.parens (comma_list (fun p ->
           pp_sym p.name ^^ P.colon ^^^ pp_bty p.bTy ^^
           P.colon ^^ P.equals ^^^ !^ ".."
@@ -154,7 +157,7 @@ let pp_where pp_info w =
           P.parens (comma_list (fun p ->
             pp_sym p.name ^^ P.colon ^^^ pp_bty p.bTy
           ) ld.params) ^^^
-          P.colon ^^^ pp_bty ld.ret_bty ^^^
+          P.colon ^^^ pp_bty ld.ret_bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp ld.body)
         in
@@ -167,8 +170,7 @@ let pp_where pp_info w =
               P.concat (List.map (fun d ->
                 P.hardline ^^ pp_def (pp_keyword "and") d
               ) rest)
-            ) ^^
-            P.hardline ^^ pp_keyword "end"
+            ^^ P.hardline ^^ pp_keyword "end")
         end
   in
   pp w
@@ -215,14 +217,14 @@ let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
     { info; annot; node = Case (pe, wcases) }
   | Erun ((), sym, pes) ->
     { info = singleton_count sym; annot; node = Run (sym, pes) }
-  | Esave ((sym, ret_bty), params_list, body) ->
+  | Esave ((sym, ret_bTy), params_list, body) ->
     let wbody = count_labels body in
     let params = List.map (fun (name, ((bTy, optCTy), pe)) ->
       { name; bTy; optCTy; pexpr = pe }
     ) params_list in
     { info = merge_counts wbody.info (singleton_count sym);
       annot;
-      node = Save { label = sym; ret_bty; params; body = wbody } }
+      node = Save { label = sym; ret_bTy; params; body = wbody } }
   | Ejump _ -> assert false
   | Ewhere _ -> assert false
   | _ ->
@@ -283,7 +285,7 @@ let rec dominates dominated ({ info; annot; node } : count_labels where) : domin
   | Run (label, pexprs) ->
     assert (Pmap.is_empty info);
     wrap (Run (label, pexprs))
-  | Save { label; ret_bty; params; body } ->
+  | Save { label; ret_bTy; params; body } ->
     let info =
       if not (Pmap.mem label dominated) then
         (* At this point we know:
@@ -297,7 +299,7 @@ let rec dominates dominated ({ info; annot; node } : count_labels where) : domin
       else
         info in
     let body = dominates dominated body in
-    let node = Save { label; ret_bty; params; body } in
+    let node = Save { label; ret_bTy; params; body } in
     { info; annot; node }
   | Base expr ->
     assert (Pmap.is_empty info);
@@ -305,29 +307,251 @@ let rec dominates dominated ({ info; annot; node } : count_labels where) : domin
   | Jump (_, _) -> assert false
   | Where _ -> assert false
 
-
-module Debug = struct
-  let pat bty = Pattern ([], CaseBase (None, bty))
+module Helper = struct
+  let pat ?sym bTy = Pattern ([], CaseBase (sym, bTy))
 
   let epure pe = Expr ([], Epure pe)
 
-  let pe v = Pexpr ([], (), PEval v)
+  let pe_sym sym = Pexpr ([],  (), PEsym sym)
 
-  let wrap_sseq1 bty expr =
-    Expr ([], Esseq (pat bty, expr, epure (pe Vunit)))
+  let pe_val v = Pexpr ([], (), PEval v)
+
+  let wrap_sseq1 bTy expr =
+    Expr ([], Esseq (pat bTy, expr, epure (pe_val Vunit)))
 
   let wrap_sseq2 _bty expr =
-    Expr ([], Esseq (pat BTy_unit, epure (pe Vunit), expr))
+    Expr ([], Esseq (pat BTy_unit, epure (pe_val Vunit), expr))
 
-  let wrap_if1 bty expr =
-    Expr ([], Eif (pe Vtrue, wrap_sseq1 bty expr, Expr ([], Epure (Pexpr ([], (), PEval Vunit)))))
+  let wrap_if1 bTy expr =
+    Expr ([], Eif (pe_val Vtrue, wrap_sseq1 bTy expr, Expr ([], Epure (Pexpr ([], (), PEval Vunit)))))
 
-  let wrap_if2 bty expr =
-    Expr ([], Eif (pe Vfalse, epure (pe Vunit), wrap_sseq1 bty expr))
+  let wrap_if2 bTy expr =
+    Expr ([], Eif (pe_val Vfalse, epure (pe_val Vunit), wrap_sseq1 bTy expr))
 end
 
-let transform_expr bty expr =
-  (* let expr = Debug.wrap_sseq1 bty expr in *)
+let bTy_of_pat pat =
+  let inferred = Core_typing.infer_pattern pat in
+  let to_cbt (_, inferred, _) = Core_typing_aux.toCoreBaseType inferred in
+  match Exception.except_fmap to_cbt inferred   with
+  | Exception.Result (Some bty) -> bty
+  | _ -> assert false (* elaboration guarantee *)
+
+let pp_sym_set ?name set =
+  (match name with
+  | None ->
+    P.empty
+  | Some name ->
+    !^ name ^^ P.colon)
+  ^^ P.braces (P.separate_map (P.comma ^^ P.space) pp_sym (Pset.elements set))
+
+(* The function can be thought of first transforming saves as follows:
+
+     save l (x := pe) in E ~> jump l(pe) where l(x) := E end
+
+   and then bubbling this outward, capturing (moving inside a label definiton)
+   the continuation (layers of enclosing let strong pat = _ in E) of that
+   expression until it reaches the dominating context of l.
+   
+   In reality, labels may overlap this happens when we goto _inside_ C blocks,
+   so more than one label may be "live" (capturing) at the same time.
+   
+   To handle this we need to keep track of not just the labels definitions, but
+   also the "live" labels being captured. Loops and gotos which only jump out
+   of scopes will only capture the continuation of exactly one label at a time
+   (and would not need to track "live" labels).
+
+   The implementation is essentially a rewrite rule of the form:
+
+     E ~> (E', None) or E ~> (E' where defs, live)
+
+   For the latter, case, when we reach a node with non-empty dominators, we
+   transform it as so:
+
+     dominators(E) = labels
+     (E' where defs, live) ~> (E' where defs, live \ labels).
+
+   If the set of live labels being captured is empty, we stop capturing and place
+   a where-expression at that point:
+
+      (E' where defs, {}) ~> (E' where defs, None).
+
+   Note that by convention, the first def in defs is will always be the one
+   capturing the continuation. In E where (def :: defs), E can be thought of as
+   an "entry block" and def as the "exit" block. There is always exactly one
+   because we synthesise join-point labels for any capturing if-expressions.
+
+   NOTE: the analysis doesn't take into account free and bound variables when
+   moving expressions around, but this doesn't seem to matter much because the
+   "free" variables in saves are re-used for function local variables (across
+   different lifetimes). They are introduced upfront, before any runs/saves
+   (and so are always part of the dominator frame, I think). *)
+let rec to_where bTy ({ info; annot; node } : dominates where) =
+  let dominators = Pmap.domain info in
+  let new_ node = { info = (); annot = []; node } in
+  let wrap node = { info = (); annot; node} in
+  let unwrap_set_defs capturing =
+    let default = (Pset.empty Symbol.symbol_compare, []) in
+    Option.value ~default capturing in
+  let map_e_or_fst_def f e capturing =
+    let (live, defs) = unwrap_set_defs capturing in
+    match defs with
+    | [] -> (f e, live, defs)
+    | def :: defs -> (e, live, { def with body = f def.body } :: defs) in
+  begin match node with
+  | If (pexpr, true_, false_) ->
+    let (true_, capturing_t) = to_where bTy true_ in
+    let (false_, capturing_f) = to_where bTy false_ in
+    begin match capturing_t, capturing_f with
+      | None, None ->
+        (wrap (If (pexpr, true_, false_)), None)
+      | _, _ ->
+        (* Approximately (not to be taken too literally) here is what's
+           happening:
+
+             E1 ~> E1' where t(xt) := Et and defs1 end
+             E2 ~> E2' where f(xt) := Ef and defs2 end
+             ---------------------------------------
+             if pe1 then E1 else E2 ~>
+               if pe1 then E1' else E2'
+                 where join(x) := pure(x)
+                 and   t(xt) := let strong yt = Et in jump join(yt)
+                 and   defs1
+                 and   f(xf) := lef sfrong yf = Ef in jump join(yf)
+                 and   defs2 end
+
+           Note that join is first, so that any continuations captured will
+           thus be place inside its body. *)
+        let label = Symbol.fresh_pretty "join" in
+        let sseq_jump body =
+          let sym = Symbol.fresh () in
+          let pat = Helper.pat ~sym bTy in
+          let jump = new_ (Jump (label, [Helper.pe_sym sym])) in
+          new_ (Sseq (pat, body, jump)) in
+        let (true_j, live_t, defs_t) =
+          map_e_or_fst_def sseq_jump true_ capturing_t in
+        let (false_j, live_f, defs_f) =
+          map_e_or_fst_def sseq_jump false_ capturing_f in
+        let def =
+          let param = {
+            name = Symbol.fresh ();
+            bTy;
+            optCTy = None;
+            pexpr = ();
+          } in {
+            label;
+            ret_bTy = bTy;
+            params = [ param ];
+            body = new_ (Base (Epure (Helper.pe_sym param.name)));
+          } in
+        let live =
+          let unioned = Pset.union live_t live_f in
+          assert (Pset.subset dominators unioned);
+          Pset.diff unioned dominators in
+        if Pset.is_empty live then
+          (* We don't add the join-point def here because we're not capturing
+             any more continuations. *)
+          (new_ (Where (wrap (If (pexpr, true_, false_)), defs_t @ defs_f)), None)
+        else
+          (wrap (If (pexpr, true_j, false_j)), Some (live, def :: defs_t @ defs_f))
+    end
+  | Sseq (pat, e1, e2) ->
+    let inner_bTy = bTy_of_pat pat in
+    let (e2, capturing2) = to_where bTy e2 in
+    let (e1, capturing1) = to_where inner_bTy e1 in
+    begin match capturing1, capturing2 with
+      | None, None ->
+        (wrap (Sseq (pat, e1, e2)), None)
+      | _, _ ->
+        (* Approximately (not to be taken too literally) here is what's
+           happening:
+
+             E1 ~> E1' where def1(x) := E and defs1 end
+             E2 ~> E2' where defs2 end
+             ---------------------------------------
+             let strong pat = E1 in E2 ~>
+               E1' where defs2
+                   and def1(x) := let strong pat = E in E2'
+                   and defs1 end
+
+           Note that defs2 is first, so that any continuations captured will
+           be place inside the head of its body. *)
+        let sseq_e2 body = wrap (Sseq (pat, body, e2)) in
+        let (e, live1, defs1) = map_e_or_fst_def sseq_e2 e1 capturing1 in
+        let (live2, defs2) = unwrap_set_defs capturing2 in
+        let live =
+          let unioned = Pset.union live1 live2 in
+          assert (Pset.subset dominators unioned);
+          Pset.diff unioned dominators in
+        if Pset.is_empty live then
+          (wrap (Where (e, defs2 @ defs1)), None)
+        else
+          (e, Some (live, defs2 @ defs1))
+    end
+  | Case (pexpr, branches) ->
+    let do_branch (pat, body) =
+      let (body, capturing) = to_where bTy body in
+      (* Case expressions can have runs inside them, but not saves,
+         so they'll never capture any continuations *)
+      assert (Option.is_none capturing);
+      (pat, body) in
+    (wrap (Case (pexpr, List.map do_branch branches)), None)
+  | Run (label, pexprs) ->
+    (wrap (Jump (label, pexprs)), None)
+  | Save { label; ret_bTy; params; body } ->
+    let (body, capturing) = to_where ret_bTy body in
+    begin match Pmap.lookup label info with
+      | Some Unused ->
+        (* This is basically
+
+             ----------------------------------------------
+             save unused (x := pe) in E ~> let x = pe in E *)
+        let pat, expr =
+          let tuple { name; bTy; optCTy; pexpr } = ((name, bTy), pexpr) in
+          let syms, pexprs = List.split @@ List.map tuple params in
+          let mk_pat (sym, bTy) = Helper.pat ~sym bTy in
+          let pat = Pattern ([], CaseCtor (Ctuple, List.map mk_pat syms)) in
+          (pat, Epure (Pexpr ([], (), PEctor (Ctuple, pexprs)))) in
+        (wrap (Sseq (pat, new_ (Base expr), body)), capturing)
+      | Some Used | None ->
+        (* Approximately (not to be taken too literally) here is
+           what's happening:
+
+             E ~> E' where defs
+             -------------------------------------------------
+             save l (x := pe) in E ~>
+                 jump l(pe) where defs and l(x) := E' end         *)
+        let pexprs = List.map (fun x -> x.pexpr) params in
+        let params = List.map (param_map (fun _ -> ())) params in
+        let jump = new_ (Jump (label, pexprs)) in
+        let def = {
+          label;
+          ret_bTy = bTy;
+          params;
+          body;
+        } in
+        let (live, defs) = unwrap_set_defs capturing in
+        let live =
+          let added = Pset.add label live in
+          assert (Pset.subset dominators added);
+          Pset.diff added dominators in
+        if Pset.is_empty live then
+          (wrap (Where (jump, defs @ [ def ])), None)
+        else
+          (jump, Some (live, defs @ [ def ]))
+    end
+  | Base expr ->
+    (wrap (Base expr), None)
+  | Jump (_, _) -> assert false
+  | Where _ -> assert false
+  end
+
+let to_where bTy dominated =
+  let (whered, capturing) = to_where bTy dominated in
+  match capturing with
+  | None -> whered
+  | Some _ -> assert false
+
+let transform_expr bTy expr =
   let counted = count_labels expr in
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
@@ -336,10 +560,14 @@ let transform_expr bty expr =
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
       (pp_where pp_dom_map dominated)) in
+  let whered = to_where bTy dominated in
+  let () = Cerb_debug.print_debug 1 []
+    (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
+      (pp_where (fun () -> None) whered)) in
   expr
 
 let transform_file file =
   let rewrite_fun_map_decl = function
-    | Proc (loc, mrk, bty, args, e) -> Proc (loc, mrk, bty, args, transform_expr bty e)
+    | Proc (loc, mrk, bTy, args, e) -> Proc (loc, mrk, bTy, args, transform_expr bTy e)
     | decl                           -> decl in
   { file with funs = Pmap.map rewrite_fun_map_decl file.funs }

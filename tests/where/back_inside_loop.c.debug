@@ -147,3 +147,90 @@ let [ret_512] _: unit =
   ... in
 save ret_512: loaded integer (a_559: loaded integer:= ..) in
   ...
+(let _: unit =
+  let x: pointer = ... in
+  let y: pointer = ... in
+  let z: pointer = ... in
+  let _: unit =
+    let a_518: loaded integer = ... in
+    ... in
+  let _: unit =
+    let a_519: loaded integer = ... in
+    ... in
+  jump while_516(x, y, z)
+    where join (a_563: unit) : unit :=
+      let _: unit =
+        let _: unit = ... in
+        let _: unit =
+          let (x: pointer, y: pointer, z: pointer) = ... in
+          ... in
+        ... in
+      let _: unit =
+        let a_537: loaded integer = ... in
+        ... in
+      let _: unit =
+        let a_538: loaded integer = ... in
+        let a_515: boolean =
+          case a_538 of
+            | Specified(a_539: integer) =>
+                ...
+            | Unspecified(_: ctype) =>
+                ...
+            end in
+        if a_515 then
+          let _: unit =
+            let _: loaded integer = ... in
+            ... in
+          let _: unit =
+            let _: loaded integer = ... in
+            ... in
+          let _: unit = jump l(x, y, z) in
+          ...
+        else
+          ... in
+      let _: unit =
+        let a_558: loaded integer = ... in
+        let _: unit = ... in
+        let _: unit = ... in
+        let _: unit = ... in
+        jump ret_512(conv_loaded_int('signed int', a_558)) in
+      let _: unit = ... in
+      let _: unit = ... in
+      let _: unit = ... in
+      ...
+    and l (x: pointer, y: pointer, z: pointer) : unit :=
+      let a_561: unit =
+        let _: unit =
+          let _: unit =
+            let _: unit =
+              let _: loaded integer = ... in
+              ... in
+            ... in
+          let _: unit =
+            let (x: pointer, y: pointer, z: pointer) = ... in
+            ... in
+          ... in
+        jump while_516(x, y, z) in
+      jump join(a_561)
+    and while_516 (x: pointer, y: pointer, z: pointer) : unit :=
+      let a_520: loaded integer = ... in
+      let a_517: boolean =
+        case a_520 of
+          | Specified(a_521: integer) =>
+              ...
+          | Unspecified(_: ctype) =>
+              ...
+          end in
+      if a_517 then
+        let _: unit =
+          let _: loaded integer = ... in
+          ... in
+        jump l(x, y, z)
+      else
+        let a_562: unit = ... in
+        jump join(a_562)
+    end in
+jump ret_512(Specified(0)))
+  where ret_512 (a_559: loaded integer) : loaded integer :=
+    ...
+  end
