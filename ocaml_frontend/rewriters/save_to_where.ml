@@ -560,6 +560,56 @@ let to_where bTy dominated =
   | None -> whered
   | Some _ -> assert false
 
+let pp_sym_set set =
+  if Pset.is_empty set then
+    None
+  else
+    Some (P.separate_map (P.comma ^^ P.space) pp_sym (Pset.elements set))
+
+let apply_ctx e ctxs =
+  List.fold_right (fun (annot, pat, e2) e1 ->
+      let info = Pset.union e1.info e2.info in
+      { info; annot; node = Sseq (pat, e1, e2) }) ctxs e
+
+(* Works mostly, but needs to track free-variables to work fully. *)
+let rec tighten_exit set bTy ({ info; annot; node } as expr) =
+  let no_uses info = Pset.is_empty (Pset.inter info set) in
+  let wrap node = { info; annot; node } in
+    match node with
+    | Case _ | Jump _ | Base _ ->
+      (expr, bTy, [])
+    | If (pe, e1, e2) ->
+      let (e1', _, e1'_ctx) = tighten_exit set bTy e1 in
+      let (e2', _, e2'_ctx) = tighten_exit set bTy e2 in
+      (wrap (If (pe, apply_ctx e1' e1'_ctx, apply_ctx e2' e2'_ctx)), bTy, [])
+    | Sseq (pat, e1, e2)  ->
+      let (e1', bTy1', e1'_ctx) = tighten_exit set (bTy_of_pat pat) e1 in
+      if no_uses e2.info then
+        (e1', bTy1', (annot, pat, e2) :: e1'_ctx)
+      else
+        let (e2', bTy2', e2'_ctx) = tighten_exit set bTy e2 in
+        begin match pat with
+          | Pattern (_, CaseBase (None, _)) ->
+            (wrap (Sseq (pat, apply_ctx e1' e1'_ctx, e2')), bTy2', e2'_ctx)
+          | _ ->
+            (wrap (Sseq (pat, apply_ctx e1' e1'_ctx, apply_ctx e2' e2'_ctx)), bTy, [])
+        end
+    | Where (body, defs) ->
+      let set =
+        List.map (fun def -> def.label) defs
+        |> Pset.from_list Symbol.compare_sym in
+      let (exit, rest) = List.hd defs, List.tl defs in
+      let (body', _, body'_ctx) = tighten_exit set bTy body in
+      let rest' = List.map (fun def ->
+          let (def_body', _, def_body'_ctx) = tighten_exit set def.ret_bTy def.body in
+          { def with body = apply_ctx def_body' def_body'_ctx }) rest in
+      let (exit', exit_bTy, exit_ctx) =
+        let (exit_body', bTy_body', exit_body'_ctx) = tighten_exit set exit.ret_bTy exit.body in
+        ({ exit with body = exit_body' ; ret_bTy = bTy_body' }, bTy_body', exit_body'_ctx) in
+      let where = wrap (Where (apply_ctx body' body'_ctx, exit' :: rest')) in
+      (apply_ctx where exit_ctx, exit_bTy, [])
+    | Run _ | Save _ -> assert false
+
 let rec to_expr { info; annot; node } =
   let wrap expr = Expr (annot, expr) in
   wrap @@
@@ -595,11 +645,10 @@ let rec to_expr { info; annot; node } =
     assert false
   end
 
-let pp_sym_set set =
-  if Pset.is_empty set then
-    None
-  else
-    Some (P.separate_map (P.comma ^^ P.space) pp_sym (Pset.elements set))
+let tighten_exit bTy e =
+  let info = Pset.empty Symbol.compare_sym in
+  let (tightened, _, ctx) = tighten_exit info bTy e in
+  apply_ctx tightened ctx
 
 let transform_expr bTy expr =
   let counted = count_labels expr in
@@ -614,6 +663,10 @@ let transform_expr bTy expr =
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
       (pp_where pp_sym_set whered)) in
+  let tightened = tighten_exit bTy whered in
+  let () = Cerb_debug.print_debug 1 []
+    (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
+      (pp_where pp_sym_set tightened)) in
   to_expr whered
 
 let transform_file file =

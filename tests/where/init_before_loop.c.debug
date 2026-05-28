@@ -121,3 +121,49 @@ jump [ret_509] ret_509(Specified(0)))
   where ret_509 (a_533: loaded integer) : loaded integer :=
     ...
   end
+(let [ret_509] _: unit =
+  let [ret_509] x: pointer = ... in
+  let [ret_509] _: unit =
+    let [ret_509] _: unit =
+      let a_514: loaded integer = ... in
+      ... in
+    let [ret_509] _: unit =
+      let _: unit =
+        jump [while_512] while_512(x)
+          where while_512 (x: pointer) : unit :=
+            let [while_512] a_515: loaded integer = ... in
+            let [while_512] a_513: boolean =
+              case a_515 of
+                | Specified(a_516: integer) =>
+                    ...
+                | Unspecified(_: ctype) =>
+                    ...
+                end in
+            if [while_512] a_513 then
+              let [while_512] _: unit =
+                let _: unit =
+                  let _: unit =
+                    let _: loaded integer = ... in
+                    ... in
+                  ... in
+                let _: unit =
+                  let (x: pointer) = ... in
+                  ... in
+                ... in
+              jump [while_512] while_512(x)
+            else
+              ...
+          end in
+      let _: unit =
+        let (x: pointer) = ... in
+        ... in
+      ... in
+    let [ret_509] a_532: loaded integer = ... in
+    let [ret_509] _: unit = ... in
+    jump [ret_509] ret_509(conv_loaded_int('signed int', a_532)) in
+  let _: unit = ... in
+  ... in
+jump [ret_509] ret_509(Specified(0)))
+  where ret_509 (a_533: loaded integer) : loaded integer :=
+    ...
+  end
