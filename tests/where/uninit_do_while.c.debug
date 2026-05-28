@@ -67,14 +67,14 @@ let [ret_509] _: unit =
   ... in
 save ret_509: loaded integer (a_524: loaded integer:= ..) in
   ...
-(let _: unit =
-  let x: pointer = ... in
-  let _: unit = ... in
-  let _: unit =
+(let [ret_509] _: unit =
+  let [ret_509] x: pointer = ... in
+  let [ret_509] _: unit = ... in
+  let [ret_509] _: unit =
     let _: unit =
-      jump do_512(x)
+      jump [do_512] do_512(x)
         where do_512 (x: pointer) : unit :=
-          let _: unit =
+          let [do_512] _: unit =
             let _: unit =
               let _: unit =
                 let _: loaded integer = ... in
@@ -84,11 +84,11 @@ save ret_509: loaded integer (a_524: loaded integer:= ..) in
               let (x: pointer) = ... in
               ... in
             ... in
-          let a_514: loaded integer = ... in
-          case a_514 of
+          let [do_512] a_514: loaded integer = ... in
+          case [do_512] a_514 of
             | Specified(a_513: integer) =>
-                if not(a_513 = 0) then
-                  jump do_512(x)
+                if [do_512] not(a_513 = 0) then
+                  jump [do_512] do_512(x)
                 else
                   ...
             | Unspecified(_: ctype) =>
@@ -99,13 +99,13 @@ save ret_509: loaded integer (a_524: loaded integer:= ..) in
       let (x: pointer) = ... in
       ... in
     ... in
-  let _: unit =
-    let a_523: loaded integer = ... in
-    let _: unit = ... in
-    jump ret_509(conv_loaded_int('signed int', a_523)) in
+  let [ret_509] _: unit =
+    let [ret_509] a_523: loaded integer = ... in
+    let [ret_509] _: unit = ... in
+    jump [ret_509] ret_509(conv_loaded_int('signed int', a_523)) in
   let _: unit = ... in
   ... in
-jump ret_509(Specified(0)))
+jump [ret_509] ret_509(Specified(0)))
   where ret_509 (a_524: loaded integer) : loaded integer :=
     ...
   end

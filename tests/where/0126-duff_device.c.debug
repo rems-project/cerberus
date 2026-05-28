@@ -212,27 +212,47 @@ let _: unit =
     let a_729: loaded integer = ... in
     ... in
   let _: unit =
-    (let _: unit =
-      let a_749: loaded integer = ... in
-      case a_749 of
+    (let [break_726] _: unit =
+      let [break_726] a_749: loaded integer = ... in
+      case [break_726] a_749 of
         | Specified(a_750: integer) =>
-            let a_751: integer = ... in
-            (let _: unit = if a_751 = 0 then jump case_759(n) else ... in
-            let _: unit = if a_751 = 7 then jump case_758(n) else ... in
-            let _: unit = if a_751 = 6 then jump case_757(n) else ... in
-            let _: unit = if a_751 = 5 then jump case_756(n) else ... in
-            let _: unit = if a_751 = 4 then jump case_755(n) else ... in
-            let _: unit = if a_751 = 3 then jump case_754(n) else ... in
-            let _: unit = if a_751 = 2 then jump case_753(n) else ... in
-            let _: unit = if a_751 = 1 then jump case_752(n) else ... in
-            let _: unit = ... in
-            let _: unit = jump break_726(n) in
-            jump case_759(n))
-              where case_752 (n: pointer) : unit :=
-                let _: unit =
-                  let _: unit =
-                    let _: unit =
-                      let _: unit =
+            let [break_726] a_751: integer = ... in
+            (let [break_726, case_752, case_753, case_754, case_755, case_756, case_757, case_758, case_759] _: unit =
+              if [case_759] a_751 = 0 then
+                jump [case_759] case_759(n)
+              else
+                ... in
+            let [break_726, case_752, case_753, case_754, case_755, case_756, case_757, case_758, case_759] _: unit =
+              if [case_758] a_751 = 7 then
+                jump [case_758] case_758(n)
+              else
+                ... in
+            let [break_726, case_752, case_753, case_754, case_755, case_756, case_757, case_759] _: unit =
+              if [case_757] a_751 = 6 then
+                jump [case_757] case_757(n)
+              else
+                ... in
+            let [break_726, case_752, case_753, case_754, case_755, case_756, case_759] _: unit =
+              if [case_756] a_751 = 5 then
+                jump [case_756] case_756(n)
+              else
+                ... in
+            let [break_726, case_752, case_753, case_754, case_755, case_759] _: unit =
+              if [case_755] a_751 = 4 then
+                jump [case_755] case_755(n)
+              else
+                ... in
+            let [break_726, case_752, case_753, case_754, case_759] _: unit = if [case_754] a_751 = 3 then jump [case_754] case_754(n) else ... in
+            let [break_726, case_752, case_753, case_759] _: unit = if [case_753] a_751 = 2 then jump [case_753] case_753(n) else ... in
+            let [break_726, case_752, case_759] _: unit = if [case_752] a_751 = 1 then jump [case_752] case_752(n) else ... in
+            let [break_726, case_759] _: unit = ... in
+            let [break_726, case_759] _: unit = jump [break_726] break_726(n) in
+            jump [case_759] case_759(n))
+              where [break_726] case_752 (n: pointer) : unit :=
+                let [do_761] _: unit =
+                  let [do_761] _: unit =
+                    let [do_761] _: unit =
+                      let [do_761] _: unit =
                         let _: unit =
                           let _: unit =
                             let _: loaded integer = ... in
@@ -242,11 +262,11 @@ let _: unit =
                           let (n: pointer) = ... in
                           ... in
                         ... in
-                      let a_763: loaded integer = ... in
-                      case a_763 of
+                      let [do_761] a_763: loaded integer = ... in
+                      case [do_761] a_763 of
                         | Specified(a_762: integer) =>
-                            if not(a_762 = 0) then
-                              jump do_761(n)
+                            if [do_761] not(a_762 = 0) then
+                              jump [do_761] do_761(n)
                             else
                               ...
                         | Unspecified(_: ctype) =>
@@ -258,48 +278,48 @@ let _: unit =
                     ... in
                   ... in
                 ...
-              and case_753 (n: pointer) : unit :=
-                let _: unit =
+              and [break_726] case_753 (n: pointer) : unit :=
+                let [case_752] _: unit =
                   let _: loaded integer = ... in
                   ... in
-                jump case_752(n)
-              and case_754 (n: pointer) : unit :=
-                let _: unit =
+                jump [case_752] case_752(n)
+              and [break_726] case_754 (n: pointer) : unit :=
+                let [case_753] _: unit =
                   let _: loaded integer = ... in
                   ... in
-                jump case_753(n)
-              and case_755 (n: pointer) : unit :=
-                let _: unit =
+                jump [case_753] case_753(n)
+              and [break_726] case_755 (n: pointer) : unit :=
+                let [case_754] _: unit =
                   let _: loaded integer = ... in
                   ... in
-                jump case_754(n)
-              and case_756 (n: pointer) : unit :=
-                let _: unit =
+                jump [case_754] case_754(n)
+              and [break_726] case_756 (n: pointer) : unit :=
+                let [case_755] _: unit =
                   let _: loaded integer = ... in
                   ... in
-                jump case_755(n)
-              and case_757 (n: pointer) : unit :=
-                let _: unit =
+                jump [case_755] case_755(n)
+              and [break_726] case_757 (n: pointer) : unit :=
+                let [case_756] _: unit =
                   let _: loaded integer = ... in
                   ... in
-                jump case_756(n)
-              and case_758 (n: pointer) : unit :=
-                let _: unit =
+                jump [case_756] case_756(n)
+              and [break_726] case_758 (n: pointer) : unit :=
+                let [case_757] _: unit =
                   let _: loaded integer = ... in
                   ... in
-                jump case_757(n)
-              and do_761 (n: pointer) : unit :=
-                let _: unit =
+                jump [case_757] case_757(n)
+              and [break_726] do_761 (n: pointer) : unit :=
+                let [case_758] _: unit =
                   let _: loaded integer = ... in
                   ... in
-                jump case_758(n)
-              and case_759 (n: pointer) : unit :=
-                jump do_761(n)
+                jump [case_758] case_758(n)
+              and [break_726] case_759 (n: pointer) : unit :=
+                jump [do_761] do_761(n)
               end
         | Unspecified(_: ctype) =>
             ...
         end in
-    jump break_726(n))
+    jump [break_726] break_726(n))
       where break_726 (n: pointer) : unit :=
         let _: unit = ... in
         ...

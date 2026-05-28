@@ -99,14 +99,14 @@ let [ret_512] _: unit =
   ... in
 save ret_512: loaded integer (a_534: loaded integer:= ..) in
   ...
-(let _: unit =
-  let p: pointer = ... in
-  let _: unit = ... in
-  (let _: unit =
-    let x: pointer = ... in
-    jump l2(x, p) in
-  jump l1(p))
-    where join (a_538: unit) : unit :=
+(let [ret_512] _: unit =
+  let [ret_512] p: pointer = ... in
+  let [ret_512] _: unit = ... in
+  (let [l1, l2] _: unit =
+    let [l2] x: pointer = ... in
+    jump [l2] l2(x, p) in
+  jump [l1] l1(p))
+    where [ret_512] join (a_538: unit) : unit :=
       let _: unit =
         let _: unit = ... in
         let _: unit =
@@ -115,51 +115,51 @@ save ret_512: loaded integer (a_534: loaded integer:= ..) in
         ... in
       let _: unit = ... in
       ...
-    and l2 (x: pointer, p: pointer) : unit :=
-      let a_536: unit =
-        let _: unit =
-          let _: unit =
-            let _: unit =
+    and [ret_512] l2 (x: pointer, p: pointer) : unit :=
+      let [l1, while_515, join] a_536: unit =
+        let [l1, while_515] _: unit =
+          let [l1] _: unit =
+            let [l1] _: unit =
               let _: loaded pointer = ... in
               ... in
-            let _: unit =
-              let _: unit = ... in
-              jump l1(p) in
+            let [l1] _: unit =
+              let [l1] _: unit = ... in
+              jump [l1] l1(p) in
             let _: unit = ... in
             ... in
           let _: unit =
             let (p: pointer) = ... in
             ... in
           ... in
-        jump while_515(p) in
-      jump join(a_536)
-    and while_515 (p: pointer) : unit :=
-      let a_517: loaded integer = ... in
-      let a_516: boolean =
+        jump [while_515] while_515(p) in
+      jump [join] join(a_536)
+    and [ret_512] while_515 (p: pointer) : unit :=
+      let [l2, ret_512, join] a_517: loaded integer = ... in
+      let [l2, ret_512, join] a_516: boolean =
         case a_517 of
           | Specified(a_518: integer) =>
               ...
           | Unspecified(_: ctype) =>
               ...
           end in
-      if a_516 then
-        let x: pointer = ... in
-        let _: unit =
+      if [l2, ret_512, join] a_516 then
+        let [l2, ret_512] x: pointer = ... in
+        let [l2, ret_512] _: unit =
           let a_524: loaded integer = ... in
           ... in
-        let _: unit =
-          let a_530: loaded integer = ... in
-          let _: unit = ... in
-          let _: unit = ... in
-          jump ret_512(conv_loaded_int('signed int', a_530)) in
-        jump l2(x, p)
+        let [l2, ret_512] _: unit =
+          let [ret_512] a_530: loaded integer = ... in
+          let [ret_512] _: unit = ... in
+          let [ret_512] _: unit = ... in
+          jump [ret_512] ret_512(conv_loaded_int('signed int', a_530)) in
+        jump [l2] l2(x, p)
       else
-        let a_537: unit = ... in
-        jump join(a_537)
-    and l1 (p: pointer) : unit :=
-      jump while_515(p)
+        let [join] a_537: unit = ... in
+        jump [join] join(a_537)
+    and [ret_512] l1 (p: pointer) : unit :=
+      jump [while_515] while_515(p)
     end in
-jump ret_512(Specified(0)))
+jump [ret_512] ret_512(Specified(0)))
   where ret_512 (a_534: loaded integer) : loaded integer :=
     ...
   end

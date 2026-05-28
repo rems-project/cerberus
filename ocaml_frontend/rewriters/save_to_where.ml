@@ -195,9 +195,9 @@ let add_counts sym int_opt1 int_opt2 =
 
 let merge_counts count1 count2 = Pmap.merge add_counts count1 count2
 
-let empty_counts = Pmap.empty Symbol.compare_sym
+let empty_map = Pmap.empty Symbol.compare_sym
 
-let singleton_count sym = Pmap.add sym 1 empty_counts
+let singleton_count sym = Pmap.add sym 1 empty_map
 
 let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
   match expr_ with
@@ -213,7 +213,7 @@ let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
     let wcases = List.map (fun (pat, e) -> (pat, count_labels e)) cases in
     let info = List.fold_left
       (fun acc (_, w) -> merge_counts acc w.info)
-      empty_counts wcases in
+      empty_map wcases in
     { info; annot; node = Case (pe, wcases) }
   | Erun ((), sym, pes) ->
     { info = singleton_count sym; annot; node = Run (sym, pes) }
@@ -228,7 +228,7 @@ let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
   | Ejump _ -> assert false
   | Ewhere _ -> assert false
   | _ ->
-    { info = empty_counts; annot; node = Base expr_ }
+    { info = empty_map; annot; node = Base expr_ }
 
 (* We could skip this and just use plain [Symbol.sym Pset.set],
    but this will allow us to tidy up unused, auto-generated nodes. *)
@@ -258,9 +258,7 @@ let union_dom sym int_opt1 int_opt2 =
 
 let union_dom = Pmap.merge union_dom
 
-let empty_dom = Pmap.empty Symbol.compare_sym
-
-let singleton_dom sym used = Pmap.add sym used empty_dom
+let singleton_dom sym used = Pmap.add sym used empty_map
 
 let rec dominates dominated ({ info; annot; node } : count_labels where) : dominates where =
   let ones, manys =
@@ -336,14 +334,6 @@ let bTy_of_pat pat =
   | Exception.Result (Some bty) -> bty
   | _ -> assert false (* elaboration guarantee *)
 
-let pp_sym_set ?name set =
-  (match name with
-  | None ->
-    P.empty
-  | Some name ->
-    !^ name ^^ P.colon)
-  ^^ P.braces (P.separate_map (P.comma ^^ P.space) pp_sym (Pset.elements set))
-
 (* The function can be thought of first transforming saves as follows:
 
      save l (x := pe) in E ~> jump l(pe) where l(x) := E end
@@ -351,10 +341,10 @@ let pp_sym_set ?name set =
    and then bubbling this outward, capturing (moving inside a label definiton)
    the continuation (layers of enclosing let strong pat = _ in E) of that
    expression until it reaches the dominating context of l.
-   
+
    In reality, labels may overlap this happens when we goto _inside_ C blocks,
    so more than one label may be "live" (capturing) at the same time.
-   
+
    To handle this we need to keep track of not just the labels definitions, but
    also the "live" labels being captured. Loops and gotos which only jump out
    of scopes will only capture the continuation of exactly one label at a time
@@ -387,8 +377,13 @@ let pp_sym_set ?name set =
    (and so are always part of the dominator frame, I think). *)
 let rec to_where bTy ({ info; annot; node } : dominates where) =
   let dominators = Pmap.domain info in
-  let new_ node = { info = (); annot = []; node } in
-  let wrap node = { info = (); annot; node} in
+  let empty_set = Pset.empty Symbol.compare_sym in
+  let singleton sym = Pset.singleton Symbol.compare_sym sym in
+  let labels_info defs =
+    List.map (fun def -> (def.label, def.body.info)) defs
+    |> List.fold_left (fun (defs, bodies) (label, used) -> (Pset.add label defs, Pset.union bodies used)) (empty_set, empty_set) in
+  let new_ info node = { info; annot = []; node } in
+  let wrap info node = { info; annot; node} in
   let unwrap_set_defs capturing =
     let default = (Pset.empty Symbol.symbol_compare, []) in
     Option.value ~default capturing in
@@ -403,7 +398,8 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
     let (false_, capturing_f) = to_where bTy false_ in
     begin match capturing_t, capturing_f with
       | None, None ->
-        (wrap (If (pexpr, true_, false_)), None)
+        let info = Pset.union true_.info false_.info in
+        (wrap info (If (pexpr, true_, false_)), None)
       | _, _ ->
         (* Approximately (not to be taken too literally) here is what's
            happening:
@@ -425,8 +421,8 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
         let sseq_jump body =
           let sym = Symbol.fresh () in
           let pat = Helper.pat ~sym bTy in
-          let jump = new_ (Jump (label, [Helper.pe_sym sym])) in
-          new_ (Sseq (pat, body, jump)) in
+          let jump = new_ (singleton label) (Jump (label, [Helper.pe_sym sym])) in
+          new_ (Pset.add label body.info) (Sseq (pat, body, jump)) in
         let (true_j, live_t, defs_t) =
           map_e_or_fst_def sseq_jump true_ capturing_t in
         let (false_j, live_f, defs_f) =
@@ -441,18 +437,23 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
             label;
             ret_bTy = bTy;
             params = [ param ];
-            body = new_ (Base (Epure (Helper.pe_sym param.name)));
+            body = new_ empty_set (Base (Epure (Helper.pe_sym param.name)));
           } in
         let live =
           let unioned = Pset.union live_t live_f in
           assert (Pset.subset dominators unioned);
           Pset.diff unioned dominators in
+        let defs = defs_t @ defs_f in
         if Pset.is_empty live then
           (* We don't add the join-point def here because we're not capturing
              any more continuations. *)
-          (new_ (Where (wrap (If (pexpr, true_, false_)), defs_t @ defs_f)), None)
+          let (labels, used) = labels_info defs in
+          let if_info = Pset.union true_.info false_.info in
+          let where_info = Pset.diff (Pset.union used if_info) labels in
+          (new_ where_info (Where (wrap if_info (If (pexpr, true_, false_)), defs)), None)
         else
-          (wrap (If (pexpr, true_j, false_j)), Some (live, def :: defs_t @ defs_f))
+          let info = Pset.union true_j.info false_j.info in
+          (wrap info (If (pexpr, true_j, false_j)), Some (live, def :: defs))
     end
   | Sseq (pat, e1, e2) ->
     let inner_bTy = bTy_of_pat pat in
@@ -460,7 +461,7 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
     let (e1, capturing1) = to_where inner_bTy e1 in
     begin match capturing1, capturing2 with
       | None, None ->
-        (wrap (Sseq (pat, e1, e2)), None)
+        (wrap (Pset.union e1.info e2.info) (Sseq (pat, e1, e2)), None)
       | _, _ ->
         (* Approximately (not to be taken too literally) here is what's
            happening:
@@ -475,17 +476,20 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
 
            Note that defs2 is first, so that any continuations captured will
            be place inside the head of its body. *)
-        let sseq_e2 body = wrap (Sseq (pat, body, e2)) in
+        let sseq_e2 body = wrap (Pset.union body.info e2.info) (Sseq (pat, body, e2)) in
         let (e, live1, defs1) = map_e_or_fst_def sseq_e2 e1 capturing1 in
         let (live2, defs2) = unwrap_set_defs capturing2 in
         let live =
           let unioned = Pset.union live1 live2 in
           assert (Pset.subset dominators unioned);
           Pset.diff unioned dominators in
+        let defs = defs2 @ defs1 in
+        let (labels, used) = labels_info defs in
         if Pset.is_empty live then
-          (wrap (Where (e, defs2 @ defs1)), None)
+          let info = Pset.diff (Pset.union used e.info) labels in
+          (wrap info (Where (e, defs)), None)
         else
-          (e, Some (live, defs2 @ defs1))
+          (e, Some (live, defs))
     end
   | Case (pexpr, branches) ->
     let do_branch (pat, body) =
@@ -494,9 +498,11 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
          so they'll never capture any continuations *)
       assert (Option.is_none capturing);
       (pat, body) in
-    (wrap (Case (pexpr, List.map do_branch branches)), None)
+    let branches = List.map do_branch branches in
+    let info = List.fold_left (fun acc (_, body) -> Pset.union acc body.info) empty_set branches in
+    (wrap info (Case (pexpr, branches)), None)
   | Run (label, pexprs) ->
-    (wrap (Jump (label, pexprs)), None)
+    (wrap (singleton label) (Jump (label, pexprs)), None)
   | Save { label; ret_bTy; params; body } ->
     let (body, capturing) = to_where ret_bTy body in
     begin match Pmap.lookup label info with
@@ -511,7 +517,7 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
           let mk_pat (sym, bTy) = Helper.pat ~sym bTy in
           let pat = Pattern ([], CaseCtor (Ctuple, List.map mk_pat syms)) in
           (pat, Epure (Pexpr ([], (), PEctor (Ctuple, pexprs)))) in
-        (wrap (Sseq (pat, new_ (Base expr), body)), capturing)
+        (wrap body.info (Sseq (pat, new_ empty_set (Base expr), body)), capturing)
       | Some Used | None ->
         (* Approximately (not to be taken too literally) here is
            what's happening:
@@ -522,7 +528,7 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
                  jump l(pe) where defs and l(x) := E' end         *)
         let pexprs = List.map (fun x -> x.pexpr) params in
         let params = List.map (param_map (fun _ -> ())) params in
-        let jump = new_ (Jump (label, pexprs)) in
+        let jump = new_ (singleton label) (Jump (label, pexprs)) in
         let def = {
           label;
           ret_bTy = bTy;
@@ -534,13 +540,16 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
           let added = Pset.add label live in
           assert (Pset.subset dominators added);
           Pset.diff added dominators in
+        let defs = defs @ [ def ] in
+        let (labels, used) = labels_info defs in
         if Pset.is_empty live then
-          (wrap (Where (jump, defs @ [ def ])), None)
+          let info = Pset.diff (Pset.union used body.info) labels in
+          (wrap info (Where (jump, defs)), None)
         else
-          (jump, Some (live, defs @ [ def ]))
+          (jump, Some (live, defs))
     end
   | Base expr ->
-    (wrap (Base expr), None)
+    (wrap empty_set (Base expr), None)
   | Jump (_, _) -> assert false
   | Where _ -> assert false
   end
@@ -558,7 +567,7 @@ let rec to_expr { info; annot; node } =
   | If (pexpr, true_, false_) ->
     Eif (pexpr, to_expr true_, to_expr false_)
   | Sseq ((Pattern ([], CaseCtor (Ctuple, pats)) as pat),
-          { info = (); annot = [];
+          { info; annot = [];
             node = Base (Epure (Pexpr ([], (), PEctor (Ctuple, pexprs)) as pexpr)) },
           e2) ->
     (* Tidy up the unused label case *)
@@ -586,19 +595,25 @@ let rec to_expr { info; annot; node } =
     assert false
   end
 
+let pp_sym_set set =
+  if Pset.is_empty set then
+    None
+  else
+    Some (P.separate_map (P.comma ^^ P.space) pp_sym (Pset.elements set))
+
 let transform_expr bTy expr =
   let counted = count_labels expr in
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
       (pp_where pp_count_map counted)) in
-  let dominated = dominates empty_dom counted in
+  let dominated = dominates empty_map counted in
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
       (pp_where pp_dom_map dominated)) in
   let whered = to_where bTy dominated in
   let () = Cerb_debug.print_debug 1 []
     (fun () -> "\n" ^ Pp_utils.to_plain_pretty_string
-      (pp_where (fun () -> None) whered)) in
+      (pp_where pp_sym_set whered)) in
   to_expr whered
 
 let transform_file file =

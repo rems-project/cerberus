@@ -87,55 +87,55 @@ let [ret_507] _: unit =
   ... in
 save ret_507: loaded integer (a_542: loaded integer:= ..) in
   ...
-(let _: unit =
-  let x: pointer = ... in
-  let _: unit =
+(let [ret_507] _: unit =
+  let [ret_507] x: pointer = ... in
+  let [ret_507] _: unit =
     let a_510: loaded integer = ... in
     ... in
-  (let a_511: loaded integer = ... in
-  let a_509: boolean =
+  (let [inner, join] a_511: loaded integer = ... in
+  let [inner, join] a_509: boolean =
     case a_511 of
       | Specified(a_512: integer) =>
           ...
       | Unspecified(_: ctype) =>
           ...
       end in
-  if a_509 then
-    jump inner(x)
+  if [inner, join] a_509 then
+    jump [inner] inner(x)
   else
-    let a_545: unit = ... in
-    jump join(a_545))
-    where join (a_546: unit) : unit :=
-      let _: unit = ... in
-      let _: unit =
-        let a_527: loaded integer = ... in
-        let a_508: boolean =
+    let [join] a_545: unit = ... in
+    jump [join] join(a_545))
+    where [ret_507] join (a_546: unit) : unit :=
+      let [inner, ret_507] _: unit = ... in
+      let [inner, ret_507] _: unit =
+        let [inner] a_527: loaded integer = ... in
+        let [inner] a_508: boolean =
           case a_527 of
             | Specified(a_528: integer) =>
                 ...
             | Unspecified(_: ctype) =>
                 ...
             end in
-        if a_508 then
-          let _: unit = jump inner(x) in
+        if [inner] a_508 then
+          let [inner] _: unit = jump [inner] inner(x) in
           ...
         else
           ... in
-      let _: unit =
-        let a_541: loaded integer = ... in
-        let _: unit = ... in
-        jump ret_507(conv_loaded_int('signed int', a_541)) in
+      let [ret_507] _: unit =
+        let [ret_507] a_541: loaded integer = ... in
+        let [ret_507] _: unit = ... in
+        jump [ret_507] ret_507(conv_loaded_int('signed int', a_541)) in
       let _: unit = ... in
       ...
-    and inner (x: pointer) : unit :=
-      let a_544: unit =
+    and [ret_507] inner (x: pointer) : unit :=
+      let [join] a_544: unit =
         let _: unit =
           let _: loaded integer = ... in
           ... in
         ... in
-      jump join(a_544)
+      jump [join] join(a_544)
     end in
-jump ret_507(Specified(0)))
+jump [ret_507] ret_507(Specified(0)))
   where ret_507 (a_542: loaded integer) : loaded integer :=
     ...
   end

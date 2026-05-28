@@ -252,71 +252,71 @@ let [ret_519] _: unit =
   ... in
 save ret_519: loaded integer (a_657: loaded integer:= ..) in
   ...
-(let _: unit =
-  let total: pointer = ... in
-  let _: unit =
+(let [ret_519] _: unit =
+  let [ret_519] total: pointer = ... in
+  let [ret_519] _: unit =
     let a_527: loaded integer = ... in
     ... in
-  let _: unit =
-    let k: pointer = ... in
-    let _: unit =
+  let [ret_519] _: unit =
+    let [ret_519] k: pointer = ... in
+    let [ret_519] _: unit =
       let a_528: loaded integer = ... in
       ... in
-    let _: unit =
-      let _: unit =
-        jump while_525(k, total)
-          where while_525 (k: pointer, total: pointer) : unit :=
-            let a_529: loaded integer = ... in
-            let a_526: boolean =
+    let [ret_519] _: unit =
+      let [ret_519] _: unit =
+        jump [while_525] while_525(k, total)
+          where [ret_519] while_525 (k: pointer, total: pointer) : unit :=
+            let [ret_519, while_525] a_529: loaded integer = ... in
+            let [ret_519, while_525] a_526: boolean =
               case a_529 of
                 | Specified(a_530: integer) =>
                     ...
                 | Unspecified(_: ctype) =>
                     ...
                 end in
-            if a_526 then
-              let _: unit =
-                let _: unit =
-                  let cluster_k: pointer = ... in
-                  let _: unit =
+            if [ret_519, while_525] a_526 then
+              let [ret_519, while_525] _: unit =
+                let [ret_519] _: unit =
+                  let [ret_519] cluster_k: pointer = ... in
+                  let [ret_519] _: unit =
                     let a_544: loaded pointer = ... in
                     ... in
-                  let _: unit =
-                    let i: pointer = ... in
-                    let _: unit =
+                  let [ret_519] _: unit =
+                    let [ret_519] i: pointer = ... in
+                    let [ret_519] _: unit =
                       let a_552: loaded integer = ... in
                       ... in
-                    let _: unit =
-                      let _: unit =
-                        jump while_542(i, cluster_k, k, total)
-                          where while_542 (i: pointer, cluster_k: pointer, k: pointer, total: pointer) : unit :=
-                            let a_553: loaded integer = ... in
-                            let a_543: boolean =
+                    let [ret_519] _: unit =
+                      let [ret_519] _: unit =
+                        jump [while_542] while_542(i, cluster_k, k, total)
+                          where [ret_519] while_542 (i: pointer, cluster_k: pointer, k: pointer, total: pointer) : unit :=
+                            let [ret_519, while_542] a_553: loaded integer = ... in
+                            let [ret_519, while_542] a_543: boolean =
                               case a_553 of
                                 | Specified(a_554: integer) =>
                                     ...
                                 | Unspecified(_: ctype) =>
                                     ...
                                 end in
-                            if a_543 then
-                              let _: unit =
-                                let _: unit =
-                                  let _: unit =
-                                    let a_573: loaded integer = ... in
-                                    let a_572: boolean =
+                            if [ret_519, while_542] a_543 then
+                              let [ret_519, while_542] _: unit =
+                                let [ret_519] _: unit =
+                                  let [ret_519] _: unit =
+                                    let [ret_519] a_573: loaded integer = ... in
+                                    let [ret_519] a_572: boolean =
                                       case a_573 of
                                         | Specified(a_574: integer) =>
                                             ...
                                         | Unspecified(_: ctype) =>
                                             ...
                                         end in
-                                    if a_572 then
-                                      let a_603: loaded integer = ... in
-                                      let _: unit = ... in
-                                      let _: unit = ... in
-                                      let _: unit = ... in
-                                      let _: unit = ... in
-                                      jump ret_519(conv_loaded_int('signed int', a_603))
+                                    if [ret_519] a_572 then
+                                      let [ret_519] a_603: loaded integer = ... in
+                                      let [ret_519] _: unit = ... in
+                                      let [ret_519] _: unit = ... in
+                                      let [ret_519] _: unit = ... in
+                                      let [ret_519] _: unit = ... in
+                                      jump [ret_519] ret_519(conv_loaded_int('signed int', a_603))
                                     else
                                       ... in
                                   let _: unit =
@@ -331,7 +331,7 @@ save ret_519: loaded integer (a_657: loaded integer:= ..) in
                                   let (i: pointer, cluster_k: pointer, k: pointer, total: pointer) = ... in
                                   ... in
                                 ... in
-                              jump while_542(i, cluster_k, k, total)
+                              jump [while_542] while_542(i, cluster_k, k, total)
                             else
                               ...
                           end in
@@ -351,7 +351,7 @@ save ret_519: loaded integer (a_657: loaded integer:= ..) in
                   let (k: pointer, total: pointer) = ... in
                   ... in
                 ... in
-              jump while_525(k, total)
+              jump [while_525] while_525(k, total)
             else
               ...
           end in
@@ -361,7 +361,7 @@ save ret_519: loaded integer (a_657: loaded integer:= ..) in
       ... in
     let _: unit = ... in
     ... in
-  let _: unit =
+  let [ret_519] _: unit =
     let a_634: loaded integer = ... in
     let a_524: boolean =
       case a_634 of
@@ -375,13 +375,13 @@ save ret_519: loaded integer (a_657: loaded integer:= ..) in
       ...
     else
       ... in
-  let _: unit =
-    let a_656: loaded integer = ... in
-    let _: unit = ... in
-    jump ret_519(conv_loaded_int('signed int', a_656)) in
+  let [ret_519] _: unit =
+    let [ret_519] a_656: loaded integer = ... in
+    let [ret_519] _: unit = ... in
+    jump [ret_519] ret_519(conv_loaded_int('signed int', a_656)) in
   let _: unit = ... in
   ... in
-jump ret_519(undef(<<UB088_reached_end_of_function>>)))
+jump [ret_519] ret_519(undef(<<UB088_reached_end_of_function>>)))
   where ret_519 (a_657: loaded integer) : loaded integer :=
     ...
   end
