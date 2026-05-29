@@ -12,50 +12,53 @@ let extend_env_list env bindings =
 let sym_in binders s =
   List.exists (fun b -> Symbol.compare_sym s b = 0) binders
 
-(* a conservative free-variable and replaceable-with-unit check
+(* Because of Core's strict semantics, a pure value is sound to propagate if
+   we know it doesn't raise error, doesn't raise UB and it terminates.
 
-   no free variables because the expression will be substituted (propagated)
-   into other contexts so needs to be well-formed
+   It's safe to hoist when it doesn't mention any binders (these are binders
+   from the effectful fragment.
 
-   replaceable with unit is more a matter of taste - we don't want large
-   pure expressions repeated throughout the code, such as if, let, case,
-   ccall; also simpler to not check if, let and case more precisely
-
-   cfunction always returns a tuple when evaluated so it's not worth checking
-   (i.e. analyze_pat_expr would always skip it) *)
-
-let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
+   I choose to not propagate ifs, lets and cases for the sake of efficiency
+   and simplicity. *)
+let rec can_prop_and_hoist binders (Pexpr (_, _, pe_)) =
+  let for_all f list = List.for_all (fun x -> can_prop_and_hoist binders (f x)) list in
   match pe_ with
   | PEsym s ->
       not (sym_in binders s)
-  | PEval _ | PEimpl _ | PEundef _ | PEerror _ ->
+  | PEval _ | PEimpl _ ->
       true
-  | PEctor (_, pes) ->
-      List.for_all (can_prop_and_rm binders) pes
-  | PEnot pe1 ->
-      can_prop_and_rm binders pe1
-  | PEop (_, pe1, pe2)
-  | PEwrapI (_, _, pe1, pe2)
-  | PEcatch_exceptional_condition (_, _, pe1, pe2)
-  | PEare_compatible (pe1, pe2)
-  | PEarray_shift (pe1, _, pe2) ->
-      can_prop_and_rm binders pe1 && can_prop_and_rm binders pe2
-  | PEmemberof (_, _, pe1)
+  | PEnot pe1 | PEmemberof (_, _, pe1)
   | PEmember_shift (pe1, _, _)
-  | PEconv_int (_, pe1)
   | PEis_scalar pe1 | PEis_integer pe1
   | PEis_signed pe1 | PEis_unsigned pe1
-  | PEbmc_assume pe1
   | PEunion (_, _, pe1) ->
-      can_prop_and_rm binders pe1
-  | PEmemop (_, pes) ->
-      List.for_all (can_prop_and_rm binders) pes
+      can_prop_and_hoist binders pe1
+  | PEop (_, pe1, pe2)
+  | PEwrapI (_, _, pe1, pe2)
+  | PEare_compatible (pe1, pe2)
+  | PEarray_shift (pe1, _, pe2) ->
+      (* this is only generated when it's total *)
+      for_all Fun.id [pe1; pe2]
   | PEstruct (_, fields) ->
-      List.for_all (fun (_, pe1) -> can_prop_and_rm binders pe1) fields
-  | PEif _ | PElet _ | PEcase _ | PEconstrained _ ->
-      false  (* not worth extra complexity *)
-   | PEcall _ | PEcfunction _ ->
-     false (* unsafe to replace with unit *)
+      for_all snd fields
+  | PEconstrained constrained (* non-det is sound to propagate *) ->
+      for_all snd constrained
+  | PEctor (_, pes) ->
+      for_all Fun.id pes
+  | PEmemop (op, pes) ->
+    (* The comment on [Mem_common.CapAssignValue] says it's part of CHERI and
+       may UB, but in the memory interface it's a pure operation (not in the
+       memory monad, returns a plain integer) so marking it as safe. *)
+    for_all Fun.id pes
+  | PEif _ | PEcase _ | PElet _ (* can be sound but inefficient *)
+  | PEbmc_assume _ (* for model checking only *)
+  | PEundef _ (* unsound to prop UB *)
+  | PEerror _ (* same for errors    *)
+  | PEcatch_exceptional_condition _ (* may raise UB *)
+  | PEconv_int _ (* may raise impl-defined error *)
+  | PEcfunction _ (* function pointer eval and lookup may UB *)
+  | PEcall _ (* may UB, or not terminate *) ->
+      false
 
 let rec binders_of_pat (Pattern (_, pat_)) =
   match pat_ with
@@ -115,10 +118,10 @@ let rec analyze_pat_pexpr binders pat pe =
   let Pattern (p_annots, pat_) = pat in
   match pat_, pe with
 
-  | CaseBase (Some s, _), _ when can_prop_and_rm binders pe ->
+  | CaseBase (Some s, _), _ when can_prop_and_hoist binders pe ->
       ([(s, pe)], wildcard_pat pat, unit_pexpr pe)
 
-  | CaseBase (None, _), _ when can_prop_and_rm binders pe ->
+  | CaseBase (None, _), _ when can_prop_and_hoist binders pe ->
       ([], wildcard_pat pat, unit_pexpr pe)
 
   | CaseBase (_, _), _ ->
