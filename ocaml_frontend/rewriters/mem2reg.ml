@@ -581,6 +581,18 @@ let update_env env matched =
       let pe = Pexpr ([], (), PEsym new_) in
       Pmap.add old pe env) env matched
 
+let rec update_cbt cbt delta =
+  match delta with
+  | Extended None ->
+    cbt
+  | Extended (Some { written; existing }) ->
+    assert ([] <> written);
+    BTy_tuple (List.map snd written @ (if existing then [cbt] else []))
+  | Tuple deltas ->
+    match cbt with
+    | BTy_tuple cbts -> BTy_tuple (List.map2 update_cbt cbts deltas)
+    | _ -> assert false
+
 let transform_fun bty syms e =
   let cbt_to_bty x = BTy_loaded (Option.get @@ Core_aux.core_object_type_of_ctype x) in
   let bty_env = ref sym_empty_map in
@@ -617,7 +629,7 @@ let transform_fun bty syms e =
           let (body, delta) = transform bty val_env promoted_set body in
           (* cbt annotation seems to be unused for type-checking, so not
              worth computing a new one based on delta *)
-          (Expr (e_annot, Esave ((label_sym, cbt), params, body)), delta)
+          (Expr (e_annot, Esave ((label_sym, update_cbt cbt delta), params, body)), delta)
 
     | Esseq (
         (Pattern (_, CaseBase (Some sym, _)) as pat),

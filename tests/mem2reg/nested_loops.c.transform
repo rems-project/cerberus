@@ -7,12 +7,12 @@ proc main (): eff loaded integer :=
         pure((conv_loaded_int('signed int', Specified(0)))) in
       let strong (x: loaded integer) =
         let strong (x: loaded integer) =
-          save do_436: unit (x: loaded integer:= x) in
+          save do_436: (loaded integer) (x: loaded integer:= x) in
             let strong (x: loaded integer) =
               let strong (x: loaded integer) =
                 let strong (x: loaded integer) =
                   let strong (x: loaded integer) =
-                    save do_440: unit (x: loaded integer:= x) in
+                    save do_440: (loaded integer) (x: loaded integer:= x) in
                       let strong (x: loaded integer) =
                         let strong (x: loaded integer) =
                           let strong (x: loaded integer) =
@@ -46,7 +46,7 @@ proc main (): eff loaded integer :=
                             pure((x)) in
                           pure((x)) in
                         let strong (x: loaded integer) =
-                          save continue_434: unit (x: loaded integer:= x) in
+                          save continue_434: (loaded integer) (x: loaded integer:= x) in
                             pure((x)) in
                         pure((x)) in
                       let strong a_442: loaded integer =
@@ -85,11 +85,13 @@ proc main (): eff loaded integer :=
                             pure((x))
                       end in
                   let strong (x: loaded integer) =
-                    save break_435: unit (x: loaded integer:= x) in  pure((x)) in
+                    save break_435: (loaded integer) (x: loaded integer:= x) in
+                      pure((x)) in
                   pure((x)) in
                 pure((x)) in
               let strong (x: loaded integer) =
-                save continue_432: unit (x: loaded integer:= x) in  pure((x)) in
+                save continue_432: (loaded integer) (x: loaded integer:= x) in
+                  pure((x)) in
               pure((x)) in
             bound(pure(Unit)) ;
             case Specified(0) of
@@ -103,7 +105,7 @@ proc main (): eff loaded integer :=
                   pure((x))
             end in
         let strong (x: loaded integer) =
-          save break_433: unit (x: loaded integer:= x) in  pure((x)) in
+          save break_433: (loaded integer) (x: loaded integer:= x) in  pure((x)) in
         pure((x)) in
       let strong a_458: loaded integer =
         bound(

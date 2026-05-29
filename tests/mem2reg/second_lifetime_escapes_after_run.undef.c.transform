@@ -6,9 +6,9 @@ proc main (): eff loaded integer :=
       let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
       run l2(x, Unspecified('signed int'), p) ;
       let strong (p: loaded pointer) =
-        save l1: unit (p: loaded pointer:= p) in
+        save l1: (loaded pointer) (p: loaded pointer:= p) in
           let strong (p: loaded pointer) =
-            save while_435: unit (p: loaded pointer:= p) in
+            save while_435: (loaded pointer) (p: loaded pointer:= p) in
               let strong a_437: loaded integer =
                 bound(
                   let weak (_: unit, _: unit) = unseq(pure(Unit), pure(Unit)) in
@@ -72,8 +72,8 @@ proc main (): eff loaded integer :=
                       pure(Unit) ;
                       run ret_432(conv_loaded_int('signed int', a_451)) ;
                       let strong (p: loaded pointer, y: loaded integer) =
-                        save l2: unit (x: pointer:= x, y: loaded integer:= y,
-                        p: loaded pointer:= p) in
+                        save l2: (loaded pointer,loaded integer) (x: pointer:= x,
+                        y: loaded integer:= y, p: loaded pointer:= p) in
                           let strong (p: loaded pointer) =
                             bound(
                               let weak (_: unit, _: unit) =
@@ -95,7 +95,7 @@ proc main (): eff loaded integer :=
                       pure(Unit) ;
                       pure((p, y)) in
                     let strong (p: loaded pointer) =
-                      save continue_433: unit (p: loaded pointer:= p) in
+                      save continue_433: (loaded pointer) (p: loaded pointer:= p) in
                         pure((p)) in
                     pure((p, y)) in
                   run while_435(p) in
@@ -104,7 +104,8 @@ proc main (): eff loaded integer :=
                 let weak if: unit = pure(Unit) in
                 pure((p)) in
           let strong (p: loaded pointer) =
-            save break_434: unit (p: loaded pointer:= p) in  pure((p)) in
+            save break_434: (loaded pointer) (p: loaded pointer:= p) in
+              pure((p)) in
           pure((p)) in
       pure(Unit) ;
       pure((p)) in

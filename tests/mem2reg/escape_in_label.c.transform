@@ -7,7 +7,8 @@ proc main (): eff loaded integer :=
       let strong (p: loaded pointer) = pure((Unspecified('void*'))) in
       store('signed int', houdini, Unspecified('signed int')) ;
       let strong (p: loaded pointer) =
-        save escape: unit (p: loaded pointer:= p, houdini: pointer:= houdini) in
+        save escape: (loaded pointer) (p: loaded pointer:= p,
+        houdini: pointer:= houdini) in
           let strong (p: loaded pointer) =
             bound(
               let weak (_: unit, _: unit) =

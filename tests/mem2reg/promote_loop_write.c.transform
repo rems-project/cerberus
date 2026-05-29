@@ -10,7 +10,8 @@ proc main (): eff loaded integer :=
         pure((conv_loaded_int('signed int', Specified(0)))) in
       let strong (x: loaded integer, i: loaded integer) =
         let strong (x: loaded integer, i: loaded integer) =
-          save while_432: unit (x: loaded integer:= x, i: loaded integer:= i) in
+          save while_432: (loaded integer,loaded integer) (x: loaded integer:= x,
+          i: loaded integer:= i) in
             let strong a_436: loaded integer =
               bound(
                 let weak (a_438: loaded integer, _: unit) =
@@ -123,7 +124,7 @@ proc main (): eff loaded integer :=
                       pure((i)) in
                     pure((x, i)) in
                   let strong (x: loaded integer, i: loaded integer) =
-                    save continue_430: unit (x: loaded integer:= x,
+                    save continue_430: (loaded integer,loaded integer) (x: loaded integer:= x,
                     i: loaded integer:= i) in
                       pure((x, i)) in
                   pure((x, i)) in
@@ -133,7 +134,8 @@ proc main (): eff loaded integer :=
               let weak if: unit = pure(Unit) in
               pure((x, i)) in
         let strong (x: loaded integer, i: loaded integer) =
-          save break_431: unit (x: loaded integer:= x, i: loaded integer:= i) in
+          save break_431: (loaded integer,loaded integer) (x: loaded integer:= x,
+          i: loaded integer:= i) in
             pure((x, i)) in
         pure((x, i)) in
       let strong a_467: loaded integer =

@@ -1821,6 +1821,7 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
           E.return (End es')
     | Esave sym_bTy sym_bTy_pes e ->
         (* TODO: check *)
+        guard_match loc ("save " ^ show (fst sym_bTy)) expected_bTy (snd sym_bTy) >>
         E.mapM (fun (sym, ((bTy,ct), pe)) ->
           typecheck_pexpr tagDefs env bTy pe
             >>= export_pexpr >>= fun pe' ->
