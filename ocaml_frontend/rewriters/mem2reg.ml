@@ -11,9 +11,25 @@ let sym_set_of_list = Pset.from_list Symbol.compare_sym
 
 let sym_empty_map = Pmap.empty Symbol.compare_sym
 
-(* [pe_free_syms pe] is the set of all (free) symbols mentioned in [pe]
-   The pointer syms we care about are always bound in effectful expressions,
-   hence we can skip tracking variables bound inside [pe] *)
+
+(* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
+   picked up by a handler in the parsers/c/c_lexer.mll of all places,
+   and the resulting backtrace is confusing.
+   I think the reason for this is that Lem compiles Pmap without debug
+   flag, and this means that the raise in the Pmap code doesn't capture
+   the backtrace, but this one here will.
+   https://github.com/rems-project/lem/pull/41 *)
+let pmap_find sym set =
+  try Pmap.find sym set with Not_found -> raise Not_found
+
+let rec binders_of_pat (Pattern (_, pat_)) =
+  match pat_ with
+  | CaseBase (None, _)   -> []
+  | CaseBase (Some s, _) -> [s]
+  | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
+
+let binders_of_pat pat = sym_set_of_list (binders_of_pat pat)
+
 let rec pe_free_syms (Pexpr (_, _, pe_)) =
   match pe_ with
   | PEsym s -> sym_singleton s
@@ -21,9 +37,15 @@ let rec pe_free_syms (Pexpr (_, _, pe_)) =
   | PEctor (_, pes) | PEcall (_, pes) | PEmemop (_, pes) ->
       pes_free_syms pes
   | PEcase (pe, arms) ->
-      pes_free_syms (pe :: (List.map snd arms))
+      let (pats, pes) = List.split arms in
+      Pset.diff
+        (pes_free_syms (pe :: pes))
+        (List.fold_left (fun set pat ->
+            Pset.union set (binders_of_pat pat)) sym_empty_set pats)
+  | PElet (pat, pe1, pe2) ->
+    Pset.diff (pes_free_syms [pe1; pe2]) (binders_of_pat pat)
   | PEarray_shift (pe1, _, pe2) | PEop (_, pe1, pe2)
-  | PElet (_, pe1, pe2) | PEwrapI (_, _, pe1, pe2)
+  | PEwrapI (_, _, pe1, pe2)
   | PEcatch_exceptional_condition (_, _, pe1, pe2)
   | PEare_compatible (pe1, pe2) ->
       pes_free_syms [pe1; pe2]
@@ -60,9 +82,12 @@ let action_escaping_syms act_ =
   match act_ with
   | Store0 (_, ctype_pe, addr_pe, val_pe, _) ->
       Pset.union (addr_indirect addr_pe) (pes_free_syms [ctype_pe; val_pe])
-  | Load0 (_, addr_pe, _) | Kill (_, addr_pe) ->
+  | Kill (_, addr_pe) ->
       addr_indirect addr_pe
-  | SeqRMW (_, ty_pe, addr_pe, _, upd_pe) ->
+  | Load0 (ctype_pe, addr_pe, _) ->
+      Pset.union (addr_indirect addr_pe) (pe_free_syms ctype_pe)
+  | SeqRMW (_, ty_pe, addr_pe, bound, upd_pe) ->
+      Pset.remove bound @@
       Pset.union (addr_indirect addr_pe) (pes_free_syms [ty_pe; upd_pe])
   | Create (pe1, pe2, _) | Alloc0 (pe1, pe2, _)
   | LinuxLoad (pe1, pe2, _) ->
@@ -94,10 +119,7 @@ let run_escaping_syms args params results =
     | Pexpr (_, _, PEsym _) -> true
     | _ -> false in
   let is_escaped param =
-    (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
-       picked up by a handler in the parsers/c/c_lexer.mll of all places,
-       and the resulting backtrace is confusing *)
-    match Option.get @@ Pmap.lookup param results with
+    match pmap_find param results with
       | Escaped -> true
       | Not_escaped -> false in
   List.fold_left2
@@ -160,7 +182,7 @@ let rec collect_info ~also_fun_args (esave_memo, create_syms, pending_eruns) (Ex
          for checking the default arguments and runs to that label. *)
       let results =
         List.fold_left (fun results sym ->
-            let status = Option.get @@ Pmap.lookup sym post_body_with_params in
+            let status = pmap_find sym post_body_with_params in
             Pmap.add sym status results)
           sym_empty_map
           param_syms in
@@ -279,10 +301,7 @@ let collect_info ~also_fun_args body =
   let create_syms =
     List.fold_left (fun create_syms (label_sym, args) ->
         let { params; body = _; results } =
-          (* [Pmap.find] throws [Not_found] (if the code is wrong) which gets
-             picked up by a handler in the parsers/c/c_lexer.mll of all places,
-             and the resulting backtrace is confusing *)
-          Option.get @@ Pmap.lookup label_sym esave_memo in
+          pmap_find label_sym esave_memo in
         let escaped_syms = run_escaping_syms args (List.map fst params) results in
         mark_set Escaped escaped_syms create_syms)
       create_syms
@@ -541,8 +560,8 @@ let rec update_pat pat delta =
 
 let extend_pe_delta pe bty_env val_env written =
   let written = Pset.elements written in
-  let pes = written |> List.map (fun sym -> Option.get @@ Pmap.lookup sym val_env) in
-  let written = written |> List.map (fun sym -> (sym, Option.get @@ Pmap.lookup sym bty_env)) in
+  let pes = written |> List.map (fun sym -> pmap_find sym val_env) in
+  let written = written |> List.map (fun sym -> (sym, pmap_find sym bty_env)) in
   if [] = pes then
     (pe, Extended None)
   else if is_unit_pe pe then
@@ -578,7 +597,7 @@ let transform_fun bty syms e =
             match Pmap.lookup sym val_env with
             | None -> (promoted, (sym, (info, arg)) :: params, val_env)
             | Some arg ->
-                let bty = Option.get @@ Pmap.lookup sym !bty_env in
+                let bty = pmap_find sym !bty_env in
                 let self = Pexpr ([], (), PEsym sym) in
                 let val_env = Pmap.add sym self val_env in
                 (sym :: promoted, (sym, ((bty, opt), arg)) :: params, val_env) in
@@ -628,7 +647,7 @@ let transform_fun bty syms e =
 
         | Load0 (_, addr_pe, _)
           when pesym_mem addr_pe syms ->
-            let pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
+            let pe = pmap_find (get_sym addr_pe) val_env in
             let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
             (Expr (e_annot, Epure pe), delta)
 
@@ -636,7 +655,7 @@ let transform_fun bty syms e =
           when pesym_mem addr_pe syms ->
             let sym = get_sym addr_pe in
             assert (Pmap.mem sym !bty_env && Pmap.mem sym val_env);
-            let prev_pe = Option.get @@ Pmap.lookup (get_sym addr_pe) val_env in
+            let prev_pe = pmap_find (get_sym addr_pe) val_env in
             let written = Pset.add sym written in
             let (val_env, pe) =
               (* could use Elet to avoid double-eval of val_pe if fwd = true *)
