@@ -87,8 +87,8 @@ let remove_integer_annot annots =
 let unit_pexpr (Pexpr (annots, bty, _)) =
   Pexpr (remove_integer_annot annots, bty, PEval Vunit)
 
-let wildcard_pat (Pattern (p_annots, _)) =
-  Pattern (p_annots, CaseBase (None, BTy_unit))
+let wildcard ~bty (Pattern (p_annots, _)) =
+  Pattern (p_annots, CaseBase (None, bty))
 
 let unit_pat_pe pat pe =
   let Pattern (p_annots, pat_) = pat in
@@ -114,22 +114,28 @@ let push_integer_annot annot pexpr =
     let Pexpr (inner_annots, inner_bty, inner_pe_) = pexpr in
     Pexpr (annots @ inner_annots, inner_bty, inner_pe_)
 
-let rec analyze_pat_pexpr binders pat pe =
+let rec analyze_pat_pexpr ~no_unit binders pat pe =
   let Pattern (p_annots, pat_) = pat in
   match pat_, pe with
 
-  | CaseBase (Some s, _), _ when can_prop_and_hoist binders pe ->
-      ([(s, pe)], wildcard_pat pat, unit_pexpr pe)
+  | CaseBase (Some s, bty), _ when can_prop_and_hoist binders pe ->
+    if no_unit then
+      ([(s, pe)], wildcard ~bty pat, pe)
+    else
+      ([(s, pe)], wildcard ~bty:BTy_unit pat, unit_pexpr pe)
 
-  | CaseBase (None, _), _ when can_prop_and_hoist binders pe ->
-      ([], wildcard_pat pat, unit_pexpr pe)
+  | CaseBase (None, bty), _ when can_prop_and_hoist binders pe ->
+    if no_unit then
+      ([], wildcard ~bty pat, pe)
+    else
+      ([], wildcard ~bty:BTy_unit pat, unit_pexpr pe)
 
   | CaseBase (_, _), _ ->
       ([], pat, pe)
 
   | CaseCtor (Ctuple, pats), Pexpr (pe_annots, pe_bty, PEctor (Ctuple, pes))
     when List.length pats = List.length pes ->
-      let results = List.map2 (analyze_pat_pexpr binders) pats pes in
+      let results = List.map2 (analyze_pat_pexpr ~no_unit binders) pats pes in
       let bindings  = List.concat_map (fun (bs, _, _) -> bs) results in
       let new_pats  = List.map (fun (_, p, _) -> p) results in
       let new_pes   = List.map (fun (_, _, e) -> e) results in
@@ -139,21 +145,21 @@ let rec analyze_pat_pexpr binders pat pe =
 
   | CaseCtor (Cspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [inner_pe])) ->
-      analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
+      analyse_specified_pat_expr ~no_unit binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
   | CaseCtor (Cspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEval (Vloaded (LVspecified ov))) ->
       let inner_pe = Pexpr (pe_annots, pe_bty, PEval (Vobject ov)) in
-      analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
+      analyse_specified_pat_expr ~no_unit binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
   | _ ->
       ([], pat, pe)
 
-and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe) =
+and analyse_specified_pat_expr ~no_unit binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe) =
   (* so that the subsitution gets any annotations *)
   let inner_pe = push_integer_annot pe_annots inner_pe in
   let (bindings, new_inner_pat, new_inner_pe) =
-    analyze_pat_pexpr binders inner_pat inner_pe in
+    analyze_pat_pexpr ~no_unit binders inner_pat inner_pe in
   if unit_pat_pe new_inner_pat new_inner_pe then
     let Pexpr (inner_annots, inner_bty, inner_pe_) = new_inner_pe in
     (* but unit values have such annotations removed *)
@@ -167,6 +173,8 @@ and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty,
     , Pattern (p_annots, CaseCtor (Cspecified, [new_inner_pat]))
     , Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [new_inner_pe])) )
 
+let analyze_pat_pexpr ?(no_unit=false) binders pat pe =
+  analyze_pat_pexpr ~no_unit binders pat pe
 
 (* ------------------------------------------------------------------ *)
 (* analyze_pat_expr: pattern-aware single-pass analysis for exprs     *)
@@ -278,8 +286,13 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
   | PEctor (c, pes) ->
       Pexpr (annots, bty, PEctor (c, List.map (propagate_pexpr env) pes))
   | PEcase (pe1, arms) ->
-      Pexpr (annots, bty, PEcase (propagate_pexpr env pe1,
-        List.map (fun (pat, pe2) -> (pat, propagate_pexpr env pe2)) arms))
+      let pe1' = propagate_pexpr env pe1 in
+      let process (pat, branch) =
+        let (bindings, new_pat, _) = analyze_pat_pexpr ~no_unit:true [] pat pe1' in
+        let env' = extend_env_list env bindings in
+        (new_pat, propagate_pexpr env' branch) in
+      let arms' = List.map process arms in
+      Pexpr (annots, bty, PEcase (pe1', arms'))
   | PEarray_shift (pe1, cty, pe2) ->
       Pexpr (annots, bty,
         PEarray_shift (propagate_pexpr env pe1, cty, propagate_pexpr env pe2))
@@ -401,8 +414,13 @@ let rec propagate_expr ~unwrap_loaded env (Expr (annots, e_) as expr) =
   | Eaction pact ->
       Expr (annots, Eaction (propagate_action env pact))
   | Ecase (pe1, arms) ->
-      Expr (annots, Ecase (pp pe1,
-        List.map (fun (pat, e2) -> (pat, propagate env e2)) arms))
+      let pe1' = propagate_pexpr env pe1 in
+      let process (pat, branch) =
+        let (bindings, new_pat, _) = analyze_pat_pexpr ~no_unit:true [] pat pe1' in
+        let env' = extend_env_list env bindings in
+        (new_pat, propagate env' branch) in
+      let arms' = List.map process arms in
+      Expr (annots, Ecase (pe1', arms'))
   | Eif (pe1, e1, e2) ->
       Expr (annots, Eif (pp pe1, propagate env e1, propagate env e2))
   | Eccall (a, pe1, pe2, pes) ->
