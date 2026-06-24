@@ -44,7 +44,7 @@ let detect_runtime : unit -> runtime_loc = fun _ ->
           (* Then check for build time runtime (in repository). *)
           find_cerblib_sourceroot ()
         else None
-    ; mk= fun ~pkg -> source, prefix / "lib" / pkg / "runtime" } in
+    ; mk= fun ~pkg -> source, prefix / pkg / "runtime" } in
   match !specified_runtime with Some(path) -> wrap `SPECIFIED path | None ->
   (* Then check the CERB_INSTALL_PREFIX environment variable. *)
   try wrap `ENV_VAR (Sys.getenv "CERB_INSTALL_PREFIX") with Not_found ->
