@@ -731,11 +731,12 @@ let transform_fun bty syms e =
           let val_env = update_env val_env matched in
           let written = sym_set_of_list (List.map fst matched) in
           ((res_sym, val_env, pat, e), written)) [e1; e2] in
-        let written = List.fold_left Pset.union written inner_w in
-        if Pset.is_empty written then
+        let inner_ws = List.fold_left Pset.union written inner_w in
+        if Pset.is_empty inner_ws then
           let es = List.map (fun (_, _, _, e) -> e) wrap_info in
           (Expr (e_annot, Eif (pe, List.nth es 0, List.nth es 1)), existing)
         else
+          let written = Pset.filter (fun sym -> Pmap.mem sym val_env) inner_ws in
           let (es, deltas) = List.split @@ List.map (fun (res_sym, val_env, pat, e) ->
               let pe = Pexpr ([], (), if is_unit_bty bty then (PEval Vunit) else (PEsym res_sym)) in
               let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
@@ -752,11 +753,12 @@ let transform_fun bty syms e =
           let val_env = update_env val_env matched in
           let written = sym_set_of_list (List.map fst matched) in
           ((res_sym, val_env, pat, e), written)) es_deltas in
-        let written = List.fold_left Pset.union written inner_w in
-        if Pset.is_empty written then
+        let inner_ws = List.fold_left Pset.union written inner_w in
+        if Pset.is_empty inner_ws then
           let es = List.map (fun (_, _, _, e) -> e) wrap_info in
           (Expr (e_annot, Ecase (pe, List.combine pats es)), existing)
         else
+          let written = Pset.filter (fun sym -> Pmap.mem sym val_env) inner_ws in
           let (es, deltas) = List.split @@ List.map (fun (res_sym, val_env, pat, e) ->
               let pe = Pexpr ([], (), if is_unit_bty bty then (PEval Vunit) else (PEsym res_sym)) in
               let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
