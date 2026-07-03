@@ -11,9 +11,8 @@ proc main (): eff loaded integer :=
             let weak (_: unit, _: unit) = unseq(pure(Unit), pure(Unit)) in
             pure(
               case (Specified(1), Specified(0)) of
-                | (Specified(a_433: integer), Specified(a_434: integer)) =>
-                    if conv_int('signed int', a_433) =
-                    conv_int('signed int', a_434) then
+                | (Specified(_: integer), Specified(_: integer)) =>
+                    if conv_int('signed int', 1) = conv_int('signed int', 0) then
                       Specified(1)
                     else
                       Specified(0)
@@ -30,7 +29,7 @@ proc main (): eff loaded integer :=
                 nd(pure(True), pure(False))
           end in
         if a_427 then
-          let weak (z: loaded integer, y: loaded integer) =
+          let strong (z: loaded integer, y: loaded integer) =
             let strong (y: loaded integer) =
               bound(pure(Unit)) ;
               pure((conv_loaded_int('signed int', Specified(1)))) in
@@ -53,7 +52,7 @@ proc main (): eff loaded integer :=
             pure((z, y)) in
           pure((z))
         else
-          let weak if: unit = pure(Unit) in
+          pure(Unit) ;
           pure((z)) in
       let strong a_441: loaded integer =
         bound(

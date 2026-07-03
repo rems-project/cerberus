@@ -725,8 +725,13 @@ let transform_fun bty syms e =
     | Eif (pe, e1, e2) ->
         let (wrap_info, inner_w) = List.split @@ List.map (fun e ->
           let (e, delta) = transform bty val_env sym_empty_set e in
-          let res_sym = Symbol.fresh_pretty "if" in
-          let res_pat = Pattern ([], CaseBase (Some res_sym, bty)) in
+          let (res_sym, res_pat) =
+            if is_unit_bty bty then
+              (None, Pattern ([], CaseBase (None, bty)))
+            else
+              let res_sym = Some (Symbol.fresh_pretty "if") in
+              let res_pat = Pattern ([], CaseBase (res_sym, bty)) in
+              (res_sym, res_pat) in
           let (matched, pat) = update_pat res_pat delta in
           let val_env = update_env val_env matched in
           let written = sym_set_of_list (List.map fst matched) in
@@ -738,17 +743,22 @@ let transform_fun bty syms e =
         else
           let written = Pset.filter (fun sym -> Pmap.mem sym val_env) inner_ws in
           let (es, deltas) = List.split @@ List.map (fun (res_sym, val_env, pat, e) ->
-              let pe = Pexpr ([], (), if is_unit_bty bty then (PEval Vunit) else (PEsym res_sym)) in
-              let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
-              (Expr ([], Ewseq (pat, e, Expr ([], Epure pe))), delta)) wrap_info in
+              let pe = Option.fold res_sym ~none:(PEval Vunit) ~some:(fun res_sym -> (PEsym res_sym)) in
+              let (pe, delta) = extend_pe_delta (Pexpr ([], (), pe)) !bty_env val_env written in
+              (Expr ([], Esseq (pat, e, Expr ([], Epure pe))), delta)) wrap_info in
           (Expr (e_annot, Eif (pe, List.nth es 0, List.nth es 1)), List.hd deltas)
 
     | Ecase (pe, arms) ->
         let (pats, es_deltas) = List.split @@ List.map (fun (pat, e) ->
           (pat, transform bty val_env sym_empty_set e)) arms in
         let (wrap_info, inner_w) = List.split @@ List.map (fun (e, delta) ->
-          let res_sym = Symbol.fresh_pretty "case" in
-          let res_pat = Pattern ([], CaseBase (Some res_sym, bty)) in
+          let (res_sym, res_pat) =
+            if is_unit_bty bty then
+              (None, Pattern ([], CaseBase (None, bty)))
+            else
+              let res_sym = Symbol.fresh_pretty "if" in
+              let res_pat = Pattern ([], CaseBase (Some res_sym, bty)) in
+              (Some res_sym, res_pat) in
           let (matched, pat) = update_pat res_pat delta in
           let val_env = update_env val_env matched in
           let written = sym_set_of_list (List.map fst matched) in
@@ -760,9 +770,9 @@ let transform_fun bty syms e =
         else
           let written = Pset.filter (fun sym -> Pmap.mem sym val_env) inner_ws in
           let (es, deltas) = List.split @@ List.map (fun (res_sym, val_env, pat, e) ->
-              let pe = Pexpr ([], (), if is_unit_bty bty then (PEval Vunit) else (PEsym res_sym)) in
-              let (pe, delta) = extend_pe_delta pe !bty_env val_env written in
-              (Expr ([], Ewseq (pat, e, Expr ([], Epure pe))), delta)) wrap_info in
+              let pe = Option.fold res_sym ~none:(PEval Vunit) ~some:(fun res_sym -> (PEsym res_sym)) in
+              let (pe, delta) = extend_pe_delta (Pexpr ([], (), pe)) !bty_env val_env written in
+              (Expr ([], Esseq (pat, e, Expr ([], Epure pe))), delta)) wrap_info in
           (Expr (e_annot, Ecase (pe, List.combine pats es)), List.hd deltas)
 
     | Ememop _ | Eccall _ | Eproc _ | Ewait _ | Eexcluded _

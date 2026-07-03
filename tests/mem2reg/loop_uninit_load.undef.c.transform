@@ -43,12 +43,10 @@ proc main (): eff loaded integer :=
               ) in
             case a_433 of
               | Specified(a_432: integer) =>
-                  let weak case: unit =
-                    if not(a_432 = 0) then run do_431(x) else pure(Unit) in
+                  if not(a_432 = 0) then run do_431(x) else pure(Unit) ;
                   pure((x))
               | Unspecified(_: ctype) =>
-                  let weak case: unit =
-                    pure(undef(<<DUMMY(unspecified AilSdo)>>)) in
+                  pure(undef(<<DUMMY(unspecified AilSdo)>>)) ;
                   pure((x))
             end in
         let strong (x: loaded integer) =

@@ -33,75 +33,72 @@ proc main (): eff loaded integer :=
                       nd(pure(True), pure(False))
                 end in
               if a_436 then
-                let weak if: unit =
+                let strong (p: loaded pointer, y: loaded integer) =
                   let strong (p: loaded pointer, y: loaded integer) =
-                    let strong (p: loaded pointer, y: loaded integer) =
-                      let strong x: pointer =
-                        create(Ivalignof('signed int'), 'signed int') in
+                    let strong x: pointer =
+                      create(Ivalignof('signed int'), 'signed int') in
+                    bound(pure(Unit)) ;
+                    store('signed int', x,
+                    conv_loaded_int('signed int', Specified(5))) ;
+                    let strong (y: loaded integer) =
                       bound(pure(Unit)) ;
-                      store('signed int', x,
-                      conv_loaded_int('signed int', Specified(5))) ;
-                      let strong (y: loaded integer) =
-                        bound(pure(Unit)) ;
-                        pure((conv_loaded_int('signed int', Specified(4)))) in
-                      let strong a_451: loaded integer =
-                        bound(
-                          let weak a_450: pointer =
-                            let weak a_446: loaded pointer =
-                              let weak _: unit = pure(Unit) in
-                              pure(p) in
-                            case a_446 of
-                              | Specified(a_447: pointer) =>
-                                  let weak a_448: boolean =
-                                    memop(PtrValidForDeref, 'signed int', a_447) in
-                                  pure(
-                                    if a_448 then
-                                      a_447
-                                    else
-                                      undef(<<UB043_indirection_invalid_value>>)
-                                  )
-                              | Unspecified(_: ctype) =>
-                                  pure(
+                      pure((conv_loaded_int('signed int', Specified(4)))) in
+                    let strong a_451: loaded integer =
+                      bound(
+                        let weak a_450: pointer =
+                          let weak a_446: loaded pointer =
+                            let weak _: unit = pure(Unit) in
+                            pure(p) in
+                          case a_446 of
+                            | Specified(a_447: pointer) =>
+                                let weak a_448: boolean =
+                                  memop(PtrValidForDeref, 'signed int', a_447) in
+                                pure(
+                                  if a_448 then
+                                    a_447
+                                  else
                                     undef(<<UB043_indirection_invalid_value>>)
-                                  )
-                            end in
-                          load('signed int', a_450)
-                        ) in
-                      kill('signed int', x) ;
-                      pure(Unit) ;
-                      pure(Unit) ;
-                      run ret_432(conv_loaded_int('signed int', a_451)) ;
-                      let strong (p: loaded pointer, y: loaded integer) =
-                        save l2: (loaded pointer,loaded integer) (x: pointer:= x,
-                        y: loaded integer:= y, p: loaded pointer:= p) in
-                          let strong (p: loaded pointer) =
-                            bound(
-                              let weak (_: unit, _: unit) =
-                                unseq(
-                                  pure(Unit)
-                                ,
-                                  let weak _: unit = pure(Unit) in
-                                  pure(Unit)
-                                ) in
-                              let weak (p: loaded pointer) =
-                                pure((Specified(x))) in
-                              pure((p))
-                            ) in
-                          pure((p, y)) in
-                      kill('signed int', x) ;
-                      pure(Unit) ;
-                      run l1(p) ;
-                      kill('signed int', x) ;
-                      pure(Unit) ;
-                      pure((p, y)) in
-                    let strong (p: loaded pointer) =
-                      save continue_433: (loaded pointer) (p: loaded pointer:= p) in
-                        pure((p)) in
+                                )
+                            | Unspecified(_: ctype) =>
+                                pure(undef(<<UB043_indirection_invalid_value>>))
+                          end in
+                        load('signed int', a_450)
+                      ) in
+                    kill('signed int', x) ;
+                    pure(Unit) ;
+                    pure(Unit) ;
+                    run ret_432(conv_loaded_int('signed int', a_451)) ;
+                    let strong (p: loaded pointer, y: loaded integer) =
+                      save l2: (loaded pointer,loaded integer) (x: pointer:= x,
+                      y: loaded integer:= y, p: loaded pointer:= p) in
+                        let strong (p: loaded pointer) =
+                          bound(
+                            let weak (_: unit, _: unit) =
+                              unseq(
+                                pure(Unit)
+                              ,
+                                let weak _: unit = pure(Unit) in
+                                pure(Unit)
+                              ) in
+                            let weak (p: loaded pointer) =
+                              pure((Specified(x))) in
+                            pure((p))
+                          ) in
+                        pure((p, y)) in
+                    kill('signed int', x) ;
+                    pure(Unit) ;
+                    run l1(p) ;
+                    kill('signed int', x) ;
+                    pure(Unit) ;
                     pure((p, y)) in
-                  run while_435(p) in
+                  let strong (p: loaded pointer) =
+                    save continue_433: (loaded pointer) (p: loaded pointer:= p) in
+                      pure((p)) in
+                  pure((p, y)) in
+                run while_435(p) ;
                 pure((p))
               else
-                let weak if: unit = pure(Unit) in
+                pure(Unit) ;
                 pure((p)) in
           let strong (p: loaded pointer) =
             save break_434: (loaded pointer) (p: loaded pointer:= p) in
