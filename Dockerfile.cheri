@@ -1,4 +1,4 @@
-FROM ubuntu:23.04
+FROM ubuntu:24.04
 
 RUN apt-get update \
     && apt-get install -y git build-essential libgmp-dev opam python3-distutils \
