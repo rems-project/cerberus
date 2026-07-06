@@ -1,0 +1,72 @@
+return code: 0
+-- Aggregates
+def struct Point :=
+  x: 'signed int'
+  y: 'signed int'
+
+-- Fun map
+proc main (): eff loaded integer :=
+  let strong p: pointer = create(Ivalignof('struct Point'), 'struct Point') in
+  store('struct Point', p, Unspecified('struct Point')) ;
+  let strong _: loaded integer =
+    bound(
+      let weak (_: unit, _: unit) =
+        unseq(
+          pure(Unit) ;
+          pure(Unit)
+        ,
+          pure(Unit)
+        ) in
+      let weak _: unit =
+        neg(store('signed int', member_shift(p, Point, .x),
+        conv_loaded_int('signed int', Specified(3)))) in
+      pure(conv_loaded_int('signed int', Specified(3)))
+    ) in
+  pure(Unit) ;
+  let strong _: loaded integer =
+    bound(
+      let weak (_: unit, _: unit) =
+        unseq(
+          pure(Unit) ;
+          pure(Unit)
+        ,
+          pure(Unit)
+        ) in
+      let weak _: unit =
+        neg(store('signed int', member_shift(p, Point, .y),
+        conv_loaded_int('signed int', Specified(4)))) in
+      pure(conv_loaded_int('signed int', Specified(4)))
+    ) in
+  pure(Unit) ;
+  let strong a_442: loaded integer =
+    bound(
+      let weak (a_433: loaded integer, a_434: loaded integer) =
+        unseq(
+          let weak _: unit =
+            pure(Unit) ;
+            pure(Unit) in
+          load('signed int', member_shift(p, Point, .x))
+        ,
+          let weak _: unit =
+            pure(Unit) ;
+            pure(Unit) in
+          load('signed int', member_shift(p, Point, .y))
+        ) in
+      pure(
+        case (a_433, a_434) of
+          | (Specified(a_435: integer), Specified(a_436: integer)) =>
+              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_435), __conv_int__('signed int', a_436)))
+          | _: (loaded integer,loaded integer) =>
+              undef(<<UB036_exceptional_condition>>)
+        end
+      )
+    ) in
+  kill('struct Point', p) ;
+  run ret_426(conv_loaded_int('signed int', a_442)) ;
+  kill('struct Point', p) ;
+  pure(Unit) ;
+  pure(Unit) ;
+  save ret_426: loaded integer (a_443: loaded integer:= Specified(0)) in
+    pure(a_443)
+
+Defined {value: "Specified(7)", stdout: "", stderr: "", blocked: "false"}

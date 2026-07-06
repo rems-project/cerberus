@@ -69,6 +69,10 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci.sh
+        cd tests
+        USE_OPAM='' ./run-ci.sh
+        USE_OPAM='' ./run-const-prop.sh
+        USE_OPAM='' ./run-mem2reg.sh
         ./diff-prog.py cerberus bytes/elab.json
         ./diff-prog.py cerberus bytes/exec.json
+        ./diff-prog.py mem2reg/filter_time_spent.sh mem2reg/transform.json
