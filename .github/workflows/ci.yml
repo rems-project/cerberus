@@ -71,6 +71,6 @@ jobs:
         eval $(opam env --switch=${{ matrix.version }})
         cd tests
         USE_OPAM='' ./run-ci.sh
-        USE_OPAM='' ./run-copy-prop.sh
+        USE_OPAM='' ./run-const-prop.sh
         ./diff-prog.py cerberus bytes/elab.json
         ./diff-prog.py cerberus bytes/exec.json
