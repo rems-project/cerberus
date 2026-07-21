@@ -86,6 +86,8 @@ let rec remove_save expr =
   | Eexcluded _ -> expr
   | End es ->
       wrap (End (List.map remove_save es))
+  | Ejump _ | Ewhere _ ->
+      failwith "should not have Ejump/Ewhere in same program has Erun/Esave"
 
 
 let core_to_micore__funmap_decl update_loc = function

@@ -409,11 +409,24 @@ let rec propagate_expr ~unwrap_loaded env (Expr (annots, e_) as expr) =
   | Eunseq es ->
       Expr (annots, Eunseq (List.map (propagate env) es))
   | Esave (sym_bty, args, body) ->
+      (* This is correct, but for subtle reasons. The elaboration re-uses local
+         var syms across the Esave binder boundary, but as a result, those
+         symbols are never re-bound to any other value, i.e. the parameters of
+         Esave will never be in env. *)
+      assert (List.for_all (fun (sym, _) -> not (Pmap.mem sym env)) args);
       Expr (annots, Esave (sym_bty,
         List.map (fun (s, (type_info, pe1)) -> (s, (type_info, pp pe1))) args,
         propagate env body))
   | Erun (a, lbl, pes) ->
       Expr (annots, Erun (a, lbl, List.map pp pes))
+  | Ejump (a, lbl, pes) ->
+      Expr (annots, Ejump (a, lbl, List.map pp pes))
+  | Ewhere (e, defs) ->
+      (* Same sym-reuse caveat as Esave above applies to label bodies. *)
+      Expr (annots, Ewhere (propagate env e,
+        List.map (fun (sym_ty, params, body) ->
+          assert (List.for_all (fun (sym, _) -> not (Pmap.mem sym env)) params);
+          (sym_ty, params, propagate env body)) defs))
   | Ebound e ->
       Expr (annots, Ebound (propagate env e))
   | Eannot (fps, e) ->

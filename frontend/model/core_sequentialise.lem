@@ -55,6 +55,11 @@ let rec sequentialise_expr (Expr annot expr_) =
         Esave sym_ty xs (sequentialise_expr e)
     | Erun () sym es ->
         expr_
+    | Ejump () sym es ->
+        expr_
+    | Ewhere e cases ->
+        Ewhere (sequentialise_expr e)
+          (List.map (fun (sym_ty, params, body) -> (sym_ty, params, sequentialise_expr body)) cases)
     | Epar es ->
         Epar (List.map sequentialise_expr es)
     | Ewait _ ->

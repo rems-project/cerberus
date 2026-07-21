@@ -468,6 +468,11 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Esave (sym_bTy, List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, untype_pexpr pe))) xs, untype_expr e)
       | Erun (a, sym, pes) ->
           Erun (a, sym, List.map untype_pexpr pes)
+      | Ejump (a, sym, pes) ->
+          Ejump (a, sym, List.map untype_pexpr pes)
+      | Ewhere (e, defs) ->
+          Ewhere (untype_expr e,
+            List.map (fun (sym_bTy, params, body) -> (sym_bTy, params, untype_expr body)) defs)
       | Epar es ->
           Epar (List.map untype_expr es)
       | Ewait tid ->
@@ -565,6 +570,11 @@ let core_passes (conf, io) ~filename core_file =
   let core_file =
     if Switches.(has_switch SW_copy_prop) then
       Copy_propagation.transform_file ~unwrap_loaded:rm_unspecs core_file
+    else
+      core_file in
+  let core_file =
+    if Switches.(has_switch SW_save_to_where) then
+      Save_to_where.transform_file core_file
     else
       core_file in
   Core_indet.hackish_order <$> begin
