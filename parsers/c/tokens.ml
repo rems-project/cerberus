@@ -147,6 +147,7 @@ type token =
   | CN_GOOD
   | CN_PACK
   | CN_UNPACK
+  | CN_DERIVE_CONSTRAINTS
   | CN_HAVE
   | CN_EXTRACT
   | CN_ARRAY_SHIFT
@@ -312,6 +313,7 @@ let string_of_token = function
   | CN_GOOD -> "CN_GOOD"
   | CN_PACK -> "CN_PACK"
   | CN_UNPACK -> "CN_UNPACK"
+  | CN_DERIVE_CONSTRAINTS -> "CN_DERIVE_CONSTRAINTS"
   | CN_HAVE -> "CN_HAVE"
   | CN_EXTRACT -> "CN_EXTRACT"
   | CN_ARRAY_SHIFT -> "CN_ARRAY_SHIFT"

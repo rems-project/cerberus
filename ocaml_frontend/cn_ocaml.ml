@@ -457,6 +457,14 @@ module MakePp (Conf: PP_CN) = struct
        Dnode (pp_ctor "[CN]inline", List.map (fun nm -> Dleaf (Conf.pp_ident nm)) nms)
     | CN_print it ->
        Dnode (pp_ctor "[CN]print", [dtree_of_cn_expr it])
+    | CN_derive_constraints preds_iargs ->
+       Dnode (pp_ctor "[CN]derive_constraints", 
+       List.map (fun (pred, iargs) -> 
+	 Dnode (pp_ctor "[CN]Pred",
+           dtree_of_cn_pred pred ::
+	   List.map dtree_of_cn_expr (Option.value ~default:[] iargs)
+	 )
+       ) preds_iargs)
 
 end
 

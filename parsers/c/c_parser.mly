@@ -151,7 +151,7 @@ type asm_qualifier =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV CN_GHOST
-%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_PRINT
+%token CN_PACK CN_UNPACK CN_DERIVE_CONSTRAINTS CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_PRINT
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
 %token <[`U|`I] * int>CN_BITS
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_LIFT_FUNCTION CN_FUNCTION CN_LEMMA CN_PREDICATE
@@ -2491,11 +2491,19 @@ cn_exprs_or_elipsis:
 | ELLIPSIS
     { None }
 
+pred_maybe_iargs:
+| p= pred es= delimited(LPAREN, cn_exprs_or_elipsis, RPAREN)
+  { (p,es) }
+
 cn_statement:
 /* copying from 'resource' rule */
-| pack_unpack=cn_pack_unpack p= pred es= delimited(LPAREN, cn_exprs_or_elipsis, RPAREN) SEMICOLON
+| pack_unpack=cn_pack_unpack p_es=pred_maybe_iargs SEMICOLON
     { let loc = region ($startpos, $endpos) noCursor in
+      let (p,es) = p_es in
       CN_statement (loc , CN_pack_unpack (pack_unpack, p, es)) }
+| CN_DERIVE_CONSTRAINTS preds_iargs=delimited(LPAREN, separated_list (COMMA, pred_maybe_iargs), RPAREN) SEMICOLON
+    { let loc = region ($startpos, $endpos) noCursor in
+      CN_statement (loc , CN_derive_constraints preds_iargs) }
 /* copying from 'resource' rule */
 | CN_TO_BYTES p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = region ($startpos, $endpos) noCursor in

@@ -4639,6 +4639,14 @@ let desugar_cn_statement (CN_statement loc stmt_) =
   | CN_print e ->
      desugar_cn_expr e >>= fun e ->
      E.return (CN_print e)
+  | CN_derive_constraints preds_iargs ->
+     (* copying from desugar_cn_resource *)
+     E.mapM (fun (pred, maybe_iargs) ->
+       desugar_cn_pred pred >>= fun pred ->
+       desugar_maybe (fun i -> E.mapM desugar_cn_expr i) maybe_iargs >>= fun maybe_iargs ->
+       E.return (pred, maybe_iargs)
+     ) preds_iargs >>= fun preds_iargs ->
+     E.return (CN_derive_constraints preds_iargs)
   end >>= fun stmt_ ->
   E.return (CN_statement loc stmt_)
 
