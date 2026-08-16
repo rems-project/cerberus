@@ -62,6 +62,11 @@ let (>|>) m1 m2 =
 let whenM cond m =
   if cond then m () else return ()
 
+let rec iterM f = function
+  | [] -> return ()
+  | x :: xs ->
+    f x >>= fun () -> iterM f xs
+
 type language =
   | Cabs | Ail | Core | Types
 
@@ -567,6 +572,23 @@ let core_passes (conf, io) ~filename core_file =
       Copy_propagation.transform_file ~unwrap_loaded:rm_unspecs core_file
     else
       core_file in
+  let core_file =
+    if Switches.(has_switch SW_warn_wseq) then
+      match Warn_wseq.analyse_file core_file with
+      | [] -> return core_file
+      | _ :: _ as locs ->
+        io.warn ~always:true (fun () ->
+           Printf.sprintf "assignment result used inside (potentially) racy expression (%d times)" (List.length locs))
+        >>= fun () ->
+        iterM (fun loc ->
+            io.warn ~always:true (fun () ->
+              let (head, pos) = Cerb_location.head_pos_of_location loc in
+              head ^ "\n" ^ pos
+          )) locs >>= fun () ->
+        return core_file
+    else
+      return core_file in
+  core_file >>= fun core_file ->
   Core_indet.hackish_order <$> begin
     if conf.sequentialise_core || conf.typecheck_core then
       typed_core_passes (conf, io) core_file >>= fun (core_file, typed_core_file) ->
