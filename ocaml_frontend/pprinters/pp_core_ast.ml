@@ -400,6 +400,14 @@ let dtree_of_expr expr =
     | Epar of ('a, 'bty, 'sym) generic_expr list
     | Ewait of Mem_common.thread_id
 *)
+    | Ejump (_, sym, _) ->
+        Dleaf (pp_ctor "Ejump" ^^^ pp_symbol sym)
+    | Ewhere (e, defs) ->
+        Dnode (pp_ctor "Ewhere",
+          self e :: List.map (fun ((sym, bTy), _, body) ->
+            Dnode (pp_ctor "label" ^^^ pp_symbol sym ^^ P.colon ^^^
+                   Pp_core.Basic.pp_core_base_type bTy, [self body])
+          ) defs)
       | _ ->
           Dleaf (pp_ctor ("TODO_expr ==> " ^ String_core.string_of_expr expr))
   in

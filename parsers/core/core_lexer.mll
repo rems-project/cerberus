@@ -102,6 +102,9 @@ let keywords =
       ("strong",       T.STRONG      );
       ("save",         T.SAVE        );
       ("run",          T.RUN         );
+      ("jump",         T.JUMP        );
+      ("where",        T.WHERE       );
+      ("and",          T.AND         );
       ("bound",        T.BOUND       );
       ("nd",           T.ND          );
       ("par",          T.PAR         );

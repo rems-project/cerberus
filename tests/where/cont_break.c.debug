@@ -1,0 +1,285 @@
+return code: 0
+let [__cerb_continue0:1, ret_509:1, continue_510:1, break_511:1, while_512:1] _: unit =
+  let [__cerb_continue0:1, continue_510:1, break_511:1, while_512:1] x: pointer = ... in
+  let [__cerb_continue0:1, continue_510:1, break_511:1, while_512:1] _: unit =
+    let a_514: loaded integer = ... in
+    ... in
+  let [__cerb_continue0:1, continue_510:1, break_511:1, while_512:1] _: unit =
+    let [__cerb_continue0:1, continue_510:1, break_511:2, while_512:1] _: unit =
+      save [__cerb_continue0:1, continue_510:1, break_511:1, while_512:2] while_512: unit (x: pointer:= ..) in
+        let [__cerb_continue0:1, continue_510:1, break_511:1, while_512:1] a_515: loaded integer = ... in
+        let [__cerb_continue0:1, continue_510:1, break_511:1, while_512:1] a_513: boolean =
+          case a_515 of
+            | Specified(a_516: integer) =>
+                ...
+            | Unspecified(_: ctype) =>
+                ...
+            end in
+        if [__cerb_continue0:1, continue_510:1, break_511:1, while_512:1] a_513 then
+          let [__cerb_continue0:1, continue_510:1, break_511:1, while_512:1] _: unit =
+            let [__cerb_continue0:1, continue_510:1, break_511:1] _: unit =
+              let [__cerb_continue0:2, break_511:1] _: unit =
+                let [__cerb_continue0:1, break_511:1] _: unit =
+                  let [__cerb_continue0:1, break_511:1] a_523: loaded integer = ... in
+                  let [__cerb_continue0:1, break_511:1] a_522: boolean =
+                    case a_523 of
+                      | Specified(a_524: integer) =>
+                          ...
+                      | Unspecified(_: ctype) =>
+                          ...
+                      end in
+                  if [__cerb_continue0:1, break_511:1] a_522 then
+                    let [break_511:1] _: unit = run [break_511:1] break_511(x) in
+                    ...
+                  else
+                    let [__cerb_continue0:1] a_537: loaded integer = ... in
+                    let [__cerb_continue0:1] a_536: boolean =
+                      case a_537 of
+                        | Specified(a_538: integer) =>
+                            ...
+                        | Unspecified(_: ctype) =>
+                            ...
+                        end in
+                    if [__cerb_continue0:1] a_536 then
+                      let [__cerb_continue0:1] _: unit =
+                        let _: loaded integer = ... in
+                        ... in
+                      let [__cerb_continue0:1] _: unit = run [__cerb_continue0:1] __cerb_continue0(x) in
+                      ...
+                    else
+                      ... in
+                let _: unit =
+                  let _: loaded integer = ... in
+                  ... in
+                ... in
+              let [__cerb_continue0:1] _: unit = save [__cerb_continue0:1] __cerb_continue0: unit (x: pointer:= ..) in  ... in
+              ... in
+            let [continue_510:1] _: unit = save [continue_510:1] continue_510: unit (x: pointer:= ..) in  ... in
+            ... in
+          run [while_512:1] while_512(x)
+        else
+          ... in
+    let [break_511:1] _: unit = save [break_511:1] break_511: unit (x: pointer:= ..) in  ... in
+    ... in
+  let _: unit = ... in
+  ... in
+save [ret_509:1] ret_509: loaded integer (a_572: loaded integer:= ..) in
+  ...
+let _: unit =
+  let x: pointer = ... in
+  let _: unit =
+    let a_514: loaded integer = ... in
+    ... in
+  let _: unit =
+    let [break_511] _: unit =
+      save [while_512] while_512: unit (x: pointer:= ..) in
+        let a_515: loaded integer = ... in
+        let a_513: boolean =
+          case a_515 of
+            | Specified(a_516: integer) =>
+                ...
+            | Unspecified(_: ctype) =>
+                ...
+            end in
+        if a_513 then
+          let _: unit =
+            let _: unit =
+              let [__cerb_continue0] _: unit =
+                let _: unit =
+                  let a_523: loaded integer = ... in
+                  let a_522: boolean =
+                    case a_523 of
+                      | Specified(a_524: integer) =>
+                          ...
+                      | Unspecified(_: ctype) =>
+                          ...
+                      end in
+                  if a_522 then
+                    let _: unit = run break_511(x) in
+                    ...
+                  else
+                    let a_537: loaded integer = ... in
+                    let a_536: boolean =
+                      case a_537 of
+                        | Specified(a_538: integer) =>
+                            ...
+                        | Unspecified(_: ctype) =>
+                            ...
+                        end in
+                    if a_536 then
+                      let _: unit =
+                        let _: loaded integer = ... in
+                        ... in
+                      let _: unit = run __cerb_continue0(x) in
+                      ...
+                    else
+                      ... in
+                let _: unit =
+                  let _: loaded integer = ... in
+                  ... in
+                ... in
+              let _: unit = save __cerb_continue0: unit (x: pointer:= ..) in  ... in
+              ... in
+            let _: unit = save [!continue_510] continue_510: unit (x: pointer:= ..) in  ... in
+            ... in
+          run while_512(x)
+        else
+          ... in
+    let _: unit = save break_511: unit (x: pointer:= ..) in  ... in
+    ... in
+  let _: unit = ... in
+  ... in
+save [!ret_509] ret_509: loaded integer (a_572: loaded integer:= ..) in
+  ...
+let _: unit =
+  let x: pointer = ... in
+  let _: unit =
+    let a_514: loaded integer = ... in
+    ... in
+  let _: unit =
+    (let [break_511] _: unit =
+      jump [while_512] while_512(x)
+        where [break_511] while_512 (x: pointer) : unit :=
+          let [break_511, while_512] a_515: loaded integer = ... in
+          let [break_511, while_512] a_513: boolean =
+            case a_515 of
+              | Specified(a_516: integer) =>
+                  ...
+              | Unspecified(_: ctype) =>
+                  ...
+              end in
+          if [break_511, while_512] a_513 then
+            let [break_511, while_512] _: unit =
+              let [break_511] _: unit =
+                (let [__cerb_continue0, break_511] _: unit =
+                  let [__cerb_continue0, break_511] _: unit =
+                    let [__cerb_continue0, break_511] a_523: loaded integer = ... in
+                    let [__cerb_continue0, break_511] a_522: boolean =
+                      case a_523 of
+                        | Specified(a_524: integer) =>
+                            ...
+                        | Unspecified(_: ctype) =>
+                            ...
+                        end in
+                    if [__cerb_continue0, break_511] a_522 then
+                      let [break_511] _: unit = jump [break_511] break_511(x) in
+                      ...
+                    else
+                      let [__cerb_continue0] a_537: loaded integer = ... in
+                      let [__cerb_continue0] a_536: boolean =
+                        case a_537 of
+                          | Specified(a_538: integer) =>
+                              ...
+                          | Unspecified(_: ctype) =>
+                              ...
+                          end in
+                      if [__cerb_continue0] a_536 then
+                        let [__cerb_continue0] _: unit =
+                          let _: loaded integer = ... in
+                          ... in
+                        let [__cerb_continue0] _: unit = jump [__cerb_continue0] __cerb_continue0(x) in
+                        ...
+                      else
+                        ... in
+                  let _: unit =
+                    let _: loaded integer = ... in
+                    ... in
+                  ... in
+                jump [__cerb_continue0] __cerb_continue0(x))
+                  where [break_511] __cerb_continue0 (x: pointer) : unit :=
+                    let _: unit = ... in
+                    ...
+                  end in
+              let _: unit =
+                let (x: pointer) = ... in
+                ... in
+              ... in
+            jump [while_512] while_512(x)
+          else
+            ...
+        end in
+    jump [break_511] break_511(x))
+      where break_511 (x: pointer) : unit :=
+        let _: unit = ... in
+        ...
+      end in
+  let _: unit = ... in
+  ... in
+let (a_572: loaded integer) = ... in
+...
+let _: unit =
+  let x: pointer = ... in
+  let _: unit =
+    let a_514: loaded integer = ... in
+    ... in
+  let _: unit =
+    (let [break_511] _: unit =
+      jump [while_512] while_512(x)
+        where [break_511] while_512 (x: pointer) : unit :=
+          let [break_511, while_512] a_515: loaded integer = ... in
+          let [break_511, while_512] a_513: boolean =
+            case a_515 of
+              | Specified(a_516: integer) =>
+                  ...
+              | Unspecified(_: ctype) =>
+                  ...
+              end in
+          if [break_511, while_512] a_513 then
+            let [break_511, while_512] _: unit =
+              let [break_511] _: unit =
+                (let [__cerb_continue0, break_511] _: unit =
+                  let [__cerb_continue0, break_511] _: unit =
+                    let [__cerb_continue0, break_511] a_523: loaded integer = ... in
+                    let [__cerb_continue0, break_511] a_522: boolean =
+                      case a_523 of
+                        | Specified(a_524: integer) =>
+                            ...
+                        | Unspecified(_: ctype) =>
+                            ...
+                        end in
+                    if [__cerb_continue0, break_511] a_522 then
+                      let [break_511] _: unit = jump [break_511] break_511(x) in
+                      ...
+                    else
+                      let [__cerb_continue0] a_537: loaded integer = ... in
+                      let [__cerb_continue0] a_536: boolean =
+                        case a_537 of
+                          | Specified(a_538: integer) =>
+                              ...
+                          | Unspecified(_: ctype) =>
+                              ...
+                          end in
+                      if [__cerb_continue0] a_536 then
+                        let [__cerb_continue0] _: unit =
+                          let _: loaded integer = ... in
+                          ... in
+                        let [__cerb_continue0] _: unit = jump [__cerb_continue0] __cerb_continue0(x) in
+                        ...
+                      else
+                        ... in
+                  let _: unit =
+                    let _: loaded integer = ... in
+                    ... in
+                  ... in
+                jump [__cerb_continue0] __cerb_continue0(x))
+                  where [break_511] __cerb_continue0 (x: pointer) : unit :=
+                    let _: unit = ... in
+                    ...
+                  end in
+              let _: unit =
+                let (x: pointer) = ... in
+                ... in
+              ... in
+            jump [while_512] while_512(x)
+          else
+            ...
+        end in
+    jump [break_511] break_511(x))
+      where break_511 (x: pointer) : unit :=
+        let _: unit = ... in
+        ...
+      end in
+  let _: unit = ... in
+  ... in
+let (a_572: loaded integer) = ... in
+...

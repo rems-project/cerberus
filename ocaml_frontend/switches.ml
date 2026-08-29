@@ -43,6 +43,9 @@ type cerb_switch =
   (* eliminate pure expr rebindings: let pat = C[pure(pexpr)] -> substitute pexpr *)
   | SW_copy_prop
 
+  (* transform procedures from Esave/Erun style to Ewhere/Ejump style *)
+  | SW_save_to_where
+
 
 let internal_ref =
   ref []
@@ -99,6 +102,8 @@ let set strs =
         Some (SW_magic_comment_char_dollar)
     | "copy_prop" ->
         Some SW_copy_prop
+    | "save_to_where" ->
+        Some SW_save_to_where
     | _ ->
         None in
   let pred x = function
@@ -128,7 +133,8 @@ let set strs =
     | SW_zero_initialised
     | SW_at_magic_comments
     | SW_magic_comment_char_dollar
-    | SW_copy_prop as y ->
+    | SW_copy_prop
+    | SW_save_to_where as y ->
         x = y in
   List.iter (fun str ->
     match read_switch str with

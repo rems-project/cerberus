@@ -89,6 +89,9 @@ type token =
   | STRONG
   | SAVE (* TODO *)
   | RUN (* TODO *)
+  | JUMP
+  | WHERE
+  | AND
 (*
   | TRY
   | WITH

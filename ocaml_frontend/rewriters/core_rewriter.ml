@@ -395,6 +395,16 @@ module Rewriter = functor (Eff: Monad) -> struct
       | Erun ((), sym, pes) ->
           mapM aux_pexpr pes >>= fun pes' ->
           return_wrap (Erun ((), sym, pes'))
+      | Ejump ((), sym, pes) ->
+          mapM aux_pexpr pes >>= fun pes' ->
+          return_wrap (Ejump ((), sym, pes'))
+      | Ewhere (e, defs) ->
+          mapM (fun (sym_ty, params, body) ->
+            aux body >>= fun body' ->
+            return (sym_ty, params, body')
+          ) defs >>= fun defs' ->
+          aux e >>= fun e' ->
+          return_wrap (Ewhere (e', defs'))
       | Epar es ->
           mapM aux es >>= fun es' ->
           return_wrap (Epar es')

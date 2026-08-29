@@ -484,6 +484,12 @@ let string_of_core_typing_cause = function
       "InvalidTag(" ^ Pp_symbol.to_string tag_sym ^ ")"
   | InvalidMember (tag_sym, Symbol.Identifier (_, memb_str)) ->
       "InvalidMember(" ^ Pp_symbol.to_string tag_sym ^ ", " ^ memb_str ^ ")"
+  | UndeclaredLabel0 sym ->
+      "undeclared label '" ^ string_of_sym sym ^ "'"
+  | MixedLabelStyles ->
+      "procedure body mixes Erun/Esave and Ejump/Ewhere label styles"
+  | LabelOutsideContext construct ->
+      construct ^ " appears outside its allowed context"
   | CoreTyping_TODO str ->
       "CoreTyping_TODO(" ^ str ^ ")"
 

@@ -1029,6 +1029,15 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
           Esave lab_sym sym_bTy_pes' (subst_sym_expr sym cval e)
     | Erun annot lab_sym pes ->
         Erun annot lab_sym (List.map (subst_sym_pexpr sym cval) pes)
+    | Ejump annot lab_sym pes ->
+        Ejump annot lab_sym (List.map (subst_sym_pexpr sym cval) pes)
+    | Ewhere e defs ->
+        let defs' = List.map (fun (sym_ty, params, body) ->
+          (sym_ty, params,
+           if List.any (fun (z, _) -> sym = z) params then body
+           else subst_sym_expr sym cval body)
+        ) defs in
+        Ewhere (subst_sym_expr sym cval e) defs'
     | End es ->
         End (List.map (subst_sym_expr sym cval) es)
     | Epar es ->
@@ -1298,6 +1307,15 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
           Esave lab_sym sym_bTy_pes' (unsafe_subst_sym_expr sym pe' e)
     | Erun annot lab_sym pes ->
         Erun annot lab_sym (List.map (unsafe_subst_sym_pexpr sym pe') pes)
+    | Ejump annot lab_sym pes ->
+        Ejump annot lab_sym (List.map (unsafe_subst_sym_pexpr sym pe') pes)
+    | Ewhere e defs ->
+        let defs' = List.map (fun (sym_ty, params, body) ->
+          (sym_ty, params,
+           if List.any (fun (z, _) -> sym = z) params then body
+           else unsafe_subst_sym_expr sym pe' body)
+        ) defs in
+        Ewhere (unsafe_subst_sym_expr sym pe' e) defs'
     | End es ->
         End (List.map (unsafe_subst_sym_expr sym pe') es)
     | Epar es ->
@@ -1573,6 +1591,10 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Nothing
     | Erun _ _ _ ->
         Nothing
+    | Ejump _ _ _ ->
+        Nothing
+    | Ewhere _ _ ->
+        Nothing
     | End _ ->
         Nothing
     | Epar _ ->
@@ -1648,6 +1670,11 @@ let rec subst_wait tid v (Expr annot expr_) =
        Esave sym sym_bTys (subst_wait tid v e)
    | Erun _ _ _ ->
        expr_
+   | Ejump _ _ _ ->
+       expr_
+   | Ewhere e defs ->
+       Ewhere (subst_wait tid v e)
+         (List.map (fun (sym_ty, params, body) -> (sym_ty, params, subst_wait tid v body)) defs)
    | End es ->
        End (List.map (subst_wait tid v) es)
    | Epar es ->
@@ -1747,6 +1774,10 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
           find_labeled_continuation sym e
     | Erun annot sym pes ->
         Nothing
+    | Ejump _ _ _ ->
+        error "Core_aux.find_labeled_continuation: should not have Ejump/Ewhere in same program as Erun/Esave"
+    | Ewhere _ _ ->
+        error "Core_aux.find_labeled_continuation: should not have Ejump/Ewhere in same program as Erun/Esave"
     | Epar es ->
         let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes there are no Esave inside par()") in
         Nothing
@@ -1826,6 +1857,10 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
           find_labeled_continuation2_aux (Map.insert sym' (List.map fst sym_bTys, e) acc) sym e
     | Erun annot sym pes ->
         acc
+    | Ejump _ _ _ ->
+        error "Core_aux.find_labeled_continuation2_aux: should not have Ejump/Ewhere in same program as Erun/Esave"
+    | Ewhere _ _ ->
+        error "Core_aux.find_labeled_continuation2_aux: should not have Ejump/Ewhere in same program as Erun/Esave"
     | Epar es ->
         let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation2_aux assumes there are no Esave inside par()") in
         acc
@@ -1910,6 +1945,10 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         Map.insert sym_lab (List.map fst sym_bTys, e) $ collect_labeled_continuations e
     | Erun _ _ _ ->
         Map.empty
+    | Ejump _ _ _ ->
+        error "Core_aux.collect_labeled_continuations: should not have Ejump/Ewhere in same program as Erun/Esave"
+    | Ewhere _ _ ->
+        error "Core_aux.collect_labeled_continuations: should not have Ejump/Ewhere in same program as Erun/Esave"
     | End _ ->
         (* TODO: check *)
         Map.empty
@@ -2239,6 +2278,10 @@ let rec collect_saves_aux st (Expr annots expr_) =
           e
     | Erun _ _ _ ->
         st
+    | Ejump _ _ _ ->
+        st
+    | Ewhere _ _ ->
+        st
     | Epar es ->
         let acc = List.foldl collect_saves_aux
           empty_saves es in
@@ -2351,6 +2394,10 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
           e
     | Erun _ _ _ ->
         st
+    | Ejump _ _ _ ->
+        error "Core_aux.m_collect_saves_aux: should not have Ejump/Ewhere in same program as Erun/Esave"
+    | Ewhere _ _ ->
+        error "Core_aux.m_collect_saves_aux: should not have Ejump/Ewhere in same program as Erun/Esave"
     | Epar es ->
         let acc = List.foldl m_collect_saves_aux
           m_empty_saves es in
