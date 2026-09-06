@@ -52,7 +52,8 @@ let collect_memory_accesses (_, sigm) =
       | AilEsizeof_expr _
       | AilEalignof _
       | AilEreg_load _
-      | AilEinvalid _ ->
+      | AilEinvalid _
+      | AilElabel_addressGNU _ ->
           ()
       | AilEunary (_, e)
       | AilEcast (_, _, e)

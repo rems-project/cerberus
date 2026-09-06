@@ -1702,6 +1702,8 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEatomic _ ->
         (* This should be impossible because the desugaring doesn't emit any AilEatomic *)
         error "annotate_expression(AilEatomic)"
+    | AilElabel_addressGNU sym ->
+        E.return (AilElabel_addressGNU sym, GenRValueType (GenPointer no_qualifiers void))
     | AilEgcc_statement bs ss ->
       AilTyping.well_formed_bindings loc sigm bs >>= fun () ->
         if sigma_fresh_bindings bs sigm then

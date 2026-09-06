@@ -2484,6 +2484,10 @@ STD_ "§6.5.2.1#2, sentence 2" $
         AnnotatedExpression () [] loc <$> (AilEprint_type <$> desugar_expression e)
     | CabsEbmc_assume e ->
         AnnotatedExpression () [] loc <$> (AilEbmc_assume <$> desugar_expression e)
+    | CabsElabel_addressGNU ident ->
+        E.guard_extension loc Errors.EXT_GNUlabelAsValue >>= fun () ->
+        E.resolve_label ident >>= fun sym ->
+        E.return (AnnotatedExpression () [] loc (AilElabel_addressGNU sym))
     | CabsEgcc_statement ss ->
         E.get_scope >>= fun scope ->
         match scope with
