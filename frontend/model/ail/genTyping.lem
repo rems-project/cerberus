@@ -511,13 +511,13 @@ let rec typecheck_constant loc cst =
   end
 
 val annotate_rvalue:
-  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> expression unit -> E.errorM (expression genTypeCategory * genType)
 val annotate_assignee:
-  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> bool -> assignment_violation -> Loc.t -> ctype -> expression unit -> E.errorM (expression genTypeCategory)
 val annotate_arguments:
-  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> Loc.t -> bool -> list (expression unit) -> maybe (list (qualifiers * ctype * bool)) ->
   E.errorM (list (expression genTypeCategory))
 
@@ -595,7 +595,7 @@ type annotation_context =
   | CTXother
 
 val annotate_expression:
-  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
 let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression () std_annots loc expr_) =
   let annotate_expression = annotate_expression annotate_block sigm gamm in
@@ -1705,7 +1705,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEgcc_statement bs ss ->
       AilTyping.well_formed_bindings loc sigm bs >>= fun () ->
         if sigma_fresh_bindings bs sigm then
-          annotate_block sigm gamm bs ss >>= fun ss' ->
+          annotate_block loc sigm gamm bs ss >>= fun ss' ->
           match List.dest_init ss' with
             | Nothing ->
                 E.return (AilEgcc_statement bs [], GenRValueType GenVoid)
@@ -2146,7 +2146,7 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
     E.constraint_violation (Loc.locOf e) (IllegalInitialisation kind)
 
 val annotate_definition:
-  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> (Symbol.sym * maybe (expression unit)) -> E.errorM (Symbol.sym * maybe (expression genTypeCategory))
 let annotate_definition annotate_block sigm gamm (sym, e_opt) =
   match (e_opt, List.lookup sym gamm) with
@@ -2161,7 +2161,7 @@ let annotate_definition annotate_block sigm gamm (sym, e_opt) =
 
 
 val annotate_definitions:
-  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> list (Symbol.sym * maybe (expression unit)) -> E.errorM (list (Symbol.sym * maybe (expression genTypeCategory)))
 let rec annotate_definitions annotate_block sigm gamm = function
   | [] ->
@@ -2175,7 +2175,7 @@ end
 
 val     annotate_statement_: Loc.t -> sigma unit -> gamma -> ctype -> statement_ unit -> E.errorM (statement_ genTypeCategory)
 let rec annotate_statement_ loc sigm gamm ty stmt =
-  let annotate_block = annotate_block (Just ty) in
+  let annotate_block loc  = annotate_block loc (Just ty) in
   let annotate_expression = annotate_expression annotate_block sigm gamm CTXother in
   let annotate_rvalue     = annotate_rvalue annotate_block sigm gamm in
   let annotate_statement  = annotate_statement sigm gamm ty in
@@ -2189,7 +2189,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSblock bindings ss ->
         AilTyping.well_formed_bindings loc sigm bindings >>
         if sigma_fresh_bindings bindings sigm then
-          annotate_block sigm gamm bindings ss >>= fun ss' ->
+          annotate_block loc sigm gamm bindings ss >>= fun ss' ->
           E.return (AilSblock bindings ss')
         else
           error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
@@ -2272,13 +2272,13 @@ and annotate_statement sigm gamm ty stmt =
 
 (* ty_opt should be Nothing if the annotate_block is passed to a function
    annotating outside of the body of a function *)
-and annotate_block ty_opt sigm gamm bs ss =
+and annotate_block loc ty_opt sigm gamm bs ss =
   (* WIP *)
   let add_bindings z acc = foldl (fun acc b -> b :: acc) z acc in
   match ty_opt with
     | Nothing ->
-        (* TODO: this should already be caught by the desugaring, but better create a proper constraint violation variant *)
-        error "TODO msg: Statement expressions are only allowed inside functions"
+        (* this should already be caught by the desugaring *)
+        E.constraint_violation loc GNUFileScopeStatementExpression
     | Just ty ->
         E.mapM (annotate_statement sigm (add_bindings bs gamm) ty) ss
   end
@@ -2311,7 +2311,7 @@ let annotate_sigma sigm =
     match List.lookup ident sigm.declarations with
       | Just (loc, _, Decl_object _ _ _ (* qs *) ty) ->
           (* TODO: qualifiers?; storage duration? *)
-          annotate_definition_aux (annotate_block Nothing) sigm [] (ty, e) >>= fun def ->
+          annotate_definition_aux (fun loc -> annotate_block loc Nothing) sigm [] (ty, e) >>= fun def ->
           E.return (ident, def)
       | _ ->
           error "annotate_sigma: object definition must have a declaration"

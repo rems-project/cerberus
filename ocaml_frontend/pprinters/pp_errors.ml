@@ -350,6 +350,8 @@ let string_of_constraint_violation = function
       "illtyped second operand in a GNU ?: expression ('" ^ string_of_gentype gty ^ "')"
   | GNUBuiltinChooseExprNotIntegerConstant ->
       "first operand of __builtin_choose_expr() is not an integer constant expression"
+  | GNUFileScopeStatementExpression ->
+      "statement expression not allowed at file scope"
   | TypedefBytesAreUnsignedCharsOnly ->
       "[[cerb::byte]] attribute must only be applied to typedefs of unsigned char"
   | CastToFromByte ->

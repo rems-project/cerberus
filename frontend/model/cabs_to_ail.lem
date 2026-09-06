@@ -1735,11 +1735,11 @@ let rec desugar_type_specifiers specs =
               end
 
           | [TSpec loc (TSpec_typeof_expr e)] ->
-              desugar_expression e      >>= fun d_e    ->
-              E.get_sigma_sofar         >>= fun sigm   ->
-              E.get_gamma_sofar         >>= fun gamm   ->
-              E.get_current_return_type >>= fun ret_ty ->
-              match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (GenTyping.annotate_block (Just ret_ty)) sigm gamm GenTyping.CTXsizeof d_e) with
+              desugar_expression e          >>= fun d_e        ->
+              E.get_sigma_sofar             >>= fun sigm       ->
+              E.get_gamma_sofar             >>= fun gamm       ->
+              E.get_current_return_type_opt >>= fun ret_ty_opt ->
+              match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (fun loc -> GenTyping.annotate_block loc ret_ty_opt) sigm gamm GenTyping.CTXsizeof d_e) with
               | Left (loc, err) ->
                   E.fail_ailtyping loc err
               | Right a_expr ->
@@ -2391,7 +2391,7 @@ STD_ "§6.5.2.1#2, sentence 2" $
             desugar_expression e >>= fun d_e  ->
             E.get_sigma_sofar    >>= fun sigm ->
             E.get_gamma_sofar    >>= fun gamm ->
-            match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (GenTyping.annotate_block Nothing) sigm gamm GenTyping.CTXsizeof d_e) with
+            match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (fun loc -> GenTyping.annotate_block loc Nothing) sigm gamm GenTyping.CTXsizeof d_e) with
               | Left (loc, err) ->
                   E.fail_ailtyping loc err
               | Right a_expr ->
@@ -2485,10 +2485,16 @@ STD_ "§6.5.2.1#2, sentence 2" $
     | CabsEbmc_assume e ->
         AnnotatedExpression () [] loc <$> (AilEbmc_assume <$> desugar_expression e)
     | CabsEgcc_statement ss ->
-        AnnotatedExpression () [] loc <$>
-          (let ctx = <| cont_ident_opt= Nothing |> in
-          desugar_block_statement (desugar_statement_aux ctx) ss >>= fun (bs, d_ss) ->
-          E.return (AilEgcc_statement bs d_ss))
+        E.get_scope >>= fun scope ->
+        match scope with
+          | E.Scope_file ->
+              E.constraint_violation loc GNUFileScopeStatementExpression
+          | _ ->
+              AnnotatedExpression () [] loc <$>
+                (let ctx = <| cont_ident_opt= Nothing |> in
+                desugar_block_statement (desugar_statement_aux ctx) ss >>= fun (bs, d_ss) ->
+                E.return (AilEgcc_statement bs d_ss))
+        end
     | CabsEcondGNU e1 e3 ->
         AnnotatedExpression () [] loc <$>
           (* TODO: add extension warning *)
@@ -4053,18 +4059,24 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           end
       
       | CabsSreturn Nothing ->
-          E.get_current_return_type >>= function
-            | Ctype.Ctype _ Ctype.Void ->
+          E.get_current_return_type_opt >>= function
+            | Nothing ->
+                (* This should only happen if a file scope GNU statement expression got through *)
+                E.constraint_violation loc GNUFileScopeStatementExpression
+            | Just (Ctype.Ctype _ Ctype.Void) ->
                 E.return AilSreturnVoid
-            | _ ->
+            | Just _ ->
                 E.constraint_violation loc VoidReturnNonVoidFunction
           end
       
       | CabsSreturn (Just e) ->
-          E.get_current_return_type >>= function
-            | Ctype.Ctype _ Ctype.Void ->
+          E.get_current_return_type_opt >>= function
+            | Nothing ->
+                (* This should only happen if a file scope GNU statement expression got through *)
+                E.constraint_violation loc GNUFileScopeStatementExpression
+            | Just (Ctype.Ctype _ Ctype.Void) ->
                 E.constraint_violation loc NonVoidReturnVoidFunction
-            | _ ->
+            | Just _ ->
                 AilSreturn <$> desugar_expression e
           end
       

@@ -211,6 +211,7 @@ type violation =
   (* ?: operator *)
   | GNUConditionalOperatorInvalidOperandType of genType
   | GNUBuiltinChooseExprNotIntegerConstant
+  | GNUFileScopeStatementExpression
   (* Byte *)
   | TypedefBytesAreUnsignedCharsOnly
   | CastToFromByte
@@ -496,6 +497,8 @@ let std_of_violation = function
   | GNUConditionalOperatorInvalidOperandType _ ->
       []
   | GNUBuiltinChooseExprNotIntegerConstant ->
+      []
+  | GNUFileScopeStatementExpression ->
       []
   | TypedefBytesAreUnsignedCharsOnly ->
       []

@@ -2328,16 +2328,10 @@ let resolve_label ident =
   end
 
 
-(* Returns the return type of the function currently being desugared *)
-let get_current_return_type: desugM Ctype.ctype =
-  read_inner (fun st ->
-    match st.current_return_type with
-      | Just ty ->
-          ty
-      | Nothing ->
-          error "Cabs_to_ail_effect.get_current_return_type Nothing"
-    end
-  )
+(* Returns the return type of the function currently being desugared (Nothing is not
+   currently in a function) *)
+let get_current_return_type_opt: desugM (maybe Ctype.ctype) =
+  read_inner (fun st -> st.current_return_type)
 
 let set_current_return_type (ty_opt: maybe Ctype.ctype) : desugM unit =
   update_inner (fun st ->
