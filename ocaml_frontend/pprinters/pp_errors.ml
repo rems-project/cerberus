@@ -44,6 +44,8 @@ let string_of_cparser_cause = function
       "unsupported non-standard concatenation of string literals"
   | Cparser_extra_semi AFTER_FUNCTION ->
       "found a semicolon after a function definition"
+  | Cparser_extra_semi AFTER_EDECL ->
+      "found a semicolon after an external declaration"
   | Cparser_extra_semi INSIDE_STRUCT ->
       "found an extra semicolon inside a struct definition"
   | Cparser_extra_semi INSIDE_UNION ->

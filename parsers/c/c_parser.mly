@@ -1563,8 +1563,9 @@ external_declaration:
     { EDecl_magic (fst magic, snd (snd magic)) }
 | fdef= function_definition
     { EDecl_func fdef }
-| xs_decl= declaration
-    { EDecl_decl xs_decl }
+| xs_decl= declaration has_extra= boption(SEMICOLON+)
+    { if has_extra then warn_extra_semicolon $startpos(has_extra) AFTER_EDECL;
+      EDecl_decl xs_decl }
 ;
 
 (* §6.9.1 Function definitions *)
