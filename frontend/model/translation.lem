@@ -3906,9 +3906,14 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             mk_run_with_lifetime_e loc env.return_lab visible_syms_tys [] [Caux.mk_specified_pe (Caux.mk_nullptr_pe env.return_ty)]
           end
         else
-          let oTy = force_core_object_type_of_ctype (ctype_of e) in
-          translate_expression true e               >>= fun core_e ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun e_wrp  ->
+          let e_ty = ctype_of e in
+          let bTy =
+            if AilTypesAux.is_void e_ty then
+              C.BTy_unit
+            else
+              C.BTy_loaded (force_core_object_type_of_ctype e_ty) in
+          translate_expression true e >>= fun core_e ->
+          E.wrapped_fresh_symbol bTy  >>= fun e_wrp  ->
         (* All the visible objects from the current function need to be killed. *)
         if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool env.return_ty && AilTypesAux.is_pointer (ctype_of e) then
             (* By Ail's typing we know that [e] is a pointer *)
@@ -3924,8 +3929,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic env.return_ty && AilTypesAux.is_arithmetic (ctype_of e) then
                 conv_loaded_arith stdlib (ctype_of e) env.return_ty e_wrp.E.sym_pe
             else
-              e_wrp.E.sym_pe in   
-          E.return begin 
+              e_wrp.E.sym_pe in
+          E.return begin
             Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
               mk_run_with_lifetime_e loc env.return_lab visible_syms_tys [] [ret_pe]
             end
