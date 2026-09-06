@@ -29,6 +29,10 @@ let string_of_ctype ?(qs=Ctype.no_qualifiers) ty = String_ail.string_of_ctype ~i
 let string_of_sym = Pp_symbol.to_string_pretty
 let string_of_gentype = String_ail.string_of_genType
 
+let string_of_extension_cause = function
+  | EXT_GNUlabelAsValue ->
+      "GNU address-of-label"
+
 let string_of_cparser_cause = function
   | Cparser_invalid_symbol ->
       "invalid symbol"
@@ -545,6 +549,8 @@ let short_message = function
       err
   | CPARSER ccause ->
       string_of_cparser_cause ccause
+  | EXTENSION ecause ->
+      "use of " ^ string_of_extension_cause ecause ^ " extension (try --permissive)"
   | DESUGAR dcause ->
       string_of_desugar_cause dcause
   | AIL_TYPING terr ->

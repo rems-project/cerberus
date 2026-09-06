@@ -3207,7 +3207,11 @@ else
           translate_function_designator self stdlib e
       | A.AilEatomic e ->
           self e
-      
+
+      | A.AilElabel_addressGNU _ ->
+          (* TODO: for now, we do not have a dynamics for GNU label-as-value *)
+          E.return (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe Ctype.void)))
+
       | A.AilEgcc_statement bs ss ->
           match translate_block_opt with
             | Nothing -> illTypedAil loc "AilEgcc_statement"

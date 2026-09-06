@@ -453,6 +453,8 @@ let rec dtree_of_expression pp_annot expr =
           let d_ctor = pp_implicit_ctor "AilEatomic" in
           Dnode ( d_ctor
                 , (*add_std_annot*) [self e] )
+      | AilElabel_addressGNU sym ->
+          Dleaf (pp_expr_ctor "AilElabel_addressGNU" ^^^ pp_symbol sym)
       | AilEgcc_statement (bs, ss) ->
           Dnode ( pp_expr_ctor "AilEgcc_statement"
                 , Dnode (pp_ctor "Bindings", List.map dtree_of_binding bs) :: List.map (dtree_of_statement pp_annot) ss )

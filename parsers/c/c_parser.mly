@@ -623,6 +623,9 @@ unary_expression:
 | ALIGNOF LPAREN ty= type_name RPAREN
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($1))
                      , CabsEalignof ty ) }
+| AMPERSAND_AMPERSAND l= general_identifier
+    { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($1))
+                     , CabsElabel_addressGNU l ) }
 ;
 
 unary_operator:

@@ -35,6 +35,7 @@ let _precedence = function
   | CabsEsizeof_expr _
   | CabsEsizeof_type _
   | CabsEalignof _
+  | CabsElabel_addressGNU _
   | CabsEcast _ -> Some 2
   | CabsEbinary (CabsMul, _, _)
   | CabsEbinary (CabsDiv, _, _)
@@ -275,6 +276,8 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEbmc_assume e ->
         Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ d_loc, [dtree_of_cabs_expression e])
+    | CabsElabel_addressGNU ident ->
+        Dleaf (pp_stmt_ctor "CabsElabel_addressGNU" ^^^ d_loc ^^^ pp_identifier ident)
     | CabsEgcc_statement ss ->
         Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, List.map dtree_of_cabs_statement ss)
     | CabsEcondGNU (e1, e2) ->

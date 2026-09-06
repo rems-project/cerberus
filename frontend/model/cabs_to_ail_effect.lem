@@ -2402,6 +2402,13 @@ let resolve_enum_constant sym =
   end
 
 
+val guard_extension: Loc.t -> Errors.extension_cause -> desugM unit
+let guard_extension loc ext =
+  if Global.isPermissive () then
+    return ()
+  else
+    State_exception.fail (loc, Errors.EXTENSION ext)
+
 (* TODO: hackish, uber inefficient *)
 val remove_unused_identifiers: forall 'a. state -> A.ail_identifier -> list (A.ail_identifier * 'a) -> list (A.ail_identifier * 'a)
 let remove_unused_identifiers st startup_sym xs =
