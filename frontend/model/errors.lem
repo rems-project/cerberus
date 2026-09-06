@@ -55,6 +55,7 @@ type core_run_cause =
 (* semicolon after a function definition and other places (is an extension it least since C++11) *)
 type extra_semi_context =
   | AFTER_FUNCTION
+  | AFTER_EDECL
   | INSIDE_STRUCT
   | INSIDE_UNION
 
