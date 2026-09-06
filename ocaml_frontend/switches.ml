@@ -43,6 +43,9 @@ type cerb_switch =
   (* eliminate pure expr rebindings: let pat = C[pure(pexpr)] -> substitute pexpr *)
   | SW_copy_prop
 
+  (* allow empty structs *)
+  | SW_empty_structs
+
 
 let internal_ref =
   ref []
@@ -99,6 +102,8 @@ let set strs =
         Some (SW_magic_comment_char_dollar)
     | "copy_prop" ->
         Some SW_copy_prop
+    | "empty_structs" ->
+        Some SW_empty_structs
     | _ ->
         None in
   let pred x = function
@@ -128,7 +133,8 @@ let set strs =
     | SW_zero_initialised
     | SW_at_magic_comments
     | SW_magic_comment_char_dollar
-    | SW_copy_prop as y ->
+    | SW_copy_prop
+    | SW_empty_structs as y ->
         x = y in
   List.iter (fun str ->
     match read_switch str with

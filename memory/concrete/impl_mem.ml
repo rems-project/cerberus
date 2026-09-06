@@ -167,8 +167,9 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : Z.t =
            (hence the `ignore_flexible` in the call to offsetof) *)
         let (_, max_offset) = offsetsof ~ignore_flexible:true tagDefs tag_sym in
         let align = of_int (alignof ~tagDefs cty) in
-        let x = modulus max_offset align in
-        if equal x zero then max_offset else Z.add max_offset (Z.sub align x)
+        if equal align zero then zero else
+          let x = modulus max_offset align in
+          if equal x zero then max_offset else Z.add max_offset (Z.sub align x)
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with
           | _, StructDef _ ->
@@ -1250,6 +1251,7 @@ module Concrete : Memory = struct
     begin
       let open Z in
       let z = sub st.last_address sz in
+      if equal align zero then return z else
       let (q,m) = quomod z align in
       let z' = sub z (if q < zero then neg m else m) in
       if z' <= zero then

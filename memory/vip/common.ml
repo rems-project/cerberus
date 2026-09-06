@@ -75,8 +75,9 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
            (hence the `ignore_flexible` in the call to offsetof) *)
         let (_, max_offset) = offsetsof ~ignore_flexible:true tagDefs tag_sym in
         let align = alignof ~tagDefs cty in
-        let x = max_offset mod align in
-        if x = 0 then max_offset else max_offset + (align - x)
+        if align = 0 then 0 else
+          let x = max_offset mod align in
+          if x = 0 then max_offset else max_offset + (align - x)
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with
           | _, StructDef _ ->

@@ -1571,6 +1571,9 @@ let rec desugar_type_specifiers specs =
             else match Utils.last all_membDefs with
               | Nothing ->
                   (* xs was an empty list *)
+if Global.has_switch Global.SW_empty_structs then
+                  E.return Nothing
+else
                   (* STD §6.7.2.1#8, sentence 3 *)
                   E.undef loc Undefined.UB061_no_named_members
               | Just ((last_ident, (lastMemb_attrs, _, lastMemb_qs, lastMemb_ty)), membDefs) ->

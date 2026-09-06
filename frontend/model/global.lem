@@ -54,6 +54,7 @@ type cerb_switch =
   | SW_permissive_printf
   | SW_no_integer_provenance
   | SW_CHERI
+  | SW_empty_structs
 
 declare ocaml target_rep function SW_strict_reads = `Switches.SW_strict_reads`
 declare ocaml target_rep function SW_forbid_nullptr_free = `Switches.SW_forbid_nullptr_free`
@@ -62,6 +63,7 @@ declare ocaml target_rep function SW_inner_arg_temps = `Switches.SW_inner_arg_te
 declare ocaml target_rep function SW_permissive_printf = `Switches.SW_permissive_printf`
 declare ocaml target_rep function SW_no_integer_provenance = `Switches.SW_no_integer_provenance`
 declare ocaml target_rep function SW_CHERI = `Switches.SW_CHERI`
+declare ocaml target_rep function SW_empty_structs = `Switches.SW_empty_structs`
 
 
 val is_CHERI: unit -> bool

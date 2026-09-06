@@ -43,6 +43,9 @@ type cerb_switch =
   (* eliminate pure symbol rebindings: let alias = pure(sym) → substitute sym *)
   | SW_copy_prop
 
+  (* allow empty structs *)
+  | SW_empty_structs
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option

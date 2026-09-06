@@ -205,6 +205,7 @@ let allocator (sz: Z.t) (align: Z.t) : (allocation_id * address) memM =
   begin
     let open Z in
     let z = sub st.last_address sz in
+    if equal align zero then return z else
     let (q,m) = quomod z align in
     let z' = sub z (if q < zero then neg m else m) in
     if z' <= zero then
