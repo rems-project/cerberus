@@ -1525,7 +1525,7 @@ asm_with_labels:
     { xs }
 
 asm_statement:
-| ASM qs= asm_qualifier* LPAREN s= string_literal RPAREN
+| ASM qs= asm_qualifier* LPAREN s= string_literal RPAREN SEMICOLON
     { let is_volatile = List.mem ASM_VOLATILE qs in
       let is_inline = List.mem ASM_INLINE qs in
       let strs =
@@ -1535,7 +1535,7 @@ asm_statement:
       in
       CabsStatement (region ($startpos, $endpos) noCursor, Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs)) }
-| ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN
+| ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN SEMICOLON
     { let is_volatile = List.mem ASM_VOLATILE qs in
       let is_inline = List.mem ASM_INLINE qs in
       let strs =
