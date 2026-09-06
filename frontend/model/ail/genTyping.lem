@@ -2228,8 +2228,22 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
         else
           E.constraint_violation loc NonVoidReturnVoidFunction
     | AilSreturn e ->
-        annotate_assignee annotate_block sigm gamm false ReturnAsSimpleAssignment (with_cursor_from (locOf e) loc) ty e >>= fun e' ->
-        E.return (AilSreturn e')
+        if AAux.is_void ty then
+          if Global.isPermissive () then
+            annotate_rvalue e >>= fun (e', gty) ->
+            match gty with
+            | GenVoid ->
+                (* NOTE: this is a GNU extension we support with --permissive *)
+                (* return E; in a void function when the type of E is void    *)
+                E.return (AilSreturn e')
+            | _ ->
+                E.constraint_violation loc NonVoidReturnVoidFunction
+            end
+          else
+            E.constraint_violation loc NonVoidReturnVoidFunction
+        else
+          annotate_assignee annotate_block sigm gamm false ReturnAsSimpleAssignment (with_cursor_from (locOf e) loc) ty e >>= fun e' ->
+          E.return (AilSreturn e')
     | AilSswitch e s ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.4.2#1" >>

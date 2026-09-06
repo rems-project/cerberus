@@ -4068,18 +4068,11 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             | Just _ ->
                 E.constraint_violation loc VoidReturnNonVoidFunction
           end
-      
+
       | CabsSreturn (Just e) ->
-          E.get_current_return_type_opt >>= function
-            | Nothing ->
-                (* This should only happen if a file scope GNU statement expression got through *)
-                E.constraint_violation loc GNUFileScopeStatementExpression
-            | Just (Ctype.Ctype _ Ctype.Void) ->
-                E.constraint_violation loc NonVoidReturnVoidFunction
-            | Just _ ->
-                AilSreturn <$> desugar_expression e
-          end
-      
+          (* NOTE: we check that we are in a non-void function during the Ail typing *)
+          AilSreturn <$> desugar_expression e
+
       | CabsSpar ss ->
           AilSpar <$> E.mapM self ss
       
