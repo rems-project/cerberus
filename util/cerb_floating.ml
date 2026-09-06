@@ -2,7 +2,7 @@
 
 let add = (+.)
 let sub = (-.)
-let mul = (+.)
+let mul = ( *. )
 let div = (/.)
 
 let of_string str =
