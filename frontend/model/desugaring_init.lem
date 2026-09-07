@@ -541,11 +541,15 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
             , List.foldl (fun acc (union_path, ident) ->
                 Map.insert union_path ident acc
               ) unions (union_bindings path) ) in
-        if whole_aggregate then
+        if whole_aggregate && pos.cursor <> [] then
           (* NOTE: the cursor is sitting on an aggregate, not on a scalar leaf,
              so [go_next] would descend into it. As with an Init_list, we move
              on ourselves and tell the caller not to advance again. *)
           liftM (do_next_in_same_level tagDefs pos) >>= fun pos ->
+          E.return (max_index, inits_acc', true, pos)
+        else if whole_aggregate then
+          (* NOTE: an empty cursor means the whole object was initialised by
+             this one expression: there is no next position to move to. *)
           E.return (max_index, inits_acc', true, pos)
         else
           E.return (max_index, inits_acc', false, pos)
@@ -557,9 +561,15 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
           | _ ->
               E.undef loc Undefined.UB081_scalar_initializer_not_single_expression
         end
+      else if cursor_overflowing pos.cursor then
+        (* NOTE: the cursor has already run off the end of the object being
+           initialised, so this whole brace group is in excess: there is
+           nowhere to put it. We stay overflowing (STD §6.7.9#2). *)
+        E.return (max_index, inits_acc, true, pos)
       else
         (* NOTE: we go on step down (an mark the opening of a block { ... }) *)
         (* NOTE: this moves the cursor to the first member/index of the struct/array *)
+        let was_overflowing = cursor_overflowing pos.cursor in
         liftM (go_down_entering_block tagDefs pos) >>= fun pos ->
         (* NOTE: for each element of the init list *)
         on_list (max_index, inits_acc, pos) (fun is_last (max_index, inits_acc, pos) (desigs_opt, init) ->
@@ -591,9 +601,12 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
               (* NOTE: if we are dealing with the LAST element of the init list *)
               (* NOTE: we move the cursor back to the level of the block we just opened *)
               go_top_of_block pos' >>= fun pos' ->
-              (* NOTE: we move up from this block *)
-              (* TODO: if we were overflowing before entering the block we need to STILL be overflowing *)
+              (* NOTE: we move up from this block. The overflow flag of the
+                 level we are leaving is about that block, not about the level
+                 we are returning to: if we were overflowing before entering
+                 the block, we must still be overflowing after leaving it. *)
               liftM (go_up (unmark_as_overflowing pos')) >>= fun pos' ->
+              let pos' = if was_overflowing then mark_as_overflowing pos' else pos' in
               liftM (do_next_in_same_level tagDefs pos') >>= fun pos' ->
               E.return pos'
           else
