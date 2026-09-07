@@ -434,6 +434,55 @@ let stringFromInit_path xs =
   String.concat "" (List.map stringFromInit_element xs)
 
 
+(* STD §6.7.9#13 and #14: not every initialiser expression facing an
+   aggregate is subject to brace elision. A compound literal of a compatible
+   type initialises the aggregate it is facing, and so does a string literal
+   facing an array of character type. In those two cases the descent stops at
+   the aggregate, and the value recorded for it is the whole object (for a
+   string literal, the exploded array of characters).
+
+   In every other case we descend to a scalar leaf, as brace elision
+   requires. *)
+val     go_bottom_or_stop: map Symbol.sym tag_definition -> AilSyntax.expression unit -> init_position ->
+          E.desugM (init_position * AilSyntax.expression unit * bool)
+let rec go_bottom_or_stop tagDefs d_e pos =
+  let stops_here =
+    match d_e with
+      | AilSyntax.AnnotatedExpression _ _ loc (AilSyntax.AilEstr (Nothing, strs)) ->
+          (* STD §6.7.9#14 *)
+          if AilTypesAux.is_array_of_character pos.ty && not (AilTypesAux.is_array_unknown_size pos.ty) then
+            let char_strs = List.concat (List.map snd strs) in
+            let (_, elem_ty, elems) = explode_string_literal loc pos.ty char_strs in
+            (* NOTE: [false], not [true]: this is an array *value* sitting
+               inside an aggregate, like the ones [constructValue_aux] builds,
+               and must not be subject to the array decay that Ail's typing
+               applies to an initialiser that came from a string literal *)
+            Just (AilSyntax.AnnotatedExpression () [] loc (AilSyntax.AilEarray false elem_ty elems))
+          else
+            Nothing
+      | AilSyntax.AnnotatedExpression _ _ _ (AilSyntax.AilEcompound qs ty _) ->
+          (* STD §6.7.9#13 *)
+          if AilTypesAux.are_compatible (qs, ty) (no_qualifiers, pos.ty) then
+            Just d_e
+          else
+            Nothing
+      | _ ->
+          Nothing
+    end in
+  match stops_here with
+    | Just d_e' ->
+        E.return (pos, d_e', true)
+    | Nothing ->
+        match go_down tagDefs pos with
+          | DInit_ok pos' ->
+              go_bottom_or_stop tagDefs d_e pos'
+          | DInit_nothing ->
+              E.return (pos, d_e, false)
+          | DInit_internal_error msg ->
+              internal_error msg
+        end
+  end
+
 val to_init_path: list init_cursor_elem -> init_path
 let to_init_path cursor =
   let aux elem =
@@ -478,11 +527,10 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
         | true ->
             E.return ()
       end >>= fun () ->
-      if false (* is_compound_literal OR string literal *) then
-        internal_error "TODO: explode the elements"
-      else
-        (* NOTE: we dealing with a scalar, so we go down to a leaf *)
-        go_bottom tagDefs pos >>= fun pos ->
+        (* NOTE: we go down until we find something the initialiser can
+           initialise: a scalar leaf, or (STD §6.7.9#13,#14) an aggregate
+           this very expression initialises as a whole *)
+        go_bottom_or_stop tagDefs d_e pos >>= fun (pos, d_e, whole_aggregate) ->
         let inits_acc' =
           if cursor_overflowing pos.cursor then
             inits_acc
@@ -493,7 +541,14 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
             , List.foldl (fun acc (union_path, ident) ->
                 Map.insert union_path ident acc
               ) unions (union_bindings path) ) in
-        E.return (max_index, inits_acc', false, pos)
+        if whole_aggregate then
+          (* NOTE: the cursor is sitting on an aggregate, not on a scalar leaf,
+             so [go_next] would descend into it. As with an Init_list, we move
+             on ourselves and tell the caller not to advance again. *)
+          liftM (do_next_in_same_level tagDefs pos) >>= fun pos ->
+          E.return (max_index, inits_acc', true, pos)
+        else
+          E.return (max_index, inits_acc', false, pos)
   | Cabs.Init_list loc xs ->
       if AilTypesAux.is_scalar (unatomic pos.ty) then
         match xs with
@@ -582,6 +637,12 @@ val constructValue: map Symbol.sym tag_definition ->
 let rec constructValue_aux tagDefs path init_map union_map (Ctype.Ctype _ ty as cty) =
   let loc = Loc.other "Cabs_to_ail.constructValue" in
   let wrap_expr expr_ = AilSyntax.AnnotatedExpression () [] loc expr_ in
+  (* NOTE: the lookup comes first because a path may name a whole aggregate,
+     and not just a scalar leaf: see [go_bottom_or_stop] (STD §6.7.9#13,#14) *)
+  match Map.lookup path init_map with
+    | Just e ->
+        e
+    | Nothing ->
   match ty with
     | Ctype.Array _ Nothing ->
         error "constructValue_aux: Array Nothing"
@@ -640,12 +701,8 @@ let rec constructValue_aux tagDefs path init_map union_map (Ctype.Ctype _ ty as 
         (* TODO: check this *)
         constructValue_aux tagDefs path init_map union_map ty'
     | _ ->
-        match Map.lookup path init_map with
-          | Nothing ->
-              mk_zeroInit tagDefs cty
-          | Just e ->
-              e
-        end
+        mk_zeroInit tagDefs cty
+  end
   end
 
 let constructValue tagDefs (init_map, union_map) ty =

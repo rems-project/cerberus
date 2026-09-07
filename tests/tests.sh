@@ -210,6 +210,8 @@ citests=(
   0343-init-designators.c
   0344-init-anonymous-members.c
   0345-init-union-designators.c
+  0346-init-inner-string-literal.c
+  0347-init-inner-compound-literal.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
