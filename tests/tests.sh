@@ -209,6 +209,7 @@ citests=(
   0342-init-brace-elision.c
   0343-init-designators.c
   0344-init-anonymous-members.c
+  0345-init-union-designators.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

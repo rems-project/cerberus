@@ -394,7 +394,7 @@ end
 type init_element =
   | Elem_array of integer
   | Elem_member of Symbol.identifier
-  | Elem_union
+  | Elem_union of Symbol.identifier
 type init_path = list init_element
 
 let stringFromInit_element = function
@@ -402,8 +402,8 @@ let stringFromInit_element = function
       "[" ^ show n ^ "]"
   | Elem_member ident ->
       "." ^ show ident
-  | Elem_union ->
-      ".UNION"
+  | Elem_union ident ->
+      ".UNION(" ^ show ident ^ ")"
 end
 
 
@@ -414,13 +414,15 @@ instance (SetType init_element)
           (0 : nat)
       | Elem_member _ ->
           1
-      | Elem_union ->
+      | Elem_union _ ->
           2
     end in
     match (elem1, elem2) with
       | (Elem_array n1, Elem_array n2) ->
           setElemCompare n1 n2
       | (Elem_member ident1, Elem_member ident2) ->
+          setElemCompare ident1 ident2
+      | (Elem_union ident1, Elem_union ident2) ->
           setElemCompare ident1 ident2
       | _ ->
           setElemCompare (ord elem1) (ord elem2)
@@ -441,9 +443,27 @@ let to_init_path cursor =
       | Init_struct _ _ ident _ ->
           Elem_member ident
       | Init_union _ ident ->
-          Elem_union
+          Elem_union ident
     end in
   List.map aux (List.reverse cursor)
+
+(* NOTE: a leaf path records, for every union it goes through, which member
+   the cursor had selected. [union_bindings] recovers those choices as a
+   binding from the path of the union itself to the selected member, which is
+   what [constructValue_aux] needs when it reaches that union.
+   Later bindings overwrite earlier ones, which is the correct C semantics for
+   an initialiser that designates a second member of the same union. *)
+val union_bindings: init_path -> list (init_path * Symbol.identifier)
+let union_bindings path =
+  snd (List.foldl (fun (prefix, acc) elem ->
+    ( prefix ++ [elem]
+    , match elem with
+        | Elem_union ident ->
+            (prefix, ident) :: acc
+        | _ ->
+            acc
+      end )
+  ) ([], []) path)
 
 let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_inner max_index pos = function
   | Cabs.Init_expr e ->
@@ -467,7 +487,12 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
           if cursor_overflowing pos.cursor then
             inits_acc
           else
-            Map.insert (to_init_path pos.cursor) d_e inits_acc in
+            let path = to_init_path pos.cursor in
+            let (values, unions) = inits_acc in
+            ( Map.insert path d_e values
+            , List.foldl (fun acc (union_path, ident) ->
+                Map.insert union_path ident acc
+              ) unions (union_bindings path) ) in
         E.return (max_index, inits_acc', false, pos)
   | Cabs.Init_list loc xs ->
       if AilTypesAux.is_scalar (unatomic pos.ty) then
@@ -534,7 +559,7 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
 end
 
 let interp_initializer_ tagDefs funcs is_static_or_thread pos xs =
-  interp_initializer_aux tagDefs funcs is_static_or_thread Map.empty false 0 pos xs >>= fun (max_index, inits, _, last_pos) ->
+  interp_initializer_aux tagDefs funcs is_static_or_thread (Map.empty, Map.empty) false 0 pos xs >>= fun (max_index, inits, _, last_pos) ->
   E.return (max_index, inits, last_pos)
 
 
@@ -551,8 +576,10 @@ let desugar_init tagDefs funcs is_static_or_thread ty init =
   E.return (ty', init_map, last_pos)
 
 
-val constructValue: map Symbol.sym tag_definition -> map init_path (AilSyntax.expression unit) -> Ctype.ctype -> AilSyntax.expression unit
-let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
+val constructValue: map Symbol.sym tag_definition ->
+  (map init_path (AilSyntax.expression unit) * map init_path Symbol.identifier) ->
+  Ctype.ctype -> AilSyntax.expression unit
+let rec constructValue_aux tagDefs path init_map union_map (Ctype.Ctype _ ty as cty) =
   let loc = Loc.other "Cabs_to_ail.constructValue" in
   let wrap_expr expr_ = AilSyntax.AnnotatedExpression () [] loc expr_ in
   match ty with
@@ -561,7 +588,7 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
     | Ctype.Array elem_ty (Just n) ->
         let es =
           List.map (fun i ->
-            Just (constructValue_aux tagDefs (path ++ [Elem_array i]) init_map elem_ty)
+            Just (constructValue_aux tagDefs (path ++ [Elem_array i]) init_map union_map elem_ty)
           ) (Utils.mkListN n) in
         wrap_expr (AilSyntax.AilEarray false(*TODO*) elem_ty es)
     | Ctype.Struct tag_sym ->
@@ -573,8 +600,7 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
                 )
               else () in
               let membrs = List.map (fun (memb_ident, (_, _, _, memb_ty)) ->
-                (* TODO: this is only correct if the first member was the one initialised *)
-                (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) init_map memb_ty))
+                (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) init_map union_map memb_ty))
               ) xs in
               wrap_expr (AilSyntax.AilEstruct tag_sym membrs)
           | _ ->
@@ -582,25 +608,37 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ isAnonymous (((first_memb_ident, (_, _, _, first_memb_ty)) :: _) as membrs)) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
                 )
               else () in
-              let () = Debug.print_debug 0 [] (fun () ->
-                "constructValue_aux: is WRONG for union ==> always assigning the first member"
-              ) in
+              (* STD §6.7.9#13: a union is initialised through the member the
+                 cursor selected (the first one, unless a designator named
+                 another). *)
+              let (memb_ident, memb_ty) =
+                match Map.lookup path union_map with
+                  | Just ident ->
+                      match List.lookup ident membrs with
+                        | Just (_, _, _, ty) ->
+                            (ident, ty)
+                        | Nothing ->
+                            error "constructValue_aux, Union: the selected member is not a member of the union"
+                      end
+                  | Nothing ->
+                      (first_memb_ident, first_memb_ty)
+                end in
               wrap_expr begin
-                AilSyntax.AilEunion tag_sym first_memb_ident
-                  (Just (constructValue_aux tagDefs (path ++ [Elem_union]) init_map first_memb_ty))
+                AilSyntax.AilEunion tag_sym memb_ident
+                  (Just (constructValue_aux tagDefs (path ++ [Elem_union memb_ident]) init_map union_map memb_ty))
               end
           | _ ->
               error "constructValue_aux, Union"
         end
     | Ctype.Atomic ty' ->
         (* TODO: check this *)
-        constructValue_aux tagDefs path init_map ty'
+        constructValue_aux tagDefs path init_map union_map ty'
     | _ ->
         match Map.lookup path init_map with
           | Nothing ->
@@ -610,5 +648,5 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
         end
   end
 
-let constructValue tagDefs init_map ty =
-  constructValue_aux tagDefs [] init_map ty
+let constructValue tagDefs (init_map, union_map) ty =
+  constructValue_aux tagDefs [] init_map union_map ty
