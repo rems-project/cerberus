@@ -2481,14 +2481,28 @@ OTHER
 (* NOTE: the check for STD §6.7.9#3 is done by [desugar_init_declarator] *)
 and wip_desugar_initializer_ loc dur current_ty init =
   (* YUCK + TODO: move somewhere *)
-  let is_string_literal_init = function
-    | Init_expr (CabsExpression _ (CabsEstring _)) ->
-        true
-    | Init_list _ [(Nothing, Init_expr (CabsExpression _ (CabsEstring _)))] ->
-        true
+  (* NOTE: STD §6.7.9#14 and #15 allow the optional enclosing braces *)
+  let string_literal_of_init = function
+    | Init_expr (CabsExpression _ (CabsEstring lit)) ->
+        Just (translate_cabs_string_literal lit)
+    | Init_list _ [(Nothing, Init_expr (CabsExpression _ (CabsEstring lit)))] ->
+        Just (translate_cabs_string_literal lit)
     | _ ->
-        false
+        Nothing
   end in
+  (* the initialiser is a string literal, and [current_ty] is an array this
+     literal may initialise (STD §6.7.9#14 for a plain or UTF-8 literal, #15
+     for a wchar_t/char16_t/char32_t one) *)
+  let string_init_opt =
+    match string_literal_of_init init with
+      | Just lit ->
+          if array_is_initialisable_by_string_literal current_ty lit then
+            Just lit
+          else
+            Nothing
+      | Nothing ->
+          Nothing
+    end in
 
   if AilTypesAux.is_scalar current_ty then
     match init with
@@ -2527,29 +2541,17 @@ and wip_desugar_initializer_ loc dur current_ty init =
     else
       E.return (current_ty, d_e)
   
-  else if AilTypesAux.is_array_of_character current_ty && is_string_literal_init init then
-    translate_cabs_string_literal <$> match init with
-      | Init_expr (CabsExpression _ (CabsEstring lit)) ->
-          E.return lit
-      | Init_list _ [(Nothing, Init_expr (CabsExpression _ (CabsEstring lit)))] ->
-          E.return lit
-      | _ ->
-          (* TODO: KAYVAN CHECK: this is dead code, `_is_string_literal_init` will filter this out! *)
-          E.undef loc Undefined.UB083
-    end >>= fun (_(*pref_opt*), char_strs) ->
+  else match string_init_opt with
+    | Just (_(*pref_opt*), char_strs) ->
+        let char_strs = List.concat (List.map snd char_strs) in
+        let (new_ty, elem_ty, conved_chars_array) =
+          explode_string_literal loc current_ty char_strs in
+        (* TODO: check *)
+        E.return
+          ( new_ty
+          , AnnotatedExpression () [] loc (AilEarray true elem_ty conved_chars_array))
 
-    let char_strs = List.concat (List.map snd char_strs) in
-    let (new_ty, elem_ty, conved_chars_array) =
-      explode_string_literal loc current_ty char_strs in
-    (* TODO: check *)
-    E.return
-      ( new_ty
-      , AnnotatedExpression () [] loc (AilEarray true elem_ty conved_chars_array))
-
-  else if (*TODO: An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t *) false then
-    error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
-
-  else
+    | Nothing ->
     E.print_debugM 2 (fun () ->
       "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
     ) >>= fun () ->
@@ -2587,6 +2589,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
             | err -> E.generic_fail err
           end
     end
+  end
 
 
 and desugar_and_register_static_assert_declaration sa_decl =

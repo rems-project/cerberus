@@ -448,9 +448,9 @@ val     go_bottom_or_stop: map Symbol.sym tag_definition -> AilSyntax.expression
 let rec go_bottom_or_stop tagDefs d_e pos =
   let stops_here =
     match d_e with
-      | AilSyntax.AnnotatedExpression _ _ loc (AilSyntax.AilEstr (Nothing, strs)) ->
-          (* STD §6.7.9#14 *)
-          if AilTypesAux.is_array_of_character pos.ty && not (AilTypesAux.is_array_unknown_size pos.ty) then
+      | AilSyntax.AnnotatedExpression _ _ loc (AilSyntax.AilEstr ((_, strs) as lit)) ->
+          (* STD §6.7.9#14 and #15 *)
+          if array_is_initialisable_by_string_literal pos.ty lit && not (AilTypesAux.is_array_unknown_size pos.ty) then
             let char_strs = List.concat (List.map snd strs) in
             let (_, elem_ty, elems) = explode_string_literal loc pos.ty char_strs in
             (* NOTE: [false], not [true]: this is an array *value* sitting

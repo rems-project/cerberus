@@ -224,6 +224,49 @@ let explode_string_literal loc array_ty char_strs =
   (new_ty, elem_ty, conved_chars_array)
 
 
+(* STD §6.7.9#15: the element type an array must have to be initialisable by a
+   string literal carrying this encoding prefix. *)
+val ctype_of_encoding_prefix: maybe encodingPrefix -> Ctype.ctype
+let ctype_of_encoding_prefix = function
+  | Nothing ->
+      Ctype.char
+  | Just Enc_u8 ->
+      Ctype.char
+  | Just Enc_u ->
+      Ctype.char16_t
+  | Just Enc_U ->
+      Ctype.char32_t
+  | Just Enc_L ->
+      Ctype.wchar_t
+end
+
+(* STD §6.7.9#14 and #15: may [array_ty] be initialised by this string
+   literal? *)
+val array_is_initialisable_by_string_literal: Ctype.ctype -> stringLiteral -> bool
+let array_is_initialisable_by_string_literal array_ty (pref_opt, _) =
+  let wide_elem_ty_opt = match pref_opt with
+    | Nothing ->
+        (* STD §6.7.9#14: any character type (char, signed char, unsigned char) *)
+        Nothing
+    | Just Enc_u8 ->
+        Nothing
+    | Just pref ->
+        Just (ctype_of_encoding_prefix (Just pref))
+  end in
+  match wide_elem_ty_opt with
+    | Nothing ->
+        AilTypesAux.is_array_of_character array_ty
+    | Just wide_elem_ty ->
+        (* STD §6.7.9#15 *)
+        match array_ty with
+          | Ctype.Ctype _ (Ctype.Array elem_ty _) ->
+              AilTypesAux.compatibleWithQualifiedUnqualifiedVersionOf elem_ty [wide_elem_ty]
+          | _ ->
+              false
+        end
+  end
+
+
 val     wrap_atomic: Ctype.ctype -> Ctype.ctype
 let rec wrap_atomic (Ctype.Ctype annots ty_ as ty) =
   match ty_ with
