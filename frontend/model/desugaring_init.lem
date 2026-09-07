@@ -4,6 +4,7 @@ open import Ctype
 open import Cabs_to_ail_aux
 import Cabs_to_ail_effect
 import AilTypesAux Constraint
+import Global
 
 type init_cursor_kind =
   | Init_array of integer(* current index*) * maybe integer(* size (nothing if we are dealing with a top-level unknown sized array) *)
@@ -295,6 +296,17 @@ let liftM = function
 end
 
 
+(* STD §6.7.9#2: "No initializer shall attempt to provide a value for an object
+   not contained within the entity being initialized." Strictly this is a
+   constraint violation, but GCC and Clang accept it (dropping the value) and
+   so do we, unless --switches=strict_initialisers is given. *)
+val report_excess: Loc.t -> Constraint.violation -> (unit -> string) -> E.desugM unit
+let report_excess loc viol msg =
+  if Global.has_switch Global.SW_strict_initialisers then
+    E.constraint_violation loc viol
+  else
+    E.warn_alwaysM msg
+
 let rec go_top_of_block pos =
   match go_up_stop_at_block pos with
     | DInit_nothing ->
@@ -331,7 +343,7 @@ let rec moveTo_aux tagDefs funcs is_top (ty_acc, cursor_acc) desigs =
               begin if idx >= size then
                 (* STD §6.7.9#2: the designated element is outside the array,
                    so this initialiser has nowhere to go. *)
-                E.warn_alwaysM (fun () ->
+                report_excess loc (Constraint.ArrayDesignatorOutOfRange idx size) (fun () ->
                   Loc.stringFromLocation loc ^
                   ": array designator index (" ^ show idx ^ ") exceeds array bounds (" ^ show size ^
                   ") (STD §6.7.9#2)"
@@ -539,7 +551,7 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
         go_bottom_or_stop tagDefs d_e pos >>= fun (pos, d_e, whole_aggregate) ->
         begin if cursor_overflowing pos.cursor then
           (* STD §6.7.9#2 *)
-          E.warn_alwaysM (fun () ->
+          report_excess (Loc.locOf d_e) Constraint.ExcessInitializers (fun () ->
             Loc.stringFromLocation (Loc.locOf d_e) ^
             ": excess element in initializer, it is ignored (STD §6.7.9#2)"
           )
@@ -580,7 +592,7 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
         (* NOTE: the cursor has already run off the end of the object being
            initialised, so this whole brace group is in excess: there is
            nowhere to put it. We stay overflowing (STD §6.7.9#2). *)
-        E.warn_alwaysM (fun () ->
+        report_excess loc Constraint.ExcessInitializers (fun () ->
           Loc.stringFromLocation loc ^
           ": excess braces in initializer, they are ignored (STD §6.7.9#2)"
         ) >>= fun () ->

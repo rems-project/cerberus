@@ -294,6 +294,10 @@ let string_of_constraint_violation = function
       "invalid storage class specifier in function declarator"
   | IncompleteParameterTypeFunctionDeclarator ->
       "incomplete type"
+  | ExcessInitializers ->
+      "excess elements in initializer"
+  | ArrayDesignatorOutOfRange (idx, size) ->
+      "array designator index (" ^ Z.to_string idx ^ ") exceeds array bounds (" ^ Z.to_string size ^ ")"
   | IllegalInitialisation (InitialisedIncomplete ty) ->
       "initialisation of an entity with an incomplete type: '" ^ string_of_ctype ty ^ "'"
   | IllegalInitialisation InitialisedVLA ->
