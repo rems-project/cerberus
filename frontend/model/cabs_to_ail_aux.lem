@@ -170,6 +170,60 @@ let oneAil =
     (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
 
 
+(* STD §6.7.9#14: an array of character type may be initialised by a string
+   literal. This explodes the characters of the literal into one initialiser
+   per element of the array: the array is zero-padded up to its declared size,
+   or truncated to it (dropping the terminating null, §6.7.9#14 sentence 2);
+   an array of unknown size is given the size of the literal plus one.
+
+   Returns the (now complete) array type, its element type, and the elements. *)
+val explode_string_literal:
+  Loc.t -> Ctype.ctype -> list string ->
+  (Ctype.ctype * Ctype.ctype * list (maybe (expression unit)))
+let explode_string_literal loc array_ty char_strs =
+  let (elem_ty, mk_ty, current_size_opt) = match array_ty with
+    | Ctype.Ctype annots (Ctype.Array elem_ty sz) ->
+        (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Array elem_ty z), sz)
+    | _ ->
+        error "Cabs_to_ail_aux.explode_string_literal: not an array type"
+  end in
+  let do_wrap xs =
+    List.map (fun z ->
+      Just (
+        AnnotatedExpression () [] loc (
+          AilEconst (ConstantCharacter (Nothing, z))
+        )
+      )
+    ) xs in
+  let (new_ty, chars_array) =
+    let chars_n = List.length char_strs in
+    match current_size_opt with
+      | Just _current_n ->
+          let current_n = natFromInteger _current_n in
+          (array_ty, match compare current_n (chars_n + 1) with
+            | EQ ->
+                do_wrap char_strs ++ [Just zeroAil]
+            | LT ->
+                do_wrap (List.take current_n char_strs)
+            | GT ->
+                do_wrap char_strs ++
+                List.replicate (current_n - chars_n) (Just zeroAil)
+          end)
+      | Nothing ->
+          (mk_ty (Just (integerFromNat chars_n + 1)), do_wrap char_strs ++ [Just zeroAil])
+    end in
+  let conved_chars_array =
+    List.map (function
+      | Nothing ->
+          Nothing
+      | Just z ->
+          Just (
+            AnnotatedExpression () [] loc (AilEcast Ctype.no_qualifiers elem_ty z)
+          )
+    end) chars_array in
+  (new_ty, elem_ty, conved_chars_array)
+
+
 val     wrap_atomic: Ctype.ctype -> Ctype.ctype
 let rec wrap_atomic (Ctype.Ctype annots ty_ as ty) =
   match ty_ with

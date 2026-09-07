@@ -2539,54 +2539,13 @@ and wip_desugar_initializer_ loc dur current_ty init =
     end >>= fun (_(*pref_opt*), char_strs) ->
 
     let char_strs = List.concat (List.map snd char_strs) in
-    
-    let (elem_ty, mk_ty, current_size_opt) = match current_ty with
-      (* | Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty sz))) ->
-          (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty z))), sz) *)
-      | Ctype.Ctype annots (Ctype.Array elem_ty sz) ->
-          (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Array elem_ty z), sz)
-      | _ -> error "TODO(msg): assert false, array_of_character init, no size opt"
-    end in
-    
-    let do_wrap xs =
-      List.map (fun z ->
-        Just (
-          AnnotatedExpression () [] loc (
-            AilEconst (ConstantCharacter (Nothing, z))
-          )
-        )
-      ) xs in
-    let (new_ty, chars_array) =
-      let chars_n = List.length char_strs in
-      match current_size_opt with
-        | Just _current_n ->
-            let current_n = natFromInteger _current_n in
-            (current_ty, match compare current_n (chars_n + 1) with
-              | EQ ->
-                  do_wrap char_strs ++ [Just zeroAil]
-              | LT ->
-                  do_wrap (List.take current_n char_strs)
-              | GT ->
-                  do_wrap char_strs ++
-                  List.replicate (current_n - chars_n) (Just zeroAil)
-            end)
-        | Nothing ->
-            (mk_ty (Just (integerFromNat chars_n + 1)), do_wrap char_strs ++ [Just zeroAil])
-      end in
-    let conved_chars_array =
-      List.map (function
-        | Nothing ->
-            Nothing
-        | Just z ->
-            Just (
-              AnnotatedExpression () [] loc (AilEcast Ctype.no_qualifiers elem_ty z)
-            )
-      end) chars_array in
+    let (new_ty, elem_ty, conved_chars_array) =
+      explode_string_literal loc current_ty char_strs in
     (* TODO: check *)
     E.return
       ( new_ty
       , AnnotatedExpression () [] loc (AilEarray true elem_ty conved_chars_array))
-  
+
   else if (*TODO: An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t *) false then
     error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
