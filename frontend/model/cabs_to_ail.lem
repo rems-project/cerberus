@@ -541,11 +541,6 @@ val desugar_struct_declaration:
 val desugar_struct_declarator:
   bool(* has_alignment *) -> struct_declarator -> E.desugM ((Annot.attributes * Symbol.identifier) * qs_ctype_builder)
 
-val desugar_init_declarator_BROKEN:
-  Ctype.qualifiers -> Ctype.ctype -> list storage_class_specifier -> init_declarator ->
-  E.desugM (Symbol.identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
-            (unit -> E.desugM (maybe (Ctype.ctype * expression unit))))
-
 val desugar_init_declarator:
   Annot.attributes ->
   bool(* isAtomic *) -> bool(* has_alignment *) ->
@@ -2101,56 +2096,6 @@ STD_ "§6.7.1#8" $
 |>
 *)
 
-(* TODO: get rid of this function *)
-(* E.desugM (Symbol.identifier * Ctype.qualifiers * Ctype.ctype * desugM (unit -> maybe expression unit)) *)
-and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_specifier) idecltor =
-  E.print_debugM 2 (fun () ->
-    "TODO ==> USING `desugar_init_declarator_BROKEN'"
-  ) >>= fun () ->
-  (* NOTE: this function does NOT check the wf of the storage classes *)
-  E.get_scope >>= fun scope ->
-  match idecltor with
-    | InitDecl _ decltor Nothing ->
-        desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
-        let (qs, ty) = mk_qs_ctype base_qs base_ty in
-        let mk_desug_init =
-          fun () -> E.return Nothing in
-        (* STD §6.9.2#2, sentence 1 *)
-        let is_tentative = match scope with
-          | E.Scope_file ->
-              AilTypesAux.is_object ty && (List.elem SC_static scs || scs = [])
-          | _ ->
-              false
-        end in
-        E.return (ident, is_tentative, (qs, ty), mk_desug_init)
-    
-    | InitDecl loc decltor (Just init) ->
-        desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
-        let (qs, ty) = mk_qs_ctype base_qs base_ty in
-        
-        (* TODO: check that we really never have parameter objects here *)
-        let kind = if AilTypesAux.is_function ty then E.OK_function else E.OK_object false in
-        (* TODO: I don't like the fact that we are using this function directly here *)
-        E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
-        
-        (* STD §6.7.9#3 *)
-        check_initialised_type_constraint loc ty >>= fun () ->
-        
-        (* STD §6.7.9#5 *)
-        if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-          E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
-        else
-          (* postponing the desugaring of the initialiser since the identifier
-             (which gets register after the current function) need to be in scope *)
-          let mk_desug_init () =
-            (* NOTE: not using <$> because of a bug in Lem *)
-            wip_desugar_initializer_ loc (determinate_storage_duration link scs) ty init >>= fun z ->
-            E.return (Just z) in
-          E.return (ident, false, (qs, ty), mk_desug_init)
-  end
-
-
-
 and desugar_init_declarator attrs isAtomic has_alignment base_qs base_ty (scs: list storage_class_specifier) idecltor =
   (* NOTE: this function does NOT check the wf of the storage classes *)
   E.get_scope >>= fun scope ->
@@ -2702,40 +2647,35 @@ and desugar_and_register_static_assert_declaration sa_decl =
   end
 
 
-(* TODO: this is broken *)
 (* val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit)) *)
 and desugar_declaration_base attrs specifs idecltors =
-  E.print_debugM 2 (fun () ->
-    "BROKEN: desugar_declaration_base"
-  ) >>= fun () ->
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
+          let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
+          let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
+          (* NOTE: `desugar_init_declarator' registers the identifiers it finds
+             (and takes care of isAtomic, of typedefs, and of the wf of the
+             storage classes). This is the same function used at file scope by
+             `desugar_and_register_external_declaration'. *)
+          E.mapM (fun init ->
+            desugar_init_declarator attrs isAtomic (specifs.alignment_specifiers <> []) base_qs base_ty specifs.storage_classes init
+          ) idecltors >>= fun xs ->
           (* for each [init_declarator] *)
-          E.foldlM (fun acc (InitDecl loc _ _ as init) ->
-            (* NOTE: the wf of the storage classes is checked later (see the
-               pattern match on [ty]) *)
-            let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
-            let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
-            desugar_init_declarator_BROKEN base_qs base_ty specifs.storage_classes init >>= fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
-            let ident_loc = Loc.locOf ident in
-            let (Ctype.Ctype _ ty as cty) = if isAtomic then Ctype.mk_ctype_atomic _ty else _ty in
-            
+          E.foldlM (fun acc -> function
+            | Nothing ->
+                (* Case of a typedef *)
+                E.return acc
+            | Just (ident_loc, _ident_attrs, link, sym, is_tentative, (qs, cty), mk_desug_init) ->
+            let (Ctype.Ctype _ ty) = cty in
+
             if is_tentative then
               (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
               error "Cabs_to_ail.desugar_declaration_base found a positive is_tentative"
-            
-            else if specifs.storage_classes = [SC_typedef] then
-              (* Case of a typedef *)
-              E.register_typedef ident (attrs, qs, cty) >>
-              E.return acc
-              
+
             else
               let do_function return_qs_ty params_opt is_variadic =
-                check_storage_class_specifiers loc Function_decl_context specifs.storage_classes >>= fun () ->
                 if specifs.alignment_specifiers <> [] then
                   E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_function)
                 else
-                  E.register_ordinary_identifier ident
-                    E.OK_function specifs.storage_classes >>= fun (_, sym) ->
                   E.register_function_declaration ident_loc attrs sym true (
                     return_qs_ty,
                     params_opt,
@@ -2754,10 +2694,6 @@ and desugar_declaration_base attrs specifs idecltors =
                       E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_register)
                     else
                     desugar_alignment_specifiers ident_loc cty specifs.alignment_specifiers >>= fun align_opt ->
-                    check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
-                    E.register_ordinary_identifier ident
-                      (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
-                    
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     match link with
                       | Linkage_external ->
@@ -2812,11 +2748,11 @@ and desugar_declaration_base attrs specifs idecltors =
                     end >>= fun (ty', ret) ->
                     E.is_incomplete ty' >>= fun is_incomplete ->
                     if link = Linkage_none && is_incomplete then
-                      E.undef (Loc.locOf ident) Undefined.UB059_incomplete_no_linkage_identifier
+                      E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                     else
                       E.return ret
               end
-          ) [] idecltors >>= (List.reverse |- E.return)
+          end) [] xs >>= (List.reverse |- E.return)
 
 
 and desugar_block_statement self ss =
