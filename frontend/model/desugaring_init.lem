@@ -328,12 +328,18 @@ let rec moveTo_aux tagDefs funcs is_top (ty_acc, cursor_acc) desigs =
         match unatomic ty_acc with
           | Ctype _ (Array elem_ty (Just size)) ->
               common e >>= fun idx ->
-              let new_elem =
-                if idx >= size then
-                  (* TODO: let* () = Eff.warn "array designator is larger than array" in *)
-                  <| is_block= is_top; is_overflowing= true; kind= Init_array (size-1) (Just size) |>
-                else
-                  <| is_block= is_top; is_overflowing= false; kind= Init_array idx (Just size) |> in
+              begin if idx >= size then
+                (* STD §6.7.9#2: the designated element is outside the array,
+                   so this initialiser has nowhere to go. *)
+                E.warn_alwaysM (fun () ->
+                  Loc.stringFromLocation loc ^
+                  ": array designator index (" ^ show idx ^ ") exceeds array bounds (" ^ show size ^
+                  ") (STD §6.7.9#2)"
+                ) >>= fun () ->
+                E.return <| is_block= is_top; is_overflowing= true; kind= Init_array (size-1) (Just size) |>
+              else
+                E.return <| is_block= is_top; is_overflowing= false; kind= Init_array idx (Just size) |>
+              end >>= fun new_elem ->
               moveTo_aux (elem_ty, new_elem :: cursor_acc) desigs'
           | Ctype _ (Array elem_ty Nothing) ->
               common e >>= fun idx ->
@@ -531,6 +537,15 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
            initialise: a scalar leaf, or (STD §6.7.9#13,#14) an aggregate
            this very expression initialises as a whole *)
         go_bottom_or_stop tagDefs d_e pos >>= fun (pos, d_e, whole_aggregate) ->
+        begin if cursor_overflowing pos.cursor then
+          (* STD §6.7.9#2 *)
+          E.warn_alwaysM (fun () ->
+            Loc.stringFromLocation (Loc.locOf d_e) ^
+            ": excess element in initializer, it is ignored (STD §6.7.9#2)"
+          )
+        else
+          E.return ()
+        end >>= fun () ->
         let inits_acc' =
           if cursor_overflowing pos.cursor then
             inits_acc
@@ -565,6 +580,10 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
         (* NOTE: the cursor has already run off the end of the object being
            initialised, so this whole brace group is in excess: there is
            nowhere to put it. We stay overflowing (STD §6.7.9#2). *)
+        E.warn_alwaysM (fun () ->
+          Loc.stringFromLocation loc ^
+          ": excess braces in initializer, they are ignored (STD §6.7.9#2)"
+        ) >>= fun () ->
         E.return (max_index, inits_acc, true, pos)
       else
         (* NOTE: we go on step down (an mark the opening of a block { ... }) *)

@@ -214,6 +214,7 @@ citests=(
   0347-init-inner-compound-literal.c
   0348-init-wide-string-literal.c
   0349-init-overflow-nested-braces.c
+  0350-init-excess-warning.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
