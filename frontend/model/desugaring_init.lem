@@ -4,6 +4,7 @@ open import Ctype
 open import Cabs_to_ail_aux
 import Cabs_to_ail_effect
 import AilTypesAux Constraint
+import Global
 
 type init_cursor_kind =
   | Init_array of integer(* current index*) * maybe integer(* size (nothing if we are dealing with a top-level unknown sized array) *)
@@ -295,6 +296,17 @@ let liftM = function
 end
 
 
+(* STD §6.7.9#2: "No initializer shall attempt to provide a value for an object
+   not contained within the entity being initialized." Strictly this is a
+   constraint violation, but GCC and Clang accept it (dropping the value) and
+   so do we, unless --switches=strict_initialisers is given. *)
+val report_excess: Loc.t -> Constraint.violation -> (unit -> string) -> E.desugM unit
+let report_excess loc viol msg =
+  if Global.has_switch Global.SW_strict_initialisers then
+    E.constraint_violation loc viol
+  else
+    E.warn_alwaysM msg
+
 let rec go_top_of_block pos =
   match go_up_stop_at_block pos with
     | DInit_nothing ->
@@ -328,12 +340,18 @@ let rec moveTo_aux tagDefs funcs is_top (ty_acc, cursor_acc) desigs =
         match unatomic ty_acc with
           | Ctype _ (Array elem_ty (Just size)) ->
               common e >>= fun idx ->
-              let new_elem =
-                if idx >= size then
-                  (* TODO: let* () = Eff.warn "array designator is larger than array" in *)
-                  <| is_block= is_top; is_overflowing= true; kind= Init_array (size-1) (Just size) |>
-                else
-                  <| is_block= is_top; is_overflowing= false; kind= Init_array idx (Just size) |> in
+              begin if idx >= size then
+                (* STD §6.7.9#2: the designated element is outside the array,
+                   so this initialiser has nowhere to go. *)
+                report_excess loc (Constraint.ArrayDesignatorOutOfRange idx size) (fun () ->
+                  Loc.stringFromLocation loc ^
+                  ": array designator index (" ^ show idx ^ ") exceeds array bounds (" ^ show size ^
+                  ") (STD §6.7.9#2)"
+                ) >>= fun () ->
+                E.return <| is_block= is_top; is_overflowing= true; kind= Init_array (size-1) (Just size) |>
+              else
+                E.return <| is_block= is_top; is_overflowing= false; kind= Init_array idx (Just size) |>
+              end >>= fun new_elem ->
               moveTo_aux (elem_ty, new_elem :: cursor_acc) desigs'
           | Ctype _ (Array elem_ty Nothing) ->
               common e >>= fun idx ->
@@ -394,7 +412,7 @@ end
 type init_element =
   | Elem_array of integer
   | Elem_member of Symbol.identifier
-  | Elem_union
+  | Elem_union of Symbol.identifier
 type init_path = list init_element
 
 let stringFromInit_element = function
@@ -402,8 +420,8 @@ let stringFromInit_element = function
       "[" ^ show n ^ "]"
   | Elem_member ident ->
       "." ^ show ident
-  | Elem_union ->
-      ".UNION"
+  | Elem_union ident ->
+      ".UNION(" ^ show ident ^ ")"
 end
 
 
@@ -414,13 +432,15 @@ instance (SetType init_element)
           (0 : nat)
       | Elem_member _ ->
           1
-      | Elem_union ->
+      | Elem_union _ ->
           2
     end in
     match (elem1, elem2) with
       | (Elem_array n1, Elem_array n2) ->
           setElemCompare n1 n2
       | (Elem_member ident1, Elem_member ident2) ->
+          setElemCompare ident1 ident2
+      | (Elem_union ident1, Elem_union ident2) ->
           setElemCompare ident1 ident2
       | _ ->
           setElemCompare (ord elem1) (ord elem2)
@@ -432,6 +452,55 @@ let stringFromInit_path xs =
   String.concat "" (List.map stringFromInit_element xs)
 
 
+(* STD §6.7.9#13 and #14: not every initialiser expression facing an
+   aggregate is subject to brace elision. A compound literal of a compatible
+   type initialises the aggregate it is facing, and so does a string literal
+   facing an array of character type. In those two cases the descent stops at
+   the aggregate, and the value recorded for it is the whole object (for a
+   string literal, the exploded array of characters).
+
+   In every other case we descend to a scalar leaf, as brace elision
+   requires. *)
+val     go_bottom_or_stop: map Symbol.sym tag_definition -> AilSyntax.expression unit -> init_position ->
+          E.desugM (init_position * AilSyntax.expression unit * bool)
+let rec go_bottom_or_stop tagDefs d_e pos =
+  let stops_here =
+    match d_e with
+      | AilSyntax.AnnotatedExpression _ _ loc (AilSyntax.AilEstr ((_, strs) as lit)) ->
+          (* STD §6.7.9#14 and #15 *)
+          if array_is_initialisable_by_string_literal pos.ty lit && not (AilTypesAux.is_array_unknown_size pos.ty) then
+            let char_strs = List.concat (List.map snd strs) in
+            let (_, elem_ty, elems) = explode_string_literal loc pos.ty char_strs in
+            (* NOTE: [false], not [true]: this is an array *value* sitting
+               inside an aggregate, like the ones [constructValue_aux] builds,
+               and must not be subject to the array decay that Ail's typing
+               applies to an initialiser that came from a string literal *)
+            Just (AilSyntax.AnnotatedExpression () [] loc (AilSyntax.AilEarray false elem_ty elems))
+          else
+            Nothing
+      | AilSyntax.AnnotatedExpression _ _ _ (AilSyntax.AilEcompound qs ty _) ->
+          (* STD §6.7.9#13 *)
+          if AilTypesAux.are_compatible (qs, ty) (no_qualifiers, pos.ty) then
+            Just d_e
+          else
+            Nothing
+      | _ ->
+          Nothing
+    end in
+  match stops_here with
+    | Just d_e' ->
+        E.return (pos, d_e', true)
+    | Nothing ->
+        match go_down tagDefs pos with
+          | DInit_ok pos' ->
+              go_bottom_or_stop tagDefs d_e pos'
+          | DInit_nothing ->
+              E.return (pos, d_e, false)
+          | DInit_internal_error msg ->
+              internal_error msg
+        end
+  end
+
 val to_init_path: list init_cursor_elem -> init_path
 let to_init_path cursor =
   let aux elem =
@@ -441,9 +510,27 @@ let to_init_path cursor =
       | Init_struct _ _ ident _ ->
           Elem_member ident
       | Init_union _ ident ->
-          Elem_union
+          Elem_union ident
     end in
   List.map aux (List.reverse cursor)
+
+(* NOTE: a leaf path records, for every union it goes through, which member
+   the cursor had selected. [union_bindings] recovers those choices as a
+   binding from the path of the union itself to the selected member, which is
+   what [constructValue_aux] needs when it reaches that union.
+   Later bindings overwrite earlier ones, which is the correct C semantics for
+   an initialiser that designates a second member of the same union. *)
+val union_bindings: init_path -> list (init_path * Symbol.identifier)
+let union_bindings path =
+  snd (List.foldl (fun (prefix, acc) elem ->
+    ( prefix ++ [elem]
+    , match elem with
+        | Elem_union ident ->
+            (prefix, ident) :: acc
+        | _ ->
+            acc
+      end )
+  ) ([], []) path)
 
 let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_inner max_index pos = function
   | Cabs.Init_expr e ->
@@ -458,17 +545,41 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
         | true ->
             E.return ()
       end >>= fun () ->
-      if false (* is_compound_literal OR string literal *) then
-        internal_error "TODO: explode the elements"
-      else
-        (* NOTE: we dealing with a scalar, so we go down to a leaf *)
-        go_bottom tagDefs pos >>= fun pos ->
+        (* NOTE: we go down until we find something the initialiser can
+           initialise: a scalar leaf, or (STD §6.7.9#13,#14) an aggregate
+           this very expression initialises as a whole *)
+        go_bottom_or_stop tagDefs d_e pos >>= fun (pos, d_e, whole_aggregate) ->
+        begin if cursor_overflowing pos.cursor then
+          (* STD §6.7.9#2 *)
+          report_excess (Loc.locOf d_e) Constraint.ExcessInitializers (fun () ->
+            Loc.stringFromLocation (Loc.locOf d_e) ^
+            ": excess element in initializer, it is ignored (STD §6.7.9#2)"
+          )
+        else
+          E.return ()
+        end >>= fun () ->
         let inits_acc' =
           if cursor_overflowing pos.cursor then
             inits_acc
           else
-            Map.insert (to_init_path pos.cursor) d_e inits_acc in
-        E.return (max_index, inits_acc', false, pos)
+            let path = to_init_path pos.cursor in
+            let (values, unions) = inits_acc in
+            ( Map.insert path d_e values
+            , List.foldl (fun acc (union_path, ident) ->
+                Map.insert union_path ident acc
+              ) unions (union_bindings path) ) in
+        if whole_aggregate && pos.cursor <> [] then
+          (* NOTE: the cursor is sitting on an aggregate, not on a scalar leaf,
+             so [go_next] would descend into it. As with an Init_list, we move
+             on ourselves and tell the caller not to advance again. *)
+          liftM (do_next_in_same_level tagDefs pos) >>= fun pos ->
+          E.return (max_index, inits_acc', true, pos)
+        else if whole_aggregate then
+          (* NOTE: an empty cursor means the whole object was initialised by
+             this one expression: there is no next position to move to. *)
+          E.return (max_index, inits_acc', true, pos)
+        else
+          E.return (max_index, inits_acc', false, pos)
   | Cabs.Init_list loc xs ->
       if AilTypesAux.is_scalar (unatomic pos.ty) then
         match xs with
@@ -477,9 +588,19 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
           | _ ->
               E.undef loc Undefined.UB081_scalar_initializer_not_single_expression
         end
+      else if cursor_overflowing pos.cursor then
+        (* NOTE: the cursor has already run off the end of the object being
+           initialised, so this whole brace group is in excess: there is
+           nowhere to put it. We stay overflowing (STD §6.7.9#2). *)
+        report_excess loc Constraint.ExcessInitializers (fun () ->
+          Loc.stringFromLocation loc ^
+          ": excess braces in initializer, they are ignored (STD §6.7.9#2)"
+        ) >>= fun () ->
+        E.return (max_index, inits_acc, true, pos)
       else
         (* NOTE: we go on step down (an mark the opening of a block { ... }) *)
         (* NOTE: this moves the cursor to the first member/index of the struct/array *)
+        let was_overflowing = cursor_overflowing pos.cursor in
         liftM (go_down_entering_block tagDefs pos) >>= fun pos ->
         (* NOTE: for each element of the init list *)
         on_list (max_index, inits_acc, pos) (fun is_last (max_index, inits_acc, pos) (desigs_opt, init) ->
@@ -511,9 +632,12 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
               (* NOTE: if we are dealing with the LAST element of the init list *)
               (* NOTE: we move the cursor back to the level of the block we just opened *)
               go_top_of_block pos' >>= fun pos' ->
-              (* NOTE: we move up from this block *)
-              (* TODO: if we were overflowing before entering the block we need to STILL be overflowing *)
+              (* NOTE: we move up from this block. The overflow flag of the
+                 level we are leaving is about that block, not about the level
+                 we are returning to: if we were overflowing before entering
+                 the block, we must still be overflowing after leaving it. *)
               liftM (go_up (unmark_as_overflowing pos')) >>= fun pos' ->
+              let pos' = if was_overflowing then mark_as_overflowing pos' else pos' in
               liftM (do_next_in_same_level tagDefs pos') >>= fun pos' ->
               E.return pos'
           else
@@ -534,7 +658,7 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
 end
 
 let interp_initializer_ tagDefs funcs is_static_or_thread pos xs =
-  interp_initializer_aux tagDefs funcs is_static_or_thread Map.empty false 0 pos xs >>= fun (max_index, inits, _, last_pos) ->
+  interp_initializer_aux tagDefs funcs is_static_or_thread (Map.empty, Map.empty) false 0 pos xs >>= fun (max_index, inits, _, last_pos) ->
   E.return (max_index, inits, last_pos)
 
 
@@ -551,17 +675,25 @@ let desugar_init tagDefs funcs is_static_or_thread ty init =
   E.return (ty', init_map, last_pos)
 
 
-val constructValue: map Symbol.sym tag_definition -> map init_path (AilSyntax.expression unit) -> Ctype.ctype -> AilSyntax.expression unit
-let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
+val constructValue: map Symbol.sym tag_definition ->
+  (map init_path (AilSyntax.expression unit) * map init_path Symbol.identifier) ->
+  Ctype.ctype -> AilSyntax.expression unit
+let rec constructValue_aux tagDefs path init_map union_map (Ctype.Ctype _ ty as cty) =
   let loc = Loc.other "Cabs_to_ail.constructValue" in
   let wrap_expr expr_ = AilSyntax.AnnotatedExpression () [] loc expr_ in
+  (* NOTE: the lookup comes first because a path may name a whole aggregate,
+     and not just a scalar leaf: see [go_bottom_or_stop] (STD §6.7.9#13,#14) *)
+  match Map.lookup path init_map with
+    | Just e ->
+        e
+    | Nothing ->
   match ty with
     | Ctype.Array _ Nothing ->
         error "constructValue_aux: Array Nothing"
     | Ctype.Array elem_ty (Just n) ->
         let es =
           List.map (fun i ->
-            Just (constructValue_aux tagDefs (path ++ [Elem_array i]) init_map elem_ty)
+            Just (constructValue_aux tagDefs (path ++ [Elem_array i]) init_map union_map elem_ty)
           ) (Utils.mkListN n) in
         wrap_expr (AilSyntax.AilEarray false(*TODO*) elem_ty es)
     | Ctype.Struct tag_sym ->
@@ -573,8 +705,7 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
                 )
               else () in
               let membrs = List.map (fun (memb_ident, (_, _, _, memb_ty)) ->
-                (* TODO: this is only correct if the first member was the one initialised *)
-                (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) init_map memb_ty))
+                (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) init_map union_map memb_ty))
               ) xs in
               wrap_expr (AilSyntax.AilEstruct tag_sym membrs)
           | _ ->
@@ -582,33 +713,41 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ isAnonymous (((first_memb_ident, (_, _, _, first_memb_ty)) :: _) as membrs)) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
                 )
               else () in
-              let () = Debug.print_debug 0 [] (fun () ->
-                "constructValue_aux: is WRONG for union ==> always assigning the first member"
-              ) in
+              (* STD §6.7.9#13: a union is initialised through the member the
+                 cursor selected (the first one, unless a designator named
+                 another). *)
+              let (memb_ident, memb_ty) =
+                match Map.lookup path union_map with
+                  | Just ident ->
+                      match List.lookup ident membrs with
+                        | Just (_, _, _, ty) ->
+                            (ident, ty)
+                        | Nothing ->
+                            error "constructValue_aux, Union: the selected member is not a member of the union"
+                      end
+                  | Nothing ->
+                      (first_memb_ident, first_memb_ty)
+                end in
               wrap_expr begin
-                AilSyntax.AilEunion tag_sym first_memb_ident
-                  (Just (constructValue_aux tagDefs (path ++ [Elem_union]) init_map first_memb_ty))
+                AilSyntax.AilEunion tag_sym memb_ident
+                  (Just (constructValue_aux tagDefs (path ++ [Elem_union memb_ident]) init_map union_map memb_ty))
               end
           | _ ->
               error "constructValue_aux, Union"
         end
     | Ctype.Atomic ty' ->
         (* TODO: check this *)
-        constructValue_aux tagDefs path init_map ty'
+        constructValue_aux tagDefs path init_map union_map ty'
     | _ ->
-        match Map.lookup path init_map with
-          | Nothing ->
-              mk_zeroInit tagDefs cty
-          | Just e ->
-              e
-        end
+        mk_zeroInit tagDefs cty
+  end
   end
 
-let constructValue tagDefs init_map ty =
-  constructValue_aux tagDefs [] init_map ty
+let constructValue tagDefs (init_map, union_map) ty =
+  constructValue_aux tagDefs [] init_map union_map ty

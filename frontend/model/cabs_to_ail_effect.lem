@@ -2655,6 +2655,12 @@ val warnM: (unit -> string) -> desugM unit
 let inline warnM msg =
   return (Debug.warn [Debug.DB_desugaring] msg)
 
+(* [warnM] is only shown when the debug level is raised; use this one for a
+   diagnostic the user is always meant to see. *)
+val warn_alwaysM: (unit -> string) -> desugM unit
+let inline warn_alwaysM msg =
+  return (Debug.warn_always [Debug.DB_desugaring] msg)
+
 
 (* TODO *)
 import Core

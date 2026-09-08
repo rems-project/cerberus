@@ -1,0 +1,1 @@
+Defined {value: "Specified(0)", stdout: "unsized[3]= {97, 98, 0}\nsized[4]= {97, 98, 0, 0}\ntruncated[2]= {97, 98}\nu16[3]= {97, 98, 0}\nu32[3]= {97, 98, 0}\nutf8[3]= \"ab\"\ns= {{120, 121, 0}, 5}\n", stderr: "", blocked: "false"}

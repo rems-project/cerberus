@@ -43,6 +43,10 @@ type cerb_switch =
   (* eliminate pure symbol rebindings: let alias = pure(sym) → substitute sym *)
   | SW_copy_prop
 
+  (* report excess and out-of-range initialisers as constraint violations
+     (STD §6.7.9#2) instead of warning and ignoring them *)
+  | SW_strict_initialisers
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option

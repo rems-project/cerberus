@@ -25,6 +25,10 @@ val print_debug_located: int -> domain list -> Cerb_location.t -> (unit -> strin
 val print_unsupported: string -> unit
 val warn: ?always:bool -> domain list -> (unit -> string) -> unit
 
+(* [warn] is silent unless the debug level is raised; this one is for
+   diagnostics the user is always meant to see. *)
+val warn_always: domain list -> (unit -> string) -> unit
+
 (* val print_deubg2: string -> 'a -> 'a *)
 
 val output_string2: string -> unit (* TODO: rename *)

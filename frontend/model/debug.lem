@@ -44,6 +44,12 @@ val warn: list domain -> (unit -> string) -> unit
 declare ocaml target_rep function warn = `Cerb_debug.warn`
 declare hol   target_rep function warn = `util$output_string`
 
+(* [warn] is only shown when the debug level is raised; this one is always
+   shown. *)
+val warn_always: list domain -> (unit -> string) -> unit
+declare ocaml target_rep function warn_always = `Cerb_debug.warn_always`
+declare hol   target_rep function warn_always = `util$output_string`
+
 
 (*
 open import Pervasives 
