@@ -1,0 +1,63 @@
+return code: 0
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer) =
+    let strong (x: loaded integer) =
+      let strong (x: loaded integer) =
+        bound(pure(Unit)) ;
+        pure((conv_loaded_int('signed int', Specified(0)))) in
+      let strong (x: loaded integer) =
+        save l: (loaded integer) (x: loaded integer:= x) in
+          let strong a_429: loaded integer =
+            bound(
+              let weak (a_431: loaded integer, _: unit) =
+                unseq(
+                  let weak _: unit = pure(Unit) in
+                  pure(x)
+                ,
+                  pure(Unit)
+                ) in
+              pure(
+                case (a_431, Specified(0)) of
+                  | (Specified(a_433: integer), Specified(_: integer)) =>
+                      if conv_int('signed int', a_433) =
+                      conv_int('signed int', 0) then
+                        Specified(1)
+                      else
+                        Specified(0)
+                  | _: (loaded integer,loaded integer) =>
+                      Unspecified('signed int')
+                end
+              )
+            ) in
+          let strong a_427: boolean =
+            case a_429 of
+              | Specified(a_430: integer) =>
+                  pure(if not(a_430 = 1) then True else False)
+              | Unspecified(_: ctype) =>
+                  nd(pure(True), pure(False))
+            end in
+          if a_427 then
+            bound(pure(Unit)) ;
+            pure(Unit) ;
+            run ret_426(conv_loaded_int('signed int', Specified(0))) ;
+            pure((x))
+          else
+            pure(Unit) ;
+            pure((x)) in
+      let strong (x: loaded integer) =
+        let strong (x: loaded integer, _: loaded integer) =
+          bound(
+            let weak (_: unit, _: unit) = unseq(pure(Unit), pure(Unit)) in
+            let weak (x: loaded integer) =
+              pure((conv_loaded_int('signed int', Specified(1)))) in
+            pure((x, conv_loaded_int('signed int', Specified(1))))
+          ) in
+        pure((x)) in
+      run l(x) ;
+      pure(Unit) ;
+      pure((x)) in
+    pure((x)) in
+  save ret_426: loaded integer (a_440: loaded integer:= Specified(0)) in
+    pure(a_440)
+
+Defined {value: "Specified(0)", stdout: "", stderr: "", blocked: "false"}

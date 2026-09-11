@@ -41,7 +41,10 @@ type cerb_switch =
   | SW_magic_comment_char_dollar
 
   (* eliminate pure expr rebindings: let pat = C[pure(pexpr)] -> substitute pexpr *)
-  | SW_copy_prop
+  | SW_const_prop
+
+  (* promote function-local non-address-taken variables to Core let-bindings *)
+  | SW_mem2reg
 
 
 let internal_ref =
@@ -97,8 +100,10 @@ let set strs =
         Some SW_at_magic_comments
     | "magic_comment_char_dollar" ->
         Some (SW_magic_comment_char_dollar)
-    | "copy_prop" ->
-        Some SW_copy_prop
+    | "const_prop" ->
+        Some SW_const_prop
+    | "mem2reg" ->
+        Some SW_mem2reg
     | _ ->
         None in
   let pred x = function
@@ -128,7 +133,8 @@ let set strs =
     | SW_zero_initialised
     | SW_at_magic_comments
     | SW_magic_comment_char_dollar
-    | SW_copy_prop as y ->
+    | SW_const_prop
+    | SW_mem2reg as y ->
         x = y in
   List.iter (fun str ->
     match read_switch str with

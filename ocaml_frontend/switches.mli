@@ -41,7 +41,10 @@ type cerb_switch =
   | SW_magic_comment_char_dollar
 
   (* eliminate pure symbol rebindings: let alias = pure(sym) → substitute sym *)
-  | SW_copy_prop
+  | SW_const_prop
+
+  (* promote function-local non-address-taken variables to Core let-bindings *)
+  | SW_mem2reg
 
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool

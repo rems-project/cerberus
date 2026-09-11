@@ -1,0 +1,21 @@
+return code: 0
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer) =
+    let strong (x: loaded integer) =
+      let strong (x: loaded integer) =
+        bound(pure(Unit)) ;
+        pure((conv_loaded_int('signed int', Specified(42)))) in
+      let strong a_428: loaded integer =
+        bound(
+          let weak _: unit = pure(Unit) in
+          pure(x)
+        ) in
+      pure(Unit) ;
+      run ret_425(conv_loaded_int('signed int', a_428)) ;
+      pure(Unit) ;
+      pure((x)) in
+    pure((x)) in
+  save ret_425: loaded integer (a_429: loaded integer:= Specified(0)) in
+    pure(a_429)
+
+Defined {value: "Specified(42)", stdout: "", stderr: "", blocked: "false"}
