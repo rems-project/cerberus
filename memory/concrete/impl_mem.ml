@@ -2023,7 +2023,7 @@ module Concrete : Memory = struct
       | None ->
           failwith "Concrete.offsetof_ival: invalid memb_ident"
   
-  let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
+  let array_shift_ptrval loc (PV (prov, ptrval_)) ty (IV (_, ival)) =
     (* As a GNU extension ty may be void, in which case the pointer arithmetic
        is performed at the byte granularity *)
     let sz = if AilTypesAux.is_void ty then Z.one else sizeof ty in
@@ -2033,15 +2033,16 @@ module Concrete : Memory = struct
       | Prov_symbolic iota ->
           failwith "Concrete.array_shift_ptrval found a Prov_symbolic"
       | _ ->
-          PV (prov, match ptrval_ with
+          begin match ptrval_ with
           | PVnull _ ->
-              (* TODO: this seems to be undefined in ISO C *)
-              (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-              failwith ("TODO(pure shift a null pointer should be undefined behaviour), offset:" ^ Z.to_string offset)
+              (* TODO: in C++ and potentially C2y (see N3322), if offset = 0, this is
+                  defined and returns a PVnull *)
+              Undefined.(undef loc [UB046_array_pointer_outside])
           | PVfunction _ ->
-              failwith "Concrete.array_shift_ptrval, PVfunction"
+              Undefined.(undef loc [UB046_array_pointer_outside])
           | PVconcrete (membr_opt, addr) ->
-              PVconcrete (membr_opt, Z.add addr offset))
+              Undefined.return0 (PV (prov, PVconcrete (membr_opt, Z.add addr offset)))
+          end
   
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let IV (_, offset) = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
@@ -2455,8 +2456,10 @@ VIP:type pointer_value =
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
       if Z.lt i size_n then
-        load loc Ctype.unsigned_char (array_shift_ptrval ptrval2 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun (_, mval) ->
-        store loc Ctype.unsigned_char false (array_shift_ptrval ptrval1 Ctype.unsigned_char (IV (Prov_none, i))) mval >>= fun _ ->
+        Nondeterminism.lift_undef (array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun ptrval1' ->
+        Nondeterminism.lift_undef (array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun ptrval2' ->
+        load loc Ctype.unsigned_char ptrval2' >>= fun (_, mval) ->
+        store loc Ctype.unsigned_char false ptrval1' mval >>= fun _ ->
         aux (Z.succ i)
       else
         return ptrval1 in
@@ -2464,14 +2467,14 @@ VIP:type pointer_value =
   
   
   (* TODO: validate more, but looks good *)
-  let memcmp ptrval1 ptrval2 (IV (_, size_n)) =
+  let memcmp loc ptrval1 ptrval2 (IV (_, size_n)) =
     let rec get_bytes ptrval acc = function
       | 0 ->
           return (List.rev acc)
       | size ->
-          load Cerb_location.unknown Ctype.unsigned_char ptrval >>= function
+          load loc Ctype.unsigned_char ptrval >>= function
             | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
-                let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IV (Prov_none, Z.one)) in
+                Nondeterminism.lift_undef (array_shift_ptrval loc ptrval Ctype.unsigned_char (IV (Prov_none, Z.one))) >>= fun ptr' ->
                 get_bytes ptr' (byte_n :: acc) (size-1)
             | _ ->
                 assert false in

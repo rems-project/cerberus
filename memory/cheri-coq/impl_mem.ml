@@ -1248,7 +1248,7 @@ module CHERIMorello : Memory = struct
   let null_cap = MM.null_cap
 
   (* Pointer shifting constructors *)
-  let array_shift_ptrval p ty iv = lift_coq_serr @@ MM.array_shift_ptrval p (toCoq_ctype ty) iv
+  let array_shift_ptrval loc p ty iv = Undefined.return0 (lift_coq_serr @@ MM.array_shift_ptrval (toCoq_location loc) p (toCoq_ctype ty) iv)
   let member_shift_ptrval p tag_sym memb_ident =
     lift_coq_serr (MM.member_shift_ptrval p (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
   let eff_array_shift_ptrval loc ptrval ty iv =
@@ -1259,8 +1259,8 @@ module CHERIMorello : Memory = struct
   let memcpy loc ptrval1 ptrval2 size_int =
     lift_coq_memM "memcpy" (MM.memcpy (toCoq_location loc) ptrval1 ptrval2 size_int)
 
-  let memcmp ptrval1 ptrval2 size_int =
-    lift_coq_memM "memcmp" (MM.memcmp ptrval1 ptrval2 size_int)
+  let memcmp loc ptrval1 ptrval2 size_int =
+    lift_coq_memM "memcmp" (MM.memcmp (toCoq_location loc) ptrval1 ptrval2 size_int)
 
   let realloc loc tid align ptr size =
     lift_coq_memM "realloc" (MM.realloc (toCoq_location loc) (Z.of_int tid) align ptr size)

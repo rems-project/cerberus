@@ -864,15 +864,14 @@ let intcast _ _ ival =
   Either.Right ival
 
 (* Pointer shifting constructors *)
-let array_shift_ptrval ptrval ty ival : pointer_value =
+let array_shift_ptrval loc ptrval ty ival : pointer_value Undefined.t0 =
   (* TODO: "VIP memory model should be called SWITCH strict_pointer_arith" *)
   match ptrval with
     | PVnull ->
-        (* TODO *)
-        failwith "UB: array_offset ==> NULL"
+        Undefined.(undef loc [UB046_array_pointer_outside])
     | PVloc (Prov_empty, _) ->
         (* TODO *)
-        failwith "UB: array_offset ==> @empty"
+        Undefined.(undef loc [UB046_array_pointer_outside])
     | PVloc (Prov_some alloc_id, addr) ->
         (* lookup_alloc alloc_id >>= fun alloc -> *)
         (* As a GNU extension ty may be void, in which case the pointer arithmetic
@@ -886,10 +885,9 @@ let array_shift_ptrval ptrval ty ival : pointer_value =
           failwith "TODO UB, array_offset ==> out-of-bound"
         else *)
           (* TODO: hack *)
-          PVloc (Prov_some alloc_id, addr')
+          Undefined.return0 (PVloc (Prov_some alloc_id, addr'))
     | PVfunptr sym ->
-        (* TODO *)
-        failwith "UB: array_offset ==> funptr"
+        Undefined.(undef loc [UB046_array_pointer_outside])
 
 let offsetof_ival tagDefs tag_sym membr_ident =
   let (xs, _) = Common.offsetsof tagDefs tag_sym in
@@ -949,14 +947,16 @@ let memcpy loc ptrval1 ptrval2 sz_ival : pointer_value memM =
   (* NOTE: we are using the pure array_shift because if we go out of bound there is a UB right away *)
   let rec aux i =
     if Z.lt i sz then
-      load loc Ctype.unsigned_char (array_shift_ptrval ptrval2 Ctype.unsigned_char (IVint i)) >>= fun (_, mval) ->
-      store loc Ctype.unsigned_char false (array_shift_ptrval ptrval1 Ctype.unsigned_char (IVint i)) mval >>= fun _ ->
+      Nondeterminism.lift_undef (array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IVint i)) >>= fun ptrval1' ->
+      Nondeterminism.lift_undef (array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IVint i)) >>= fun ptrval2' ->
+      load loc Ctype.unsigned_char ptrval2' >>= fun (_, mval) ->
+      store loc Ctype.unsigned_char false ptrval1' mval >>= fun _ ->
       aux (Z.succ i)
     else
       return ptrval1 in
   aux Z.zero
 
-let memcmp ptrval1 ptrval2 sz_ival : integer_value memM =
+let memcmp loc ptrval1 ptrval2 sz_ival : integer_value memM =
   let size_n = ival_to_int sz_ival in
   let rec get_bytes ptrval acc = function
   | 0 ->
@@ -964,7 +964,7 @@ let memcmp ptrval1 ptrval2 sz_ival : integer_value memM =
   | size ->
       load Cerb_location.unknown Ctype.unsigned_char ptrval >>= function
         | (_, MVinteger (_, byte_ival)) ->
-            let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IVint Z.one) in
+            Nondeterminism.lift_undef (array_shift_ptrval loc ptrval Ctype.unsigned_char (IVint Z.one)) >>= fun ptr' ->
             get_bytes ptr' (ival_to_int byte_ival :: acc) (size-1)
         | _ ->
             assert false in

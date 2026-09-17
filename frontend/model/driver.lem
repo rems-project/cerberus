@@ -809,7 +809,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     
     | (Mem_common.Memcmp, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
                           Core.Vobject (Core.OVinteger size_ival)]) ->
-        liftMem (Mem.memcmp ptr_val1 ptr_val2 size_ival) >>= fun res ->
+        liftMem (Mem.memcmp loc ptr_val1 ptr_val2 size_ival) >>= fun res ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
     
     | (Mem_common.PtrWellAligned, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptrval)]) ->

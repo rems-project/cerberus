@@ -106,14 +106,14 @@ module type Memory = sig
   val null_cap : bool(* is_signed *) -> integer_value
 
   (* Pointer shifting constructors *)
-  val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
+  val array_shift_ptrval: Cerb_location.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value Undefined.t0
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
   
   val eff_array_shift_ptrval: Cerb_location.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
   val eff_member_shift_ptrval: Cerb_location.t -> pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value memM
   
   val memcpy: Cerb_location.t -> pointer_value -> pointer_value -> integer_value -> pointer_value memM
-  val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
+  val memcmp: Cerb_location.t -> pointer_value -> pointer_value -> integer_value -> integer_value memM
   val realloc: Cerb_location.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
 
   val va_start: (Ctype.ctype * pointer_value) list -> integer_value memM

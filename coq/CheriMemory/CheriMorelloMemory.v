@@ -2393,9 +2393,9 @@ Module Type CheriMemoryImpl
   Definition null_cap (is_signed : bool) : integer_value :=
     IC is_signed (C.cap_c0 tt).
 
-  Definition array_shift_ptrval: pointer_value -> CoqCtype.ctype -> integer_value ->
+  Definition array_shift_ptrval: location_ocaml -> pointer_value -> CoqCtype.ctype -> integer_value ->
                                  serr pointer_value
-    := fun _ _ _ => raise "pure array_shift_ptrval not used in CHERI".
+    := fun _ _ _ _ => raise "pure array_shift_ptrval not used in CHERI".
 
   Definition member_shift_ptrval: pointer_value -> CoqSymbol.sym ->
                                   CoqSymbol.identifier -> serr pointer_value
@@ -2692,6 +2692,7 @@ Module Type CheriMemoryImpl
     ret dst_p.
 
   Definition memcmp
+    (loc : location_ocaml)
     (ptrval1 ptrval2 : pointer_value)
     (size_int : integer_value)
     : memM integer_value

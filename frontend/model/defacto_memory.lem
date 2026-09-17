@@ -1001,9 +1001,9 @@ let internal_shift_ptrval ptr_val spe : impl_pointer_value =
   end
 
 
-let impl_array_shift_ptrval ptr_val ty (IV _ ival_) =
+let impl_array_shift_ptrval _ ptr_val ty (IV _ ival_) =
   let () = Debug.print_debug 5 [Debug.DB_memory] (fun () -> "Mem.array_shift_ptrval: " ^ stringFromPointer_value ptr_val) in
-  internal_shift_ptrval ptr_val (SPE_array ty ival_)
+  Undefined.return (internal_shift_ptrval ptr_val (SPE_array ty ival_))
 
 let impl_member_shift_ptrval ptr_val tag_sym memb_ident =
   internal_shift_ptrval ptr_val (SPE_member tag_sym memb_ident)
@@ -2532,14 +2532,14 @@ let impl_memcpy _ ptr_val1 ptr_val2 size_ival =
   error "WIP: Symbolic memcpy"
 
 (* BEGIN MEMCMP ================================================================================= *)
-val     memcmp_load_aux: impl_pointer_value -> integer -> integer -> list impl_mem_value -> impl_memM (list impl_mem_value)
-let rec memcmp_load_aux ptrval offset max_offset acc =
+val     memcmp_load_aux: Loc.t -> impl_pointer_value -> integer -> integer -> list impl_mem_value -> impl_memM (list impl_mem_value)
+let rec memcmp_load_aux loc ptrval offset max_offset acc =
   if offset >= max_offset then
     return (List.reverse acc)
   else
-    let ptrval' = impl_array_shift_ptrval ptrval unsigned_char (IV Prov_none (IVconcrete offset)) in
-    impl_load (Loc.other "memcmp_load_aux") unsigned_char ptrval' >>= fun (fp, mval) ->
-    memcmp_load_aux ptrval (offset+1) max_offset (mval :: acc)
+    Nondeterminism.lift_undef (impl_array_shift_ptrval loc ptrval unsigned_char (IV Prov_none (IVconcrete offset))) >>= fun ptrval' ->
+    impl_load loc unsigned_char ptrval' >>= fun (fp, mval) ->
+    memcmp_load_aux loc ptrval (offset+1) max_offset (mval :: acc)
 
 let rec memcmp_compare (mval1, mval2) : impl_memM integer =
   match (mval1, mval2) with
@@ -2580,15 +2580,15 @@ let rec fold_memcmp_compare mvals1 mvals2 ord_acc =
 
   
 
-let impl_memcmp ptr_val1 ptr_val2 size_ival =
+let impl_memcmp loc ptr_val1 ptr_val2 size_ival =
   match size_ival with
     | IV _ (IVsizeof ty) ->
         impl_load (Loc.other "memcmp, 1st pointer") ty ptr_val1 >>= fun (fp1, mval1) ->
         impl_load (Loc.other "memcmp, 2nd pointer") ty ptr_val2 >>= fun (fp2, mval2) ->
         error "Mem.impl_memcmp"
     | IV _ (IVconcrete n) ->
-        memcmp_load_aux ptr_val1 0 n [] >>= fun mvals1 ->
-        memcmp_load_aux ptr_val2 0 n [] >>= fun mvals2 ->
+        memcmp_load_aux loc ptr_val1 0 n [] >>= fun mvals1 ->
+        memcmp_load_aux loc ptr_val2 0 n [] >>= fun mvals2 ->
         fold_memcmp_compare mvals1 mvals2 0 >>= fun ord ->
         return (IV Prov_none (IVconcrete ord))
 (*

@@ -114,7 +114,7 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter null_cap : bool -> integer_value.
 
   Parameter array_shift_ptrval :
-    pointer_value -> CoqCtype.ctype -> integer_value ->
+    location_ocaml -> pointer_value -> CoqCtype.ctype -> integer_value ->
     serr pointer_value.
 
   Parameter member_shift_ptrval :
@@ -133,7 +133,7 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
     location_ocaml -> pointer_value -> pointer_value -> integer_value -> memM pointer_value.
 
   Parameter memcmp :
-    pointer_value -> pointer_value -> integer_value -> memM integer_value.
+    location_ocaml -> pointer_value -> pointer_value -> integer_value -> memM integer_value.
 
   Parameter realloc :
     location_ocaml ->

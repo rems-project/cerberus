@@ -138,7 +138,7 @@ declare ocaml target_rep function null_cap = `Impl_mem.null_cap`
 declare ocaml target_rep function ptr_t_int_value = `Impl_mem.ptr_t_int_value`
 
 (* Pointer shifting constructors *)
-val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
+val array_shift_ptrval: Loc.t -> pointer_value -> Ctype.ctype -> integer_value -> Undefined.t pointer_value
 val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
 declare ocaml target_rep function array_shift_ptrval = `Impl_mem.array_shift_ptrval`
 declare ocaml target_rep function member_shift_ptrval = `Impl_mem.member_shift_ptrval`
@@ -151,7 +151,7 @@ declare ocaml target_rep function eff_member_shift_ptrval = `Impl_mem.eff_member
 
 
 val memcpy: Loc.t -> pointer_value -> pointer_value -> integer_value -> memM pointer_value
-val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
+val memcmp: Loc.t -> pointer_value -> pointer_value -> integer_value -> memM integer_value
 val realloc: Loc.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> memM pointer_value
 
 declare ocaml target_rep function memcpy = `Impl_mem.memcpy`

@@ -346,8 +346,8 @@ declare hol   target_rep function stringFromCtype = `pp$stringFromCtype`
 
 
 (* the third argument specify have many characters to load at most *)
-val     load_character_array_aux: Ctype.ctype -> Mem.pointer_value -> maybe nat -> list char -> Mem.memM (list char)
-let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
+val     load_character_array_aux: Loc.t -> Ctype.ctype -> Mem.pointer_value -> maybe nat -> list char -> Mem.memM (list char)
+let rec load_character_array_aux loc elem_ty ptrval prec_n_opt acc =
   match prec_n_opt with
     | Just 0 ->
         Mem.return (List.reverse acc)
@@ -367,12 +367,12 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
               else
                 Mem.bind
                   begin if Global.is_CHERI () then
-                    Mem.eff_array_shift_ptrval (Loc.other "printf()") ptrval elem_ty (Mem.integer_ival 1)
+                    Mem.eff_array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 1)
                   else
-                    Mem.return (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1))
+                    Nondeterminism.lift_undef (Mem.array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 1))
                   end
                   (fun ptrval' ->
-                    load_character_array_aux elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc)))
+                    load_character_array_aux loc elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc)))
               (fun () -> error "WIP: Formatted.load_character_array, non constant ival")
           )
           (fun _ _ -> error "Formatted.load_character_array, found a float")
@@ -382,15 +382,15 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
           (fun _ _ -> error "Formatted.load_character_array, found a union")
       )
   end
-val load_character_array: Ctype.ctype -> Mem.pointer_value -> maybe nat -> Mem.memM (list char)
-let load_character_array elem_ty ptrval prec_n_opt =
+val load_character_array: Loc.t -> Ctype.ctype -> Mem.pointer_value -> maybe nat -> Mem.memM (list char)
+let load_character_array loc elem_ty ptrval prec_n_opt =
   Mem.bind
     begin if Global.is_CHERI () then
-      Mem.eff_array_shift_ptrval (Loc.other "printf()") ptrval elem_ty (Mem.integer_ival 0)
+      Mem.eff_array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 0)
     else
-      Mem.return (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0))
+      Nondeterminism.lift_undef (Mem.array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 0))
     end
-    (fun ptrval' -> load_character_array_aux elem_ty ptrval' prec_n_opt [])
+    (fun ptrval' -> load_character_array_aux loc elem_ty ptrval' prec_n_opt [])
   
 
 
@@ -650,7 +650,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                       else
                           match Mem_aux.pointerValueFromMemValue mval with
                           | Just (_, ptrval) ->
-                              load_character_array ref_ty ptrval prec >>= fun chars ->
+                              load_character_array loc ref_ty ptrval prec >>= fun chars ->
                               Mem.return (Right (U.Defined (false, chars, args')))
                           | Nothing ->
                               error "WIP[error message], Formatted => CS_s, didn't load a pointer"
@@ -757,11 +757,13 @@ let rec printf_aux loc eval_conv acc fs ty_ptrvals =
 
 
 val     store_chars_in_array: bool -> Mem.pointer_value -> list char -> Mem.memM unit
-let rec store_chars_in_array zero_terminated ptrval = function
+let rec store_chars_in_array zero_terminated ptrval =
+  let loc = Loc.other "store_chars_in_array()" in
+  function
   | [] ->
       if zero_terminated then
-        Mem.store (Loc.other "store_chars_in_array()") Ctype.char false ptrval
-                    (Mem.integer_value_mval Ctype.Char (Mem.integer_ival 0)) >>= fun _ ->
+        Mem.store loc Ctype.char false ptrval
+          (Mem.integer_value_mval Ctype.Char (Mem.integer_ival 0)) >>= fun _ ->
         Mem.return ()
       else
         Mem.return ()
@@ -770,14 +772,14 @@ let rec store_chars_in_array zero_terminated ptrval = function
         Mem.integer_value_mval Ctype.Char
           (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
       (* TODO: maybe needs to be unsigned char *)
-      Mem.store (Loc.other "store_chars_in_array()") Ctype.char false ptrval c_mval >>= fun _ ->
+      Mem.store loc Ctype.char false ptrval c_mval >>= fun _ ->
       begin if Global.is_CHERI () then
-        Mem.eff_array_shift_ptrval (Loc.other "store_chars_in_array()") ptrval Ctype.char (Mem.integer_ival 1)
+        Mem.eff_array_shift_ptrval loc ptrval Ctype.char (Mem.integer_ival 1)
       else
-        Mem.return (Mem.array_shift_ptrval ptrval Ctype.char (Mem.integer_ival 1))
+        Nondeterminism.lift_undef (Mem.array_shift_ptrval loc ptrval Ctype.char (Mem.integer_ival 1))
       end >>= fun ptrval' ->
       store_chars_in_array zero_terminated ptrval' cs
-end
+  end
 
 
 val vsnprintf: Loc.t ->

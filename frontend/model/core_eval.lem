@@ -751,7 +751,8 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
         self pe2 >>= fun pe2' ->
         match (Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
           | (Just (Vobject (OVpointer ptr_val)), Just (Vobject (OVinteger ival))) ->
-              EU.return $ PEval (Vobject (OVpointer (Mem.array_shift_ptrval ptr_val ty ival)))
+              Exception.return (Mem.array_shift_ptrval loc ptr_val ty ival) >>= fun ptrval' ->
+              EU.return (PEval (Vobject (OVpointer ptrval')))
           | (Just _, Just _) ->
               EU.fail $ Illformed_program ("PEarray_shift: type error ==> " ^
                                            Pp.stringFromCore_pexpr (Pexpr [] () (PEarray_shift pe1' ty pe2')))

@@ -277,6 +277,15 @@ and liftND get put liftInfo liftErr (ND m) =
   )
 
 
+val lift_undef: forall 'a 'info 'err 'cs 'st. Undefined.t 'a -> ndM 'a 'info 'err 'cs 'st
+let lift_undef m =
+  match m with
+  | Undefined.Defined a -> return a
+  | Undefined.Undef loc ubs -> kill (Undef loc ubs)
+  | Undefined.Error loc str -> kill (Error loc str)
+  end
+
+
 
 let mk_step info xs =
   let () = Debug.print_debug 2 [] (fun () ->
