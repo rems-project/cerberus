@@ -12,50 +12,53 @@ let extend_env_list env bindings =
 let sym_in binders s =
   List.exists (fun b -> Symbol.compare_sym s b = 0) binders
 
-(* a conservative free-variable and replaceable-with-unit check
+(* Because of Core's strict semantics, a pure value is sound to propagate if
+   we know it doesn't raise error, doesn't raise UB and it terminates.
 
-   no free variables because the expression will be substituted (propagated)
-   into other contexts so needs to be well-formed
+   It's safe to hoist when it doesn't mention any binders (these are binders
+   from the effectful fragment.
 
-   replaceable with unit is more a matter of taste - we don't want large
-   pure expressions repeated throughout the code, such as if, let, case,
-   ccall; also simpler to not check if, let and case more precisely
-
-   cfunction always returns a tuple when evaluated so it's not worth checking
-   (i.e. analyze_pat_expr would always skip it) *)
-
-let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
+   I choose to not propagate ifs, lets and cases for the sake of efficiency
+   and simplicity. *)
+let rec can_prop_and_hoist binders (Pexpr (_, _, pe_)) =
+  let for_all f list = List.for_all (fun x -> can_prop_and_hoist binders (f x)) list in
   match pe_ with
   | PEsym s ->
       not (sym_in binders s)
-  | PEval _ | PEimpl _ | PEundef _ | PEerror _ ->
+  | PEval _ | PEimpl _ ->
       true
-  | PEctor (_, pes) ->
-      List.for_all (can_prop_and_rm binders) pes
-  | PEnot pe1 ->
-      can_prop_and_rm binders pe1
-  | PEop (_, pe1, pe2)
-  | PEwrapI (_, _, pe1, pe2)
-  | PEcatch_exceptional_condition (_, _, pe1, pe2)
-  | PEare_compatible (pe1, pe2)
-  | PEarray_shift (pe1, _, pe2) ->
-      can_prop_and_rm binders pe1 && can_prop_and_rm binders pe2
-  | PEmemberof (_, _, pe1)
+  | PEnot pe1 | PEmemberof (_, _, pe1)
   | PEmember_shift (pe1, _, _)
-  | PEconv_int (_, pe1)
   | PEis_scalar pe1 | PEis_integer pe1
   | PEis_signed pe1 | PEis_unsigned pe1
-  | PEbmc_assume pe1
   | PEunion (_, _, pe1) ->
-      can_prop_and_rm binders pe1
-  | PEmemop (_, pes) ->
-      List.for_all (can_prop_and_rm binders) pes
+      can_prop_and_hoist binders pe1
+  | PEop (_, pe1, pe2)
+  | PEwrapI (_, _, pe1, pe2)
+  | PEare_compatible (pe1, pe2)
+  | PEarray_shift (pe1, _, pe2) ->
+      (* this is only generated when it's total *)
+      for_all Fun.id [pe1; pe2]
   | PEstruct (_, fields) ->
-      List.for_all (fun (_, pe1) -> can_prop_and_rm binders pe1) fields
-  | PEif _ | PElet _ | PEcase _ | PEconstrained _ ->
-      false  (* not worth extra complexity *)
-   | PEcall _ | PEcfunction _ ->
-     false (* unsafe to replace with unit *)
+      for_all snd fields
+  | PEconstrained constrained (* non-det is sound to propagate *) ->
+      for_all snd constrained
+  | PEctor (_, pes) ->
+      for_all Fun.id pes
+  | PEmemop (op, pes) ->
+    (* The comment on [Mem_common.CapAssignValue] says it's part of CHERI and
+       may UB, but in the memory interface it's a pure operation (not in the
+       memory monad, returns a plain integer) so marking it as safe. *)
+    for_all Fun.id pes
+  | PEif _ | PEcase _ | PElet _ (* can be sound but inefficient *)
+  | PEbmc_assume _ (* for model checking only *)
+  | PEundef _ (* unsound to prop UB *)
+  | PEerror _ (* same for errors    *)
+  | PEcatch_exceptional_condition _ (* may raise UB *)
+  | PEconv_int _ (* may raise impl-defined error *)
+  | PEcfunction _ (* function pointer eval and lookup may UB *)
+  | PEcall _ (* may UB, or not terminate *) ->
+      false
 
 let rec binders_of_pat (Pattern (_, pat_)) =
   match pat_ with
@@ -84,8 +87,8 @@ let remove_integer_annot annots =
 let unit_pexpr (Pexpr (annots, bty, _)) =
   Pexpr (remove_integer_annot annots, bty, PEval Vunit)
 
-let wildcard_pat (Pattern (p_annots, _)) =
-  Pattern (p_annots, CaseBase (None, BTy_unit))
+let wildcard ~bty (Pattern (p_annots, _)) =
+  Pattern (p_annots, CaseBase (None, bty))
 
 let unit_pat_pe pat pe =
   let Pattern (p_annots, pat_) = pat in
@@ -111,22 +114,28 @@ let push_integer_annot annot pexpr =
     let Pexpr (inner_annots, inner_bty, inner_pe_) = pexpr in
     Pexpr (annots @ inner_annots, inner_bty, inner_pe_)
 
-let rec analyze_pat_pexpr binders pat pe =
+let rec analyze_pat_pexpr ~no_unit binders pat pe =
   let Pattern (p_annots, pat_) = pat in
   match pat_, pe with
 
-  | CaseBase (Some s, _), _ when can_prop_and_rm binders pe ->
-      ([(s, pe)], wildcard_pat pat, unit_pexpr pe)
+  | CaseBase (Some s, bty), _ when can_prop_and_hoist binders pe ->
+    if no_unit then
+      ([(s, pe)], wildcard ~bty pat, pe)
+    else
+      ([(s, pe)], wildcard ~bty:BTy_unit pat, unit_pexpr pe)
 
-  | CaseBase (None, _), _ when can_prop_and_rm binders pe ->
-      ([], wildcard_pat pat, unit_pexpr pe)
+  | CaseBase (None, bty), _ when can_prop_and_hoist binders pe ->
+    if no_unit then
+      ([], wildcard ~bty pat, pe)
+    else
+      ([], wildcard ~bty:BTy_unit pat, unit_pexpr pe)
 
   | CaseBase (_, _), _ ->
       ([], pat, pe)
 
   | CaseCtor (Ctuple, pats), Pexpr (pe_annots, pe_bty, PEctor (Ctuple, pes))
     when List.length pats = List.length pes ->
-      let results = List.map2 (analyze_pat_pexpr binders) pats pes in
+      let results = List.map2 (analyze_pat_pexpr ~no_unit binders) pats pes in
       let bindings  = List.concat_map (fun (bs, _, _) -> bs) results in
       let new_pats  = List.map (fun (_, p, _) -> p) results in
       let new_pes   = List.map (fun (_, _, e) -> e) results in
@@ -136,21 +145,21 @@ let rec analyze_pat_pexpr binders pat pe =
 
   | CaseCtor (Cspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [inner_pe])) ->
-      analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
+      analyse_specified_pat_expr ~no_unit binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
   | CaseCtor (Cspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEval (Vloaded (LVspecified ov))) ->
       let inner_pe = Pexpr (pe_annots, pe_bty, PEval (Vobject ov)) in
-      analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
+      analyse_specified_pat_expr ~no_unit binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
   | _ ->
       ([], pat, pe)
 
-and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe) =
+and analyse_specified_pat_expr ~no_unit binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe) =
   (* so that the subsitution gets any annotations *)
   let inner_pe = push_integer_annot pe_annots inner_pe in
   let (bindings, new_inner_pat, new_inner_pe) =
-    analyze_pat_pexpr binders inner_pat inner_pe in
+    analyze_pat_pexpr ~no_unit binders inner_pat inner_pe in
   if unit_pat_pe new_inner_pat new_inner_pe then
     let Pexpr (inner_annots, inner_bty, inner_pe_) = new_inner_pe in
     (* but unit values have such annotations removed *)
@@ -164,6 +173,8 @@ and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty,
     , Pattern (p_annots, CaseCtor (Cspecified, [new_inner_pat]))
     , Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [new_inner_pe])) )
 
+let analyze_pat_pexpr ?(no_unit=false) binders pat pe =
+  analyze_pat_pexpr ~no_unit binders pat pe
 
 (* ------------------------------------------------------------------ *)
 (* analyze_pat_expr: pattern-aware single-pass analysis for exprs     *)
@@ -275,8 +286,13 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
   | PEctor (c, pes) ->
       Pexpr (annots, bty, PEctor (c, List.map (propagate_pexpr env) pes))
   | PEcase (pe1, arms) ->
-      Pexpr (annots, bty, PEcase (propagate_pexpr env pe1,
-        List.map (fun (pat, pe2) -> (pat, propagate_pexpr env pe2)) arms))
+      let pe1' = propagate_pexpr env pe1 in
+      let process (pat, branch) =
+        let (bindings, new_pat, _) = analyze_pat_pexpr ~no_unit:true [] pat pe1' in
+        let env' = extend_env_list env bindings in
+        (new_pat, propagate_pexpr env' branch) in
+      let arms' = List.map process arms in
+      Pexpr (annots, bty, PEcase (pe1', arms'))
   | PEarray_shift (pe1, cty, pe2) ->
       Pexpr (annots, bty,
         PEarray_shift (propagate_pexpr env pe1, cty, propagate_pexpr env pe2))
@@ -398,8 +414,13 @@ let rec propagate_expr ~unwrap_loaded env (Expr (annots, e_) as expr) =
   | Eaction pact ->
       Expr (annots, Eaction (propagate_action env pact))
   | Ecase (pe1, arms) ->
-      Expr (annots, Ecase (pp pe1,
-        List.map (fun (pat, e2) -> (pat, propagate env e2)) arms))
+      let pe1' = propagate_pexpr env pe1 in
+      let process (pat, branch) =
+        let (bindings, new_pat, _) = analyze_pat_pexpr ~no_unit:true [] pat pe1' in
+        let env' = extend_env_list env bindings in
+        (new_pat, propagate env' branch) in
+      let arms' = List.map process arms in
+      Expr (annots, Ecase (pe1', arms'))
   | Eif (pe1, e1, e2) ->
       Expr (annots, Eif (pp pe1, propagate env e1, propagate env e2))
   | Eccall (a, pe1, pe2, pes) ->
