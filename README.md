@@ -33,7 +33,15 @@ The CLI can then be used either from the source directory using:
 $ dune exec cerberus -- ARG1 .. ARGN
 ```
 
-or, after doing `$ make install`, using the `cerberus` executable.
+or install to use `cerberus` as executable via
+
+```bash
+$ make install DESTDIR=$HOME/.local/cerberus
+# if not in $PATH, adjust shell config, ie ~/.bashrc
+$ PATH=${PATH}:"$HOME/.local/cerberus/bin"
+# needs the opam configuration being loaded, ie $ eval (opam env)
+$ cerberus --help
+```
 
 ---
 To fully remove all object and Lem generated files:
