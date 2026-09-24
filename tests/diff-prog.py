@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, sys, re, subprocess, json, difflib, argparse, concurrent.futures, math, multiprocessing
+import os, sys, re, subprocess, json, difflib, argparse, concurrent.futures, math, multiprocessing, time
 
 def eprint(*args, then_exit=True, **kwargs):
     print('Error:', *args, file=sys.stderr, **kwargs)
@@ -21,7 +21,7 @@ class Prog:
         self.name = config['name']
 
     def run(self, test_rel_path):
-        cmd = time_cmd([self.prog] + self.args + [test_rel_path])
+        cmd = [self.prog] + self.args + [test_rel_path]
         if self.print_cmd:
             print(' '.join(cmd))
         if self.run_cmd:
@@ -31,10 +31,11 @@ class Prog:
 
     def output(self, test_rel_path):
         try:
+            start_time = time.monotonic()
             completed = self.run(test_rel_path);
+            elapsed_time = time.monotonic() - start_time
             lines = completed.stdout.splitlines(True)
-            time = float(lines[-3].split()[1])
-            return { 'time': time, 'lines' : [("return code: %d\n" % completed.returncode)] + lines[:-3] }
+            return { 'time': elapsed_time, 'lines' : [("return code: %d\n" % completed.returncode)] + lines }
         except subprocess.TimeoutExpired:
             return { 'time': float(self.timeout), 'lines': ["TIMEOUT\n"] }
 

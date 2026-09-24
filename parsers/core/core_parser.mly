@@ -734,6 +734,40 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
              Eff.mapM symbolify_pexpr _pes >>= fun pes ->
              Eff.return (Erun ((), sym, pes))
        end
+   | Ejump ((), _sym, _pes) ->
+       (* Labels from Ewhere are in sym_scopes (not st.labels), so use
+          lookup_sym rather than lookup_label. *)
+       lookup_sym _sym >>= begin function
+         | None ->
+             Eff.fail (Cerb_location.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
+         | Some (sym, _) ->
+             Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+             Eff.return (Ejump ((), sym, pes))
+       end
+   | Ewhere (_e, _defs) ->
+       (* Open a scope for all where-labels so they are mutually visible
+          within the block (including from e) but out of scope outside. *)
+       under_scope begin
+         (* Pass 1: register all label syms before processing any body,
+            so forward and mutual references resolve correctly. *)
+         Eff.mapM (fun ((_sym, bTy), _xs, _body) ->
+           register_sym _sym >>= fun sym ->
+           Eff.return ((sym, bTy), _xs, _body)
+         ) _defs >>= fun _defs' ->
+         (* Pass 2: process each body under its own scope for params. *)
+         Eff.mapM (fun ((sym, bTy), _xs, _body) ->
+           under_scope begin
+             Eff.mapM (fun (_psym, bTy_mct) ->
+               register_sym _psym >>= fun psym ->
+               Eff.return (psym, bTy_mct)
+             ) _xs >>= fun xs ->
+             symbolify_expr _body >>= fun body ->
+             Eff.return ((sym, bTy), xs, body)
+           end
+         ) _defs' >>= fun defs ->
+         symbolify_expr _e >>= fun e ->
+         Eff.return (Ewhere (e, defs))
+       end
    | Epar _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (Epar es)
@@ -839,9 +873,14 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Eccall _
     | Eproc _
     | Erun _
+    | Ejump _
     | Ewait _
       ->
         Eff.return ()
+    | Ewhere (_e, _defs) ->
+        (* TODO: save/run and jump/where should not occur in the same program *)
+        Eff.mapM_ (fun (_, _, _body) -> register_labels _body) _defs >>= fun () ->
+        register_labels _e
     | Ecase (_, _pat_es) ->
         Eff.mapM_ (fun (_, _e) ->
           register_labels _e
@@ -1132,6 +1171,7 @@ let mk_file decls =
 (* SEMICOLON has higher priority than IN *)
 %nonassoc IN
 %right SEMICOLON
+%nonassoc WHERE
 
 
 
@@ -1153,7 +1193,7 @@ let mk_file decls =
 %token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD SEQ_RMW SEQ_RMW_WITH_FORWARD KILL FREE RMW FENCE (* COMPARE_EXCHANGE_STRONG *)
 
 (* continuation operators *)
-%token SAVE RUN
+%token SAVE RUN JUMP WHERE AND
 
 (* binder patterns *)
 %token UNDERSCORE
@@ -1693,12 +1733,30 @@ expr:
 | RUN _sym= SYM _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
     { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Erun ((), _sym, _pes) ) }
+| JUMP _sym= SYM _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
+           , Ejump ((), _sym, _pes) ) }
+| _e= expr WHERE _defs= separated_nonempty_list(AND, where_def) END
+    { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
+           , Ewhere (_e, _defs) ) }
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , End _es ) }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Expr ( [Aloc (region ($startpos, $endpos) NoCursor)]
            , Epar _es ) }
+;
+
+where_param:
+| _sym= SYM COLON _bTy= core_base_type
+    { (_sym, (_bTy, None)) }
+;
+
+where_def:
+| _sym= SYM
+  _xs= delimited(LPAREN, separated_list(COMMA, where_param), RPAREN)
+  COLON _bTy= core_base_type COLON_EQ _body= expr
+    { ((_sym, _bTy), _xs, _body) }
 ;
 
 action:

@@ -43,6 +43,9 @@ type cerb_switch =
   (* eliminate pure symbol rebindings: let alias = pure(sym) → substitute sym *)
   | SW_copy_prop
 
+  (* transform procedures from Esave/Erun style to Ewhere/Ejump style *)
+  | SW_save_to_where
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option

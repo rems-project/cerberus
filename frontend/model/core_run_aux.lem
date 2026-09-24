@@ -32,6 +32,11 @@ type context (* core_run_annotation unit Symbol.sym *) =
   | Csseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
   | Cannot of list Annot.annot * list Core.dyn_annotation * context
   | Cbound of list Annot.annot * context
+  | Cwhere of list Annot.annot
+            * list ((Symbol.sym * core_base_type)
+                  * list (Symbol.sym * (core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)))
+                  * Core.expr core_run_annotation)
+            * context
 
 let rec stringFromContext ctx =
   match ctx with
@@ -47,6 +52,8 @@ let rec stringFromContext ctx =
         "Cannot[" ^ stringFromContext ctx' ^ "]"
     | Cbound _ ctx' ->
         "Cbound[" ^ stringFromContext ctx' ^ "]"
+    | Cwhere _ _ ctx' ->
+        "Cwhere[" ^ stringFromContext ctx' ^ "]"
   end
 instance (Show context)
   let show ctx = stringFromContext ctx
@@ -348,6 +355,12 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
           Esave sym_bTy xs (add_to_sb p_aids e)
       | Erun annots sym pes ->
           Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> sym pes
+      | Ejump annots sym pes ->
+          Ejump <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> sym pes
+      | Ewhere e defs ->
+          Ewhere (add_to_sb p_aids e)
+            (List.map (fun (sym_ty, params, body) ->
+              (sym_ty, params, add_to_sb p_aids body)) defs)
       | Epar es ->
           Epar (List.map (add_to_sb p_aids) es)
       | Ewait _ ->
@@ -433,6 +446,12 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           Esave sym_bTy xs (add_to_asw aids e)
       | Erun annots sym pes ->
           Erun <| annots with asw_before= aids union annots.asw_before |> sym pes
+      | Ejump annots sym pes ->
+          Ejump <| annots with asw_before= aids union annots.asw_before |> sym pes
+      | Ewhere e defs ->
+          Ewhere (add_to_asw aids e)
+            (List.map (fun (sym_ty, params, body) ->
+              (sym_ty, params, add_to_asw aids body)) defs)
       | End es ->
           End (List.map (add_to_asw aids) es)
       | Epar es ->
@@ -598,6 +617,12 @@ let rec convert_expr (Expr annot expr_) =
         Esave sym (List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, convert_pexpr pe))) xs) (convert_expr e)
     | Erun _ sym pes ->
         Erun empty_annotation sym (List.map convert_pexpr pes)
+    | Ejump _ sym pes ->
+        Ejump empty_annotation sym (List.map convert_pexpr pes)
+    | Ewhere e defs ->
+        Ewhere (convert_expr e)
+          (List.map (fun (sym_ty, params, body) ->
+            (sym_ty, params, convert_expr body)) defs)
     | End es ->
         End (List.map convert_expr es)
     | Epar es ->

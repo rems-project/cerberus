@@ -1,0 +1,181 @@
+return code: 0
+let [ret_513:2, continue_514:1, break_515:1, while_516:1] _: unit =
+  let [ret_513:1, continue_514:1, break_515:1, while_516:1] sum: pointer = ... in
+  let [ret_513:1, continue_514:1, break_515:1, while_516:1] _: unit =
+    let a_518: loaded integer = ... in
+    ... in
+  let [ret_513:1, continue_514:1, break_515:1, while_516:1] _: unit =
+    let [continue_514:1, break_515:1, while_516:1] _: unit =
+      save [continue_514:1, while_516:2] while_516: unit (sum: pointer:= ..) in
+        let [continue_514:1, while_516:1] a_519: loaded integer = ... in
+        let [continue_514:1, while_516:1] a_517: boolean =
+          case a_519 of
+            | Specified(a_520: integer) =>
+                ...
+            | Unspecified(_: ctype) =>
+                ...
+            end in
+        if [continue_514:1, while_516:1] a_517 then
+          let [continue_514:1, while_516:1] _: unit =
+            let [continue_514:1] _: unit =
+              let _: unit =
+                let _: loaded integer = ... in
+                ... in
+              let _: unit =
+                let _: loaded integer = ... in
+                ... in
+              ... in
+            let [continue_514:1] _: unit = save [continue_514:1] continue_514: unit (sum: pointer:= ..) in  ... in
+            ... in
+          run [while_516:1] while_516(sum)
+        else
+          ... in
+    let [break_515:1] _: unit = save [break_515:1] break_515: unit (sum: pointer:= ..) in  ... in
+    ... in
+  let [ret_513:1] _: unit =
+    let [ret_513:1] a_551: loaded integer = ... in
+    let [ret_513:1] _: unit = ... in
+    run [ret_513:1] ret_513(conv_loaded_int('signed int', a_551)) in
+  let _: unit = ... in
+  ... in
+save [ret_513:1] ret_513: loaded integer (a_552: loaded integer:= ..) in
+  ...
+let [ret_513] _: unit =
+  let sum: pointer = ... in
+  let _: unit =
+    let a_518: loaded integer = ... in
+    ... in
+  let _: unit =
+    let _: unit =
+      save [while_516] while_516: unit (sum: pointer:= ..) in
+        let a_519: loaded integer = ... in
+        let a_517: boolean =
+          case a_519 of
+            | Specified(a_520: integer) =>
+                ...
+            | Unspecified(_: ctype) =>
+                ...
+            end in
+        if a_517 then
+          let _: unit =
+            let _: unit =
+              let _: unit =
+                let _: loaded integer = ... in
+                ... in
+              let _: unit =
+                let _: loaded integer = ... in
+                ... in
+              ... in
+            let _: unit = save [!continue_514] continue_514: unit (sum: pointer:= ..) in  ... in
+            ... in
+          run while_516(sum)
+        else
+          ... in
+    let _: unit = save [!break_515] break_515: unit (sum: pointer:= ..) in  ... in
+    ... in
+  let _: unit =
+    let a_551: loaded integer = ... in
+    let _: unit = ... in
+    run ret_513(conv_loaded_int('signed int', a_551)) in
+  let _: unit = ... in
+  ... in
+save ret_513: loaded integer (a_552: loaded integer:= ..) in
+  ...
+(let [ret_513] _: unit =
+  let [ret_513] sum: pointer = ... in
+  let [ret_513] _: unit =
+    let a_518: loaded integer = ... in
+    ... in
+  let [ret_513] _: unit =
+    let _: unit =
+      jump [while_516] while_516(sum)
+        where while_516 (sum: pointer) : unit :=
+          let [while_516] a_519: loaded integer = ... in
+          let [while_516] a_517: boolean =
+            case a_519 of
+              | Specified(a_520: integer) =>
+                  ...
+              | Unspecified(_: ctype) =>
+                  ...
+              end in
+          if [while_516] a_517 then
+            let [while_516] _: unit =
+              let _: unit =
+                let _: unit =
+                  let _: loaded integer = ... in
+                  ... in
+                let _: unit =
+                  let _: loaded integer = ... in
+                  ... in
+                ... in
+              let _: unit =
+                let (sum: pointer) = ... in
+                ... in
+              ... in
+            jump [while_516] while_516(sum)
+          else
+            ...
+        end in
+    let _: unit =
+      let (sum: pointer) = ... in
+      ... in
+    ... in
+  let [ret_513] _: unit =
+    let [ret_513] a_551: loaded integer = ... in
+    let [ret_513] _: unit = ... in
+    jump [ret_513] ret_513(conv_loaded_int('signed int', a_551)) in
+  let _: unit = ... in
+  ... in
+jump [ret_513] ret_513(undef(<<UB088_reached_end_of_function>>)))
+  where ret_513 (a_552: loaded integer) : loaded integer :=
+    ...
+  end
+(let [ret_513] _: unit =
+  let [ret_513] sum: pointer = ... in
+  let [ret_513] _: unit =
+    let [ret_513] _: unit =
+      let a_518: loaded integer = ... in
+      ... in
+    let [ret_513] _: unit =
+      let _: unit =
+        jump [while_516] while_516(sum)
+          where while_516 (sum: pointer) : unit :=
+            let [while_516] a_519: loaded integer = ... in
+            let [while_516] a_517: boolean =
+              case a_519 of
+                | Specified(a_520: integer) =>
+                    ...
+                | Unspecified(_: ctype) =>
+                    ...
+                end in
+            if [while_516] a_517 then
+              let [while_516] _: unit =
+                let _: unit =
+                  let _: unit =
+                    let _: loaded integer = ... in
+                    ... in
+                  let _: unit =
+                    let _: loaded integer = ... in
+                    ... in
+                  ... in
+                let _: unit =
+                  let (sum: pointer) = ... in
+                  ... in
+                ... in
+              jump [while_516] while_516(sum)
+            else
+              ...
+          end in
+      let _: unit =
+        let (sum: pointer) = ... in
+        ... in
+      ... in
+    let [ret_513] a_551: loaded integer = ... in
+    let [ret_513] _: unit = ... in
+    jump [ret_513] ret_513(conv_loaded_int('signed int', a_551)) in
+  let _: unit = ... in
+  ... in
+jump [ret_513] ret_513(undef(<<UB088_reached_end_of_function>>)))
+  where ret_513 (a_552: loaded integer) : loaded integer :=
+    ...
+  end

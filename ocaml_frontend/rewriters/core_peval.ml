@@ -377,6 +377,16 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                   Esave (lab_sym, sym_bTy_pes', subst_sym_expr2 sym z e)
             | Erun (annot, lab_sym, pes) ->
                 Erun (annot, lab_sym, List.map (subst_sym_pexpr2 sym z) pes)
+            | Ejump (annot, lab_sym, pes) ->
+                Ejump (annot, lab_sym, List.map (subst_sym_pexpr2 sym z) pes)
+            | Ewhere (e, defs) ->
+                let defs' = List.map (fun (sym_ty, params, body) ->
+                  (sym_ty, params,
+                   (* TODO: revisit when scoping is clearer (ideally labels are closed) *)
+                   if List.exists (fun (s, _) -> sym = s) params then body
+                   else subst_sym_expr2 sym z body)
+                ) defs in
+                Ewhere (subst_sym_expr2 sym z e, defs')
             | End es ->
                 End (List.map (subst_sym_expr2 sym z) es)
             | Epar es ->

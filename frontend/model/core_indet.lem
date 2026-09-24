@@ -151,6 +151,8 @@ let rec import_expr e =
   | Core.Ebound e       -> Ebound (import_expr e)
   | Core.Esave k a_tys e  -> Esave k a_tys (import_expr e)
   | Core.Erun _ k a_vs    -> Erun k (map (fun (a, v) -> (a, import_expr v)) a_vs)
+  | Core.Ewhere _ _ -> error "import_expr: Ewhere not supported in indet"
+  | Core.Ejump _ _ _ -> error "import_expr: Ejump not supported in indet"
   | Core.Eshift e1 e2     -> Eshift (import_expr e1) (import_expr e2)
   end
 
@@ -435,6 +437,10 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
         Core.Expr annot (Core.Esave sym sym_bTys (indet_hack e))
     | Core.Erun bs sym pes ->
         expr
+    | Core.Ewhere _ _ ->
+        error "TODO indet_hack Ewhere"
+    | Core.Ejump _ _ _ ->
+        error "TODO indet_hack Ejump"
     | Core.End es ->
         Core.Expr annot (Core.End (map indet_hack es))
     | Core.Epar es ->
