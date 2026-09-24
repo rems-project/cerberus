@@ -1,47 +1,48 @@
+open Cerb_symbol
 module IntMap = Map.Make(Z)
 
 let serialise_prefix = function
-  | Symbol.PrefOther s ->
+  | PrefOther s ->
       (* TODO: this should not be possible anymore *)
       `Assoc [("kind", `String "other"); ("name", `String s)]
-  | Symbol.PrefMalloc ->
+  | PrefMalloc ->
       `Assoc [("kind", `String "malloc");
               ("scope", `Null);
               ("name", `String "malloc'd");
               ("loc", `Null)]
-  | Symbol.PrefStringLiteral (loc, _) ->
+  | PrefStringLiteral (loc, _) ->
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
               ("name", `String "literal");
               ("loc", Cerb_location.to_json loc)]
-  | Symbol.PrefCompoundLiteral (loc, _) ->
+  | PrefCompoundLiteral (loc, _) ->
       `Assoc [("kind", `String "compound literal");
               ("scope", `Null);
               ("name", `String "literal");
               ("loc", Cerb_location.to_json loc)]
-  | Symbol.PrefTemporaryLifetime (loc, _) ->
+  | PrefTemporaryLifetime (loc, _) ->
       `Assoc [("kind", `String "rvalue temporary");
               ("scope", `Null);
               ("name", `String "temporary");
               ("loc", Cerb_location.to_json loc)]
-  | Symbol.PrefFunArg (loc, _, n) ->
+  | PrefFunArg (loc, _, n) ->
       `Assoc [("kind", `String "arg");
               ("scope", `Null);
               ("name", `String ("arg" ^ string_of_int n));
               ("loc", Cerb_location.to_json loc)]
-  | Symbol.PrefSource (_, []) ->
+  | PrefSource (_, []) ->
       failwith "serialise_prefix: PrefSource with an empty list"
-  | Symbol.PrefSource (loc, [name]) ->
+  | PrefSource (loc, [name]) ->
         `Assoc [("kind", `String "source");
                 ("name", `String (Pp_symbol.to_string_pretty name));
                 ("scope", `Null);
                 ("loc", Cerb_location.to_json loc);]
-  | Symbol.PrefSource (loc, [scope; name]) ->
+  | PrefSource (loc, [scope; name]) ->
       `Assoc [("kind", `String "source");
               ("name", `String (Pp_symbol.to_string_pretty name));
               ("scope", `String (Pp_symbol.to_string_pretty scope));
               ("loc", Cerb_location.to_json loc);]
-  | Symbol.PrefSource (_, _) ->
+  | PrefSource (_, _) ->
       failwith "serialise_prefix: PrefSource with more than one scope"
 
 

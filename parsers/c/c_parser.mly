@@ -8,6 +8,7 @@
 
 %{
 open Cerb_frontend
+open Cerb_symbol
 
 open Cabs
 open Cn
@@ -50,8 +51,6 @@ let rec concat_specs = function
   | [spec] -> spec
   | s::ss -> append_specs s (concat_specs ss)
 
-let string_of_cabs_id (Symbol.Identifier(_, n)) = n
-
 let to_attrs = function
   | None ->
       Annot.Attrs []
@@ -71,8 +70,8 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 
 let magic_to_attr magik : Annot.attribute =
   let open Annot in
-  { attr_ns= Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
-  ; attr_id= Symbol.Identifier (Cerb_location.unknown, "magic")
+  { attr_ns= Some (Identifier.mk Cerb_location.unknown "cerb")
+  ; attr_id= Identifier.mk Cerb_location.unknown "magic"
   ; attr_args= List.map (fun (loc, (_,str)) -> (loc, str, [loc, str])) magik }
 
 let magic_to_attrs = function
@@ -169,14 +168,14 @@ type asm_qualifier =
 (* ========================================================================== *)
 
 %type<string> typedef_name var_name
-%type<Symbol.identifier> general_identifier
+%type<Identifier.t> general_identifier
 
 %type<LF.context> save_context
 
 %type<LF.declarator> declarator direct_declarator declarator_varname
   declarator_typedefname
 
-%type<Symbol.identifier>
+%type<Identifier.t>
   enumeration_constant
 
 %type<Cabs.cabs_expression>
@@ -215,7 +214,7 @@ type asm_qualifier =
 %type<Cabs.cabs_type_specifier>
   struct_or_union_specifier
 
-%type<Annot.attributes -> Symbol.identifier option -> (Cabs.struct_declaration list) option -> Lexing.position -> Cabs.cabs_type_specifier>
+%type<Annot.attributes -> Identifier.t option -> (Cabs.struct_declaration list) option -> Lexing.position -> Cabs.cabs_type_specifier>
   struct_or_union
 
 %type<Cabs.struct_declaration list>
@@ -328,21 +327,21 @@ type asm_qualifier =
 %start cn_ghost_args
 %start cn_toplevel
 
-%type<Symbol.identifier Cn.cn_base_type> base_type
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_function> cn_function
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_predicate> cn_predicate
-%type<(Symbol.identifier) Cn.cn_datatype> cn_datatype
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_clauses> clauses if_clauses
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_clause> clause
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_resource> resource
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_pred> pred
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_condition> condition
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_func_spec> function_spec fundef_spec
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec> loop_spec
-%type<(Symbol.identifier, Cabs.type_name) Cn.cn_statement> cn_statement
-%type<((Symbol.identifier, Cabs.type_name) Cn.cn_statement) list> cn_statements
-%type<((Symbol.identifier, Cabs.type_name) Cn.cn_expr) list * Symbol.identifier list> cn_ghost_args
-%type<(Symbol.identifier * Symbol.identifier Cn.cn_base_type) list> cn_args
+%type<Identifier.t Cn.cn_base_type> base_type
+%type<(Identifier.t, Cabs.type_name) Cn.cn_function> cn_function
+%type<(Identifier.t, Cabs.type_name) Cn.cn_predicate> cn_predicate
+%type<(Identifier.t) Cn.cn_datatype> cn_datatype
+%type<(Identifier.t, Cabs.type_name) Cn.cn_clauses> clauses if_clauses
+%type<(Identifier.t, Cabs.type_name) Cn.cn_clause> clause
+%type<(Identifier.t, Cabs.type_name) Cn.cn_resource> resource
+%type<(Identifier.t, Cabs.type_name) Cn.cn_pred> pred
+%type<(Identifier.t, Cabs.type_name) Cn.cn_condition> condition
+%type<(Identifier.t, Cabs.type_name) Cn.cn_func_spec> function_spec fundef_spec
+%type<(Identifier.t, Cabs.type_name) Cn.cn_loop_spec> loop_spec
+%type<(Identifier.t, Cabs.type_name) Cn.cn_statement> cn_statement
+%type<((Identifier.t, Cabs.type_name) Cn.cn_statement) list> cn_statements
+%type<((Identifier.t, Cabs.type_name) Cn.cn_expr) list * Identifier.t list> cn_ghost_args
+%type<(Identifier.t * Identifier.t Cn.cn_base_type) list> cn_args
 
 
 %type<Cabs.external_declaration> cn_toplevel_elem
@@ -453,15 +452,15 @@ var_name:
 (* NOTE: This rule is declared early, so that reduce/reduce conflict is
    resolved using it. *)
 typedef_name_spec:
-| i= typedef_name
+| str= typedef_name
     { TSpec ((region ($startpos, $endpos) noCursor),
-             TSpec_name (Identifier (point $startpos, i))) }
+             TSpec_name (Identifier.mk (point $startpos) str)) }
 ;
 
 general_identifier:
-| i= typedef_name
-| i= var_name
-    { Symbol.Identifier (region ($startpos, $endpos) noCursor, i) }
+| str= typedef_name
+| str= var_name
+    { Identifier.mk (region ($startpos, $endpos) noCursor) str }
 ;
 
 save_context:
@@ -487,14 +486,14 @@ declarator_typedefname:
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
 | i= general_identifier
-    { LF.declare_varname (string_of_cabs_id i); i }
+    { LF.declare_varname (Identifier.to_string i); i }
 ;
 
 (* §6.5.1 Primary expressions *)
 primary_expression:
 | str= var_name
     { CabsExpression (region ($startpos, $endpos) noCursor,
-        CabsEident (Symbol.Identifier (point $startpos(str), str))) }
+        CabsEident (Identifier.mk (point $startpos(str)) str)) }
 | cst= CONSTANT
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEconst cst) }
@@ -852,7 +851,7 @@ declaration:
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = region($startpos, $endpos) (pointCursor $startpos) in
-      Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
+      Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Identifier.mk loc "test")), None)]) }
 ;
 
 declaration_specifier:
@@ -1157,9 +1156,9 @@ function_declarator:
 
 identifier_list: (* NOTE: the list is in reverse *)
 | id= var_name
-    { [ Symbol.Identifier (point $startpos, id) ] }
+    { [ Identifier.mk (point $startpos) id ] }
 | ids= identifier_list COMMA id= var_name
-    { Symbol.Identifier (point $startpos, id) :: ids }
+    { Identifier.mk (point $startpos) id :: ids }
 ;
 
 pointer:
@@ -1724,7 +1723,7 @@ attribute_identifier:
 | name= general_identifier
     { name }
 | str= c_keyword_as_string
-    { Symbol.Identifier (point $startpos, str) }
+    { Identifier.mk (point $startpos) str }
 
 attribute_token:
 | name= attribute_identifier
@@ -1859,7 +1858,7 @@ prim_expr:
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
 | RETURN
     { Cerb_frontend.Cn.(CNExpr (point $startpos,
-        CNExpr_var (Symbol.Identifier (point $startpos($1), "return")))) }
+        CNExpr_var (Identifier.mk (point $startpos($1)) "return"))) }
 | e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( region ($startpos, $endpos) (pointCursor $startpos($2))
                                , CNExpr_memberof (e, member))) }
@@ -2232,7 +2231,7 @@ cn_predicate:
       let loc = region ($startpos, $endpos) noCursor in
       { cn_pred_magic_loc= Cerb_location.unknown
       ; cn_pred_loc= loc
-      ; cn_pred_name= Symbol.Identifier (loc, str)
+      ; cn_pred_name= Identifier.mk loc str
       ; cn_pred_attrs
       ; cn_pred_output
       ; cn_pred_iargs
@@ -2285,9 +2284,9 @@ cn_type_synonym:
    a situation where the name has been assigned as a typedef *)
 %inline cn_variable:
 | str= NAME VARIABLE
-    { Symbol.Identifier (point $startpos(str), str) }
+    { Identifier.mk (point $startpos(str)) str }
 | str= NAME TYPE
-    { Symbol.Identifier (point $startpos(str), str) }
+    { Identifier.mk (point $startpos(str)) str }
 
 %inline base_type_cn_variable:
 | bt=base_type str=cn_variable
@@ -2398,7 +2397,7 @@ pred:
 | CN_BLOCK
     { Cerb_frontend.Cn.CN_block None }
 | str= UNAME VARIABLE
-    { Cerb_frontend.Cn.CN_named (Symbol.Identifier (point $startpos(str), str)) }
+    { Cerb_frontend.Cn.CN_named (Identifier.mk (point $startpos(str)) str) }
 ;
 
 ctype:

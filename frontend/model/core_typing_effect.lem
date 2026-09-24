@@ -1,7 +1,8 @@
 open import Pervasives
 import Map_extra
 
-open import Utils Exception Core Errors
+open import Utils Exception Core
+import Errors
 
 type eff 'a = Exception.exceptM 'a Errors.error
 include Exception
@@ -22,7 +23,7 @@ let runM m = m
 
 val fail: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
 let core_typing_effect_fail loc cause =
-  Exception (loc, Errors.CORE_TYPING cause)
+  Exception (Errors.core_typing_error loc cause)
 let inline fail = core_typing_effect_fail
 
 (* NOTE: this is different than trysM, since it checks all the cases *)
@@ -41,7 +42,7 @@ let core_typing_effect_guard pred loc cause =
   if pred then
     return ()
   else
-    Exception (loc, Errors.CORE_TYPING cause)
+    Exception (Errors.core_typing_error loc cause)
 let inline guard = core_typing_effect_guard
 (* BUG in Lem (see issue #197)
       fail loc cause
@@ -55,3 +56,39 @@ let rec core_typing_effect_foldlM f b = function
       bind (f b x) (fun z -> core_typing_effect_foldlM f z xs)
 end
 let inline foldlM = core_typing_effect_foldlM
+
+
+(* UndefinedStartup *)
+
+let mismatch loc info_str expected_bTy found_bTy =
+  fail loc (Errors.Mismatch info_str expected_bTy found_bTy)
+
+(* MismatchBinaryOperator  *)
+(* MismatchIf *)
+
+let mismatch_expected loc info_str expected_bTy found_str =
+  fail loc (Errors.MismatchExpected info_str expected_bTy found_str)
+
+let mismatch_found loc info_str expected_str found_bTy =
+  fail loc (Errors.MismatchFound info_str expected_str found_bTy)
+
+let unresolved_symbol loc nm =
+  fail loc (Errors.UnresolvedSymbol nm)
+
+let function_or_procedure_symbol loc sym =
+  fail loc (Errors.FunctionOrProcedureSymbol sym)
+
+let too_general loc =
+  fail loc Errors.TooGeneral
+
+let fail_TODO loc str =
+  fail loc (Errors.CoreTyping_TODO str)
+
+let heterogenous_list loc expected_bTy found_bTy =
+ fail loc (Errors.HeterogenousList expected_bTy found_bTy)
+
+let invalid_tag loc tag_sym =
+  fail loc (Errors.InvalidTag tag_sym)
+
+let invalid_member loc tag_sym memb_ident =
+  fail loc (Errors.InvalidMember tag_sym memb_ident)

@@ -1,8 +1,9 @@
 open import Pervasives Utils Show Core
 import Global Dlist Pp State_exception_undefined Map_extra
 
-open import Errors Core Annot
+open import Core Annot
 import Cmm_csem Mem_common Core_aux
+import Errors
 
 
 (* DEBUG *)
@@ -152,22 +153,22 @@ let reset_continuation = function
       error "reset_continuation ==> Stack_cons2"
 end
 
-val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) core_run_cause
+val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) Errors.core_run_cause
 let pop_stack = function
   | Stack_empty ->
-      Exception.fail (Found_empty_stack "pop_stack")
+      Exception.fail (Errors.Found_empty_stack "pop_stack")
   | Stack_cons _ cont sk ->
       Exception.return (cont, sk)
   | Stack_cons2 _ _ _ ->
       error "pop_stack ==> Stack_cons2"  
 end
 
-val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_cause
+val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) Errors.core_run_cause
 let pop_continuation_element = function
   | Stack_empty ->
-      Exception.fail (Found_empty_stack "pop_continuation_element")
+      Exception.fail (Errors.Found_empty_stack "pop_continuation_element")
   | Stack_cons _ [] _ ->
-      Exception.fail Reached_end_of_proc
+      Exception.fail Errors.Reached_end_of_proc
   | Stack_cons sym_opt (cont_elem :: cont) sk ->
       Exception.return (cont_elem, Stack_cons sym_opt cont sk)
   | Stack_cons2 _ _ _ ->
@@ -175,10 +176,10 @@ let pop_continuation_element = function
 end
 
 
-val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
+val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) Errors.core_run_cause
 let push_continuation_element cont_elem = function
   | Stack_empty ->
-      Exception.fail (Found_empty_stack "push_continuation_element")
+      Exception.fail (Errors.Found_empty_stack "push_continuation_element")
   | Stack_cons sym_opt cont sk ->
       Exception.return (Stack_cons sym_opt (cont_elem :: cont) sk)
   | Stack_cons2 _ _ _ ->
@@ -187,11 +188,11 @@ end
 
 
 
-val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
+val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) Errors.core_run_cause
 let append_to_current_continuation cont_elem = function
   | Stack_empty ->
       (* A procedure need to currently be running to append *)
-      Exception.fail (Found_empty_stack "append_to_current_continuation")
+      Exception.fail (Errors.Found_empty_stack "append_to_current_continuation")
   | Stack_cons sym_opt cont sk ->
       Exception.return $ Stack_cons sym_opt (cont_elem :: cont) sk
   | Stack_cons2 _ _ _ ->
@@ -244,7 +245,7 @@ type core_run_state = <|
 
 (* Monad of the core evaluator (State + Exception + Undefined) *)
 type core_runM 'a =
-  State_exception_undefined.stExceptUndefM 'a core_run_state core_run_cause
+  State_exception_undefined.stExceptUndefM 'a core_run_state Errors.core_run_cause
 
 
 let push_exec_loc sym loc = function
@@ -503,89 +504,25 @@ end
 
 (* BEGIN silly *)
 (* Dummy function doing nothing, but required to typecheck *)
-
-val convert_pexpr: forall 'bty. generic_pexpr 'bty Symbol.sym -> pexpr
-let rec convert_pexpr (Pexpr annot _ pexpr_) =
-  Pexpr annot () match pexpr_ with
-  | PEsym sym ->
-      PEsym sym
- | PEimpl iCst ->
-     PEimpl iCst
- | PEval cval ->
-     PEval cval
- | PEconstrained xs ->
-     PEconstrained (List.map (fun (constrs, pe) -> (constrs, convert_pexpr pe)) xs)
- | PEundef loc ub ->
-     PEundef loc ub
- | PEerror str pe ->
-     PEerror str (convert_pexpr pe)
- | PEctor ctor pes ->
-     PEctor ctor (List.map convert_pexpr pes)
- | PEcase pe pat_pes ->
-     PEcase (convert_pexpr pe) (List.map (fun (pat, pe) -> (pat, convert_pexpr pe)) pat_pes)
- | PEarray_shift pe1 ty pe2 ->
-     PEarray_shift (convert_pexpr pe1) ty (convert_pexpr pe2)
- | PEmember_shift pe sym ident ->
-     PEmember_shift (convert_pexpr pe) sym ident
- | PEmemop mop pes ->
-    PEmemop mop (List.map convert_pexpr pes)
- | PEnot pe ->
-     PEnot (convert_pexpr pe)
- | PEop bop pe1 pe2 ->
-     PEop bop (convert_pexpr pe1) (convert_pexpr pe2)
- | PEconv_int ity pe ->
-    PEconv_int ity (convert_pexpr pe)
- | PEwrapI ity iop pe1 pe2 ->
-    PEwrapI ity iop (convert_pexpr pe1) (convert_pexpr pe2)
- | PEcatch_exceptional_condition ity iop pe1 pe2 ->
-    PEcatch_exceptional_condition ity iop (convert_pexpr pe1) (convert_pexpr pe2)
- | PEstruct sym ident_pes ->
-     PEstruct sym (List.map (fun (ident, pe) -> (ident, convert_pexpr pe)) ident_pes)
- | PEunion sym ident pe ->
-     PEunion sym ident (convert_pexpr pe)
- | PEcfunction pe ->
-     PEcfunction (convert_pexpr pe)
- | PEmemberof tag_sym memb_ident pe ->
-     PEmemberof tag_sym memb_ident (convert_pexpr pe)
- | PEcall nm pes ->
-     PEcall nm (List.map convert_pexpr pes)
- | PElet pat pe1 pe2 ->
-     PElet pat (convert_pexpr pe1) (convert_pexpr pe2)
- | PEif pe1 pe2 pe3 ->
-     PEif (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3)
- | PEis_scalar pe ->
-     PEis_scalar (convert_pexpr pe)
- | PEis_integer pe ->
-     PEis_integer (convert_pexpr pe)
- | PEis_signed pe ->
-     PEis_signed (convert_pexpr pe)
- | PEis_unsigned pe ->
-     PEis_unsigned (convert_pexpr pe)
- | PEbmc_assume pe ->
-     PEbmc_assume (convert_pexpr pe)
- | PEare_compatible pe1 pe2 ->
-     PEare_compatible (convert_pexpr pe1) (convert_pexpr pe2)
-  end
-
-val     convert_expr: forall 'bty 'a. Core.generic_expr 'a 'bty Symbol.sym -> Core.expr core_run_annotation
+val     convert_expr: forall 'a. Core.generic_expr 'a Symbol.sym -> Core.expr core_run_annotation
 let rec convert_expr (Expr annot expr_) =
   Expr annot match expr_ with
     | Epure pe ->
-        Epure (convert_pexpr pe)
+        Epure pe
     | Ememop memop pes ->
-        Ememop memop (List.map convert_pexpr pes)
+        Ememop memop pes
     | Elet pat pe1 e2 ->
-        Elet pat (convert_pexpr pe1) (convert_expr e2)
+        Elet pat pe1 (convert_expr e2)
     | Eif pe1 e2 e3 ->
-        Eif (convert_pexpr pe1) (convert_expr e2) (convert_expr e3)
+        Eif pe1 (convert_expr e2) (convert_expr e3)
     | Ecase pe pat_es ->
-        Ecase (convert_pexpr pe) (List.map (fun (pat, e) -> (pat, convert_expr e)) pat_es)
+        Ecase pe (List.map (fun (pat, e) -> (pat, convert_expr e)) pat_es)
     | Eccall _ ty pe pes ->
-        Eccall empty_annotation (convert_pexpr ty) (convert_pexpr pe) (List.map convert_pexpr pes)
+        Eccall empty_annotation ty pe pes
     | Eproc _ nm pes ->
-        Eproc empty_annotation nm (List.map convert_pexpr pes)
-    | Eaction pact ->
-        Eaction (convert_paction pact)
+        Eproc empty_annotation nm pes
+    | Eaction (Paction p (Action loc _ act_)) ->
+        Eaction (Paction p (Action loc empty_annotation act_))
     | Eunseq es ->
         Eunseq (List.map convert_expr es)
     | Ewseq pat e1 e2 ->
@@ -595,9 +532,9 @@ let rec convert_expr (Expr annot expr_) =
     | Ebound e ->
         Ebound (convert_expr e)
     | Esave sym xs e ->
-        Esave sym (List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, convert_pexpr pe))) xs) (convert_expr e)
+        Esave sym xs (convert_expr e)
     | Erun _ sym pes ->
-        Erun empty_annotation sym (List.map convert_pexpr pes)
+        Erun empty_annotation sym pes
     | End es ->
         End (List.map convert_expr es)
     | Epar es ->
@@ -606,69 +543,9 @@ let rec convert_expr (Expr annot expr_) =
         Ewait tid
     | Eannot fps e ->
         Eannot fps (convert_expr e)
-    | Eexcluded n act ->
-        Eexcluded n (convert_action act)
-(*
-    | Eloc loc e ->
-        Eloc loc (convert_expr e)
-    | Estd s e ->
-        Estd s (convert_expr e)
-*)
+    | Eexcluded n (Action loc _ act_) ->
+        Eexcluded n (Action loc empty_annotation act_)
   end
-
-and convert_action_ act_ =
-  match act_ with
-    | Create pe1 pe2 pref ->
-        Create (convert_pexpr pe1) (convert_pexpr pe2) pref
-    | CreateReadOnly pe1 pe2 pe3 pref ->
-        CreateReadOnly (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) pref
-    | Alloc pe1 pe2 pref ->
-        Alloc (convert_pexpr pe1) (convert_pexpr pe2) pref
-    | Kill kind pe ->
-        Kill kind (convert_pexpr pe)
-    | Store b pe1 pe2 pe3 mo ->
-        Store b (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
-    | SeqRMW b pe1 pe2 sym pe3 ->
-        SeqRMW b (convert_pexpr pe1) (convert_pexpr pe2) sym (convert_pexpr pe3)
-    | Load pe1 pe2 mo ->
-        Load (convert_pexpr pe1) (convert_pexpr pe2) mo
-    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
-        RMW (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) (convert_pexpr pe4) mo1 mo2
-    | Fence mo ->
-        Fence mo
-    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
-        CompareExchangeStrong (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) (convert_pexpr pe4) mo1 mo2
-    | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
-        CompareExchangeWeak (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) (convert_pexpr pe4) mo1 mo2
-    | LinuxFence mo ->
-        LinuxFence mo
-    | LinuxStore pe1 pe2 pe3 mo ->
-        LinuxStore (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
-    | LinuxLoad pe1 pe2 mo ->
-        LinuxLoad (convert_pexpr pe1) (convert_pexpr pe2) mo
-    | LinuxRMW pe1 pe2 pe3 mo ->
-        LinuxRMW (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
-
-  end
-
-and convert_action act =
-  match act with
-    | Action loc _ act_ ->
-        Action loc empty_annotation (convert_action_ act_)
-  end
-
-and convert_paction pact =
-  match pact with
-    | Paction p act ->
-        Paction p (convert_action act)
-  end
-
-let convert_impl_decl = function
-  | Def bTy pe ->
-      Def bTy (convert_pexpr pe)
-  | IFun bTy sym_bTys pe ->
-      IFun bTy sym_bTys (convert_pexpr pe)
-end
 
 let convert_globs (name, glb) =
   (name, match glb with
@@ -678,11 +555,11 @@ let convert_globs (name, glb) =
       GlobalDecl bTy
   end)
 
-val convert_file: forall 'bty 'a. generic_file 'bty 'a -> file core_run_annotation
+val convert_file: forall 'a. generic_file 'a -> file core_run_annotation
 let convert_file file =
   let convert_fun_map_decl = function
     | Fun bTy params pe ->
-        Fun bTy params (convert_pexpr pe)
+        Fun bTy params pe
     | ProcDecl loc bTy params ->
         ProcDecl loc bTy params
     | BuiltinDecl loc bTy params ->
@@ -690,18 +567,17 @@ let convert_file file =
     | Proc loc mrk bTy params e ->
         Proc loc mrk bTy params (convert_expr e)
   end in
-
- <|
-  main=    file.main;
-  calling_convention= file.calling_convention;
-  tagDefs= file.tagDefs;
-  stdlib=  Map.map convert_fun_map_decl file.stdlib;
-  impl=    Map.map convert_impl_decl file.impl;
-  globs=   List.map convert_globs file.globs;
-  funs=    Map.map convert_fun_map_decl file.funs;
-  extern=  file.extern;
-  funinfo= file.funinfo;
-  loop_attributes= file.loop_attributes;
-  visible_objects_env= file.visible_objects_env;
- |>
+  <|
+    main=    file.main;
+    calling_convention= file.calling_convention;
+    tagDefs= file.tagDefs;
+    stdlib=  Map.map convert_fun_map_decl file.stdlib;
+    impl=    file.impl;
+    globs=   List.map convert_globs file.globs;
+    funs=    Map.map convert_fun_map_decl file.funs;
+    extern=  file.extern;
+    funinfo= file.funinfo;
+    loop_attributes= file.loop_attributes;
+    visible_objects_env= file.visible_objects_env;
+  |>
 (* END silly *)

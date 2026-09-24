@@ -53,7 +53,7 @@ let test file expr : unit expr =
                 begin match eval_pexpr pexpr with
                   | Right (Defined cval) ->
                       ChangeDoChildrenPost
-                        ( Identity.return (Pexpr (annots, bty, PEval cval))
+                        ( Identity.return (Pexpr (annots, bty, PEbase cval))
                         , fun z -> Identity.return z )
                   | Right (Undef (_, ubs)) ->
                       failwith (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
@@ -64,7 +64,7 @@ let test file expr : unit expr =
                       print_endline ("PEcfunction => " ^ Pp_errors.to_string err);
                       exit 1
                 end
-            | PElet (pat, Pexpr (_, _, PEval cval), pe2) ->
+            | PElet (pat, Pexpr (_, _, PEbase cval), pe2) ->
                 ChangeDoChildrenPost
                   ( Identity.return (subst_pexpr pat cval pe2)
                   , Identity.return )

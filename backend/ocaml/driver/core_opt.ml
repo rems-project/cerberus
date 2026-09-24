@@ -31,7 +31,7 @@ let rec assoc_seq = function
   | e -> core_expr_map assoc_seq e
 
 (* Eliminates skip expressions, it does not eliminate "lonely" skips. *)
-(* TODO: unsafe_core_aux.subst_pattern Vunit *)
+(* TODO: unsafe_core_aux.subst_pattern Bunit *)
 let rec elim_skip = function
   | Expr (_, Esseq (_, Expr (_, Eskip), e)) -> elim_skip e
   | Expr (_, Esseq (_, e, Expr (_, Eskip))) -> elim_skip e

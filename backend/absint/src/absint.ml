@@ -223,23 +223,23 @@ let rec absvalue_of_texpr ~with_sym core man = function
   | TEval v ->
     get_env () >>= fun env ->
     begin match v with
-      | Vobject (OVinteger i)
-      | Vloaded (LVspecified (OVinteger i)) ->
+      | Bobject (OVinteger i)
+      | Bloaded (LVspecified (OVinteger i)) ->
         let n = Impl_mem.case_integer_value i
           (fun n -> Coeff.s_of_int (Z.to_int n))
           (fun _ -> assert false)
         in
         return @@ ATexpr (Texpr1.cst env n)
-      | Vloaded (LVspecified (OVpointer p)) ->
+      | Bloaded (LVspecified (OVpointer p)) ->
         Impl_mem.case_ptrval p
           (fun _ -> assert false (* null pointer *))
           (function Some sym -> return @@ ATpointer (APfunction sym) (* function *) | None -> assert false)
           (fun prov addr -> assert false)
-      | Vunit ->
+      | Bunit ->
         return @@ ATunit
-      | Vtrue ->
+      | Btrue ->
         return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int 1))
-      | Vfalse ->
+      | Bfalse ->
         return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int 0))
       | v ->
         debug @@ String_core.string_of_value v;
@@ -627,9 +627,9 @@ let rec guard core man g st = function
   | Cnot c -> (* TODO: this might be wrong *)
     let (is_bot, st) = guard core man g st c in
     (not is_bot, st)
-  | Cval Vtrue ->
+  | Cval Btrue ->
     (true, st)
-  | Cval Vfalse ->
+  | Cval Bfalse ->
     (false, st)
   | Cval v ->
     debug @@ String_core.string_of_value v;

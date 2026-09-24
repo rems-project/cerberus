@@ -90,18 +90,18 @@ module Rewriter = functor (Eff: Monad) -> struct
   type 'a rw =
     | RW of (Cerb_location.t -> 'a -> 'a action)
   
-  type 'bty rewriter = {
-      rw_pexpr : (('bty, Symbol.sym) C.generic_pexpr) rw;
-      rw_action: ((unit, 'bty, Symbol.sym) generic_action) rw;
-      rw_expr  : ((unit, 'bty, Symbol.sym) generic_expr) rw;
+  type rewriter = {
+      rw_pexpr : C.pexpr rw;
+      rw_action: (unit C.action) rw;
+      rw_expr  : (unit expr) rw;
   }
  
-  type (_, 'bty) selector =
-    | PEXPR  : (('bty, Symbol.sym) C.generic_pexpr, 'bty) selector
-    | ACTION : ((unit, 'bty, Symbol.sym) C.generic_action, 'bty) selector
-    | EXPR   : ((unit, 'bty, Symbol.sym) C.generic_expr, 'bty) selector
+  type _ selector =
+    | PEXPR  : C.pexpr selector
+    | ACTION : (unit C.action) selector
+    | EXPR   : (unit C.expr) selector
   
-  let doRewrite (type a bty) (z: (a, bty) selector) (rw: bty rewriter) (children: bty rewriter -> a -> a t) (node: a) : a t =
+  let doRewrite (type a) (z: a selector) (rw: rewriter) (children: rewriter -> a -> a t) (node: a) : a t =
     let _start : a rw = match z with
       | PEXPR  -> rw.rw_pexpr
       | ACTION -> rw.rw_action
@@ -130,10 +130,10 @@ module Rewriter = functor (Eff: Monad) -> struct
           liftM (post ch)
   
   
-  let rec rewritePexpr_ (rw: 'bty rewriter) (pe: ('bty, Symbol.sym) C.generic_pexpr) : (('bty, Symbol.sym) C.generic_pexpr) t =
+  let rec rewritePexpr_ (rw: rewriter) (pe: C.pexpr) : C.pexpr t =
     doRewrite PEXPR rw childrenPexpr pe
   
-  and childrenPexpr (rw: 'bty rewriter) (Pexpr (annots, bty, pexpr_) as pexpr) =
+  and childrenPexpr (rw: rewriter) (Pexpr (annots, bty, pexpr_) as pexpr) =
     let aux = rewritePexpr_ rw in
     let return_wrap z = return (Pexpr (annots, bty, z)) in
     begin match Annot.get_loc annots with
@@ -145,14 +145,8 @@ module Rewriter = functor (Eff: Monad) -> struct
     match pexpr_ with
       | PEsym _
       | PEimpl _
-      | PEval _ ->
+      | PEbase _ ->
           return pexpr
-      | PEconstrained xs ->
-          mapM (fun (x, pe) ->
-            aux pe >>= fun pe' ->
-            return (x, pe')
-          ) xs >>= fun xs' ->
-          return_wrap (PEconstrained xs')
       | PEundef _ ->
           return pexpr
       | PEerror (str, pe) ->
@@ -223,15 +217,6 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux pe2 >>= fun pe2' ->
           aux pe3 >>= fun pe3' ->
           return_wrap (PEif (pe1', pe2', pe3'))
-      | PEis_scalar pe ->
-          aux pe >>= fun pe' ->
-          return_wrap (PEis_scalar pe')
-      | PEis_integer pe ->
-          aux pe >>= fun pe' ->
-          return_wrap (PEis_integer pe')
-      | PEis_signed pe ->
-          aux pe >>= fun pe' ->
-          return_wrap (PEis_signed pe')
       | PEis_unsigned pe ->
           aux pe >>= fun pe' ->
           return_wrap (PEis_unsigned pe')
@@ -244,10 +229,10 @@ module Rewriter = functor (Eff: Monad) -> struct
           return_wrap (PEare_compatible (pe1', pe2'))
   
   
-  let rec rewriteAction_ (rw: 'bty rewriter) (act: (unit, 'bty, Symbol.sym) C.generic_action) : ((unit, 'bty, Symbol.sym) C.generic_action) t =
+  let rec rewriteAction_ (rw: rewriter) (act: unit C.action) : (unit C.action) t =
     doRewrite ACTION rw childrenAction act
   
-  and childrenAction (rw: 'bty rewriter) (Action (loc, (), act_)) =
+  and childrenAction (rw: rewriter) (Action (loc, (), act_)) =
     let aux_pexpr = rewritePexpr_ rw in
     let return_wrap z = return (Action (loc, (), z)) in
     update_loc loc >>= fun () ->
@@ -261,35 +246,35 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux_pexpr pe2 >>= fun pe2' ->
           aux_pexpr pe3 >>= fun pe3' ->
           return_wrap (CreateReadOnly (pe1', pe2', pe3', pref))
-      | Alloc0 (pe1, pe2, pref) ->
+      | Alloc (pe1, pe2, pref) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
-          return_wrap (Alloc0 (pe1', pe2', pref))
+          return_wrap (Alloc (pe1', pe2', pref))
       | Kill (kind, pe) ->
           aux_pexpr pe >>= fun pe' ->
           return_wrap (Kill (kind, pe'))
-      | Store0 (b, pe1, pe2, pe3, mo) ->
+      | Store (b, pe1, pe2, pe3, mo) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
           aux_pexpr pe3 >>= fun pe3' ->
-          return_wrap (Store0 (b, pe1', pe2', pe3', mo))
-      | Load0 (pe1, pe2, mo) ->
+          return_wrap (Store (b, pe1', pe2', pe3', mo))
+      | Load (pe1, pe2, mo) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
-          return_wrap (Load0 (pe1', pe2', mo))
+          return_wrap (Load (pe1', pe2', mo))
       | SeqRMW (b, pe1, pe2, sym, pe3) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
           aux_pexpr pe3 >>= fun pe3' ->
           return_wrap (SeqRMW (b, pe1', pe2', sym, pe3'))
-      | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+      | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
           aux_pexpr pe3 >>= fun pe3' ->
           aux_pexpr pe4 >>= fun pe4' ->
-          return_wrap (RMW0 (pe1', pe2', pe3', pe4', mo1, mo2))
-      | Fence0 mo ->
-          return_wrap (Fence0 mo)
+          return_wrap (RMW (pe1', pe2', pe3', pe4', mo1, mo2))
+      | Fence mo ->
+          return_wrap (Fence mo)
       | CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
@@ -320,10 +305,10 @@ module Rewriter = functor (Eff: Monad) -> struct
           return_wrap (LinuxRMW (pe1', pe2', pe3', mo))
   
   
-  let rec rewriteExpr_ (rw: 'bty rewriter) (expr: (unit, 'bty, Symbol.sym) C.generic_expr) : ((unit, 'bty, Symbol.sym) C.generic_expr) t =
+  let rec rewriteExpr_ (rw: rewriter) (expr: unit C.expr) : (unit C.expr) t =
     doRewrite EXPR rw childrenExpr expr
   
-  and childrenExpr (rw: 'bty rewriter) (Expr (annots, expr_)) =
+  and childrenExpr (rw: rewriter) (Expr (annots, expr_)) =
     let aux = rewriteExpr_ rw in
     let aux_pexpr = rewritePexpr_ rw in
     let aux_action = rewriteAction_ rw in
@@ -407,12 +392,12 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux_action act >>= fun act' ->
           return_wrap (Eexcluded (n, act'))
 
-  let rewritePexpr (rw: 'bty rewriter) (pe: ('bty, Symbol.sym) C.generic_pexpr) : (('bty, Symbol.sym) C.generic_pexpr) Eff.t =
+  let rewritePexpr (rw: rewriter) (pe: C.pexpr) : C.pexpr Eff.t =
     runM (rewritePexpr_ rw pe)
   
-  let rewriteAction (rw: 'bty rewriter) (act: (unit, 'bty, Symbol.sym) C.generic_action) : ((unit, 'bty, Symbol.sym) C.generic_action) Eff.t =
+  let rewriteAction (rw: rewriter) (act: unit C.action) : (unit C.action) Eff.t =
     runM (rewriteAction_ rw act)
   
-  let rewriteExpr (rw: 'bty rewriter) (expr: (unit, 'bty, Symbol.sym) C.generic_expr) : ((unit, 'bty, Symbol.sym) C.generic_expr) Eff.t =
+  let rewriteExpr (rw: rewriter) (expr: unit C.expr) : (unit C.expr) Eff.t =
     runM (rewriteExpr_ rw expr)
 end

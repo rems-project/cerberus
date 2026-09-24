@@ -4,6 +4,7 @@
    "A simple, possibly correct LR parser for C11" *)
 
 open Cerb_frontend
+open Cerb_symbol
 
 exception KnR_declaration of Cerb_location.t
 
@@ -21,15 +22,15 @@ val identifier: declarator -> string
 val cabs_of_declarator: declarator -> Cabs.declarator
 
 val pointer_decl: Cabs.pointer_declarator -> declarator -> declarator
-val identifier_decl: Annot.attributes -> Symbol.identifier -> declarator
+val identifier_decl: Annot.attributes -> Identifier.t -> declarator
 val declarator_decl: declarator -> declarator
 val array_decl: Cabs.array_declarator -> declarator -> declarator
 val fun_decl: Cabs.parameter_type_list -> context -> declarator -> declarator
-val fun_ids_decl: Symbol.identifier list -> context -> declarator -> declarator
+val fun_ids_decl: Identifier.t list -> context -> declarator -> declarator
 
 val reinstall_function_context: declarator -> unit
 val create_function_definition:
   Cerb_location.t ->
-  ((((Symbol.identifier option * Symbol.identifier) * (((Cerb_location.t * string * (Cerb_location.t * string) list) list) option)) list) list) option ->
+  ((((Identifier.t option * Identifier.t) * (((Cerb_location.t * string * (Cerb_location.t * string) list) list) option)) list) list) option ->
   Annot.attributes option ->
   Cabs.specifiers -> declarator -> Cabs.cabs_statement -> Cabs.cabs_declaration list option -> Cabs.function_definition

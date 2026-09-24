@@ -19,7 +19,11 @@ let rec fetch_stdlib_symbol_aux pred xs =
 
 val fetch_stdlib_symbol: list Symbol.sym -> string -> Symbol.sym
 let fetch_stdlib_symbol syms str =
-  match fetch_stdlib_symbol_aux (function (Symbol.Symbol _ _ (SD_Id z)) -> z = str | _ -> false end) syms with
+  let match_sym sym = match Symbol.match_id sym with
+    | Just z -> z = str
+    | Nothing -> false
+  end in
+  match fetch_stdlib_symbol_aux match_sym syms with
     | Just sym ->
         sym
     | Nothing ->
@@ -39,10 +43,13 @@ let rec mk_stdcall_aux pred xs =
 
 val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list Core.pexpr -> Core.pexpr)
 let mk_stdcall stdlib fname =
-  match mk_stdcall_aux (function ((Symbol _ _ (SD_Id z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
+  let match_sym (sym, _) = match Symbol.match_id sym with
+    | Just z -> z = fname
+    | Nothing -> false
+  end in
+  match mk_stdcall_aux match_sym (Map_extra.toList stdlib) with
     | Just (f, Core.Fun bTy params _) ->
-        fun pes ->
-          Core.Pexpr [] () (Core.PEcall (Core.Sym f) pes)
+        fun pes -> Caux.mk_call_pe (Core.Sym f) pes
     | _ ->
         error $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
  end
@@ -300,6 +307,7 @@ type translation_stdlib = <|
   mkcall_conv_loaded_int:             Ctype.ctype -> C.pexpr -> C.pexpr;
   mkcall_loaded_fvfromint:            Ctype.ctype -> C.pexpr -> C.pexpr;
   mkcall_loaded_ivfromfloat:          Ctype.ctype -> C.pexpr -> C.pexpr;
+  mkcall_loaded_floatingcast:         Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr;
   mkcall_conv_loaded_int_:            C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_loaded_fvfromint_:           C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_loaded_ivfromfloat_:         C.pexpr -> C.pexpr -> C.pexpr;
@@ -318,7 +326,7 @@ type translation_stdlib = <|
 val mk_translation_stdlib: (map string Symbol.sym) * C.fun_map unit -> translation_stdlib
 let mk_translation_stdlib (ailnames, stdlib_fun_map) =
   let std_syms = Set_extra.toList (Map.domain stdlib_fun_map) in
-  let mk_call str pes = Core.Pexpr [] () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
+  let mk_call str pes = Caux.mk_call_pe (Core.Sym (fetch_stdlib_symbol std_syms str)) pes in
   let mk_proc str pes = Core.Expr [] (Core.Eproc () (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
   <| ailnames=                           ailnames
    ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
@@ -329,6 +337,11 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
          error "mkcall_conv_int called on non integer type"
        else
          mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_loaded_floatingcast= fun ty1 ty2 pe ->
+       if not (AilTypesAux.is_floating ty1 && AilTypesAux.is_floating ty2) then
+         error "mkcall_loaded_floatingcast called on a non floating type"
+       else
+         mk_call "loaded_floatingcast" [Caux.mk_ail_ctype_pe ty1; Caux.mk_ail_ctype_pe ty2; pe]
    ; mkcall_conv_loaded_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_loaded_int called on non integer type"
@@ -390,14 +403,16 @@ let conv_loaded_arith stdlib ty_src ty_dst pe =
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
       error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
-(*      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
+(*      C.Pexpr [] Nothing (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
   else if AilTypesAux.is_floating ty_src then
     if AilTypesAux.is_integer ty_dst then
       stdlib.mkcall_loaded_ivfromfloat ty_dst pe
-(*      C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
+(*      C.Pexpr [] Nothing (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
     else if AilTypesAux.is_floating ty_dst then
-      (* TODO: floating vs floating conversion *)
-      pe
+      if not (ctypeEqual ty_dst ty_src) then
+        stdlib.mkcall_loaded_floatingcast ty_dst ty_src pe
+      else
+        pe
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
       error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
@@ -422,13 +437,13 @@ let conv_arith stdlib ty_src ty_dst pe =
     if AilTypesAux.is_integer ty_dst then
       stdlib.mkcall_conv_int ty_dst pe
     else if AilTypesAux.is_floating ty_dst then
-      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe])
+      Caux.mk_fvfromint_pe pe
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
       error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
   else if AilTypesAux.is_floating ty_src then
     if AilTypesAux.is_integer ty_dst then
-      C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe])
+      Caux.mk_ivfromfloat_pe (Caux.mk_ail_ctype_pe ty_dst) pe
     else if AilTypesAux.is_floating ty_dst then
       (* TODO: floating vs floating conversion *)
       pe

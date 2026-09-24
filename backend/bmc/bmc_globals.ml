@@ -3,26 +3,22 @@ open Z3
 
 (* TODO: move to bmc_conf *)
 
-(* Z3 context config *)
-let g_z3_ctx_cfg =
-  let base_cfg = [ ("model", "true")  (* Generate model *)
-                 ; ("proof", "false") (* Disable proof generation *)
-                 ; ("auto_config", "true")
-                 (*; ("model_compress", "false")*)
-                 ] in
-  (* For versions >= 4.8, we disable model_compress in order to
-   * be able to easily query the model
-   * (e.g. when generating graphs or returning the model to the user).
-   *
-   * This parameter did not exist before 4.8; setting model_compress to
-   * false essentially reverts to the before-4.8 behaviour.
-   *)
-  if Z3.Version.major > 4 ||
-     (Z3.Version.major = 4 && Z3.Version.minor >= 8) then
-       ("model_compress", "false") :: base_cfg
-  else base_cfg
 
-let g_ctx = mk_context g_z3_ctx_cfg
+let g_ctx =
+  let version_compare (x1, y1, z1) (x2, y2, z2) =
+    let cx = Int.compare x1 x2 in if cx <> 0 then cx else
+    let cy = Int.compare y1 y2 in if cy <> 0 then cy else
+    Int.compare z1 z2 in
+  (* We disable model compression in order to be able to easily query the model (e.g. when
+     generating graphs or returning the model to the user). *)
+  (* We only support Z3 >= 4.8.7 *)
+  if version_compare (4, 8, 7) Version.(major, minor, build) >= 0 then
+    Z3.set_global_param "model.compact" "false";
+  mk_context
+    (* Z3 context config *)
+    [ ("model", "true")  (* Generate model *)
+    ; ("proof", "false") (* Disable proof generation *)
+    ; ("auto_config", "true") ]
 
 let g_z3_solver_logic_opt = None        (* Logic used by the solver *)
 let g_solver              = Solver.mk_solver g_ctx g_z3_solver_logic_opt

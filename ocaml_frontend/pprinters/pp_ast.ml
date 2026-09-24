@@ -22,16 +22,15 @@ let add_dtree_of_attributes (Annot.Attrs xs) dtrees =
     | [] ->
         dtrees
     | _ ->
-        let string_of_ident (Symbol.Identifier (_, str)) = str in
         Dnode ( !^ (ansi_format [Bold; Red] "Attributes")
               , List.map (fun attr ->
                   let str =
                     begin match attr.attr_ns with
                   | Some z ->
-                          string_of_ident z ^ "::"
+                          z.Cerb_symbol.Identifier.str ^ "::"
                       | None ->
                           ""
-                    end ^ string_of_ident attr.attr_id ^
+                    end ^ attr.attr_id.Cerb_symbol.Identifier.str ^
                     "(" ^ String.concat ", " (List.map (fun (_, _, l) ->
                       String.concat " ++ " (List.map (fun (loc, z) ->
                       "\"" ^ String.escaped z ^ "\"") l)) attr.attr_args) ^  ")" in

@@ -10,14 +10,14 @@ module RW = Rewriter(Identity_monad)
 let rec contains_unspec (Pattern (annots, pattern_)) = 
   match pattern_ with
   | CaseBase _ -> false
-  | CaseCtor (Cunspecified, pats) -> true
-  | CaseCtor (_, pats) -> List.exists contains_unspec pats
+  | CaseDtor (Dunspecified, pats) -> true
+  | CaseDtor (_, pats) -> List.exists contains_unspec pats
 
 let rec always_matches (Pattern (_, pat_)) =
   match pat_ with
   | CaseBase _ -> true
-  | CaseCtor (Cspecified, [pat']) -> always_matches pat'
-  | CaseCtor (Ctuple, pats) -> List.for_all always_matches pats
+  | CaseDtor (Dspecified, [pat']) -> always_matches pat'
+  | CaseDtor (Dtuple, pats) -> List.for_all always_matches pats
   | _ -> false
 
 let rec cleanup_cases = function
@@ -29,7 +29,7 @@ let rec cleanup_cases = function
 
 
 
-let rewriter : 'bty RW.rewriter =
+let rewriter : RW.rewriter =
   let open RW in {
     rw_pexpr=
       RW.RW begin fun _ _ ->

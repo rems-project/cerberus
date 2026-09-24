@@ -16,9 +16,10 @@ val extract_common:
   maybe (list (Loc.t * string * list (Loc.t * string)))
 let extract_common attr cerb_str =
   match attr.Annot.attr_ns with
-    | Just (Symbol.Identifier _ str_ns) ->
-        let Symbol.Identifier _ str_id = attr.Annot.attr_id in
-        if str_ns = "cerb" && str_id = cerb_str then
+    | Just ns_ident ->
+        let ns_str = Symbol.string_of_identifier ns_ident in
+        let id_str = Symbol.string_of_identifier attr.Annot.attr_id in
+        if ns_str = "cerb" && id_str = cerb_str then
           Just attr.Annot.attr_args
         else
           Nothing
@@ -66,9 +67,10 @@ let decode_with_address_NEW (Attrs xs) =
 let decode_with_address (Attrs xs) =
   let extract attr =
     match attr.Annot.attr_ns with
-      | Just (Symbol.Identifier _ str_ns) ->
-          let Symbol.Identifier _ str_id = attr.Annot.attr_id in
-          if str_ns = "cerb" && str_id = "with_address" then
+      | Just ns_ident ->
+          let ns_str = Symbol.string_of_identifier ns_ident in
+          let id_str = Symbol.string_of_identifier attr.Annot.attr_id in
+          if ns_str = "cerb" && id_str = "with_address" then
             match attr.Annot.attr_args with
               | [(_, str, _)] ->
                   Right (Just (snd (Decode.decode_integer_constant str)))

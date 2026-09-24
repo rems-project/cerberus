@@ -24,8 +24,8 @@ type implementation = {
   sizeof_fty: floatingType -> int option;
   alignof_ity: integerType -> int option;
   alignof_fty: floatingType -> int option;
-  register_enum: Symbol.sym -> Z.t list -> bool;
-  typeof_enum: Symbol.sym -> integerType;
+  register_enum: Cerb_symbol.Sym.t -> Z.t list -> bool;
+  typeof_enum: Cerb_symbol.Sym.t -> integerType;
   type_alias_map: type_alias_map;
 }
 
@@ -47,16 +47,16 @@ val get: unit -> implementation
 
 val offsetsof :
   ?ignore_flexible:bool ->
-  (Symbol.sym, (Cerb_location.t * Ctype.tag_definition)) Pmap.map ->
-  Symbol.sym ->
-  (Symbol.identifier * Ctype.ctype * Z.t) list * Z.t
+  (Cerb_symbol.Sym.t, (Cerb_location.t * Ctype.tag_definition)) Pmap.map ->
+  Cerb_symbol.Sym.t ->
+  (Cerb_symbol.Identifier.t * Ctype.ctype * Z.t) list * Z.t
 
 val sizeof :
-  (Symbol.sym, (Cerb_location.t * Ctype.tag_definition)) Pmap.map ->
+  (Cerb_symbol.Sym.t, (Cerb_location.t * Ctype.tag_definition)) Pmap.map ->
   Ctype.ctype ->
   Z.t
 
 val alignof :
-  (Symbol.sym, (Cerb_location.t * Ctype.tag_definition)) Pmap.map ->
+  (Cerb_symbol.Sym.t, (Cerb_location.t * Ctype.tag_definition)) Pmap.map ->
   Ctype.ctype ->
   Z.t

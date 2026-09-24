@@ -19,6 +19,7 @@ type tag_kind =
   | Kind_struct
   | Kind_union
   | Kind_enum
+(* TODO: eq, ord *)
 
 (* STD §6.2.1#1, sentence 1 *)
 type ordinary_kind = (* the ones that can have a linkage *)
@@ -29,12 +30,14 @@ type ordinary_kind = (* the ones that can have a linkage *)
   | OK_function
   | OK_enum_constant
   | OK_typedef
+(* TODO: eq, ord *)
 
 type identifier_kind =
   | Kind_ordinary of ordinary_kind
   | Kind_tag of tag_kind
   | Kind_label
   | Kind_member of tag_kind
+(* TODO: eq, ord *)
 (*
   | Kind_macro_name
   | Kind_macro_parameter
@@ -102,23 +105,35 @@ type scope =
   | Scope_block of scope_id
   | Scope_prototype of scope_id
 
-let scopeEqual sc1 sc2 =
-  match (sc1, sc2) with
-    | (Scope_function, Scope_function) ->
-        true
-    | (Scope_file, Scope_file) ->
-        true
-    | (Scope_block id1, Scope_block id2) ->
-        id1 = id2
-    | (Scope_prototype id1, Scope_prototype id2) ->
-        id1 = id2
-    | _ ->
-        false
-  end
+let (equal_scope, compare_scope) =
+  let ord = function
+    | Scope_function -> (0 : nat)
+    | Scope_file -> 1
+    | Scope_block _ -> 2
+    | Scope_prototype _ -> 3
+  end in
+  ( (fun sc1 sc2 ->
+      match (sc1, sc2) with
+        | (Scope_function, Scope_function) ->
+            true
+        | (Scope_file, Scope_file) ->
+            true
+        | (Scope_block id1, Scope_block id2) ->
+            id1 = id2
+        | (Scope_prototype id1, Scope_prototype id2) ->
+            id1 = id2
+        | _ ->
+            ord sc1 = ord sc2
+      end)
+    , (fun sc1 sc2 -> compare (ord sc1) (ord sc2)) )
 
 instance (Eq scope)
-  let (=)  = scopeEqual
-  let (<>) = fun x y -> not (scopeEqual x y)
+  let (=)  = equal_scope
+  let (<>) = fun x y -> not (equal_scope x y)
+end
+
+instance (SetType scope)
+  let setElemCompare = compare_scope
 end
 
 
@@ -202,6 +217,7 @@ type function_declaration =
 type registration =
   | Internal of A.ail_identifier * identifier_kind * maybe linkage
   | External
+(* TODO: ord *)
 
 type global_definition =
   | Tentative of Loc.t * Ctype.ctype
@@ -302,17 +318,17 @@ val generic_fail: forall 'a. Errors.error -> desugM 'a
 let inline generic_fail err = State_exception.fail err
 
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
-let inline fail loc dcause = State_exception.fail (loc, Errors.DESUGAR dcause)
+let inline fail loc dcause = State_exception.fail (Errors.desugar_error loc dcause)
 
-let inline fail_ailtyping loc tcause = State_exception.fail (loc, Errors.AIL_TYPING tcause)
+let inline fail_ailtyping loc tcause = State_exception.fail (Errors.ail_typing_error loc tcause)
 
 val contraint_violation: forall 'a. Loc.t -> Constraint.violation -> desugM 'a
 let inline constraint_violation loc v =
-  State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation v))
+  State_exception.fail (Errors.desugar_error loc (Errors.Desugar_ConstraintViolation v))
 
 val undef: forall 'a. Loc.t -> Undefined.undefined_behaviour -> desugM 'a
 let inline undef loc ub =
-  State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour ub))
+  State_exception.fail (Errors.desugar_error loc (Errors.Desugar_UndefinedBehaviour ub))
 
 val mapM: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM (list 'b)
 val mapM_: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM unit
@@ -327,11 +343,15 @@ let inline iter = State_exception.iter
 val tryWith: forall 'a. Errors.error -> desugM 'a -> desugM 'a
 let inline tryWith = State_exception.tryWith
 
-val catch: forall 'a. desugM 'a -> (Errors.error -> desugM 'a) -> desugM 'a
-let catch m f = fun s ->
+val catch_internal_error: forall 'a. desugM 'a -> (Errors.internal_error -> desugM 'a) -> desugM 'a
+let catch_internal_error m f = fun s ->
   match m s with
     | Exception.Result a -> Exception.Result a
-    | Exception.Exception err -> f err s
+    | Exception.Exception err ->
+        match Errors.match_internal_error err with
+          | Nothing -> Exception.Exception err
+          | Just err -> f err s
+        end
   end
 
 val fmap: forall 'a 'b. ('a -> 'b) -> desugM 'a -> desugM 'b
@@ -604,7 +624,7 @@ let initial_state core_eval_stuff cn_eval_stuff = <|
 val record_marker: unit -> desugM nat
 let record_marker () =
   let id = Symbol.fresh_int () in
-  begin if Global.backend_name () = "Cn" then
+  begin if Global.is_backend "Cn" then
     get_inner >>= fun inner ->
     State_exception.update (fun old_state -> <| old_state with markers_env= Map.insert id inner old_state.markers_env |>)
   else
@@ -631,10 +651,10 @@ let inline eval = cabs_to_ail_effect_eval
 
 
 val freshify: Symbol.identifier -> desugM Symbol.identifier
-let freshify (Symbol.Identifier loc str) =
+let freshify ident =
   modify_inner (fun st ->
     let n = st.aux_supply in
-    (Symbol.Identifier loc (str ^ show n), <| st with aux_supply= n+1 |>)
+    (Symbol.freshify_identifier ident n, <| st with aux_supply= n+1 |>)
   )
 
 val fresh_block_scope: desugM scope
@@ -705,7 +725,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
   end >>
   let do_fresh () =
     (* generates a fresh symbol *)
-    let Symbol.Identifier loc str = ident in
+    let str = Symbol.string_of_identifier ident in
     let sym = match kind with
       | Kind_ordinary (OK_object _) ->
          Symbol.fresh_object_address str
@@ -1105,7 +1125,8 @@ let resolve_cn_ident ns ident =
 
 
 val register_cn_ident: Cn.cn_namespace -> Symbol.identifier -> desugM Symbol.sym
-let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
+let register_cn_ident ns ident =
+  let str = Symbol.string_of_identifier ident in
   resolve_cn_ident_opt ns ident >>= function
   | Just (s, kind) ->
      fail (Loc.locOf ident) (Errors.Desugar_CN (CNErr_redeclaration ns))
@@ -1663,7 +1684,7 @@ val register_tag: Loc.t -> tag_kind -> maybe Symbol.identifier -> desugM A.ail_i
 let register_tag loc kind = function
   | Nothing ->
       (* unnamed struct/union *)
-      return (Symbol.fresh_description (Symbol.SD_unnamed_tag loc))
+      return (Symbol.fresh_unnamed_tag loc)
   | Just tag_ident ->
       internal_register_identifier (fun (scope, (sym, prev_kind, _)) do_fresh ->
         current_scope_is scope >>= function
@@ -2386,7 +2407,7 @@ let guard_extension loc ext =
   if Global.isPermissive () then
     return ()
   else
-    State_exception.fail (loc, Errors.EXTENSION ext)
+    State_exception.fail (Errors.extension_error loc ext)
 
 (* TODO: hackish, uber inefficient *)
 val remove_unused_identifiers: forall 'a. state -> A.ail_identifier -> list (A.ail_identifier * 'a) -> list (A.ail_identifier * 'a)
@@ -2460,7 +2481,7 @@ val extract_program: string -> desugM (A.ail_program unit)
 let extract_program startup_str =
   get_inner >>= fun st ->
   let startup_sym_opt =
-    match Map.lookup (Symbol.Identifier Loc.unknown startup_str, Namespace_ordinary)
+    match Map.lookup (Symbol.mk_identifier Loc.unknown startup_str, Namespace_ordinary)
             st.registered_external_identifiers with
       | Nothing ->
           Nothing
@@ -2560,7 +2581,7 @@ let extract_program startup_str =
       | Just Linkage_internal ->
           if    List.elem sym st.used_identifier
              && (kind = Kind_ordinary (OK_object false) || kind = Kind_ordinary OK_function)
-             && List.lookup sym object_defs = Nothing
+             && Maybe.isNothing (List.lookup sym object_defs)
              && not (Map.member sym st.function_definitions) then
             (* STD §6.9#3, sentence 2 *)
             constraint_violation (Loc.locOf ident) (Constraint.ExternalRedefinition sym)

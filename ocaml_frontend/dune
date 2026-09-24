@@ -5,9 +5,10 @@
  (public_name cerberus-lib.frontend)
  (synopsis "Cerberus frontend")
  (flags (:standard -w @8@11@12-9-27-33-67))
- (modules :standard \ pp_naive_memory pp_symbolic pp_constraints pp_cmm pp_sb)
+ (modules :standard \ pp_sb)
  (virtual_modules impl_mem)
- (libraries unix lem monomorphic pprint cerb_util sibylfs))
+ (preprocess (pps ppx_deriving.eq ppx_deriving.ord))
+ (libraries unix ppx_deriving lem monomorphic pprint cerb_util cerb_sibylfs))
 
 (rule
  (targets version.ml)

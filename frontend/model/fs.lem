@@ -2,127 +2,127 @@
 open import Num Maybe Either
 
 type fs_stat
-declare ocaml target_rep type fs_stat = `Sibylfs.fs_stat`
+declare ocaml target_rep type fs_stat = `Cerb_sibylfs.fs_stat`
 
 val fs_dev: fs_stat -> integer
-declare ocaml target_rep function fs_dev = `Sibylfs.fs_dev`
+declare ocaml target_rep function fs_dev = `Cerb_sibylfs.fs_dev`
 
 val fs_ino: fs_stat -> integer
-declare ocaml target_rep function fs_ino = `Sibylfs.fs_ino`
+declare ocaml target_rep function fs_ino = `Cerb_sibylfs.fs_ino`
 
 val fs_mode: fs_stat -> integer
-declare ocaml target_rep function fs_mode = `Sibylfs.fs_mode`
+declare ocaml target_rep function fs_mode = `Cerb_sibylfs.fs_mode`
 
 val fs_nlink: fs_stat -> integer
-declare ocaml target_rep function fs_nlink = `Sibylfs.fs_nlink`
+declare ocaml target_rep function fs_nlink = `Cerb_sibylfs.fs_nlink`
 
 val fs_uid: fs_stat -> integer
-declare ocaml target_rep function fs_uid = `Sibylfs.fs_uid`
+declare ocaml target_rep function fs_uid = `Cerb_sibylfs.fs_uid`
 
 val fs_gid: fs_stat -> integer
-declare ocaml target_rep function fs_gid = `Sibylfs.fs_gid`
+declare ocaml target_rep function fs_gid = `Cerb_sibylfs.fs_gid`
 
 val fs_rdev: fs_stat -> integer
-declare ocaml target_rep function fs_rdev = `Sibylfs.fs_rdev`
+declare ocaml target_rep function fs_rdev = `Cerb_sibylfs.fs_rdev`
 
 val fs_size: fs_stat -> integer
-declare ocaml target_rep function fs_size = `Sibylfs.fs_size`
+declare ocaml target_rep function fs_size = `Cerb_sibylfs.fs_size`
 
 val fs_atime: fs_stat -> integer
-declare ocaml target_rep function fs_atime = `Sibylfs.fs_atime`
+declare ocaml target_rep function fs_atime = `Cerb_sibylfs.fs_atime`
 
 val fs_mtime: fs_stat -> integer
-declare ocaml target_rep function fs_mtime = `Sibylfs.fs_mtime`
+declare ocaml target_rep function fs_mtime = `Cerb_sibylfs.fs_mtime`
 
 val fs_ctime: fs_stat -> integer
-declare ocaml target_rep function fs_ctime = `Sibylfs.fs_ctime`
+declare ocaml target_rep function fs_ctime = `Cerb_sibylfs.fs_ctime`
 
 type fs_error
-declare ocaml target_rep type fs_error = `Sibylfs.fs_error`
+declare ocaml target_rep type fs_error = `Cerb_sibylfs.Fs_error.t`
 
 val fs_string_of_error: fs_error -> string
-declare ocaml target_rep function fs_string_of_error = `Sexplib.Sexp.to_string @@ Fs_spec.Fs_types.sexp_of_error`
+declare ocaml target_rep function fs_string_of_error = `Sexplib.Sexp.to_string @@ Cerb_sibylfs.Fs_error.to_sexp`
 
 type fs_state
-declare ocaml target_rep type fs_state = `Sibylfs.fs_state`
+declare ocaml target_rep type fs_state = `Cerb_sibylfs.Fs_state.t`
 
 val fs_initial_state: fs_state
-declare ocaml target_rep function fs_initial_state = `Sibylfs.fs_initial_state`
+declare ocaml target_rep function fs_initial_state = `Cerb_sibylfs.Fs_state.initial_state`
 
 val string_of_fs_state: fs_state -> string
-declare ocaml target_rep function string_of_fs_state = `Sexplib.Sexp.to_string_hum @@ Sibylfs.sexp_of_fs_state`
+declare ocaml target_rep function string_of_fs_state = `Sexplib.Sexp.to_string_hum @@ Cerb_sibylfs.Fs_state.to_sexp`
 
 val fs_mkdir: fs_state -> string -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_mkdir = `Sibylfs.run_mkdir`
+declare ocaml target_rep function fs_mkdir = `Cerb_sibylfs.run_mkdir`
 
 val fs_open: fs_state -> string -> integer -> maybe integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_open = `Sibylfs.run_open`
+declare ocaml target_rep function fs_open = `Cerb_sibylfs.run_open`
 
 val fs_close: fs_state -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_close = `Sibylfs.run_close`
+declare ocaml target_rep function fs_close = `Cerb_sibylfs.run_close`
 
 val fs_write: fs_state -> integer -> list char -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_write = `Sibylfs.run_write`
+declare ocaml target_rep function fs_write = `Cerb_sibylfs.run_write`
 
 val fs_read: fs_state -> integer -> integer -> fs_state * (either fs_error (list char))
-declare ocaml target_rep function fs_read = `Sibylfs.run_read`
+declare ocaml target_rep function fs_read = `Cerb_sibylfs.run_read`
 
 val fs_pwrite: fs_state -> integer -> list char -> integer -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_pwrite = `Sibylfs.run_pwrite`
+declare ocaml target_rep function fs_pwrite = `Cerb_sibylfs.run_pwrite`
 
 val fs_pread: fs_state -> integer -> integer -> integer -> fs_state * (either fs_error (list char))
-declare ocaml target_rep function fs_pread = `Sibylfs.run_pread`
+declare ocaml target_rep function fs_pread = `Cerb_sibylfs.run_pread`
 
 val fs_rename: fs_state -> string -> string -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_rename = `Sibylfs.run_rename`
+declare ocaml target_rep function fs_rename = `Cerb_sibylfs.run_rename`
 
 val fs_umask: fs_state -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_umask = `Sibylfs.run_umask`
+declare ocaml target_rep function fs_umask = `Cerb_sibylfs.run_umask`
 
 val fs_chmod: fs_state -> string -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_chmod = `Sibylfs.run_chmod`
+declare ocaml target_rep function fs_chmod = `Cerb_sibylfs.run_chmod`
 
 val fs_chdir: fs_state -> string -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_chdir = `Sibylfs.run_chdir`
+declare ocaml target_rep function fs_chdir = `Cerb_sibylfs.run_chdir`
 
 val fs_chown: fs_state -> string -> integer -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_chown = `Sibylfs.run_chown`
+declare ocaml target_rep function fs_chown = `Cerb_sibylfs.run_chown`
 
 val fs_link: fs_state -> string -> string -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_link = `Sibylfs.run_link`
+declare ocaml target_rep function fs_link = `Cerb_sibylfs.run_link`
 
 val fs_readlink: fs_state -> string -> fs_state * (either fs_error (list char))
-declare ocaml target_rep function fs_readlink = `Sibylfs.run_readlink`
+declare ocaml target_rep function fs_readlink = `Cerb_sibylfs.run_readlink`
 
 val fs_symlink: fs_state -> string -> string -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_symlink = `Sibylfs.run_symlink`
+declare ocaml target_rep function fs_symlink = `Cerb_sibylfs.run_symlink`
 
 val fs_rmdir: fs_state -> string -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_rmdir = `Sibylfs.run_rmdir`
+declare ocaml target_rep function fs_rmdir = `Cerb_sibylfs.run_rmdir`
 
 val fs_truncate: fs_state -> string -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_truncate = `Sibylfs.run_truncate`
+declare ocaml target_rep function fs_truncate = `Cerb_sibylfs.run_truncate`
 
 val fs_unlink: fs_state -> string -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_unlink = `Sibylfs.run_unlink`
+declare ocaml target_rep function fs_unlink = `Cerb_sibylfs.run_unlink`
 
 val fs_lseek: fs_state -> integer -> integer -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_lseek = `Sibylfs.run_lseek`
+declare ocaml target_rep function fs_lseek = `Cerb_sibylfs.run_lseek`
 
 val fs_stat: fs_state -> string -> fs_state * (either fs_error fs_stat)
-declare ocaml target_rep function fs_stat = `Sibylfs.run_stat`
+declare ocaml target_rep function fs_stat = `Cerb_sibylfs.run_stat`
 
 val fs_lstat: fs_state -> string -> fs_state * (either fs_error fs_stat)
-declare ocaml target_rep function fs_lstat = `Sibylfs.run_lstat`
+declare ocaml target_rep function fs_lstat = `Cerb_sibylfs.run_lstat`
 
 val fs_opendir: fs_state -> string -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_opendir = `Sibylfs.run_opendir`
+declare ocaml target_rep function fs_opendir = `Cerb_sibylfs.run_opendir`
 
 val fs_readdir: fs_state -> integer -> fs_state * (either fs_error (list char))
-declare ocaml target_rep function fs_readdir = `Sibylfs.run_readdir`
+declare ocaml target_rep function fs_readdir = `Cerb_sibylfs.run_readdir`
 
 val fs_rewinddir: fs_state -> integer -> fs_state
-declare ocaml target_rep function fs_rewinddir = `Sibylfs.run_rewinddir`
+declare ocaml target_rep function fs_rewinddir = `Cerb_sibylfs.run_rewinddir`
 
 val fs_closedir: fs_state -> integer -> fs_state * (either fs_error nat)
-declare ocaml target_rep function fs_closedir = `Sibylfs.run_closedir`
+declare ocaml target_rep function fs_closedir = `Cerb_sibylfs.run_closedir`

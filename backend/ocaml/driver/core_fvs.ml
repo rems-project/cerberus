@@ -41,11 +41,10 @@ let rec fv_pe (Pexpr (_,_, e)) fvs =
   match e with
   | PEsym l -> l::fvs
   | PEimpl _ -> fvs
-  | PEval _ -> fvs
-  | PEconstrained cs -> List.fold_left (flip fv_pe %% snd) fvs cs
+  | PEbase _ -> fvs
   | PEundef _ -> fvs
   | PEerror (_, pe) -> fv_pe pe fvs
-  | PEctor (_, pes) -> List.fold_left (flip fv_pe) fvs pes
+  | PEctor (_, pes) -> List.fold_left (Fun.flip fv_pe) fvs pes
   | PEcase (pe, cases) ->
     List.fold_left (
       fun acc (pat, pe) -> acc@(fv_pe pe [] |> fvs_rm (fv_pat [] pat))
@@ -59,9 +58,9 @@ let rec fv_pe (Pexpr (_,_, e)) fvs =
   | PEare_compatible (pe1, pe2)
   | PEop (_, pe1, pe2) ->
     fv_pe pe1 fvs |> fv_pe pe2
-  | PEstruct (l,cs) -> l::(List.fold_left (flip fv_pe %% snd) fvs cs)
+  | PEstruct (l,cs) -> l::(List.fold_left (Fun.flip fv_pe %% snd) fvs cs)
   | PEunion (l,_,pe) -> l::(fv_pe pe fvs)
-  | PEcall (l, pes) -> List.fold_left (flip fv_pe) fvs pes
+  | PEcall (l, pes) -> List.fold_left (Fun.flip fv_pe) fvs pes
   | PElet (pat, pe1, pe2) ->
     fv_pe pe1 fvs
     |> fv_pe pe2
@@ -70,9 +69,6 @@ let rec fv_pe (Pexpr (_,_, e)) fvs =
     fv_pe pe1 fvs
     |> fv_pe pe2
     |> fv_pe pe3
-  | PEis_scalar pe
-  | PEis_integer pe
-  | PEis_signed pe
   | PEcfunction pe
   | PEis_unsigned pe -> fv_pe pe fvs
 
@@ -92,15 +88,15 @@ let fv_act (Paction(_, Action (_, _, act))) fvs =
 let rec fv_core (Expr (_, e_)) fvs =
   match e_ with
   | Epure pe            -> fv_pe pe fvs
-  | Ememop (memop, pes) -> List.fold_left (flip fv_pe) fvs pes
+  | Ememop (memop, pes) -> List.fold_left (Fun.flip fv_pe) fvs pes
   | Eaction act         -> fv_act act fvs
-  | Eccall (_, _, nm, pes) -> List.fold_left (flip fv_pe) fvs (nm::pes)
-  | Eproc  (_, nm, pes) -> List.fold_left (flip fv_pe) fvs pes
+  | Eccall (_, _, nm, pes) -> List.fold_left (Fun.flip fv_pe) fvs (nm::pes)
+  | Eproc  (_, nm, pes) -> List.fold_left (Fun.flip fv_pe) fvs pes
   | Eskip               -> fvs
   | Esave (_, ps, e) ->
     let bvs = List.map fst ps in
     let pes = List.map (snd % snd) ps in
-    fv_core e (List.fold_left (flip fv_pe) fvs pes)
+    fv_core e (List.fold_left (Fun.flip fv_pe) fvs pes)
     |> fvs_rm bvs
   | Eif (pe1, e2, e3) ->
     fv_pe pe1 fvs
@@ -119,7 +115,7 @@ let rec fv_core (Expr (_, e_)) fvs =
     fv_core e2 fvs
     |> fvs_rm (fv_pat [] pat)
     |> fv_core e1
-  | Erun (_, _, pes) -> List.fold_left (flip fv_pe) fvs pes
+  | Erun (_, _, pes) -> List.fold_left (Fun.flip fv_pe) fvs pes
   | Eunseq _ -> raise (Unsupported "fv unseq")
   | Ebound _ -> raise (Unsupported "fv bound")
   | End    _ -> raise (Unsupported "fv end")

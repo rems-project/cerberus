@@ -1,16 +1,14 @@
 open Cerb_frontend
+open Cerb_symbol
 open Bmc_globals
 open Annot
 open Core
 
-module Sym = Symbol
 open Z3
 open Z3.Arithmetic
 
 
 (* ========== TYPE ALIASES / DEFINITIONS ============= *)
-
-type sym_ty = Sym.sym
 
 type vc_debug =
 | VcDebugUndef of Cerb_location.t * Undefined.undefined_behaviour
@@ -136,27 +134,19 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
 
 
 (* ========== Core symbol functions ============= *)
-let sym_cmp = Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method
-
-let sym_eq sym1 sym2 = sym_cmp sym1 sym2 = 0
-
-let symbol_to_string (sym: sym_ty) =
+let symbol_to_string (sym: Sym.t) =
   match sym with
-  | Symbol (_, num, SD_Id str) ->
-      (str ^ "_" ^ (string_of_int num))
-  | Symbol (_, num, _) ->
-      ("?_" ^ (string_of_int num))
+  | Sym.{ id; desc= SD_Id str; _} ->
+      str ^ "_" ^ string_of_int id
+  | Sym.{ id; _} ->
+      "?_" ^ string_of_int id
 
-let symbol_to_int (Symbol(_, num, _): sym_ty) = num
+let symbol_to_string_simple = function
+  | Sym.{ desc= SD_Id str; _ } -> str
+  | Sym.{ id; _ } ->
+      "?_" ^ string_of_int id
 
-let symbol_to_string_simple (sym: sym_ty) =
-  match sym with
-  | Symbol (_, _, SD_Id str) -> str
-  | Symbol (_, num, _) ->
-      ("?_" ^ (string_of_int num))
-
-let prefix_to_string (prefix: Sym.prefix) =
-  match prefix with
+let prefix_to_string = function
   | PrefSource (_, l) -> "[" ^ (String.concat "," (List.map symbol_to_string_simple l)) ^ "]"
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
@@ -166,9 +156,8 @@ let prefix_to_string (prefix: Sym.prefix) =
   | PrefMalloc -> "malloc"
 
 
-let prefix_to_string_short (prefix: Sym.prefix) =
-  match prefix with
-  | PrefSource (_, l) ->  symbol_to_string_simple (List.hd (List.rev l))
+let prefix_to_string_short = function
+  | PrefSource (_, l) -> symbol_to_string_simple (List.hd (List.rev l))
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
   | PrefTemporaryLifetime _ -> "rvalue temporary"
@@ -178,17 +167,11 @@ let prefix_to_string_short (prefix: Sym.prefix) =
 
 let name_cmp = fun nm1 nm2 ->
   match (nm1, nm2) with
-  | (Sym sym1, Sym sym2) -> sym_cmp sym1 sym2
+  | (Sym sym1, Sym sym2) -> Sym.compare sym1 sym2
   | (Impl impl1, Impl impl2) ->
       Implementation.implementation_constant_compare impl1 impl2
   | (Sym _, Impl _) -> (-1)
   | (Impl _, Sym _) -> 1
-
-let ident_cmp = fun ident1 ident2 ->
-  let (Sym.Identifier(_, str1)) = ident1 in
-  let (Sym.Identifier(_, str2)) = ident2 in
-  compare str1 str2
-
 
 (* ========== Core memory functions ============= *)
 let is_null (ptr: Impl_mem.pointer_value) : bool =
@@ -257,7 +240,7 @@ let bmc_debug_print level str =
     print_endline str
 
 (* ========== Pretty printing ========== *)
-let name_to_string (name: sym_ty generic_name) =
+let name_to_string (name: Sym.t generic_name) =
   match name with
   | Sym a  -> symbol_to_string a
   | Impl i -> Implementation.string_of_implementation_constant i
@@ -271,7 +254,7 @@ let pp_to_stdout (doc: PPrint.document) =
 let pp_to_string (doc: PPrint.document) : string =
   Pp_utils.to_plain_string doc
 
-let pp_file (core_file: ('a, 'b) generic_file) =
+let pp_file (core_file: 'a file) =
   pp_to_stdout (Pp_core.Basic.pp_file core_file)
 
 let pp_ctype (ctype: Ctype.ctype) =
@@ -326,9 +309,7 @@ let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
   (match pe_ with
   | PEsym s -> PEsym s
   | PEimpl impl1 -> PEimpl impl1
-  | PEval v -> PEval v
-  | PEconstrained cs ->
-    PEconstrained (Lem_list.mapi (fun i (m, pe) -> (m, self (i+ 1) pe)) cs)
+  | PEbase b -> PEbase b
   | PEundef( loc, undef1) -> PEundef( loc, undef1)
   | PEerror( err, pe) -> PEerror( err, (self( 1) pe))
   | PEctor( ctor1, pes) -> PEctor( ctor1, (selfs pes))
@@ -350,9 +331,6 @@ let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
   | PEcall( name1, pes) -> PEcall( name1, (selfs pes))
   | PElet( pat, pe1, pe2) -> PElet( pat, (self( 1) pe1), (self( 2) pe2))
   | PEif( pe1, pe2, pe3) -> PEif( (self( 1) pe1), (self( 2) pe2), (self( 3) pe3))
-  | PEis_scalar pe -> PEis_scalar (self( 1) pe)
-  | PEis_integer pe -> PEis_integer (self( 1) pe)
-  | PEis_signed pe -> PEis_signed (self( 1) pe)
   | PEis_unsigned pe -> PEis_unsigned (self( 1) pe)
   | PEbmc_assume pe -> PEbmc_assume (self( 1) pe)
   | PEare_compatible( pe1, pe2) -> PEare_compatible( (self( 1) pe1), (self( 2) pe2))

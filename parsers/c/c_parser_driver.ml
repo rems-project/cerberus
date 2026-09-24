@@ -19,10 +19,10 @@ let after_before_msg offset buffer (lexbuf : Lexing.lexbuf) =
 
 let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
   let to_pos = C_lexer.LineMap.position in
-  try Exception.except_return (parse lexer lexbuf) with
+  try Result.ok (parse lexer lexbuf) with
   | C_lexer.Error err ->
     let loc = Cerb_location.point (to_pos (Lexing.lexeme_start_p lexbuf)) in
-    Exception.fail (loc, Errors.CPARSER err)
+    Result.error (loc, Errors.CPARSER err)
   | C_parser.Error state ->
     let message =
       try
@@ -35,12 +35,12 @@ let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
     let range = (to_pos (Lexing.lexeme_start_p lexbuf), to_pos (Lexing.lexeme_end_p lexbuf)) in
     let loc = Cerb_location.(region range NoCursor) in
     let where = after_before_msg offset token_pos_buffer lexbuf in
-    Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token  (where ^ "\n" ^ message)))
+    Result.error (loc, Errors.CPARSER (Errors.Cparser_unexpected_token  (where ^ "\n" ^ message)))
   | Failure msg ->
     prerr_endline "CPARSER_DRIVER (Failure)";
     failwith msg
   | Lexer_feedback.KnR_declaration loc ->
-    Exception.fail (loc, Errors.CPARSER Errors.Cparser_KnR_declaration)
+    Result.error (loc, Errors.CPARSER Errors.Cparser_KnR_declaration)
   | exn ->
     let loc = Cerb_location.point @@ Cerb_position.from_lexing @@ Lexing.lexeme_start_p lexbuf in
     failwith @@ "CPARSER_DRIVER(" ^ Cerb_location.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
@@ -121,7 +121,7 @@ let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
       parse_loc_string C_parser.cn_toplevel (loc, str)
       |> Exception.except_fmap (update_enclosing_region loc)
     | decl ->
-      Exception.except_return [decl] in
+      Result.ok [decl] in
   decls
   |> Exception.except_mapM magic_comments_to_cn_toplevel
   |> Exception.except_fmap (fun decls -> Cabs.TUnit (List.concat decls))
@@ -137,7 +137,7 @@ let parse_with_magic_comments lexbuf =
 let parse lexbuf =
   (* Setup the lexer's line map *)
   C_lexer.LineMap.init lexbuf.Lexing.lex_curr_p.pos_fname;
-  Exception.except_bind (parse_with_magic_comments lexbuf)
+  Result.bind (parse_with_magic_comments lexbuf)
     magic_comments_to_cn_toplevel
 
 let parse_from_channel input =

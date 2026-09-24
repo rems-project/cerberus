@@ -1,5 +1,6 @@
 open Cabs
 
+open Cerb_symbol
 open Cerb_pp_prelude
 open Pp_ast
 open Cerb_colour
@@ -77,7 +78,7 @@ let _pp_colour_type_keyword k =
 let _pp_colour_function_identifier id =
   !^(ansi_format [Bold; Blue] id)
 
-let pp_colour_label (Symbol.Identifier (_, str)) =
+let pp_colour_label Identifier.{str; _} =
   !^(ansi_format [Magenta] str)
 
 let pp_decl_ctor k =

@@ -4,6 +4,7 @@
    "A simple, possibly correct LR parser for C11" *)
 
 open Cerb_frontend
+open Cerb_symbol
 
 module IdSet = Set.Make(String)
 
@@ -69,7 +70,7 @@ let restore_context ctxt =
 type decl_sort =
   | DeclId
   | DeclFun of context
-  | DeclFunIds of context * Symbol.identifier list
+  | DeclFunIds of context * Identifier.t list
   | DeclPtr of Cabs.pointer_declarator
   | DeclOther
 and declarator =
@@ -93,10 +94,10 @@ let pointer_decl pdecl d =
   { d with sort=    DeclPtr pdecl;
   }
 
-let identifier_decl attrs (Symbol.Identifier(_, str) as i) =
-  { id=      str;
+let identifier_decl attrs ident =
+  { id=      ident.Identifier.str;
     sort=    DeclId;
-    direct=  Cabs.DDecl_identifier (attrs, i);
+    direct=  Cabs.DDecl_identifier (attrs, ident);
   }
 
 let declarator_decl d =

@@ -1,8 +1,8 @@
 open Core
 
-type env = (Symbol.sym, pexpr) Pmap.map
+type env = (Cerb_symbol.Sym.t, pexpr) Pmap.map
 
-let empty_env : env = Pmap.empty Symbol.compare_sym
+let empty_env : env = Pmap.empty Cerb_symbol.Sym.compare
 
 let extend_env env alias pe = Pmap.add alias pe env
 
@@ -10,7 +10,7 @@ let extend_env_list env bindings =
   List.fold_left (fun acc (s, pe) -> extend_env acc s pe) env bindings
 
 let sym_in binders s =
-  List.exists (fun b -> Symbol.compare_sym s b = 0) binders
+  List.exists (fun b -> Cerb_symbol.Sym.compare s b = 0) binders
 
 (* a conservative free-variable and replaceable-with-unit check
 
@@ -28,7 +28,7 @@ let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
   match pe_ with
   | PEsym s ->
       not (sym_in binders s)
-  | PEval _ | PEimpl _ | PEundef _ | PEerror _ ->
+  | PEbase _ | PEimpl _ | PEundef _ | PEerror _ ->
       true
   | PEctor (_, pes) ->
       List.for_all (can_prop_and_rm binders) pes
@@ -43,8 +43,7 @@ let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
   | PEmemberof (_, _, pe1)
   | PEmember_shift (pe1, _, _)
   | PEconv_int (_, pe1)
-  | PEis_scalar pe1 | PEis_integer pe1
-  | PEis_signed pe1 | PEis_unsigned pe1
+  | PEis_unsigned pe1
   | PEbmc_assume pe1
   | PEunion (_, _, pe1) ->
       can_prop_and_rm binders pe1
@@ -52,7 +51,7 @@ let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
       List.for_all (can_prop_and_rm binders) pes
   | PEstruct (_, fields) ->
       List.for_all (fun (_, pe1) -> can_prop_and_rm binders pe1) fields
-  | PEif _ | PElet _ | PEcase _ | PEconstrained _ ->
+  | PEif _ | PElet _ | PEcase _ ->
       false  (* not worth extra complexity *)
    | PEcall _ | PEcfunction _ ->
      false (* unsafe to replace with unit *)
@@ -61,7 +60,7 @@ let rec binders_of_pat (Pattern (_, pat_)) =
   match pat_ with
   | CaseBase (None, _)   -> []
   | CaseBase (Some s, _) -> [s]
-  | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
+  | CaseDtor (_, pats)   -> List.concat_map binders_of_pat pats
 
 (* ------------------------------------------------------------------ *)
 (* analyze_pat_pexpr: pattern-aware single-pass analysis for pexprs   *)
@@ -82,7 +81,7 @@ let remove_integer_annot annots =
  * types for pure expressions, of various kinds, so must be removed
  * from units *)
 let unit_pexpr (Pexpr (annots, bty, _)) =
-  Pexpr (remove_integer_annot annots, bty, PEval Vunit)
+  Pexpr (remove_integer_annot annots, bty, PEbase Bunit)
 
 let wildcard_pat (Pattern (p_annots, _)) =
   Pattern (p_annots, CaseBase (None, BTy_unit))
@@ -91,7 +90,7 @@ let unit_pat_pe pat pe =
   let Pattern (p_annots, pat_) = pat in
   let Pexpr (annots, bty, pe_) = pe in
   match pat_, pe_ with
-  | CaseBase (_, BTy_unit), PEval Vunit ->
+  | CaseBase (_, BTy_unit), PEbase Bunit ->
     true
   | _ ->
     false
@@ -124,23 +123,23 @@ let rec analyze_pat_pexpr binders pat pe =
   | CaseBase (_, _), _ ->
       ([], pat, pe)
 
-  | CaseCtor (Ctuple, pats), Pexpr (pe_annots, pe_bty, PEctor (Ctuple, pes))
+  | CaseDtor (Dtuple, pats), Pexpr (pe_annots, pe_bty, PEctor (Ctuple, pes))
     when List.length pats = List.length pes ->
       let results = List.map2 (analyze_pat_pexpr binders) pats pes in
       let bindings  = List.concat_map (fun (bs, _, _) -> bs) results in
       let new_pats  = List.map (fun (_, p, _) -> p) results in
       let new_pes   = List.map (fun (_, _, e) -> e) results in
       ( bindings
-      , Pattern (p_annots, CaseCtor (Ctuple, new_pats))
+      , Pattern (p_annots, CaseDtor (Dtuple, new_pats))
       , Pexpr (pe_annots, pe_bty, PEctor (Ctuple, new_pes)) )
 
-  | CaseCtor (Cspecified, [inner_pat]),
+  | CaseDtor (Dspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [inner_pe])) ->
       analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
-  | CaseCtor (Cspecified, [inner_pat]),
-    Pexpr (pe_annots, pe_bty, PEval (Vloaded (LVspecified ov))) ->
-      let inner_pe = Pexpr (pe_annots, pe_bty, PEval (Vobject ov)) in
+  | CaseDtor (Dspecified, [inner_pat]),
+    Pexpr (pe_annots, pe_bty, PEbase (Bloaded (LVspecified ov))) ->
+      let inner_pe = Pexpr (pe_annots, pe_bty, PEbase (Bobject ov)) in
       analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
   | _ ->
@@ -161,7 +160,7 @@ and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty,
     (* if it's already been pushed inside, the outer will duplicate it *)
     let pe_annots = remove_integer_annot pe_annots in
     ( bindings
-    , Pattern (p_annots, CaseCtor (Cspecified, [new_inner_pat]))
+    , Pattern (p_annots, CaseDtor (Dspecified, [new_inner_pat]))
     , Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [new_inner_pe])) )
 
 
@@ -194,10 +193,10 @@ let unwrap_loaded_pat ~enabled (subs, pat, expr) =
     let Pattern (p_annots, pat_) = pat in
     (match pat_ with
      | CaseBase (Some s, BTy_loaded cbt) ->
-         let pe_sym = Pexpr ([], (), PEsym s) in
-         let pe = Pexpr ([], (), PEctor (Cspecified, [pe_sym])) in
+         let pe_sym = Pexpr ([], None, PEsym s) in
+         let pe = Pexpr ([], None, PEctor (Cspecified, [pe_sym])) in
          let pattern = Pattern ([], CaseBase (Some s, BTy_object cbt)) in
-         let pattern = Pattern (p_annots, CaseCtor (Cspecified, [pattern])) in
+         let pattern = Pattern (p_annots, CaseDtor (Dspecified, [pattern])) in
          (* re-using the same sym! *)
          ((s, pe) :: subs, pattern, expr)
      | _ ->
@@ -222,13 +221,13 @@ let rec analyze_pat_expr ~unwrap_loaded binders pat (Expr (annot, e_) as expr) =
   | Eunseq es ->
       let Pattern (p_annots, pat_) = pat in
       (match pat_ with
-       | CaseCtor (Ctuple, pats) when List.length pats = List.length es ->
+       | CaseDtor (Dtuple, pats) when List.length pats = List.length es ->
            let results = List.map2 (analyze binders) pats es in
            let bindings = List.concat_map (fun (bs, _, _) -> bs) results in
            let new_pats = List.map (fun (_, p, _) -> p) results in
            let new_es   = List.map (fun (_, _, e) -> e) results in
            ( bindings
-           , Pattern (p_annots, CaseCtor (Ctuple, new_pats))
+           , Pattern (p_annots, CaseDtor (Dtuple, new_pats))
            , ret_e (Eunseq new_es) )
        | _ ->
            ([], pat, expr))
@@ -265,7 +264,7 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
       (match Pmap.lookup s env with
        | Some pe' -> pe'
        | None     -> Pexpr (annots, bty, PEsym s))
-  | PEval _ | PEimpl _ | PEundef _ | PEerror _ | PEconstrained _ ->
+  | PEbase _ | PEimpl _ | PEundef _ | PEerror _ ->
       pe
   | PElet (pat, pe1, pe2) ->
       let pe1' = propagate_pexpr env pe1 in
@@ -316,12 +315,6 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
         propagate_pexpr env pe1,
         propagate_pexpr env pe2,
         propagate_pexpr env pe3))
-  | PEis_scalar pe1 ->
-      Pexpr (annots, bty, PEis_scalar (propagate_pexpr env pe1))
-  | PEis_integer pe1 ->
-      Pexpr (annots, bty, PEis_integer (propagate_pexpr env pe1))
-  | PEis_signed pe1 ->
-      Pexpr (annots, bty, PEis_signed (propagate_pexpr env pe1))
   | PEis_unsigned pe1 ->
       Pexpr (annots, bty, PEis_unsigned (propagate_pexpr env pe1))
   | PEbmc_assume pe1 ->
@@ -338,20 +331,20 @@ let propagate_action env (Paction (pol, Action (loc, a, act_))) =
         Create (pp pe1, pp pe2, prefix)
     | CreateReadOnly (pe1, pe2, pe3, prefix) ->
         CreateReadOnly (pp pe1, pp pe2, pp pe3, prefix)
-    | Alloc0 (pe1, pe2, prefix) ->
-        Alloc0 (pp pe1, pp pe2, prefix)
+    | Alloc (pe1, pe2, prefix) ->
+        Alloc (pp pe1, pp pe2, prefix)
     | Kill (kind, pe1) ->
         Kill (kind, pp pe1)
-    | Store0 (lk, pe1, pe2, pe3, mo) ->
-        Store0 (lk, pp pe1, pp pe2, pp pe3, mo)
-    | Load0 (pe1, pe2, mo) ->
-        Load0 (pp pe1, pp pe2, mo)
+    | Store (lk, pe1, pe2, pe3, mo) ->
+        Store (lk, pp pe1, pp pe2, pp pe3, mo)
+    | Load (pe1, pe2, mo) ->
+        Load (pp pe1, pp pe2, mo)
     | SeqRMW (lk, pe1, pe2, sym, pe3) ->
         SeqRMW (lk, pp pe1, pp pe2, sym, pp pe3)
-    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
-        RMW0 (pp pe1, pp pe2, pp pe3, pp pe4, mo1, mo2)
-    | Fence0 mo ->
-        Fence0 mo
+    | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        RMW (pp pe1, pp pe2, pp pe3, pp pe4, mo1, mo2)
+    | Fence mo ->
+        Fence mo
     | CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2) ->
         CompareExchangeStrong (pp pe1, pp pe2, pp pe3, pp pe4, mo1, mo2)
     | CompareExchangeWeak (pe1, pe2, pe3, pe4, mo1, mo2) ->

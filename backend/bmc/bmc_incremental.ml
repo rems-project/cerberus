@@ -8,11 +8,11 @@ open Bmc_types
 open Bmc_utils
 
 open Cerb_frontend
+open Cerb_symbol
 open Core
 open Core_aux
 open Impl_mem
 open Printf
-open Cerb_util
 open Z3
 
 module Caux = Core_aux
@@ -43,36 +43,40 @@ module BmcInline = struct
     id_gen : int;
     run_depth_table : run_depth_table;
 
-    file   : unit typed_file; (* unmodified *)
+    file   : unit file; (* unmodified *)
 
-    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    inline_pexpr_map : (int, pexpr) Pmap.map;
+    inline_expr_map  : (int, unit expr) Pmap.map;
 
-    fn_call_map : (int, sym_ty) Pmap.map;
+    fn_call_map : (int, Sym.t) Pmap.map;
 
     (* Return type for Erun *)
     fn_type : core_base_type option;
 
     (* procedure-local state *)
-    proc_expr : (unit typed_expr) option;
+    proc_expr : (unit expr) option;
 
     (* function call map: map from Core symbol -> function ptr*)
-    fn_ptr_map : (sym_ty, sym_ty) Pmap.map;
+    fn_ptr_map : (Sym.t, Sym.t) Pmap.map;
 
   }
 
   include EffMonad(struct type state = state_ty end)
 
+  let compare_name =
+    (Core.instance_Map_MapKeyType_Core_generic_name_dict
+      Lem_map.{mapKeyCompare_method= Sym.compare }).mapKeyCompare_method
+
   let mk_initial file : state =
     { id_gen           = 0
-    ; run_depth_table  = Pmap.empty Stdlib.compare
+    ; run_depth_table  = Pmap.empty compare_name
     ; file             = file
-    ; inline_pexpr_map = Pmap.empty Stdlib.compare
-    ; inline_expr_map  = Pmap.empty Stdlib.compare
-    ; fn_call_map      = Pmap.empty Stdlib.compare
+    ; inline_pexpr_map = Pmap.empty Int.compare
+    ; inline_expr_map  = Pmap.empty Int.compare
+    ; fn_call_map      = Pmap.empty Int.compare
     ; fn_type          = None
     ; proc_expr        = None
-    ; fn_ptr_map       = Pmap.empty Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_basic_classes.setElemCompare_method
+    ; fn_ptr_map       = Sym.empty_pmap
     }
 
   (* ======= Accessors ======== *)
@@ -106,7 +110,7 @@ module BmcInline = struct
     get_run_depth_table    >>= fun table ->
     put_run_depth_table (Pmap.add label (depth-1) table)
 
-  let get_file : (unit typed_file) eff =
+  let get_file : (unit file) eff =
     get >>= fun st ->
     return st.file
 
@@ -120,33 +124,33 @@ module BmcInline = struct
     put {st with fn_type = Some cbt}
 
   (* proc_expr *)
-  let get_proc_expr : (unit typed_expr) eff =
+  let get_proc_expr : (unit expr) eff =
     get >>= fun st ->
     return (Option.get st.proc_expr)
 
-  let update_proc_expr (proc_expr: unit typed_expr) : unit eff =
+  let update_proc_expr (proc_expr: unit expr) : unit eff =
     get >>= fun st ->
     put {st with proc_expr = Some proc_expr}
 
   (* inline maps *)
-  let add_inlined_pexpr (id: int) (pexpr: typed_pexpr) : unit eff =
+  let add_inlined_pexpr (id: int) (pexpr: pexpr) : unit eff =
     get >>= fun st ->
     put {st with inline_pexpr_map = Pmap.add id pexpr st.inline_pexpr_map}
 
-  let add_inlined_expr (id: int) (expr: unit typed_expr) : unit eff =
+  let add_inlined_expr (id: int) (expr: unit expr) : unit eff =
     get >>= fun st ->
     put {st with inline_expr_map = Pmap.add id expr st.inline_expr_map}
 
-  let add_fn_call (id: int) (fn_sym: sym_ty) : unit eff =
+  let add_fn_call (id: int) (fn_sym: Sym.t) : unit eff =
     get >>= fun st ->
     put {st with fn_call_map = Pmap.add id fn_sym st.fn_call_map}
 
   (* fn_ptr_map *)
-  let add_to_fn_ptr_map (sym: sym_ty) (fn_sym: sym_ty) : unit eff =
+  let add_to_fn_ptr_map (sym: Sym.t) (fn_sym: Sym.t) : unit eff =
     get >>= fun st ->
     put {st with fn_ptr_map = Pmap.add sym fn_sym st.fn_ptr_map}
 
-  let get_fn_ptr_sym (sym : sym_ty) : sym_ty eff =
+  let get_fn_ptr_sym (sym : Sym.t) : Sym.t eff =
     get >>= fun st ->
     match Pmap.lookup sym st.fn_ptr_map with
     | None -> failwith (sprintf "BmcInline: fn_sym %s not found"
@@ -154,7 +158,7 @@ module BmcInline = struct
     | Some fn_sym -> return fn_sym
 
   (* TODO: hack to compute function from pointer *)
-  let get_function_from_ptr (ptr: Impl_mem.pointer_value): sym_ty eff =
+  let get_function_from_ptr (ptr: Impl_mem.pointer_value): Sym.t eff =
     get_file >>= fun file ->
     let ptr_str = pp_to_string (Impl_mem.pp_pointer_value ptr) in
     let (fn_sym, _) = List.find (fun (sym, _) ->
@@ -165,32 +169,32 @@ module BmcInline = struct
 
   (* TODO: move this; really same as core_aux except typed. *)
 
-  let mk_sym_pat sym_opt bTy: typed_pattern =
+  let mk_sym_pat sym_opt bTy: pattern =
     (Pattern( [], (CaseBase (sym_opt, bTy))))
 
-  let mk_ctype_pe ty: typed_pexpr =
-    (Pexpr( [], BTy_ctype, (PEval (Vctype ty))))
+  let mk_ctype_pe ty: pexpr =
+    (Pexpr( [], Some BTy_ctype, (PEbase (Bctype ty))))
 
-  let mk_boolean_pe b: typed_pexpr =
-    (Pexpr( [], BTy_boolean, (PEval (if b then Vtrue else Vfalse))))
+  let mk_boolean_pe b: pexpr =
+    (Pexpr( [], Some BTy_boolean, (PEbase (if b then Btrue else Bfalse))))
 
-  let rec mk_list_pe pes : typed_pexpr =
-    (Pexpr( [], BTy_list BTy_ctype, (match pes with
+  let rec mk_list_pe pes : pexpr =
+    (Pexpr( [], Some (BTy_list BTy_ctype), (match pes with
       | [] ->
           PEctor( (Cnil BTy_ctype), [])
       | pe :: pes' ->
           PEctor( Ccons, [pe; mk_list_pe pes'])
     )))
 
-  let mk_tuple_pe pes: typed_pexpr =
-    let cbts = List.map (fun (Pexpr(_, cbt, _)) -> cbt) pes in
-    (Pexpr( [], BTy_tuple cbts, (PEctor( Ctuple, pes))))
+  let mk_tuple_pe pes: pexpr =
+    let cbts = List.map (fun (Pexpr(_, cbt, _)) -> Option.get cbt) pes in
+    (Pexpr( [], Some (BTy_tuple cbts), (PEctor( Ctuple, pes))))
 
-  let mk_ewseq pat e1 e2 : unit typed_expr =
+  let mk_ewseq pat e1 e2 : unit expr =
     Expr([], Ewseq(pat, e1, e2))
 
   (* ======== Inline functions ======= *)
-  let rec inline_pe (Pexpr(annots, bTy, pe_)) : typed_pexpr eff =
+  let rec inline_pe (Pexpr(annots, bTy, pe_)) : pexpr eff =
     get_fresh_id  >>= fun id ->
     (match pe_ with
     | PEsym _  -> return pe_
@@ -203,8 +207,7 @@ module BmcInline = struct
             return (PEimpl const)
         | _ -> assert false
         end
-    | PEval _  -> return pe_
-    | PEconstrained _ -> assert false
+    | PEbase _  -> return pe_
     | PEundef _ -> return pe_
     | PEerror _ -> return pe_
     | PEctor (ctor, pes) ->
@@ -293,7 +296,7 @@ module BmcInline = struct
           let error_msg =
             sprintf "call_depth_exceeded: %s" (name_to_string  name) in
           let new_pexpr =
-            (Pexpr([], ty, PEerror(error_msg, Pexpr([], BTy_unit,PEval(Vunit))))) in
+            (Pexpr([], Some ty, PEerror(error_msg, Pexpr([], Some BTy_unit,PEbase(Bunit))))) in
           inline_pe new_pexpr >>= fun inlined_new_pexpr ->
           add_inlined_pexpr id inlined_new_pexpr >>
           return (PEcall (name, inlined_pes))
@@ -303,7 +306,7 @@ module BmcInline = struct
           (* Substitute arguments in function call *)
           let sub_map = List.fold_right2
               (fun (sym, _) pe table -> Pmap.add sym pe table)
-              args inlined_pes (Pmap.empty sym_cmp) in
+              args inlined_pes Sym.empty_pmap in
           (* Get the new function body to work with *)
           let pexpr_to_call = unsafe_substitute_pexpr sub_map fun_expr in
           increment_run_depth name >>
@@ -321,15 +324,6 @@ module BmcInline = struct
         inline_pe pe2 >>= fun inlined_pe2 ->
         inline_pe pe3 >>= fun inlined_pe3 ->
         return (PEif(inlined_pe1, inlined_pe2, inlined_pe3))
-    | PEis_scalar pe ->
-        inline_pe pe >>= fun inlined_pe ->
-        return (PEis_scalar(inlined_pe))
-    | PEis_integer pe ->
-        inline_pe pe >>= fun inlined_pe ->
-        return (PEis_integer(inlined_pe))
-    | PEis_signed pe ->
-        inline_pe pe >>= fun inlined_pe ->
-        return (PEis_signed(inlined_pe))
     | PEis_unsigned pe ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEis_unsigned(inlined_pe))
@@ -354,30 +348,30 @@ module BmcInline = struct
         inline_pe pe2 >>= fun inlined_pe2 ->
         inline_pe pe3 >>= fun inlined_pe3 ->
         return (CreateReadOnly(inlined_pe1, inlined_pe2, inlined_pe3, pref))
-    | Alloc0 (pe1, pe2, pref) ->
+    | Alloc (pe1, pe2, pref) ->
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
-        return (Alloc0(inlined_pe1, inlined_pe2, pref))
+        return (Alloc(inlined_pe1, inlined_pe2, pref))
     | Kill (b, pe) ->
         inline_pe pe >>= fun inlined_pe ->
         return (Kill(b, inlined_pe))
-    | Store0 (b, pe1, pe2, pe3, memord) ->
+    | Store (b, pe1, pe2, pe3, memord) ->
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
         inline_pe pe3 >>= fun inlined_pe3 ->
-        return (Store0(b, inlined_pe1, inlined_pe2, inlined_pe3, memord))
-    | Load0 (pe1, pe2, memord) ->
+        return (Store(b, inlined_pe1, inlined_pe2, inlined_pe3, memord))
+    | Load (pe1, pe2, memord) ->
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
-        return (Load0(inlined_pe1, inlined_pe2, memord))
-    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        return (Load(inlined_pe1, inlined_pe2, memord))
+    | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
         inline_pe pe3 >>= fun inlined_pe3 ->
         inline_pe pe4 >>= fun inlined_pe4 ->
-        return (RMW0(inlined_pe1, inlined_pe2, inlined_pe3, inlined_pe4, mo1, mo2))
-    | Fence0 mo ->
-        return (Fence0(mo))
+        return (RMW(inlined_pe1, inlined_pe2, inlined_pe3, inlined_pe4, mo1, mo2))
+    | Fence mo ->
+        return (Fence(mo))
     | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
@@ -411,7 +405,7 @@ module BmcInline = struct
     ) >>= fun inlined_action ->
     return (Paction(p, Action(loc, a, inlined_action)))
 
-  let rec inline_e (Expr(annots, e_)) : (unit typed_expr) eff =
+  let rec inline_e (Expr(annots, e_)) : (unit expr) eff =
     get_fresh_id >>= fun id ->
     (match e_ with
     | Epure pe ->
@@ -435,10 +429,10 @@ module BmcInline = struct
              Pexpr(_,_,PEnot(Pexpr(_,_,PEare_compatible(pe_ty, Pexpr(_,_,PEsym sym2))))),
                        Expr(_, Epure(Pexpr(_,_,PEundef _))),
                        _)) as e)) ->
-        assert (sym_cmp cty_sym sym2 = 0);
+        assert (Sym.equal cty_sym sym2);
         (* TODO: ugly hack. This changes the semantics and is just wrong. *)
         bmc_debug_print 7 "TODO: Elet hack for function calls";
-        let sub_map = Pmap.add cty_sym pe_ty (Pmap.empty sym_cmp) in
+        let sub_map = Pmap.add cty_sym pe_ty Sym.empty_pmap in
         let hacky_expr = unsafe_substitute_expr sub_map e in
 
         inline_pe pe >>= fun inlined_pe ->
@@ -487,9 +481,9 @@ module BmcInline = struct
           let error_msg =
             sprintf "Eccall_depth_exceeded: %s" (name_to_string (Sym fn_ptr_sym)) in
           let new_expr =
-            (Expr([],Epure(Pexpr([], fun_ty,
+            (Expr([],Epure(Pexpr([], Some fun_ty,
                            PEerror(error_msg,
-                                   Pexpr([], BTy_unit, PEval(Vunit))))))) in
+                                   Pexpr([], Some BTy_unit, PEbase(Bunit))))))) in
           inline_e new_expr >>= fun inlined_new_expr ->
           add_inlined_expr id inlined_new_expr >>
           return (Eccall(a, pe_ty, pe_fn, pe_args))
@@ -500,7 +494,7 @@ module BmcInline = struct
             assert (List.length pe_args = List.length fun_args);
             let sub_map = List.fold_right2
               (fun (sym,_) pe map -> Pmap.add sym pe map)
-              fun_args inlined_pe_args (Pmap.empty sym_cmp) in
+              fun_args inlined_pe_args Sym.empty_pmap in
             let expr_to_check = unsafe_substitute_expr sub_map fun_expr in
 
             get_proc_expr >>= fun old_proc_expr ->
@@ -540,9 +534,9 @@ module BmcInline = struct
           let error_msg =
             sprintf "call_depth_exceeded: %s" (name_to_string name) in
           let new_expr =
-            (Expr([],Epure(Pexpr([], ty,
+            (Expr([],Epure(Pexpr([], Some ty,
                            PEerror(error_msg,
-                                   Pexpr([], BTy_unit, PEval(Vunit))))))) in
+                                   Pexpr([], Some BTy_unit, PEbase(Bunit))))))) in
           inline_e new_expr >>= fun inlined_new_expr ->
           add_inlined_expr id inlined_new_expr >>
           return (Eproc(a, name, pes))
@@ -550,7 +544,7 @@ module BmcInline = struct
           bmc_debug_print 7 "Eproc: Check this";
           let sub_map = List.fold_right2
             (fun (sym, _) pe table -> Pmap.add sym pe table)
-            args inlined_pes (Pmap.empty sym_cmp) in
+            args inlined_pes Sym.empty_pmap in
           let expr_to_check = unsafe_substitute_expr sub_map fun_expr in
           increment_run_depth name >>
           inline_e expr_to_check >>= fun inlined_expr_to_check ->
@@ -591,7 +585,7 @@ module BmcInline = struct
         return (End (inlined_es))
     | Esave (name, varlist, e) ->
         let sub_map = List.fold_right (fun (sym, (cbt, pe)) map ->
-          Pmap.add sym pe map) varlist (Pmap.empty sym_cmp) in
+          Pmap.add sym pe map) varlist Sym.empty_pmap in
         let to_check = unsafe_substitute_expr sub_map e in
         inline_e to_check >>= fun inlined_to_check ->
         add_inlined_expr id inlined_to_check >>
@@ -606,23 +600,22 @@ module BmcInline = struct
            *)
           get_fn_type >>= fun ret_type ->
           let new_expr =
-            (Expr([],Epure(Pexpr([], ret_type,
+            (Expr([],Epure(Pexpr([], Some ret_type,
                            PEerror(error_msg,
-                                   Pexpr([], BTy_unit, PEval(Vunit)))))))
+                                   Pexpr([], Some BTy_unit, PEbase(Bunit)))))))
                            (*error(error_msg,
-                                  Pexpr([], BTy_unit, PEval (Vunit))))))) *)in
+                                  Pexpr([], BTy_unit, PEbase (Bunit))))))) *)in
           inline_e new_expr >>= fun inlined_new_expr ->
           add_inlined_expr id inlined_new_expr >>
           return (Erun(a, label, pelist))
         else begin
           get_proc_expr >>= fun proc_expr ->
           let (cont_syms, cont_expr) = Option.get (find_labeled_continuation
-                            Sym.instance_Basic_classes_Eq_Symbol_sym_dict
                             label proc_expr) in
           assert (List.length pelist = List.length cont_syms);
           let sub_map = List.fold_right2
               (fun sym pe map -> Pmap.add sym pe map)
-              cont_syms pelist (Pmap.empty sym_cmp) in
+              cont_syms pelist Sym.empty_pmap in
           let cont_to_check = unsafe_substitute_expr sub_map cont_expr in
           increment_run_depth (Sym label) >>
           inline_e cont_to_check >>= fun inlined_cont_to_check ->
@@ -646,8 +639,8 @@ module BmcInline = struct
     | GlobalDecl bty ->
       return (gname, GlobalDecl bty)
 
-  let inline (file: unit typed_file) (fn_to_check: sym_ty)
-             : (unit typed_file) eff =
+  let inline (file: unit file) (fn_to_check: Sym.t)
+             : (unit file) eff =
     mapM inline_globs file.globs >>= fun globs ->
     (match Pmap.lookup fn_to_check file.funs with
      | Some (Proc (annot, marker_id, bTy, params, e)) ->
@@ -667,23 +660,23 @@ end
 (* Do SSA renaming and also get a global map from sym -> cbt
  * to construct Z3 Expr *)
 module BmcSSA = struct
-  type sym_table_ty = (sym_ty, sym_ty) Pmap.map
-  type sym_expr_table_ty = (sym_ty, Expr.expr) Pmap.map
+  type sym_table_ty = (Sym.t, Sym.t) Pmap.map
+  type sym_expr_table_ty = (Sym.t, Expr.expr) Pmap.map
 
   type state_ty = {
     sym_table     : sym_table_ty;
     sym_expr_table  : sym_expr_table_ty;
 
-    file   : unit typed_file; (* unmodified *)
+    file   : unit file; (* unmodified *)
 
-    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    inline_pexpr_map : (int, pexpr) Pmap.map;
+    inline_expr_map  : (int, unit expr) Pmap.map;
   }
   include EffMonad(struct type state = state_ty end)
 
   let mk_initial file inline_pexpr_map inline_expr_map : state =
-    { sym_table        = Pmap.empty sym_cmp;
-      sym_expr_table   = Pmap.empty sym_cmp;
+    { sym_table        = Sym.empty_pmap;
+      sym_expr_table   = Sym.empty_pmap;
       file             = file;
       inline_pexpr_map = inline_pexpr_map;
       inline_expr_map  = inline_expr_map;
@@ -698,14 +691,14 @@ module BmcSSA = struct
     get >>= fun st ->
     put {st with sym_table = table}
 
-  let lookup_sym (sym: sym_ty) : sym_ty eff =
+  let lookup_sym (sym: Sym.t) : Sym.t eff =
     get_sym_table >>= fun sym_table ->
     match Pmap.lookup sym sym_table with
     | None -> failwith (sprintf "BmcSSA error: sym %s not found"
                                 (symbol_to_string sym))
     | Some s -> return s
 
-  let add_to_sym_table (sym1: sym_ty) (sym2: sym_ty) : unit eff =
+  let add_to_sym_table (sym1: Sym.t) (sym2: Sym.t) : unit eff =
     get_sym_table >>= fun table ->
     put_sym_table (Pmap.add sym1 sym2 table)
 
@@ -717,7 +710,7 @@ module BmcSSA = struct
     get >>= fun st ->
     put {st with sym_expr_table = table}
 
-  let put_sym_expr (sym: sym_ty) (ty: core_base_type) : unit eff =
+  let put_sym_expr (sym: Sym.t) (ty: core_base_type) : unit eff =
     get_sym_expr_table >>= fun table ->
     get >>= fun st ->
     match Pmap.lookup sym table with
@@ -728,44 +721,47 @@ module BmcSSA = struct
                                   (cbt_to_z3 ty st.file) in
         put_sym_expr_table (Pmap.add sym expr table)
 
-  let get_fresh_sym (str: string option) : sym_ty eff =
+  let get_fresh_sym (str_opt: string option) : Sym.t eff =
     get >>= fun st ->
-    return @@ Sym.fresh_fancy str
+    let sym = match str_opt with
+    | Some str -> Sym.fresh_pretty str
+    | None -> Sym.fresh () in
+    return sym
 
   (* inline maps *)
-  let get_inline_pexpr (uid: int): typed_pexpr eff =
+  let get_inline_pexpr (uid: int): pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
     | None -> failwith (sprintf "Error: BmcSSA inline_pexpr not found %d"
                                 uid)
     | Some pe -> return pe
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcSSA inline_expr not found %d"
                                 uid)
     | Some e -> return e
 
-  let update_inline_pexpr (uid: int) (pexpr: typed_pexpr) : unit eff =
+  let update_inline_pexpr (uid: int) (pexpr: pexpr) : unit eff =
     get >>= fun st ->
     put {st with inline_pexpr_map = Pmap.add uid pexpr st.inline_pexpr_map}
 
-  let update_inline_expr (uid: int) (expr: (unit typed_expr)) : unit eff =
+  let update_inline_expr (uid: int) (expr: (unit expr)) : unit eff =
     get >>= fun st ->
     put {st with inline_expr_map = Pmap.add uid expr st.inline_expr_map}
 
 
   (* Core functions*)
-  let rename_sym (Symbol(_, n, stropt) as sym: sym_ty) : sym_ty eff =
-    let str = match stropt with
-              | SD_Id s -> s ^ "_" ^ (string_of_int n)
-              | _ -> "_" ^ (string_of_int n) in
+  let rename_sym ({id; desc; _ } as sym: Sym.t) : Sym.t eff =
+    let str = match desc with
+              | SD_Id s -> s ^ "_" ^ (string_of_int id)
+              | _ -> "_" ^ (string_of_int id) in
     get_fresh_sym (Some str) >>= fun new_sym ->
     add_to_sym_table sym new_sym >>
     return new_sym
 
-  let rec ssa_pattern (Pattern(annots, pat) : typed_pattern) : typed_pattern eff =
+  let rec ssa_pattern (Pattern(annots, pat) : pattern) : pattern eff =
     (match pat with
      | CaseBase (Some sym, typ) ->
          rename_sym sym >>= fun new_sym ->
@@ -773,13 +769,13 @@ module BmcSSA = struct
          return (CaseBase(Some new_sym, typ))
      | CaseBase (None, _) ->
          return pat
-     | CaseCtor (ctor, patlist) ->
+     | CaseDtor (dtor, patlist) ->
          mapM ssa_pattern patlist >>= fun ssad_patlist ->
-         return (CaseCtor(ctor, ssad_patlist))
+         return (CaseDtor(dtor, ssad_patlist))
     ) >>= fun ssad_pat ->
     return (Pattern(annots, ssad_pat))
 
-  let rec ssa_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
+  let rec ssa_pe (Pexpr(annots, bTy, pe_) as pexpr) : pexpr eff =
     let uid = get_id_pexpr pexpr in
     get_sym_table >>= fun original_table ->
     (match pe_ with
@@ -791,8 +787,7 @@ module BmcSSA = struct
         ssa_pe inlined_pe    >>= fun ssad_inlined_pe ->
         update_inline_pexpr uid ssad_inlined_pe >>
         return pe_
-    | PEval _ -> return pe_
-    | PEconstrained _ -> assert false
+    | PEbase _ -> return pe_
     | PEundef _ -> return pe_
     | PEerror _ -> return pe_
     | PEctor (ctor, pelist) ->
@@ -875,15 +870,6 @@ module BmcSSA = struct
         ssa_pe pe3 >>= fun ssad_pe3 ->
         put_sym_table old_table >>
         return (PEif(ssad_pe1, ssad_pe2, ssad_pe3))
-    | PEis_scalar pe ->
-        ssa_pe pe >>= fun ssad_pe ->
-        return (PEis_scalar(ssad_pe))
-    | PEis_integer pe ->
-        ssa_pe pe >>= fun ssad_pe ->
-        return (PEis_integer(ssad_pe))
-    | PEis_signed pe ->
-        ssa_pe pe >>= fun ssad_pe ->
-        return (PEis_signed(ssad_pe))
     | PEis_unsigned pe ->
         ssa_pe pe >>= fun ssad_pe ->
         return (PEis_unsigned(ssad_pe))
@@ -909,30 +895,30 @@ module BmcSSA = struct
         ssa_pe pe2 >>= fun ssad_pe2 ->
         ssa_pe pe3 >>= fun ssad_pe3 ->
         return (CreateReadOnly(ssad_pe1, ssad_pe2, ssad_pe3, pref))
-    | Alloc0 (pe1, pe2, pref) ->
+    | Alloc (pe1, pe2, pref) ->
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
-        return (Alloc0(ssad_pe1, ssad_pe2, pref))
+        return (Alloc(ssad_pe1, ssad_pe2, pref))
     | Kill (b, pe) ->
         ssa_pe pe >>= fun ssad_pe ->
         return (Kill(b, ssad_pe))
-    | Store0 (b, pe1, pe2, pe3, memord) ->
+    | Store (b, pe1, pe2, pe3, memord) ->
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
         ssa_pe pe3 >>= fun ssad_pe3 ->
-        return (Store0(b, ssad_pe1, ssad_pe2, ssad_pe3, memord))
-    | Load0 (pe1, pe2, memord) ->
+        return (Store(b, ssad_pe1, ssad_pe2, ssad_pe3, memord))
+    | Load (pe1, pe2, memord) ->
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
-        return (Load0(ssad_pe1, ssad_pe2, memord))
-    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        return (Load(ssad_pe1, ssad_pe2, memord))
+    | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
         ssa_pe pe3 >>= fun ssad_pe3 ->
         ssa_pe pe4 >>= fun ssad_pe4 ->
-        return (RMW0(ssad_pe1, ssad_pe2, ssad_pe3, ssad_pe4, mo1, mo2))
-    | Fence0 mo ->
-        return (Fence0(mo))
+        return (RMW(ssad_pe1, ssad_pe2, ssad_pe3, ssad_pe4, mo1, mo2))
+    | Fence mo ->
+        return (Fence(mo))
     | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
@@ -966,7 +952,7 @@ module BmcSSA = struct
     ) >>= fun ssad_action ->
     return (Paction(p, Action(loc, a, ssad_action)))
 
-  let rec ssa_e (Expr(annots, e_) as expr) : (unit typed_expr) eff =
+  let rec ssa_e (Expr(annots, e_) as expr) : (unit expr) eff =
     let uid = get_id_expr expr in
     get_sym_table >>= fun original_table ->
     (match e_ with
@@ -1066,13 +1052,13 @@ module BmcSSA = struct
         put_sym_expr gname bty >>
         return (gname, GlobalDecl (bty, ty))
 
-    let ssa_param ((sym, cbt): (sym_ty * core_base_type)) =
+    let ssa_param ((sym, cbt): (Sym.t * core_base_type)) =
       rename_sym sym >>= fun new_sym ->
       put_sym_expr new_sym cbt >>
       return (new_sym, cbt)
 
-    let ssa (file: unit typed_file) (fn_to_check: sym_ty)
-            : (unit typed_file) eff =
+    let ssa (file: unit file) (fn_to_check: Sym.t)
+            : (unit file) eff =
       mapM ssa_globs file.globs >>= fun ssad_globs ->
       (match Pmap.lookup fn_to_check file.funs with
        | Some (Proc(annot, marker_id, bTy, params, e)) ->
@@ -1101,19 +1087,19 @@ module BmcZ3 = struct
     | ICreate of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | ICreateReadOnly of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc * Expr.expr (* initial_value *)
     | IKill of aid * Expr.expr (* ptr *) * bool (* is dynamic *)
-    | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
-    | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
+    | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Atomics.memory_order
+    | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Atomics.memory_order
     | ICompareExchangeStrong of
         (* Load expected value *) aid *
         (* If fail, do a load of obj then a store *) aid * aid *
         (* If succeed, do a rmw *) aid * ctype *
-        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
+        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Atomics.memory_order * Atomics.memory_order
     | ICompareExchangeWeak of
         (* Loaded expected *) aid *
         (* If fail, do a load of obj and then a store *) aid * aid *
         (* If succeed, do a rmw *) aid * ctype *
-        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
-    | IFence of aid * Cmm_csem.memory_order
+        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Atomics.memory_order * Atomics.memory_order
+    | IFence of aid * Atomics.memory_order
     | IMemop of aid * Mem_common.memop * Expr.expr list (* arguments *) * Expr.expr list (* values bound by Z3; only relevant for PtrValidForDeref *)
     | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.linux_memory_order
     | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.linux_memory_order
@@ -1154,16 +1140,16 @@ module BmcZ3 = struct
     alloc_meta_map: (alloc, allocation_metadata) Pmap.map;
     prov_syms       : (Expr.expr * (Expr.expr * ctype)) list;
 
-    file          : unit typed_file;
+    file          : unit file;
 
     (* Internal state *)
     alloc_supply  : alloc;
     aid_supply    : aid;
 
-    inline_pexpr_map: (int, typed_pexpr) Pmap.map;
-    inline_expr_map : (int, unit typed_expr) Pmap.map;
-    sym_table       : (sym_ty, Expr.expr) Pmap.map;
-    fn_call_map     : (int, sym_ty) Pmap.map;
+    inline_pexpr_map: (int, pexpr) Pmap.map;
+    inline_expr_map : (int, unit expr) Pmap.map;
+    sym_table       : (Sym.t, Expr.expr) Pmap.map;
+    fn_call_map     : (int, Sym.t) Pmap.map;
   }
 
   let mk_initial file
@@ -1172,11 +1158,11 @@ module BmcZ3 = struct
                  sym_table
                  fn_call_map
                  : z3_state = {
-    expr_map       = Pmap.empty Stdlib.compare;
-    case_guard_map = Pmap.empty Stdlib.compare;
-    action_map     = Pmap.empty Stdlib.compare;
+    expr_map       = Pmap.empty Int.compare;
+    case_guard_map = Pmap.empty Int.compare;
+    action_map     = Pmap.empty Int.compare;
     param_actions  = [];
-    alloc_meta_map = Pmap.empty Stdlib.compare;
+    alloc_meta_map = Pmap.empty Int.compare;
     prov_syms      = [];
 
     file = file;
@@ -1204,11 +1190,11 @@ module BmcZ3 = struct
     get >>= fun st ->
     put {st with action_map = Pmap.add uid action st.action_map}
 
-  let get_file : (unit typed_file) eff =
+  let get_file : (unit file) eff =
     get >>= fun st ->
     return st.file
 
-  let lookup_sym (sym: sym_ty) : Expr.expr eff =
+  let lookup_sym (sym: Sym.t) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup sym st.sym_table with
     | None -> failwith (sprintf "Error: BmcZ3 %s not found in sym_table"
@@ -1231,19 +1217,19 @@ module BmcZ3 = struct
     return aid
 
   (* inline expr maps *)
-  let get_inline_pexpr (uid: int): typed_pexpr eff =
+  let get_inline_pexpr (uid: int): pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
     | None -> failwith (sprintf "Error: BmcZ3 inline_pexpr not found %d" uid)
     | Some pe -> return pe
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcZ3 inline_expr not found %d" uid)
     | Some e -> return e
 
-  let get_fn_call (uid: int) : sym_ty eff =
+  let get_fn_call (uid: int) : Sym.t eff =
     get >>= fun st ->
     match Pmap.lookup uid st.fn_call_map with
     | None -> failwith (sprintf "Error: BmcZ3 fn_call not found %d"
@@ -1264,7 +1250,7 @@ module BmcZ3 = struct
     put {st with prov_syms = (sym,(ival,ty)) :: st.prov_syms}
 
   (* HELPERS *)
-  let compute_case_guards (patterns: typed_pattern list)
+  let compute_case_guards (patterns: pattern list)
                           (to_match: Expr.expr)
                           : Expr.expr * Expr.expr list =
     let pattern_guards =
@@ -1277,7 +1263,10 @@ module BmcZ3 = struct
     (vc, case_guards)
 
   (* SMT stuff *)
-  let rec z3_pe (Pexpr(annots, bTy, pe_) as pexpr) : Expr.expr eff =
+  let rec z3_pe (Pexpr(annots, bTy_opt, pe_) as pexpr) : Expr.expr eff =
+    let bTy = match bTy_opt with
+      | Some bTy -> bTy 
+      | None -> raise InvalidTypedCore in
     let uid = get_id_pexpr pexpr in
     (match pe_ with
     | PEsym sym ->
@@ -1285,10 +1274,9 @@ module BmcZ3 = struct
     | PEimpl _ ->
         get_inline_pexpr uid >>= fun inline_pe ->
         z3_pe inline_pe
-    | PEval cval ->
+    | PEbase cval ->
        get_file >>= fun file ->
        return (value_to_z3 cval file)
-    | PEconstrained _ -> assert false
     | PEundef _ ->
         get_file >>= fun file ->
         let sort = cbt_to_z3 bTy file in
@@ -1297,7 +1285,7 @@ module BmcZ3 = struct
         get_file >>= fun file ->
         let sort = cbt_to_z3 bTy file in
         return (mk_fresh_const (sprintf "error_%d" uid) sort)
-    | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ty))]) ->
+    | PEctor (Civmin, [Pexpr(_, Some BTy_ctype, PEbase (Bctype ty))]) ->
         (* TODO: Get rid of ImplFunctions *)
         begin match strip_atomic ty with
           | Ctype (_, Basic (Integer ity)) as ty' ->
@@ -1310,7 +1298,7 @@ module BmcZ3 = struct
           | _ ->
               assert false
         end
-    | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ty))]) ->
+    | PEctor(Civmax, [Pexpr(_, Some BTy_ctype, PEbase (Bctype ty))]) ->
         begin match strip_atomic ty with
           | Ctype (_, Basic (Integer ity)) as ty' ->
               begin match Pmap.lookup ity ImplFunctions.ivmax_map with
@@ -1322,7 +1310,7 @@ module BmcZ3 = struct
           | _ ->
               assert false
         end
-    | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+    | PEctor(Civsizeof, [Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype))]) ->
         (*let raw_ctype = strip_atomic ctype in*)
         get_file >>= fun file ->
         let type_size = PointerSort.type_size ctype file in
@@ -1343,7 +1331,7 @@ module BmcZ3 = struct
           end
         end
         *)
-    | PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+    | PEctor(Civalignof, [Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype))]) ->
         (* We can just directly compute the values rather than do it in the
          * roundabout way as in the above *)
         let raw_ctype = strip_atomic ctype in
@@ -1385,7 +1373,7 @@ module BmcZ3 = struct
               PointerSort.struct_member_index_list sym file in
             let member_indices = zip index_list memlist in
             let shift_opt = List.find_opt (fun (shift, (mem, _)) ->
-              if ident_cmp mem member = 0 then true
+              if Identifier.compare mem member = 0 then true
               else false
             ) member_indices in
             (match shift_opt with
@@ -1405,11 +1393,15 @@ module BmcZ3 = struct
         z3_pe pe1 >>= fun z3d_pe1 ->
         z3_pe pe2 >>= fun z3d_pe2 ->
         return (binop_to_z3 binop z3d_pe1 z3d_pe2)
-    | PEconv_int _
-    | PEwrapI _
+    | PEconv_int _ ->
+        (* FIXME: this is only used by CN *)
+        failwith "PEconv_int is not supported"
+    | PEwrapI _ -> 
+        (* FIXME: this is only used by CN *)
+        failwith "PEwrapI is not supported"
     | PEcatch_exceptional_condition _ ->
         (* FIXME: this is only used by CN *)
-        failwith "PEconv_int|PEwrapI|PEcatch_exceptional_condition is not supported"
+        failwith "PEcatch_exceptional_condition is not supported"
     | PEstruct (sym, pes) ->
         get_file >>= fun file ->
         let struct_sort = CtypeToZ3.struct_sym_to_z3_sort sym file in
@@ -1433,10 +1425,7 @@ module BmcZ3 = struct
         z3_pe pe1  >>= fun z3d_pe1 ->
         z3_pe pe2  >>= fun z3d_pe2 ->
         return (mk_ite z3d_cond z3d_pe1 z3d_pe2)
-    | PEis_scalar _  -> assert false
-    | PEis_integer _ -> assert false
-    | PEis_signed _  -> assert false
-    | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ty))) ->
+    | PEis_unsigned (Pexpr(_, Some BTy_ctype, PEbase (Bctype ty))) ->
         begin match strip_atomic ty with
           | Ctype (_, Basic (Integer ity)) as ty' ->
               begin match Pmap.lookup ity ImplFunctions.is_unsigned_map with
@@ -1462,7 +1451,7 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let mk_create_aux ctype align_ty (pref: Sym.prefix)
+  let mk_create_aux ctype align_ty (pref: prefix)
                     (permission: permission_flag) =
     get_file >>= fun file ->
     get_fresh_alloc >>= fun alloc_id ->
@@ -1485,7 +1474,7 @@ module BmcZ3 = struct
     return (alloc_id,flat_sortlist, aids, base_addr)
 
 
-  let mk_create_read_only ctype align_ty (pref: Sym.prefix)
+  let mk_create_read_only ctype align_ty (pref: prefix)
                           (initial_value: Expr.expr) =
     get_file >>= fun file ->
     mk_create_aux ctype align_ty pref ReadOnly
@@ -1494,7 +1483,7 @@ module BmcZ3 = struct
             ICreateReadOnly (aids, ctype, align_ty, flat_sortlist,
                              alloc_id, initial_value))
 
-  let mk_create ctype align_ty (pref: Sym.prefix) =
+  let mk_create ctype align_ty (pref: prefix) =
     get_file >>= fun file ->
     mk_create_aux ctype align_ty pref ReadWrite
         >>= fun (alloc_id, flat_sortlist, aids, base_addr) ->
@@ -1503,17 +1492,17 @@ module BmcZ3 = struct
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
-    | Create (Pexpr(_, _, PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype align))])),
-              Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+    | Create (Pexpr(_, _, PEctor(Civalignof, [Pexpr(_, Some BTy_ctype, PEbase (Bctype align))])),
+              Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype)), prefix) ->
         mk_create ctype align prefix
     | Create _ ->
         assert false
-    | CreateReadOnly (Pexpr(_, _, PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype align))])),
-              Pexpr(_, BTy_ctype, PEval (Vctype ctype)),
+    | CreateReadOnly (Pexpr(_, _, PEctor(Civalignof, [Pexpr(_, Some BTy_ctype, PEbase (Bctype align))])),
+              Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype)),
               initial_value, prefix) ->
         z3_pe initial_value >>= fun z3d_initial_value ->
         mk_create_read_only ctype align prefix z3d_initial_value
-    | Alloc0 _ ->
+    | Alloc _ ->
         failwith "TODO: dynamic allocation"
     | Kill (kind, pe) ->
         let is_dynamic =
@@ -1525,7 +1514,7 @@ module BmcZ3 = struct
         bmc_debug_print 7 "TODO: kill ignored";
         z3_pe pe >>= fun z3d_pe ->
         return (UnitSort.mk_unit, IKill (aid, z3d_pe, is_dynamic))
-    | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | Store (b, Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
@@ -1534,9 +1523,9 @@ module BmcZ3 = struct
 
         return (UnitSort.mk_unit,
                 IStore (aid, ty, flat_sortlist, sym_expr, z3d_wval, mo))
-    | Store0 _ ->
+    | Store _ ->
         assert false
-    | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+    | Load (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), mo) ->
         get_fresh_aid  >>= fun aid ->
         get_file >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
@@ -1546,15 +1535,15 @@ module BmcZ3 = struct
         lookup_sym sym >>= fun sym_expr ->
         let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
         return (rval_expr, ILoad (aid, ty, flat_sortlist, sym_expr, rval_expr, mo))
-    | Load0 _ ->
+    | Load _ ->
         assert false
-    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+    | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
         assert false
-    | CompareExchangeStrong(Pexpr(_,_,PEval (Vctype ty)),
+    | CompareExchangeStrong(Pexpr(_,_,PEbase (Bctype ty)),
                             Pexpr(_,_,PEsym obj),
                             Pexpr(_,_,PEsym expected),
                             desired, mo_success, mo_failure) (* fall through *)
-    | CompareExchangeWeak  (Pexpr(_,_,PEval (Vctype ty)),
+    | CompareExchangeWeak  (Pexpr(_,_,PEbase (Bctype ty)),
                             Pexpr(_,_,PEsym obj),
                             Pexpr(_,_,PEsym expected),
                             desired, mo_success, mo_failure) ->
@@ -1612,14 +1601,14 @@ module BmcZ3 = struct
         assert false
     | CompareExchangeWeak _ ->
         assert false
-    | Fence0 mo ->
+    | Fence mo ->
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
     | LinuxFence mo ->
         assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, ILinuxFence (aid, mo))
-    | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+    | LinuxLoad (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), mo) ->
         assert_memory_mode_linux ();
         assert (!!bmc_conf.concurrent_mode);
         get_fresh_aid  >>= fun aid ->
@@ -1634,7 +1623,7 @@ module BmcZ3 = struct
                 sym_expr, rval_expr, mo))
     | LinuxLoad _ ->
         assert false
-    | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | LinuxStore (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
@@ -1646,7 +1635,7 @@ module BmcZ3 = struct
                 ILinuxStore (aid, ty, flat_sortlist, sym_expr, z3d_wval, mo))
     | LinuxStore _ ->
         assert false
-    | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | LinuxRMW (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
@@ -1663,7 +1652,8 @@ module BmcZ3 = struct
     add_action uid intermediate_action >>
     return z3d_action
 
-  let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
+  (* The expr must be type annotated *)
+  let rec z3_e (Expr(annots, expr_) as expr: unit expr) : Expr.expr eff =
     let uid = get_id_expr expr in
 
     (match expr_ with
@@ -1720,7 +1710,7 @@ module BmcZ3 = struct
         z3_pe p2 >>= fun z3d_p2 ->
         return (binop_to_z3 OpGe (PointerSort.get_addr_index z3d_p1)
                                  (PointerSort.get_addr_index z3d_p2))
-    | Ememop (Ptrdiff, [((Pexpr(_,BTy_ctype, (PEval (Vctype ctype)))) as ty);p1;p2]) ->
+    | Ememop (Ptrdiff, [((Pexpr(_,Some BTy_ctype, (PEbase (Bctype ctype)))) as ty);p1;p2]) ->
         assert (g_pnvi);
         z3_pe ty >>= fun _ ->
         z3_pe p1 >>= fun z3d_p1 ->
@@ -1790,7 +1780,7 @@ module BmcZ3 = struct
                       (int_to_z3 0)
                )
     | Ememop (PtrArrayShift,
-              [ptr;Pexpr(_, BTy_ctype, PEval (Vctype ctype));index]) ->
+              [ptr;Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype));index]) ->
         (* We treat this like a PEarray_shift;
          * except in the memory model we add a check for pointer
          * validity/lifetime
@@ -1910,9 +1900,9 @@ module BmcZ3 = struct
       | GlobalDecl ty ->
         return ()
 
-    let z3_param ((sym, cbt): (sym_ty * core_base_type))
+    let z3_param ((sym, cbt): (Sym.t * core_base_type))
                  (ctype: ctype)
-                 (fn_to_check: sym_ty)
+                 (fn_to_check: Sym.t)
                  : (intermediate_action option) eff =
       if not (is_core_ptr_bty cbt) then
         return None
@@ -1923,8 +1913,8 @@ module BmcZ3 = struct
         return (Some action)
       end
 
-    let z3_params (params : (sym_ty * core_base_type) list)
-                  (fn_to_check : sym_ty)
+    let z3_params (params : (Sym.t * core_base_type) list)
+                  (fn_to_check : Sym.t)
                   : (intermediate_action option) list eff =
       get_file >>= fun file ->
       match Pmap.lookup fn_to_check file.funinfo with
@@ -1933,8 +1923,8 @@ module BmcZ3 = struct
       | Some (_, _, _, param_tys, _, _) ->
           mapM2 (fun p ty -> z3_param p ty fn_to_check) params @@ List.map snd param_tys
 
-    let z3_file (file: unit typed_file) (fn_to_check: sym_ty)
-                : (unit typed_file) eff =
+    let z3_file (file: unit file) (fn_to_check: Sym.t)
+                : (unit file) eff =
       mapM z3_globs file.globs >>
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, _, bTy, params, e)) ->
@@ -1951,8 +1941,8 @@ end
 (* ======= Compute drop continuation; only matters for Esseq/Ewseq? *)
 module BmcDropCont = struct
   type internal_state = {
-    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    inline_pexpr_map : (int, pexpr) Pmap.map;
+    inline_expr_map  : (int, unit expr) Pmap.map;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
 
     drop_cont_map : (int, Expr.expr) Pmap.map;
@@ -1966,17 +1956,17 @@ module BmcDropCont = struct
   { inline_pexpr_map = inline_pexpr_map;
     inline_expr_map  = inline_expr_map;
     case_guard_map   = case_guard_map;
-    drop_cont_map    = Pmap.empty Stdlib.compare;
+    drop_cont_map    = Pmap.empty Int.compare;
   }
 
-  let get_inline_pexpr (uid: int): typed_pexpr eff =
+  let get_inline_pexpr (uid: int): pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
     | None -> failwith (sprintf "Error: BmcDropCont inline_pexpr not found %d"
                                 uid)
     | Some pe -> return pe
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcDropCont inline_expr not found %d"
@@ -2065,7 +2055,7 @@ module BmcDropCont = struct
     | GlobalDecl _ ->
         return ()
 
-  let drop_cont_file (file: unit typed_file) (fn_to_check: sym_ty)
+  let drop_cont_file (file: unit file) (fn_to_check: Sym.t)
                      : Expr.expr eff =
     mapM drop_cont_globs file.globs >>
     (match Pmap.lookup fn_to_check file.funs with
@@ -2080,9 +2070,9 @@ end
 (* ======= Compute syntactic let bindings ====== *)
 module BmcBind = struct
   type binding_state = {
-    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
-    sym_table        : (sym_ty, Expr.expr) Pmap.map;
+    inline_pexpr_map : (int, pexpr) Pmap.map;
+    inline_expr_map  : (int, unit expr) Pmap.map;
+    sym_table        : (Sym.t, Expr.expr) Pmap.map;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
@@ -2108,19 +2098,19 @@ module BmcBind = struct
     alloc_meta_map   = alloc_meta;
   }
 
-  let get_inline_pexpr (uid: int): typed_pexpr eff =
+  let get_inline_pexpr (uid: int): pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
     | None -> failwith (sprintf "Error: BmcBind inline_pexpr not found %d" uid)
     | Some pe -> return pe
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcBind inline_expr not found %d" uid)
     | Some e -> return e
 
-  let lookup_sym (sym: sym_ty) : Expr.expr eff =
+  let lookup_sym (sym: Sym.t) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup sym st.sym_table with
     | None -> failwith (sprintf "Error: BmcBind %s not found in sym_table"
@@ -2166,7 +2156,7 @@ module BmcBind = struct
   *)
 
   (* let bindings *)
-  let mk_let_binding (maybe_sym: sym_ty option)
+  let mk_let_binding (maybe_sym: Sym.t option)
                      (expr: Expr.expr)
                      : Expr.expr eff =
     match maybe_sym with
@@ -2182,29 +2172,29 @@ module BmcBind = struct
         else
           return (mk_eq sym_expr expr) *)
 
-  let rec mk_let_bindings_raw (Pattern(_,pat): typed_pattern) (expr: Expr.expr)
+  let rec mk_let_bindings_raw (Pattern(_,pat): pattern) (expr: Expr.expr)
                               : Expr.expr eff =
     (match pat with
     | CaseBase(sym, _) ->
         mk_let_binding sym expr
-    | CaseCtor (Ctuple, patlist) ->
+    | CaseDtor (Dtuple, patlist) ->
         assert (Expr.get_num_args expr = List.length patlist);
         mapM (fun (pat, e) -> mk_let_bindings_raw pat e)
              (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
         return (mk_and bindings)
-    | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
+    | CaseDtor(Dspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
         let is_specified = LoadedInteger.is_specified expr in
         let specified_value = LoadedInteger.get_specified_value expr in
         mk_let_binding sym specified_value >>= fun is_eq_value ->
         return (mk_and [is_specified; is_eq_value])
-    | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
+    | CaseDtor(Dspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
         let is_specified = LoadedPointer.is_specified expr in
         let specified_value = LoadedPointer.get_specified_value expr in
         mk_let_binding sym specified_value >>= fun is_eq_value ->
         return (mk_and [is_specified; is_eq_value])
-    | CaseCtor(Cspecified, _) ->
+    | CaseDtor(Dspecified, _) ->
         assert false
-    | CaseCtor(Cunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
+    | CaseDtor(Dunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
         let (is_unspecified, unspecified_value) =
           if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
             let is_unspecified = LoadedInteger.is_unspecified expr in
@@ -2219,22 +2209,22 @@ module BmcBind = struct
         in
         mk_let_binding sym unspecified_value >>= fun is_eq_value ->
         return (mk_and [is_unspecified; is_eq_value])
-    | CaseCtor(Cunspecified, _) ->
+    | CaseDtor(Dunspecified, _) ->
         assert false
-    | CaseCtor(Cnil BTy_ctype, []) ->
+    | CaseDtor(Dnil BTy_ctype, []) ->
         assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
         return mk_true
-    | CaseCtor(Ccons, [hd;tl]) ->
+    | CaseDtor(Dcons, [hd;tl]) ->
         assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
         let is_cons = CtypeListSort.is_cons expr in
         mk_let_bindings_raw hd (CtypeListSort.get_head expr) >>= fun eq_head ->
         mk_let_bindings_raw tl (CtypeListSort.get_tail expr) >>= fun eq_tail ->
         return (mk_and [is_cons; eq_head; eq_tail])
-    | CaseCtor(_, _) ->
+    | CaseDtor(_, _) ->
         assert false
     )
 
-  let mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
+  let mk_let_bindings (pat: pattern) (expr: Expr.expr)
                       : binding eff =
     mk_let_bindings_raw pat expr >>= fun binding ->
     return (BindLet binding)
@@ -2258,10 +2248,8 @@ module BmcBind = struct
     | PEimpl _ ->
         get_inline_pexpr uid >>= fun inline_pe ->
         bind_pe inline_pe
-    | PEval _ ->
+    | PEbase _ ->
         return []
-    | PEconstrained _ ->
-        assert false
     | PEundef _ ->
         return []
     | PEerror _ ->
@@ -2341,12 +2329,7 @@ module BmcBind = struct
                 (* Guarded asserts is unnecessary *)
                 (List.map (guard_assert guard) bound_pe1) @
                 (List.map (guard_assert (mk_not guard)) bound_pe2))
-    | PEis_scalar _
-    | PEis_integer _ ->
-        assert false
-    | PEis_signed _ ->
-        assert false
-    | PEis_unsigned (Pexpr (_, BTy_ctype, PEval (Vctype ctype))) ->
+    | PEis_unsigned (Pexpr (_, Some BTy_ctype, PEbase (Bctype ctype))) ->
         return []
     | PEis_unsigned _ ->
         assert false
@@ -2397,24 +2380,24 @@ module BmcBind = struct
         bind_create_helper uid
     | CreateReadOnly _ ->
         bind_create_helper uid
-    | Alloc0 _ -> assert false
+    | Alloc _ -> assert false
     | Kill (_, pe) ->
         bind_pe pe
-    | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | Store (b, Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         bind_pe wval
-    | Store0 _ ->
+    | Store _ ->
         assert false
-    | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+    | Load (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), mo) ->
         return []
-    | Load0 _ ->
+    | Load _ ->
         assert false
-    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+    | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
         bind_pe pe1 >>= fun bound_pe1 ->
         bind_pe pe2 >>= fun bound_pe2 ->
         bind_pe pe3 >>= fun bound_pe3 ->
         bind_pe pe4 >>= fun bound_pe4 ->
         return (bound_pe1 @ bound_pe2 @ bound_pe3 @ bound_pe4)
-    | Fence0 mo ->
+    | Fence mo ->
         return []
     | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
         bind_pe pe1 >>= fun bound_pe1 ->
@@ -2448,7 +2431,7 @@ module BmcBind = struct
         failwith "TODO: SeqRMW"
     )
 
-  let rec bind_e (Expr(annots, expr_) as expr: unit typed_expr)
+  let rec bind_e (Expr(annots, expr_) as expr: unit expr)
                  : (binding list) eff =
     let uid = get_id_expr expr in
     (match expr_ with
@@ -2552,7 +2535,7 @@ module BmcBind = struct
       | GlobalDecl _ ->
           return []
 
-    let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
+    let bind_file (file: unit file) (fn_to_check: Sym.t)
                   : (Expr.expr list * (Cerb_location.t option * Expr.expr) list) eff =
       mapM bind_globs file.globs >>= fun bound_globs ->
       (match Pmap.lookup fn_to_check file.funs with
@@ -2574,9 +2557,9 @@ end
 
 module BmcVC = struct
   type vc_state = {
-    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
-    sym_table        : (sym_ty, Expr.expr) Pmap.map;
+    inline_pexpr_map : (int, pexpr) Pmap.map;
+    inline_expr_map  : (int, unit expr) Pmap.map;
+    sym_table        : (Sym.t, Expr.expr) Pmap.map;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
@@ -2602,19 +2585,19 @@ module BmcVC = struct
     drop_cont_map    = drop_cont_map;
   }
 
-  let get_inline_pexpr (uid: int): typed_pexpr eff =
+  let get_inline_pexpr (uid: int): pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
     | None -> failwith (sprintf "Error: BmcVC inline_pexpr not found %d" uid)
     | Some pe -> return pe
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcVC inline_expr not found %d" uid)
     | Some e -> return e
 
-  let lookup_sym (sym: sym_ty) : Expr.expr eff =
+  let lookup_sym (sym: Sym.t) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup sym st.sym_table with
     | None -> failwith (sprintf "Error: BmcVC %s not found in sym_table"
@@ -2661,8 +2644,7 @@ module BmcVC = struct
     | PEimpl _          ->
        get_inline_pexpr uid >>= fun inline_pe ->
        vcs_pe inline_pe
-    | PEval _           -> return []
-    | PEconstrained _   -> assert false
+    | PEbase _          -> return []
     | PEundef (loc, ub) -> return [(mk_false, VcDebugUndef (loc,ub))]
     | PEerror (str, _)  -> return [(mk_false, VcDebugStr (string_of_int uid ^ "_" ^ str))]
     | PEctor (ctor, pelist) ->
@@ -2721,9 +2703,6 @@ module BmcVC = struct
         vcs_pe pe2                            >>= fun vc2s ->
         return ((List.map (guard_vc guard_z3) vc1s) @
                 (List.map (guard_vc (mk_not guard_z3)) vc2s))
-    | PEis_scalar pe   -> vcs_pe pe
-    | PEis_integer pe  -> vcs_pe pe
-    | PEis_signed pe   -> vcs_pe pe
     | PEis_unsigned pe -> vcs_pe pe
     | PEare_compatible (pe1,pe2) ->
         vcs_pe pe1 >>= fun vc1s ->
@@ -2732,21 +2711,21 @@ module BmcVC = struct
     | PEbmc_assume pe -> vcs_pe pe
 
   (* TODO!!! *)
-  let vcs_paction (Paction (p, Action(loc, a, action_)) : unit typed_paction)
+  let vcs_paction (Paction (p, Action(loc, a, action_)) : unit paction)
                       uid
                       : (bmc_vc list) eff =
     match action_ with
-    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+    | Create (align, Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype)), prefix) ->
         return []
     | Create _ -> assert false
-    | CreateReadOnly (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), initial_value, prefix) ->
+    | CreateReadOnly (align, Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype)), initial_value, prefix) ->
         vcs_pe initial_value >>= fun vcs_initial_value ->
         return vcs_initial_value
     | CreateReadOnly _  -> assert false
-    | Alloc0 _          -> assert false
+    | Alloc _          -> assert false
     | Kill (_, pe) ->
         vcs_pe pe
-    | Store0 (_, Pexpr(_,_,PEval (Vctype ty)),
+    | Store (_, Pexpr(_,_,PEbase (Bctype ty)),
                  (Pexpr(_,_,PEsym sym)), wval, memorder) ->
         (* TODO: Where should we check whether the ptr is valid? *)
         let valid_memorder =
@@ -2759,8 +2738,8 @@ module BmcVC = struct
                 ::(PointerSort.ptr_in_range ptr_z3,
                    VcDebugStr ("out of bounds pointer at memory store"))
                 :: vcs_wval)
-    | Store0 _          -> assert false
-    | Load0 (Pexpr(_,_,PEval (Vctype ty)),
+    | Store _          -> assert false
+    | Load (Pexpr(_,_,PEbase (Bctype ty)),
              (Pexpr(_,_,PEsym sym)), memorder) ->
         let valid_memorder =
               mk_bool (not (memorder = Release || memorder = Acq_rel)) in
@@ -2771,14 +2750,14 @@ module BmcVC = struct
                ;(PointerSort.ptr_in_range ptr_z3,
                    VcDebugStr ("out of bounds pointer at memory load"))
                ]
-    | Load0 _ -> assert false
-    | RMW0 _  -> assert false
-    | Fence0 _ -> return []
-    | CompareExchangeStrong (Pexpr(_,_,PEval (Vctype ty)),
+    | Load _ -> assert false
+    | RMW _  -> assert false
+    | Fence _ -> return []
+    | CompareExchangeStrong (Pexpr(_,_,PEbase (Bctype ty)),
                              Pexpr(_,_,PEsym obj),
                              Pexpr(_,_,PEsym expected),
                              desired, mo_success, mo_failure)  (* fall through *)
-    | CompareExchangeWeak   (Pexpr(_,_,PEval (Vctype ty)),
+    | CompareExchangeWeak   (Pexpr(_,_,PEbase (Bctype ty)),
                              Pexpr(_,_,PEsym obj),
                              Pexpr(_,_,PEsym expected),
                              desired, mo_success, mo_failure) ->
@@ -2810,7 +2789,7 @@ module BmcVC = struct
     | CompareExchangeStrong _ -> assert false
     | CompareExchangeWeak _ -> assert false
     | LinuxFence _ -> return []
-    | LinuxStore (Pexpr(_,_,PEval (Vctype ty)),
+    | LinuxStore (Pexpr(_,_,PEbase (Bctype ty)),
                   (Pexpr(_,_,PEsym sym)), wval, memorder) ->
         assert_memory_mode_linux ();
         vcs_pe wval                     >>= fun vcs_wval ->
@@ -2823,7 +2802,7 @@ module BmcVC = struct
                    VcDebugStr ("out of bounds pointer at memory store"))
                 :: vcs_wval)
     | LinuxStore _ -> assert false
-    | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)),
+    | LinuxLoad (Pexpr(_,_,PEbase (Bctype ty)),
                  (Pexpr(_,_,PEsym sym)), memorder) ->
         assert_memory_mode_linux ();
         lookup_sym sym >>= fun ptr_z3 ->
@@ -2833,7 +2812,7 @@ module BmcVC = struct
                    VcDebugStr ("out of bounds pointer at memory load")
                ]
     | LinuxLoad _  -> assert false
-    | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | LinuxRMW (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         assert (!!bmc_conf.concurrent_mode);
         assert_memory_mode_linux ();
         vcs_pe wval >>= fun vcs_wval ->
@@ -2901,7 +2880,7 @@ module BmcVC = struct
         vcs_pe ptr       >>= fun vcs_ptr ->
 
         let ity = (match ctype_dst with
-          | Pexpr(_, BTy_ctype, PEval (Vctype (Ctype (_, Basic (Integer z))))) -> z
+          | Pexpr(_, Some BTy_ctype, PEbase (Bctype (Ctype (_, Basic (Integer z))))) -> z
           | _ -> assert false
           ) in
         get_expr (get_id_pexpr ptr) >>= fun z3d_ptr ->
@@ -2974,7 +2953,7 @@ module BmcVC = struct
       | GlobalDef(_, e) -> vcs_e e
       | GlobalDecl _ -> return []
 
-    let vcs_file (file: unit typed_file) (fn_to_check: sym_ty)
+    let vcs_file (file: unit file) (fn_to_check: Sym.t)
                   : (bmc_vc list) eff =
       mapM vcs_globs file.globs >>= fun vcs_globs ->
       (match Pmap.lookup fn_to_check file.funs with
@@ -2991,8 +2970,8 @@ end
 module BmcRet = struct
 
   type internal_state = {
-    file            : unit typed_file;
-    inline_expr_map : (int, unit typed_expr) Pmap.map;
+    file            : unit file;
+    inline_expr_map : (int, unit expr) Pmap.map;
     expr_map        : (int, Expr.expr) Pmap.map;
     case_guard_map  : (int, Expr.expr list) Pmap.map;
     drop_cont_map   : (int, Expr.expr) Pmap.map;
@@ -3019,11 +2998,11 @@ module BmcRet = struct
   }
 
   (* Getters/setters *)
-  let get_file : (unit typed_file) eff =
+  let get_file : (unit file) eff =
     get >>= fun st ->
     return st.file
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcRet inline_expr not found %d"
@@ -3137,7 +3116,7 @@ module BmcRet = struct
     | Ewait _       -> assert false
     | Eannot _ | Eexcluded _ -> assert false
 
-  let do_file (file: unit typed_file) (fn_to_check: sym_ty)
+  let do_file (file: unit file) (fn_to_check: Sym.t)
               : (Expr.expr * Expr.expr list) eff =
     (match Pmap.lookup fn_to_check file.funs with
     | Some (Proc(annot, _, bTy, params, e)) ->
@@ -3166,7 +3145,7 @@ module BmcMemCommon = struct
   (* TODO: move to separate file *)
   let mk_unspecified_expr (sort: Sort.sort)
                           (raw_ctype: ctype)
-                          (file: unit typed_file)
+                          (file: unit file)
                           : Expr.expr =
     let ctype = CtypeSort.mk_nonatomic_expr raw_ctype in
     let rec aux (Ctype.Ctype (_, raw_ctype) as cty) =
@@ -3222,7 +3201,7 @@ module BmcMemCommon = struct
 
   let mk_initial_loaded_value (sort: Sort.sort) (name: string)
                               (ctype: ctype) (specified: bool)
-                              (file: unit typed_file)
+                              (file: unit file)
                               : Expr.expr * (Expr.expr list) =
     if specified then begin
       let (initial_value, assertions) = mk_initial_value ctype name in
@@ -3309,7 +3288,7 @@ module BmcMemCommon = struct
     (* Constrain provenances from cast_ival_to_ptrval *)
     let provenance_assertions ((sym,(ival, ctype)) : Expr.expr * (Expr.expr * ctype))
                               (data: (int, allocation_metadata) Pmap.map)
-                              (file: unit typed_file)
+                              (file: unit file)
                               : Expr.expr list =
       let ival_max =
         binop_to_z3 OpAdd ival (int_to_z3 ((PointerSort.type_size ctype file) - 1)) in
@@ -3530,7 +3509,7 @@ module BmcSeqMem = struct
     val provenance_assertions :
           (Expr.expr * (Expr.expr * ctype)) list ->
           (int, allocation_metadata) Pmap.map ->
-          unit typed_file ->
+          unit file ->
           Expr.expr list
   end
 
@@ -3682,7 +3661,7 @@ module BmcSeqMem = struct
 
     let provenance_assertions (provsyms : (Expr.expr * (Expr.expr * ctype)) list)
                               (data: (int , allocation_metadata) Pmap.map)
-                              (file: unit typed_file)
+                              (file: unit file)
                               : Expr.expr list =
       List.concat (List.map
           (fun x -> BmcMemCommon.provenance_assertions x data file)
@@ -3779,9 +3758,9 @@ module BmcSeqMem = struct
   module SeqMem = MemConcrete
 
   type seq_state = {
-    file             : unit typed_file;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
-    sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
+    file             : unit file;
+    inline_expr_map  : (int, unit expr) Pmap.map;
+    sym_expr_table   : (Sym.t, Expr.expr) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
     param_actions    : (BmcZ3.intermediate_action option) list;
@@ -3834,11 +3813,11 @@ module BmcSeqMem = struct
         sprintf "%s %s" (SeqMem.print_addr addr) acc) s ""
   end
 
-  let get_file : (unit typed_file) eff =
+  let get_file : (unit file) eff =
     get >>= fun st ->
     return st.file
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcSeqMem inline_expr not found %d"
@@ -3851,7 +3830,7 @@ module BmcSeqMem = struct
     | None -> failwith (sprintf "Error: BmcSeqMem expr not found %d" uid)
     | Some e -> return e
 
-  let get_sym_expr (sym: sym_ty) : Expr.expr eff =
+  let get_sym_expr (sym: Sym.t) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup sym st.sym_expr_table with
     | None -> failwith (sprintf "Error: BmcSeqMem sym_expr %s not found"
@@ -3983,7 +3962,7 @@ module BmcSeqMem = struct
            }
 
   (* TODO: mod_addr *)
-  let do_paction (Paction(p, Action(loc, a, action_)) : unit typed_paction)
+  let do_paction (Paction(p, Action(loc, a, action_)) : unit paction)
                  uid
                  : ret_ty eff =
     get_action uid >>= fun action ->
@@ -4270,7 +4249,7 @@ module BmcSeqMem = struct
     | GlobalDecl _ -> return empty_ret
 
   (* Initialize value of argument to something specified in valid range *)
-  let initialise_param ((sym,cbt): (sym_ty * core_base_type))
+  let initialise_param ((sym,cbt): (Sym.t * core_base_type))
                        (action_opt: BmcZ3.intermediate_action option)
                        : ret_ty eff =
     match action_opt with
@@ -4293,8 +4272,8 @@ module BmcSeqMem = struct
     | _ ->
         assert false
 
-  let initialise_params (params: ((sym_ty * core_base_type) list))
-                        (fn_to_check: sym_ty)
+  let initialise_params (params: ((Sym.t * core_base_type) list))
+                        (fn_to_check: Sym.t)
                         : ret_ty eff =
     get_param_actions >>= fun param_actions ->
     mapM2 initialise_param params param_actions >>= fun rets ->
@@ -4303,7 +4282,7 @@ module BmcSeqMem = struct
       ; mod_addr = AddrSet.union ret.mod_addr acc.mod_addr
       }) empty_ret rets)
 
-  let do_file (file: unit typed_file) (fn_to_check: sym_ty)
+  let do_file (file: unit file) (fn_to_check: Sym.t)
               : (Expr.expr list) eff =
     mapM do_globs file.globs >>= fun globs ->
     (match Pmap.lookup fn_to_check file.funs with
@@ -4338,10 +4317,10 @@ end
 module BmcConcActions = struct
 
   type internal_state = {
-    file             : unit typed_file;
-    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
-    sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
+    file             : unit file;
+    inline_pexpr_map : (int, pexpr) Pmap.map;
+    inline_expr_map  : (int, unit expr) Pmap.map;
+    sym_expr_table   : (Sym.t, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
     param_actions    : (BmcZ3.intermediate_action option) list;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
@@ -4360,13 +4339,13 @@ module BmcConcActions = struct
 
     mem_module     : (module MemoryModel);
 
-    taint_table    : (sym_ty, aid Pset.set) Pmap.map;
+    taint_table    : (Sym.t, aid Pset.set) Pmap.map;
   }
 
   include EffMonad(struct type state = internal_state end)
 
   (* TODO: the sort of Loaded needs to include struct stuff *)
-  let mk_memory_module (file: unit typed_file) =
+  let mk_memory_module (file: unit file) =
     if !!bmc_conf.parse_from_model then
       let cat_model = Bmc_cat.CatParser.load_file !!bmc_conf.model_file in
       (module GenericModel (val cat_model) : MemoryModel)
@@ -4400,37 +4379,37 @@ module BmcConcActions = struct
     alloc_meta_map   = alloc_meta_map;
     prov_syms        = prov_syms;
 
-    bmc_actions      = Pmap.empty Stdlib.compare;
-    bmc_action_map   = Pmap.empty Stdlib.compare;
+    bmc_actions      = Pmap.empty Int.compare;
+    bmc_action_map   = Pmap.empty Int.compare;
     tid              = 0;
     tid_supply       = 1;
-    parent_tids      = Pmap.empty Stdlib.compare;
+    parent_tids      = Pmap.empty Int.compare;
     assertions       = [];
     read_only_allocs = [];
 
-    taint_table      = Pmap.empty Stdlib.compare;
+    taint_table      = Sym.empty_pmap;
     mem_module       = mk_memory_module file;
   }
 
-  let get_file : unit typed_file eff =
+  let get_file : unit file eff =
     get >>= fun st ->
     return st.file
 
-  let get_inline_pexpr (uid: int): typed_pexpr eff =
+  let get_inline_pexpr (uid: int): pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
     | None -> failwith (sprintf "Error: BmcConcActions inline_pexpr not found %d"
                                 uid)
     | Some pe -> return pe
 
-  let get_inline_expr (uid: int): (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcConcActions inline_expr not found %d"
                                 uid)
     | Some e -> return e
 
-  let get_sym_expr (sym: sym_ty) : Expr.expr eff =
+  let get_sym_expr (sym: Sym.t) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup sym st.sym_expr_table with
     | None -> failwith (sprintf "Error: BmcConcActions sym_expr %s not found"
@@ -4545,7 +4524,7 @@ module BmcConcActions = struct
    * TODO: make this work nicely with unspecified subarrays too. Currently we assume   * array types are specified.
    *)
   let flatten_multid_arrays ((Ctype.Ctype (_, ctype)) as cty)
-                            (file: unit typed_file)
+                            (file: unit file)
                             (value: Expr.expr)
                             (initial: bool)
                             : Expr.expr * (Expr.expr list) =
@@ -4705,7 +4684,7 @@ module BmcConcActions = struct
     mapM add_assertion assumptions >>= fun _ ->
     mk_store_and_flatten_multid_arrays
               pol mk_true aid initial_tid
-              (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype
+              (C_mem_order Atomics.NA) ptr_0 initial_value ctype
               is_initial
         >>= fun store ->
     return [store]
@@ -4742,7 +4721,7 @@ module BmcConcActions = struct
             let ptr = PointerSort.mk_ptr (int_to_z3 alloc_id) target_addr in
             (mk_store_and_flatten_multid_arrays
                              pol mk_true aid initial_tid
-                             (C_mem_order Cmm_csem.NA) ptr initial_value ty)
+                             (C_mem_order Atomics.NA) ptr initial_value ty)
           ) indexed_sorts
           end
         end
@@ -4948,7 +4927,7 @@ module BmcConcActions = struct
     | GlobalDef(_, e) -> do_actions_e e
     | GlobalDecl _ -> return []
 
-  let do_actions_param ((sym,cbt): (sym_ty * core_base_type))
+  let do_actions_param ((sym,cbt): (Sym.t * core_base_type))
                        (action_opt : BmcZ3.intermediate_action option)
                        : bmc_action list eff =
     match action_opt with
@@ -4972,8 +4951,8 @@ module BmcConcActions = struct
         return actions
     | _ -> assert false
 
-  let do_actions_params (params: ((sym_ty * core_base_type) list))
-                        (fn_to_check: sym_ty)
+  let do_actions_params (params: ((Sym.t * core_base_type) list))
+                        (fn_to_check: Sym.t)
                         : bmc_action list eff =
     get_param_actions >>= fun param_actions ->
     mapM2 do_actions_param params param_actions >>= fun actionss ->
@@ -5077,14 +5056,14 @@ module BmcConcActions = struct
     | GlobalDecl _ -> return []
 
   (* ==== Taint analysis ===== *)
-  let get_taint (sym: sym_ty) : aid Pset.set eff =
+  let get_taint (sym: Sym.t) : aid Pset.set eff =
     get >>= fun st ->
     match Pmap.lookup sym st.taint_table with
     | None -> failwith (sprintf "BmcConcActions: taint %s not found"
                                 (symbol_to_string sym))
     | Some ret -> return ret
 
-  let add_taint (sym: sym_ty) (taint: aid Pset.set) : unit eff =
+  let add_taint (sym: Sym.t) (taint: aid Pset.set) : unit eff =
     get >>= fun st ->
     put {st with taint_table = Pmap.add sym taint st.taint_table}
 
@@ -5096,19 +5075,19 @@ module BmcConcActions = struct
       print_endline "]";
     ) st.taint_table)
 
-  let rec do_taint_pat (Pattern(_,pat): typed_pattern) (aids: aid Pset.set)
+  let rec do_taint_pat (Pattern(_,pat): pattern) (aids: aid Pset.set)
                        : unit eff =
     match pat with
     | CaseBase(Some sym, _) ->
         add_taint sym aids
     | CaseBase(None, _) ->
         return ()
-    | CaseCtor(_, patlist) ->
+    | CaseDtor(_, patlist) ->
         mapM_ (fun pat -> do_taint_pat pat aids) patlist
 
   let union_taints (taints: (aid Pset.set) list) : aid Pset.set =
     List.fold_left (fun x y -> Pset.union x y)
-                   (Pset.empty Stdlib.compare)
+                   (Pset.empty Int.compare)
                    taints
 
   type deps = {
@@ -5142,13 +5121,12 @@ module BmcConcActions = struct
     | PEimpl const ->
         get_inline_pexpr uid >>= fun inline_pe ->
         do_taint_pe inline_pe
-    | PEval cval ->
-        return (Pset.empty Stdlib.compare)
-    | PEconstrained _ -> assert false
+    | PEbase cval ->
+        return (Pset.empty Int.compare)
     | PEundef _ ->
-        return (Pset.empty Stdlib.compare)
+        return (Pset.empty Int.compare)
     | PEerror _ ->
-        return (Pset.empty Stdlib.compare)
+        return (Pset.empty Int.compare)
     | PEctor (_, pes) ->
         mapM do_taint_pe pes >>= fun taint_pes ->
         return (union_taints taint_pes)
@@ -5200,9 +5178,6 @@ module BmcConcActions = struct
         do_taint_pe pe2 >>= fun taint_pe2 ->
         return (union_taints [taint_cond; taint_pe1; taint_pe2])
           (*Pset.union taint_pe1 taint_pe2)*)
-    | PEis_scalar pe   (* fall through *)
-    | PEis_integer pe  (* fall through *)
-    | PEis_signed pe   (* fall through *)
     | PEis_unsigned pe ->
         do_taint_pe pe
     | PEare_compatible (pe1, pe2) ->
@@ -5219,15 +5194,15 @@ module BmcConcActions = struct
     | Create(pe1, pe2, pref) ->
         do_taint_pe pe1 >>= fun _ ->
         do_taint_pe pe2 >>= fun _ ->
-        return (Pset.empty Stdlib.compare, empty_deps)
+        return (Pset.empty Int.compare, empty_deps)
     | CreateReadOnly _ -> assert false
-    | Alloc0 _ -> assert false
+    | Alloc _ -> assert false
     | Kill(_, Pexpr(_,_,PEsym sym)) ->
         get_action uid >>= fun interm_action ->
         get_taint sym >>= fun taint_ptr ->
         begin match interm_action with
         | IKill(aid, _,_) ->
-          return (Pset.empty Stdlib.compare,
+          return (Pset.empty Int.compare,
                  { addr = cartesian_product (Pset.elements taint_ptr) [aid]
                  ; data = []
                  ; ctrl = []
@@ -5237,27 +5212,27 @@ module BmcConcActions = struct
         end
     | Kill _ ->
         assert false
-    | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | Store (b, Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_action uid >>= fun interm_action ->
         do_taint_pe wval >>= fun taint_wval ->
         get_taint sym >>= fun taint_ptr ->
         begin match interm_action with
         | IStore(aid, _,_,_,_,_) ->
-          return (Pset.empty Stdlib.compare,
+          return (Pset.empty Int.compare,
                  { addr = cartesian_product (Pset.elements taint_ptr) [aid]
                  ; data = cartesian_product (Pset.elements taint_wval) [aid]
                  ; ctrl = []
                  })
         | _ -> assert false
         end
-    | Store0 _ ->
+    | Store _ ->
         assert false
-    | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+    | Load (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), mo) ->
         get_action uid >>= fun interm_action ->
         get_taint sym >>= fun taint_ptr ->
         begin match interm_action with
         | ILoad(aid, _,_,_,_,_) ->
-            return (Pset.add aid (Pset.empty Stdlib.compare),
+            return (Pset.add aid (Pset.empty Int.compare),
                     { addr = cartesian_product (Pset.elements taint_ptr) [aid]
                     ; data = []
                     ; ctrl = []
@@ -5265,31 +5240,31 @@ module BmcConcActions = struct
         | _ -> assert false
         end
 
-    | Load0 _ ->
+    | Load _ ->
         assert false
-    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
-        bmc_debug_print 7 "TODO: Taint RMW0";
+    | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        bmc_debug_print 7 "TODO: Taint RMW";
         (* TODO *)
-        return (Pset.empty Stdlib.compare, empty_deps)
-    | Fence0 mo ->
-        return (Pset.empty Stdlib.compare, empty_deps)
+        return (Pset.empty Int.compare, empty_deps)
+    | Fence mo ->
+        return (Pset.empty Int.compare, empty_deps)
     | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
         (* TODO: We only do taint analysis for linux at the moment;
          * CompareExchangeStrong for C only*)
         bmc_debug_print 7 "TODO: Taint CompareExchangeStrong";
-        return (Pset.empty Stdlib.compare, empty_deps)
+        return (Pset.empty Int.compare, empty_deps)
     | CompareExchangeWeak(pe1, pe2, pe3, pe4, mo1, mo2) ->
         bmc_debug_print 7 "TODO: Taint CompareExchangeWeak";
-        return (Pset.empty Stdlib.compare, empty_deps)
+        return (Pset.empty Int.compare, empty_deps)
     | LinuxFence mo ->
-        return (Pset.empty Stdlib.compare, empty_deps)
+        return (Pset.empty Int.compare, empty_deps)
 
-    | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+    | LinuxLoad (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), mo) ->
         get_action uid >>= fun interm_action ->
         get_taint sym >>= fun taint_ptr ->
         begin match interm_action with
         | ILinuxLoad(aid, _,_,_,_,_) ->
-            return (Pset.add aid (Pset.empty Stdlib.compare),
+            return (Pset.add aid (Pset.empty Int.compare),
                     { addr = cartesian_product (Pset.elements taint_ptr) [aid]
                     ; data = []
                     ; ctrl = []
@@ -5297,27 +5272,27 @@ module BmcConcActions = struct
                    )
         | _ -> assert false
         end
-    | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | LinuxStore (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_action uid >>= fun interm_action ->
         do_taint_pe wval >>= fun taint_wval ->
         get_taint sym >>= fun taint_ptr ->
         begin match interm_action with
         | ILinuxStore(aid, _,_,_,_,_) ->
-          return (Pset.empty Stdlib.compare,
+          return (Pset.empty Int.compare,
                  { addr = cartesian_product (Pset.elements taint_ptr) [aid]
                  ; data = cartesian_product (Pset.elements taint_wval) [aid]
                  ; ctrl = []
                  })
         | _ -> assert false
         end
-    | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+    | LinuxRMW (Pexpr(_,_,PEbase (Bctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_action uid   >>= fun interm_action ->
         do_taint_pe wval >>= fun taint_wval ->
         get_taint sym >>= fun taint_ptr ->
         (* TODO: Check if this is correct *)
         begin match interm_action with
         | ILinuxRmw(aid, _, _, _, _,_,_) ->
-            return (Pset.add aid (Pset.empty Stdlib.compare),
+            return (Pset.add aid (Pset.empty Int.compare),
                    { addr = cartesian_product (Pset.elements taint_ptr) [aid]
                    ; data = cartesian_product (Pset.elements taint_wval) [aid]
                    ; ctrl = []
@@ -5413,7 +5388,7 @@ module BmcConcActions = struct
 
   (* Just add empty taint *)
   let do_taint_globs (gname, glb) =
-    add_taint gname (Pset.empty Stdlib.compare)
+    add_taint gname (Pset.empty Int.compare)
 
   let mk_preexec (actions: bmc_action list)
                  (prod: aid_rel list)
@@ -5497,7 +5472,7 @@ module BmcConcActions = struct
 
     return vcs
 
-  let do_file (file: unit typed_file) (fn_to_check: sym_ty)
+  let do_file (file: unit file) (fn_to_check: Sym.t)
               : (preexec * Expr.expr list * bmc_vc list * 't option) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
     mapM do_po_globs file.globs      >>= fun globs_po ->

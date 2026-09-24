@@ -15,7 +15,7 @@ let decode_integer_constant str =
     | 'f' | 'F' -> 15
     | n         -> int_of_char n - int_of_char '0' in
   let (str, basisN, basis) =
-    if str.[0] = '0' then
+    if Char.equal str.[0] '0' then
       let l = String.length str in
       if String.length str > 1 then
         begin match str.[1] with
@@ -162,11 +162,11 @@ let decode_character_constant_aux = function
       if String.length str = 0 then
         failwith "decode_character_constant: empty constant"
       else
-        if String.get str 0 = '\\' then
+        if Char.equal (String.get str 0) '\\' then
           if String.length str = 1 then
             failwith "decode_character_constant, invalid constant: '\\'"
           else
-            if String.get str 1 = 'x' then
+            if Char.equal (String.get str 1) 'x' then
               if String.length str = 2 then
                 failwith "decode_character_constant, invalid constant: '\\x'"
               else

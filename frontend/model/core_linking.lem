@@ -1,16 +1,17 @@
 open import Pervasives Utils Show Map Map_extra
-open import Loc Cabs Symbol Core Exception Errors
+open import Loc Cabs Symbol Core
+import Errors Exception
 
-let inline (>>=) = except_bind
-val link_fail: forall 'a. Loc.t -> core_linking_cause -> exceptM 'a (Loc.t * cause)
+let inline (>>=) = Exception.bind
+val link_fail: forall 'a. Loc.t -> Errors.core_linking_cause -> Exception.exceptM 'a (Errors.error)
 let link_fail loc cause =
-  Exception (loc, Errors.CORE_LINKING cause)
+  Exception.fail (Errors.linking_error loc cause)
 
 (* NOTE: the function returns an assoc list of redundant tentative to global definitions *)
 val link_extern: forall 'a. SetType 'a =>
                  map identifier (list 'a * linking_kind) ->
                  map identifier (list 'a * linking_kind) ->
-                 exceptM ((map identifier (list 'a * linking_kind)) * list (sym * sym)) (Loc.t * cause)
+                 Exception.exceptM ((map identifier (list 'a * linking_kind)) * list (sym * sym)) Errors.error
 let link_extern ext acc =
   Map_extra.fold (fun k (ds, lk_def) m_acc ->
     let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in
@@ -18,40 +19,40 @@ let link_extern ext acc =
     match Map.lookup k acc with
     | Nothing ->
       let () = Debug.print_debug 3 [] (fun _ -> "linking (Nothing): " ^ show lk_def) in
-      return (Map.insert k (ds, lk_def) acc_ext, acc_tent)
+      Exception.return (Map.insert k (ds, lk_def) acc_ext, acc_tent)
     | Just (acc_ds, LK_none) ->
       let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_none): " ^ show lk_def) in
-      return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, acc_tent)
+      Exception.return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, acc_tent)
     | Just (acc_ds, LK_tentative tent) ->
       let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_tentative " ^ show tent ^ "): " ^ show lk_def) in
       match lk_def with
       | LK_normal def ->
-        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, (tent, def) :: acc_tent)
+        Exception.return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, (tent, def) :: acc_tent)
       | LK_tentative def_tent ->
-        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, (tent, def_tent) :: acc_tent)
+        Exception.return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, (tent, def_tent) :: acc_tent)
       | LK_none ->
-        return (Map.insert k (ds ++ acc_ds, LK_tentative tent) acc_ext, acc_tent)
+        Exception.return (Map.insert k (ds ++ acc_ds, LK_tentative tent) acc_ext, acc_tent)
       end
     | Just (acc_ds, LK_normal def) ->
       let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_normal " ^ show def ^ "): " ^ show lk_def) in
       match lk_def with
       | LK_normal _ ->
-        link_fail (locOf k) (DuplicateExternalName k)
+        link_fail (locOf k) (Errors.DuplicateExternalName k)
       | LK_tentative tent ->
-        return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, (tent, def) :: acc_tent)
+        Exception.return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, (tent, def) :: acc_tent)
       | LK_none ->
-        return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, acc_tent)
+        Exception.return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, acc_tent)
       end
-  end) ext (return (acc, []))
+  end) ext (Exception.return (acc, []))
 
 
-val link_main: maybe sym -> maybe sym -> exceptM (maybe sym) (Loc.t * cause)
+val link_main: maybe sym -> maybe sym -> Exception.exceptM (maybe sym) Errors.error
 let link_main opt_m1 opt_m2 =
   match (opt_m1, opt_m2) with
-  | (Just _, Just _)   -> link_fail Loc.unknown DuplicateMain
-  | (Just m1, Nothing) -> return $ Just m1
-  | (Nothing, Just m2) -> return $ Just m2
-  | (Nothing, Nothing) -> return $ Nothing
+  | (Just _, Just _)   -> link_fail Loc.unknown Errors.DuplicateMain
+  | (Just m1, Nothing) -> Exception.return $ Just m1
+  | (Nothing, Just m2) -> Exception.return $ Just m2
+  | (Nothing, Nothing) -> Exception.return $ Nothing
   end
 
 val list_remove_assoc: forall 'a 'b. 'a -> list ('a * 'b) -> list ('a * 'b)
@@ -64,7 +65,7 @@ let rec symbols_in_pattern acc (Pattern _ pat) =
   match pat with
   | CaseBase (Just sym, _) -> Set.insert sym acc
   | CaseBase _ -> {}
-  | CaseCtor _ pats -> List.foldl symbols_in_pattern acc pats
+  | CaseDtor _ pats -> List.foldl symbols_in_pattern acc pats
   end
 
 let rec free_pexpr acc (Pexpr _ _ pe) =
@@ -73,10 +74,8 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       Set.insert sym acc
   | PEimpl _ ->
       acc
-  | PEval _ ->
+  | PEbase _ ->
       acc
-  | PEconstrained cpes ->
-      List.foldl (fun acc (_, pe) -> free_pexpr acc pe) acc cpes
   | PEundef _ _ ->
       acc
   | PEerror _ pe ->
@@ -120,12 +119,6 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       (* (free_pexpr (free_pexpr acc pe1) pe2) \ (symbols_in_pattern {} pat) *)
   | PEif pe1 pe2 pe3 ->
       free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3
-  | PEis_scalar pe ->
-      free_pexpr acc pe
-  | PEis_integer pe ->
-      free_pexpr acc pe
-  | PEis_signed pe ->
-      free_pexpr acc pe
   | PEis_unsigned pe ->
       free_pexpr acc pe
   | PEare_compatible pe1 pe2 ->
@@ -277,16 +270,17 @@ let safe_map_union m1 m2 =
     Assert_extra.failwith "safe_map_union: maps are not disjoint"
 
 
-val link_aux: forall 'a 'b. generic_file 'a 'b ->
-                           generic_file 'a 'b ->
-                           exceptM (generic_file 'a 'b) (Loc.t * cause)
+val link_aux: forall 'a.
+  generic_file 'a ->
+  generic_file 'a ->
+  Exception.exceptM (generic_file 'a) Errors.error
 let link_aux f1 f2 =
   if f1.calling_convention <> f2.calling_convention then
-    link_fail Loc.unknown IncompatibleCallingConvention
+    link_fail Loc.unknown Errors.IncompatibleCallingConvention
   else
   link_extern f2.extern f1.extern >>= fun (extern, reduntant_globs) ->
   link_main f1.main f2.main >>= fun main ->
-  return
+  Exception.return
     <| main=    main;
        calling_convention= f1.calling_convention;
        tagDefs= f1.tagDefs union f2.tagDefs;
@@ -304,13 +298,14 @@ let link_aux f1 f2 =
            f2.visible_objects_env;
     |>
 
-val link: forall 'a 'b. list (generic_file 'a 'b) ->
-                        exceptM (generic_file 'a 'b) (Loc.t * cause)
+val link: forall 'a.
+  list (generic_file 'a) ->
+  Exception.exceptM (generic_file 'a) Errors.error
 let link = function
   | [] ->
     error "linking: no core files"
   | f::fs ->
-    List.foldl (fun m_acc f -> m_acc >>= link_aux f) (return f) fs
+    List.foldl (fun m_acc f -> m_acc >>= link_aux f) (Exception.return f) fs
 end
 
 

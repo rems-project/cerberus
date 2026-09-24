@@ -1,13 +1,15 @@
 [@@@landmark "auto"]
 open Lem_pervasives
+
+open Cerb_colour
+open Cerb_pp_prelude
+open Cerb_symbol
+
 open Core
 open Annot
 
 open Either
 
-open Cerb_colour
-
-open Cerb_pp_prelude
 
 module type CONFIG =
 sig
@@ -25,18 +27,19 @@ sig
   val pp_core_base_type: core_base_type -> PPrint.document
   val pp_object_value: object_value -> PPrint.document
   val pp_value: value -> PPrint.document
-  val pp_params: (Symbol.sym * core_base_type) list -> PPrint.document
-  val pp_pattern : Symbol.sym Core.generic_pattern -> PPrint.document
-  val pp_pexpr: ('ty, Symbol.sym) generic_pexpr -> PPrint.document
-  val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
-  val pp_file: ('a, 'b) generic_file -> PPrint.document
+  val pp_params: (Sym.t * core_base_type) list -> PPrint.document
+  val pp_pattern : Sym.t Core.generic_pattern -> PPrint.document
+  val pp_pexpr: pexpr -> PPrint.document
+  val pp_expr: 'a expr -> PPrint.document
+  val pp_file: 'a file -> PPrint.document
   val pp_ctor : ctor -> PPrint.document
+  val pp_dtor : dtor -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
+  val pp_funinfo: (Sym.t, Cerb_location.t * Annot.attributes * Ctype.ctype * (Sym.t option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Sym.t, Cerb_location.t * Annot.attributes * Ctype.ctype * (Sym.t option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_extern_symmap: (Sym.t, Sym.t) Pmap.map -> PPrint.document
 
-  val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
+  val pp_action: Sym.t Core.generic_action_ -> PPrint.document
 (*  val pp_stack: 'a stack -> PPrint.document *)
 end
 
@@ -69,8 +72,7 @@ let maybe_print_location (annot: Annot.annot list) : P.document =
 let precedence_pexpr = function
   | PEundef _
   | PEerror _
-  | PEval _
-  | PEconstrained _
+  | PEbase _
   | PEsym _
   | PEimpl _
   | PEctor _
@@ -89,9 +91,6 @@ let precedence_pexpr = function
   | PElet _
   | PEif _
   | PEcfunction _
-  | PEis_scalar _
-  | PEis_integer _
-  | PEis_signed _
   | PEis_unsigned _
   | PEbmc_assume _
   | PEare_compatible _ ->
@@ -238,13 +237,13 @@ let pp_name = function
 
 
 let pp_memory_order = function
-  | Cmm_csem.NA      -> !^ "NA"
-  | Cmm_csem.Seq_cst -> pp_keyword "seq_cst"
-  | Cmm_csem.Relaxed -> pp_keyword "relaxed"
-  | Cmm_csem.Release -> pp_keyword "release"
-  | Cmm_csem.Acquire -> pp_keyword "acquire"
-  | Cmm_csem.Consume -> pp_keyword "consume"
-  | Cmm_csem.Acq_rel -> pp_keyword "acq_rel"
+  | Atomics.NA      -> !^ "NA"
+  | Atomics.Seq_cst -> pp_keyword "seq_cst"
+  | Atomics.Relaxed -> pp_keyword "relaxed"
+  | Atomics.Release -> pp_keyword "release"
+  | Atomics.Acquire -> pp_keyword "acquire"
+  | Atomics.Consume -> pp_keyword "consume"
+  | Atomics.Acq_rel -> pp_keyword "acq_rel"
 
 let pp_linux_memory_order = function
   | Linux.Once      -> pp_keyword "once"
@@ -277,13 +276,7 @@ let rec pp_object_value = function
   | OVinteger ival ->
       Impl_mem.pp_integer_value_for_core ival
   | OVfloating fval ->
-      Impl_mem.case_fval fval
-        (fun () -> !^ "unspec(floating)")
-        (fun fval -> !^(string_of_float fval))
-(*
-  | OVsymbolic symb ->
-      !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_object_value Pp_mem.pp_pointer_value symb)
-*)
+      !^(string_of_float fval)
   | OVpointer ptr_val ->
       Impl_mem.pp_pointer_value ptr_val
   | OVarray lvals ->
@@ -291,14 +284,14 @@ let rec pp_object_value = function
   | OVstruct (tag_sym, xs) ->
       P.parens (pp_datactor "struct" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        comma_list (fun (Symbol.Identifier (_, ident), _, mval) ->
-          P.dot ^^ !^ ident ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
+        comma_list (fun ({Identifier.str; _}, _, mval) ->
+          P.dot ^^ !^ str ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
         ) xs
       )
-  | OVunion (tag_sym, Symbol.Identifier (_, ident), mval) ->
+  | OVunion (tag_sym, {Identifier.str; _}, mval) ->
       P.parens (pp_datactor "union" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        P.dot ^^ !^ ident ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
+        P.dot ^^ !^ str ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
       )
 
 and pp_loaded_value = function
@@ -318,21 +311,21 @@ let rec pp_value = function
         ) xs
       )
 *)
-  | Vunit ->
+  | Bunit ->
       pp_datactor "Unit"
-  | Vtrue ->
+  | Btrue ->
       pp_datactor "True"
-  | Vfalse ->
+  | Bfalse ->
       pp_datactor "False"
-  | Vlist (_, cvals) ->
+  | Blist (_, cvals) ->
       P.brackets (comma_list pp_value cvals)
-  | Vtuple cvals ->
+  | Btuple cvals ->
       P.parens (comma_list pp_value cvals)
-  | Vctype ty ->
+  | Bctype ty ->
       P.squotes (Cerb_colour.without_colour (Pp_ail.pp_ctype Ctype.no_qualifiers) ty)
-  | Vobject oval ->
+  | Bobject oval ->
       pp_object_value oval
-  | Vloaded lval ->
+  | Bloaded lval ->
       pp_loaded_value lval
 
 let pp_ctor = function
@@ -368,9 +361,22 @@ let pp_ctor = function
       pp_datactor "Cfvfromint"
   | Civfromfloat ->
       pp_datactor "Civfromfloat"
+  | Cfloatingcast ->
+      pp_datactor "Cfloatingcast"
   | CivNULLcap is_signed ->
       pp_datactor "CivNULLcap" ^^ P.parens (!^ (if is_signed then "signed" else "unsigned"))
 
+let pp_dtor = function
+  | Dnil _ ->
+      pp_datactor "Nil"
+  | Dcons ->
+      pp_datactor "Cons"
+  | Dtuple ->
+      pp_datactor "Tuple"
+  | Dspecified ->
+      pp_datactor "Specified"
+  | Dunspecified ->
+      pp_datactor "Unspecified"
 
 let rec pp_pattern (Pattern (_, pat)) =
   match pat with
@@ -379,10 +385,10 @@ let rec pp_pattern (Pattern (_, pat)) =
   | CaseBase (Some sym, bTy) ->
       pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 (* Syntactic sugar for tuples and lists *)
-  | CaseCtor (Ctuple, pats) ->
+  | CaseDtor (Dtuple, pats) ->
       P.parens (comma_list pp_pattern pats)
-  | CaseCtor (ctor, pats) ->
-      pp_ctor ctor ^^ P.parens (comma_list pp_pattern pats)
+  | CaseDtor (dtor, pats) ->
+      pp_dtor dtor ^^ P.parens (comma_list pp_pattern pats)
 
 let pp_case pp_pexpr pp pe xs =
   pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
@@ -443,15 +449,8 @@ let pp_pexpr pe =
           )))
       | PEerror (str, pe) ->
           pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp pe)
-      | PEval cval ->
+      | PEbase cval ->
           pp_value cval
-      | PEconstrained xs ->
-          pp_keyword "constrained" ^^ P.parens (
-            comma_list (fun (cs, pe) ->
-              P.brackets (Pp_mem.pp_mem_constraint Impl_mem.pp_integer_value cs) ^^^
-              P.equals ^^ P.rangle ^^ pp pe
-            ) xs
-          )
       | PEsym sym ->
           pp_symbol sym
       | PEimpl iCst ->
@@ -489,9 +488,9 @@ let pp_pexpr pe =
           pp_keyword "array_shift" ^^ P.parens (
             pp pe1 ^^ P.comma ^^^ pp_ctype ty ^^ P.comma ^^^ pp pe2
           )
-      | PEmember_shift (pe, tag_sym, (Symbol.Identifier (_, memb_ident))) ->
+      | PEmember_shift (pe, tag_sym, {Identifier.str; _}) ->
           pp_keyword "member_shift" ^^ P.parens (
-            pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
+            pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ str
           )
       | PEmemop (pure_memop, pes) ->
           pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
@@ -506,14 +505,14 @@ let pp_pexpr pe =
       | PEstruct (tag_sym, xs) ->
           P.parens (pp_datactor "struct" ^^^ pp_raw_symbol tag_sym) ^^
           P.braces (
-            comma_list (fun (Symbol.Identifier (_, ident), pe) ->
-              P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
+            comma_list (fun ({Identifier.str; _}, pe) ->
+              P.dot ^^ !^ str ^^ P.equals ^^^ pp pe
             ) xs
           )
-      | PEunion (tag_sym, Symbol.Identifier (_, ident), pe) ->
+      | PEunion (tag_sym, {Identifier.str; _}, pe) ->
           P.parens (pp_datactor "union" ^^^ pp_raw_symbol tag_sym) ^^
           P.braces (
-            P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
+            P.dot ^^ !^ str ^^ P.equals ^^^ pp pe
           )
       | PEmemberof (tag_sym, memb_ident, pe) ->
           pp_keyword "memberof" ^^ P.parens (
@@ -529,12 +528,6 @@ let pp_pexpr pe =
           pp_let ~ctor:"let" pp pp pat pe1 pe2
       | PEif (pe1, pe2, pe3) ->
           pp_if pp pp pe1 pe2 pe3
-      | PEis_scalar pe ->
-          pp_keyword "is_scalar" ^^^ P.parens (pp pe)
-      | PEis_integer pe ->
-          pp_keyword "is_integer" ^^^ P.parens (pp pe)
-      | PEis_signed pe ->
-          pp_keyword "is_signed" ^^^ P.parens (pp pe)
       | PEis_unsigned pe ->
           pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
       | PEbmc_assume pe ->
@@ -686,21 +679,24 @@ let rec pp_expr expr =
 
 and pp_action act =
   let pp_args args mo =
-    P.parens (comma_list pp_pexpr args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+     let is_na = match mo with
+       | Atomics.NA -> true
+       | _ -> false in
+     P.parens (comma_list pp_pexpr args ^^ if is_na then P.empty else P.comma ^^^ pp_memory_order mo) in
   match act with
     | Create (al, ty, _) ->
         pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty)
     | CreateReadOnly (al, ty, init, _) ->
         pp_keyword "create_readonly" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty ^^ P.comma ^^^ pp_pexpr init)
-    | Alloc0 (al, n, _) ->
+    | Alloc (al, n, _) ->
         pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
     | Kill (Core.Dynamic, e) ->
         pp_keyword "free" ^^ P.parens (pp_pexpr e)
     | Kill (Core.Static0 ct, e) ->
         pp_keyword "kill" ^^ P.parens (pp_ctype ct ^^ P.comma ^^^ pp_pexpr e)
-    | Store0 (is_locking, ty, e1, e2, mo) ->
+    | Store (is_locking, ty, e1, e2, mo) ->
        pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [ty; e1; e2] mo
-    | Load0 (ty, e, mo) ->
+    | Load (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
     | SeqRMW (b, ty, e1, sym, e2) ->
         let kw = if b then "seq_rmw_with_forward" else "seq_rmw" in
@@ -710,12 +706,12 @@ and pp_action act =
           pp_symbol sym ^^^ !^ "=>" ^^^
           pp_pexpr e2
         )
-    | RMW0 (ty, e1, e2, e3, mo1, mo2) ->
+    | RMW (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "rmw" ^^
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | Fence0 mo ->
+    | Fence mo ->
         pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
     | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "compare_exchange_strong" ^^
@@ -758,8 +754,8 @@ let pp_tagDefinitions tagDefs =
           ("struct", membrs)
       | Ctype.UnionDef membrs -> ("union", membrs)
     in
-    let pp_tag (Symbol.Identifier (_, name), (_, align_opt(*TODO*), _, ty)) =
-      !^name ^^ P.colon ^^^ pp_ctype ty
+    let pp_tag ({Identifier.str; _}, (_, align_opt(*TODO*), _, ty)) =
+      !^ str ^^ P.colon ^^^ pp_ctype ty
     in
     pp_cond loc @@
     pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals

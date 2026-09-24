@@ -42,6 +42,7 @@ type cerb_switch =
 
   (* eliminate pure expr rebindings: let pat = C[pure(pexpr)] -> substitute pexpr *)
   | SW_copy_prop
+[@@deriving eq]
 
 
 let internal_ref =
@@ -129,11 +130,11 @@ let set strs =
     | SW_at_magic_comments
     | SW_magic_comment_char_dollar
     | SW_copy_prop as y ->
-        x = y in
+        equal_cerb_switch x y in
   List.iter (fun str ->
     match read_switch str with
       | Some sw ->
-          if None = has_switch_pred (pred sw) then
+          if Option.is_none (has_switch_pred (pred sw)) then
             internal_ref := sw :: !internal_ref
           else
             prerr_endline ("switch '" ^ String.escaped str ^ "' would override a previous switch --> ignoring.")

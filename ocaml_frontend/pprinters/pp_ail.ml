@@ -5,6 +5,7 @@ open AilSyntax
 open Ctype
 open GenTypes
 
+open Cerb_symbol
 open Cerb_colour
 
 open Pp_ail_raw
@@ -704,8 +705,7 @@ and pp_statement_aux pp_annot ~bs {attrs= Annot.Attrs attrs; node; _} =
     | AilScase (n, s) ->
         if !executable_spec then
           (* TODO(Rini): this is very brittle *)
-          let case_str = match (List.nth attrs 0).attr_id with
-            | Identifier (_, str) -> str in
+          let case_str = (List.nth attrs 0).attr_id.Identifier.str in
           pp_keyword "case" ^^^ !^ case_str ^^ P.colon ^/^ pp_statement s
         else
           pp_keyword "case" ^^^ !^ (Z.to_string n) ^^ P.colon ^/^ pp_statement s
@@ -768,12 +768,10 @@ let pp_tag_definition (tag, (_, Annot.Attrs attrs, def)) =
           ) flexible_opt
           ) ^^ P.semi
     | UnionDef ident_qs_tys ->
-        let s (Symbol.Identifier (_,s)) = s in
-        let is_enum = match attrs with 
+        let is_enum = match attrs with
           | [] -> false
-          | attr :: _ -> 
-            let str = s attr.attr_id in 
-            String.equal str "enum"
+          | attr :: _ ->
+              String.equal attr.attr_id.Identifier.str "enum"
         in
         if !executable_spec && is_enum then
           (* TODO(Rini): this is wrong *)
@@ -839,7 +837,7 @@ let pp_function_prototype sym decl = match decl with
         if is_func_ptr then
           pp_ctype_declaration
             (pp_id_func
-               (Symbol.fresh_pretty
+               (Sym.fresh_pretty
                   (Pp_symbol.to_string_pretty ~is_human:false sym
                    ^ Pp_utils.to_plain_pretty_string args)))
             ret_qs
@@ -957,7 +955,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                       if is_func_ptr then
                         pp_ctype_declaration
                           (pp_id_func
-                              (Symbol.fresh_pretty
+                              (Sym.fresh_pretty
                                 (Pp_symbol.to_string_pretty ~is_human:false sym
                                   ^ Pp_utils.to_plain_pretty_string args)))
                           ret_qs
@@ -1062,7 +1060,7 @@ let pp_program_with_annot =
   pp_program_aux (fun gtc doc -> P.braces (pp_genTypeCategory gtc) ^^ P.brackets doc)
 
 
-let pp_id_only (Symbol.Identifier (_,n)) = P.string n
+let pp_id_only ident = P.string ident.Identifier.str
 let pp_attr_arg (_, arg, _) = P.dquotes (P.string arg)
 let pp_attr_args args = P.parens (P.separate_map P.comma pp_attr_arg args)
 

@@ -1,5 +1,8 @@
-open import Pervasives Utils AilSyntax Core
-import Loc TypingError Undefined Constraint Symbol
+open import Pervasives
+import Loc Symbol TypingError Undefined Constraint
+import Core
+
+declare {ocaml} rename module = Lem_errors
 
 type extension_cause =
   | EXT_GNUlabelAsValue
@@ -26,20 +29,17 @@ type desugar_cause =
 
 type core_typing_cause =
   | UndefinedStartup of Symbol.sym (* Found no definition of the startup fun/proc *)
-  | Mismatch of string (* syntax info *) * core_base_type (* expected *) * core_base_type (* found *)
+  | Mismatch of string (* syntax info *) * Core.core_base_type (* expected *) * Core.core_base_type (* found *)
   | MismatchBinaryOperator of Core.binop
-  | MismatchIf of core_base_type (* then *) * core_base_type (* else *)
-  | MismatchExpected of string (* syntax info *) * core_base_type (* expected *) * string (* found *)
-  | MismatchFound of string (* syntax info *) * string (* expected *) * maybe core_base_type (* found *)
-  | UnresolvedSymbol of name
+  | MismatchIf of Core.core_base_type (* then *) * Core.core_base_type (* else *)
+  | MismatchExpected of string (* syntax info *) * Core.core_base_type (* expected *) * string (* found *)
+  | MismatchFound of string (* syntax info *) * string (* expected *) * maybe Core.core_base_type (* found *)
+  | UnresolvedSymbol of Core.name
   | FunctionOrProcedureSymbol of Symbol.sym
-  | CFunctionExpected of name (* symbol *)
-  | CFunctionParamsType
-  | CFunctionReturnType
   | TooGeneral
   | CoreTyping_TODO of string (* TODO: get rid of this constructor eventually *)
   (* NOTE: I cannot fire these errors *)
-  | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
+  | HeterogenousList of Core.core_base_type (* expected *) * Core.core_base_type (* found *)
   | InvalidTag of Symbol.sym
   | InvalidMember of Symbol.sym * Symbol.identifier
 
@@ -54,6 +54,7 @@ type core_run_cause =
   | Reached_end_of_proc
   | Unknown_impl
   | Unresolved_symbol of Loc.t * Symbol.sym (* found an unresolved symbolic name in core_eval *)
+  | Constrained (* Symbolic execution (needing PEconstrained) is no longer supported *)
 
 (* semicolon after a function definition and other places (is an extension it least since C++11) *)
 type extra_semi_context =
@@ -99,33 +100,25 @@ type driver_cause =
 type internal_error =
   | Internal_error_desugaring of string
 
-type cause =
-  | CPP of string (* NOTE: this is an empty string when piping to stderr *)
-  | CPARSER of cparser_cause
-  | EXTENSION of extension_cause
-  | DESUGAR of desugar_cause
-  | AIL_TYPING of TypingError.typing_error
-  | CORE_PARSER of core_parser_cause
-  | CORE_TYPING of core_typing_cause
-  | CORE_LINKING of core_linking_cause
-  | CORE_RUN of core_run_cause
-  | DRIVER of driver_cause
-  | UNSUPPORTED of string
-  | INTERNAL_ERROR of internal_error
+type error
+declare ocaml target_rep type error = `Errors.error`
 
-type error = Loc.t * cause
 
-instance (Show core_run_cause)
-  let show = function
-    | Illformed_program str ->
-        "Illformed_program[" ^ str ^ "]"
-    | Found_empty_stack str ->
-        "Found_empty_stack[" ^ str ^ "]"
-    | Reached_end_of_proc ->
-        "Reached_end_of_proc"
-    | Unknown_impl ->
-        "Unknown_impl"
-    | Unresolved_symbol _ sym ->
-        "Unresolved_symbol[" ^ show sym ^ "]"
-  end
-end
+val extension_error: Loc.t -> extension_cause -> error
+val desugar_error: Loc.t -> desugar_cause -> error
+val ail_typing_error: Loc.t -> TypingError.typing_error -> error
+val core_typing_error: Loc.t -> core_typing_cause -> error
+val linking_error: Loc.t -> core_linking_cause -> error
+val core_run_error: Loc.t -> core_run_cause -> error
+declare ocaml target_rep function extension_error = `Errors.extension_error`
+declare ocaml target_rep function desugar_error = `Errors.desugar_error`
+declare ocaml target_rep function ail_typing_error = `Errors.ail_typing_error`
+declare ocaml target_rep function core_typing_error = `Errors.core_typing_error`
+declare ocaml target_rep function linking_error = `Errors.linking_error`
+declare ocaml target_rep function core_run_error = `Errors.core_run_error`
+
+val internal_error: Loc.t -> internal_error -> error
+declare ocaml target_rep function internal_error = `Errors.internal_error`
+
+val match_internal_error: error -> maybe internal_error
+declare ocaml target_rep function match_internal_error = `Errors.match_internal_error`

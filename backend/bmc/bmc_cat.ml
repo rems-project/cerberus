@@ -1,6 +1,5 @@
 open Bmc_utils
 open Printf
-open Cerb_util
 
 
 (* ======== CAT SPECIFICATION ============ *)

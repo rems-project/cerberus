@@ -1,6 +1,6 @@
 open Cerb_frontend
+open Cerb_symbol
 open Cerb_backend
-open Cerb_util
 open Instance_api
 open Pipeline
 
@@ -19,7 +19,7 @@ type conf =
 
 let dummy_io =
   let open Pipeline in
-  let skip = fun _ -> Exception.except_return ()
+  let skip = fun _ -> Result.ok ()
   in {
     pass_message=   skip;
     set_progress=   skip;
@@ -81,16 +81,16 @@ let hack ?(is_bmc=false) ~conf mode =
   in cerb_conf := fun () -> conf
 
 let respond filename name f = function
-  | Exception.Result r ->
+  | Ok r ->
     f r
-  | Exception.Exception err ->
+  | Error err ->
     Failure (Str.replace_first (Str.regexp_string filename) name @@ Pp_errors.to_string err)
 
 (* elaboration *)
 
 let elaborate ~is_bmc ~conf ~filename =
-  let return = Exception.except_return in
-  let (>>=)  = Exception.except_bind in
+  let return = Result.ok in
+  let (>>=)  = Result.bind in
   hack ~is_bmc ~conf Random;
   Switches.set conf.instance.switches;
   Debug.print 7 @@ List.fold_left (fun acc sw -> acc ^ " " ^ sw) "Switches: " conf.instance.switches;
@@ -167,8 +167,8 @@ let write_tmp_file content =
     failwith "write_tmp_file"
 
 let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
-  let return = Exception.except_return in
-  let (>>=)  = Exception.except_bind in
+  let return = Result.ok in
+  let (>>=)  = Result.bind in
   Debug.print 7 ("Running BMC...");
   try
     elaborate ~is_bmc:true ~conf ~filename
@@ -208,8 +208,8 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
 
 (* execution *)
 let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
-  let return = Exception.except_return in
-  let (>>=)  = Exception.except_bind in
+  let return = Result.ok in
+  let (>>=)  = Result.bind in
   hack ~conf mode;
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
@@ -254,9 +254,7 @@ let set_uid file =
     let pe_' = match pe_ with
       | PEsym s -> PEsym s
       | PEimpl impl -> PEimpl impl
-      | PEval v -> PEval v
-      | PEconstrained cs ->
-        PEconstrained (List.mapi (fun i (m, pe) -> (m, set_pe pe)) cs)
+      | PEbase b -> PEbase b
       | PEundef (loc, undef) -> PEundef (loc, undef)
       | PEerror (err, pe) -> PEerror (err, set_pe pe)
       | PEctor (ctor, pes) -> PEctor (ctor, List.map set_pe pes)
@@ -279,9 +277,6 @@ let set_uid file =
       | PEcall (name, pes) -> PEcall (name, List.map set_pe pes)
       | PElet (pat, pe1, pe2) -> PElet (pat, set_pe pe1, set_pe pe2)
       | PEif (pe1, pe2, pe3) -> PEif (set_pe pe1, set_pe pe2, set_pe pe3)
-      | PEis_scalar pe -> PEis_scalar (set_pe pe)
-      | PEis_integer pe -> PEis_integer (set_pe pe)
-      | PEis_signed pe -> PEis_signed (set_pe pe)
       | PEis_unsigned pe -> PEis_unsigned (set_pe pe)
       | PEbmc_assume pe -> PEbmc_assume (set_pe pe)
       | PEare_compatible (pe1, pe2) -> PEare_compatible (set_pe pe1, set_pe pe2)
@@ -349,7 +344,7 @@ let decode s = Marshal.from_string s 0
 
 let get_state_details st =
   let string_of_env env =
-    let f e = Pmap.fold (fun (s:Symbol.sym) (v:Core.value) acc ->
+    let f e = Pmap.fold (fun (s:Sym.t) (v:Core.value) acc ->
         Pp_symbol.to_string_pretty s ^ "= " ^ String_core.string_of_value v ^ "\n" ^ acc
       ) e "" in
     List.fold_left (fun acc e -> acc ^ f e) "" env
@@ -362,14 +357,14 @@ let get_state_details st =
     let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
     let Core.Expr (arena_annots, _) = ts.arena in
     let maybe_uid = Annot.get_uid arena_annots in
-    let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
+    let loc = Option.value ~default:ts.Core_run.current_loc @@ Annot.get_loc arena_annots in
     (loc, maybe_uid, arena, string_of_env ts.env, stdout, stderr)
   | _ ->
     (Cerb_location.unknown, None, "", "", stdout, stderr)
 
 let get_file_hash core =
   match core.Core.main with
-  | Some (Symbol.Symbol (hash, _, _)) -> hash
+  | Some sym -> sym.Sym.tunit
   | None -> failwith "get_file_hash"
 
 (* NOTE: Web doesn't depend on Driver *)
@@ -616,8 +611,8 @@ let create_expr_range_list core =
   Hashtbl.fold (fun k v acc -> (k, v)::acc) table []
 
 let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
-  let return = Exception.except_return in
-  let (>>=)  = Exception.except_bind in
+  let return = Result.ok in
+  let (>>=)  = Result.bind in
   match active_node_opt with
   | None -> (* no active node *)
     hack ~conf Random;
@@ -632,7 +627,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
     let core'    = Core_run_aux.convert_file core in
-    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
+    let st0      = Driver.initial_driver_state core' Cerb_sibylfs.Fs_state.initial_state (* TODO *) in
     let (m, st)  = (Driver.drive false core' [], st0) in
     last_node_id := 0;
     let node_info= `Init in
@@ -643,7 +638,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let tagDefs  = encode @@ Tags.tagDefs () in
     return @@ Interactive (tagDefs, ranges, ([n], []))
   | Some n ->
-    let tagsMap : (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map = decode n.tagDefs in
+    let tagsMap : (Sym.t, Cerb_location.t * Ctype.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;
     hack ~conf Random;
     Switches.set conf.instance.switches;
@@ -663,7 +658,7 @@ let instance debug_level =
       |> respond filename name (fun s -> Execution s)
     | `Step (conf, filename, name, active) ->
       step ~conf:(setup conf) ~filename active
-      |> respond filename name id
+      |> respond filename name Fun.id
     | `BMC (conf, bmc_model, filename, name) ->
       try
         bmc ~filename ~name ~conf:(add_bmc_macro ~bmc_model @@ setup conf) ~bmc_model ~filename ()

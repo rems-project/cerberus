@@ -21,7 +21,7 @@ let inline_label run_annots (label_loc, l_annot, label_sym, label_arg_syms_bts, 
   let (Expr (body_annots, body_)) = 
     (List.fold_right (fun ((spec_arg, spec_bt), expr_arg) body ->
          match expr_arg with
-         | Pexpr (_, _, PEsym s) when Symbol.symbolEquality s spec_arg ->
+         | Pexpr (_, _, PEsym s) when Cerb_symbol.Sym.equal s spec_arg ->
             body
          | _ ->
             let pat = (Pattern ([], CaseBase (Some spec_arg, spec_bt))) in
@@ -43,7 +43,7 @@ let inline_label run_annots (label_loc, l_annot, label_sym, label_arg_syms_bts, 
 open Core_rewriter
 module RW = Rewriter(Identity_monad)
 
-let rewriter label : 'bty RW.rewriter =
+let rewriter label : RW.rewriter =
   let (_, _, label_sym, _, _) = label in
   {
     rw_pexpr= RW.RW (fun _ _ -> Traverse);
@@ -51,7 +51,7 @@ let rewriter label : 'bty RW.rewriter =
     rw_expr=
       RW.RW (fun _ (Expr (annots, expr_)) ->
         match expr_ with
-        | Erun (_, l, args) when Symbol.symbolEquality l label_sym ->
+        | Erun (_, l, args) when Cerb_symbol.Sym.equal l label_sym ->
            Update (inline_label annots label args)
         | _ ->
            Traverse
@@ -118,7 +118,7 @@ let rewrite_fun_map_decl = function
               to_inline
          ) 
          label_defs 
-         (Pmap.empty Symbol.symbol_compare, [])
+         (Pmap.empty Cerb_symbol.Sym.compare, [])
      in
      let (label_defs, body) = inline_label_labels_and_body ~to_inline ~to_keep body in
      Mi_Proc (loc, mrk, rbt, arg_bts, body, label_defs)

@@ -1,23 +1,23 @@
-open Symbol
+open Cerb_symbol
 open Cerb_pp_prelude
 open Cerb_location
 
-let to_string (Symbol (_, n, sd)) =
-  match sd with
+let to_string sym =
+  match sym.Sym.desc with
     | SD_Id str | SD_ObjectAddress str | SD_FunArgValue str ->
-        str ^ "_" ^ string_of_int n
+        str ^ "_" ^ string_of_int sym.Sym.id
     | _ ->
-        "a_" ^ string_of_int n
+        "a_" ^ string_of_int sym.Sym.id
 
-let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
-  let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
+let to_string_pretty ?(is_human=false) sym =
+  let add_number name = name ^ "{" ^ string_of_int sym.Sym.id ^ "}" in
   let maybe_add_number name =
    if !Cerb_debug.debug_level > 4 then
       add_number name
      else
       name
   in
-  match sd with
+  match sym.Sym.desc with
     | SD_Id str
     | SD_ObjectAddress str
     | SD_FunArgValue str ->
@@ -26,17 +26,18 @@ let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
         if is_human then
           "(unnamed tag at " ^ Cerb_location.location_to_string loc ^ ")"
         else
-          "__cerbty_unnamed_tag_" ^ string_of_int n
+          "__cerbty_unnamed_tag_" ^ string_of_int sym.Sym.id
     | SD_CN_Id str ->
         (* (Printf.printf "SD_CN_Id: %s\n" str; *)
         str
         (* ) *)
     | _ ->
-        "a_" ^ string_of_int n
+        "a_" ^ string_of_int sym.Sym.id
 
 (* enriched versions used by the CN backend *)
-let to_string_pretty_cn ?(print_nums=false) (Symbol (_, n, sd) as s) =
-  let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
+let to_string_pretty_cn ?(print_nums=false) sym =
+  let open Sym in
+  let add_number name = name ^ "{" ^ string_of_int sym.id ^ "}" in
   let maybe_add_number name = 
       if print_nums then
         add_number name
@@ -44,10 +45,10 @@ let to_string_pretty_cn ?(print_nums=false) (Symbol (_, n, sd) as s) =
         name
   in
   let symbol_description = function
-    | SD_None -> 
-        to_string s
+    | SD_None ->
+        to_string sym
     | SD_unnamed_tag _ ->
-        "__cerbty_unnamed_tag_" ^ string_of_int n
+        "__cerbty_unnamed_tag_" ^ string_of_int sym.id
     | SD_Id name -> 
         name
     | SD_CN_Id name -> 
@@ -58,12 +59,12 @@ let to_string_pretty_cn ?(print_nums=false) (Symbol (_, n, sd) as s) =
         "return"
     | SD_FunArgValue str ->
        str
-    | SD_FunArg (_, i) ->
-        "ARG" ^ string_of_int i
+    | SD_FunArg (_, idx) ->
+        "ARG" ^ string_of_int idx
   in
-  match sd with
-  | SD_None -> to_string s
-  | _ -> maybe_add_number (symbol_description sd)
+  match sym.desc with
+  | SD_None -> to_string sym
+  | _ -> maybe_add_number (symbol_description sym.desc)
 
 (*
 let to_string_latex (n, _) =
@@ -94,7 +95,7 @@ let pp_prefix = function
       P.braces (!^ "compound literal")
 
 
-let pp_identifier ?(clever=false) (Symbol.Identifier (loc, str)) =
+let pp_identifier ?(clever=false) Identifier.{loc; str} =
   begin if Cerb_debug.get_debug_level () >= 5 then
     pp_location ~clever loc ^^ P.space
   else

@@ -3,10 +3,10 @@ open Bmc_sorts
 open Bmc_utils
 
 open Cerb_frontend
+open Cerb_symbol
 open Ctype
 open Core
 open Printf
-open Cerb_util
 open Z3
 
 (* =========== <> =========== *)
@@ -65,7 +65,7 @@ let rec base_ctype (Ctype (_, ty) as cty) : ctype =
       cty
 
 let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
-                           (file: unit typed_file)
+                           (file: unit file)
                            : bmcz3sort =
   match ty with
   | Void     -> assert false
@@ -122,7 +122,7 @@ struct_to_sort (sym, memlist_def) file  =
 
 
 let size_of_ctype (ty: ctype)
-                  (file: unit typed_file) =
+                  (file: unit file) =
   bmcz3sort_size (ctype_to_bmcz3sort ty file)
 
 
@@ -155,16 +155,16 @@ let is_fun_ptr (p: Impl_mem.pointer_value) : bool =
   if String.length ptr_str < String.length cfun_hdr then false
   else (String.sub ptr_str 0 (String.length cfun_hdr) = cfun_hdr)
 
-let value_to_z3 (value: value) (file: unit typed_file) : Expr.expr =
+let value_to_z3 (value: value) (file: unit file) : Expr.expr =
   match value with
-  | Vunit        -> UnitSort.mk_unit
-  | Vtrue        -> mk_true
-  | Vfalse       -> mk_false
-  | Vlist _      -> assert false
-  | Vtuple _     -> assert false
-  | Vctype cty   -> CtypeSort.mk_expr cty
-  | Vobject oval -> object_value_to_z3 oval
-  | Vloaded (LVspecified oval) ->
+  | Bunit        -> UnitSort.mk_unit
+  | Btrue        -> mk_true
+  | Bfalse       -> mk_false
+  | Blist _      -> assert false
+  | Btuple _     -> assert false
+  | Bctype cty   -> CtypeSort.mk_expr cty
+  | Bobject oval -> object_value_to_z3 oval
+  | Bloaded (LVspecified oval) ->
       begin match oval with
        | OVinteger ival ->
            LoadedInteger.mk_specified (integer_value_to_z3 ival)
@@ -176,7 +176,7 @@ let value_to_z3 (value: value) (file: unit typed_file) : Expr.expr =
              assert false
        | _ -> assert false
       end
-  | Vloaded (LVunspecified ctype) ->
+  | Bloaded (LVunspecified ctype) ->
       begin
       match ctype with
       | Ctype (_, Basic (Integer _)) ->
@@ -201,7 +201,7 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
     failwith "Error: unions are not supported."
 
 let cbt_to_z3 (cbt: core_base_type)
-              (file: unit typed_file): Sort.sort =
+              (file: unit file): Sort.sort =
   match cbt with
   | BTy_unit                -> UnitSort.mk_sort
   | BTy_boolean             -> boolean_sort
@@ -233,18 +233,19 @@ let cbt_to_z3 (cbt: core_base_type)
   | BTy_storable            ->
       failwith "TODO: support for BTy_storable"
 
+exception InvalidTypedCore
 
-let ctype_from_pexpr (ctype_pe: typed_pexpr) =
+let ctype_from_pexpr (ctype_pe: pexpr) =
   match ctype_pe with
-  | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
-  | _ -> assert false
+  | Pexpr(_, Some BTy_ctype, PEbase (Bctype ctype)) -> ctype
+  | _ -> raise InvalidTypedCore
 
 
 let ctor_to_z3 (ctor  : ctor)
                (exprs : Expr.expr list)
                (bTy   : core_base_type option)
                (uid   : int)
-               (file  : unit typed_file) =
+               (file  : unit file) =
   match ctor,exprs with
   | Ctuple,exprs ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
@@ -350,34 +351,34 @@ let ctor_to_z3 (ctor  : ctor)
       assert false
 
 (* =========== PATTERN MATCHING =========== *)
-let rec pattern_match (Pattern(_,pattern): typed_pattern)
+let rec pattern_match (Pattern(_,pattern): pattern)
                       (expr: Expr.expr)
                       : Expr.expr =
   match pattern with
   | CaseBase(_,_) ->
       mk_true
-  | CaseCtor(Ctuple, patlist) ->
+  | CaseDtor(Dtuple, patlist) ->
       assert (Expr.get_num_args expr = List.length patlist);
       let expr_list = Expr.get_args expr in
       let match_conditions =
         List.map2 (fun pat e -> pattern_match pat e) patlist expr_list in
       mk_and match_conditions
-  | CaseCtor(Cspecified, [Pattern(_,CaseBase(_, BTy_object OTy_integer))]) ->
+  | CaseDtor(Dspecified, [Pattern(_,CaseBase(_, BTy_object OTy_integer))]) ->
       LoadedInteger.is_specified expr
-  | CaseCtor(Cspecified, [Pattern(_,CaseBase(_, BTy_object OTy_pointer))]) ->
+  | CaseDtor(Dspecified, [Pattern(_,CaseBase(_, BTy_object OTy_pointer))]) ->
       LoadedPointer.is_specified expr
-  | CaseCtor(Cspecified, _) ->
+  | CaseDtor(Dspecified, _) ->
       assert false
-  | CaseCtor(Cunspecified, [Pattern(_,CaseBase(_, BTy_ctype))]) ->
+  | CaseDtor(Dunspecified, [Pattern(_,CaseBase(_, BTy_ctype))]) ->
       if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
         LoadedInteger.is_unspecified expr
       else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
         LoadedPointer.is_unspecified expr
       else
         assert false
-  | CaseCtor(Cnil BTy_ctype, []) ->
+  | CaseDtor(Dnil BTy_ctype, []) ->
       CtypeListSort.is_nil expr
-  | CaseCtor(Ccons, [hd;tl]) ->
+  | CaseDtor(Dcons, [hd;tl]) ->
       (* BTy_ctype supported only *)
       assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
       mk_and [CtypeListSort.is_cons expr
@@ -466,7 +467,7 @@ module ImplFunctions = struct
       let expr = mk_fresh_const
                     (sprintf "%s(%S)" name (Expr.to_string ctype_expr))
                     sort in
-      Pmap.add ity expr acc) (Pmap.empty Stdlib.compare) itys
+      Pmap.add ity expr acc) (Pmap.empty IntegerType.setElemCompare_integerType) itys
   (* ---- Constants ---- *)
 
 
@@ -553,45 +554,45 @@ let assert_initial_range (ctype: ctype) (const: Expr.expr)
  *)
 
 
-let is_ptr_pat (pat: typed_pattern) : bool =
+let is_ptr_pat (pat: pattern) : bool =
   match pat with
   | Pattern(_, (CaseBase(Some _, BTy_loaded OTy_pointer))) -> true
   | _ -> false
 
-let get_sym_from_base_pattern (pat: typed_pattern) : sym_ty option =
+let get_sym_from_base_pattern (pat: pattern) : Sym.t option =
   match pat with
   | Pattern(_, (CaseBase(sym, _))) -> sym
   | _ -> assert false
 
-let is_loaded_ptr_expr (expr: unit typed_expr) =
+let is_loaded_ptr_expr (expr: unit expr) =
   match expr with
-  | Expr(_, (Epure(Pexpr(_,_,PEval(Vloaded (LVspecified (OVpointer p))))))) ->
+  | Expr(_, (Epure(Pexpr(_,_,PEbase(Bloaded (LVspecified (OVpointer p))))))) ->
       true
   | _ -> false
 
-let get_ptr_from_loaded_ptr_expr (expr: unit typed_expr)
+let get_ptr_from_loaded_ptr_expr (expr: unit expr)
                                  : Impl_mem.pointer_value =
   match expr with
-  | Expr(_, (Epure(Pexpr(_,_,PEval(Vloaded (LVspecified (OVpointer p))))))) ->
+  | Expr(_, (Epure(Pexpr(_,_,PEbase(Bloaded (LVspecified (OVpointer p))))))) ->
       p
   | _ -> assert false
 
 
 type cfun_call_symbols = {
-  fn_ptr  : sym_ty;
-  fn_ptr_inner : sym_ty option;
+  fn_ptr  : Sym.t;
+  fn_ptr_inner : Sym.t option;
   ptr     : Impl_mem.pointer_value;
 }
 
 
 (* Return ptr sym and rewritten expr *)
-let extract_cfun_if_cfun_call (pat: typed_pattern)
-                              (e1: unit typed_expr)
-                              (e2: unit typed_expr)
+let extract_cfun_if_cfun_call (pat: pattern)
+                              (e1: unit expr)
+                              (e2: unit expr)
                               : cfun_call_symbols option =
   match (pat, e1,e2) with
-  | (Pattern(_, (CaseCtor(Ctuple,
-              [ptr_pat1;Pattern(_, (CaseCtor(Ctuple, tuple)))]))),
+  | (Pattern(_, (CaseDtor(Dtuple,
+              [ptr_pat1;Pattern(_, (CaseDtor(Dtuple, tuple)))]))),
      Expr(_, (Esseq(
        ptr_pat2,
        ((Expr(_, (Epure(loaded_ptr_pexpr)))) as loaded_ptr_expr),
@@ -614,7 +615,7 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
         None
   | (_,
     Expr(_, (Epure(loaded_ptr_pexpr))),
-    Expr(_, (Esseq(Pattern(_, (CaseCtor(Ctuple, tuple))),
+    Expr(_, (Esseq(Pattern(_, (CaseDtor(Dtuple, tuple))),
                    Expr(_,(Epure(Pexpr(_,_,PEcfunction (Pexpr(_,_,PEsym p)))))),
                    continuation
             )))) ->
@@ -624,7 +625,7 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
       *   let strong (... : tuple) = pure (c_function(p)) in ...
       *)
       if (is_ptr_pat pat && is_loaded_ptr_expr e1 &&
-          sym_eq p (Option.get (get_sym_from_base_pattern pat)))
+          Sym.equal p (Option.get (get_sym_from_base_pattern pat)))
       then begin
         let tuple_syms  = List.map get_sym_from_base_pattern tuple in
         assert (List.length tuple_syms = 4);
@@ -634,7 +635,7 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
              }
       end else
         None
-  | (Pattern(_, (CaseCtor(Ctuple, tuple1::_))),
+  | (Pattern(_, (CaseDtor(Dtuple, tuple1::_))),
      Expr(_, (Eunseq (sub_e1 :: (sub_e2 :: _)))),_) ->
       (* Unseq pattern:
        *  let weak ((p, (...)), _) =
@@ -642,8 +643,8 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
        *        pure((inner, cfunction(inner))),
        *)
       begin match tuple1,sub_e1 with
-      | (Pattern(_, (CaseCtor(Ctuple,
-              [ptr_pat1;Pattern(_, (CaseCtor(Ctuple, tuple)))])))),
+      | (Pattern(_, (CaseDtor(Dtuple,
+              [ptr_pat1;Pattern(_, (CaseDtor(Dtuple, tuple)))])))),
          Expr(_, (Esseq(
            ptr_pat2,
            ((Expr(_, (Epure(loaded_ptr_pexpr)))) as loaded_ptr_expr),

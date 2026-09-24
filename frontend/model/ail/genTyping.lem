@@ -1,5 +1,5 @@
 open import Pervasives Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
-import Constraint Undefined Builtins Debug Pp Cmm_csem Global
+import Constraint Undefined Builtins Debug Pp Atomics Global
 
 import Implementation
 
@@ -888,8 +888,18 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     
     | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin b)) args ->
         let loc_cursor = Loc.with_cursor loc' in
-        let memorder_ty = Ctype [] $ Basic (Integer (Signed (Int_))) (* TODO: actually memory_order enum *) in
+        let memorder_ty = Cty.signed_int (* TODO: actually memory_order enum *) in
         match (b, args) with
+        | (AilBatomic AilBAthread_fence, order_e :: args) ->
+            (* void atomic_thread_fence(memory_order) *)
+            let gen_fun_ty =
+              GenRValueType
+                (GenFunction (no_qualifiers, Cty.void) [(no_qualifiers, memorder_ty, false)] false) in
+            annotate_rvalue order_e >>= fun (order_e', order_gty) ->
+            (* TODO: check order_gty *)
+            E.return ( AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) [order_e']
+                     , GenRValueType GenVoid )
+
         | (AilBatomic AilBAstore, object_e :: desired_e :: order_e :: args) ->
             annotate_rvalue object_e >>= fun (object_e',  object_gty)  ->
             match object_gty with
@@ -899,11 +909,11 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicStore object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false (desired_e :: order_e :: args) (Just params_wo_ptr) >>= fun es' ->
                   match memory_order_of_expr order_e with
-                  | Just Cmm_csem.Acquire ->
+                  | Just Atomics.Acquire ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
-                  | Just Cmm_csem.Consume ->
+                  | Just Atomics.Consume ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Atomics.Acq_rel ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
@@ -923,9 +933,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicLoad object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false (order_e :: args) (Just params_wo_ptr) >>= fun es' ->
                   match memory_order_of_expr order_e with
-                  | Just Cmm_csem.Release ->
+                  | Just Atomics.Release ->
                     E.undef loc_cursor Undefined.UB206_atomic_load_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Atomics.Acq_rel ->
                     E.undef loc_cursor Undefined.UB206_atomic_load_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
@@ -965,9 +975,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   annotate_arguments loc_cursor false (order_success_e :: order_failure_e :: args) (Just params2) >>= fun args2 ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
-                  | Just Cmm_csem.Release ->
+                  | Just Atomics.Release ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Atomics.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: args1 ++ args2)
@@ -992,9 +1002,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   annotate_arguments loc_cursor false (order_success_e :: order_failure_e :: args) (Just params2) >>= fun args2 ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
-                  | Just Cmm_csem.Release ->
+                  | Just Atomics.Release ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Atomics.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: args1 ++ args2)
@@ -1089,13 +1099,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
        | (_, _) ->
             error "WIP: typing builtin"
     end
-    
-    (* TODO: this is wrong in so many ways!! *)
-    | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol digest s (Symbol.SD_Id "atomic_thread_fence")))) [order_e] ->
-        (* TODO: do typechecking *)
-        annotate_rvalue order_e >>= fun (order_e', order_gty) ->
-        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol digest s (Symbol.SD_Id "atomic_thread_fence")))) [order_e'], GenRValueType GenVoid)
-    
+
     | AilEcall e es ->
         E.add "§6.5.2.2#1" >>
         let check_return_type ret_ty =
@@ -2439,7 +2443,7 @@ let annotate_program (startup_opt, sigm) =
                     E.undef (Loc.with_cursor_from (Loc.locOf aty1) loc) Undefined.UB004b_incorrect_main_argument1
               end >>
               (* TODO: check arguments *)
-              if ret_qs = no_qualifiers && proj_ctype_ ret_ty = Basic (Integer (Signed Int_)) then
+              if ret_qs = no_qualifiers && ret_ty = Cty.signed_int then
                 annotate_sigma sigm >>= fun sigm' ->
                 E.return (startup_opt, sigm')
               else

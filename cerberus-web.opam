@@ -10,6 +10,7 @@ authors: [
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
+  "ocaml" {>= "4.14"}
   "cerberus-lib"
   "z3"
   "fpath" {>= "0.7.3"}

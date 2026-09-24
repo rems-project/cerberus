@@ -291,7 +291,7 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     let n = M.case_mem_value x (terr()) terr (fun _ -> conv cty)
         terr terr (terr()) terr terr
     in Nondeterminism.nd_return (Either.Right (Undefined.Defined
-                       (Core.Vloaded (Core.LVspecified (Core.OVinteger n)))))
+                       (Core.Bloaded (Core.LVspecified (Core.OVinteger n)))))
   in
   Formatted.printf eval_conv (List.rev (List.map encode xs)) args
   >>= begin function

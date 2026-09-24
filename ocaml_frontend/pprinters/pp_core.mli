@@ -1,3 +1,4 @@
+open Cerb_symbol
 open Core
 
 module type CONFIG =
@@ -21,18 +22,19 @@ sig
   val pp_core_base_type: core_base_type -> PPrint.document
   val pp_object_value: object_value -> PPrint.document
   val pp_value: value -> PPrint.document
-  val pp_params: (Symbol.sym * core_base_type) list -> PPrint.document
-  val pp_pattern : Symbol.sym Core.generic_pattern -> PPrint.document
-  val pp_pexpr: ('ty, Symbol.sym) generic_pexpr -> PPrint.document
-  val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
-  val pp_file: ('a, 'b) generic_file -> PPrint.document
+  val pp_params: (Sym.t * core_base_type) list -> PPrint.document
+  val pp_pattern : Sym.t Core.generic_pattern -> PPrint.document
+  val pp_pexpr: pexpr -> PPrint.document
+  val pp_expr: ('a, Sym.t) generic_expr -> PPrint.document
+  val pp_file: 'a generic_file -> PPrint.document
   val pp_ctor : ctor -> PPrint.document
+  val pp_dtor : dtor -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
+  val pp_funinfo: (Sym.t, Cerb_location.t * Annot.attributes * Ctype.ctype * (Sym.t option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Sym.t, Cerb_location.t * Annot.attributes * Ctype.ctype * (Sym.t option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_extern_symmap: (Sym.t, Sym.t) Pmap.map -> PPrint.document
 
-  val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
+  val pp_action: Sym.t generic_action_ -> PPrint.document
 (*  val pp_stack: 'a stack -> PPrint.document *)
 end
 

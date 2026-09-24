@@ -1,4 +1,5 @@
 open Cerb_frontend
+open Cerb_symbol
 
 type _sym =
   string * (Cerb_position.t * Cerb_position.t)
@@ -11,15 +12,15 @@ type mode =
   | ImplORFileMode
 
 type parsed_core_file =
-  Symbol.sym (* main symbol *) *
-  (Symbol.sym * (Core.core_base_type * Ctype.ctype) * unit Core.expr) list (* globals *) *
+  Sym.t (* main symbol *) *
+  (Sym.t * (Core.core_base_type * Ctype.ctype) * unit Core.expr) list (* globals *) *
   unit Core.fun_map (* fun map *) *
-  (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map (* tagDefs *)
+  (Sym.t, Cerb_location.t * Ctype.tag_definition) Pmap.map (* tagDefs *)
 
 (* Type of Core parser outputs *)
 type result =
   | Rfile of parsed_core_file
-  | Rstd  of (string, Symbol.sym) Pmap.map (* Map of ailnames *) * unit Core.fun_map
+  | Rstd  of (string, Sym.t) Pmap.map (* Map of ailnames *) * unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
 
 exception Core_error of (Cerb_location.t * Errors.core_parser_cause)
@@ -119,9 +120,6 @@ type token =
   | ACQUIRE
   | CONSUME
   | ACQ_REL
-  | IS_SCALAR
-  | IS_INTEGER
-  | IS_SIGNED
   | IS_UNSIGNED
   | ARE_COMPATIBLE
   | UNSPECIFIED
@@ -211,6 +209,7 @@ type token =
   
   | FVFROMINT
   | IVFROMFLOAT
+  | FLOATINGCAST
   | NULL
   | BUILTIN
   | CONV_INT

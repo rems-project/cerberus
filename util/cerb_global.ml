@@ -45,6 +45,9 @@ let set_cerb_conf ~backend_name ~exec exec_mode ~concurrency error_verbosity ~de
 let backend_name () =
   !!cerb_conf.backend_name
 
+let is_backend str =
+  String.equal str !!cerb_conf.backend_name
+
 let concurrency_mode () =
   !!cerb_conf.concurrency
 

@@ -67,7 +67,7 @@ let wrapped_fresh_symbol bTy =
 
 val wrapped_fresh_symbol_: Symbol.symbol_description -> C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
 let wrapped_fresh_symbol_ descr bTy =
-  let sym = Symbol.fresh_description descr in
+  let sym = Symbol.fresh_with_description descr in
   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
 
 val cheri_const_alias_map: elabM (map Symbol.sym Symbol.sym)
@@ -104,7 +104,7 @@ let with_block_objects binds ma = fun st ->
 val track_temporary_objects: forall 'a. elabM 'a -> elabM (list (wrapped_symbol * Ctype.ctype) * 'a)
 let track_temporary_objects ma =
   fun st ->
-    if st.temporary_objects <> [] then
+    if not (List.null st.temporary_objects) then
       error "[Translation.E.track_temporary_objects]"
     else
       let (a, st') = ma st in
@@ -153,7 +153,7 @@ val record_object_types_marker: unit -> elabM nat
 let record_object_types_marker () = 
   let marker_id = Symbol.fresh_int () in
   begin
-    if Global.backend_name () = "Cn" then
+    if Global.is_backend "Cn" then
       get_visible_objects >>= fun visible_objects ->
       mapM (fun sym ->
         resolve_object_type sym >>= fun (_, ty) ->

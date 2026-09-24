@@ -84,7 +84,6 @@ Module Type CheriMemoryImpl
 
   Definition storage_instance_id : Set := Z.
   Definition symbolic_storage_instance_id : Set := Z.
-  Definition floating_value : Set := float. (* 64 bit *)
 
   Inductive function_pointer : Set :=
   | FP_valid : CoqSymbol.sym -> function_pointer
@@ -107,7 +106,7 @@ Module Type CheriMemoryImpl
     CoqIntegerType.integerType -> integer_value_indt ->
     mem_value_with_err
   | MVEfloating :
-    CoqCtype.floatingType -> floating_value ->
+    CoqCtype.floatingType -> float ->
     mem_value_with_err
   | MVEpointer :
     CoqCtype.ctype -> pointer_value_indt -> mem_value_with_err
@@ -129,7 +128,7 @@ Module Type CheriMemoryImpl
       (* base cases *)
       (forall c : CoqCtype.ctype, P (MVEunspecified c)) ->
       (forall (i : CoqIntegerType.integerType) (i0 : integer_value_indt), P (MVEinteger i i0)) ->
-      (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVEfloating f f0)) ->
+      (forall (f : CoqCtype.floatingType) (f0 : float), P (MVEfloating f f0)) ->
       (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVEpointer c p)) ->
       (forall (e: mem_error), P (MVErr e)) ->
       (* recursive cases *)
@@ -177,7 +176,7 @@ Module Type CheriMemoryImpl
   | MVinteger :
     CoqIntegerType.integerType -> integer_value_indt -> mem_value_indt
   | MVfloating :
-    CoqCtype.floatingType -> floating_value -> mem_value_indt
+    CoqCtype.floatingType -> float -> mem_value_indt
   | MVpointer :
     CoqCtype.ctype -> pointer_value_indt -> mem_value_indt
   | MVarray : list mem_value_indt -> mem_value_indt
@@ -195,7 +194,7 @@ Module Type CheriMemoryImpl
       (* base cases *)
       (forall c : CoqCtype.ctype, P (MVunspecified c)) ->
       (forall (i : CoqIntegerType.integerType) (i0 : integer_value_indt), P (MVinteger i i0)) ->
-      (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVfloating f f0)) ->
+      (forall (f : CoqCtype.floatingType) (f0 : float), P (MVfloating f f0)) ->
       (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVpointer c p)) ->
       (* recursive cases *)
       (forall l : list mem_value_indt, List.Forall P l -> P (MVarray l)) ->
@@ -2869,9 +2868,6 @@ Module Type CheriMemoryImpl
     intfromptr Loc_unknown CoqCtype.void (CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) ptrval ;;
     ptrfromint Loc_unknown (CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) CoqCtype.void ival.
 
-  Definition concurRead_ival: CoqIntegerType.integerType -> CoqSymbol.sym -> serr (integer_value)
-    := fun _ _ => raise "TODO: concurRead_ival".
-
   Definition integer_ival (z:Z): integer_value := IV z.
 
   Definition int_bin
@@ -2934,8 +2930,6 @@ Module Type CheriMemoryImpl
     f (num_of_int v).
    *)
 
-  Definition is_specified_ival (ival : integer_value) : bool := true.
-
   Definition eq_ival (n1 n2: integer_value) :=
     Some (num_of_int n1 =? num_of_int n2).
 
@@ -2945,40 +2939,16 @@ Module Type CheriMemoryImpl
   Definition le_ival (n1 n2: integer_value) :=
     Some (num_of_int n1 <=? num_of_int n2).
 
-  Definition zero_fval : float := PrimFloat.zero.
-
-  Definition one_fval : float := PrimFloat.one.
-
-  (* Not implmeneted but we need a placeholder to compile libc during build *)
-  Definition str_fval (str : string) : serr floating_value :=
-    ret PrimFloat.zero.
-  (* raise "str_fval not implmented". *)
-
-  Definition op_fval
-    (fop : floating_operator)
-    (fval1 fval2 : float) : float
-    :=
-    match fop with
-    | FloatAdd => PrimFloat.add fval1 fval2
-    | FloatSub => PrimFloat.sub fval1 fval2
-    | FloatMul => PrimFloat.mul fval1 fval2
-    | FloatDiv => PrimFloat.div fval1 fval2
-    end.
-
-  Definition eq_fval := PrimFloat.eqb.
-  Definition lt_fval := PrimFloat.ltb.
-  Definition le_fval := PrimFloat.leb.
-
-  Definition fvfromint (iv:integer_value): serr (floating_value)
+  Definition fvfromint (iv:integer_value): serr (float)
     := raise "fvfromint not implemented".
 
   Definition ivfromfloat
     (ity: CoqIntegerType.integerType)
-    (fval: floating_value): serr integer_value
+    (fval: float): serr integer_value
     :=
     match ity with
     | CoqIntegerType.Bool =>
-        ret (IV (if eq_fval fval zero_fval then 0 else 1))
+        ret (IV (if PrimFloat.eqb fval PrimFloat.zero then 0 else 1))
     | _ =>
         nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         let zbytes := Z.of_nat nbytes in
@@ -3008,7 +2978,7 @@ Module Type CheriMemoryImpl
     : mem_value := MVinteger ity ival.
 
   Definition floating_value_mval
-    (fty: CoqCtype.floatingType) (fval: floating_value)
+    (fty: CoqCtype.floatingType) (fval: float)
     : mem_value := MVfloating fty fval.
 
   Definition pointer_mval
@@ -3034,7 +3004,7 @@ Module Type CheriMemoryImpl
     (f_unspec : CoqCtype.ctype -> A)
     (f_concur : CoqIntegerType.integerType -> CoqSymbol.sym -> A)
     (f_ival : CoqIntegerType.integerType -> integer_value -> A)
-    (f_fval : CoqCtype.floatingType -> floating_value -> A)
+    (f_fval : CoqCtype.floatingType -> float -> A)
     (f_ptr : CoqCtype.ctype -> pointer_value -> A)
     (f_array : list mem_value -> A)
     (f_struct : CoqSymbol.sym -> list (CoqSymbol.identifier * CoqCtype.ctype * mem_value) -> A)
@@ -3050,9 +3020,6 @@ Module Type CheriMemoryImpl
     | MVunion tag_sym memb_ident mval' => f_union tag_sym memb_ident mval'
     end.
    *)
-
-  Definition sequencePoint: memM unit :=
-    ret tt.
 
   Definition cap_of_mem_value
     (funptrmap : ZMap.M.t (digest * string * C.t))

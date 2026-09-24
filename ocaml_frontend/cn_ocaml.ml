@@ -1,11 +1,11 @@
+open Cerb_pp_prelude
+open Cerb_location
+open Cerb_symbol
+
 open Cn
 
-open Cerb_pp_prelude
 open Pp_ast
 open Pp_symbol
-
-open Cerb_location
-
 
 module P = PPrint
 
@@ -26,9 +26,9 @@ let string_of_ns = function
   | CN_type_nm -> "type name"
 
 let string_of_error = function
-  | CNErr_uppercase_function (Symbol.Identifier (_, str)) ->
+  | CNErr_uppercase_function Identifier.{str; _} ->
       "function name `" ^ str ^ "' does not start with a lowercase letter"
-  | CNErr_lowercase_predicate (Symbol.Identifier (_, str)) ->
+  | CNErr_lowercase_predicate Identifier.{str; _} ->
       "predicate name `" ^ str ^ "' does not start with an uppercase letter"
   | CNErr_redeclaration ns ->
       "redeclaration of " ^ string_of_ns ns
@@ -36,13 +36,13 @@ let string_of_error = function
       "undeclared predicate name"
   | CNErr_invalid_tag ->
       "tag name is not declared or a union tag"
-  | CNErr_unknown_identifier (ns, Symbol.Identifier (_, str)) ->
+  | CNErr_unknown_identifier (ns, Identifier.{str; _}) ->
       "the " ^ string_of_ns ns ^ " `" ^ str ^ "' is not declared"
-  | CNErr_unknown_c_identifier (Symbol.Identifier (_, str)) ->
+  | CNErr_unknown_c_identifier Identifier.{str; _} ->
       "the C symbol `" ^ str ^ "' is unknown"
   | CNErr_missing_oarg sym ->
       "missing an assignment for the output argument `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
-  | CNErr_duplicate_field (Symbol.Identifier (_, str)) ->
+  | CNErr_duplicate_field Identifier.{str; _} ->
       "field `" ^ str ^ "' duplicated"
   | CNErr_general s -> s
     
@@ -469,14 +469,14 @@ module MakePp (Conf: PP_CN) = struct
 end
 
 module PpCabs = MakePp (struct
-  type ident = Symbol.identifier
+  type ident = Identifier.t
   type ty = Cabs.type_name
   let pp_ident = pp_identifier
   let pp_ty _ = failwith "PpCabs.pp_type_name"
 end)
 
 module PpAil = MakePp (struct
-  type ident = Symbol.sym
+  type ident = Sym.t
   type ty = Ctype.ctype
   let pp_ident ?(clever=false) sym = !^ (Cerb_colour.ansi_format [Yellow] (Pp_symbol.to_string_pretty_cn sym))
   let pp_ty ty = Pp_ail.pp_ctype Ctype.no_qualifiers ty

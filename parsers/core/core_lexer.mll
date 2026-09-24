@@ -82,6 +82,7 @@ let keywords =
 
       ("Fvfromint",   T.FVFROMINT      );
       ("Ivfromfloat", T.IVFROMFLOAT    );
+      ("Floatingcast", T.FLOATINGCAST  );
 
       (* this is a fake constructor at the syntax level *)
       (* NOTE: it would be better to pass to the Core parser an env with the C types symbols (to resolve max_align_t) *)
@@ -157,9 +158,6 @@ let keywords =
       ("acq_rel", T.ACQ_REL );
       
       (* TODO: temporary *)
-      ("is_scalar",   T.IS_SCALAR  );
-      ("is_integer",  T.IS_INTEGER );
-      ("is_signed",   T.IS_SIGNED  );
       ("is_unsigned", T.IS_UNSIGNED);
       ("are_compatible", T.ARE_COMPATIBLE);
       

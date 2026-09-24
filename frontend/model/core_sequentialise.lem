@@ -1,6 +1,6 @@
 open import Core
 
-val     sequentialise_expr: typed_expr unit -> typed_expr unit
+val     sequentialise_expr: expr unit -> expr unit
 let rec sequentialise_expr (Expr annot expr_) =
   Expr annot match expr_ with
     | Epure _ ->
@@ -28,7 +28,7 @@ let rec sequentialise_expr (Expr annot expr_) =
           Expr [] (Ewseq (Pattern annot_ctor (CaseBase (Nothing, bTy))) (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip bTys es) in
         expr_'
-    | Ewseq (Pattern _ (CaseCtor Ctuple pats)) (Expr _ (Eunseq es)) e2 ->
+    | Ewseq (Pattern _ (CaseDtor Dtuple pats)) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
           Expr [] (Ewseq pat (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip pats es) in
@@ -40,7 +40,7 @@ let rec sequentialise_expr (Expr annot expr_) =
           Expr [] (Esseq (Pattern annot_ctor (CaseBase (Nothing, bTy))) (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip bTys es) in
         expr_'
-    | Esseq (Pattern _ (CaseCtor Ctuple pats)) (Expr _ (Eunseq es)) e2 ->
+    | Esseq (Pattern _ (CaseDtor Dtuple pats)) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
           Expr [] (Esseq pat (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip pats es) in
@@ -66,7 +66,7 @@ let rec sequentialise_expr (Expr annot expr_) =
   end
 
 
-val sequentialise_file: typed_file unit -> typed_file unit
+val sequentialise_file: file unit -> file unit
 let sequentialise_file file =
   <| file with funs= Map.map (function
        | Proc loc mrk bTy params e ->

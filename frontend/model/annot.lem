@@ -1,5 +1,6 @@
 open import Maybe
-open import Pervasives
+open import Pervasives Show_extra
+import Assert_extra
 import Loc
 import Symbol
 import IntegerType
@@ -23,6 +24,9 @@ end
 val no_attributes: attributes
 let no_attributes =
   Attrs []
+
+let is_no_attributes (Attrs xs) =
+  List.null xs
 
 val combine_attributes: attributes -> attributes -> attributes
 let combine_attributes (Attrs xs1) (Attrs xs2) =
@@ -200,27 +204,30 @@ let get_cerb_magic_attr annots =
   match get_attrs annots with
   | Nothing -> []
   | Just (Attrs attributes) ->
-     List.concatMap (fun attr ->
-         match (attr.attr_ns, attr.attr_id) with
-         | (Just (Symbol.Identifier _loc1 "cerb"), Symbol.Identifier _loc2 "magic") ->
-            List.map (fun (loc, arg, _) -> (loc, arg)) attr.attr_args
-         | _ ->
-            []
-         end
+      List.concatMap (fun attr ->
+        match attr.attr_ns with
+        | Just ns_ident ->
+            let ns_str = Symbol.string_of_identifier ns_ident in
+            let id_str = Symbol.string_of_identifier attr.attr_id in
+            if ns_str = "cerb" && id_str = "magic" then
+              List.map (fun (loc, arg, _) -> (loc, arg)) attr.attr_args
+            else
+              []
+        | Nothing -> []
+        end
        ) attributes
   end
 
 let is_cerb_byte (Attrs attributes) =
      List.any (fun attr ->
-         match (attr.attr_ns, attr.attr_id) with
-         | (Just (Symbol.Identifier _loc1 "cerb"), Symbol.Identifier _loc2 "byte") ->
-            true
-         | _ ->
-            false
-         end
+        match attr.attr_ns with
+        | Just ns_ident ->
+            let ns_str = Symbol.string_of_identifier ns_ident in
+            let id_str = Symbol.string_of_identifier attr.attr_id in
+            ns_str = "cerb" && id_str = "byte"
+        | Nothing -> false
+        end
        ) attributes
-
-       
 
 
 
@@ -302,7 +309,10 @@ let rec get_uid annots =
 
 val is_return: list annot -> bool
 let is_return annots =
-  get_label_annot annots = Just LAreturn
+  match get_label_annot annots with
+    | Just LAreturn -> true
+    | _ -> false
+  end
 
 val is_loop_break: list annot -> bool
 let is_loop_break annots =

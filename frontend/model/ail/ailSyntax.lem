@@ -6,12 +6,17 @@ type ail_identifier = Symbol.sym
 
 type reg = nat
 
-type integerSuffix = 
+type integerSuffix =
  | U
  | UL
  | ULL
  | L
  | LL
+
+instance (Eq integerSuffix)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
 type basis =
   | Octal
@@ -19,10 +24,40 @@ type basis =
   | Hexadecimal
   | Binary
 
+instance (Eq basis)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
 type integerConstant [name = "ic*"] =
   | IConstant of integer * basis * maybe integerSuffix
   | IConstantMax of integerType
   | IConstantMin of integerType
+
+let equal_integerConstant iCst1 iCst2 =
+  let ord = function
+    | IConstant _ _ _ ->
+        (0 : nat)
+    | IConstantMax _ ->
+        1
+    | IConstantMin _ ->
+        2
+  end in
+  match (iCst1, iCst2) with
+    | (IConstant n1 b1 suff_opt1, IConstant n2 b2 suff_opt2) ->
+        n1 = n2 && b1 = b2 && suff_opt1 = suff_opt2
+    | (IConstantMax ity1, IConstantMax ity2) ->
+        ity1 = ity2
+    | (IConstantMin ity1, IConstantMin ity2) ->
+        ity1 = ity2
+    | _ ->
+        ord iCst1 = ord iCst2
+  end
+
+instance (Eq integerConstant)
+  let (=) = equal_integerConstant
+  let (<>) = fun iCst1 iCst2 -> not (equal_integerConstant iCst1 iCst2)
+end
 
 type floatingSuffix =
   | Fsuf_F

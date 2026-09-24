@@ -8,7 +8,7 @@ type driver_conf = {
   trace: bool;
 }
 
-type execution_result = (Core.value list, Errors.error) Exception.exceptM
+type execution_result = (Core.value list, Errors.error) result
 
 type batch_exit =
   | Unspecified of Ctype.ctype
@@ -24,7 +24,7 @@ val string_of_batch_exit: batch_exit -> string
 val string_of_batch_output: ?json:bool -> ?is_charon:bool -> int option -> (string list * batch_output) -> string
 
 val batch_drive:
-  'a Core.file -> string list -> Sibylfs.fs_state -> driver_conf -> (string list * batch_output) list
+  'a Core.file -> string list -> Cerb_sibylfs.Fs_state.t -> driver_conf -> (string list * batch_output) list
 
 val drive:
-  'a Core.file -> string list -> Sibylfs.fs_state -> driver_conf -> execution_result
+  'a Core.file -> string list -> Cerb_sibylfs.Fs_state.t -> driver_conf -> execution_result

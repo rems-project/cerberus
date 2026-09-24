@@ -15,7 +15,7 @@ bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
   "cerberus-lib"
   "angstrom" {>= "0.14.0"}
-  "z3"
+  "z3" {>= "4.8.7"}
   "cmdliner"
   "lem"
 ]

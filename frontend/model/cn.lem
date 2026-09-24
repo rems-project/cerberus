@@ -273,6 +273,30 @@ type cn_namespace =
   | CN_oarg
   | CN_type_nm
 
+let (equal_cn_namespace, compare_cn_namespace) =
+  let ord = function
+    | CN_predicate -> (0 : nat)
+    | CN_function -> 1
+    | CN_lemma -> 2
+    | CN_fun_spec -> 3
+    | CN_datatype_nm -> 4
+    | CN_constructor -> 5
+    | CN_vars -> 6
+    | CN_oarg -> 7
+    | CN_type_nm -> 8
+  end in 
+  ( (fun ns1 ns2 -> ord ns1 = ord ns2)
+  , (fun ns1 ns2 -> compare (ord ns1) (ord ns2)) )
+
+instance (Eq cn_namespace)
+  let (=) = equal_cn_namespace
+  let (<>) = fun x y -> not (equal_cn_namespace x y)
+end
+
+instance (SetType cn_namespace)
+  let setElemCompare = compare_cn_namespace
+end
+
 instance (Show cn_namespace)
   let show ns =
     match ns with

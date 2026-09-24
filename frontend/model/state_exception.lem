@@ -1,4 +1,4 @@
-open import Pervasives Utils
+open import List
 import Exception
 
 (* HACK: most of the inlines are only added to prevent Lem's renaming *)
@@ -19,66 +19,47 @@ let stExpect_bind m f = fun s ->
 
 (* Reinventing the wheel *)
 val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> stExceptM 'a 's 'msg -> stExceptM 'b 's 'msg
-val join: forall 'a 's 'msg. stExceptM (stExceptM 'a 's 'msg) 's 'msg -> stExceptM 'a 's 'msg
-let inline fmap f m = stExpect_bind m (fun z -> stExpect_return $ f z)
-let inline join mm  = stExpect_bind mm (fun z -> z)
+let inline fmap f m = stExpect_bind m (fun z -> stExpect_return (f z))
 
 val app: forall 'a 'b 's 'msg. stExceptM ('a -> 'b) 's 'msg -> stExceptM 'a 's 'msg -> stExceptM 'b 's 'msg
 let inline app  mf m = stExpect_bind mf (fun f -> fmap f m)
-(*
-TODO: UNUSED
-val papp: forall 'a 'b 's 'msg. stExceptM ('a -> 'b) 's 'msg -> 'a -> stExceptM 'b 's 'msg
-let papp mf x = bind mf (fun f -> return (f x))
-*)
 
-module Operators = struct
-  let inline (>>=)    = stExpect_bind
-  let inline (>>) m f = stExpect_bind m (fun _ -> f)
-  let inline (<$>)    = fmap
-  let inline (<*>)    = app
-end
-open Operators
 
-(*
-TODO: UNUSED
-let app2 mf mx my = mf <*> mx <*> my
-let app3 mf mx my mz = (app2 mf mx my) <*> mz
-let map2 f mx my = f <$> mx <*> my
-let map3 f mx my mz = (map2 f mx my) <*> mz
-*)
-
-let inline sequence ms =
+val stExpect_mapM: forall 'a 'b 's 'msg.
+  ('a -> stExceptM 'b 's 'msg) ->
+  list 'a ->
+  stExceptM (list 'b) 's 'msg
+let stExpect_mapM f xs =
   foldr
     (fun m m' ->
-      m  >>= fun x  ->
-      m' >>= fun xs ->
+      stExpect_bind m (fun x ->
+      stExpect_bind m' (fun xs ->
       stExpect_return (x::xs)
-    ) (stExpect_return []) ms
+    ))) (stExpect_return [])
+    (List.map f xs)
 
-let inline listM t xs = sequence (t xs)
-
-val stExpect_mapM: forall 'a 'b 's 'msg. ('a -> stExceptM 'b 's 'msg) -> list 'a -> stExceptM (list 'b) 's 'msg
-let stExpect_mapM f = listM (List.map f)
-
-val mapiM: forall 'a 'b 's 'msg. (nat -> 'a -> stExceptM 'b 's 'msg) -> list 'a -> stExceptM (list 'b) 's 'msg
-let mapiM f = listM (List.mapi f)
-
-let inline sequence_ ms = foldr (>>) (stExpect_return ()) ms
-val mapM_: forall 'a 'b 's 'msg. ('a -> stExceptM 'b 's 'msg) -> list 'a -> stExceptM unit 's 'msg
-let inline mapM_ f _as = sequence_ (List.map f _as)
+val mapM_: forall 'a 'b 's 'msg.
+  ('a -> stExceptM 'b 's 'msg) ->
+  list 'a ->
+  stExceptM unit 's 'msg
+let inline mapM_ f xs =
+  foldr
+    (fun m f -> stExpect_bind m (fun _ -> f))
+    (stExpect_return ())
+    (List.map f xs)
 
 
 
 val     stExcept_foldlM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'a 's 'msg) -> 'a -> list 'b -> stExceptM 'a 's 'msg
 let rec stExcept_foldlM f a = function
   | []    -> stExpect_return a
-  | b::bs -> f a b >>= fun a' -> stExcept_foldlM f a' bs
+  | b::bs -> stExpect_bind (f a b) (fun a' -> stExcept_foldlM f a' bs)
 end
 
 val     foldrM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'b 's 'msg) -> 'b -> list 'a -> stExceptM 'b 's 'msg
 let rec foldrM f a = function
   | [] -> stExpect_return a
-  | x::xs -> foldrM f a xs >>= f x
+  | x::xs -> stExpect_bind (foldrM f a xs) (f x)
 end
 
 let inline iter f l = stExcept_foldlM (fun () a -> f a) () l
@@ -86,19 +67,6 @@ let inline iter f l = stExcept_foldlM (fun () a -> f a) () l
 
 (* Exception stuff *)
 let inline fail msg = fun _ -> Exception.fail msg
-
-let of_option msg = function
-  | Just a  -> stExpect_return a
-  | Nothing -> fail msg
-end
-
-let option msg m =
-  let f o =
-    match o with
-      | Just a  -> stExpect_return a
-      | Nothing -> fail msg
-    end in
-  stExpect_bind m f
 
 
 (* hijack the error message of a failing computation *)
@@ -115,7 +83,7 @@ val eval:   forall 'a 'b 's 'msg. stExceptM 'a 's 'msg -> 's -> Exception.except
 let state_except_read   f = fun s -> Exception.return (f s, s)
 let state_except_update f = fun s -> Exception.return ((), f s)
 let state_except_modify f = fun s -> Exception.return (f s)
-let state_except_eval   m = fun s -> Exception.fmap fst (m s)
+let state_except_eval   m = fun s -> Exception.fmap (fun (x, _) -> x) (m s)
 let inline read = state_except_read
 let inline update = state_except_update
 let inline modify = state_except_modify
@@ -127,10 +95,6 @@ let state_except_get = fun st -> Exception.return (st, st)
 let state_except_put st = fun _ -> Exception.return ((), st)
 let inline get = state_except_get
 let inline put = state_except_put
-
-val run: forall 'a 's 'msg. stExceptM 'a 's 'msg -> 's -> Exception.exceptM ('a * 's) 'msg
-let state_except_run m = fun st -> m st
-let inline run = state_except_run
 
 
 val liftException: forall 'a 'state 'msg. Exception.exceptM 'a 'msg -> stExceptM 'a 'state 'msg

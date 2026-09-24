@@ -475,3 +475,19 @@ instance (SetType cabs_base_type_specifier)
     setElemCompare (ord bspecif1) (ord bspecif2)
 end
 
+let (equal_storage_class_specifier, compare_storage_class_specifier) =
+  let ord = function
+    | SC_typedef -> (0 : nat)
+    | SC_extern -> 1
+    | SC_static -> 2
+    | SC_Thread_local -> 3
+    | SC_auto -> 4
+    | SC_register -> 5
+  end in
+  ( (fun x y -> ord x = ord y)
+  , (fun x y -> compare (ord x) (ord y)) )
+
+instance (Eq storage_class_specifier)
+  let (=) = equal_storage_class_specifier
+  let (<>) = fun x y -> not (equal_storage_class_specifier x y)
+end

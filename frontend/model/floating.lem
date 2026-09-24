@@ -1,0 +1,33 @@
+open import Bool Basic_classes Num
+import Ctype
+
+type float
+declare ocaml target_rep type float = `Float.t`
+
+(* Floating value constructors *)
+val zero_fval: float
+val one_fval: float
+val str_fval: string -> float
+declare ocaml target_rep function zero_fval = `Float.zero`
+declare ocaml target_rep function one_fval = `Float.one`
+declare ocaml target_rep function str_fval = `Float.of_string`
+
+(* Predicates on floating values *)
+val add_fval : float -> float -> float
+val sub_fval : float -> float -> float
+val mul_fval : float -> float -> float
+val div_fval : float -> float -> float
+declare ocaml target_rep function add_fval = `Float.add`
+declare ocaml target_rep function sub_fval = `Float.sub`
+declare ocaml target_rep function mul_fval = `Float.mul`
+declare ocaml target_rep function div_fval = `Float.div`
+
+val eq_fval: float -> float -> bool
+val lt_fval: float -> float -> bool
+val le_fval: float -> float -> bool
+declare ocaml target_rep function eq_fval = `Float.equal`
+declare ocaml target_rep function lt_fval = `Cerb_floating.less_than`
+declare ocaml target_rep function le_fval = `Cerb_floating.less_equal`
+
+val round_double_to_float32: float -> float
+declare ocaml target_rep function round_double_to_float32 = `Cerb_floating.round_double_to_float32`

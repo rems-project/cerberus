@@ -3,22 +3,30 @@ open import Pervasives
 declare {ocaml} rename module = Lem_global
 
 type execution_mode =
-  | Interactive
+  (* | Interactive *)
   | Exhaustive
   | Random
 
+let equal_execution_mode =
+  let ord = function
+    (* | Interactive -> (0 : nat) *)
+    | Exhaustive -> (0 : nat)
+    | Random -> 1
+  end in
+  fun x y -> (ord x) = (ord y)
+
 instance (Eq execution_mode)
-  let (=) = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
+  let (=) = equal_execution_mode
+  let (<>) = fun x y -> not (equal_execution_mode x y)
 end
 
 declare ocaml target_rep type     execution_mode = `Cerb_global.execution_mode`
-declare ocaml target_rep function Interactive    = `Cerb_global.Interactive`
+(* declare ocaml target_rep function Interactive    = `Cerb_global.Interactive` *)
 declare ocaml target_rep function Exhaustive     = `Cerb_global.Exhaustive`
 declare ocaml target_rep function Random         = `Cerb_global.Random`
 
 declare hol target_rep type     execution_mode = `util$execution_mode`
-declare hol target_rep function Interactive    = `util$Interactive`
+(* declare hol target_rep function Interactive    = `util$Interactive` *)
 declare hol target_rep function Exhaustive     = `util$Exhaustive`
 declare hol target_rep function Random         = `util$Random`
 
@@ -26,8 +34,8 @@ val current_execution_mode: unit -> maybe execution_mode
 declare ocaml target_rep function current_execution_mode = `Cerb_global.current_execution_mode`
 declare hol   target_rep function current_execution_mode = `util$current_execution_mode`
 
-val backend_name: unit -> string
-declare ocaml target_rep function backend_name = `Cerb_global.backend_name`
+val is_backend: string -> bool
+declare ocaml target_rep function is_backend = `Cerb_global.is_backend`
 
 val using_concurrency: unit -> bool
 declare ocaml target_rep function using_concurrency = `Cerb_global.concurrency_mode`

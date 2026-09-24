@@ -1,15 +1,14 @@
-open Bmc_utils
-
 open Cerb_frontend
+open Cerb_symbol
 open Core
 
-type substitute_map = (sym_ty, typed_pexpr) Pmap.map
+type substitute_map = (Sym.t, pexpr) Pmap.map
 
 (* WARNING: all these functions assume the symbols in the
    substitute_map doesn't clash with the binders in the Core exprs *)
 
 let rec unsafe_substitute_pexpr (map: substitute_map)
-                         (Pexpr(annot, ty, pexpr_): typed_pexpr) =
+                         (Pexpr(annot, ty, pexpr_): pexpr) =
   let ret = match pexpr_ with
     | PEsym sym ->
         begin match Pmap.lookup sym map with
@@ -17,8 +16,7 @@ let rec unsafe_substitute_pexpr (map: substitute_map)
         | None -> PEsym sym
         end
     | PEimpl _ -> pexpr_
-    | PEval _ -> pexpr_
-    | PEconstrained _ -> assert false
+    | PEbase _ -> pexpr_
     | PEundef _ -> pexpr_
     | PEerror (s, pe) ->
         PEerror(s, unsafe_substitute_pexpr map pe)
@@ -58,12 +56,6 @@ let rec unsafe_substitute_pexpr (map: substitute_map)
         PEif(unsafe_substitute_pexpr map pe1,
              unsafe_substitute_pexpr map pe2,
              unsafe_substitute_pexpr map pe3)
-    | PEis_scalar pe ->
-        PEis_scalar(unsafe_substitute_pexpr map pe)
-    | PEis_integer pe ->
-        PEis_integer(unsafe_substitute_pexpr map pe)
-    | PEis_signed pe ->
-        PEis_signed (unsafe_substitute_pexpr map pe)
     | PEis_unsigned pe ->
         PEis_unsigned (unsafe_substitute_pexpr map pe)
     | PEbmc_assume pe ->
@@ -75,33 +67,33 @@ let rec unsafe_substitute_pexpr (map: substitute_map)
     Pexpr(annot, ty, ret)
 
 let unsafe_substitute_action (map: substitute_map)
-                          (Action(loc, a, action_) : 'a typed_action) =
+                          (Action(loc, a, action_) : 'a action) =
   let ret = match action_ with
     | Create (pe1, pe2, sym) ->
         Create(unsafe_substitute_pexpr map pe1, unsafe_substitute_pexpr map pe2, sym)
     | CreateReadOnly _ -> assert false
-    | Alloc0 (pe1,pe2,sym) ->
-        Alloc0(unsafe_substitute_pexpr map pe1, unsafe_substitute_pexpr map pe2, sym)
+    | Alloc (pe1,pe2,sym) ->
+        Alloc(unsafe_substitute_pexpr map pe1, unsafe_substitute_pexpr map pe2, sym)
     | Kill (b, pe) ->
         Kill (b, unsafe_substitute_pexpr map pe)
-    | Store0 (is_locking, pe1, pe2, pe3, memorder) ->
-        Store0(is_locking,
+    | Store (is_locking, pe1, pe2, pe3, memorder) ->
+        Store(is_locking,
                unsafe_substitute_pexpr map pe1,
                unsafe_substitute_pexpr map pe2,
                unsafe_substitute_pexpr map pe3,
                memorder)
-    | Load0 (pe1, pe2, memorder) ->
-        Load0 (unsafe_substitute_pexpr map pe1,
+    | Load (pe1, pe2, memorder) ->
+        Load (unsafe_substitute_pexpr map pe1,
                unsafe_substitute_pexpr map pe2,
                memorder)
-    | RMW0 (pe1,pe2,pe3,pe4,mo1,mo2) ->
-        RMW0 (unsafe_substitute_pexpr map pe1,
+    | RMW (pe1,pe2,pe3,pe4,mo1,mo2) ->
+        RMW (unsafe_substitute_pexpr map pe1,
               unsafe_substitute_pexpr map pe2,
               unsafe_substitute_pexpr map pe3,
               unsafe_substitute_pexpr map pe4,
               mo1, mo2)
-    | Fence0 mo ->
-        Fence0 mo
+    | Fence mo ->
+        Fence mo
     | CompareExchangeStrong(pe1,pe2,pe3,pe4,mo1,mo2) ->
         CompareExchangeStrong(unsafe_substitute_pexpr map pe1,
                               unsafe_substitute_pexpr map pe2,
@@ -136,7 +128,7 @@ let unsafe_substitute_action (map: substitute_map)
   Action(loc, a, ret)
 
 let rec unsafe_substitute_expr (map: substitute_map)
-                        (Expr(annot, expr_) : 'a typed_expr) =
+                        (Expr(annot, expr_) : 'a expr) =
   let ret = match expr_ with
     | Epure pe ->
         Epure(unsafe_substitute_pexpr map pe)

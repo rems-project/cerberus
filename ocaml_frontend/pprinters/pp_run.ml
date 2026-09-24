@@ -175,3 +175,5 @@ let string_of_core_run_error = function
       "Unknown_impl"
   | Unresolved_symbol (_, sym) ->
       "Unresolved_symbol[" ^ Pp_symbol.to_string_pretty sym ^ "]"
+  | Constrained ->
+      "Constrained"

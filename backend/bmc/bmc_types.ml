@@ -36,12 +36,11 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (*========================================================================*)
 
-open Cerb_backend.Auxl
+open Auxl
 open Bmc_sorts
 
 open Cerb_frontend
 open Printf
-open Cerb_util
 open Z3
 
 (* ======== Concurrency ========= *)
@@ -58,7 +57,7 @@ type z3_value    = Expr.expr
 type guard       = Expr.expr
 
 type memory_order =
-  | C_mem_order of Cmm_csem.memory_order
+  | C_mem_order of Atomics.memory_order
   | Linux_mem_order of Linux.linux_memory_order
 
 type memop_action =
@@ -200,7 +199,7 @@ let is_ptr_array_shift (a: action) = match a with
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)
 let pp_memory_order = function
   | C_mem_order mo ->
-      Cmm_csem.(function
+      Atomics.(function
       | NA -> "na"
       | Seq_cst -> "sc"
       | Relaxed -> "rlx"
@@ -350,7 +349,7 @@ let layout_by_thread (do_relabel: bool) (preexec: preexec2) : layout =
     else if List.mem (a2,a1) preexec.sb then 1
     else 0 in
   let sorted_threads = List.sort
-      (fun tid1 tid2 -> compare tid1 tid2)
+      (fun tid1 tid2 -> Int.compare tid1 tid2)
       preexec.threads in
   let actions_of_thread tid = List.filter
       (fun a -> tid = tid_of_action a)

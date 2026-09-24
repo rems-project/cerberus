@@ -3,9 +3,9 @@ open Cerb_backend
 open Cerb_global
 open Pipeline
 
-let (>>=) = Exception.except_bind
+let (>>=) = Result.bind
 let (>>) m f = m >>= fun _ -> f
-let return = Exception.except_return
+let return = Result.ok
 
 let io, get_progress =
   let open Pipeline in
@@ -23,8 +23,8 @@ let frontend (conf, io) ~is_lib filename core_std =
     core_frontend (conf, io) core_std ~filename
     >>= core_passes (conf, io) ~filename
   else
-    Exception.fail (Cerb_location.unknown, Errors.UNSUPPORTED
-                      "The file extention is not supported")
+    Result.error (Cerb_location.unknown, Errors.UNSUPPORTED
+                  "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
   let libc_dirs = Cerb_runtime.[in_runtime ~pkg:"cerberus-bmc" "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
@@ -127,24 +127,24 @@ let cerberus debug_level progress core_obj
   in
   let success = Either.Right 0 in
   let runM = function
-      | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+      | Error (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
         let open Driver_ocaml in
         print_string begin
           string_of_batch_output ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
         epilogue 1
-    | Exception.Exception (loc, Errors.(AIL_TYPING (TypingError.TError_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+    | Error (loc, Errors.(AIL_TYPING (TypingError.TError_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
         let open Driver_ocaml in
         print_string begin
           string_of_batch_output ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
         epilogue 1
-    | Exception.Exception err ->
+    | Error err ->
         prerr_endline (Pp_errors.to_string err);
         epilogue 1
-    | Exception.Result (Either.Left (batch_mode, execs)) ->
+    | Ok (Either.Left (batch_mode, execs)) ->
         let is_charon =
           match batch_mode with
             | `CharonBatch -> true
@@ -177,7 +177,7 @@ let cerberus debug_level progress core_obj
           end
         ) execs;
         epilogue exit
-    | Exception.Result (Either.Right n) ->
+    | Ok (Either.Right n) ->
         epilogue n
   in
   runM @@ match files with

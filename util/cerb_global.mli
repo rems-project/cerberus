@@ -46,6 +46,7 @@ val set_cerb_conf:
 val current_execution_mode: unit -> execution_mode option
 
 val backend_name: unit -> string
+val is_backend: string -> bool
 
 val concurrency_mode: unit -> bool
 val isDefacto: unit -> bool

@@ -86,14 +86,26 @@ type tag_definition =
 
 (** Type class instances *)
 
+
+let equal_realFloatingType rfty1 rfty2 =
+  let ord = function
+    | Float -> (0 : nat)
+    | Double -> 1
+    | LongDouble -> 2
+  end in
+  ord rfty1 = ord rfty2
+
+let eq_floatingType (RealFloating fty1) (RealFloating fty2) =
+  equal_realFloatingType fty1 fty2
+
 instance (Eq realFloatingType)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
+  let (=)  = equal_realFloatingType
+  let (<>) = fun x y -> not (equal_realFloatingType x y)
 end
 
 instance (Eq floatingType)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
+  let (=)  = eq_floatingType
+  let (<>) = fun x y -> not (eq_floatingType x y)
 end
 
 
@@ -216,7 +228,7 @@ instance (Show tag_definition)
   let show def =
     let string_of_identifiers tag_defs =
       List.foldl (fun acc (ident, _) ->
-        acc ^ (show ident) ^ "; "
+        acc ^ Symbol.string_of_identifier ident ^ "; "
       ) "[" tag_defs ^ "]"
     in
     match def with

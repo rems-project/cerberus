@@ -1650,7 +1650,7 @@ let rec desugar_type_specifiers specs =
               end
           
           | [TSpec loc (TSpec_struct attrs (Just tag_ident) Nothing)] ->
-              if attrs <> Annot.no_attributes then
+              if not (Annot.is_no_attributes attrs) then
                 E.fail loc (Errors.Desugar_TODO "Attribute constraint violation ==> N2335 6.7.2.1#6 and 6.7.2.3#4")
               else
                 (* NOTE: 'desugar_type_specifiers' must NOT be called on a
@@ -1716,7 +1716,9 @@ let rec desugar_type_specifiers specs =
               E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic (Ctype.Integer (Ctype.Enum tag_sym))))
           
           (* *)
-          | [TSpec _ (TSpec_name ((Symbol.Identifier cid_loc str) as ident))] ->
+          | [TSpec _ (TSpec_name ident)] ->
+              let cid_loc = Symbol.loc_of_identifier ident in
+              let str = Symbol.string_of_identifier ident in
               E.print_debugM 2 (fun () -> "Cabs_to_ail, TSpec_name ==> " ^ str) >>
               match Builtins.translate_builtin_typenames str with
                 | Just ty ->
@@ -1836,7 +1838,7 @@ and desugar_array_declarator under_array (ADecl loc tquals is_static a_decltor_s
      a function parameter *)
   E.get_scope >>= function
      | E.Scope_prototype _ ->
-         if under_array = IsUnderArray && (tquals <> [] || is_static) then
+         if under_array = IsUnderArray && (not (List.null tquals) || is_static) then
 STD_ "§6.7.6.2#1, sentence 5, not outermost" $
            E.constraint_violation loc ArrayDeclarationQsAndStaticOnlyOutmost
          else
@@ -1861,7 +1863,7 @@ STD_ "§6.7.6.2#1, sentence 5, not outermost" $
            )
 
      | _ ->
-         if tquals <> [] || is_static then
+         if not (List.null tquals) || is_static then
 STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
            E.constraint_violation loc ArrayDeclarationQsAndStaticOutsideFunctionProto
          else
@@ -2115,7 +2117,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
         let decltor_loc = Loc.locOf decltor in
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
           E.constraint_violation decltor_loc IllegalStorageClassFunctionDeclarator
-        else if specifs.alignment_specifiers <> [] then
+        else if not (List.null specifs.alignment_specifiers) then
           E.constraint_violation decltor_loc (IllegalAlignas IllegalAlignas_parameter)
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
@@ -2173,7 +2175,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
         let loc = Loc.bbox_location (List.map Loc.locOf specifs.type_specifiers) in
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
           E.constraint_violation loc IllegalStorageClassFunctionDeclarator
-        else if specifs.alignment_specifiers <> [] then
+        else if not (List.null specifs.alignment_specifiers) then
           E.constraint_violation loc (IllegalAlignas IllegalAlignas_parameter)
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
@@ -2249,7 +2251,7 @@ and desugar_expression (CabsExpression loc expr) =
   match expr with
     | CabsEident ident ->
         AnnotatedExpression () [] loc <$>
-        let (Symbol.Identifier _ str) = ident in (* DEBUG *)
+        let str = Symbol.string_of_identifier ident in (* DEBUG *)
         E.print_debugM 2 (fun () -> "DESUGARING, CabsEident: " ^ str) >>= fun () -> (* DEBUG *)
 STD_ "§6.5.1#2" $
         E.resolve_ordinary_identifier loc ident >>= function
@@ -2558,7 +2560,7 @@ STD_ "§6.7.1#4" $
     E.constraint_violation loc ThreadLocalFunctionDeclaration
   
   else if not (decl_ctxt = Function_decl_context && E.is_block_scope scope -->
-               scs = [] || scs = [SC_extern]) then
+               List.null scs || scs = [SC_extern]) then
 STD_ "§6.7.1#7" $
     E.undef loc Undefined.UB060_block_scope_function_with_storage_class
   else
@@ -2593,7 +2595,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         (* STD §6.9.2#2, sentence 1 *)
         let is_tentative = match scope with
           | E.Scope_file ->
-              AilTypesAux.is_object ty && (List.elem SC_static scs || scs = [])
+              AilTypesAux.is_object ty && (List.elem SC_static scs || List.null scs)
           | _ ->
               false
         end in
@@ -2639,7 +2641,7 @@ and desugar_init_declarator attrs isAtomic has_alignment base_qs base_ty (scs: l
         (* STD §6.9.2#2, sentence 1 *)
         let is_tentative = match scope with
           | E.Scope_file ->
-              AilTypesAux.is_object ty && (List.elem SC_static scs || scs = [])
+              AilTypesAux.is_object ty && (List.elem SC_static scs || List.null scs)
           | _ ->
               false
         end in
@@ -2711,7 +2713,7 @@ and desugar_struct_declaration struct_decl =
           end
         else
           E.mapM (fun sdecltor ->
-            desugar_struct_declarator (align_specs <> []) sdecltor >>= fun ((attrs, ident), mk_qs_ctype) ->
+            desugar_struct_declarator (not (List.null align_specs)) sdecltor >>= fun ((attrs, ident), mk_qs_ctype) ->
             (* NOTE: the checks for §6.7.2.1#3 are done by desugar_type_specifiers because
                we need to special case the last member. *)
             let (qs, ty) =
@@ -3369,7 +3371,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
     end >>= fun e ->
     desugar_expression e >>= fun d_e ->
     (* STD §6.7.9#4 *)
-    if dur = Static || dur = Thread then
+    if is_static_of_thread dur then
       is_initializer_constant_expression_or_string_literal d_e >>= function
         | false ->
             E.constraint_violation (Loc.locOf d_e) IllegalStorageClassStaticOrThreadInitializer
@@ -3473,12 +3475,12 @@ and wip_desugar_initializer_ loc dur current_ty init =
           |> in
           (* If the (currently buggy) desugaring of initialisers fails, we
              produces an invalid AST node to be able to carry on. *)
-          E.catch begin
-            Desugaring_init.desugar_init tagDefs funcs (dur = Static || dur = Thread) current_ty init >>= fun (current_ty', init_st, _) ->
+          E.catch_internal_error begin
+            Desugaring_init.desugar_init tagDefs funcs (is_static_of_thread dur) current_ty init >>= fun (current_ty', init_st, _) ->
             E.return (current_ty', Desugaring_init.constructValue tagDefs init_st current_ty')
           end
           function
-            | (_, Errors.INTERNAL_ERROR (Errors.Internal_error_desugaring str)) ->
+            | (Errors.Internal_error_desugaring str) ->
                 let current_ty' =
                   (* If we are dealing with an array of unknown size, we give
                      it size 1 to make the type complete *)
@@ -3489,7 +3491,6 @@ and wip_desugar_initializer_ loc dur current_ty init =
                         current_ty
                   end in
                 E.return (current_ty', AnnotatedExpression () [] loc (AilEinvalid current_ty' (AilInvalid_desugaring_init_failed str)))
-            | err -> E.generic_fail err
           end
 
           (* E.get_tag_definitions >>= fun tagDefs ->
@@ -3552,7 +3553,7 @@ and desugar_declaration_base attrs specifs idecltors =
             else
               let do_function return_qs_ty params_opt is_variadic =
                 check_storage_class_specifiers loc Function_decl_context specifs.storage_classes >>= fun () ->
-                if specifs.alignment_specifiers <> [] then
+                if not (List.null specifs.alignment_specifiers) then
                   E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_function)
                 else
                   E.register_ordinary_identifier ident
@@ -3571,7 +3572,7 @@ and desugar_declaration_base attrs specifs idecltors =
                 | Ctype.FunctionNoParams return_qs_ty ->
                     do_function return_qs_ty Nothing false
                 | _ ->
-                    if List.elem SC_register specifs.storage_classes && specifs.alignment_specifiers <> [] then
+                    if List.elem SC_register specifs.storage_classes && not (List.null specifs.alignment_specifiers) then
                       E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_register)
                     else
                     desugar_alignment_specifiers ident_loc cty specifs.alignment_specifiers >>= fun align_opt ->
@@ -3666,7 +3667,7 @@ E.fresh_block_scope >>= fun scope ->
             (* this is the case of a block already present in the Cabs code. *)
             snd z :: acc
         | (CabsStatement _ _ _, AilSskip) ->
-            if d_stmt.A.attrs = Annot.no_attributes then
+            if Annot.is_no_attributes d_stmt.A.attrs then
               acc
             else
               snd z :: acc
@@ -3674,7 +3675,7 @@ E.fresh_block_scope >>= fun scope ->
             (* this is the case of a block already present in the Cabs code. *)
             snd z :: acc
         | (_, AilSblock [] xs) ->
-            if d_stmt.A.attrs = Annot.no_attributes then
+            if Annot.is_no_attributes d_stmt.A.attrs then
               (* here a block with no local variables was introduced by the desugaring *)
               xs ++ acc
             else
@@ -3772,7 +3773,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       
       | CabsSwhile e s ->
           (* TODO: when supporting VLAs ==> §6.8.4.2#2 *)
-          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
+          E.freshify (Symbol.mk_identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -3804,7 +3805,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             E.return (AilSwhile d_e d_s loop_id)
       
       | CabsSdo e s ->
-          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
+          E.freshify (Symbol.mk_identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -3836,7 +3837,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             E.return (AilSdo d_s d_e loop_id)
       
       | CabsSfor (Just (FC_decl decl_loc ((Declaration_base attrs specifs idecltors)))) e2_opt e3_opt s ->
-          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
+          E.freshify (Symbol.mk_identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -3848,7 +3849,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             E.mapM (fun (InitDecl loc _ _ as init) ->
               check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
-              desugar_init_declarator attrs isAtomic (specifs.alignment_specifiers <> []) base_qs base_ty specifs.storage_classes init
+              desugar_init_declarator attrs isAtomic (not (List.null specifs.alignment_specifiers)) base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             let loop_id = Symbol.fresh_int () in
             E.record_loop_attribute loop_id attrs_outer (match e2_opt with Just e2 -> Loc.locOf e2 | Nothing -> Loc.unknown end) loc >> 
@@ -3946,7 +3947,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       
       | CabsSfor fc_opt e2_opt e3_opt s ->
           (* fc_opt is either Nothing, a static assertion, or a FC_expr *)
-          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
+          E.freshify (Symbol.mk_identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let loop_id = Symbol.fresh_int () in
@@ -4646,7 +4647,7 @@ val desugar_and_register_function_definition: function_definition -> E.desugM un
 let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
     E.constraint_violation fundef_loc IllegalStorageClassFunctionDefinition
-  else if specifs.alignment_specifiers <> [] then
+  else if not (List.null specifs.alignment_specifiers) then
     E.constraint_violation fundef_loc (IllegalAlignas IllegalAlignas_function)
   else
     (* NOTE: §6.9.1#5 is enforced inside the following call to
@@ -4750,7 +4751,7 @@ let desugar_and_register_external_declaration edecl =
         alignment_specifiers= [];
       |> []) ->
         let () =
-          if attrs <> Annot.no_attributes then
+          if not (Annot.is_no_attributes attrs) then
             Debug.print_debug 0 [] (fun () ->
               "TODO(attributes ignored) -- TSpec_struct 3 => " ^ show ident)
           else () in
@@ -4788,7 +4789,7 @@ let desugar_and_register_external_declaration edecl =
            (see suite/parsing/declarator_visibility.c) *)
         (* NOTE: `desugar_init_declarator' does register the identifier it finds *)
         E.mapM (fun init ->
-          desugar_init_declarator attrs isAtomic (specifs.alignment_specifiers <> []) base_qs base_ty specifs.storage_classes init
+          desugar_init_declarator attrs isAtomic (not (List.null specifs.alignment_specifiers)) base_qs base_ty specifs.storage_classes init
         ) idecltors >>= fun xs ->
         
         (* for each [init_declarator] *)
@@ -4799,7 +4800,7 @@ let desugar_and_register_external_declaration edecl =
           | Just (ident_loc, ident_attrs, link, sym, isTentative, (qs, ty), mk_desug_init) ->
               let do_function fun_qs return_qs_ty params_opt is_variadic =
                 let () =
-                  if Annot.no_attributes <> ident_attrs then
+                  if not (Annot.is_no_attributes ident_attrs) then
                     Debug.print_debug 0 [] (fun () ->
                       "WARNING: desugaring of a function initdecl is erasing some attributes!"
                     )
@@ -4807,7 +4808,7 @@ let desugar_and_register_external_declaration edecl =
                     () in
                 if qs <> Ctype.no_qualifiers then
                   E.undef ident_loc Undefined.UB066_qualified_function_specification
-                else if specifs.alignment_specifiers <> [] then
+                else if not (List.null specifs.alignment_specifiers) then
                   E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_function)
                 else
                 E.register_function_declaration ident_loc attrs sym true (
@@ -4824,7 +4825,7 @@ let desugar_and_register_external_declaration edecl =
                 | Ctype.Ctype _ (Ctype.FunctionNoParams return_qs_ty) ->
                     do_function qs return_qs_ty Nothing false
                 | ty ->
-                    if List.elem SC_register specifs.storage_classes && specifs.alignment_specifiers <> [] then
+                    if List.elem SC_register specifs.storage_classes && not (List.null specifs.alignment_specifiers) then
                       E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_register)
                     else
                     desugar_alignment_specifiers ident_loc ty specifs.alignment_specifiers >>= fun align_opt ->
@@ -4877,7 +4878,7 @@ let desugar_and_register_external_declaration edecl =
                           else if link = Linkage_none && is_incomplete then
                             E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                           else
-                            if dur = Static || dur = Thread then
+                            if is_static_of_thread dur then
                               (* TODO: not correct for thread? *)
                               if List.elem SC_extern specifs.storage_classes then
                                 E.return ()

@@ -113,7 +113,7 @@ let go_down_entering_block tagDefs pos = go_down_aux tagDefs true  pos
 module E = Cabs_to_ail_effect
 let inline (>>=) = E.bind
 let internal_error msg =
-  E.generic_fail (Loc.unknown, Errors.INTERNAL_ERROR (Errors.Internal_error_desugaring msg))
+  E.generic_fail (Errors.internal_error Loc.unknown (Errors.Internal_error_desugaring msg))
 
 val     go_bottom: map Symbol.sym tag_definition -> init_position -> E.desugM init_position
 let rec go_bottom tagDefs pos =
@@ -224,7 +224,7 @@ let do_next_in_same_level tagDefs pos =
                   | Nothing   -> false
                 end in
               if index_is_overflowing then
-                if cursor' = [] then
+                if List.null cursor' then
                   (* OVERFLOWING *)
                   DInit_ok <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
                 else
@@ -232,7 +232,7 @@ let do_next_in_same_level tagDefs pos =
               else
                 DInit_ok <| pos with cursor= <| elem with kind= Init_array new_idx size_opt |> :: cursor' |>
           | Init_struct _ _ _ [] ->
-              if cursor' = [] then
+              if List.null cursor' then
                 (* OVERFLOWING *)
                 DInit_ok <| pos with cursor= [<| elem with is_overflowing= true |>] |>
               else
@@ -240,7 +240,7 @@ let do_next_in_same_level tagDefs pos =
           | Init_struct tag_sym prev_membrs current_member ((memb_ident, memb_ty) :: next_membrs) ->
               DInit_ok (<| pos with ty= memb_ty; cursor= <| elem with kind= Init_struct tag_sym (prev_membrs ++ [(current_member, pos.ty)]) memb_ident next_membrs |> :: cursor' |>)
           | Init_union _ _ ->
-              if cursor' = [] then
+              if List.null cursor' then
                 (* OVERFLOWING *)
                 DInit_ok <| pos with cursor= [<| elem with is_overflowing= true |>] |>
               else

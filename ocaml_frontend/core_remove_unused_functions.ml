@@ -1,3 +1,4 @@
+open Cerb_symbol
 open Core_rewriter
 open Core
 
@@ -46,23 +47,17 @@ module STATE (S : S) = struct
 end
 
 
-module Sym = struct
-  type t = Symbol.sym
-  let compare = Symbol.symbol_compare
-end
-
-
 module Def = struct
 
   type t = 
     | Impl of Implementation.implementation_constant
-    | Sym of Symbol.sym 
+    | Sym of Sym.t 
     | Id of string
 
   let equal a b = 
     match a, b with
     | Impl i1, Impl i2 -> Implementation.implementation_constant_equal i1 i2
-    | Sym s1, Sym s2 -> Symbol.symbolEquality s1 s2
+    | Sym s1, Sym s2 -> Sym.equal s1 s2
     | Id i1, Id i2 -> String.equal i1 i2
     | Impl _, _
     | Sym _, _
@@ -73,7 +68,7 @@ module Def = struct
   let compare a b = 
     match a, b with
     | Impl i1, Impl i2 -> Implementation.implementation_constant_compare i1 i2
-    | Sym s1, Sym s2 -> Symbol.symbol_compare s1 s2
+    | Sym s1, Sym s2 -> Sym.compare s1 s2
     | Id i1, Id i2 -> String.compare i1 i2
     | Impl _, Sym _ -> -1
     | Sym _, Id _ -> -1
@@ -148,7 +143,7 @@ module RW = Rewriter(State)
 
 
 
-type ('a,'bty,'sym) name_collector =
+type ('a, 'sym) name_collector =
   { names_in_pointer_value : Impl_mem.pointer_value -> unit t; 
     names_in_memory_value : Impl_mem.mem_value -> unit t; 
     names_in_object_value : object_value -> unit t;
@@ -159,14 +154,14 @@ type ('a,'bty,'sym) name_collector =
     names_in_value : value -> unit t;
     names_in_pattern : 'sym generic_pattern -> unit t;
     names_in_name : 'sym generic_name -> unit t;
-    names_in_pexpr : ('bty,'sym) generic_pexpr -> unit t;
-    names_in_expr : ('a,'bty,'sym) generic_expr -> unit t}
+    names_in_pexpr : pexpr -> unit t;
+    names_in_expr : 'a expr -> unit t}
 
 
 
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
 (* this collects all the symbols mentioned *)
-let deps_of fn_or_impl : ('a,'bty,'sym) name_collector = 
+let deps_of fn_or_impl : ('a, 'sym) name_collector = 
 
   let record_dep = record_dep fn_or_impl in
 
@@ -191,17 +186,17 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
       (fun sym id mv -> 
         names_in_union sym id mv)
 
-  and names_in_struct (sym : Symbol.sym) fields : unit m =
+  and names_in_struct (sym : Sym.t) fields : unit m =
     record_dep (Sym sym) >>
-    iterate fields (fun (Identifier (_,id), ctype, mv) ->
-        record_dep (Id id) >>
+    iterate fields (fun (Identifier.{str; _}, ctype, mv) ->
+        record_dep (Id str) >>
         names_in_ctype ctype >>
         names_in_memory_value mv
       )
 
-  and names_in_union sym (Identifier (_,id)) mv : unit m = 
+  and names_in_union sym Identifier.{str; _} mv : unit m = 
     record_dep (Sym sym) >>
-    record_dep (Id id) >>
+    record_dep (Id str) >>
     names_in_memory_value mv
 
   and names_in_object_value ov : unit m =
@@ -256,14 +251,14 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
   in
 
   let rec names_in_value = function
-    | Vobject ov -> names_in_object_value ov
-    | Vloaded lv -> names_in_loaded_value lv
-    | Vunit
-    | Vtrue
-    | Vfalse -> return ()
-    | Vctype ct -> names_in_ctype ct
-    | Vlist (cbt, vs) -> iterate vs names_in_value
-    | Vtuple vs -> iterate vs names_in_value
+    | Bobject ov -> names_in_object_value ov
+    | Bloaded lv -> names_in_loaded_value lv
+    | Bunit
+    | Btrue
+    | Bfalse -> return ()
+    | Bctype ct -> names_in_ctype ct
+    | Blist (cbt, vs) -> iterate vs names_in_value
+    | Btuple vs -> iterate vs names_in_value
   in
 
   let rec names_in_pattern (Pattern (_, pat_)) = 
@@ -273,7 +268,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
     | CaseBase (Some sym, cbt) -> 
        record_dep (Sym sym) >>
        names_in_core_base_type cbt
-    | CaseCtor (_, pats) ->
+    | CaseDtor (_, pats) ->
        iterate pats names_in_pattern
   in
 
@@ -296,7 +291,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
              PostTraverseAction (fun () -> record_dep (Sym sym))
           | PEimpl impl -> 
              PostTraverseAction (fun () -> record_dep (Impl impl))
-          | PEval v -> 
+          | PEbase v ->
              let a () = names_in_value v in
              PostTraverseAction a
           | PEcase (_, patpes) ->
@@ -308,14 +303,14 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
           | PEstruct (sym,fields) ->
              let a () = 
                record_dep (Sym sym) >>
-               iterate fields (fun (Identifier (_,id),_) -> 
-                   record_dep (Id id))
+               iterate fields (fun (Identifier.{str; _},_) -> 
+                   record_dep (Id str))
              in
              PostTraverseAction a
-          | PEmember_shift (_,sym,Identifier (_,id))
-          | PEunion (sym,Identifier (_,id),_)
-          | PEmemberof (sym,Identifier (_,id),_) ->
-             let a () = record_dep (Sym sym) >> record_dep (Id id) in
+          | PEmember_shift (_,sym, Identifier.{str; _})
+          | PEunion (sym, Identifier.{str; _},_)
+          | PEmemberof (sym, Identifier.{str; _},_) ->
+             let a () = record_dep (Sym sym) >> record_dep (Id str) in
              PostTraverseAction a
           | PEcall (name,_) ->
              let a () = names_in_name name in
@@ -402,7 +397,7 @@ let do_impls is =
            name_collector.names_in_pexpr pe) is >>
     return () 
 
-let do_fun_map definitely_keep (fmap : ('bty,'a) generic_fun_map) =
+let do_fun_map definitely_keep (fmap : 'a generic_fun_map) =
   pmap_iterM (fun fn decl ->
     (if definitely_keep 
      then record_keep (Sym fn) 
@@ -432,7 +427,7 @@ let do_fun_map definitely_keep (fmap : ('bty,'a) generic_fun_map) =
     return ()
 
 
-let do_globs_list (gs : (Symbol.sym *  ('a, 'bty) generic_globs) list) =
+let do_globs_list (gs : (Sym.t * 'a generic_globs) list) =
   mapM (fun (glob, g) ->
       record_keep (Sym glob) >>
       let name_collector = deps_of (Sym glob) in
@@ -453,8 +448,8 @@ let do_tagDefs tagDefs =
     let name_collector = deps_of (Sym sym) in
     match tagDef with
     | Ctype.StructDef (fields, flexible_opt) ->
-       iterate fields (fun (Identifier (_,id), (_,_,_,ct)) -> 
-           record_dep (Sym sym) (Id id) >>
+       iterate fields (fun (Identifier.{str; _}, (_,_,_,ct)) -> 
+           record_dep (Sym sym) (Id str) >>
            name_collector.names_in_ctype ct) >>
        begin match flexible_opt with
          | None ->
@@ -463,14 +458,14 @@ let do_tagDefs tagDefs =
              name_collector.names_in_ctype (Ctype ([], Array (elem_ty, None)))
        end
     | Ctype.UnionDef d ->
-       iterate d (fun (Identifier (_,id), (_,_,_,ct)) -> 
-           record_dep (Sym sym) (Id id) >>
+       iterate d (fun (Identifier.{str; _}, (_,_,_,ct)) -> 
+           record_dep (Sym sym) (Id str) >>
            name_collector.names_in_ctype ct)
     ) tagDefs
 
 let do_extern_map em = 
-  pmap_iterM (fun (Symbol.Identifier (_,id)) (ls,_) ->
-      iterate ls (fun s -> record_dep (Id id) (Sym s))
+  pmap_iterM (fun Identifier.{str; _} (ls,_) ->
+      iterate ls (fun s -> record_dep (Id str) (Sym s))
     ) em >>
   return ()
 
@@ -540,10 +535,10 @@ let remove_unused_functions remove_funinfo_entries file =
    * in *)
 
 
-  let used_stdlib : ('bty, 'a) generic_fun_map = 
+  let used_stdlib : 'a generic_fun_map = 
     Pmap.filter (fun name _ -> 
           Pset.mem (Def.Sym name) keep ||
-            match Symbol.symbol_description name with
+            match name.Sym.desc with
             | SD_Id sname ->
                Pset.mem (Def.Impl (BuiltinFunction sname)) keep
             | _ -> false
@@ -556,9 +551,9 @@ let remove_unused_functions remove_funinfo_entries file =
       ) file.impl
   in
 
-  let used_extern = 
-    Pmap.filter (fun (Symbol.Identifier (_,name)) _ -> 
-        DefSet.mem (Def.Id name) keep) file.extern
+  let used_extern =
+    Pmap.filter (fun Identifier.{str; _} _ ->
+      DefSet.mem (Def.Id str) keep) file.extern
   in
 
   (* let used_funinfo = 

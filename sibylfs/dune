@@ -1,13 +1,32 @@
 (include_subdirs unqualified)
+
 (dirs generated)
 
 (library
- (name sibylfs)
+ (name cerb_sibylfs)
  (public_name cerberus-lib.sibylfs)
  (synopsis "Sibylfs")
- (flags (:standard -w -3-8-9-27-33-39))
- (preprocess (pps ppx_sexp_conv))
- (modules abstract_string dir_heap fs_dict_wrappers fs_dump ; fs_interface FIXME?
-  fs_prelude fs_printer fs_spec lem_support list_array sibylfs)
- (wrapped false)
- (libraries unix sha lem ppx_sexp_conv sexplib))
+ (flags
+  (:standard -w -3-8-9-27-33-39))
+ (preprocess
+  (pps ppx_sexp_conv))
+ (modules
+  abstract_string
+  dir_heap
+  fs_dict_wrappers
+  fs_prelude
+  fs_printer
+  fs_spec
+  lem_support
+  list_array
+  cerb_sibylfs)
+ (private_modules
+  abstract_string
+  dir_heap
+  fs_dict_wrappers
+  fs_prelude
+  fs_printer
+  fs_spec
+  lem_support
+  list_array)
+ (libraries unix lem ppx_sexp_conv sexplib))

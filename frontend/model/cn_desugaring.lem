@@ -34,7 +34,7 @@ let initial_cn_desugaring_state cn_desugaring_init =
   let add (type_, names) acc =
     List.foldl (fun acc (str, sym, loc) ->
         let loc = match loc with | Just loc -> loc | Nothing -> Loc.unknown end in
-        let entry = (type_, Symbol.Identifier loc str) in
+        let entry = (type_, Symbol.mk_identifier loc str) in
         if Map.member entry acc
         then Assert_extra.failwith (str ^ " already registered as CN function name")
         else Map.insert entry sym acc

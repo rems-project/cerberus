@@ -6,9 +6,8 @@ open Bmc_types
 open Bmc_utils
 
 open Cerb_frontend
-open Core
+open Cerb_symbol
 open Printf
-open Cerb_util
 open Z3
 open Z3.Arithmetic
 
@@ -16,7 +15,7 @@ open Z3.Arithmetic
  * and can be "changed" by let strong.
  * We should track this elsewhere. *)
 type bmc_action =
-  | BmcAction of polarity * guard * action
+  | BmcAction of Core.polarity * guard * action
 
 type preexec = {
   actions         : bmc_action list;
@@ -72,10 +71,10 @@ let addr_of_bmcaction (bmcaction: bmc_action) =
 let ctype_of_bmcaction(bmcaction: bmc_action) : ctype =
   ctype_of_action (get_action bmcaction)
 
-let size_of_bmcaction(bmcaction: bmc_action) (file: unit typed_file) : int =
+let size_of_bmcaction(bmcaction: bmc_action) (file: unit Core.file) : int =
   PointerSort.type_size (ctype_of_bmcaction bmcaction) file
 
-let max_addr_of_bmcaction (bmcaction: bmc_action) (file: unit typed_file) =
+let max_addr_of_bmcaction (bmcaction: bmc_action) (file: unit Core.file) =
   let base_addr = addr_of_bmcaction bmcaction in
   let size = size_of_bmcaction bmcaction file in
   assert (size > 0);
@@ -99,7 +98,7 @@ let is_fence_action (BmcAction(_,_,a): bmc_action) =
 
 
 let bmcaction_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
-  compare (aid_of_action a1) (aid_of_action a2)
+  Int.compare (aid_of_action a1) (aid_of_action a2)
 
 (* ======= Provenance stuff ======= *)
 let provs_of_memop_action (memop: memop_action) : Expr.expr list =
@@ -322,7 +321,7 @@ let compute_crit (po : (bmc_action * bmc_action) list) =
   let tid_to_edge_list_map =
     Pmap.fold (fun key value tid_map ->
       add_to_pmap (tid_of_bmcaction key) (key, value) tid_map)
-      edge_lists (Pmap.empty Stdlib.compare) in
+      edge_lists (Pmap.empty Int.compare) in
   let top_sorted =
     List.map (fun (_, edge_list) -> top_sort edge_list)
              (Pmap.bindings_list tid_to_edge_list_map) in
@@ -334,13 +333,13 @@ let compute_crit (po : (bmc_action * bmc_action) list) =
 let string_of_memory_order = function
   | C_mem_order mo ->
       (match mo with
-       | Cmm_csem.NA      -> "NA"
-       | Cmm_csem.Seq_cst -> "seq_cst"
-       | Cmm_csem.Relaxed -> "relaxed"
-       | Cmm_csem.Release -> "release"
-       | Cmm_csem.Acquire -> "acquire"
-       | Cmm_csem.Consume -> assert false
-       | Cmm_csem.Acq_rel -> "acq_rel"
+       | Atomics.NA      -> "NA"
+       | Atomics.Seq_cst -> "seq_cst"
+       | Atomics.Relaxed -> "relaxed"
+       | Atomics.Release -> "release"
+       | Atomics.Acquire -> "acquire"
+       | Atomics.Consume -> assert false
+       | Atomics.Acq_rel -> "acq_rel"
       )
   | Linux_mem_order mo ->
       (match mo with
@@ -357,7 +356,7 @@ let string_of_memory_order = function
 
 
 let string_of_polarity = function
-  | Pos -> "+"
+  | Core.Pos -> "+"
   | Neg -> "-"
 
 let string_of_memop_action = function
@@ -431,7 +430,7 @@ module type MemoryModel = sig
   val get_assertions : z3_memory_model -> Expr.expr list
   val get_vcs        : z3_memory_model -> bmc_vc list
 
-  val compute_executions : preexec -> (unit typed_file) -> z3_memory_model
+  val compute_executions : preexec -> (unit Core.file) -> z3_memory_model
   val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr
                            -> (alloc, allocation_metadata) Pmap.map option
                            -> string * string list * bool
@@ -784,7 +783,7 @@ module MemoryModelCommon = struct
       @ common
     else common
 
-  let initialise (exec: preexec) (file: unit typed_file) =
+  let initialise (exec: preexec) (file: unit Core.file) =
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
     bmc_debug_print 3 (sprintf "# actions: %d" (List.length all_actions));
@@ -796,7 +795,7 @@ module MemoryModelCommon = struct
     (* Map from aid to corresponding Z3 event *)
     let event_map = List.fold_left2 (fun acc action z3expr ->
       Pmap.add (aid_of_bmcaction action) z3expr acc)
-      (Pmap.empty Stdlib.compare) all_actions all_events in
+      (Pmap.empty Int.compare) all_actions all_events in
     let z3action (action: bmc_action) : Expr.expr =
       Pmap.find (aid_of_bmcaction action) event_map in
     let decls = mk_decls event_sort in
@@ -1204,7 +1203,7 @@ module MemoryModelCommon = struct
 
   let get_address_ranges (data: (int * allocation_metadata) list)
                          (interp: Expr.expr -> Expr.expr option)
-                         : (int * (int * int) option * Sym.prefix) list =
+                         : (int * (int * int) option * prefix) list =
     List.map (fun (alloc,metadata) ->
       let addr_base = get_metadata_base metadata in
       let addr_size = get_metadata_size metadata in
@@ -1221,7 +1220,7 @@ module MemoryModelCommon = struct
     ) data
 
   let loc_to_string (loc: Expr.expr)
-                    (ranges: (int * ((int * int) option) * Sym.prefix) list)
+                    (ranges: (int * ((int * int) option) * prefix) list)
                     : string =
     match Expr.get_args loc with
     | [a1] ->
@@ -1508,7 +1507,7 @@ module RC11MemoryModel : MemoryModel = struct
     ; sbrf_clk  = sbrf_clk
     }
 
-  let compute_executions (exec: preexec) (file: unit typed_file) : z3_memory_model =
+  let compute_executions (exec: preexec) (file: unit Core.file) : z3_memory_model =
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
     let writes = List.filter has_wval all_actions in
@@ -1906,7 +1905,7 @@ module RC11MemoryModel : MemoryModel = struct
     ; event_map  = event_map
     ; action_map = List.fold_left (fun acc a ->
                       Pmap.add (aid_of_bmcaction a) (get_action a) acc)
-                      (Pmap.empty Stdlib.compare) all_actions
+                      (Pmap.empty Int.compare) all_actions
 
     ; decls      = decls
     ; fns        = fns
@@ -2061,7 +2060,7 @@ module RC11MemoryModel : MemoryModel = struct
 
     let threads = Pset.elements (
         List.fold_left (fun acc a -> Pset.add (tid_of_action a) acc)
-                       (Pset.empty compare) noninitial_actions) in
+                       (Pset.empty Int.compare) noninitial_actions) in
 
     let sb = List.filter (get_relation fns.sb) prod in
     let asw = List.filter (get_relation fns.asw) prod in
@@ -2456,7 +2455,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ) (Pmap.empty compare, Pmap.empty compare)
       (List.map (fun (s,_,_) -> s) M.bindings)
 
-  let compute_executions (exec: preexec) (file: unit typed_file) =
+  let compute_executions (exec: preexec) (file: unit Core.file) =
     let common        = initialise exec file in
     let (decls,fns)   = mk_decls_and_fnapps common.event_sort in
     let actions = exec.initial_actions @ exec.actions in
@@ -2464,7 +2463,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let action_map =
       List.fold_left (fun acc a ->
         Pmap.add (aid_of_bmcaction a) (get_action a) acc)
-        (Pmap.empty Stdlib.compare) actions in
+        (Pmap.empty Int.compare) actions in
 
     let model : z3_memory_model =
       { event_sort    = common.event_sort
@@ -2613,7 +2612,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let prod = cartesian_product action_events action_events in
     let threads = Pset.elements (
         List.fold_left (fun acc a -> Pset.add (tid_of_action a) acc)
-                       (Pset.empty compare) noninitial_actions) in
+                       (Pset.empty Int.compare) noninitial_actions) in
     let po = List.filter (get_relation fns.po) prod in
     let asw = List.filter (get_relation fns.asw) prod in
 

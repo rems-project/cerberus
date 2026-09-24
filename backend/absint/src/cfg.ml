@@ -409,12 +409,8 @@ let rec texpr_of_pexpr (Pexpr (_, _, pe_)) =
     return @@ TEsym x
   | PEimpl c ->
     return @@ TEimpl c
-  | PEval v ->
+  | PEbase v ->
     return @@ TEval v
-  | PEconstrained cs ->
-    let (ivs, pes) = List.split cs in
-    selfs pes >>= fun tes ->
-    return @@ TEconstrained (List.combine ivs tes)
   | PEundef (loc, ub) ->
     return @@ TEundef (loc, ub)
   | PEerror (str, pe) ->
@@ -461,21 +457,12 @@ let rec texpr_of_pexpr (Pexpr (_, _, pe_)) =
   | PElet (_, _, _)
   | PEif _ ->
     None
-  | PEis_scalar pe ->
-    self pe >>= fun te ->
-    return @@ TEis_scalar te
-  | PEis_integer pe ->
-    self pe >>= fun te ->
-    return @@ TEis_integer te
-  | PEis_signed pe ->
-    self pe >>= fun te ->
-    return @@ TEis_signed te
   | PEis_unsigned pe ->
     self pe >>= fun te ->
     return @@ TEis_unsigned te
   | PEbmc_assume _ ->
     (* NOTE: ignoring bmc_assumes *)
-    return @@ TEval Vunit
+    return @@ TEval Bunit
   | PEare_compatible (pe1, pe2) ->
     self pe1 >>= fun te1 ->
     self pe2 >>= fun te2 ->
@@ -489,9 +476,9 @@ let rec cond_of_pexpr (Pexpr (_, _, pe_)) =
     return @@ Csym x
   | PEimpl c ->
     assert false (* NOTE: not sure about this *)
-  | PEval v ->
+  | PEbase v ->
     return @@ Cval v
-  | PEconstrained _ | PEundef _ | PEerror _ | PEctor _ ->
+  | PEundef _ | PEerror _ | PEctor _ ->
     assert false
   | PEcase _ ->
     None
@@ -510,21 +497,12 @@ let rec cond_of_pexpr (Pexpr (_, _, pe_)) =
     assert false
   | PEcall _ | PElet (_, _, _) | PEif _ ->
     None
-  | PEis_scalar pe ->
-    texpr_of_pexpr pe >>= fun te ->
-    return @@ Cis_scalar te
-  | PEis_integer pe ->
-    texpr_of_pexpr pe >>= fun te ->
-    return @@ Cis_integer te
-  | PEis_signed pe ->
-    texpr_of_pexpr pe >>= fun te ->
-    return @@ Cis_signed te
   | PEis_unsigned pe ->
     texpr_of_pexpr pe >>= fun te ->
     return @@ Cis_unsigned te
   | PEbmc_assume _ ->
     (* NOTE: ignoring bmc_assumes *)
-    return @@ Cval Vtrue
+    return @@ Cval Btrue
   | PEare_compatible (pe1, pe2) ->
     texpr_of_pexpr pe1 >>= fun te1 ->
     texpr_of_pexpr pe2 >>= fun te2 ->
@@ -549,19 +527,8 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
     add (in_v, out_v) (Tassign (in_pat, te))
   | None ->
     match pe_ with
-    | PEsym _ | PEimpl _ | PEval _ ->
+    | PEsym _ | PEimpl _ | PEbase _ ->
       assert false
-    | PEconstrained cs ->
-      let (ivs, pes) = List.split cs in
-      List.fold_left (fun acc pe ->
-          let (sym, pat) = new_symbol () in
-          acc >>= fun (syms, in_v) ->
-          new_vertex () >>= fun out_v ->
-          self (in_v, out_v) pat pe >>= fun _ ->
-          return (sym::syms, out_v)
-        ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
-      let tes = List.map (fun sym -> TEsym sym) @@ List.rev rev_syms in
-      add (in_v, out_v) (Tassign (in_pat, TEconstrained (List.combine ivs tes)))
     | PEundef _ ->
       assert false
     | PEerror (str, pe) ->
@@ -698,24 +665,6 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       new_vertex () >>= fun false_v ->
       add (in_v, false_v) (Tcond (Cnot cond)) >>= fun _ ->
       self (false_v, out_v) in_pat pe3
-    | PEis_scalar pe ->
-      let (sym, pat) = new_symbol () in
-      new_vertex () >>= fun mid_v ->
-      self (in_v, mid_v) pat pe >>= fun _ ->
-      let te = TEis_scalar (TEsym sym) in
-      add (mid_v, out_v) (Tassign (in_pat, te))
-    | PEis_integer pe ->
-      let (sym, pat) = new_symbol () in
-      new_vertex () >>= fun mid_v ->
-      self (in_v, mid_v) pat pe >>= fun _ ->
-      let te = TEis_integer (TEsym sym) in
-      add (mid_v, out_v) (Tassign (in_pat, te))
-    | PEis_signed pe ->
-      let (sym, pat) = new_symbol () in
-      new_vertex () >>= fun mid_v ->
-      self (in_v, mid_v) pat pe >>= fun _ ->
-      let te = TEis_signed (TEsym sym) in
-      add (mid_v, out_v) (Tassign (in_pat, te))
     | PEis_unsigned pe ->
       let (sym, pat) = new_symbol () in
       new_vertex () >>= fun mid_v ->

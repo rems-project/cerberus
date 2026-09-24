@@ -5,7 +5,6 @@
 
 (* thanks to Stella Lau for a bug fix *)
 open Cerb_frontend
-open Cerb_backend (* for Dot *)
 
 module Int = struct
   type t = int
@@ -141,13 +140,13 @@ let aid_of_action = function
 module Bmc_types_pp = struct
 
 let string_of_c_memory_order = function
-| Cmm_csem.NA -> "na"
-| Cmm_csem.Seq_cst -> "sc"
-| Cmm_csem.Relaxed -> "rlx"
-| Cmm_csem.Release -> "rel"
-| Cmm_csem.Acquire -> "acq"
-| Cmm_csem.Consume -> "con"
-| Cmm_csem.Acq_rel -> "acqrel"
+| Atomics.NA -> "na"
+| Atomics.Seq_cst -> "sc"
+| Atomics.Relaxed -> "rlx"
+| Atomics.Release -> "rel"
+| Atomics.Acquire -> "acq"
+| Atomics.Consume -> "con"
+| Atomics.Acq_rel -> "acqrel"
 
 let string_of_linux_memory_order = function
 | Linux.Once -> "once"

@@ -1,4 +1,4 @@
-open Sibylfs
+open Cerb_sibylfs
 
 type fs =
   | File of string * Bytes.t * int * Unix.file_perm
@@ -54,6 +54,6 @@ let rec fs_write st =
 let initialise root =
   let cur = Unix.getcwd () in
   Unix.chdir root;
-  let st = Array.fold_left fs_write fs_initial_state @@ fs_read root in
+  let st = Array.fold_left fs_write Fs_state.initial_state @@ fs_read root in
   Unix.chdir cur;
   st

@@ -25,7 +25,10 @@ module Fs_spec_intf = Fs_spec
 
 module Dir_heap_intf = Dir_heap
 
+(* Commented because we don't use it and it introduces a deps on the sha library *)
+(*
 module Fs_dump_intf = Fs_dump
+*)
 
 module Fs_printer_intf = Fs_printer
 

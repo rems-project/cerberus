@@ -1,77 +1,39 @@
-open import Pervasives Utils Show Show_extra Enum Loc
-import Debug
+open import Basic_classes Bool Num Maybe Show Loc
 
-type identifier =
-  | Identifier of Loc.t * string
+declare {ocaml} rename module = Lem_symbol
 
+type identifier
+val mk_identifier : Loc.t -> string -> identifier
+val equal_identifier : identifier -> identifier -> bool
+val compare_identifier : identifier -> identifier -> ordering
+val string_of_identifier : identifier -> string
+val loc_of_identifier : identifier -> Loc.t
+val freshify_identifier : identifier -> nat -> identifier
 
-let idEqual ident1 ident2 =
-  let (Identifier _ str1) = ident1 in
-  let (Identifier _ str2) = ident2 in
-  str1 = str2
+declare ocaml target_rep type identifier = `Cerb_symbol.Identifier.t`
+declare ocaml target_rep function mk_identifier = `Cerb_symbol.Identifier.mk`
+declare ocaml target_rep function equal_identifier = `Cerb_symbol.Identifier.equal`
+declare ocaml target_rep function compare_identifier = `Cerb_symbol.Identifier.compare`
+declare ocaml target_rep function string_of_identifier = `Cerb_symbol.Identifier.to_string`
+declare ocaml target_rep function loc_of_identifier = `Cerb_symbol.Identifier.get_loc`
+declare ocaml target_rep function freshify_identifier = `Cerb_symbol.Identifier.freshify`
 
 instance (Eq identifier)
-  let (=) = idEqual
-  let (<>) ident1 ident2 =
-    let (Identifier _ str1) = ident1 in
-    let (Identifier _ str2) = ident2 in
-    str1 <> str2
+  let (=) = equal_identifier
+  let (<>) ident1 ident2 = not (equal_identifier ident1 ident2)
 end
 
 instance (SetType identifier)
-  let setElemCompare ident1 ident2 =
-    let (Identifier _ str1) = ident1 in
-    let (Identifier _ str2) = ident2 in
-    setElemCompare str1 str2
-end
-
-instance (Located identifier)
-  let locOf ident =
-    let (Identifier loc _) = ident in
-    loc
+  let setElemCompare = compare_identifier
 end
 
 instance (Show identifier)
-  let show ident =
-    let Identifier _ str = ident in
-    str
+  let show = string_of_identifier
 end
 
-type digest
-declare ocaml target_rep type digest = `Digest.t`
-
-val digest: unit -> digest
-declare ocaml target_rep function digest = `Cerb_fresh.digest`
-
-val digest_compare: digest -> digest ->int 
-declare ocaml target_rep function digest_compare = `Digest.compare`
-
-val string_of_digest: digest -> string
-declare ocaml target_rep function string_of_digest = `Digest.to_hex`
-
-instance (Eq digest)
-  let (=) x y = digest_compare x y = 0
-  let (<>) x y = digest_compare x y <> 0
+instance (Located identifier)
+  let locOf = loc_of_identifier
 end
-
-instance (Ord digest)
-  let compare x y =
-    let cmp = digest_compare x y in
-    if cmp < 0 then LT else if cmp = 0 then EQ else GT
-  let (<) x y =
-    digest_compare x y < 0
-  let (<=) x y =
-    digest_compare x y <= 0
-  let (>) x y =
-    digest_compare x y > 0
-  let (>=) x y =
-    digest_compare x y >= 0
-end
-
-instance (Show digest)
-  let show d = string_of_digest d
-end
-
 
 
 type symbol_description =
@@ -82,198 +44,81 @@ type symbol_description =
   | SD_ObjectAddress of string
   | SD_Return
   | SD_FunArgValue of string
-  | SD_FunArg of Loc.t *  nat
-  (* | SD_Pointee of string (\* label/environment *\) * symbol_description *)
-  (* | SD_PredOutput of string (\* label/environment *\) * string (\* pred *\) * string (\* output *\) *)
+  | SD_FunArg of (Loc.t * nat)
+declare ocaml target_rep type symbol_description = `Cerb_symbol.Sym.description`
+declare ocaml target_rep function SD_None = `Cerb_symbol.Sym.SD_None`
+declare ocaml target_rep function SD_unnamed_tag = `Cerb_symbol.Sym.SD_unnamed_tag`
+declare ocaml target_rep function SD_Id = `Cerb_symbol.Sym.SD_Id`
+declare ocaml target_rep function SD_CN_Id = `Cerb_symbol.Sym.SD_CN_Id`
+declare ocaml target_rep function SD_ObjectAddress = `Cerb_symbol.Sym.SD_ObjectAddress`
+declare ocaml target_rep function SD_Return = `Cerb_symbol.Sym.SD_Return`
+declare ocaml target_rep function SD_FunArgValue = `Cerb_symbol.Sym.SD_FunArgValue`
+declare ocaml target_rep function SD_FunArg = `Cerb_symbol.Sym.SD_FunArg`
 
-
-(* type prefix =
- *   | PrefSource of Loc.t * list sym
- *   | PrefFunArg of Loc.t * digest * int
- *   | PrefStringLiteral of Loc.t * digest
- *   | PrefCompoundLiteral of Loc.t * digest
- *   | PrefMalloc
- *   | PrefOther of string *)
-
-
-let show_symbol_description sd =
-  match sd with
-    | SD_None -> 
-        "SD_None"
-    | SD_unnamed_tag _ ->
-        "SD_unnamed_tag"
-    | SD_Id str -> 
-        "SD_Id("^show str^")"
-    | SD_CN_Id str -> 
-        "SD_CN_Id("^show str^")"
-    | SD_ObjectAddress name -> 
-        "SD_ObjectAddress" ^ show name
-    | SD_Return ->
-        "SD_Return"
-    | SD_FunArgValue str -> 
-        "SD_FunArgValue" ^ "(" ^ show str ^ ")"
-    | SD_FunArg _ n ->
-        "SD_FunArg" ^ "(" ^ show n ^ ")"
-    (* | SD_Pointee env symbol_description ->
-    *    "SD_Pointee" ^ show (env, show_symbol_description symbol_description) *)
-  end
-
-instance (Show symbol_description)
-  let show = show_symbol_description
-end
-
-(* Symbolic identifiers *)
-type sym =
-  Symbol of digest * nat * symbol_description
-
-
-
-
-val        symbolEqual: sym -> sym -> bool
-let inline symbolEqual sym1 sym2 =
-  match (sym1, sym2) with
-    | (Symbol d1 n1 sd1, Symbol d2 n2 sd2) ->
-        if d1 = d2 && n1 = n2 then
-          if Debug.get_level () >= 5 && sd1 <> sd2 then
-            let () = Debug.print_debug 5 [] (fun () ->
-              "[Symbol.symbolEqual] suspicious equality ==> " ^ show sd1
-              ^ " <-> " ^ show sd2) in
-            true
-          else
-            true
-        else
-          false
-  end
-
-(* to have a non-inlined version to refer to *)
-let symbolEquality = symbolEqual
-(* for [@@deriving eq] *)
-let equal_sym = symbolEquality
-
-val symbol_compare: sym -> sym -> ordering
-let symbol_compare (Symbol d1 n1 _) (Symbol d2 n2 _) =
-  if d1 = d2 then compare n1 n2
-  else compare d1 d2
-(* for [@@ deriving ord] *)
-let compare_sym = symbol_compare
+type sym
+val equal_sym : sym -> sym -> bool
+val compare_sym : sym -> sym -> ordering
+val show_sym : sym -> string
+val match_id : sym -> maybe string
+val symbol_description : sym -> symbol_description
+val set_symbol_description : sym -> symbol_description -> sym
+val from_same_translation_unit : sym -> sym -> bool
+declare ocaml target_rep type sym = `Cerb_symbol.Sym.t`
+declare ocaml target_rep function equal_sym = `Cerb_symbol.Sym.equal`
+declare ocaml target_rep function compare_sym = `Cerb_symbol.Sym.compare`
+declare ocaml target_rep function show_sym = `Cerb_symbol.Sym.show`
+declare ocaml target_rep function match_id = `Cerb_symbol.Sym.match_id`
+declare ocaml target_rep function symbol_description = `Cerb_symbol.Sym.get_desc`
+declare ocaml target_rep function set_symbol_description = `Cerb_symbol.Sym.set_desc`
+declare ocaml target_rep function from_same_translation_unit = `Cerb_symbol.Sym.from_same_translation_unit`
 
 instance (Eq sym)
-  let (=)            = symbolEqual
-  let (<>) sym1 sym2 = not (symbolEqual sym1 sym2)
-end
-
-instance (Ord sym)
-  let compare sym1 sym2 =
-    let (Symbol d1 n1 _) = sym1 in
-    let (Symbol d2 n2 _) = sym2 in
-      if d1 = d2 then compare n1 n2
-      else compare d1 d2
-  let (<) sym1 sym2 = 
-    let (Symbol d1 n1 _) = sym1 in
-    let (Symbol d2 n2 _) = sym2 in
-    d1 < d2 || (d1 = d2 && n1 < n2)
-  let (<=) sym1 sym2 = 
-    let (Symbol d1 n1 _) = sym1 in
-    let (Symbol d2 n2 _) = sym2 in
-    d1 <= d2 || (d1 = d2 && n1 <= n2)
-  let (>) sym1 sym2 = 
-    let (Symbol d1 n1 _) = sym1 in
-    let (Symbol d2 n2 _) = sym2 in
-    d1 > d2 || (d1 = d2 && n1 > n2)
-  let (>=) sym1 sym2 = 
-    let (Symbol d1 n1 _) = sym1 in
-    let (Symbol d2 n2 _) = sym2 in
-    d1 >= d2 || (d1 = d2 && n1 >= n2)
-end
-
-instance (NumSucc sym)
-  let succ sym =
-    let (Symbol d n sd) = sym in 
-    Symbol d (n+1) sd
+  let (=) = equal_sym
+  let (<>) sym1 sym2 = not (equal_sym sym1 sym2)
 end
 
 instance (SetType sym)
-  let setElemCompare sym1 sym2 = ordCompare sym1 sym2
+  let setElemCompare = compare_sym
 end
-
-let show_symbol sym =
-  let Symbol d n sd = sym in
-  "Symbol" ^ show (n, sd)
 
 instance (Show sym)
-  let show = show_symbol
+  let show = show_sym
 end
-
-let show_raw_less (Symbol _ n sd) =
-  "Symbol(" ^ show n ^ ", " ^ show sd ^ ")"
-let show_raw (Symbol d n sd) =
-  "Symbol(" ^ show d ^ ", " ^ show n ^ ", " ^ show sd ^ ")"
-
-
-(* Location prefix *)
-type prefix =
-  | PrefSource of Loc.t * list sym
-  | PrefFunArg of Loc.t * digest * int
-  | PrefStringLiteral of Loc.t * digest
-  | PrefCompoundLiteral of Loc.t * digest
-  | PrefMalloc
-  | PrefTemporaryLifetime of Loc.t * digest
-  | PrefOther of string
-
-(* TODO: "nat", "int" *)
-val fresh_int: unit -> nat
-declare ocaml target_rep function fresh_int = `Cerb_fresh.int`
-
-val digest_of_sym: sym -> digest
-let digest_of_sym (Symbol dig _ _) = dig
 
 val fresh: unit -> sym
-let fresh () =
-  Symbol (digest()) (fresh_int ()) SD_None
-
 val fresh_pretty : string -> sym
-let fresh_pretty str =
-  Symbol (digest()) (fresh_int ()) (SD_Id str)
-
 val fresh_cn : string -> sym
-let fresh_cn str =
-  Symbol (digest()) (fresh_int ()) (SD_CN_Id str)
-
 val fresh_pretty_with_id : (nat -> string) -> sym
-let fresh_pretty_with_id mkStr =
-  let id = fresh_int () in
-  Symbol (digest()) id (SD_Id (mkStr id))
+(* val fresh_fancy : maybe string -> sym *)
+val fresh_funarg : Loc.t -> nat -> sym
+val fresh_with_description : symbol_description -> sym
+val fresh_object_address : string -> sym
+val fresh_unnamed_tag : Loc.t -> sym
+declare ocaml target_rep function fresh = `Cerb_symbol.Sym.fresh`
+declare ocaml target_rep function fresh_pretty = `Cerb_symbol.Sym.fresh_pretty`
+declare ocaml target_rep function fresh_cn = `Cerb_symbol.Sym.fresh_cn`
+declare ocaml target_rep function fresh_pretty_with_id = `Cerb_symbol.Sym.fresh_pretty_with_id`
+(* declare ocaml target_rep function fresh_fancy = `Cerb_symbol.Sym.fresh_fancy` *)
+declare ocaml target_rep function fresh_funarg = `Cerb_symbol.Sym.fresh_funarg`
+declare ocaml target_rep function fresh_with_description = `Cerb_symbol.Sym.fresh_with_description`
+declare ocaml target_rep function fresh_unnamed_tag = `Cerb_symbol.Sym.fresh_unnamed_tag`
+declare ocaml target_rep function fresh_object_address = `Cerb_symbol.Sym.fresh_object_address`
 
-val fresh_fancy : maybe string -> sym
-let fresh_fancy = function
-  | Just str -> fresh_pretty str
-  | Nothing  -> fresh ()
-end
+type prefix
+(* The constructors prefixed with [mk_] query the [Cerb_fresh.digest] state *)
+val mk_funarg_prefix : Loc.t -> int -> prefix
+val compound_literal_prefix : Loc.t -> sym -> prefix
+val source_prefix : Loc.t -> list sym -> prefix
+val temporary_lifetime_prefix : Loc.t -> sym -> prefix
+val string_literal_prefix : Loc.t -> sym -> prefix
+val other_prefix : string -> prefix
+declare ocaml target_rep type prefix = `Cerb_symbol.prefix`
+declare ocaml target_rep function mk_funarg_prefix = `Cerb_symbol.mk_funarg_prefix`
+declare ocaml target_rep function compound_literal_prefix = `Cerb_symbol.compound_literal_prefix`
+declare ocaml target_rep function source_prefix = `Cerb_symbol.source_prefix`
+declare ocaml target_rep function temporary_lifetime_prefix = `Cerb_symbol.temporary_lifetime_prefix`
+declare ocaml target_rep function string_literal_prefix = `Cerb_symbol.string_literal_prefix`
+declare ocaml target_rep function other_prefix = `Cerb_symbol.other_prefix`
 
-let fresh_object_address name =
-  Symbol (digest()) (fresh_int ()) (SD_ObjectAddress name)
-
-let fresh_funarg loc i = 
-  Symbol (digest ()) (fresh_int ()) (SD_FunArg loc i)
-
-let fresh_description sd =
-  Symbol (digest ()) (fresh_int ()) sd
-
-let set_symbol_description (Symbol d n _) sd = 
-  Symbol d n sd
-
-
-
-(* let fresh_pointee env sd = 
- *   let id = fresh_int () in
- *   Symbol (digest ()) id (SD_Pointee env sd) *)
-  
-
-
-val from_same_translation_unit: sym -> sym -> bool
-let from_same_translation_unit sym1 sym2 =
-  0 = digest_compare (digest_of_sym sym1) (digest_of_sym sym2)
-
-
-let symbol_description (Symbol _ _ descr) = descr
-let symbol_num (Symbol _ num _) = num
+val fresh_int : unit -> nat
+declare ocaml target_rep function fresh_int = `Cerb_fresh.int`

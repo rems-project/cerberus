@@ -1,4 +1,5 @@
 open Ctype
+open Cerb_symbol
 
 type type_alias_map = {
   intN_t_alias: int -> integerBaseType option;
@@ -24,8 +25,8 @@ type implementation = {
   sizeof_fty: floatingType -> int option;
   alignof_ity: integerType -> int option;
   alignof_fty: floatingType -> int option;
-  register_enum: Symbol.sym -> Z.t list -> bool;
-  typeof_enum: Symbol.sym -> integerType;
+  register_enum: Sym.t -> Z.t list -> bool;
+  typeof_enum: Sym.t -> integerType;
   type_alias_map: type_alias_map;
 }
 
@@ -134,7 +135,7 @@ module DefaultImpl = struct
         Signed Int_
       else
         Unsigned Int_ in
-    if List.exists (fun (z, _) -> Symbol.symbol_compare z tag_sym = 0) !registered_enums then
+    if List.exists (fun (z, _) -> Sym.compare z tag_sym = 0) !registered_enums then
       false
     else begin
       registered_enums := (tag_sym, ity) :: !registered_enums;
@@ -142,10 +143,10 @@ module DefaultImpl = struct
     end
 
   let typeof_enum tag_sym =
-    match List.find_opt (fun (z, _) -> Symbol.symbol_compare z tag_sym = 0) !registered_enums with
+    match List.find_opt (fun (z, _) -> Sym.compare z tag_sym = 0) !registered_enums with
       | None ->
           failwith ("Ocaml_implementation.typeof_enum: '" ^
-                    Symbol.instance_Show_Show_Symbol_sym_dict.show_method tag_sym ^ "' was not registered")
+                    Sym.show tag_sym ^ "' was not registered")
       | Some (_, z) ->
           z
   let max_alignment =
@@ -205,11 +206,11 @@ module DefaultImpl = struct
 
   let sizeof_fty = function
     | RealFloating Float ->
-        Some 8 (* TODO:hack ==> 4 *)
+        Some 4
     | RealFloating Double ->
         Some 8
     | RealFloating LongDouble ->
-        Some 8 (* TODO:hack ==> 16 *)
+        Some 16
 
   let alignof_ity ity =
     match Common.normalise_integerType_ type_alias_map typeof_enum ity with

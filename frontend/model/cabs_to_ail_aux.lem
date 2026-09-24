@@ -5,6 +5,11 @@ import AilSyntax AilTypesAux Ctype Annot
 
 module A = AilSyntax
 
+let is_static_of_thread = function
+  | A.Static -> true
+  | A.Thread -> true
+  | _ -> false
+end
 
 type tag_definition =
   | Struct_definition of Loc.t * Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
@@ -18,9 +23,17 @@ type linkage =
   | Linkage_internal
   | Linkage_none
 
+let equal_linkage x y =
+  let ord = function
+    | Linkage_external -> (0 : nat)
+    | Linkage_internal -> 1
+    | Linkage_none -> 2
+  end in
+  ord x = ord y
+
 instance (Eq linkage)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
+  let (=)  = equal_linkage
+  let (<>) = fun x y -> not (equal_linkage x y)
 end
 
 instance (Show linkage)

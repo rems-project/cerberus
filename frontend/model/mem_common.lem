@@ -346,13 +346,6 @@ type integer_operator =
   | IntRem_f (* flooring remainder *)
   | IntExp
 
-type floating_operator =
-  | FloatAdd
-  | FloatSub
-  | FloatMul
-  | FloatDiv
-
-
 type derivecap_op =
   | DCunary of AilSyntax.unaryOperator
   | DCbinary of AilSyntax.binaryOperator
@@ -470,15 +463,6 @@ let stringFromInteger_operator = function
   | IntExp ->
       "IntExp"
 end
-
-
-let stringFromFloating_operator = function
-  | FloatAdd -> "FloatAdd"
-  | FloatSub -> "FloatSub"
-  | FloatMul -> "FloatMul"
-  | FloatDiv -> "FloatDiv"
-end
-
 
 type mem_constraint 'a =
   | MC_empty

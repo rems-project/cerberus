@@ -99,8 +99,8 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
           tag1 = tag2
         else
           let (tag_str1, tag_str2) =
-            match (tag1, tag2) with
-              | (Symbol.Symbol _ _ (Symbol.SD_Id tag_str1), Symbol.Symbol _ _ (Symbol.SD_Id tag_str2)) ->
+            match (Symbol.match_id tag1, Symbol.match_id tag2) with
+              | (Just tag_str1, Just  tag_str2) ->
                   (tag_str1, tag_str2)
               | _ ->
                   error "Ctype_aux.are_compatible_aux: failed to destruct a struct tag"
@@ -141,8 +141,8 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
           tag1 = tag2
         else
           let (tag_str1, tag_str2) =
-            match (tag1, tag2) with
-              | (Symbol.Symbol _ _ (Symbol.SD_Id tag_str1), Symbol.Symbol _ _ (Symbol.SD_Id tag_str2)) ->
+            match (Symbol.match_id tag1, Symbol.match_id tag2) with
+              | (Just tag_str1, Just  tag_str2) ->
                   (tag_str1, tag_str2)
               | _ ->
                   error "Ctype_aux.are_compatible_aux: failed to destruct a union tags"

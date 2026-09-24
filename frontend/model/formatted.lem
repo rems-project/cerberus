@@ -1,7 +1,8 @@
 (* TODO: A negative precision argument is taken as if the precision were omitted. *)
 open import Pervasives Utils Monadic_parsing
-import String_extra Errors AilTypesAux Core Core_aux Ctype Mem Mem_aux Float
+import String_extra Errors AilTypesAux Core Core_aux Ctype Mem Mem_aux Floating
 import Decode Implementation Undefined
+import Pp
 
 module U = Undefined
 
@@ -394,7 +395,7 @@ let load_character_array elem_ty ptrval prec_n_opt =
   
 
 
-val format_string_of_float: nat -> Float.float -> string
+val format_string_of_float: nat -> Floating.float -> string
 declare ocaml target_rep function format_string_of_float = `Decode.format_string_of_float`
 
 let is_illtyped_conversion expected_ty arg_ty =
@@ -453,7 +454,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                   eval_conv conv_ty mval >>= function
                     | Left err ->
                         Mem.return (Left err)
-                    | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
+                    | Right (U.Defined (Core.Bloaded (Core.LVspecified (Core.OVinteger ival)))) ->
                         match Mem_aux.integerFromIntegerValue ival with
                           | Just n ->
                               Mem.return $ Right (U.return (
@@ -467,7 +468,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                                 (false, String.toCharList (Mem.stringFromInteger_value ival), args')
                               ))
                         end
-                    | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
+                    | Right (U.Defined (Core.Bloaded (Core.LVunspecified _))) ->
                         Mem.return $ Right (U.return (false, [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
                     | Right (U.Defined cval) ->
                         error ("WIP: convert --> not an integer ==> " ^ Pp.stringFromCore_value cval)
@@ -479,9 +480,9 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
               | Nothing ->
                   (* TODO: this is wrong if "not (is_integer ty)" *)
                   match snd (Core_aux.valueFromMemValue mval) with
-                    | Core.Vloaded (Core.LVunspecified _) ->
+                    | Core.Bloaded (Core.LVunspecified _) ->
                         Mem.return $ Right (U.return (false, [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
-                    | Core.Vloaded (Core.LVspecified (Core.OVinteger ival)) ->
+                    | Core.Bloaded (Core.LVspecified (Core.OVinteger ival)) ->
                         match Mem_aux.integerFromIntegerValue ival with
                           | Just n ->
                               Mem.return $ Right (U.return (
@@ -494,12 +495,10 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                               let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "printf() found an abstract integer value") in
                               Mem.return $ Right (U.return (false, [#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
                         end
-                    | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
+                    | Core.Bloaded (Core.LVspecified (Core.OVfloating fval)) ->
                         Mem.return $ Right (U.return (
                           false
-                        , Mem.case_fval fval
-                            (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
-                            cont_floating
+                        , cont_floating fval
                         , args'))
                     | _ ->
                         error "Formatted.aux should only be called on a loaded(arimetic value)"

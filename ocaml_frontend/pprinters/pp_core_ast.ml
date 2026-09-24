@@ -46,10 +46,7 @@ let rec dtree_of_object_value = function
   | OVinteger ival ->
       Dleaf (pp_pure_ctor "OVinteger" ^^^ Impl_mem.pp_integer_value_for_core ival)
   | OVfloating fval ->
-      Dleaf (pp_pure_ctor "OVfloating" ^^^
-             Impl_mem.case_fval fval
-               (fun () -> !^ "unspec(floating)")
-              (fun fval -> !^(string_of_float fval)))
+      Dleaf (pp_pure_ctor "OVfloating" ^^^ !^(string_of_float fval))
   | OVpointer ptrval ->
       Dleaf (pp_pure_ctor "OVpointer" ^^^ Impl_mem.pp_pointer_value ptrval)
   | OVarray lvals ->
@@ -67,32 +64,32 @@ and dtree_of_loaded_value = function
       Dleaf (pp_pure_ctor "LVunspecified" ^^^ P.squotes (Pp_ail.pp_ctype Ctype.no_qualifiers ty))
 
 let dtree_of_value = function
-  | Vobject oval ->
-      Dnode (pp_pure_ctor "Vobject", [dtree_of_object_value oval])
-  | Vloaded lval ->
-      Dnode (pp_pure_ctor "Vloaded", [dtree_of_loaded_value lval])
-  | Vunit ->
-      Dleaf (pp_pure_ctor "Vunit")
-  | Vtrue ->
-      Dleaf (pp_pure_ctor "Vtrue")
-  | Vfalse ->
-      Dleaf (pp_pure_ctor "Vfalse")
-  | Vctype ty ->
-      Dleaf (pp_pure_ctor "Vctype" ^^^ P.squotes (Pp_ail.pp_ctype Ctype.no_qualifiers ty))
-  | Vlist (bTy, cvals) ->
-      Dleaf (pp_pure_ctor "Vlist" ^^^ !^ (ansi_format [Red] "TODO"))
-  | Vtuple cvals ->
-      Dleaf (pp_pure_ctor "Vtuple" ^^^ !^ (ansi_format [Red] "TODO"))
+  | Bobject oval ->
+      Dnode (pp_pure_ctor "Bobject", [dtree_of_object_value oval])
+  | Bloaded lval ->
+      Dnode (pp_pure_ctor "Bloaded", [dtree_of_loaded_value lval])
+  | Bunit ->
+      Dleaf (pp_pure_ctor "Bunit")
+  | Btrue ->
+      Dleaf (pp_pure_ctor "Btrue")
+  | Bfalse ->
+      Dleaf (pp_pure_ctor "Bfalse")
+  | Bctype ty ->
+      Dleaf (pp_pure_ctor "Bctype" ^^^ P.squotes (Pp_ail.pp_ctype Ctype.no_qualifiers ty))
+  | Blist (bTy, cvals) ->
+      Dleaf (pp_pure_ctor "Blist" ^^^ !^ (ansi_format [Red] "TODO"))
+  | Btuple cvals ->
+      Dleaf (pp_pure_ctor "Btuple" ^^^ !^ (ansi_format [Red] "TODO"))
 
  (* type 'sym generic_value =  (* Core values *)
-  | Vobject of ( 'sym generic_object_value) (* C object value *)
-  | Vloaded of ( 'sym generic_loaded_value) (* loaded C object value *)
-  | Vunit
-  | Vtrue
-  | Vfalse
-  | Vctype of ctype (* C type as value *)
-  | Vlist of core_base_type * ( 'sym generic_value) list
-  | Vtuple of ( 'sym generic_value) list tuple *)
+  | Bobject of ( 'sym generic_object_value) (* C object value *)
+  | Bloaded of ( 'sym generic_loaded_value) (* loaded C object value *)
+  | Bunit
+  | Btrue
+  | Bfalse
+  | Bctype of ctype (* C type as value *)
+  | Blist of core_base_type * ( 'sym generic_value) list
+  | Btuple of ( 'sym generic_value) list tuple *)
 
 
 let string_of_bop = function
@@ -140,10 +137,8 @@ let dtree_of_pexpr pexpr =
           Dleaf (pp_ctor "PEsym" ^^^ pp_symbol sym)
       | PEimpl iCst ->
           Dleaf (pp_ctor "PEimpl" ^^^ !^ (ansi_format [Red] "TODO"))
-      | PEval cval ->
-          Dnode (pp_ctor "PEval", [dtree_of_value cval])
-      | PEconstrained xs ->
-          Dleaf (pp_ctor "PEconstrained" ^^^ !^ (ansi_format [Red] "TODO"))
+      | PEbase cval ->
+          Dnode (pp_ctor "PEbase", [dtree_of_value cval])
       | PEundef (loc, ub) ->
           Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
       | PEerror (str, pe) ->
@@ -203,15 +198,6 @@ let dtree_of_pexpr pexpr =
       | PEif (pe1, pe2, pe3) ->
           Dnode ( pp_ctor "PEif"
                 , [ self pe1; self pe2; self pe3 ] )
-      | PEis_scalar pe ->
-          Dnode ( pp_ctor "PEis_scalar"
-                , [ self pe] )
-      | PEis_integer pe ->
-          Dnode ( pp_ctor "PEis_integer"
-                , [ self pe] )
-      | PEis_signed pe ->
-          Dnode ( pp_ctor "PEis_signed"
-                , [ self pe] )
       | PEis_unsigned pe ->
           Dnode ( pp_ctor "PEis_unsigned"
                 , [ self pe] )
@@ -232,21 +218,21 @@ let pp_action_ctor act =
         "create"
     | CreateReadOnly _ ->
         "create_readonly"
-    | Alloc0 _ ->
+    | Alloc _ ->
         "alloc"
     | Kill _ ->
         "kill"
-    | Store0 _ ->
+    | Store _ ->
         "store"
-    | Load0 _ ->
+    | Load _ ->
         "load"
     | SeqRMW (false, _, _, _, _) ->
         "seq_rmw"
     | SeqRMW (true, _, _, _, _) ->
         "seq_rmw_with_forward"
-    | RMW0 _ ->
+    | RMW _ ->
         "rmw"
-    | Fence0 _ ->
+    | Fence _ ->
         "fence"
     | CompareExchangeStrong _ ->
         "cmpxchg_strong"
@@ -271,16 +257,16 @@ let dtree_of_action act =
       | CreateReadOnly _ ->
           ( "create_readonly"
           , [] )
-      | Alloc0 _ ->
+      | Alloc _ ->
           ( "alloc"
           , [] )
       | Kill _ ->
           ( "kill"
           , [] )
-      | Store0 _ ->
+      | Store _ ->
           ( "store"
           , [] )
-      | Load0 (pe1, pe2, mo) ->
+      | Load (pe1, pe2, mo) ->
           ( "load"
           , [ dtree_of_pexpr pe1
             ; dtree_of_pexpr pe2 ] )
@@ -295,10 +281,10 @@ let dtree_of_action act =
             ; dtree_of_pexpr pe1
             ; Dleaf (pp_symbol sym)
             ; dtree_of_pexpr pe3 ] )
-      | RMW0 _ ->
+      | RMW _ ->
           ( "rmw"
           , [] )
-      | Fence0 _ ->
+      | Fence _ ->
           ( "fence"
           , [] )
       | CompareExchangeStrong _ ->

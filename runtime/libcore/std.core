@@ -92,6 +92,14 @@ fun loaded_ivfromfloat (ty: ctype, _f: loaded floating) : loaded integer :=
         Unspecified(ty)
   end
 
+fun loaded_floatingcast (ty1: ctype, ty2: ctype, _f: loaded floating) : loaded floating :=
+  case _f of
+    | Specified(f:floating) =>
+        Specified(Floatingcast(ty1, ty2, f))
+    | Unspecified(_: ctype) =>
+        Unspecified(ty1)
+  end
+
 proc loaded_pointer_to_Bool (_ptr: loaded pointer) : eff loaded integer :=
   case _ptr of
     | Specified(ptr: pointer) =>

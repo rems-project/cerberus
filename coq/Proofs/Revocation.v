@@ -4223,13 +4223,6 @@ Module CheriMemoryImplWithProofs
     same_state_steps.
   Qed.
 
-  Instance sequencePoint_SameState
-    : SameState  (sequencePoint).
-  Proof.
-    unfold sequencePoint.
-    same_state_steps.
-  Qed.
-
   Instance allocate_object_PreservesInvariant
     (tid:MemCommonExe.thread_id)
     (pref:CoqSymbol.prefix)

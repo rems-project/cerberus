@@ -2,9 +2,6 @@
    we might want to put in a common module *)
 open Ctype
 
-let ident_equal x y =
-  Symbol.instance_Basic_classes_Eq_Symbol_identifier_dict.isEqual_method x y
-
 let offsetsof = Ocaml_implementation.offsetsof
 (* TODO(state-removal) *)
 let sizeof ?(tagDefs= Tags.tagDefs ()) ty = Ocaml_implementation.sizeof tagDefs ty

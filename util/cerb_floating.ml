@@ -1,16 +1,7 @@
-(* Floating point operations indirection, since Lem does not support '+.', '*.'.... *)
+let less_than f1 f2 =
+  Float.compare f1 f2 < 0
 
-let add = (+.)
-let sub = (-.)
-let mul = ( *. )
-let div = (/.)
+let less_equal f1 f2 =
+  Float.compare f1 f2 <= 0
 
-let of_string str =
-  try
-    let l = String.length str in
-    if String.get str (l-1) == 'f' then
-      float_of_string (String.sub str 0 (l-1))
-    else
-      float_of_string str
-  with
-    _ -> raise (Failure __FUNCTION__)
+external round_double_to_float32: Float.t -> Float.t = "round_double_to_float32"

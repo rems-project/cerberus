@@ -1,20 +1,22 @@
 (* NOTE: this is work in progress *)
+open Cerb_debug
+open Cerb_symbol
+
 open Core_rewriter
 open Core
 
-open Cerb_debug
 
 
 (* TODO: move this to Core_aux *)
 let rec match_pattern_pexpr loc_opt (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_pe, bTy, pexpr_) as pexpr)
-  : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * Cerb_location.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+  : [ `MATCHED of (pattern * pexpr) option * (Sym.t * Cerb_location.t option * [ `VAL of value | `SYM of Sym.t ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_pexpr z = Pexpr (annots_pe, bTy, z) in
   match pat_, pexpr_ with
     |  CaseBase (None, _), _ ->
         `MATCHED (Some (pat, pexpr), [])
-    | _, PEval cval ->
-        begin match Core_aux.match_pattern pat cval with
+    | _, PEbase b ->
+        begin match Core_aux.match_pattern pat b with
           | None ->
               `MISMATCHED
           | Some xs ->
@@ -33,28 +35,28 @@ let rec match_pattern_pexpr loc_opt (Pattern (annots_pat, pat_) as pat) (Pexpr (
 
 
     | CaseBase _, _
-    | CaseCtor _, PEcfunction _
-    | CaseCtor _, PEsym _ ->
+    | CaseDtor _, PEcfunction _
+    | CaseDtor _, PEsym _ ->
         `MATCHED (Some (pat, pexpr), [])
     
-    | CaseCtor (Cspecified, [pat']), PEctor (Cspecified, [pe']) ->
+    | CaseDtor (Dspecified, [pat']), PEctor (Cspecified, [pe']) ->
         begin match match_pattern_pexpr loc_opt pat' pe' with
           | `MISMATCHED ->
               `MISMATCHED
           | `MATCHED (None, xs) ->
               `MATCHED (None, xs)
           | `MATCHED (Some (pat'', pe''), xs) ->
-              `MATCHED (Some (wrap_pat (CaseCtor (Cspecified, [pat''])), wrap_pexpr (PEctor (Cspecified, [pe'']))), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dspecified, [pat''])), wrap_pexpr (PEctor (Cspecified, [pe'']))), xs)
         end
 
 (*
 
-Vloaded (LVspecified oval)) ->
-        match_pattern pat' (Vobject oval)
-    | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
-        match_pattern pat' (Vctype ty)
+Bloaded (LVspecified oval)) ->
+        match_pattern pat' (Bobject oval)
+    | (CaseDtor Dunspecified [pat'], Bloaded (LVunspecified ty)) ->
+        match_pattern pat' (Bctype ty)
 *)
-    | CaseCtor (Ctuple, pats), PEctor (Ctuple, pes) ->
+    | CaseDtor (Dtuple, pats), PEctor (Ctuple, pes) ->
         let xs =
           List.fold_left2 (fun acc pat pe ->
             match match_pattern_pexpr loc_opt pat pe, acc with
@@ -77,7 +79,7 @@ Vloaded (LVspecified oval)) ->
               `MATCHED (Some (pat', pe'), xs)
           | `MATCHED (Some (pats', pes'), xs) ->
               assert (List.length pats' = List.length pes');
-              `MATCHED (Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs)
         end
     | _ ->
         print_endline "\n===========================================";
@@ -88,7 +90,7 @@ Vloaded (LVspecified oval)) ->
 
 
 let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
-   : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Cerb_location.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+   : [ `MATCHED of (pattern * 'a expr) option * (Sym.t * Cerb_location.t option * [ `VAL of value | `SYM of Sym.t ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_expr z = Expr (annots_e, z) in
   match pat_, expr_ with
@@ -106,7 +108,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
     | CaseBase (Some _, _), _ ->
         `MATCHED (Some (pat, expr), [])
     
-    | CaseCtor (Ctuple, pats), Eunseq es ->
+    | CaseDtor (Dtuple, pats), Eunseq es ->
         let xs =
           List.fold_left2 (fun acc pat e ->
             match match_pattern_expr pat e, acc with
@@ -129,16 +131,16 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
               `MATCHED (Some (pat', e'), xs)
           | `MATCHED (Some (pats', es'), xs) ->
               assert (List.length pats' = List.length es');
-              `MATCHED (Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_expr (Eunseq es')), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_expr (Eunseq es')), xs)
         end
     
     | _ ->
         `MISMATCHED (* (Some (pat, expr), []) *)
 (*
-    | CaseBase (Some sym, _), PEval cval ->
+    | CaseBase (Some sym, _), PEbase cval ->
         (None, [(sym, cval)])
 
-    | CaseCtor (Ctuple, pats), PEctor (Ctuple, pes) ->
+    | CaseDtor (Dtuple, pats), PEctor (Ctuple, pes) ->
         let xs =
           List.fold_left2 (fun acc pat pe ->
             match match_pattern_pexpr pat pe, acc with
@@ -157,7 +159,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
               Some (pat', pe'), xs
           | Some (pats', pes'), xs ->
               assert (List.length pats' = List.length pes');
-              Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs
+              Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs
         end
 
     | _ ->
@@ -166,7 +168,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
 *)
 
 
-(* val     select_case_pexpr: forall 'a. (Symbol.sym -> value -> 'a -> 'a) -> value -> list (pattern * 'a) -> maybe 'a *)
+(* val     select_case_pexpr: forall 'a. (Sym.t -> value -> 'a -> 'a) -> value -> list (pattern * 'a) -> maybe 'a *)
 let rec select_case_pexpr loc_opt subst_sym pexpr = function
   | [] ->
       `MISMATCHED
@@ -195,11 +197,11 @@ let rec select_case_pexpr loc_opt subst_sym pexpr = function
 
 let dest_specified p_e = match p_e with
   | Pexpr (_, _, PEctor (Cspecified, [p_e2])) -> Some p_e2
-  | Pexpr (x, y, PEval (Vloaded (LVspecified z))) -> Some (Pexpr (x, y, PEval (Vobject z)))
+  | Pexpr (x, y, PEbase (Bloaded (LVspecified z))) -> Some (Pexpr (x, y, PEbase (Bobject z)))
   | _ -> None
 
 let dest_ptr p_e = match p_e with
-  | Pexpr (_, _, PEval (Vobject (OVpointer ptr))) -> Some ptr
+  | Pexpr (_, _, PEbase (Bobject (OVpointer ptr))) -> Some ptr
   | _ -> None
 
 let known_fcall p_e =
@@ -248,7 +250,7 @@ let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
   let wrap z = Pexpr (annot, bTy, z) in
   match pexpr_ with
     | PEsym sym' ->
-      if sym = sym' then
+      if Sym.equal sym sym' then
         let annot' = match fst z with
           | Some loc ->
               Annot.Aloc loc :: annot
@@ -256,21 +258,15 @@ let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
               annot in
         match snd z with
           | `VAL cval ->
-               Pexpr (annot', bTy, PEval cval)
+               Pexpr (annot', bTy, PEbase cval)
           | `SYM sym ->
             Pexpr (annot', bTy, PEsym sym)
       else
         wrap pexpr_
     | PEimpl _
-    | PEval _
+    | PEbase _
     | PEundef _ ->
         wrap pexpr_
-    | PEconstrained xs ->
-        wrap begin
-          PEconstrained begin
-            List.map (fun (constrs, pe) -> (constrs, subst_sym_pexpr2 sym z pe)) xs
-          end
-        end
     | PEerror (str, pe) ->
         wrap (PEerror (str, subst_sym_pexpr2 sym z pe))
     | PEctor (ctor, pes) ->
@@ -312,12 +308,6 @@ let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
         wrap (PElet (pat, subst_sym_pexpr2 sym z pe1, if Core_aux.in_pattern sym pat then pe2 else subst_sym_pexpr2 sym z pe2))
     | PEif (pe1, pe2, pe3) ->
         wrap (PEif (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3))
-    | PEis_scalar pe ->
-        wrap (PEis_scalar (subst_sym_pexpr2 sym z pe))
-    | PEis_integer pe ->
-        wrap (PEis_integer (subst_sym_pexpr2 sym z pe))
-    | PEis_signed pe ->
-        wrap (PEis_signed (subst_sym_pexpr2 sym z pe))
     | PEis_unsigned pe ->
         wrap (PEis_unsigned (subst_sym_pexpr2 sym z pe))
     | PEbmc_assume pe ->
@@ -370,7 +360,7 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 let sym_bTy_pes' = List.map (fun (x, (bTy, pe)) ->
                   (x, (bTy, subst_sym_pexpr2 sym z pe))
                 ) sym_bTy_pes in
-                if List.exists (fun (z, _) -> sym = z) sym_bTy_pes then
+                if List.exists (fun (z, _) -> Sym.equal sym z) sym_bTy_pes then
                   (* TODO: check *)
                   Esave (lab_sym, sym_bTy_pes', e)
                 else
@@ -394,27 +384,27 @@ and subst_sym_action_2 sym z = function
       Create (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, pref)
   | CreateReadOnly (pe1, pe2, pe3, pref) ->
       CreateReadOnly (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3, pref)
-  | Alloc0 (pe1, pe2, pref) ->
-      Alloc0 (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, pref)
+  | Alloc (pe1, pe2, pref) ->
+      Alloc (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, pref)
   | Kill (kind, pe) ->
       Kill (kind, subst_sym_pexpr2 sym z pe)
-  | Store0 (b, pe1, pe2, pe3, mo) ->
-      Store0 (b, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3, mo)
-  | Load0 (pe1, pe2, mo) ->
-      Load0 (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, mo)
+  | Store (b, pe1, pe2, pe3, mo) ->
+      Store (b, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3, mo)
+  | Load (pe1, pe2, mo) ->
+      Load (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, mo)
   | SeqRMW (b, pe1, pe2, rmw_sym, pe3) ->
       (* sym is bound in pe3 *)
       let pe3' =
-        if Symbol.symbolEquality sym rmw_sym then
+        if Sym.equal sym rmw_sym then
           pe3
         else
           subst_sym_pexpr2 sym z pe3 in
       SeqRMW (b, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, rmw_sym, pe3')
-  | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
-      RMW0 ( subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2
+  | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
+      RMW ( subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2
            , subst_sym_pexpr2 sym z pe3, subst_sym_pexpr2 sym z pe4, mo1, mo2 )
-  | Fence0 mo ->
-      Fence0 mo
+  | Fence mo ->
+      Fence mo
   | CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2) ->
       CompareExchangeStrong ( subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2
                             , subst_sym_pexpr2 sym z pe3, subst_sym_pexpr2 sym z pe4, mo1, mo2 )
@@ -451,12 +441,12 @@ let apply_substs_expr xs e =
 
 
 (* FIXME: probably this should be passed like a proper parameter *)
-let config_unfold_stdlib : (Symbol.sym -> bool) ref =
+let config_unfold_stdlib : (Sym.t -> bool) ref =
   ref (fun _ -> false)
 
 
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
-let core_peval file : 'bty RW.rewriter =
+let core_peval file : RW.rewriter =
 
   let stdlib_unfold_pred fsym fdecl = (! config_unfold_stdlib) fsym in
 
@@ -468,8 +458,7 @@ let core_peval file : 'bty RW.rewriter =
   in
 
   let eval_pexpr pexpr =
-    let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
-    Core_eval.eval_pexpr Cerb_location.unknown None emp [] None file pexpr in
+    Core_eval.eval_pexpr Cerb_location.unknown None Sym.empty_pmap [] None file pexpr in
   
   let to_unfold_funs =
     (* The list of stdlib functions to be unfolded (see PEcall) *)
@@ -509,10 +498,10 @@ let core_peval file : 'bty RW.rewriter =
         match eval_pexpr pexpr with
           | Right (Defined cval) ->
               begin match pexpr_ with
-                | PEval _ ->
+                | PEbase _ ->
                     Unchanged
                 | _ ->
-                    Update (Pexpr (annots, bTy, PEval cval))
+                    Update (Pexpr (annots, bTy, PEbase cval))
               end
           | _ ->
               begin match pexpr_ with
@@ -520,7 +509,7 @@ let core_peval file : 'bty RW.rewriter =
                     begin match eval_pexpr pexpr with
                       | Right (Defined cval) ->
                           ChangeDoChildrenPost
-                            ( Identity.return (Pexpr (annots, bTy, PEval cval))
+                            ( Identity.return (Pexpr (annots, bTy, PEbase cval))
                             , Identity.return )
                       | Right (Undef (_, ubs)) ->
                           error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
@@ -562,16 +551,16 @@ let core_peval file : 'bty RW.rewriter =
                 
                 | PEif (pe1, pe2, pe3) ->
                     begin match eval_pexpr pe1 with
-                      | Right (Defined Vtrue) ->
+                      | Right (Defined Btrue) ->
                           ChangeDoChildrenPost
                             ( Identity.return pe2
                             , Identity.return )
-                      | Right (Defined Vfalse) ->
+                      | Right (Defined Bfalse) ->
                           ChangeDoChildrenPost
                             ( Identity.return pe3
                             , Identity.return )
                       | Right (Defined _) ->
-                          error "PEif -> not Vtrue or Vfalse"
+                          error "PEif -> not Btrue or Bfalse"
                       | Right (Undef (_, ubs)) ->
                           error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                       | Right (Error (_, str)) ->
@@ -646,7 +635,7 @@ let core_peval file : 'bty RW.rewriter =
 
 
           | Eskip ->
-              Update (Core_aux.(mk_pure_e (mk_value_pe Vunit)))
+              Update (Core_aux.(mk_pure_e (mk_value_pe Bunit)))
 *)
           
           | Ewseq (pat, e1, e2)
@@ -654,7 +643,7 @@ let core_peval file : 'bty RW.rewriter =
               begin match match_pattern_expr pat e1 with
                 | `MISMATCHED ->
                     Traverse
-(*                    error ("mismatched Ewseq/Esseq ==> " ^ String_core.string_of_expr (Core_aux.(mk_wseq_e pat e1 (mk_pure_e (mk_value_pe Vunit))))) *)
+(*                    error ("mismatched Ewseq/Esseq ==> " ^ String_core.string_of_expr (Core_aux.(mk_wseq_e pat e1 (mk_pure_e (mk_value_pe Bunit))))) *)
                 | `MATCHED (None, xs) ->
                     let add_loc =
                       match Annot.get_loc annots with
@@ -704,16 +693,16 @@ let core_peval file : 'bty RW.rewriter =
           
           | Eif (pe1, e2, e3) ->
               begin match eval_pexpr pe1 with
-                | Right (Defined Vtrue) ->
+                | Right (Defined Btrue) ->
                     ChangeDoChildrenPost
                       ( Identity.return e2
                       , Identity.return )
-                | Right (Defined Vfalse) ->
+                | Right (Defined Bfalse) ->
                     ChangeDoChildrenPost
                       ( Identity.return e3
                       , Identity.return )
                 | Right (Defined _) ->
-                    error "PEif -> not Vtrue or Vfalse"
+                    error "PEif -> not Btrue or Bfalse"
                 | Right (Undef (_, ubs)) ->
                     error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                 | Right (Error (_, str)) ->
@@ -822,18 +811,18 @@ let rewrite_file file =
   let rw_expr = steps_peval_expr file in
 
 
-  let rewrite_impl_decl (is : 'bty generic_impl_decl) : 'bty generic_impl_decl =
+  let rewrite_impl_decl (is : impl_decl) : impl_decl =
     match is with
     | Def (cbt, pe) -> Def (cbt, rw_pexpr pe)
     | IFun (cbt, args, pe) -> IFun (cbt, args, rw_pexpr pe)
   in
 
-  let rewrite_impl (is : 'bty generic_impl) : 'bty generic_impl =
+  let rewrite_impl (is : impl) : impl =
     Pmap.map (fun v -> rewrite_impl_decl v) is
   in
 
-  let rewrite_fun_map_decl (d : ('bty, 'a) generic_fun_map_decl)
-      : ('bty, 'a) generic_fun_map_decl =
+  let rewrite_fun_map_decl (d : 'a generic_fun_map_decl)
+      : 'a generic_fun_map_decl =
     match d with
     | Fun (bt, args, pe) -> Fun (bt, args, rw_pexpr pe)
     | Proc (loc, mrk, bt, args, e) -> Proc (loc, mrk, bt, args, rw_expr e)
@@ -842,21 +831,21 @@ let rewrite_file file =
   in
 
 
-  let rewrite_fun_map (fmap : ('bty,'a) generic_fun_map) 
-      : ('bty, 'a) generic_fun_map = 
+  let rewrite_fun_map (fmap : 'a generic_fun_map) 
+      : 'a generic_fun_map = 
     Pmap.map (rewrite_fun_map_decl) fmap
   in
 
 
-  let rewrite_globs (g : ('a, 'bty) generic_globs) : ('a, 'bty) generic_globs = 
+  let rewrite_globs (g : 'a generic_globs) : 'a generic_globs = 
     match g with
     | GlobalDef (bt, e) -> GlobalDef (bt, rw_expr e)
     | GlobalDecl bt -> GlobalDecl bt 
   in
 
 
-  let rewrite_globs_list (gs : (Symbol.sym *  ('a, 'bty) generic_globs) list )
-      : (Symbol.sym * ('a, 'bty) generic_globs) list = 
+  let rewrite_globs_list (gs : (Sym.t *  'a generic_globs) list )
+      : (Sym.t * 'a generic_globs) list = 
     List.map (fun (sym,g) -> (sym, rewrite_globs g)) gs
   in
 
@@ -887,7 +876,7 @@ let sym_eq =
 
 
 
-let symbol_of_funname file str : Symbol.sym option =
+let symbol_of_funname file str : Sym.t option =
   List.find_opt (fun (Symbol.Symbol (_, _, str_opt)) ->
       match str_opt with
         | Some str' when str = str' ->
@@ -912,7 +901,7 @@ let is_recursive_function file sym : bool =
                 match pexpr_ with
                   | PEsym _
                   | PEimpl _
-                  | PEval _
+                  | PEbase _
                   | PEundef _ ->
                       false
                   | PEconstrained _ ->
@@ -931,9 +920,6 @@ let is_recursive_function file sym : bool =
                   | PEcfunction pe
                   | PEmemberof (_, _, pe) ->
                       aux pe
-                  | PEis_scalar pe
-                  | PEis_integer pe
-                  | PEis_signed pe
                   | PEis_unsigned pe
                   | PEbmc_assume pe ->
                       aux pe
@@ -956,7 +942,7 @@ let is_recursive_function file sym : bool =
         end
 
 
-let unfold_functions file (funames: string (*Symbol.sym list*)) expr : unit expr =
+let unfold_functions file (funames: string (*Sym.t list*)) expr : unit expr =
   let funames =
     List.find (fun (Symbol.Symbol (_, _, str_opt)) ->
       match str_opt with

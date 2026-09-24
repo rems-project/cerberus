@@ -7,23 +7,23 @@ open Bmc_utils
 open Z3
 
 open Cerb_frontend
+open Cerb_symbol
 open Core
 open Printf
-open Cerb_util
 
 open Bmc_incremental
 
 module BmcM = struct
   type state_ty = {
-    file        : unit typed_file;
-    fn_to_check : sym_ty;
+    file        : unit file;
+    fn_to_check : Sym.t;
     ail_opt     : GenTypes.genTypeCategory AilSyntax.ail_program option;
 
-    inline_pexpr_map : (int, typed_pexpr) Pmap.map option;
-    inline_expr_map  : (int, unit typed_expr) Pmap.map option;
-    fn_call_map      : (int, sym_ty) Pmap.map option;
+    inline_pexpr_map : (int, pexpr) Pmap.map option;
+    inline_expr_map  : (int, unit expr) Pmap.map option;
+    fn_call_map      : (int, Sym.t) Pmap.map option;
 
-    sym_expr_table   : (sym_ty, Expr.expr) Pmap.map option;
+    sym_expr_table   : (Sym.t, Expr.expr) Pmap.map option;
 
     expr_map         : (int, Expr.expr) Pmap.map option;
     case_guard_map   : (int, Expr.expr list) Pmap.map option;
@@ -260,7 +260,7 @@ module BmcM = struct
         }
 
   (* ===== Getters/setters ===== *)
-  let get_file : (unit typed_file) eff =
+  let get_file : (unit file) eff =
     get >>= fun st ->
     return st.file
 
@@ -282,8 +282,8 @@ let initialise_solver (solver: Solver.solver) =
   Params.add_bool params (mk_sym "macro_finder") g_macro_finder;
   Solver.set_parameters solver params
 
-let bmc_file (file              : unit typed_file)
-             (fn_to_check       : sym_ty)
+let bmc_file (file              : unit file)
+             (fn_to_check       : Sym.t)
              (ail_opt: GenTypes.genTypeCategory AilSyntax.ail_program option) =
   let initial_state : BmcM.state =
     BmcM.mk_initial_state file fn_to_check ail_opt in
@@ -503,11 +503,11 @@ let bmc_file (file              : unit typed_file)
 
 (* Find f_name in function map, returning the Core symbol *)
 let find_function (f_name: string)
-                  (fun_map: unit typed_fun_map) =
+                  (fun_map: unit fun_map) =
   let is_f_name = (fun (sym, decl) ->
-      match sym with
-      | Sym.Symbol(_, i, SD_Id s) -> String.equal s f_name
-      | _ -> false
+      match Sym.match_id sym with
+      | Some str -> String.equal str f_name
+      | None -> false
     ) in
   match (List.find_opt is_f_name (Pmap.bindings_list fun_map)) with
   | Some (sym, _) -> sym
@@ -519,7 +519,7 @@ let find_function (f_name: string)
 let bmc (core_file  : unit file)
         (ail_opt    : GenTypes.genTypeCategory AilSyntax.ail_program option) =
   match Core_typing.typecheck_program core_file with
-  | Result typed_core -> begin
+  | Ok typed_core -> begin
       let t = Sys.time() in
       let core_to_check =
           if !!bmc_conf.sequentialise then
@@ -536,7 +536,7 @@ let bmc (core_file  : unit file)
                                    (Sys.time() -. t));
         ret
     end
-    | Exception msg ->
+    | Error msg ->
         let str_err = Pp_errors.to_string msg in
         printf "Typechecking error: %s\n" str_err;
         `Unknown str_err

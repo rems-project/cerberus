@@ -1,4 +1,5 @@
 open Cerb_frontend
+open Cerb_symbol
 
 type language =
   | Cabs | Ail | Core | Types
@@ -22,12 +23,12 @@ type configuration = {
 }
 
 type io_helpers = {
-  pass_message: string -> (unit, Errors.error) Exception.exceptM;
-  set_progress: string -> (unit, Errors.error) Exception.exceptM;
-  run_pp: string option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
-  print_endline: string -> (unit, Errors.error) Exception.exceptM;
-  print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
-  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
+  pass_message: string -> (unit, Errors.error) result;
+  set_progress: string -> (unit, Errors.error) result;
+  run_pp: string option -> PPrint.document -> (unit, Errors.error) result;
+  print_endline: string -> (unit, Errors.error) result;
+  print_debug: int -> (unit -> string) -> (unit, Errors.error) result;
+  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) result;
 }
 val default_io_helpers: io_helpers
 val get_progress: unit -> int
@@ -37,69 +38,64 @@ val run_pp: string option -> PPrint.document -> unit
 val core_stdlib_path: unit -> string
 
 val load_core_stdlib:
-  unit -> ((string, Symbol.sym) Pmap.map * unit Core.fun_map, Cerb_location.t * Errors.cause) Exception.exceptM
+  unit -> ((string, Sym.t) Pmap.map * unit Core.fun_map, Cerb_location.t * Errors.cause) result
 
 val load_core_impl:
-  (string, Symbol.sym) Pmap.map * unit Core.fun_map -> string ->
-  (Core.impl, Cerb_location.t * Errors.cause) Exception.exceptM
+  (string, Sym.t) Pmap.map * unit Core.fun_map -> string ->
+  (Core.impl, Cerb_location.t * Errors.cause) result
 
-val cpp: (configuration * io_helpers) -> filename:string -> (string, Cerb_location.t * Errors.cause) Exception.exceptM
+val cpp: (configuration * io_helpers) -> filename:string -> (string, Cerb_location.t * Errors.cause) result
 
 val c_frontend:
   ?cn_init_scope: Cn_desugaring.init_scope ->
   (configuration * io_helpers) ->
-  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
+  (((string, Sym.t) Pmap.map * unit Core.generic_fun_map) * Core.impl) ->
   filename:string ->
   ( Cabs.translation_unit
   * (Cabs_to_ail_effect.fin_markers_env * GenTypes.genTypeCategory AilSyntax.ail_program)
-  , Cerb_location.t * Errors.cause) Exception.exceptM
+  , Cerb_location.t * Errors.cause) result
 
 val c_frontend_and_elaboration:
   ?cn_init_scope: Cn_desugaring.init_scope ->
   (configuration * io_helpers) ->
-  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
+  (((string, Sym.t) Pmap.map * unit Core.generic_fun_map) * Core.impl) ->
   filename:string ->
   ( Cabs.translation_unit option
   * (Cabs_to_ail_effect.fin_markers_env * GenTypes.genTypeCategory AilSyntax.ail_program) option
   * unit Core.file
-  , Cerb_location.t * Errors.cause) Exception.exceptM
+  , Cerb_location.t * Errors.cause) result
 
 val core_frontend:
   'a * io_helpers ->
-  ('b * (Symbol.sym, (unit, unit) Core.generic_fun_map_decl) Pmap.map) *
-  (Implementation.implementation_constant, unit Core.generic_impl_decl)
+  ('b * (Sym.t, unit Core.generic_fun_map_decl) Pmap.map) *
+  (Implementation.implementation_constant, Core.impl_decl)
   Pmap.map ->
   filename:string ->
-  ((unit, unit) Core.generic_file, Cerb_location.t * Errors.cause) Exception.exceptM
+  (unit Core.file, Cerb_location.t * Errors.cause) result
 
 
 val typed_core_passes:
   (configuration * io_helpers) -> unit Core.file ->
-  (unit Core.file * unit Core.typed_file, Cerb_location.t * Errors.cause) Exception.exceptM
+  (unit Core.file, Cerb_location.t * Errors.cause) result
 
 val core_passes:
   (configuration * io_helpers) -> filename:string -> unit Core.file ->
-  (unit Core.file, Cerb_location.t * Errors.cause) Exception.exceptM
+  (unit Core.file, Cerb_location.t * Errors.cause) result
 
 val interp_backend:
   io_helpers -> 'a Core.file ->
   args:(string list) -> batch:[`Batch | `CharonBatch | `JsonBatch | `NotBatch] -> fs:string option -> driver_conf:Driver_ocaml.driver_conf ->
-  ((([`Batch | `CharonBatch | `JsonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Cerb_location.t * Errors.cause) Exception.exceptM
+  ((([`Batch | `CharonBatch | `JsonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Cerb_location.t * Errors.cause) result
 
 (*
 val ocaml_backend:
   (configuration * io_helpers) -> filename:string -> ocaml_corestd:bool -> unit Core.file ->
-  (int, Cerb_location.t * Errors.cause) Exception.exceptM
+  (int, Cerb_location.t * Errors.cause) result
    *)
 
 val read_core_object:
   (configuration * io_helpers) -> ?is_lib:bool ->
-  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
+  (((string, Sym.t) Pmap.map * unit Core.generic_fun_map) * Core.impl) ->
   string ->
-  (unit Core.file, Cerb_location.t * Errors.cause) Exception.exceptM
+  (unit Core.file, Cerb_location.t * Errors.cause) result
 val write_core_object: unit Core.file -> string -> unit
-
-
-val untype_file: 
-  'a Core.typed_file ->
-  'a Core.file

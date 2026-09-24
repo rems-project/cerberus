@@ -15,7 +15,7 @@ val parse_loc_string :
   ((Lexing.lexbuf -> Tokens.token) -> Lexing.lexbuf -> 'a) ->
   Cerb_location.t * string ->
   ('a, Cerb_location.t * Cerb_frontend.Errors.cause)
-  Cerb_frontend.Exception.exceptM
+  result
 
 
 (** Parse a C translation unit from a file.
@@ -24,7 +24,7 @@ val parse_from_channel :
   string ->
   (Cerb_frontend.Cabs.translation_unit,
    Cerb_location.t * Cerb_frontend.Errors.cause)
-  Cerb_frontend.Exception.exceptM
+  result
 
 
 (** Parse a C translation unit from the given string.
@@ -38,4 +38,4 @@ val parse_from_string :
   string ->
   (Cerb_frontend.Cabs.translation_unit,
    Cerb_location.t * Cerb_frontend.Errors.cause)
-  Cerb_frontend.Exception.exceptM
+  result

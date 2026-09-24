@@ -16,7 +16,7 @@ type driver_conf = {
   trace: bool;
 }
 
-type execution_result = (Core.value list, Errors.error) Exception.exceptM
+type execution_result = (Core.value list, Errors.error) result
 
 
 let string_of_driver_error = function
@@ -44,9 +44,9 @@ let string_of_batch_exit exit =
     let open Core in
     match exit with
       | Unspecified ty ->
-        Vloaded (LVunspecified ty)
+        Bloaded (LVunspecified ty)
       | Specified n ->
-          Vloaded (LVspecified (OVinteger (Impl_mem.integer_ival n)))
+          Bloaded (LVspecified (OVinteger (Impl_mem.integer_ival n)))
       | OtherValue cval ->
           cval in
   String_core.string_of_value cval
@@ -161,11 +161,11 @@ let batch_drive (file: 'a Core.file) args fs_state conf =
       | ND.Active dres ->
           let exit =
             match dres.Driver.dres_core_value with
-              | Vloaded (LVspecified (OVinteger ival)) ->
+              | Bloaded (LVspecified (OVinteger ival)) ->
                   Impl_mem.case_integer_value ival
                     (fun n  -> Specified n)
                     (fun () -> OtherValue dres.Driver.dres_core_value)
-              | Vloaded (LVunspecified ty) ->
+              | Bloaded (LVunspecified ty) ->
                   Unspecified ty
               | _ ->
                   OtherValue dres.Driver.dres_core_value in
@@ -269,7 +269,7 @@ else
           );
         if conf.fs_dump then begin
           print_endline "File System:";
-          print_endline @@ Sexplib.Sexp.to_string_hum @@ Sibylfs.sexp_of_fs_state st.Driver.fs_state
+          print_endline @@ Sexplib.Sexp.to_string_hum @@ Cerb_sibylfs.Fs_state.to_sexp st.Driver.fs_state
         end;
         if conf.trace then
           PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace);
@@ -305,4 +305,4 @@ else
       | (ND.Killed (_, ND.Other reason), _, st) ->
           print_endline (Cerb_colour.(ansi_format [Red] ("OTHER ERROR: " ^ string_of_driver_error reason)))
   ) values;
-  Exception.except_return !ret
+  Result.ok !ret
