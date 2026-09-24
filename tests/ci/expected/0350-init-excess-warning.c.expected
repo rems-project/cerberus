@@ -1,0 +1,1 @@
+Defined {value: "Specified(0)", stdout: "arr= {1, 2}\na2= {0, 0, 0, 0, 0}\ns= {1, 2}\n", stderr: "", blocked: "false"}

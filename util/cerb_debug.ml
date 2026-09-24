@@ -48,6 +48,10 @@ let warn ?(always=false) _doms msg =
   if always || !debug_level > 1 then
     prerr_endline Cerb_colour.(ansi_format [Yellow] ("warning: " ^ msg ()))
 
+(* [warn] is silent unless the debug level is raised; this one is for
+   diagnostics the user is always meant to see. *)
+let warn_always doms msg = warn ~always:true doms msg
+
 (*
 let print_debug2 msg k =
   if !debug_level > 0 then

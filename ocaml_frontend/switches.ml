@@ -43,6 +43,10 @@ type cerb_switch =
   (* eliminate pure expr rebindings: let pat = C[pure(pexpr)] -> substitute pexpr *)
   | SW_copy_prop
 
+  (* report excess and out-of-range initialisers as constraint violations
+     (STD §6.7.9#2) instead of warning and ignoring them *)
+  | SW_strict_initialisers
+
 
 let internal_ref =
   ref []
@@ -99,6 +103,8 @@ let set strs =
         Some (SW_magic_comment_char_dollar)
     | "copy_prop" ->
         Some SW_copy_prop
+    | "strict_initialisers" ->
+        Some SW_strict_initialisers
     | _ ->
         None in
   let pred x = function
@@ -128,7 +134,8 @@ let set strs =
     | SW_zero_initialised
     | SW_at_magic_comments
     | SW_magic_comment_char_dollar
-    | SW_copy_prop as y ->
+    | SW_copy_prop
+    | SW_strict_initialisers as y ->
         x = y in
   List.iter (fun str ->
     match read_switch str with

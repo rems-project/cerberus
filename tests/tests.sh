@@ -206,11 +206,19 @@ citests=(
   0338-cast-pointer-to-_Bool.c
   0339-invalid-string-character.error.c
   0340-shl_promotion_to_signed.undef.c
+  0342-init-brace-elision.c
+  0343-init-designators.c
+  0344-init-anonymous-members.c
+  0345-init-union-designators.c
+  0346-init-inner-string-literal.c
+  0347-init-inner-compound-literal.c
+  0348-init-wide-string-literal.c
+  0349-init-overflow-nested-braces.c
+  0350-init-excess-warning.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
 skip=(
-  0083-array_initializers.c  # REAL BUG(!) -- Desugaring of initializers
   0113-cast_assign_parsing.error.c            # REAL BUG (!) -- C parser
   0205-illegal-storage-class.error.c          # IMPROVE: the location and message should be more specific
   0210-illegal-storage-class-function.error.c # IMPROVE: the location and message should be more specific

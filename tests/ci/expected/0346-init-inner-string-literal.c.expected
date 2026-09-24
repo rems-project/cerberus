@@ -1,0 +1,1 @@
+Defined {value: "Specified(0)", stdout: "x= {\"abc\", 7}\nc= {\"ab\", cdef, \"\"}\nt= {hi, \"abc\"}\nd= {\"xy\", 3} (s[2]=0 s[3]=0)\n", stderr: "", blocked: "false"}

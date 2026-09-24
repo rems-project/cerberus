@@ -157,6 +157,8 @@ type violation =
   | IllegalStorageClassFunctionDeclarator (* §6.7.6.3#2 *)
   | IncompleteParameterTypeFunctionDeclarator (* §6.7.6.3#4 *)
   (* 6.7.9 Initialization *)
+  | ExcessInitializers (* §6.7.9#2 *)
+  | ArrayDesignatorOutOfRange of integer * integer (* §6.7.9#2 *)
   | IllegalInitialisation of illegal_initialisation (* §6.7.9#3 *)
   | IllegalStorageClassStaticOrThreadInitializer (* §6.7.9#4 *)
   | IllegalLinkageAndInitialization (* §6.7.9#5 *)
@@ -422,6 +424,10 @@ let std_of_violation = function
       ["§6.7.6.3#2"]
   | IncompleteParameterTypeFunctionDeclarator ->
       ["§6.7.6.3#4"]
+  | ExcessInitializers ->
+      ["§6.7.9#2"]
+  | ArrayDesignatorOutOfRange _ _ ->
+      ["§6.7.9#2"]
   | IllegalInitialisation _ ->
       ["§6.7.9#3"]
   | IllegalStorageClassStaticOrThreadInitializer ->

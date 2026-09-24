@@ -1718,8 +1718,19 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           end
         else
           error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
-    | AilEinvalid ty reason ->
-        E.return (AilEinvalid ty reason, GenRValueType (inject_type ty))
+    | AilEinvalid _ reason ->
+        (* NOTE: an invalid node means the desugaring gave up on a construct
+           and produced a placeholder to be able to carry on. Typing it as a
+           well-formed rvalue lets it reach the elaborator, which fails with
+           `Translation called on Ail program with an invalid node' and no
+           location at all. Report it here, where we still have one. *)
+        let msg = match reason with
+          | AilInvalid_desugaring_init_failed str ->
+              "the desugaring of this initializer failed: " ^ str
+          | AilInvalid_other str ->
+              str
+        end in
+        E.fail loc (TError_NotYetSupported msg)
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->

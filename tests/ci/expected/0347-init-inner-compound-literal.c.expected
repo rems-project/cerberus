@@ -1,0 +1,1 @@
+Defined {value: "Specified(0)", stdout: "s= {{1, 2}, 3}\nts= {{4, 5}, {6, 7}}\nd= {{9, 10}, 8}\n", stderr: "", blocked: "false"}

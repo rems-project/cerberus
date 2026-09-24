@@ -1,0 +1,1 @@
+Defined {value: "Specified(0)", stdout: "designated= 1\nredesignated= 1\nredesignated2= 1\nimplicit= 9\nstructy= {4, 5}\narr= {1, 7}\nw= {8, 1}\n", stderr: "", blocked: "false"}
