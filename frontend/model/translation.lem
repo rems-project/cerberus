@@ -3805,7 +3805,7 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
     
     | A.AilSwhile e s loop_id ->
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
-        let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "while_" ^ show x) in
+        let sym_loop = Symbol.fresh_pretty_with_id (fun x -> "while_" ^ show x) in
         E.wrapped_fresh_symbol C.BTy_boolean                  >>= fun do_loop_wrp  ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer)   >>= fun test_wrp     ->
         E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)   >>= fun case_wrp     ->
@@ -3831,6 +3831,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
                           (Caux.mk_boolean_pe true) (Caux.mk_boolean_pe false)
                       end )
                     (* non-deterministic branching if the test expression had unspecified value *)
+                    (* TODO: the elaboration of do while () does a UB, the two
+                     * should behave the same *)
                   ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                     , Caux.mk_nd_e [Caux.mk_pure_e (Caux.mk_boolean_pe true); Caux.mk_pure_e (Caux.mk_boolean_pe false)] ) ]
               end
@@ -3840,19 +3842,28 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
         end
     
     | A.AilSdo s e loop_id ->
-        (* TODO: make the elab of AilSdo use mkTestExpression *)
-        let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "do_" ^ show x) in
-        let sym_case = Symbol.fresh () in
-        let sym_e    = Symbol.fresh () in
-        translate_expression true e >>= fun core_e       ->
-        self s                      >>= fun core_s       ->
-        E.get_visible_objects       >>= fun visible_syms ->
-        
+        (*
+         * [| do S while (E) |] =
+         *  save l(...) in
+         *    lets () = [| S |] in
+         *    lets test: integer loaded = [| E == 0 |] in
+         *    case test of
+         *    | Specified case => if not (case = 1) then run l(...) else pure(Unit)
+         *    | Unspecified _ => pure(undef("unspecified AilSdo"))
+         *    end
+         *)
+        (* NOTE: the object type is OTy_integer since we are using mkTestExpression
+         * which turns [e] into [e == 0] *)
+        let sym_loop = Symbol.fresh_pretty_with_id (fun x -> "do_" ^ show x) in
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer)   >>= fun test_wrp     ->
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)   >>= fun case_wrp     ->
+        translate_expression true (mkTestExpression TestEq e) >>= fun core_test    ->
+        self s                                                >>= fun core_s       ->
+        E.get_visible_objects                                 >>= fun visible_syms ->
         let core_loop =
           Caux.mk_run_e sym_loop [ Caux.mk_sym_pe sym | forall (sym MEM visible_syms) | true ] in
-
         E.mapM (fun sym ->
-            E.resolve_object_type sym >>= fun (_, ty) ->            
+            E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return begin
@@ -3861,15 +3872,13 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
               (* controlling expression *)
               begin
-                Caux.mk_sseq_e (Caux.mk_sym_pat sym_e (C.BTy_loaded C.OTy_integer)) core_e (
-                  Caux.mk_case_e (Caux.mk_sym_pe sym_e)
-                    [ ( Caux.mk_specified_pat (Caux.mk_sym_pat sym_case (C.BTy_object C.OTy_integer))
-                      , Caux.mk_if_e (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe sym_case) (Caux.mk_integer_pe 0)))
+                Caux.mk_sseq_e test_wrp.E.sym_pat core_test (
+                  Caux.mk_case_e test_wrp.E.sym_pe
+                    [ ( Caux.mk_specified_pat case_wrp.E.sym_pat
+                      , Caux.mk_if_e (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_wrp.E.sym_pe (Caux.mk_integer_pe 1)))
                           core_loop Caux.mk_skip_e )
-                      (* non-deterministic branching if the test expression had unspecified value *)
                     ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                      , (* Caux.mk_nd_e [core_loop; Caux.mk_skip_e] *)
-                        Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSdo")) ) ]
+                      , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSdo")) ) ]
                    )
               end
           )
