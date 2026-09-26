@@ -218,6 +218,12 @@ type switch_info = <|
   default_info: maybe Loc.t;
 |>
 
+
+import Translation_effect
+type desug_config = <|
+  elab_conf: Translation_effect.elab_config;
+|>
+
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
   aux_supply: nat;
@@ -278,6 +284,9 @@ type state = <|
 
   (* TODO TODO TODO *)
   core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
+
+  (* READ-ONLY, this will be moved to the `desug_config` type when the monad is updated *)
+  desug_conf: desug_config;
 |>
 
 type markers_env =
@@ -372,6 +381,9 @@ let modify_inner f =
     (a, <| st with inner= inner_st' |>)
   )
 
+
+let read_config =
+  read_inner (fun st -> st.desug_conf)
 
 val void: forall 'a. desugM 'a -> desugM unit
 let cabs_to_ail_effect_void m =
@@ -552,8 +564,10 @@ let empty_switch_info =
 
 
 (* ========================================================================== *)
-val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> state_with_markers
-let initial_state core_eval_stuff cn_eval_stuff = <|
+val initial_state:
+  desug_config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
+  Cn_desugaring.init_scope -> state_with_markers
+let initial_state desug_conf core_eval_stuff cn_eval_stuff = <|
   inner= <|
     aux_supply=      0;
     scope_id_supply= 0;
@@ -583,6 +597,7 @@ let initial_state core_eval_stuff cn_eval_stuff = <|
     cn_state= Cn_desugaring.initial_cn_desugaring_state cn_eval_stuff;
     
     core_eval_stuff= core_eval_stuff;
+    desug_conf = desug_conf;
   |>;
   markers_env= Map.empty;
 |>
@@ -619,13 +634,16 @@ let fin_markers_env () =
   State_exception.return (id, st.markers_env)
 
 
-val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
-let cabs_to_ail_effect_eval core_eval_stuff cn_eval_stuff m =
+val eval:
+  forall 'a.
+  desug_config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
+  Cn_desugaring.init_scope -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
+let cabs_to_ail_effect_eval desug_conf core_eval_stuff cn_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->
     fin_markers_env () >>= fun markers ->
     State_exception.return (markers, res)
-  end (initial_state core_eval_stuff cn_eval_stuff)
+  end (initial_state desug_conf core_eval_stuff cn_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
 

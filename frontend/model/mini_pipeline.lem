@@ -57,12 +57,14 @@ let inline (>>=) = Eff.bind
 
 
 val evalConstantExpressionAux:
-  Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
+  TranslateEff.elab_config -> Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
   A.sigma unit ->
   (GenTypes.genTypeCategory -> Eff.exceptM unit Errors.error) ->
   maybe Ctype.ctype -> A.expression unit -> Eff.exceptM C.value Errors.error
 
-let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm typing_guard ty_opt expr =
+let evalConstantExpressionAux
+  elab_conf loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm typing_guard ty_opt expr
+=
   let toAilTau: A.expression unit -> ErrorMonad.errorM (A.expression GenTypes.genTypeCategory) =
     GenTyping.annotate_expression (fun loc -> GenTyping.annotate_block loc Nothing) sigm [] (*TODO: check*)GenTyping.CTXother in
   
@@ -78,10 +80,10 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
           Translation_aux.ctype_of a_e
     end in
     let oTy = force_core_object_type_of_ctype ty in
-    TranslateEff.bind (translate_expression Nothing true ECTX_other ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib (translate_tag_definitions sigm.A.tag_definitions: C.core_tag_definitions) a_e) (fun core_e                       ->
-    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy)) (fun e_wrp ->
-    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy)) (fun obj_wrp ->
-    TranslateEff.return begin
+    TranslateEff.elab_bind (translate_expression Nothing true ECTX_other ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib (translate_tag_definitions sigm.A.tag_definitions: C.core_tag_definitions) a_e) (fun core_e                       ->
+    TranslateEff.elab_bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy)) (fun e_wrp ->
+    TranslateEff.elab_bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy)) (fun obj_wrp ->
+    TranslateEff.elab_return begin
       Core_aux.mk_wseq_e e_wrp.TranslateEff.sym_pat core_e begin
         Core_aux.mk_pure_e begin
           Core_aux.mk_case_pe e_wrp.TranslateEff.sym_pe
@@ -104,26 +106,23 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
     | Right a_expr ->
         (* applies the provided typing guard *)
         typing_guard (GenTypes.genTypeCategoryOf a_expr) >>= fun () ->
-
-        let callconv =
-          if Global.has_switch Global.SW_inner_arg_temps then Core.Inner_arg_callconv else Core.Normal_callconv in
-        
         (* elaborate the typed expression into Core *)
-        let (core_expr, translate_final_st) = TranslateEff.runStateM (toCore a_expr) (TranslateEff.elab_init callconv) in
+        let (core_expr, translate_final_st) =
+          TranslateEff.runElabM elab_conf (toCore a_expr) TranslateEff.elab_initial_state in
         
         let dr_st =
           (* this just builds the shell of the driver state *)
           let dummy_core_file = Core_run_aux.convert_file
             <| C.main= Nothing
-             ; C.calling_convention= callconv
+             ; C.calling_convention= elab_conf.TranslateEff.calling_convention
              ; C.stdlib= stdlib_fun_map
              ; C.impl= impl
              ; C.globs= []
              ; C.funs= Map.empty
              ; C.tagDefs= Map.empty
              ; C.extern= Map.empty
-             ; C.funinfo= Map.empty 
-             ; C.loop_attributes= Map.empty 
+             ; C.funinfo= Map.empty
+             ; C.loop_attributes= Map.empty
              ; C.visible_objects_env = Map.empty
            |> 
           in
@@ -169,10 +168,10 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
 
 
 val evalIntegerConstantExpression:
-  Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
+  TranslateEff.elab_config -> Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
   maybe Ctype.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
 
-let evalIntegerConstantExpression loc core_env sigm ty_opt expr =
+let evalIntegerConstantExpression elab_conf loc core_env sigm ty_opt expr =
   let typing_guard gtc =
     let do_fail =
       Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour Undefined.UB055_invalid_integer_constant_expression))
@@ -187,7 +186,7 @@ let evalIntegerConstantExpression loc core_env sigm ty_opt expr =
             do_fail
     end in
   
-  evalConstantExpressionAux loc core_env sigm typing_guard ty_opt expr >>= function
+  evalConstantExpressionAux elab_conf loc core_env sigm typing_guard ty_opt expr >>= function
     | C.Vloaded (C.LVspecified (C.OVinteger ival)) ->
         match Mem.eval_integer_value ival with
           | Just n ->

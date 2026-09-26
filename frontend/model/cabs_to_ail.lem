@@ -1128,8 +1128,9 @@ val evaluate_integer_constant_expression: Loc.t -> maybe Ctype.ctype -> expressi
 let evaluate_integer_constant_expression loc ty_opt expr =
   E.get_core_eval_stuff >>= fun core_env ->
   E.get_sigma_sofar >>= fun sigm ->
+  E.read_config >>= fun conf ->
   E.liftException
-      (Mini_pipeline.evalIntegerConstantExpression loc core_env sigm ty_opt expr)
+      (Mini_pipeline.evalIntegerConstantExpression conf.E.elab_conf loc core_env sigm ty_opt expr)
 
 
 
@@ -4945,9 +4946,12 @@ let register_additional_cn_var id = E.register_cn_ident CN_vars id
 
 
 import Core
-val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> string -> translation_unit ->
+val desugar:
+  E.desug_config ->
+  (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> string ->
+  translation_unit ->
   Exception.exceptM (E.fin_markers_env * ail_program unit) Errors.error
-let desugar core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
+let desugar desug_conf core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
 (*
   E.eval sym_counter core_eval_stuff cn_eval_stuff (
     E.under_scope E.Scope_file (
@@ -5022,7 +5026,7 @@ let desugar core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
     )
   ) 
 *)
-  E.eval core_eval_stuff cn_eval_stuff (
+  E.eval desug_conf core_eval_stuff cn_eval_stuff (
     E.under_scope E.Scope_file (
       register_cn_predicate_names edecls                       >>= fun () ->
       register_cn_function_names edecls                        >>= fun () ->

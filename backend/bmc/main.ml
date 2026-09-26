@@ -11,13 +11,13 @@ let io, get_progress =
   let open Pipeline in
   default_io_helpers, get_progress
 
-let frontend (conf, io) ~is_lib filename core_std =
+let frontend elab_conf (conf, io) ~is_lib filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     read_core_object (conf, io) ~is_lib core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
+    c_frontend_and_elaboration elab_conf (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
@@ -106,16 +106,18 @@ let cerberus debug_level progress core_obj
   let prelude =
     (* Looking for and parsing the core standard library *)
     Switches.set switches;
+    (* TODO: merge this with conf *)
+    let elab_conf = mk_elab_config () in
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
     load_core_impl core_stdlib impl_name >>= fun core_impl ->
     io.pass_message "Implementation file loaded." >>
-    return (core_stdlib, core_impl)
+    return ((core_stdlib, core_impl), elab_conf)
   in
-  let main core_std =
+  let main core_std elab_conf =
     Exception.except_foldlM (fun core_files (is_lib, file) ->
-      frontend (conf, io) ~is_lib file core_std >>= fun core_file ->
+      frontend elab_conf (conf, io) ~is_lib file core_std >>= fun core_file ->
       return (core_file::core_files)
     ) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ (List.map (fun z -> (false, z)) files))
   in
@@ -187,7 +189,8 @@ let cerberus debug_level progress core_obj
       else
         Pp_errors.fatal "no input file"
     | [file] when core_obj ->
-      prelude >>= frontend (conf, io) ~is_lib:false file >>= fun core_file ->
+      prelude >>= fun (core_std, elab_conf) ->
+      frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
       begin match output_name with
         | Some output_file ->
           write_core_object core_file output_file
@@ -204,8 +207,8 @@ let cerberus debug_level progress core_obj
       else if bmc then
         begin match files with
           | [filename] ->
-            prelude >>= fun core_std ->
-            c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, ail_opt, core) ->
+            prelude >>= fun (core_std, elab_conf) ->
+            c_frontend_and_elaboration elab_conf (conf, io) core_std ~filename >>= fun (_, ail_opt, core) ->
             core_passes (conf, io) ~filename core >>= fun core ->
             ignore @@ Bmc.bmc core (Option.map snd ail_opt);
             return success
@@ -236,9 +239,9 @@ let cerberus debug_level progress core_obj
         return success
       (* Dump a core object (-c) *)
       else if core_obj then
-        prelude >>= fun core_std ->
+        prelude >>= fun (core_std, elab_conf) ->
         Exception.except_foldlM (fun () file ->
-          frontend (conf, io) ~is_lib:false file core_std >>= fun core_file ->
+          frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file;
           return ()
@@ -246,7 +249,8 @@ let cerberus debug_level progress core_obj
         return success
       (* Link and execute *)
       else
-        prelude >>= main >>= begin function
+        prelude >>= fun (core_std, elab_conf) ->
+        main core_std elab_conf >>= begin function
           | [] -> assert false
           | f::fs ->
             (*if cfg then Cfg.mk_dot ~sequentialise:sequentialise_core f;*)

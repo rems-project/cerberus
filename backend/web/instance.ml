@@ -98,7 +98,9 @@ let elaborate ~is_bmc ~conf ~filename =
   try
     load_core_stdlib () >>= fun core_stdlib ->
     load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
-    c_frontend_and_elaboration (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
+    (* TODO: merge this with conf *)
+    let elab_conf = mk_elab_config () in
+    c_frontend_and_elaboration elab_conf (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
     >>= function
     | (Some cabs, Some (_, ail), core) ->
       core_passes (conf.pipeline, conf.io) ~filename core
