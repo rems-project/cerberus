@@ -11,7 +11,10 @@ type unspecified_ub_context =
   | UB_unspec_copy_alloc_id
   | UB_unspec_rvalue_memberof
   | UB_unspec_memberofptr
+  | UB_unspec_if
+  | UB_unspec_while
   | UB_unspec_do
+  | UB_unspec_switch
 
 type undefined_by_omission =
   | UB_OMIT_memcpy_non_object
@@ -1079,7 +1082,10 @@ let ub_str_bimap =
     ; (UB_CERB004_unspecified UB_unspec_copy_alloc_id, "UB_CERB004_unspecified__copy_alloc_id")
     ; (UB_CERB004_unspecified UB_unspec_rvalue_memberof, "UB_CERB004_unspecified__rvalue_memberof")
     ; (UB_CERB004_unspecified UB_unspec_memberofptr, "UB_CERB004_unspecified__memberofptr")
+    ; (UB_CERB004_unspecified UB_unspec_if, "UB_CERB004_unspecified__if")
+    ; (UB_CERB004_unspecified UB_unspec_while, "UB_CERB004_unspecified__while")
     ; (UB_CERB004_unspecified UB_unspec_do, "UB_CERB004_unspecified__do")
+    ; (UB_CERB004_unspecified UB_unspec_switch, "UB_CERB004_unspecified__switch")
     ; (UB_CERB005_free_nullptr, "UB_CERB005_free_nullptr")
     ; (UB_CHERI_InvalidCap,"UB_CHERI_InvalidCap")
     ; (UB_CHERI_InsufficientPermissions,"UB_CHERI_InsufficientPermissions")
@@ -1408,8 +1414,14 @@ let pretty_string_of_undefined_behaviour = function
             "the operand of '.' operator (rvalue case) evaluates to an unspecified value"
         | UB_unspec_memberofptr ->
             "the operand of '->' operator evaluates to an unspecified value"
+        | UB_unspec_if ->
+            "the controlling expression of an 'if' statement evaluated to an unspecified value"
+        | UB_unspec_while ->
+            "the controlling expression of a 'while' statement evaluated to an unspecified value"
         | UB_unspec_do ->
             "the controlling expression of a 'do' statement evaluated to an unspecified value"
+        | UB_unspec_switch ->
+            "the controlling expression of a 'switch' statement evaluated to an unspecified value"
       end
   | UB_CERB005_free_nullptr ->
       "a call to 'free()' is given a 'NULL' pointer"

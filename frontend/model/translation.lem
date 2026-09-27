@@ -3655,6 +3655,14 @@ let translate_block translate_expr_opt self loc f binds ss =
     end
   )
 
+let translate_branch_on_unspec conf loc ctx e1 e2 =
+  match conf.E.branching_on_unspec with
+  | E.Elab_ND ->
+      Caux.mk_nd_e [e1; e2]
+  | E.Elab_UB ->
+      Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified ctx))
+  end
+
 val translate_stmt:
   translation_stdlib ->
   C.core_tag_definitions ->
@@ -3795,9 +3803,13 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
                       Caux.mk_if_pe (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_wrp.E.sym_pe (Caux.mk_integer_pe 1)))
                         (Caux.mk_boolean_pe true) (Caux.mk_boolean_pe false)
                     end )
-                  (* non-deterministic branching if the test expression had unspecified value *)
+                  (* if the test expression had unspecified value, UB or non-deterministic
+                    * branching depending on the configuration *)
                 ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                  , Caux.mk_nd_e [Caux.mk_pure_e (Caux.mk_boolean_pe true); Caux.mk_pure_e (Caux.mk_boolean_pe false)] ) ]
+                  , translate_branch_on_unspec conf loc
+                      Undefined.UB_unspec_if
+                      (Caux.mk_pure_e (Caux.mk_boolean_pe true))
+                      (Caux.mk_pure_e (Caux.mk_boolean_pe false)) ) ]
             end
             (Caux.mk_if_e do_then_wrp.E.sym_pe core_s1 core_s2)
           end
@@ -3830,11 +3842,13 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
                         Caux.mk_if_pe (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_wrp.E.sym_pe (Caux.mk_integer_pe 1)))
                           (Caux.mk_boolean_pe true) (Caux.mk_boolean_pe false)
                       end )
-                    (* non-deterministic branching if the test expression had unspecified value *)
-                    (* TODO: the elaboration of do while () does a UB, the two
-                     * should behave the same *)
+                    (* if the test expression had unspecified value, UB or non-deterministic
+                     * branching depending on the configuration *)
                   ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                    , Caux.mk_nd_e [Caux.mk_pure_e (Caux.mk_boolean_pe true); Caux.mk_pure_e (Caux.mk_boolean_pe false)] ) ]
+                    , translate_branch_on_unspec conf loc
+                        Undefined.UB_unspec_while
+                        (Caux.mk_pure_e (Caux.mk_boolean_pe true))
+                        (Caux.mk_pure_e (Caux.mk_boolean_pe false)) ) ]
               end
                 (Caux.mk_if_e do_loop_wrp.E.sym_pe core_s_loop Caux.mk_skip_e)
             end
@@ -3878,7 +3892,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
                       , Caux.mk_if_e (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_wrp.E.sym_pe (Caux.mk_integer_pe 1)))
                           core_loop Caux.mk_skip_e )
                     ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                      , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSdo")) ) ]
+                      , translate_branch_on_unspec conf loc Undefined.UB_unspec_do
+                          core_loop Caux.mk_skip_e ) ]
                    )
               end
           )
@@ -4022,7 +4037,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
                     case_labs) )
                  (* UB if unspecified *)
                ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                 , Caux.mk_pure_e (Caux.mk_undef_exceptional_condition loc) ) ]))
+                 , Caux.mk_pure_e (Caux.mk_undef_pe loc
+                    (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_switch)) ) ]))
     
     | A.AilScase n s ->
         self s                >>= fun core_s       ->

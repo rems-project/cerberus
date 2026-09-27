@@ -33,6 +33,10 @@ type elab_state = <|
   errors: list string;
 |>
 
+type elab_ub_or_nd =
+  | Elab_UB
+  | Elab_ND
+
 type elab_config = <|
   calling_convention: C.calling_convention;
 
@@ -41,17 +45,19 @@ type elab_config = <|
   is_CHERI: bool;
   is_CN: bool;
   strict_pointer_arith: bool;
+  branching_on_unspec: elab_ub_or_nd;
 (*
 has_switch Global.SW_inner_arg_temps ---> USE calling_convention
 *)
 |>
 
-let elab_config callconv is_PNVI is_CHERI is_CN strict_pointer_arith = <|
+let elab_config callconv is_PNVI is_CHERI is_CN strict_pointer_arith branching_on_unspec = <|
   calling_convention= callconv;
   is_PNVI= is_PNVI;
   is_CHERI= is_CHERI;
   is_CN= is_CN;
   strict_pointer_arith= strict_pointer_arith;
+  branching_on_unspec= branching_on_unspec;
 |>
 
 val elab_initial_state: elab_state

@@ -33,6 +33,8 @@ module CerbSwitchesProxy = struct
     | SW_revocation `CORNUCOPIA -> SW_revocation CORNUCOPIA
     | SW_at_magic_comments -> SW_at_magic_comments
     | SW_magic_comment_char_dollar -> SW_magic_comment_char_dollar
+    | SW_copy_prop -> SW_copy_prop
+    | SW_branching_on_unspec_is_nd -> SW_branching_on_unspec_is_nd
 
   let toCoq_switches (cs: cerb_switch list): CoqSwitches.cerb_switches_t =
     let open ListSet in

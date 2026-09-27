@@ -710,5 +710,8 @@ let mk_elab_config () =
     is_CHERI= Switches.is_CHERI ();
     is_CN= String.equal Cerb_global.(backend_name ()) "Cn";
     strict_pointer_arith= Switches.has_strict_pointer_arith ();
+    branching_on_unspec= Translation_effect.(
+      if Switches.(has_switch SW_branching_on_unspec_is_nd)
+      then Elab_ND else Elab_UB)
   }
 
