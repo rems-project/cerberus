@@ -216,6 +216,7 @@ type case_selector =
 type switch_info = <|
   cases_info: list (Loc.t * case_selector);
   default_info: maybe Loc.t;
+  promoted_ty: Ctype.ctype; (* the promoted type of the controlling expression *)
 |>
 
 
@@ -559,8 +560,8 @@ let hack_inject_idents_map idents_map =
   )
 
 
-let empty_switch_info =
-  <| cases_info= []; default_info= Nothing |>
+let init_switch_info promoted_ty =
+  <| cases_info= []; default_info= Nothing; promoted_ty= promoted_ty |>
 
 
 (* ========================================================================== *)
@@ -935,19 +936,21 @@ end
 let check_case_overlaps xs =
   check_case_overlaps_aux [] xs
 
-val is_in_switch : desugM bool
-let is_in_switch =
+(* Use this to check whether inside a switch, and to get the (promoted) type of
+ * the controlling expression. *)
+val get_switch_promoted_type : desugM (maybe Ctype.ctype)
+let get_switch_promoted_type =
   read_inner (fun st ->
     match st.switch_context with
-      | []     -> false
-      | _ :: _ -> true
+      | []     -> Nothing
+      | ctx :: _ -> Just (ctx.promoted_ty)
     end
   )
 
-val as_switch_body: forall 'a. desugM 'a -> desugM 'a
-let as_switch_body m =
+val as_switch_body: forall 'a. Ctype.ctype -> desugM 'a -> desugM 'a
+let as_switch_body promoted_ty m =
   update_inner (fun st ->
-    <| st with switch_context= empty_switch_info :: st.switch_context |>
+    <| st with switch_context= init_switch_info promoted_ty :: st.switch_context |>
   ) >>= fun () ->
   m >>= fun ret ->
   get_inner >>= fun st ->

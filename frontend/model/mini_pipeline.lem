@@ -13,6 +13,7 @@ import GenTypes GenTypesAux
 
 (* Ail typing *)
 import GenTyping ErrorMonad TypingError
+import AilTypesAux Implementation
 
 (* Elaboration *)
 open import Translation Translation_aux
@@ -56,31 +57,46 @@ module Eff = Exception
 let inline (>>=) = Eff.bind
 
 
-val evalConstantExpressionAux:
-  TranslateEff.elab_config -> Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
+type eval_mode =
+  | Own_type
+      (* only evaluates *)
+  | Check_representable_in of Ctype.ctype
+      (* check that the value is representable in the given **integer** type *)
+  | Convert_to of Ctype.ctype
+      (* convert the value to the given **integer** type *)
+
+val evalIntegerConstantExpressionAux:
+  TranslateEff.elab_config -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
   A.sigma unit ->
   (GenTypes.genTypeCategory -> Eff.exceptM unit Errors.error) ->
-  maybe Ctype.ctype -> A.expression unit -> Eff.exceptM C.value Errors.error
+  eval_mode -> A.expression unit -> Eff.exceptM C.value Errors.error
 
-let evalConstantExpressionAux
-  elab_conf loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm typing_guard ty_opt expr
+let evalIntegerConstantExpressionAux
+  elab_conf (*TODO*)(ailnames, stdlib_fun_map, impl) sigm typing_guard mode d_expr
 =
   let toAilTau: A.expression unit -> ErrorMonad.errorM (A.expression GenTypes.genTypeCategory) =
     GenTyping.annotate_expression (fun loc -> GenTyping.annotate_block loc Nothing) sigm [] (*TODO: check*)GenTyping.CTXother in
   
   let toCore (a_e: A.expression GenTypes.genTypeCategory) : TranslateEff.elabM (Core.expr unit) =
     (* STD §6.6#4 *)
-    (* NOTE: this constraint requires the evaluated constant to be within the range of expression's type *)
+    (* NOTE: this constraint requires the evaluated constant to be within the
+     * range of expression's type *)
     let stdlib = Translation_aux.mk_translation_stdlib (ailnames, stdlib_fun_map) in
-    let ty = match ty_opt with
-      | Just ty ->
-          ty
-      | Nothing ->
+    (* the type in which the value must be representable is either provided, inferred,
+     * or guaranteed by conversion *)
+    let (ty, conv_ty_opt) = match mode with
+      | Own_type ->
           (* TODO/NOTE: this should correspond to constants from array sizes and such *)
-          Translation_aux.ctype_of a_e
+          (Translation_aux.ctype_of a_e, Nothing)
+      | Check_representable_in ty ->
+          (ty, Nothing)
+      | Convert_to conv_ty ->
+          (Translation_aux.ctype_of a_e, Just conv_ty)
     end in
     let oTy = force_core_object_type_of_ctype ty in
-    TranslateEff.elab_bind (translate_expression Nothing true ECTX_other ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib (translate_tag_definitions sigm.A.tag_definitions: C.core_tag_definitions) a_e) (fun core_e                       ->
+    TranslateEff.elab_bind (translate_expression Nothing true ECTX_other
+      ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib
+      (translate_tag_definitions sigm.A.tag_definitions: C.core_tag_definitions) a_e) (fun core_e ->
     TranslateEff.elab_bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy)) (fun e_wrp ->
     TranslateEff.elab_bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy)) (fun obj_wrp ->
     TranslateEff.elab_return begin
@@ -90,7 +106,14 @@ let evalConstantExpressionAux
             [ ( Core_aux.mk_specified_pat obj_wrp.TranslateEff.sym_pat
               , Core_aux.mk_if_pe
                   (stdlib.mkcall_is_representable obj_wrp.TranslateEff.sym_pe ty)
-                  (Caux.mk_specified_pe obj_wrp.TranslateEff.sym_pe)
+                  (Caux.mk_specified_pe begin
+                    match conv_ty_opt with
+                      | Just conv_ty ->
+                          stdlib.mkcall_conv_int conv_ty obj_wrp.TranslateEff.sym_pe
+                      | Nothing ->
+                          obj_wrp.TranslateEff.sym_pe
+                    end
+                  end)
                   (Core_aux.mk_error_pe "§6.6#4 failed" obj_wrp.TranslateEff.sym_pe) )
             ; ( Core_aux.mk_unspecified_pat (Core_aux.mk_empty_pat C.BTy_ctype)
                 (* TODO: this should be dead code? *)
@@ -100,7 +123,7 @@ let evalConstantExpressionAux
     end))) in
   
   (* typechecks the expression *)
-  match ErrorMonad.runErrorMonad (toAilTau expr) with
+  match ErrorMonad.runErrorMonad (toAilTau d_expr) with
     | Left (loc, err) ->
         Eff.fail (loc, Errors.DESUGAR Errors.Desugar_illtypedIntegerConstant)
     | Right a_expr ->
@@ -134,7 +157,7 @@ let evalConstantExpressionAux
               Core_run.stack=  Core_run.Stack_empty (*Core_run.push_empty_continuation Nothing Core_run.empty_stack*);
               Core_run.errno=  Mem.null_ptrval Ctype.signed_int;
               Core_run.env=    [Map.empty];
-              Core_run.current_loc= loc;
+              Core_run.current_loc= Loc.locOf d_expr;
               Core_run.exec_loc= Core_run.ELoc_normal []; (* TODO: maybe create a new variant *)
               Core_run.current_proc_opt= Nothing;
             |> init_dr_st.Driver.core_state
@@ -168,25 +191,25 @@ let evalConstantExpressionAux
 
 
 val evalIntegerConstantExpression:
-  TranslateEff.elab_config -> Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
-  maybe Ctype.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
+  TranslateEff.elab_config -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
+  eval_mode -> A.expression unit -> Eff.exceptM integer Errors.error
 
-let evalIntegerConstantExpression elab_conf loc core_env sigm ty_opt expr =
+let evalIntegerConstantExpression elab_conf core_env sigm mode d_expr =
   let typing_guard gtc =
     let do_fail =
-      Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour Undefined.UB055_invalid_integer_constant_expression))
+      Eff.fail (Loc.locOf d_expr, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour Undefined.UB055_invalid_integer_constant_expression))
     in match gtc with
       | GenTypes.GenLValueType _ _ _ ->
           do_fail
       | GenTypes.GenRValueType gty ->
-          (* TODO: check ty_opt and gty ? *)
+          (* TODO: check mode and gty ? *)
           if GenTypesAux.is_integer gty then
             Eff.return ()
           else
             do_fail
     end in
   
-  evalConstantExpressionAux elab_conf loc core_env sigm typing_guard ty_opt expr >>= function
+  evalIntegerConstantExpressionAux elab_conf core_env sigm typing_guard mode d_expr >>= function
     | C.Vloaded (C.LVspecified (C.OVinteger ival)) ->
         match Mem.eval_integer_value ival with
           | Just n ->
@@ -199,17 +222,39 @@ let evalIntegerConstantExpression elab_conf loc core_env sigm ty_opt expr =
           "cval: " ^ Pp.stringFromCore_value cval
         ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
-        error (Loc.stringFromLocation loc ^ ", Mini_pipeline.evalIntegerConstantExpression")
+        error
+          ( Loc.stringFromLocation (Loc.locOf d_expr)
+          ^ ", Mini_pipeline.evalIntegerConstantExpression" )
   end
 
 
-val typecheckAil: A.sigma unit -> A.gamma -> A.expression unit -> either (Loc.t * TypingError.typing_error) Ctype.ctype
-let typecheckAil sigm gamm expr =
-  match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (fun loc -> GenTyping.annotate_block loc Nothing) sigm gamm (*TODO: check*)GenTyping.CTXother expr) with
+val typecheckAil:
+  A.sigma unit -> A.gamma -> A.expression unit ->
+  either (Loc.t * TypingError.typing_error) Ctype.ctype
+let typecheckAil sigm gamm d_expr =
+  match
+    ErrorMonad.runErrorMonad (GenTyping.annotate_expression (fun loc ->
+      GenTyping.annotate_block loc Nothing) sigm gamm (*TODO: check*)GenTyping.CTXother d_expr
+    )
+  with
     | Left z ->
         Left z
     | Right a_expr ->
         Right (Translation_aux.ctype_of a_expr)
+  end
+
+(* Typechecks the Ail expression  and returns its promoted type (as [Right (Just ty)]),
+ * or [Right Nothing] if it does not have an integer type, or returns the type error if it failed
+ * to typecheck *)
+val typecheckAil_promoted:
+  IntegerImpl.implementation -> A.sigma unit -> A.gamma -> A.expression unit ->
+  either (Loc.t * TypingError.typing_error) (maybe Ctype.ctype)
+let typecheckAil_promoted impl sigm gamm d_expr =
+  match typecheckAil sigm gamm d_expr with
+    | Left z ->
+        Left z
+    | Right ty ->
+        Right (AilTypesAux.promotion impl ty)
   end
 
 val in_range_of_signed_int: integer -> maybe bool

@@ -214,7 +214,7 @@ let string_of_constraint_violation = function
   | LabelRedefinition l ->
       "redefinition of '" ^ string_of_cid l ^ "'"
   | SwitchStatementControllingExpressionNotInteger ->
-      "statement requires expression of integer type"
+      "switch statement requires expression of integer type"
   | CaseStatementOverlap prev_loc ->
       "duplicate case value"
   | MutipleDefaultStatement prev_loc ->
