@@ -1,5 +1,5 @@
 open import Pervasives Utils Translation_effect Symbol Show Show_extra Ctype
-import Core Core_aux
+import Core Core_aux Mem
 import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
 
@@ -416,6 +416,8 @@ let warn_atomic_elaboration guard =
       () in
   return ()
 
+(* IMPORTANT: this must be kept in sync with loaded_ivfromfloat() in std.core
+ * and std_inner_arg_temps.core *)
 val conv_arith: translation_stdlib -> Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr
 let conv_arith stdlib ty_src ty_dst pe =
   if AilTypesAux.is_integer ty_src then
@@ -427,7 +429,13 @@ let conv_arith stdlib ty_src ty_dst pe =
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
       error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
   else if AilTypesAux.is_floating ty_src then
-    if AilTypesAux.is_integer ty_dst then
+    if AilTypesAux.is_Bool ty_dst then
+      (* STD §6.3.1.2#1: 0 if the value compares equal to 0.0, 1 otherwise; the test is on
+         the floating value, not on its truncation (see loaded_ivfromfloat() in std.core) *)
+      Caux.mk_if_pe
+        (Caux.mk_op_pe C.OpEq pe (Caux.mk_floating_value_pe (Mem.zero_fval)))
+        (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1)
+    else if AilTypesAux.is_integer ty_dst then
       C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe])
     else if AilTypesAux.is_floating ty_dst then
       (* TODO: floating vs floating conversion *)
