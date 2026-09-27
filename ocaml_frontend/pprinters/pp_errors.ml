@@ -391,7 +391,7 @@ let string_of_desugar_cause = function
   | Desugar_NotYetSupported str ->
       "feature not yet supported: " ^ str
   | Desugar_agnosticFailure str ->
-      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnotic)"
+      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnostic)"
   | Desugar_illtypedIntegerConstant ->
       "failed to typecheck an integer constant expression"
   | Desugar_CN e ->
@@ -424,7 +424,7 @@ let string_of_ail_typing_error = function
   | TError_NotYetSupported str ->
       "feature not yet supported: " ^ str
   | TError_AgnosticFailure str ->
-      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnotic)"
+      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnostic)"
   | TError_CN Cn.CNErr_typing_TODO ->
       "CN typing error"
 
