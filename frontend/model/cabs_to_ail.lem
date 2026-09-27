@@ -4120,10 +4120,13 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                   E.register_case range_loc (E.CaseSelectConst n1) >>= fun () ->
                   AilScase n1 <$> self s
                 else
+                  (* an empty range can never be selected, so the case statement is dropped and not
+                   * registered, but we kept its body because it can still be reached when
+                   * control-flow falls through from a previous case *)
                   E.warnM (fun () ->
                     "empty case range [" ^ Loc.stringFromLocation loc ^
                     "] discarded by the desugaring") >>= fun () ->
-                  E.return AilSskip
+                  (fun d_s -> AilSblock [] [d_s]) <$> self s
             | Nothing ->
                 E.constraint_violation loc LabelStatementOutsideSwitch
           end
