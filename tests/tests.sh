@@ -208,6 +208,7 @@ citests=(
   0340-shl_promotion_to_signed.undef.c
   0342-empty-range-case.c
   0343-subzero-floating-to-_Bool.c
+  0344-ptr-to-_Bool-param.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

@@ -897,7 +897,34 @@ let translate_function_call loc annots is_used translate_expr stdlib e es =
               , (ctype_of arg_e, Aaux.is_null_pointer_constant arg_e, arg_wrp.E.sym_pe) :: args_info )
   ) (0, [], [], []) es >>= fun (_, rev_arg_sym_pats, rev_core_arg_es, rev_args_info) ->
   (* create parameters and convert them *)
-  let (args_info, variadic_args_info) = List.splitAt (List.length expect_params) (List.reverse rev_args_info) in
+  let (args_info, variadic_args_info) =
+    List.splitAt (List.length expect_params) (List.reverse rev_args_info) in
+  (* (STD §6.5.2.2#7, sentence 1) implicit conversion of the argument to the type of the
+   * corresponding parameter using the assignment rules.
+   * NOTE: a pointer argument passed to a _Bool parameter has already been converted during its
+   * elaboration (and has Core type loaded integer), so we do NOT convert it again here. *)
+  let conv_arg_value expect_param_ty expect_param_ty_pe (arg_ty, arg_is_null, arg_sym_pe) =
+    if
+      AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool expect_param_ty
+      && AilTypesAux.is_pointer arg_ty
+    then
+      arg_sym_pe
+    (* NOTE: since the expected type is compatible with the parameter type, if one is an integer or
+      floating, the other one must also be an integer or floating (respectively) *)
+    else if AilTypesAux.is_integer expect_param_ty then
+      if AilTypesAux.is_integer arg_ty then
+        stdlib.mkcall_conv_loaded_int_ expect_param_ty_pe arg_sym_pe
+      else
+        stdlib.mkcall_loaded_ivfromfloat_ expect_param_ty_pe arg_sym_pe
+    else if AilTypesAux.is_floating expect_param_ty then
+      if AilTypesAux.is_integer arg_ty then
+        stdlib.mkcall_loaded_fvfromint_ expect_param_ty_pe arg_sym_pe
+      else
+        arg_sym_pe
+    else if AilTypesAux.is_pointer expect_param_ty && arg_is_null then
+      Caux.mk_specified_pe (Caux.mk_nullptr_pe expect_param_ty)
+    else
+      arg_sym_pe in
   (* standard arguments *)
   E.foldlM (fun (n, rev_core_creates) ((_, expect_param_ty, _), (arg_ty, arg_is_null, arg_sym_pe)) ->
     E.wrapped_fresh_symbol C.BTy_ctype                  >>= fun param_ty_wrp ->
@@ -911,24 +938,7 @@ let translate_function_call loc annots is_used translate_expr stdlib e es =
           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
           begin
             let conv_value =
-              if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool expect_param_ty && AilTypesAux.is_pointer arg_ty then
-                arg_sym_pe
-              (* NOTE: since the expected type is compatible with the parameter type, if one is an integer or
-                floating, the other one must also be an integer or floating (respectively) *)
-              else if AilTypesAux.is_integer expect_param_ty then
-                if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_conv_loaded_int_ expect_param_ty_pe arg_sym_pe
-                else
-                  stdlib.mkcall_loaded_ivfromfloat_ expect_param_ty_pe arg_sym_pe
-              else if AilTypesAux.is_floating expect_param_ty then
-                if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_loaded_fvfromint_ expect_param_ty_pe arg_sym_pe
-                else
-                  arg_sym_pe
-              else if AilTypesAux.is_pointer expect_param_ty && arg_is_null then
-                Caux.mk_specified_pe (Caux.mk_nullptr_pe expect_param_ty)
-              else
-                arg_sym_pe in
+              conv_arg_value expect_param_ty expect_param_ty_pe (arg_ty, arg_is_null, arg_sym_pe) in
             let mo =
               if AilTypesAux.is_atomic expect_param_ty then
                 (* STD §6.2.6.1#9 *)
@@ -961,22 +971,7 @@ let translate_function_call loc annots is_used translate_expr stdlib e es =
             (Caux.mk_not_pe (Caux.mk_are_compatible expect_param_ty_pe param_ty_wrp.E.sym_pe))
             (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible)
             begin
-              (* NOTE: since the expected type is compatible with the parameter type,
-                if one is an integer or floating, the other one must also be an integer or floating (respectively) *)
-              if AilTypesAux.is_integer expect_param_ty then
-                if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_conv_loaded_int_ expect_param_ty_pe arg_sym_pe
-                else
-                  stdlib.mkcall_loaded_ivfromfloat_ expect_param_ty_pe arg_sym_pe
-              else if AilTypesAux.is_floating expect_param_ty then
-                if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_loaded_fvfromint_ expect_param_ty_pe arg_sym_pe
-                else
-                  arg_sym_pe
-              else if AilTypesAux.is_pointer expect_param_ty && arg_is_null then
-                Caux.mk_specified_pe (Caux.mk_nullptr_pe expect_param_ty)
-              else
-                arg_sym_pe
+              conv_arg_value expect_param_ty expect_param_ty_pe (arg_ty, arg_is_null, arg_sym_pe)
             end
           )) :: cn_core_args )
     ) (0,[]) (List.zip expect_params args_info)
