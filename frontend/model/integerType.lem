@@ -3,8 +3,8 @@
  *     Victor Gomes
  *)
 
-open import Symbol
-open import Pervasives
+ open import Pervasives
+ import Symbol
 
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =

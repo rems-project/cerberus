@@ -3,8 +3,8 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Utils Loc Show Symbol
-import Annot IntegerType
+open import Pervasives Utils Loc Show
+import Symbol Annot IntegerType
 include IntegerType
 
 (* STD §6.2.5#10, sentence 1 *)

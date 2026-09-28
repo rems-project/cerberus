@@ -1,5 +1,5 @@
-open import Pervasives Utils Symbol
-
+open import Pervasives Utils
+import Symbol
 import Pp
 
 import Core 
