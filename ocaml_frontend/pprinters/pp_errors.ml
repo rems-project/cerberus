@@ -10,6 +10,21 @@ open Cerb_location
 open Cerb_colour
 open Cerb_pp_prelude
 
+let string_of_cause_kind = function
+  | CPP _ -> "cpp"
+  | CPARSER _ -> "parser"
+  | EXTENSION _ -> "extension"
+  | DESUGAR _ -> "desugar"
+  | AIL_TYPING _ -> "ail_typing"
+  | CORE_PARSER _ -> "core_parser"
+  | CORE_TYPING _ -> "core_typing"
+  | CORE_LINKING _ -> "core_linking"
+  | CORE_RUN _ -> "core_run"
+  | DRIVER _ -> "driver"
+  | UNSUPPORTED _ -> "unsupported"
+  | INTERNAL_ERROR _ -> "internal_error"
+
+
 type kind =
   | Error
   | Warning

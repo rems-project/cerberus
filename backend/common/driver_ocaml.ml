@@ -66,87 +66,103 @@ let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec
       end
     else
       "" in
-  let has_multiple =
-    match i_opt with
-      | Some i ->
-          Printf.bprintf buf "EXECUTION %d" i;
-          true
-      | None ->
-          Buffer.add_string buf constrs_str;
-          false in
-  begin match exec with
-    | Defined { exit; stdout; stderr; blocked } ->
-        let exit_str = Cerb_colour.without_colour string_of_batch_exit exit in
-        if is_charon then begin
-          if has_multiple then begin
-            Printf.bprintf buf " (exit = %s):\n" exit_str;
-            Buffer.add_string buf constrs_str
-          end;
-          Buffer.add_string buf stdout;
-          prerr_string stderr
-        end else if json then begin
-          Yojson.to_buffer buf begin
-            `Assoc [ "status", `String "Defined"
-                   ; "details", `Assoc [ "value", `String exit_str
-                                       ; "stdout", `String (String.escaped stdout)
-                                       ; "stderr", `String (String.escaped stderr) ] ]
+  if json then begin
+    let execution_fields =
+      match i_opt with
+        | Some i -> [ ("execution", `Int i) ]
+        | None -> [] in
+    let constraints_fields =
+      if !Cerb_debug.debug_level > 0 then
+        [ ("constraints", `List (List.map (fun z -> `String z) z3_strs)) ]
+      else
+        [] in
+    let (status, details) =
+      match exec with
+        | Defined { exit; stdout; stderr; blocked } ->
+            ( "Defined"
+            , [ ("value", `String (Cerb_colour.without_colour string_of_batch_exit exit))
+              ; ("stdout", `String stdout)
+              ; ("stderr", `String stderr)
+              ; ("blocked", `Bool blocked) ] )
+        | Undefined { ub; stderr; loc } ->
+            ( "Undefined"
+            , [ ("ub", `String (Undefined.stringFromUndefined_behaviour ub))
+              ; ("stderr", `String stderr)
+              ; ("loc", (Cerb_location.to_json loc :> Yojson.t)) ] )
+        | Error { msg; stderr } ->
+            ( "Error"
+            , [ ("msg", `String msg)
+              ; ("stderr", `String stderr) ] ) in
+    Yojson.to_buffer buf begin
+      `Assoc (execution_fields @ [ ("status", `String status); ("details", `Assoc details) ]
+        @ constraints_fields)
+    end;
+    Buffer.add_string buf "\n";
+    flush_all ();
+    Buffer.contents buf
+  end else begin
+    let has_multiple =
+      match i_opt with
+        | Some i ->
+            Printf.bprintf buf "EXECUTION %d" i;
+            true
+        | None ->
+            Buffer.add_string buf constrs_str;
+            false in
+    begin match exec with
+      | Defined { exit; stdout; stderr; blocked } ->
+          let exit_str = Cerb_colour.without_colour string_of_batch_exit exit in
+          if is_charon then begin
+            if has_multiple then begin
+              Printf.bprintf buf " (exit = %s):\n" exit_str;
+              Buffer.add_string buf constrs_str
+            end;
+            Buffer.add_string buf stdout;
+            prerr_string stderr
+          end else begin
+            begin if has_multiple then
+              Buffer.add_string buf  ":\n"
+            end;
+            Buffer.add_string buf constrs_str;
+            Printf.bprintf buf "Defined {value: \"%s\", stdout: \"%s\", stderr: \"%s\", blocked: \"%s\"}"
+              exit_str
+              (String.escaped stdout) (String.escaped stderr)
+              (if blocked then "true" else "false")
           end
-        end else begin
+      | Undefined { ub; stderr; loc } ->
           begin if has_multiple then
             Buffer.add_string buf  ":\n"
           end;
           Buffer.add_string buf constrs_str;
-          Printf.bprintf buf "Defined {value: \"%s\", stdout: \"%s\", stderr: \"%s\", blocked: \"%s\"}"
-            exit_str
-            (String.escaped stdout) (String.escaped stderr)
-            (if blocked then "true" else "false")
-        end
-    | Undefined { ub; stderr; loc } ->
-        begin if has_multiple then
-          Buffer.add_string buf  ":\n"
-        end;
-        Buffer.add_string buf constrs_str;
-        if is_charon then begin
-          prerr_string stderr;
-          Printf.bprintf buf "Undefined {ub: \"%s\", loc: \"%s\"}%s"
-          (Undefined.stringFromUndefined_behaviour ub)
-          (Cerb_location.simple_location loc)
-          (if is_charon then "\n" else "")
-        end else if json then begin
-          Yojson.to_buffer buf begin
-            `Assoc [ "status", `String "Undefined"
-                   ; "details", `Assoc [ "ub", `String (Undefined.stringFromUndefined_behaviour ub)
-                                       ; "stderr", `String (String.escaped stderr)
-                                       ; "loc", (Cerb_location.to_json loc :> Yojson.t) ] ]
-          end
-        end else
-          Printf.bprintf buf "Undefined {ub: \"%s\", stderr: \"%s\", loc: \"%s\"}%s"
-          (Undefined.stringFromUndefined_behaviour ub)
-          (String.escaped stderr)
-          (Cerb_location.simple_location loc)
-          (if is_charon then "\n" else "")
-    | Error { msg; stderr } ->
-        if is_charon then
-          prerr_string stderr
-        else if json then begin
-          Yojson.to_buffer buf begin
-            `Assoc [ "status", `String "Error"
-                   ; "details", `Assoc [ "msg", `String msg
-                                       ; "stderr", `String (String.escaped stderr) ] ]
-          end
-        end else begin
-          begin if has_multiple then
-            Buffer.add_string buf  ":\n"
-          end;
-          Buffer.add_string buf constrs_str;
-          Printf.bprintf buf "Error {msg: \"%s\"}%s"
-            msg
+          if is_charon then begin
+            prerr_string stderr;
+            Printf.bprintf buf "Undefined {ub: \"%s\", loc: \"%s\"}%s"
+            (Undefined.stringFromUndefined_behaviour ub)
+            (Cerb_location.simple_location loc)
             (if is_charon then "\n" else "")
-        end
-  end;
-  (if not is_charon then Buffer.add_string buf "\n" else ());
-  flush_all ();
-  Buffer.contents buf
+          end else
+            Printf.bprintf buf "Undefined {ub: \"%s\", stderr: \"%s\", loc: \"%s\"}%s"
+            (Undefined.stringFromUndefined_behaviour ub)
+            (String.escaped stderr)
+            (Cerb_location.simple_location loc)
+            (if is_charon then "\n" else "")
+      | Error { msg; stderr } ->
+          if is_charon then
+            prerr_string stderr
+          else begin
+            begin if has_multiple then
+              Buffer.add_string buf  ":\n"
+            end;
+            Buffer.add_string buf constrs_str;
+            Printf.bprintf buf "Error {msg: \"%s\"}%s"
+              msg
+              (if is_charon then "\n" else "")
+          end
+    end;
+    (if not is_charon then Buffer.add_string buf "\n" else ());
+    flush_all ();
+    Buffer.contents buf
+  end
 
 (* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
 let batch_drive (file: 'a Core.file) args fs_state conf =

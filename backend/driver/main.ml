@@ -164,6 +164,18 @@ let cerberus debug_level progress core_obj
     else n
   in
   let success = Either.Right 0 in
+  (* --json-batch: the errors issued before any execution are reported on
+   * stdout as a JSON object of the same shape as the executions *)
+  let print_json_error ?(loc=Cerb_location.unknown) kind msg text =
+    print_string begin
+      Yojson.to_string begin
+        `Assoc [ ("status", `String "Error")
+               ; ("details", `Assoc [ ("kind", `String kind)
+                                    ; ("msg", `String msg)
+                                    ; ("loc", (Cerb_location.to_json loc :> Yojson.t))
+                                    ; ("text", `String text) ]) ]
+      end ^ "\n"
+    end in
   let runM = function
     | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch || batch = `JsonBatch) ->
         let open Driver_ocaml in
@@ -178,6 +190,11 @@ let cerberus debug_level progress core_obj
           string_of_batch_output ~json:(batch = `JsonBatch) ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
+        epilogue 1
+    | Exception.Exception (loc, err) when batch = `JsonBatch ->
+        print_json_error ~loc (Pp_errors.string_of_cause_kind err)
+          (Cerb_colour.without_colour Pp_errors.short_message err)
+          (Cerb_colour.without_colour Pp_errors.to_string (loc, err));
         epilogue 1
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
@@ -219,9 +236,14 @@ let cerberus debug_level progress core_obj
     | Exception.Result (Either.Right n) ->
         epilogue n 
   in
+  let run () =
   runM @@ match files with
     | [] ->
-      Pp_errors.fatal "no input file"
+      if batch = `JsonBatch then begin
+        print_json_error "fatal" "no input file" "no input file";
+        exit 1
+      end else
+        Pp_errors.fatal "no input file"
     | [file] when core_obj ->
       prelude >>= fun (core_std, elab_conf) ->
       frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
@@ -289,6 +311,16 @@ let cerberus debug_level progress core_obj
                 (write_core_object core_file (out ^ ".co"); create_executable out);
               return success
             end
+  in
+  if batch = `JsonBatch then
+    (* the OCaml exceptions escaping the pipeline (likely crashes) are reported
+     * as JSON too, and re-raised *)
+    try run () with
+      | e ->
+          print_json_error "uncaught_exception" (Printexc.to_string e) "";
+          raise e
+  else
+    run ()
 
 (* CLI stuff *)
 open Cmdliner
@@ -468,7 +500,7 @@ let batch =
   let doc = "makes the execution driver produce batch friendly output" in
   Arg.(value & vflag `NotBatch & [(`Batch, info["batch"] ~doc);
                                   (`CharonBatch, info["charon-batch"] ~doc:(doc^" (for Charon)"));
-                                  (`JsonBatch, info["json-batch"] ~doc:"outputs the executions in json") ])
+                                  (`JsonBatch, info["json-batch"] ~doc:"like --batch, but prints one JSON object per line on stdout (for each execution, or for the reported error)") ])
 
 let typecheck_core =
   let doc = "typecheck the elaborated Core program" in
