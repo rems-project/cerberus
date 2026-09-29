@@ -177,6 +177,7 @@ type violation =
   | IfStatementControllingExpressionNotScalar (* §6.8.4.1#1 *)
   (* 6.8.4.2 The switch statement *)
   | SwitchStatementControllingExpressionNotInteger (* §6.8.4.2#1 *)
+  | CaseNotIntegerConstantExpression (* §6.8.4.2#3, sentence 1 *)
   | CaseStatementOverlap of Loc.t
   | MutipleDefaultStatement of Loc.t
   (* 6.8.5 Iteration statements *)
@@ -452,6 +453,8 @@ let std_of_violation = function
       ["§6.8.4.1#1"]
   | SwitchStatementControllingExpressionNotInteger ->
       ["§6.8.4.2#1"]
+  | CaseNotIntegerConstantExpression ->
+      ["§6.8.4.2#3, sentence 1"]
   | CaseStatementOverlap _ ->
       ["§6.8.4.2#3, sentence 1"]
   | MutipleDefaultStatement _ ->

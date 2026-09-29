@@ -230,6 +230,8 @@ let string_of_constraint_violation = function
       "redefinition of '" ^ string_of_cid l ^ "'"
   | SwitchStatementControllingExpressionNotInteger ->
       "switch statement requires expression of integer type"
+  | CaseNotIntegerConstantExpression ->
+      "expression is not an integer constant expression"
   | CaseStatementOverlap prev_loc ->
       "duplicate case value"
   | MutipleDefaultStatement prev_loc ->

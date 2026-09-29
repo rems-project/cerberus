@@ -1146,8 +1146,12 @@ let evaluate_integer_constant_expression ty_opt d_expr =
  * of the switch's controlling expression. (see the desugaring of CabsSswitch) *)
 val evaluate_case_constant_expression: Ctype.ctype -> expression unit -> E.desugM integer
 let evaluate_case_constant_expression promoted_ctrl_ty d_expr =
-  evaluate_integer_constant_expression_aux (Mini_pipeline.Convert_to promoted_ctrl_ty) d_expr
-
+  is_integer_constant_expression d_expr >>= function
+    | false ->
+        E.constraint_violation (Loc.locOf d_expr) CaseNotIntegerConstantExpression
+    | true ->
+        evaluate_integer_constant_expression_aux (Mini_pipeline.Convert_to promoted_ctrl_ty) d_expr
+  end
 
 
 
