@@ -1827,6 +1827,9 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
         match Map.lookup sym env.labs with
           | Just (bTy, bTys) ->
 (*            guard_match loc "run" expected_bTy bTy >> *) (* TODO check *)
+              if List.length pes <> List.length bTys then
+                E.fail loc (ArityMismatchRun (List.length bTys) (List.length pes))
+              else
               begin
                 Erun annot sym <$> E.mapM (fun (bTy, pe) ->
                   typecheck_pexpr tagDefs env bTy pe

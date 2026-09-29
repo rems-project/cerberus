@@ -491,6 +491,11 @@ let string_of_core_typing_cause = function
       (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
       (match m_found with Some found -> "this expression is of type '" ^ string_of_bty found ^ "' but " | None -> "") ^
       "an expression of type '" ^ expected ^ "' was expected"
+  | ArityMismatchRun (expected, found) ->
+      Printf.sprintf
+        "wrong number of arguments to a run(): expected %d but %d were found"
+        expected
+        found
   | CFunctionExpected nm ->
       "symbol '" ^ string_of_name nm ^ "' has incorrect type, a symbol of type 'cfunction' was expected"
   | CFunctionParamsType ->

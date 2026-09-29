@@ -31,6 +31,7 @@ type core_typing_cause =
   | MismatchIf of core_base_type (* then *) * core_base_type (* else *)
   | MismatchExpected of string (* syntax info *) * core_base_type (* expected *) * string (* found *)
   | MismatchFound of string (* syntax info *) * string (* expected *) * maybe core_base_type (* found *)
+  | ArityMismatchRun of nat(* expected *) * nat(* found *)
   | UnresolvedSymbol of name
   | FunctionOrProcedureSymbol of Symbol.sym
   | CFunctionExpected of name (* symbol *)
