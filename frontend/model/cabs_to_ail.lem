@@ -579,9 +579,12 @@ let constructValue tagDefs elems ty =
 
 (* BEGIN predicates on Ail syntax *)
 (* see §6.6#6 *)
-(* TODO: make the function pure, when complete *)
-val     is_integer_constant_expression: expression unit -> E.desugM bool
-let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as expr) =
+(* The is_constraint boolean informs whether the expression is specified to be an integer constant
+ * expression by a Constraint section in standard. If not, "shall" failures from §6.6#6 are to be
+ * reported as undefined behaviour *)
+val     is_integer_constant_expression: bool -> expression unit -> E.desugM bool
+let rec is_integer_constant_expression is_constraint (AnnotatedExpression () _ loc expr_ as expr) =
+  let is_integer_constant_expression = is_integer_constant_expression is_constraint in
   STD_ "§6.6#6" match expr_ with
     | AilEunary uop e ->
         match uop with
@@ -600,8 +603,33 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
           | PostfixDecr ->
               E.return false
         end
-    | AilEcast _ _ _ ->
-        E.fail loc (Errors.Desugar_NotYetSupported "cast operator in `integer constant expressions'")
+    | AilEcast _ cast_ty e ->
+        let do_failure =
+          if is_constraint then
+            E.return false
+          else
+            E.undef loc Undefined.UB055_invalid_integer_constant_expression in
+        if not (AilTypesAux.is_integer cast_ty) then
+          do_failure
+        else if Global.isAgnostic () then
+            E.fail loc (Errors.Desugar_agnosticFailure "cast in an integer constant expression")
+        else
+          E.get_sigma_sofar >>= fun sigm ->
+          E.get_gamma_sofar >>= fun gamm ->
+          match Mini_pipeline.typecheckAil sigm gamm e with
+            | Left (loc, tcause) -> E.fail_ailtyping loc tcause
+            | Right ty ->
+                if not (AilTypesAux.is_arithmetic ty) then
+                  do_failure
+                else match e with
+                  | AnnotatedExpression () _ _ (AilEconst (ConstantFloating _)) ->
+                      (* STD §6.6#6: "floating constants that are the immediate
+                       * operands of casts" *)
+                      E.return true
+                  | _ ->
+                      is_integer_constant_expression e
+                end
+          end
     | AilEassert _ ->
         E.return false
     | AilEoffsetof _ _ ->
@@ -919,7 +947,7 @@ let is_address_constant a_expr =
           | true ->
               E.return true
           | false ->
-              is_integer_constant_expression expr
+              is_integer_constant_expression false(*not Constraint *) expr
         end
     | _ ->
         E.return false
@@ -933,6 +961,7 @@ let is_address_constant a_expr =
 (* TODO: "or evaluate to" *)
 val is_initializer_constant_expression_or_string_literal: expression unit -> E.desugM bool
 let is_initializer_constant_expression_or_string_literal (AnnotatedExpression () _ loc expr as a_expr) =
+  let is_integer_constant_expression = is_integer_constant_expression false(*not Constraint *) in
   is_arithmetic_constant_expression false (* TODO check *) a_expr >>= fun b1 ->
   is_address_constant a_expr               >>= fun b2 ->
   (* STD §6.6#7, bullets 1 - 3 *)
@@ -1146,7 +1175,7 @@ let evaluate_integer_constant_expression ty_opt d_expr =
  * of the switch's controlling expression. (see the desugaring of CabsSswitch) *)
 val evaluate_case_constant_expression: Ctype.ctype -> expression unit -> E.desugM integer
 let evaluate_case_constant_expression promoted_ctrl_ty d_expr =
-  is_integer_constant_expression d_expr >>= function
+  is_integer_constant_expression true(*Constraint requirement *) d_expr >>= function
     | false ->
         E.constraint_violation (Loc.locOf d_expr) CaseNotIntegerConstantExpression
     | true ->
@@ -1900,7 +1929,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
            a size expression *)
         (* STD §6.7.6.2#4, sentence 3 *)
         desugar_expression e >>= fun d_e ->
-        is_integer_constant_expression d_e >>= function
+        is_integer_constant_expression true(* failure should in term lead to VLA *) d_e >>= function
           | false ->
               E.fail loc (Errors.Desugar_NotYetSupported "variable length array type 2")
           | true ->
@@ -2543,8 +2572,8 @@ STD_ "§6.5.2.1#2, sentence 2" $
     | CabsEbuiltinGNU (GNUbuiltin_choose_expr const_e e1 e2) ->
         AnnotatedExpression () [] loc <$>
         (* TODO: add extension warning *)
-          (desugar_expression const_e         >>= fun d_e ->
-          is_integer_constant_expression d_e >>= function
+          (desugar_expression const_e >>= fun d_e ->
+          is_integer_constant_expression true(*Constraint requirement *) d_e >>= function
             | false ->
                 E.constraint_violation (Loc.locOf const_e) GNUBuiltinChooseExprNotIntegerConstant
             | true ->
@@ -2773,7 +2802,7 @@ and desugar_enumerator (ident, e_opt) =
         let loc = Loc.locOf e in
         desugar_expression e >>= fun d_e ->
         (* STD §6.7.2.2#2 *)
-        is_integer_constant_expression d_e >>= function
+        is_integer_constant_expression true(*Constraint requirement *) d_e >>= function
           | false ->
               E.constraint_violation loc WrongTypeEnumConstant
           | true ->
@@ -2794,7 +2823,7 @@ and desugar_alignment_specifier loc align_spec =
         let loc = Loc.locOf e in
         desugar_expression e >>= fun d_e ->
         (* STD §6.7.2.2#2 *)
-        is_integer_constant_expression d_e >>= function
+        is_integer_constant_expression true(*Constraint requirement *) d_e >>= function
           | false ->
               E.constraint_violation loc AlignasNotIntegerConstant
           | true ->
@@ -3049,7 +3078,7 @@ and pathFromDesigs_aux acc = function
       E.return (List.reverse acc)
   | Desig_array e :: xs ->
       desugar_expression e               >>= fun d_e ->
-      is_integer_constant_expression d_e >>= function
+      is_integer_constant_expression true(*Constraint requirement *) d_e >>= function
         | false ->
             E.constraint_violation (Loc.locOf e) IllegalTypeArrayDesignator
         | true ->
@@ -3530,7 +3559,7 @@ and desugar_and_register_static_assert_declaration sa_decl =
   match sa_decl with
    | Static_assert (CabsExpression loc _ as e) lit ->
        desugar_expression e >>= fun d_e ->
-       is_integer_constant_expression d_e >>= function
+       is_integer_constant_expression false(* not Constraint requirement *) d_e >>= function
          | false ->
              E.undef loc Undefined.UB204_illtyped_Static_assert
          | true ->
