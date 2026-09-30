@@ -1,0 +1,6 @@
+ci/0270-invalid-compound-literal.error.c:4:3: error: constraint violation: compound literal has invalid type
+  (struct s){ 1 };
+  ^~~~~~~~~~~~~~~ 
+§6.5.2.5#1: 
+1   The type name shall specify a complete object type or an array of unknown size, but not a
+    variable length array type.

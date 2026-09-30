@@ -103,6 +103,8 @@ citests=(
   0117-global_array_init_incomplete.error.c
   0118-block_array_init_incomplete.error.c
   0119-block_array_init_rec.c
+  0120-addition_null_pointer.undef.c
+  0121-addition_null_pointer_zero.undef.c
   0122-incr_overflow.undef.c
   0123-decr_underflow.undef.c
   0124-incr_wrap.c
@@ -154,6 +156,8 @@ citests=(
   0245-storage-class-void-param.undef.c
   0246-block-scoped-function.undef.c
   0254-undeclared-label.error.c
+  0258-array-function-type.error.c
+  0270-invalid-compound-literal.error.c
   0285-assignment-not-lvalue.error.c
   0286-binary-operator.error.c
   0287-equality.error.c

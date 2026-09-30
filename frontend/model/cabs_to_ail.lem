@@ -1013,8 +1013,12 @@ type fundef =
   | NotFunDef
 
 
+(* Builders use an exception monad rather than the desugaring monad. This allows reporting
+ * constraint violations (currently for invalid element types of arrays) while guaranteeing that
+ * they never change the desugaring state. This is important to keep dummy instantiations like the
+ * the one in desugar_and_register_function_definition harmless. *)
 type qs_ctype_builder =
-  Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype)
+  Ctype.qualifiers -> Ctype.ctype -> Exception.exceptM (Ctype.qualifiers * Ctype.ctype) Errors.error
 
 
 val desugar_struct_declaration:
@@ -1500,13 +1504,13 @@ type under_array =
 
 
 val desugar_array_declarator:
-  under_array -> array_declarator -> E.desugM (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))
+  under_array -> array_declarator -> E.desugM qs_ctype_builder
 val desugar_pointer_declarator:
-  pointer_declarator -> E.desugM (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))
+  pointer_declarator -> E.desugM qs_ctype_builder
 val desugar_abstract_declarator:
-  under_array -> abstract_declarator -> E.desugM (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))
+  under_array -> abstract_declarator -> E.desugM qs_ctype_builder
 val desugar_direct_abstract_declarator:
-  under_array -> direct_abstract_declarator -> E.desugM (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))
+  under_array -> direct_abstract_declarator -> E.desugM qs_ctype_builder
 
 
 
@@ -1940,7 +1944,17 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
               if n <= 0 then
                 E.constraint_violation loc ArrayDeclarationNegativeSize
               else
-                E.return (fun qs ty -> perform_adjust qs (Ctype.Ctype [Annot.Aloc loc] (Ctype.Array ty (Just n))))
+                E.return (fun qs ty ->
+                  if AilTypesAux.is_function ty then
+                    (* STD §6.7.6.2#1, sentence 4 (only the function check for now (TODO)) *)
+                    Exception.throw
+                      ( loc
+                      , Errors.DESUGAR (Errors.Desugar_ConstraintViolation
+                          ArrayDeclarationFunctionType) )
+                  else
+                    Exception.except_return
+                      (perform_adjust qs (Ctype.Ctype [Annot.Aloc loc] (Ctype.Array ty (Just n))))
+                )
         end
     
     | Just ADeclSize_asterisk ->
@@ -1954,11 +1968,20 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
     
     | Nothing ->
         (* here the array declarator: has no size expression *)
-        E.return (fun qs ty -> perform_adjust qs (Ctype.Ctype [Annot.Aloc loc] (Ctype.Array ty Nothing)))
+        E.return (fun qs ty ->
+          if AilTypesAux.is_function ty then
+            (* STD §6.7.6.2#1, sentence 4 (only the function check for now (TODO)) *)
+            Exception.throw
+              ( loc
+              , Errors.DESUGAR (Errors.Desugar_ConstraintViolation ArrayDeclarationFunctionType) )
+          else
+            Exception.except_return
+              (perform_adjust qs (Ctype.Ctype [Annot.Aloc loc] (Ctype.Array ty Nothing)))
+        )
   end
 
 
-(* TYPE: pointer_declarator -> E.desugM (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype)) *)
+(* TYPE: pointer_declarator -> E.desugM qs_ctype_builder *)
 and desugar_pointer_declarator (PDecl ptr_loc tquals ptr_decltor_opt)  =
   (* if ptr_decltor_opt = Nothing, these qualifiers are of the current pointer
      type we are building; otherwise, they are of the referenced type of the
@@ -1984,7 +2007,7 @@ and desugar_pointer_declarator (PDecl ptr_loc tquals ptr_decltor_opt)  =
         (* in this case [tquals_qs] are the qualifiers of the pointer type we
            are currently building *)
         E.return (
-          fun base_qs base_ty -> (tquals_qs, mk_pointer_ctype base_qs base_ty)
+          fun base_qs base_ty -> Exception.except_return (tquals_qs, mk_pointer_ctype base_qs base_ty)
         )
   end
 
@@ -1993,13 +2016,13 @@ and desugar_abstract_declarator under_array = function
   | AbsDecl_pointer ptr_decltor ->
       desugar_pointer_declarator ptr_decltor
   | AbsDecl_direct ptr_decltor_opt dabs_decltor ->
-      maybe (E.return (fun qs ty -> (qs, ty))) desugar_pointer_declarator
+      maybe (E.return (fun qs ty -> Exception.except_return (qs, ty))) desugar_pointer_declarator
         ptr_decltor_opt >>= fun mk_pointer_qs_ctype ->
       desugar_direct_abstract_declarator under_array dabs_decltor >>= fun mk_qs_ctype ->
       E.return (
         fun base_qs base_ty ->
-          let (ptr_qs, ptr_ty) = mk_pointer_qs_ctype base_qs base_ty in
-          mk_qs_ctype ptr_qs ptr_ty
+          Exception.except_bind (mk_pointer_qs_ctype base_qs base_ty)
+            (fun (ptr_qs, ptr_ty) -> mk_qs_ctype ptr_qs ptr_ty)
       )
 end
 
@@ -2009,17 +2032,17 @@ and desugar_direct_abstract_declarator under_array = function
       desugar_abstract_declarator under_array abs_decltor
   | DAbs_array dabs_decltor_opt a_decltor ->
       (* NOTE: the recursive call is "under an array" declaration *)
-      maybe (E.return (fun qs ty -> (qs, ty)))
+      maybe (E.return (fun qs ty -> Exception.except_return (qs, ty)))
         (desugar_direct_abstract_declarator IsUnderArray) dabs_decltor_opt >>= fun mk_outer_qs_ctype ->
       desugar_array_declarator under_array a_decltor                       >>= fun mk_array_qs_ctype ->
       E.return (
         fun base_qs base_ty ->
-          let (array_qs, array_ty) = mk_array_qs_ctype base_qs base_ty in
-          mk_outer_qs_ctype array_qs array_ty
+          Exception.except_bind (mk_array_qs_ctype base_qs base_ty)
+            (fun (array_qs, array_ty) -> mk_outer_qs_ctype array_qs array_ty)
       )
   | DAbs_function dabs_decltor_opt param_tys ->
       (* TODO: documentation (the code the same as for desugar_direct_declarator, DDecl_function *)
-      maybe (E.return (fun qs ty -> (qs, ty)))
+      maybe (E.return (fun qs ty -> Exception.except_return (qs, ty)))
         (desugar_direct_abstract_declarator under_array) dabs_decltor_opt >>= fun mk_qs_ctype ->
       E.fresh_prototype_scope >>= fun proto_scope ->
       E.under_scope proto_scope
@@ -2065,10 +2088,10 @@ and desugar_direct_abstract_declarator under_array = function
       )
 end
 
-(* TYPE: E.desugM (Symbol.identifier * (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))) *)
+(* TYPE: E.desugM (Symbol.identifier * qs_ctype_builder) *)
 and desugar_direct_declarator fundef under_array = function
   | DDecl_identifier attrs ident ->
-      E.return ((attrs, ident), fun base_qs base_ty -> (base_qs, base_ty))
+      E.return ((attrs, ident), fun base_qs base_ty -> Exception.except_return (base_qs, base_ty))
   
   | DDecl_declarator decltor ->
       desugar_declarator fundef decltor
@@ -2079,8 +2102,8 @@ and desugar_direct_declarator fundef under_array = function
       desugar_array_declarator under_array a_decltor         >>= fun mk_array_qs_ctype          ->
       E.return ( attrs_ident
                , fun base_qs base_ty ->
-                   let (array_qs, array_ty) = mk_array_qs_ctype base_qs base_ty in
-                   mk_outer_qs_ctype array_qs array_ty )
+                   Exception.except_bind (mk_array_qs_ctype base_qs base_ty)
+                    (fun (array_qs, array_ty) -> mk_outer_qs_ctype array_qs array_ty) )
   
   | DDecl_function ddecltor param_tys ->
       let fundef' =
@@ -2173,9 +2196,8 @@ and desugar_parameter_declaration is_first fundef param_decl =
           desugar_declarator NotFunDef decltor            >>= fun ((_, ident), mk_qs_ctype) ->
           let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
           (* STD §6.9.1#7, sentence 4 *)
-          let (_qs, _ty) =
-            mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
-          
+          E.liftException (mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty)
+            >>= fun (_qs, _ty) ->
           if AilTypesAux.is_void _ty then
             match fundef with
               | IsFunDef ->
@@ -2228,12 +2250,12 @@ and desugar_parameter_declaration is_first fundef param_decl =
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
-          maybe (E.return (fun qs ty -> (qs, ty)))
+          maybe (E.return (fun qs ty -> Exception.except_return (qs, ty)))
             (desugar_abstract_declarator NotUnderArray) abs_decltor_opt >>= fun mk_qs_ctype ->
           let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
           (* STD §6.9.1#7, sentence 4 *)
-          let (_qs, _ty) =
-            mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
+          E.liftException (mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty)
+            >>= fun (_qs, _ty) ->
           let (qs, ty) = AilTypesAux.adjust _qs _ty in
           let ret = (Nothing, ( qs
                               , if isAtomic then Ctype.mk_ctype_atomic ty else ty
@@ -2257,16 +2279,17 @@ and desugar_parameter_declaration is_first fundef param_decl =
 
 
 
-(* TYPE: E.desugM (Symbol.identifier * (AilTypes.qualifiers -> AilTypes.ctype -> (AilTypes.qualifiers * AilTypes.ctype))) *)
+(* TYPE: E.desugM (Symbol.identifier * qs_ctype_builder) *)
 and desugar_declarator fundef (Declarator ptr_decltor_opt ddecltor) =
-  maybe (E.return (fun qs ty -> (qs, ty))) desugar_pointer_declarator
+  maybe (E.return (fun qs ty -> Exception.except_return (qs, ty))) desugar_pointer_declarator
     ptr_decltor_opt >>= fun mk_pointer_qs_ctype ->
   desugar_direct_declarator fundef NotUnderArray ddecltor >>= fun (attrs_ident, mk_qs_ctype) ->
   (* TODO: check, but seems correct *)
-  E.return ( attrs_ident
-           , fun base_qs base_ty ->
-               let (ptr_qs, ptr_ty) = mk_pointer_qs_ctype base_qs base_ty in
-               mk_qs_ctype ptr_qs ptr_ty )
+  E.return
+    ( attrs_ident
+    , fun base_qs base_ty ->
+        Exception.except_bind (mk_pointer_qs_ctype base_qs base_ty)
+          (fun (ptr_qs, ptr_ty) -> mk_qs_ctype ptr_qs ptr_ty) )
 
 
 
@@ -2407,7 +2430,14 @@ STD_ "§6.5.2.1#2, sentence 2" $
     | CabsEcompound tyname inits ->
         AnnotatedExpression () [] loc <$>
           (desugar_type_name tyname >>= fun (qs, ty)    ->
-          E.is_inside_function     >>= fun inside_func ->
+          (* STD §6.5.2.5#1
+           * we perform the check of the type BEFORE we desugar the initializer *)
+          E.is_complete_object ty >>= fun is_complete_object ->
+          if not (   AilTypesAux.is_array_unknown_size ty
+                  || (is_complete_object && not (AilTypesAux.is_vla ty)) ) then
+            E.constraint_violation loc InvalidTypeCompoundLiteral
+          else
+          E.is_inside_function >>= fun inside_func ->
           (* NOTE: there is no need to do the check for STD §6.7.9#3 here, because of the ail typing *)
           wip_desugar_initializer_ loc (if inside_func then Automatic else Static) ty (Init_list loc inits) >>= fun (ty', d_e) ->
           E.return (AilEcompound qs ty' d_e))
@@ -2637,7 +2667,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
   match idecltor with
     | InitDecl _ decltor Nothing ->
         desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
-        let (qs, ty) = mk_qs_ctype base_qs base_ty in
+        E.liftException (mk_qs_ctype base_qs base_ty) >>= fun (qs, ty) ->
         let mk_desug_init =
           fun () -> E.return Nothing in
         (* STD §6.9.2#2, sentence 1 *)
@@ -2651,8 +2681,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
     
     | InitDecl loc decltor (Just init) ->
         desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
-        let (qs, ty) = mk_qs_ctype base_qs base_ty in
-        
+        E.liftException (mk_qs_ctype base_qs base_ty) >>= fun (qs, ty) ->
         (* TODO: check that we really never have parameter objects here *)
         let kind = if AilTypesAux.is_function ty then E.OK_function else E.OK_object false in
         (* TODO: I don't like the fact that we are using this function directly here *)
@@ -2682,7 +2711,7 @@ and desugar_init_declarator attrs isAtomic has_alignment base_qs base_ty (scs: l
   match idecltor with
     | InitDecl loc decltor Nothing ->
         desugar_declarator NotFunDef decltor >>= fun ((ident_attrs, ident), mk_qs_ctype) ->
-        let (qs, _ty) = mk_qs_ctype base_qs base_ty in
+        E.liftException (mk_qs_ctype base_qs base_ty) >>= fun (qs, _ty) ->
         let ty = if isAtomic then wrap_atomic _ty else _ty in
         let mk_desug_init =
           fun () -> E.return Nothing in
@@ -2714,7 +2743,7 @@ and desugar_init_declarator attrs isAtomic has_alignment base_qs base_ty (scs: l
           E.fail loc (Errors.Desugar_MiscViolation Errors.TypedefInitializer)
         else
           desugar_declarator NotFunDef decltor >>= fun ((ident_attrs, ident), mk_qs_ctype) ->
-          let (qs, _ty) = mk_qs_ctype base_qs base_ty in
+          E.liftException (mk_qs_ctype base_qs base_ty) >>= fun (qs, _ty) ->
           let ty = if isAtomic then wrap_atomic _ty else _ty in
           (* TODO: check that we really never have parameter objects here *)
           let kind = if AilTypesAux.is_function ty then E.OK_function else E.OK_object false in
@@ -2764,8 +2793,8 @@ and desugar_struct_declaration struct_decl =
             desugar_struct_declarator (align_specs <> []) sdecltor >>= fun ((attrs, ident), mk_qs_ctype) ->
             (* NOTE: the checks for §6.7.2.1#3 are done by desugar_type_specifiers because
                we need to special case the last member. *)
-            let (qs, ty) =
-              mk_qs_ctype (Ctype.combine_qualifiers tquals_qs specs_qs) base_ty in
+            E.liftException (mk_qs_ctype (Ctype.combine_qualifiers tquals_qs specs_qs) base_ty)
+              >>= fun (qs, ty) ->
             desugar_alignment_specifiers (Loc.locOf ident) ty align_specs >>= fun align_opt ->
             E.return (ident, (Annot.combine_attributes outer_attrs attrs, align_opt, qs, if isAtomic then wrap_atomic ty else ty))
           ) sdecltors
@@ -2944,13 +2973,12 @@ and desugar_alignment_specifiers loc decl_ty xs =
 and desugar_type_name (Type_name specs tquals align_specs abs_decltor_opt) =
   (* TODO: align_specs is ignored here *)
   desugar_type_specifiers specs >>= fun (specs_qs, base_ty) ->
-  maybe (E.return (fun qs ty -> (qs, ty)))
+  maybe (E.return (fun qs ty -> Exception.except_return (qs, ty)))
     (desugar_abstract_declarator NotUnderArray) abs_decltor_opt >>= fun mk_qs_ctype ->
   let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
   
-  let (qs, ty) =
-    mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
-  E.return (qs, (if isAtomic then wrap_atomic ty else ty))
+  E.liftException (mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty)
+    >>= fun (qs, ty) -> E.return (qs, (if isAtomic then wrap_atomic ty else ty))
 
 
 
@@ -4740,7 +4768,8 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
     (* NOTE: as per §6.9.1#2, we perform a dummy instantiation of the type
        **specified by the declarator portion of the function definition**, which
        here means `ddecltor' without `specifs' *)
-    match mk_qs_ctype Ctype.no_qualifiers (Ctype.Ctype [] Ctype.Void) with
+    E.liftException (mk_qs_ctype Ctype.no_qualifiers (Ctype.Ctype [] Ctype.Void)) >>=
+    function
       | (_, Ctype.Ctype _ (Ctype.Function _ _ _)) ->
           E.return ()
       | (_, Ctype.Ctype _ (Ctype.FunctionNoParams _)) ->
@@ -4766,7 +4795,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
         let base_ty = if isAtomic then Ctype.mk_ctype_atomic specs_ty else specs_ty in
         let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
         
-        let (qs, ty) = mk_qs_ctype base_qs base_ty in
+        E.liftException (mk_qs_ctype base_qs base_ty) >>= fun (qs, ty) ->
         let process (return_qs, return_ty) params_opt isVariadic =
           (* NOTE: the constraint in §6.9.1#3 is enforced later in the Ail
             typechecker *)
