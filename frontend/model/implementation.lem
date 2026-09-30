@@ -24,8 +24,8 @@ declare ocaml target_rep function register_enum = `(Ocaml_implementation.get()).
 declare ocaml target_rep function typeof_enum = `(Ocaml_implementation.get()).typeof_enum`
 declare ocaml target_rep function normalise_integerType = `Ocaml_implementation.normalise_integerType (Ocaml_implementation.get())`
 
-val sizeof_ty: map Symbol.sym (Loc.t * Ctype.tag_definition) -> Ctype.ctype -> integer
-val alignof_ty: map Symbol.sym (Loc.t * Ctype.tag_definition) -> Ctype.ctype -> integer
+val sizeof_ty: Ctype.tag_definitions -> Ctype.ctype -> integer
+val alignof_ty: Ctype.tag_definitions -> Ctype.ctype -> integer
 declare ocaml target_rep function sizeof_ty = `Ocaml_implementation.sizeof`
 declare ocaml target_rep function alignof_ty = `Ocaml_implementation.alignof`
 

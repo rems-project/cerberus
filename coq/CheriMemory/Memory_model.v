@@ -39,7 +39,7 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter footprint : Set.
   Parameter overlapping : footprint -> footprint -> bool.
   Parameter mem_state : Type.
-  Parameter initial_mem_state : mem_state.
+  Parameter initial_mem_state : SymMap.t CoqCtype.tag_definition -> mem_state.
 
   Parameter memM: Type -> Type.
   #[local] Declare Instance memM_monad: Monad memM.
@@ -114,10 +114,12 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter null_cap : bool -> integer_value.
 
   Parameter array_shift_ptrval :
+    SymMap.t CoqCtype.tag_definition ->
     location_ocaml -> pointer_value -> CoqCtype.ctype -> integer_value ->
     serr pointer_value.
 
   Parameter member_shift_ptrval :
+    SymMap.t CoqCtype.tag_definition ->
     pointer_value -> CoqSymbol.sym ->
     CoqSymbol.identifier -> serr pointer_value.
 
@@ -166,8 +168,6 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
     CoqSymbol.sym -> CoqSymbol.identifier ->
     serr integer_value.
 
-  Parameter sizeof_ival : CoqCtype.ctype -> serr integer_value.
-  Parameter alignof_ival : CoqCtype.ctype -> serr integer_value.
   Parameter bitwise_complement_ival :
     CoqIntegerType.integerType -> integer_value -> integer_value.
   Parameter bitwise_and_ival :

@@ -563,7 +563,7 @@ and alignof tagDefs (Ctype (_, ty)) : Z.t =
           ) init membrs
       end
   | Union tag_sym ->
-      begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+      begin match Pmap.find tag_sym tagDefs with
       | _, StructDef _ -> assert false
       | _, UnionDef membrs ->
           (* NOTE: Structs (and unions) alignment is that of the maximum alignment

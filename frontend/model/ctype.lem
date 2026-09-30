@@ -84,6 +84,10 @@ type tag_definition =
   | StructDef of list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe flexible_array_member
   | UnionDef of list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
 
+type tag_definitions =
+  map Symbol.sym (Loc.t * tag_definition)
+
+
 (** Type class instances *)
 
 instance (Eq realFloatingType)

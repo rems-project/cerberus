@@ -250,10 +250,6 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
 let c_frontend_and_elaboration ?(cn_init_scope=Cn_desugaring.empty_init) elab_conf (conf, io) (core_stdlib, core_impl) ~filename =
   let desug_conf = Cabs_to_ail_effect.{ elab_conf } in
   c_frontend ~cn_init_scope desug_conf (conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
-  (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
-     used more than once, we need to do reset here *)
-  (* TODO(someday): find a better way *)
-  Tags.reset_tagDefs ();
   let core_file = Translation.translate core_stdlib elab_conf core_impl ailtau_prog in
   io.set_progress "ELABO" >>= fun () ->
   io.pass_message "Translation to Core completed!" >>= fun () ->

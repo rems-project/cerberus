@@ -262,7 +262,7 @@ export default class View {
   }
 
   /** Start interactive tabs (with the first state Init) */
-  startInteractive(ranges: Range[], tag_defs: string, steps: GraphFragment) {
+  startInteractive(ranges: Range[], steps: GraphFragment) {
     if (steps.nodes.length != 1)
       throw new Error('impossible initialise interactive mode')
     let init = steps.nodes[0]
@@ -275,7 +275,6 @@ export default class View {
     this.state.interactive = {
       current: init,
       next_options: [init.id],
-      tag_defs: tag_defs,
       ranges: ranges,
       last_node_id: init.id,
       counter: 0,
@@ -822,7 +821,7 @@ export default class View {
         break
       case 'interactive':
         this.state.console = ''
-        this.startInteractive(res.ranges, res.tagDefs, new GraphFragment(res.steps))
+        this.startInteractive(res.ranges, new GraphFragment(res.steps))
         break;
       case 'stepping':
         this.state.console = ''

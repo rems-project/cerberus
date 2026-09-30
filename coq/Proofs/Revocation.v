@@ -36,7 +36,7 @@ From CheriCaps.Common Require Import Capabilities.
 From Common Require Import SimpleError Utils ZMap AMap FMapExt.
 From Morello Require Import CapabilitiesGS MorelloCapsGS.
 
-From CheriMemory Require Import CheriMorelloMemory Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CerbSwitches CoqAilTypesAux.
+From CheriMemory Require Import CheriMorelloMemory Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqSwitches CerbSwitches CoqAilTypesAux.
 
 Require Import Tactics.
 
@@ -59,10 +59,6 @@ Require Import ListSet.
 
 Module ZMapProofs:= FMapExtProofs(Z_as_ExtOT)(ZMap).
 Module AMapProofs:= FMapExtProofs(AddressValue_as_ExtOT)(AMap).
-
-Module AbstTagDefs: TagDefs.
-  Definition tagDefs := abst_tagDefs.
-End AbstTagDefs.
 
 (* Morello-specific *)
 Fact ADDR_LIMIT_to_Z:
@@ -233,8 +229,8 @@ End CHERISwitchesExe.
 
 Module CheriMemoryImplWithProofs
 <:
-  CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(AbstTagDefs)(CHERISwitchesExe).
-  Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(AbstTagDefs)(CHERISwitchesExe).
+  CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CHERISwitchesExe).
+  Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CHERISwitchesExe).
 
   (* --- Equality predicates for types used in Memory Models --- *)
 
@@ -2739,8 +2735,9 @@ Module CheriMemoryImplWithProofs
       ).
 
   Lemma initial_mem_state_invariant:
-    mem_invariant initial_mem_state.
+    forall tagDefs, mem_invariant (initial_mem_state tagDefs).
   Proof.
+    intro tagDefs.
     unfold initial_mem_state, mem_invariant.
     repeat split; cbn in *.
     -
@@ -3775,17 +3772,17 @@ Module CheriMemoryImplWithProofs
   Qed.
 
   Instance is_within_bound_SameState:
-    forall x0 x1 x2, SameState (is_within_bound x0 x1 x2).
+    forall tagDefs x0 x1 x2, SameState (is_within_bound tagDefs x0 x1 x2).
   Proof.
-    intros x0 x1 x2.
+    intros tagDefs x0 x1 x2.
     unfold is_within_bound.
     same_state_steps.
   Qed.
 
   Instance is_atomic_member_access_SameState:
-    forall x0 x1 x2, SameState (is_atomic_member_access x0 x1 x2).
+    forall tagDefs x0 x1 x2, SameState (is_atomic_member_access tagDefs x0 x1 x2).
   Proof.
-    intros x0 x1 x2.
+    intros tagDefs x0 x1 x2.
     unfold is_atomic_member_access.
     same_state_steps.
   Qed.
@@ -4244,6 +4241,7 @@ Module CheriMemoryImplWithProofs
     break_if;[preserves_step|].
     preserves_step.
     preserves_step.
+    preserves_step.
     break_match_goal;[preserves_step|].
     preserves_step.
     apply allocator_PreservesInvariant.
@@ -4547,9 +4545,9 @@ Module CheriMemoryImplWithProofs
     unfold store in H.
     state_inv_steps.
 
-    rewrite MorelloImpl.uchar_size in H6, H11.
+    rewrite MorelloImpl.uchar_size in H6, H12.
     invc H6.
-    invc H11.
+    invc H12.
     cbn.
     apply AMap.M.add_1.
     reflexivity.
@@ -4843,8 +4841,8 @@ Module CheriMemoryImplWithProofs
   Qed.
 
   Lemma sizeof_pos:
-    forall fuel szn maybe_tagDefs ty,
-      sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat
+    forall fuel szn tagDefs ty,
+      sizeof fuel tagDefs ty = inr szn -> (0 < szn)%nat
 
   with
   offsetof_struct_max_offset_pos:
@@ -4855,11 +4853,11 @@ Module CheriMemoryImplWithProofs
       clear sizeof_pos.
       induction fuel as [| fuel' IHfuel] using nat_ind.
       + (* Base case: fuel = 0 *)
-        intros szn maybe_tagDefs ty H.
+        intros szn tagDefs ty H.
         simpl in H.
         discriminate.
       +
-        intros szn maybe_tagDefs ty H.
+        intros szn tagDefs ty H.
         simpl in H.
 
         destruct ty as [a cty].
@@ -4896,10 +4894,7 @@ Module CheriMemoryImplWithProofs
           assumption.
         *
           (* struct *)
-          generalize dependent (match maybe_tagDefs with
-                                | Some x => x
-                                | None => AbstTagDefs.tagDefs tt
-                                end); intros.
+          generalize dependent tagDefs; intros.
 
           clear H1.
 
@@ -4913,10 +4908,7 @@ Module CheriMemoryImplWithProofs
           state_inv_steps;bool_to_prop_hyp; try congruence;lia.
         *
           (* Union *)
-          generalize dependent (match maybe_tagDefs with
-                                | Some x => x
-                                | None => AbstTagDefs.tagDefs tt
-                                end); intros.
+          generalize dependent tagDefs; intros.
 
           clear H1.
           break_match_hyp;[|inv H].
@@ -4937,7 +4929,7 @@ Module CheriMemoryImplWithProofs
             clear H3.
 
             (* proof by induction on [l] *)
-            revert t0 Heqt1.
+            revert t Heqt0.
             induction l;intros.
             ++
               invc H.
@@ -4946,12 +4938,12 @@ Module CheriMemoryImplWithProofs
               clear H.
               repeat break_let.
               remember (fun '(acc_size, acc_align) '(_, (_, align_opt, _, ty)) =>
-                          sz <- sizeof fuel' (Some t) ty;;
+                          sz <- sizeof fuel' tagDefs0 ty;;
                           al <-
                             match align_opt with
                             | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
-                            | Some (CoqCtype.AlignType al_ty) => alignof fuel' (Some t) al_ty
-                            | None => alignof fuel' (Some t) ty
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel' tagDefs0 al_ty
+                            | None => alignof fuel' tagDefs0 ty
                             end;; ret (Nat.max acc_size sz, Nat.max acc_align al))
                 as f.
               assert (f_mon : forall sz sz' al al' a,
@@ -5747,14 +5739,15 @@ Module CheriMemoryImplWithProofs
           (fun mval : mem_value_indt =>
              forall s s' : mem_state_r,
                mem_invariant s ->
-               forall (addr addr' : AddressValue.t) (fuel : nat),
-                 repr fuel addr mval s = inr (s', addr') -> mem_invariant s') l)
+               forall (addr addr' : AddressValue.t) (fuel : nat) (tagDefs: SymMap.t CoqCtype.tag_definition),
+                 repr fuel tagDefs addr mval s = inr (s', addr') -> mem_invariant s') l)
 
     (s s' : mem_state_r)
     (M: mem_invariant s)
     (addr addr': AddressValue.t)
-    (fuel: nat):
-    repr fuel addr (MVarray l) s = inr (s', addr') -> mem_invariant s'.
+    (fuel: nat)
+    (tagDefs: SymMap.t CoqCtype.tag_definition):
+    repr fuel tagDefs addr (MVarray l) s = inr (s', addr') -> mem_invariant s'.
   Proof.
     intros R.
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
@@ -5794,9 +5787,10 @@ Module CheriMemoryImplWithProofs
     (offs : list (identifier * CoqCtype.ctype * nat))
     (sym: CoqSymbol.sym)
     (fuel max_offset: nat)
+    (tagDefs: SymMap.t CoqCtype.tag_definition)
     :
-    struct_typecheck sym (AbstTagDefs.tagDefs tt) values = inr tt ->
-    offsetsof_struct fuel (AbstTagDefs.tagDefs tt) sym = inr (offs, max_offset) ->
+    struct_typecheck sym tagDefs values = inr tt ->
+    offsetsof_struct fuel tagDefs sym = inr (offs, max_offset) ->
     Datatypes.length offs = Datatypes.length values.
   Proof.
     intros HT HO.
@@ -5910,13 +5904,14 @@ Module CheriMemoryImplWithProofs
           (fun '(_, _, b) =>
              forall s s' : mem_state_r,
                mem_invariant s ->
-               forall (addr addr' : AddressValue.t) (fuel : nat),
-                 repr fuel addr b s = inr (s', addr') -> mem_invariant s') l)
+               forall (addr addr' : AddressValue.t) (fuel : nat) (tagDefs: SymMap.t CoqCtype.tag_definition),
+                 repr fuel tagDefs addr b s = inr (s', addr') -> mem_invariant s') l)
     (s s' : mem_state_r)
     (M: mem_invariant s)
     (addr addr': AddressValue.t)
-    (fuel: nat):
-    repr fuel addr (MVstruct sym l) s = inr (s', addr') ->  mem_invariant s'.
+    (fuel: nat)
+    (tagDefs: SymMap.t CoqCtype.tag_definition):
+    repr fuel tagDefs addr (MVstruct sym l) s = inr (s', addr') ->  mem_invariant s'.
   Proof.
     intros R.
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
@@ -5926,7 +5921,7 @@ Module CheriMemoryImplWithProofs
     destruct x.
     rename l0 into offs, l into values.
 
-    apply (offsetsof_struct_length _ _ _ _ _ R2) in R3.
+    apply (offsetsof_struct_length _ _ _ _ _ _ R2) in R3.
     clear R2. rename R3 into L.
 
     apply do_pad_preserves.
@@ -5989,18 +5984,19 @@ Module CheriMemoryImplWithProofs
 
   Lemma repr_preserves
     (fuel : nat)
+    (tagDefs: SymMap.t CoqCtype.tag_definition)
     (mval: mem_value)
     (s s': mem_state_r)
     (M: mem_invariant s)
     (addr addr': AddressValue.t):
 
-    repr fuel addr mval s = inr (s', addr')
+    repr fuel tagDefs addr mval s = inr (s', addr')
     ->
       mem_invariant s'.
   Proof.
     Opaque sizeof.
-    revert fuel.
-    dependent induction mval;intros fuel R.
+    revert fuel tagDefs.
+    dependent induction mval;intros fuel tagDefs R.
     - (* MVunspecified *)
       destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       unfold repr in R.
@@ -6125,6 +6121,7 @@ Module CheriMemoryImplWithProofs
     break_let.
     break_if;[preserves_step|].
     preserves_step.
+    preserves_step.
     apply SameStatePreserves, is_within_bound_SameState.
     break_if;[|preserves_step].
     preserves_step.
@@ -6135,9 +6132,13 @@ Module CheriMemoryImplWithProofs
     break_if;[preserves_step|].
     preserves_step.
     -
-      preserves_step;[preserves_step|].
-      preserves_step;[apply SameStatePreserves, cap_check_SameState|].
       preserves_step.
+      apply bind_PreservesInvariant_same_state.
+      typeclasses eauto.
+      intros szn.
+      apply bind_PreservesInvariant_same_state.
+      typeclasses eauto.
+      intros u.
       apply bind_PreservesInvariant_value_SameState.
       typeclasses eauto.
       intros H x6 H0.
@@ -6145,8 +6146,6 @@ Module CheriMemoryImplWithProofs
       preserves_step;[|preserves_step].
       preserves_step.
       apply serr2InternalErr_inv in H0.
-      destruct x5.
-      subst.
       apply repr_preserves in H0;eauto.
     -
       (* handling `is_locking` *)

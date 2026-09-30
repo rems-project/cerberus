@@ -1388,7 +1388,7 @@ val translate_expression:
   expr_ctx ->
   (maybe Symbol.sym * maybe Symbol.sym) ->
   translation_stdlib ->
-  Core.core_tag_definitions ->
+  Ctype.tag_definitions ->
   A.expression GenTypes.genTypeCategory ->
   E.elabM (C.expr unit)
 let rec translate_expression translate_block_opt is_used ctx variadic_env stdlib tagDefs a_expr =
@@ -3684,7 +3684,7 @@ let translate_branch_on_unspec conf loc ctx e1 e2 =
 
 val translate_stmt:
   translation_stdlib ->
-  C.core_tag_definitions ->
+  Ctype.tag_definitions ->
   A.ail_identifier ->
   translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
@@ -4265,7 +4265,7 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
 
 val translate_tag_definitions:
   list (A.ail_identifier * (Loc.t * Annot.attributes * Ctype.tag_definition)) ->
-  C.core_tag_definitions
+  Ctype.tag_definitions
 let translate_tag_definitions ctx =
   Map.fromList (List.map (fun (x, (loc, _, y)) -> (x, (loc, y))) ctx)
 
@@ -4281,7 +4281,7 @@ let is_inner_arg_temps conf =
 val translate_program:
   translation_stdlib ->
   maybe Symbol.sym * A.sigma GenTypes.genTypeCategory ->
-  E.elabM (  C.core_tag_definitions
+  E.elabM (  Ctype.tag_definitions
            * list (Symbol.sym * (C.generic_globs unit unit))
            * C.generic_fun_map unit unit
            * map Symbol.sym (Loc.t * Annot.attributes * Ctype.ctype * list (maybe Symbol.sym * Ctype.ctype) * bool * bool) )

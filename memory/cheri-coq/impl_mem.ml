@@ -243,12 +243,10 @@ module CerbTagDefs = struct
     let l = Pmap.bindings_list m in
     let (e:CoqCtype.tag_definition CoqSymbol.SymMap.t) = CoqSymbol.SymMap.empty in
     List.fold_left (fun m (s,(_, d)) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
-
-  let tagDefs _ = toCoq_SymMap (Tags.tagDefs ())
 end
 
 
-module MM = CheriMemoryExe(MemCommonExe)(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs:CoqTags.TagDefs)(CerbSwitchesProxy)
+module MM = CheriMemoryExe(MemCommonExe)(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbSwitchesProxy)
 module C = MorelloCapabilityWithStrfcap
 
 module L = struct
@@ -270,7 +268,7 @@ module CHERIMorello : Memory = struct
   type footprint = MM.footprint
   type mem_state = MM.mem_state
 
-  let initial_mem_state = MM.initial_mem_state
+  let initial_mem_state tagDefs = MM.initial_mem_state (CerbTagDefs.toCoq_SymMap tagDefs)
   let overlapping = MM.overlapping
 
   let cs_module = (module struct
@@ -1161,7 +1159,7 @@ module CHERIMorello : Memory = struct
   (* There is a sketch of implementation of this function in Coq but
      it requires some dependencies and fixpoint magic.  It OK to have
      in in OCaml for now *)
-  let prefix_of_pointer (pv:pointer_value) : string option memM =
+  let prefix_of_pointer tagDefs (pv:pointer_value) : string option memM =
     if !Cerb_debug.debug_level >= 2 then
       Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
     let open String_symbol in
@@ -1179,7 +1177,7 @@ module CHERIMorello : Memory = struct
          Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ " + " ^ Z.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
          let offset = Z.sub addr alloc.base in
-         let (offs, _) = lift_coq_serr (MM.offsetsof MM.coq_DEFAULT_FUEL (CerbTagDefs.tagDefs ()) (toCoq_Symbol_sym tag_sym)) in
+         let (offs, _) = lift_coq_serr (MM.offsetsof MM.coq_DEFAULT_FUEL (toCoq_SymMap tagDefs) (toCoq_Symbol_sym tag_sym)) in
          let offs = List.map (fun ((id,ty),n) ->(fromCoq_Symbol_identifier id,ty,n)) offs in
          let rec find = function
            | [] ->
@@ -1192,7 +1190,7 @@ module CHERIMorello : Memory = struct
       | Some (Ctype (_, Array (ty, _))) ->
          let offset = Z.sub addr alloc.base in
          if Z.lt offset alloc.size then
-           let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (Some (CerbTagDefs.tagDefs ())) (toCoq_ctype ty)) in
+           let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (toCoq_SymMap tagDefs) (toCoq_ctype ty)) in
            let n = Z.div offset sz in
            Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ "[" ^ Z.to_string n ^ "]")
          else
@@ -1248,9 +1246,9 @@ module CHERIMorello : Memory = struct
   let null_cap = MM.null_cap
 
   (* Pointer shifting constructors *)
-  let array_shift_ptrval loc p ty iv = Undefined.return0 (lift_coq_serr @@ MM.array_shift_ptrval (toCoq_location loc) p (toCoq_ctype ty) iv)
-  let member_shift_ptrval p tag_sym memb_ident =
-    lift_coq_serr (MM.member_shift_ptrval p (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
+  let array_shift_ptrval tagDefs loc p ty iv = Undefined.return0 (lift_coq_serr @@ MM.array_shift_ptrval (toCoq_SymMap tagDefs) (toCoq_location loc) p (toCoq_ctype ty) iv)
+  let member_shift_ptrval tagDefs p tag_sym memb_ident =
+    lift_coq_serr (MM.member_shift_ptrval (toCoq_SymMap tagDefs) p (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
   let eff_array_shift_ptrval loc ptrval ty iv =
     lift_coq_memM "eff_array_shift_ptrval" (MM.eff_array_shift_ptrval (toCoq_location loc) ptrval (toCoq_ctype ty) iv)
   let eff_member_shift_ptrval loc ptrval tag_sym memb_ident =
@@ -1301,9 +1299,6 @@ module CHERIMorello : Memory = struct
                      (toCoq_SymMap tagDefs)
                      (toCoq_Symbol_sym tag_sym)
                      (toCoq_Symbol_identifier memb_ident))
-
-  let sizeof_ival ty = lift_coq_serr @@ MM.sizeof_ival (toCoq_ctype ty)
-  let alignof_ival ty = lift_coq_serr @@ MM.alignof_ival (toCoq_ctype ty)
 
   let bitwise_complement_ival ity a =
     MM.bitwise_complement_ival (toCoq_integerType ity) a

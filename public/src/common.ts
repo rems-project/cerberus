@@ -10,7 +10,6 @@ export interface InteractiveRequest {
   lastId: number,
   state: string,
   active: number,
-  tagDefs: string
 }
 
 export interface IR {
@@ -84,7 +83,6 @@ export interface Model {
 }
 
 export interface Interactive {
-  tag_defs: string          // tag defs of current execution
   last_node_id: number      // seed to the server (last known node)
   current: Node             // current active step state
   next_options: number []   // next possible steps
@@ -117,7 +115,7 @@ export interface State {
 export type ResultRequest =
   { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
   { status: 'execution', console: string, result: string} |
-  { status: 'interactive', tagDefs: string, ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
+  { status: 'interactive', ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'stepping', result: string, activeId: number, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'failure', console: string, result: string } |
   { status: 'bmc', result: string, executions: string[] } |

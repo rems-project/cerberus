@@ -170,15 +170,19 @@ type mem_state = {
 
   (* Web user-interface stuff *)
   last_used: allocation_id option;
+
+  (* READONLY (TODO: move this to the config part when the monad is changed) *)
+  tagDefs: Ctype.tag_definitions;
 } [@@warning "-unused-field"]
 
-let initial_mem_state: mem_state =
+let initial_mem_state tagDefs: mem_state =
   { allocations= IntMap.empty
   ; bytemap= IntMap.empty
   ; funptrmap= IntMap.empty
   ; next_alloc_id= Z.zero
   ; last_address= Z.of_int 0xFFFFFFFFFFFF
-  ; last_used= None }
+  ; last_used= None
+  ; tagDefs }
 
 type 'a memM =
   ('a, string, MC.mem_error, integer_value MC.mem_constraint, mem_state) Nondeterminism.ndM
@@ -243,9 +247,9 @@ let lookup_alloc alloc_id : allocation memM =
         return alloc
 
 (* [a .. a + sizeof(ty) − 1] ⊆ [a_i .. a_i + n_1 - 1] *)
-let check_bounds addr ty alloc =
+let check_bounds ~tagDefs addr ty alloc =
   Z.leq alloc.base addr
-&& Z.leq (Z.add addr (Z.pred (Common.sizeof ty)))
+&& Z.leq (Z.add addr (Z.pred (Common.sizeof ~tagDefs ty)))
                (Z.add alloc.base (Z.pred alloc.length))
 
 
@@ -306,12 +310,13 @@ end else
    Some (char_of_int (Z.to_int (Z.extract i (8*n) 8)))
  )
 
-let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
+let rec repr ~tagDefs funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
+  let repr = repr ~tagDefs in
   let ret bs = (funptrmap, bs) in
   match mval with
     | MVunspecified ty ->
         (* TODO(fix-Overflow) *)
-        let sz = Z.to_int (Common.sizeof ty) in
+        let sz = Z.to_int (Common.sizeof ~tagDefs ty) in
         ret @@ List.init sz
           (fun _ -> AbsByte.{prov= Prov_empty; value= None; ptrfrag_idx= None})
     | MVinteger (ity, ival) ->
@@ -374,28 +379,28 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
         (funptrmap, L.concat @@ List.rev bs_s)
     | MVstruct (tag_sym, xs) ->
         let padding_byte _ = AbsByte.{prov= Prov_empty; value= None; ptrfrag_idx= None} in
-        let (offs, last_off) = Common.offsetsof (Tags.tagDefs ()) tag_sym in
-        let sz = Common.sizeof (Ctype ([], Struct tag_sym)) in
+        let (offs, last_off) = Common.offsetsof tagDefs tag_sym in
+        let sz = Common.sizeof ~tagDefs (Ctype ([], Struct tag_sym)) in
         (* TODO(fix-Overflow) *)
         let final_pad = Z.(to_int (sz - last_off)) in
         let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
             (* TODO(fix-Overflow) *)
             let pad = Z.(to_int (off - last_off)) in
             let (funptrmap, bs) = repr funptrmap mval in
-            (funptrmap, Z.add off (Common.sizeof ty), acc @ List.init pad padding_byte @ bs)
+            (funptrmap, Z.add off (Common.sizeof ~tagDefs ty), acc @ List.init pad padding_byte @ bs)
           end (funptrmap, Z.zero, []) offs xs
         in
         (funptrmap, bs @ List.init final_pad padding_byte)
     | MVunion (tag_sym, memb_ident, mval) ->
         let padding_byte _ = AbsByte.{prov= Prov_empty; value= None; ptrfrag_idx= None} in
         (* TODO(fix-Overflow) *)
-        let size = Z.to_int (Common.sizeof (Ctype ([], Union tag_sym))) in
+        let size = Z.to_int (Common.sizeof ~tagDefs (Ctype ([], Union tag_sym))) in
         let (funptrmap', bs) = repr funptrmap mval in
         (funptrmap', bs @ List.init (size - List.length bs) padding_byte)
 
 
-let rec abst (*allocations*) (*funptrmap*) (Ctype (_, ty) as cty) (bs : AbsByte.t list) : mem_value * AbsByte.t list =
-let self ty bs = abst (*allocations*) ty bs in
+let rec abst ~tagDefs (*allocations*) (*funptrmap*) (Ctype (_, ty) as cty) (bs : AbsByte.t list) : mem_value * AbsByte.t list =
+let self ty bs = abst ~tagDefs (*allocations*) ty bs in
 let interp_bytes xs : [ `SPECIFIED of   [ `PROV of allocation_id | `NOPROV ]
                                      * [ `PROV2 of allocation_id | `NOPROV2 ]
                                      * char list
@@ -443,7 +448,7 @@ let interp_bytes xs : [ `SPECIFIED of   [ `PROV of allocation_id | `NOPROV ]
                  `INVALID_PTRFRAG in
            `SPECIFIED (prov_status', prov2_status', c :: cs, ptrfrag_status')
  ) (`SPECIFIED (`NOPROV, `NOPROV2, [], `VALID_PTRFRAG 0)) (List.rev xs) in
-let cty_sz = Common.sizeof cty in
+let cty_sz = Common.sizeof ~tagDefs cty in
 if Z.lt (Z.of_int (List.length bs)) cty_sz then
  failwith "INTERNAL ERROR: Vip.abst, |bs| < sizeof(ty)";
 match ty with
@@ -553,8 +558,8 @@ match ty with
        (* TODO(fix-Overflow) *)
        let pad = Z.(to_int (memb_offset - previous_offset)) in
        let (mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
-       ((memb_ident, memb_ty, mval)::acc_xs, Z.(memb_offset + (Common.sizeof memb_ty)), acc_bs')
-     ) ([], Z.zero, bs1) (fst (Common.offsetsof (Tags.tagDefs ()) tag_sym)) in
+       ((memb_ident, memb_ty, mval)::acc_xs, Z.(memb_offset + (Common.sizeof ~tagDefs memb_ty)), acc_bs')
+     ) ([], Z.zero, bs1) (fst (Common.offsetsof tagDefs tag_sym)) in
      (* TODO: check that bs' = last padding of the struct *)
      (MVstruct (tag_sym, List.rev rev_xs), bs2)
 | Union tag_sym ->
@@ -567,14 +572,16 @@ let in_bounds addr alloc =
 
 
 let allocate_object tid prefix al_ival ty _ init_opt : pointer_value memM =
-  let n = Common.sizeof ty in
+  get >>= fun st ->
+  let tagDefs = st.tagDefs in
+  let n = Common.sizeof ~tagDefs ty in
   allocator n (ival_to_int al_ival) >>= fun (alloc_id, addr) ->
   let init_mval =
     match init_opt with
       | None -> MVunspecified ty
       | Some mval -> mval in
   update (fun st ->
-    let (funptrmap, pre_bs) = repr st.funptrmap init_mval in
+    let (funptrmap, pre_bs) = repr ~tagDefs st.funptrmap init_mval in
     let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
     { st with
       allocations= IntMap.add alloc_id {base= addr; length= n; killed= false; ty; prefix} st.allocations;
@@ -610,6 +617,8 @@ let kill loc is_dyn ptrval : unit memM =
 
 
 let load loc ty ptrval : (footprint * mem_value) memM =
+  get >>= fun st ->
+  let tagDefs = st.tagDefs in
   match ptrval with
     | PVnull ->
         fail ~loc (MerrAccess (LoadAccess, NullPtr))
@@ -619,20 +628,22 @@ let load loc ty ptrval : (footprint * mem_value) memM =
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
           fail ~loc (MerrAccess (LoadAccess, DeadPtr))
-        else if not (check_bounds addr ty alloc) then
+        else if not (check_bounds ~tagDefs addr ty alloc) then
           fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
         else
           get >>= fun st ->
           put { st with last_used= Some alloc_id } >>= fun () ->
           (* TODO(fix-Overflow) *)
-          let sz = Z.to_int (Common.sizeof ty) in
+          let sz = Z.to_int (Common.sizeof ~tagDefs ty) in
           let bs = fetch_bytes st.bytemap addr sz in
-          return (FOOTPRINT, fst (abst (*st.allocations*) ty bs))
+          return (FOOTPRINT, fst (abst ~tagDefs (*st.allocations*) ty bs))
     | PVfunptr _ ->
       fail ~loc (MerrAccess (LoadAccess, FunctionPtr))
 
 
 let store loc ty is_locking ptrval mval : footprint memM =
+  get >>= fun st ->
+  let tagDefs = st.tagDefs in
   match ptrval with
     | PVnull ->
         fail ~loc (MerrAccess (StoreAccess, NullPtr))
@@ -642,11 +653,11 @@ let store loc ty is_locking ptrval mval : footprint memM =
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
           fail ~loc (MerrAccess (StoreAccess, DeadPtr))
-        else if not (check_bounds addr ty alloc) then
+        else if not (check_bounds ~tagDefs addr ty alloc) then
           fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
         else
           update begin fun st ->
-            let (funptrmap, pre_bs) = repr st.funptrmap mval in
+            let (funptrmap, pre_bs) = repr ~tagDefs st.funptrmap mval in
             let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
             { st with last_used= Some alloc_id;
                       bytemap=
@@ -730,6 +741,8 @@ let ge_ptrval loc ptrval1 ptrval2 : bool memM =
   rel_op_ptrval loc Z.geq ptrval1 ptrval2
 
 let diff_ptrval loc diff_ty ptrval1 ptrval2 : integer_value memM =
+  get >>= fun st ->
+  let tagDefs = st.tagDefs in
   match ptrval1, ptrval2 with
     | PVloc (Prov_some alloc_id1, addr1)
     , PVloc (Prov_some alloc_id2, addr2) when Z.equal alloc_id1 alloc_id2 ->
@@ -743,7 +756,7 @@ let diff_ptrval loc diff_ty ptrval1 ptrval2 : integer_value memM =
                 elem_ty
             | _ ->
                 diff_ty in
-          return (IVint (Z.div (Z.sub addr1 addr2) (Common.sizeof diff_ty')))
+          return (IVint (Z.div (Z.sub addr1 addr2) (Common.sizeof ~tagDefs diff_ty')))
         else
           fail ~loc (MerrVIP VIP_diffptr_out_of_bound)
     | _ ->
@@ -753,10 +766,12 @@ let update_prefix: (Symbol.prefix * mem_value) -> unit memM =
   fun _ ->
     (* TODO: VIP.update_prefix isn't doing anything *)
     return ()
-let prefix_of_pointer: pointer_value -> string option memM =
+let prefix_of_pointer _ : pointer_value -> string option memM =
   fun _ -> return None (* TODO *)
 
 let isWellAligned_ptrval ref_ty ptrval =
+  get >>= fun st ->
+  let tagDefs = st.tagDefs in
   (* TODO: catch builtin function types *)
   match unatomic_ ref_ty with
     | Void
@@ -767,7 +782,7 @@ let isWellAligned_ptrval ref_ty ptrval =
           | PVnull ->
               return true
           | PVloc (_, addr) ->
-              return (Z.(equal (modulus addr (Common.alignof ref_ty)) zero))
+              return (Z.(equal (modulus addr (Common.alignof ~tagDefs ref_ty)) zero))
           | PVfunptr _ ->
               fail (MerrOther "called isWellAligned_ptrval on function pointer")
         end
@@ -864,7 +879,7 @@ let intcast _ _ ival =
   Either.Right ival
 
 (* Pointer shifting constructors *)
-let array_shift_ptrval loc ptrval ty ival : pointer_value Undefined.t0 =
+let array_shift_ptrval tagDefs loc ptrval ty ival : pointer_value Undefined.t0 =
   (* TODO: "VIP memory model should be called SWITCH strict_pointer_arith" *)
   match ptrval with
     | PVnull ->
@@ -876,7 +891,7 @@ let array_shift_ptrval loc ptrval ty ival : pointer_value Undefined.t0 =
         (* lookup_alloc alloc_id >>= fun alloc -> *)
         (* As a GNU extension ty may be void, in which case the pointer arithmetic
           is performed at the byte granularity *)
-        let sz = if AilTypesAux.is_void ty then Z.one else Common.sizeof ty in
+        let sz = if AilTypesAux.is_void ty then Z.one else Common.sizeof ~tagDefs ty in
         let addr' = Z.(add addr (mul (ival_to_int ival) sz)) in
         (* TODO *)
         (* if alloc.killed then
@@ -900,7 +915,7 @@ let offsetof_ival tagDefs tag_sym membr_ident =
         (* NOTE: this is an internal error *)
         failwith "VIP.offsetof_ival: invalid membr_ident"
 
-let member_shift_ptrval ptrval tag_sym membr_ident : pointer_value =
+let member_shift_ptrval tagDefs ptrval tag_sym membr_ident : pointer_value =
   (* TODO: need an effectful variant in the interface to have the errors inside the monad *)
   match ptrval with
     | PVnull ->
@@ -908,10 +923,10 @@ let member_shift_ptrval ptrval tag_sym membr_ident : pointer_value =
     | PVloc (Prov_empty, _) ->
         failwith "UB: member_offset ==> @empty"
     | PVloc (Prov_some alloc_id, addr) ->
-        let addr' = Z.(add addr (ival_to_int (offsetof_ival (Tags.tagDefs ()) tag_sym membr_ident))) in
+        let addr' = Z.(add addr (ival_to_int (offsetof_ival tagDefs tag_sym membr_ident))) in
         PVloc (Prov_some alloc_id, addr')
         (* lookup_alloc alloc_id >>= fun alloc ->
-        let addr' = Z.add addr (Z.of_int (Common.sizeof ty)) in
+        let addr' = Z.add addr (Z.of_int (Common.sizeof ~tagDefs ty)) in
         if alloc.killed then
           failwith "TODO UB, member_offset ==> killed"
         else if not (in_bounds addr' alloc) then
@@ -922,6 +937,8 @@ let member_shift_ptrval ptrval tag_sym membr_ident : pointer_value =
         failwith "UB: member_offset ==> funptr"
 
 let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
+  get >>= fun st ->
+  let tagDefs = st.tagDefs in
   match ptrval with
     | PVnull ->
         fail (MerrVIP (VIP_array_shift VIP_null))
@@ -929,7 +946,7 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
         fail (MerrVIP (VIP_array_shift VIP_empty))
     | PVloc (Prov_some alloc_id, addr) ->
         lookup_alloc alloc_id >>= fun alloc ->
-          let addr' = Z.(add addr (mul (ival_to_int ival) (Common.sizeof ty))) in
+          let addr' = Z.(add addr (mul (ival_to_int ival) (Common.sizeof ~tagDefs ty))) in
         if not (in_bounds addr' alloc) then
           fail (MerrVIP (VIP_array_shift VIP_out_of_bound))
         else
@@ -938,17 +955,19 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
         fail (MerrVIP (VIP_array_shift VIP_funptr))
 
 let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
-  return (member_shift_ptrval tag_sym membr_ident ptrval)
+  get >>= fun st ->
+  return (member_shift_ptrval st.tagDefs tag_sym membr_ident ptrval)
 
 let memcpy loc ptrval1 ptrval2 sz_ival : pointer_value memM =
+  get >>= fun st ->
   let sz = ival_to_int sz_ival in
   (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
   (* TODO: copy ptrval2 into ptrval1 *)
   (* NOTE: we are using the pure array_shift because if we go out of bound there is a UB right away *)
   let rec aux i =
     if Z.lt i sz then
-      Nondeterminism.lift_undef (array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IVint i)) >>= fun ptrval1' ->
-      Nondeterminism.lift_undef (array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IVint i)) >>= fun ptrval2' ->
+      Nondeterminism.lift_undef (array_shift_ptrval st.tagDefs loc ptrval1 Ctype.unsigned_char (IVint i)) >>= fun ptrval1' ->
+      Nondeterminism.lift_undef (array_shift_ptrval st.tagDefs loc ptrval2 Ctype.unsigned_char (IVint i)) >>= fun ptrval2' ->
       load loc Ctype.unsigned_char ptrval2' >>= fun (_, mval) ->
       store loc Ctype.unsigned_char false ptrval1' mval >>= fun _ ->
       aux (Z.succ i)
@@ -957,6 +976,7 @@ let memcpy loc ptrval1 ptrval2 sz_ival : pointer_value memM =
   aux Z.zero
 
 let memcmp loc ptrval1 ptrval2 sz_ival : integer_value memM =
+  get >>= fun st ->
   let size_n = ival_to_int sz_ival in
   let rec get_bytes ptrval acc = function
   | 0 ->
@@ -964,7 +984,7 @@ let memcmp loc ptrval1 ptrval2 sz_ival : integer_value memM =
   | size ->
       load Cerb_location.unknown Ctype.unsigned_char ptrval >>= function
         | (_, MVinteger (_, byte_ival)) ->
-            Nondeterminism.lift_undef (array_shift_ptrval loc ptrval Ctype.unsigned_char (IVint Z.one)) >>= fun ptr' ->
+            Nondeterminism.lift_undef (array_shift_ptrval st.tagDefs loc ptrval Ctype.unsigned_char (IVint Z.one)) >>= fun ptr' ->
             get_bytes ptr' (ival_to_int byte_ival :: acc) (size-1)
         | _ ->
             assert false in
@@ -1051,9 +1071,6 @@ let op_ival op ival1 ival2 : integer_value =
     | IntRem_f -> Z.integerRem_f
     | IntExp   -> fun x y -> Z.pow x (Z.to_int y) in
   IVint (op (ival_to_int ival1) (ival_to_int ival2))
-
-let sizeof_ival ty = IVint (Common.sizeof ty)
-let alignof_ival ty = IVint (Common.alignof ty)
 
 let bitwise_complement_ival _ ival =
   IVint (Z.(sub (neg (ival_to_int ival)) one))
@@ -1337,7 +1354,7 @@ let rec mk_ui_values st bs ty mval : ui_value list =
   let mk_ui_values = mk_ui_values st in
   let mk_scalar kind v p bs_opt =
     (* TODO(fix-Overflow) *)
-    let size = Z.to_int (Common.sizeof ty) in
+    let size = Z.to_int (Common.sizeof ~tagDefs:st.tagDefs ty) in
     [{ kind; size; path = []; value = v;
        prov = p; typ = Some ty; bytes = bs_opt }] in
   let mk_pad n v =
@@ -1377,7 +1394,7 @@ let rec mk_ui_values st bs ty mval : ui_value list =
         | Ctype (_, Array (elem_ty, _)) ->
           (* the Z.to_int on the sizeof() will raise Overflow on huge structs/unions *)
           (* TODO(fix-Overflow) *)
-          let size = Z.to_int (Common.sizeof elem_ty) in
+          let size = Z.to_int (Common.sizeof ~tagDefs:st.tagDefs elem_ty) in
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
               let row = List.map (add_path (string_of_int i)) @@ mk_ui_values acc_bs elem_ty mval in
               (row::acc, i+1, L.drop size acc_bs)
@@ -1391,19 +1408,19 @@ let rec mk_ui_values st bs ty mval : ui_value list =
         (* NOTE: we recombine the bytes to get paddings *)
         (* the Z.to_int on the sizeof() will raise Overflow on huge structs *)
           (* TODO(fix-Overflow) *)
-        let size = Z.to_int (Common.sizeof ty) in
+        let size = Z.to_int (Common.sizeof ~tagDefs:st.tagDefs ty) in
         let (bs1, bs2) = L.split_at size bs in
             let (rev_rowss, _, bs') = List.fold_left begin
             fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset) ->
               let pad = to_int (sub memb_offset previous_offset) in
               let acc_bs' = L.drop pad acc_bs in
-              let (mval, acc_bs'') = abst memb_ty acc_bs' in
+              let (mval, acc_bs'') = abst ~tagDefs:st.tagDefs memb_ty acc_bs' in
               let rows = mk_ui_values acc_bs' memb_ty mval in
               let rows' = List.map (add_path memb) rows in
               (* TODO: set padding value here *)
               let rows'' = if Int.(pad = 0) then rows' else mk_pad pad "" :: rows' in
-              (rows''::acc_rowss, Z.add memb_offset (Common.sizeof memb_ty), acc_bs'')
-          end ([], Z.zero, bs1) (fst (Common.offsetsof (Tags.tagDefs ()) tag_sym))
+              (rows''::acc_rowss, Z.add memb_offset (Common.sizeof ~tagDefs:st.tagDefs memb_ty), acc_bs'')
+          end ([], Z.zero, bs1) (fst (Common.offsetsof st.tagDefs tag_sym))
         in List.concat (List.rev rev_rowss)
     | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
         List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
@@ -1412,7 +1429,7 @@ let mk_ui_alloc st id (alloc: allocation) : ui_alloc =
   (* let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.length)) in *)
   let length = Z.to_int alloc.length in
   let bs = fetch_bytes st.bytemap alloc.base length in
-  let (mval, _) = abst alloc.ty bs in
+  let (mval, _) = abst ~tagDefs:st.tagDefs alloc.ty bs in
   {
     id;
     base = Z.to_string alloc.base;

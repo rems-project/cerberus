@@ -94,8 +94,8 @@ module IntMap = Map.Make(Z)
 
 let offsetsof = Ocaml_implementation.offsetsof
 (* TODO(state-removal) *)
-let sizeof ?(tagDefs= Tags.tagDefs ()) ty = Ocaml_implementation.sizeof tagDefs ty
-let alignof ?(tagDefs= Tags.tagDefs ()) ty = Ocaml_implementation.alignof tagDefs ty
+let sizeof ~tagDefs ty = Ocaml_implementation.sizeof tagDefs ty
+let alignof ~tagDefs ty = Ocaml_implementation.alignof tagDefs ty
 
 module Concrete : Memory = struct
   let name = "concrete"
@@ -321,9 +321,12 @@ module Concrete : Memory = struct
     last_used: storage_instance_id option;
 
     requested: (address * Z.t) list; (* the addresses (and object sizes) that were allocated with cerb::with_address() *)
+
+    (* READONLY (TODO: move this to the config part when the monad is changed) *)
+    tagDefs: Ctype.tag_definitions;
   }
   
-  let initial_mem_state = {
+  let initial_mem_state tagDefs = {
     next_alloc_id= Z.zero;
     next_iota= Z.zero;
     allocations= IntMap.empty;
@@ -340,8 +343,12 @@ module Concrete : Memory = struct
     dynamic_addrs= [];
     last_used= None;
     requested= [];
+
+    tagDefs;
   }
-  
+
+  let get_tagDefs = read (fun st -> st.tagDefs)
+
   (* TODO *)
   type footprint =
       (* base address, size *)
@@ -497,23 +504,23 @@ module Concrete : Memory = struct
       | None ->
           fail ~loc (MerrOutsideLifetime ("Concrete.get_allocation, alloc_id=" ^ Z.to_string alloc_id))
   
-  let is_within_bound ~loc alloc_id lvalue_ty addr =
+  let is_within_bound ~tagDefs ~loc alloc_id lvalue_ty addr =
     get_allocation ~loc alloc_id >>= fun alloc ->
-    return (Z.leq alloc.base addr && Z.leq (Z.add addr (sizeof lvalue_ty)) (Z.add alloc.base alloc.size))
+    return (Z.leq alloc.base addr && Z.leq (Z.add addr (sizeof ~tagDefs lvalue_ty)) (Z.add alloc.base alloc.size))
   
-  let is_within_device ty addr =
+  let is_within_device ~tagDefs ty addr =
     return begin
       List.exists (fun (min, max) ->
-        Z.leq min addr && Z.leq (Z.add addr (sizeof ty)) max
+        Z.leq min addr && Z.leq (Z.add addr (sizeof ~tagDefs ty)) max
       ) device_ranges
     end
   
   (* NOTE: this will have to change when moving to a subobject semantics *)
-  let is_atomic_member_access ~loc alloc_id lvalue_ty addr =
+  let is_atomic_member_access ~tagDefs ~loc alloc_id lvalue_ty addr =
     get_allocation ~loc alloc_id >>= fun alloc ->
     match alloc.ty with
       | Some ty when AilTypesAux.is_atomic ty ->
-          if    addr = alloc.base && Z.equal (sizeof lvalue_ty) alloc.size
+          if    addr = alloc.base && Z.equal (sizeof ~tagDefs lvalue_ty) alloc.size
              && Ctype.ctypeEqual lvalue_ty ty then
             (* the types equality check is to deal with the case where the
                first member is accessed and their are no padding bytes ... *)
@@ -522,7 +529,7 @@ module Concrete : Memory = struct
             let () = Printf.fprintf stderr "addr: %s <--> alloc.base: %s\n"
               (Z.to_string addr) (Z.to_string alloc.base) in
             let () = Printf.fprintf stderr "|lvalue_ty|: %s <--> |alloc|: %s\n"
-              (Z.to_string (sizeof lvalue_ty)) (Z.to_string alloc.size) in
+              (Z.to_string (sizeof ~tagDefs lvalue_ty)) (Z.to_string alloc.size) in
             return true
       | _ ->
           return false
@@ -730,14 +737,18 @@ module Concrete : Memory = struct
     return alloc_id
   
   
-  (* INTERNAL abst: ctype -> AbsByte.t list -> [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list *)
+  (* INTERNAL abst: ctype -> AbsByte.t list ->
+                [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list *)
   (* ASSUMES: has_size ty /\ |bs| >= sizeof ty*)
   (* property that should hold:
        forall ty bs bs' mval.
          has_size ty -> |bs| >= sizeof ty -> abst ty bs = (mval, bs') ->
          |bs'| + sizeof ty  = |bs| /\ typeof mval = ty *)
-  let rec abst ?(is_zap=false) find_overlaping ~(addr : address) unionmap funptrmap (Ctype (_, ty) as cty) (bs : AbsByte.t list) : [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list =
-    let self ?(offset=0) = abst find_overlaping ~addr:(Z.add addr (Z.of_int offset)) unionmap funptrmap in
+  let rec abst ?(is_zap=false) ~tagDefs find_overlaping ~(addr : address) unionmap funptrmap
+    (Ctype (_, ty) as cty) (bs : AbsByte.t list) 
+  : [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list =
+    let self ?(offset=0) =
+      abst ~tagDefs find_overlaping ~addr:(Z.add addr (Z.of_int offset)) unionmap funptrmap in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
         match acc_opt, c_opt with
@@ -749,7 +760,7 @@ module Concrete : Memory = struct
               Some (c :: acc)
       ) (Some []) (List.rev xs) in
     
-    if Z.lt (Z.of_int (List.length bs)) (sizeof cty) then
+    if Z.lt (Z.of_int (List.length bs)) (sizeof ~tagDefs cty) then
       failwith "abst, |bs| < sizeof(ty)";
     
     let merge_taint x y =
@@ -770,7 +781,7 @@ module Concrete : Memory = struct
           (* ty must have a known size *)
           assert false
       | Basic (Integer ity) ->
-          let (bs1, bs2) = L.split_at (Z.to_int (sizeof cty)) bs in
+          let (bs1, bs2) = L.split_at (Z.to_int (sizeof ~tagDefs cty)) bs in
           let (prov, bs1') = AbsByte.pvi_split_bytes bs1 in
             (* PNVI-ae-udi *)
           ( AbsByte.provs_of_bytes bs1
@@ -795,7 +806,7 @@ module Concrete : Memory = struct
                   MVunspecified cty
             end , bs2)
       | Basic (Floating fty) ->
-          let (bs1, bs2) = L.split_at (Z.to_int (sizeof cty)) bs in
+          let (bs1, bs2) = L.split_at (Z.to_int (sizeof ~tagDefs cty)) bs in
           (* we don't care about provenances for floats *)
           let (_, _, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint
@@ -816,7 +827,7 @@ module Concrete : Memory = struct
           in
           aux (Z.to_int n) (`NoTaint, []) bs
       | Pointer (_, ref_ty) ->
-          let (bs1, bs2) = L.split_at (Z.to_int (sizeof cty)) bs in
+          let (bs1, bs2) = L.split_at (Z.to_int (sizeof ~tagDefs cty)) bs in
           Cerb_debug.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint (* PNVI-ae-udi *)
@@ -884,21 +895,21 @@ module Concrete : Memory = struct
           self atom_ty bs
       | Struct tag_sym ->
           (* TODO: the Z.to_int on the sizeof() will raise Overflow on huge structs *)
-          let (bs1, bs2) = L.split_at (Z.to_int (sizeof cty)) bs in
+          let (bs1, bs2) = L.split_at (Z.to_int (sizeof ~tagDefs cty)) bs in
           let (taint, rev_xs, _, bs') = List.fold_left (fun (taint_acc, acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             (* TODO: the Z.to_int will raise Overflow if the member is huge *)
             let pad = Z.to_int (Z.sub memb_offset previous_offset) in
             let (taint, mval, acc_bs') = self ~offset:pad memb_ty (L.drop pad acc_bs) in
-            (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, Z.add memb_offset (sizeof memb_ty), acc_bs')
-          ) (`NoTaint, [], Z.zero, bs1) (fst (offsetsof ~ignore_flexible:true (Tags.tagDefs ()) tag_sym)) in
+            (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, Z.add memb_offset (sizeof ~tagDefs memb_ty), acc_bs')
+          ) (`NoTaint, [], Z.zero, bs1) (fst (offsetsof ~ignore_flexible:true tagDefs tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
           (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union tag_sym ->
-          let (bs1, bs2) = L.split_at (Z.to_int (sizeof cty)) bs in
+          let (bs1, bs2) = L.split_at (Z.to_int (sizeof ~tagDefs cty)) bs in
           if is_zap then
             (* TODO: hack to prevent pointer zap from crashing if a union is in the memory *)
             ( `NoTaint, MVunspecified cty, bs2)
-          else (match Pmap.find tag_sym (Tags.tagDefs ()) with
+          else (match Pmap.find tag_sym tagDefs with
             | _, UnionDef ((first_membr_def :: _) as membrs) ->
                 let (membr_ident, (_, _, _, membr_ty)) =
                   match IntMap.find_opt addr unionmap with
@@ -959,23 +970,23 @@ module Concrete : Memory = struct
       )
   
   (* INTERNAL repr *)
-  let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
+  let rec repr ~tagDefs funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
     let ret bs = (funptrmap, bs) in
     match mval with
       | MVunspecified ty ->
           (* TODO: the Z.to_int on the sizeof() will raise Overflow on huge structs/unions *)
-          ret @@ List.init (Z.to_int (sizeof ty)) (fun _ -> AbsByte.v Prov_none None)
+          ret @@ List.init (Z.to_int (sizeof ~tagDefs ty)) (fun _ -> AbsByte.v Prov_none None)
       | MVinteger (ity, IV (prov, n)) ->
           ret @@List.map (AbsByte.v prov) begin
             bytes_of_int
               (AilTypesAux.is_signed_ity ity)
-              (Z.to_int (sizeof (Ctype ([], Basic (Integer ity))))) n
+              (Z.to_int (sizeof ~tagDefs (Ctype ([], Basic (Integer ity))))) n
           end
       | MVfloating (fty, fval) ->
           ret @@ List.map (AbsByte.v Prov_none) begin
             bytes_of_int
               true (* TODO: check that *)
-              (Z.to_int (sizeof (Ctype ([], Basic (Floating fty))))) (Z.of_int64 (Int64.bits_of_float fval))
+              (Z.to_int (sizeof ~tagDefs (Ctype ([], Basic (Floating fty))))) (Z.of_int64 (Int64.bits_of_float fval))
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
           Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
@@ -1016,39 +1027,39 @@ module Concrete : Memory = struct
       | MVarray mvals ->
           let (funptrmap, bs_s) =
             List.fold_left begin fun (funptrmap, bs) mval ->
-              let (funptrmap, bs') = repr funptrmap mval in
+              let (funptrmap, bs') = repr ~tagDefs funptrmap mval in
               (funptrmap, bs' :: bs)
             end (funptrmap, []) mvals in
           (* TODO: use a fold? *)
           (funptrmap, L.concat @@ List.rev bs_s)
       | MVstruct (tag_sym, xs) ->
           let padding_byte _ = AbsByte.v Prov_none None in
-          let (offs, last_off) = offsetsof ~ignore_flexible:true (Tags.tagDefs ()) tag_sym in
+          let (offs, last_off) = offsetsof ~ignore_flexible:true tagDefs tag_sym in
           (* NOTE: this Z.to_int is fine because we can't have huge paddings *)
-          let final_pad = Z.(to_int (sub (sizeof (Ctype ([], Struct tag_sym))) last_off)) in
+          let final_pad = Z.(to_int (sub (sizeof ~tagDefs (Ctype ([], Struct tag_sym))) last_off)) in
           (* TODO: rewrite now that offsetsof returns the paddings *)
           let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
               (* NOTE: this Z.to_int is fine because we can't have huge paddings *)
               let pad = Z.to_int (Z.sub off last_off) in
-              let (funptrmap, bs) = repr funptrmap mval in
-              (funptrmap, Z.add off (sizeof ty), acc @ List.init pad padding_byte @ bs)
+              let (funptrmap, bs) = repr ~tagDefs funptrmap mval in
+              (funptrmap, Z.add off (sizeof ~tagDefs ty), acc @ List.init pad padding_byte @ bs)
             end (funptrmap, Z.zero, []) offs xs
           in
           (funptrmap, bs @ List.init final_pad padding_byte)
       | MVunion (tag_sym, memb_ident, mval) ->
           (* TODO: the Z.to_int on the sizeof() will raise Overflow on huge structs/unions *)
-          let size = Z.to_int (sizeof (Ctype ([], Union tag_sym))) in
-          let (funptrmap', bs) = repr funptrmap mval in
+          let size = Z.to_int (sizeof ~tagDefs (Ctype ([], Union tag_sym))) in
+          let (funptrmap', bs) = repr ~tagDefs funptrmap mval in
           (funptrmap', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
   
   
   (* BEGIN DEBUG *)
-  let dot_of_mem_state st =
+  let dot_of_mem_state ~tagDefs st =
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (Z.to_int alloc.size) in
       match alloc.ty with
         | Some ty ->
-            let (_, mval, _) = abst (find_overlaping st) ~addr:alloc.base st.last_used_union_members st.funptrmap ty bs in
+            let (_, mval, _) = abst ~tagDefs (find_overlaping st) ~addr:alloc.base st.last_used_union_members st.funptrmap ty bs in
             mval
         | None ->
             failwith "Concrete.dot_of_mem_state: alloc.ty = None"
@@ -1109,8 +1120,9 @@ module Concrete : Memory = struct
       failwith "allocator_with_address ==> requested adddress has wrong alignment"
   
   let allocate_object tid pref (*is_zero_init*) (IV (_, align)) ty req_addr_opt init_opt : pointer_value memM =
+    get_tagDefs >>= fun tagDefs ->
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
-    let size = sizeof ty in
+    let size = sizeof ~tagDefs ty in
     begin match req_addr_opt with
       | None ->
           allocator size align
@@ -1138,7 +1150,7 @@ module Concrete : Memory = struct
                             IntMap.add addr b acc
                           ) st.bytemap bs
                         else
-                          let (_, pre_bs) = repr st.funptrmap (MVunspecified ty) in
+                          let (_, pre_bs) = repr ~tagDefs st.funptrmap (MVunspecified ty) in
                           let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in              
                           List.fold_left (fun acc (addr, b) ->
                             IntMap.add addr b acc
@@ -1156,7 +1168,7 @@ module Concrete : Memory = struct
           let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= readonly_status; taint= `Unexposed} in
           (* TODO: factorise this with do_store inside Concrete.store *)
           update (fun st ->
-            let (funptrmap, pre_bs) = repr st.funptrmap mval in
+            let (funptrmap, pre_bs) = repr ~tagDefs st.funptrmap mval in
             let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
             { st with
                 allocations= IntMap.add alloc_id alloc st.allocations;
@@ -1184,7 +1196,7 @@ module Concrete : Memory = struct
         Cerb_debug.warn [] (fun () -> "update_prefix: wrong arguments");
         return ()
   
-  let prefix_of_pointer (PV (prov, pv)) : string option memM =
+  let prefix_of_pointer tagDefs (PV (prov, pv)) : string option memM =
     let open String_symbol in
     let rec aux addr alloc = function
       | None
@@ -1200,7 +1212,7 @@ module Concrete : Memory = struct
           Some (string_of_prefix alloc.prefix ^ " + " ^ Z.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
           let offset = Z.sub addr alloc.base in
-          let (offs, _) = offsetsof (Tags.tagDefs ()) tag_sym in
+          let (offs, _) = offsetsof tagDefs tag_sym in
           let rec find = function
             | [] ->
               None
@@ -1213,7 +1225,7 @@ module Concrete : Memory = struct
       | Some (Ctype (_, Array (ty, _))) ->
           let offset = Z.sub addr alloc.base in
           if Z.lt offset alloc.size then
-            let n = Z.div offset (sizeof ty) in
+            let n = Z.div offset (sizeof ~tagDefs ty) in
             Some (string_of_prefix alloc.prefix ^ "[" ^ Z.to_string n ^ "]")
           else
             None
@@ -1259,7 +1271,7 @@ module Concrete : Memory = struct
   
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
-  let zap_pointers alloc_id =
+  let zap_pointers ~tagDefs alloc_id =
     modify (fun st ->
       let bytemap' = IntMap.fold (fun _ alloc acc ->
         let bs = fetch_bytes st.bytemap alloc.base (Z.to_int alloc.size) in
@@ -1268,7 +1280,7 @@ module Concrete : Memory = struct
               (* TODO: zapping doesn't work yet for dynamically allocated pointers *)
               acc
           | Some ty ->
-              begin match abst ~is_zap:true (find_overlaping st) ~addr:alloc.base st.last_used_union_members st.funptrmap ty bs with
+              begin match abst ~is_zap:true ~tagDefs (find_overlaping st) ~addr:alloc.base st.last_used_union_members st.funptrmap ty bs with
                 | (_, MVpointer (ref_ty, (PV (Prov_some ptr_alloc_id, _))), []) when alloc_id = ptr_alloc_id ->
                     let bs' = List.init (Z.to_int alloc.size) (fun i ->
                       (Z.add alloc.base (Z.of_int i), AbsByte.v Prov_none None)
@@ -1331,7 +1343,8 @@ module Concrete : Memory = struct
                    allocations= IntMap.remove alloc_id st.allocations}
         end >>= fun () ->
         if Switches.(has_switch SW_zap_dead_pointers) then
-          zap_pointers alloc_id
+          get_tagDefs >>= fun tagDefs ->
+          zap_pointers ~tagDefs alloc_id
         else
           return ()
     
@@ -1365,7 +1378,8 @@ module Concrete : Memory = struct
                            allocations= IntMap.remove alloc_id st.allocations}
                 end >>= fun () ->
                 if Switches.(has_switch SW_zap_dead_pointers) then
-                  zap_pointers alloc_id
+                  get_tagDefs >>= fun tagDefs ->
+                  zap_pointers ~tagDefs alloc_id
                 else
                   return ()
               end else
@@ -1376,11 +1390,12 @@ module Concrete : Memory = struct
     Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
       "ENTERING LOAD: " ^ Cerb_location.location_to_string loc
     );
+    get_tagDefs >>= fun tagDefs ->
     let do_load alloc_id_opt addr =
       get >>= fun st ->
       (* TODO: the Z.to_int will fail on huge objects *)
-      let bs = fetch_bytes st.bytemap addr (Z.to_int (sizeof ty)) in
-      let (taint, mval, bs') = abst (find_overlaping st) ~addr st.last_used_union_members st.funptrmap ty bs in
+      let bs = fetch_bytes st.bytemap addr (Z.to_int (sizeof ~tagDefs ty)) in
+      let (taint, mval, bs') = abst ~tagDefs (find_overlaping st) ~addr st.last_used_union_members st.funptrmap ty bs in
       (* PNVI-ae-udi *)
       begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
         expose_allocations taint
@@ -1388,7 +1403,7 @@ module Concrete : Memory = struct
         return ()
       end >>= fun () ->
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
-      let fp = FP (`R, addr, (sizeof ty)) in
+      let fp = FP (`R, addr, (sizeof ~tagDefs ty)) in
       begin match bs' with
         | [] ->
             Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
@@ -1432,7 +1447,7 @@ module Concrete : Memory = struct
       | (Prov_none, _) ->
           fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
       | (Prov_device, PVconcrete (_, addr)) ->
-          begin is_within_device ty addr >>= function
+          begin is_within_device ~tagDefs ty addr >>= function
             | false ->
                 fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
             | true ->
@@ -1449,11 +1464,11 @@ module Concrete : Memory = struct
               | true ->
                   return (`FAIL (loc, MerrAccess (LoadAccess, DeadPtr)))
               | false ->
-                  begin is_within_bound ~loc z ty addr >>= function
+                  begin is_within_bound ~tagDefs ~loc z ty addr >>= function
                     | false ->
                         return (`FAIL (loc, MerrAccess (LoadAccess, OutOfBoundPtr)))
                     | true ->
-                        begin is_atomic_member_access ~loc z ty addr >>= function
+                        begin is_atomic_member_access ~tagDefs ~loc z ty addr >>= function
                           | true ->
                               return (`FAIL (loc, MerrAccess (LoadAccess, AtomicMemberof)))
                           | false ->
@@ -1471,14 +1486,14 @@ module Concrete : Memory = struct
             | false ->
                 return ()
           end >>= fun () ->
-          begin is_within_bound ~loc alloc_id ty addr >>= function
+          begin is_within_bound ~tagDefs ~loc alloc_id ty addr >>= function
             | false ->
                 Cerb_debug.print_debug 1 [] (fun () ->
                   "LOAD out of bound, alloc_id=" ^ Z.to_string alloc_id
                 );
                 fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
             | true ->
-                begin is_atomic_member_access ~loc alloc_id ty addr >>= function
+                begin is_atomic_member_access ~tagDefs ~loc alloc_id ty addr >>= function
                   | true ->
                       fail ~loc (MerrAccess (LoadAccess, AtomicMemberof))
                   | false ->
@@ -1488,6 +1503,7 @@ module Concrete : Memory = struct
   
   
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
+    get_tagDefs >>= fun tagDefs ->
     Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
       "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
       " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
@@ -1505,7 +1521,7 @@ module Concrete : Memory = struct
     end else
       let do_store alloc_id_opt addr =
         update begin fun st ->
-          let (funptrmap, pre_bs) = repr st.funptrmap mval in
+          let (funptrmap, pre_bs) = repr ~tagDefs st.funptrmap mval in
           let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
           { st with last_used= alloc_id_opt;
                     bytemap=
@@ -1523,7 +1539,7 @@ module Concrete : Memory = struct
               return ()
         end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Cerb_location.location_to_string loc) >>= fun () ->
-        return (FP (`W, addr, (sizeof ty))) in
+        return (FP (`W, addr, (sizeof ~tagDefs ty))) in
       let select_ro_kind = function
         | Symbol.PrefTemporaryLifetime _ ->
             ReadonlyTemporaryLifetime
@@ -1539,7 +1555,7 @@ module Concrete : Memory = struct
         | (Prov_none, _) ->
             fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
         | (Prov_device, PVconcrete (_, addr)) ->
-            begin is_within_device ty addr >>= function
+            begin is_within_device ~tagDefs ty addr >>= function
               | false ->
                   fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
               | true ->
@@ -1552,7 +1568,7 @@ module Concrete : Memory = struct
            PNVI-ae-udi stuff separated to avoid polluting the
            vanilla PNVI code) *)
           let precondition z =
-            is_within_bound ~loc z ty addr >>= function
+            is_within_bound ~tagDefs ~loc z ty addr >>= function
               | false ->
                   return (`FAIL (loc, MerrAccess (StoreAccess, OutOfBoundPtr)))
               | true ->
@@ -1561,7 +1577,7 @@ module Concrete : Memory = struct
                     | IsReadOnly ro_kind ->
                         return (`FAIL (loc, MerrWriteOnReadOnly ro_kind))
                     | IsWritable ->
-                      begin is_atomic_member_access ~loc z ty addr >>= function
+                      begin is_atomic_member_access ~tagDefs ~loc z ty addr >>= function
                         | true ->
                             return (`FAIL (loc, MerrAccess (LoadAccess, AtomicMemberof)))
                         | false ->
@@ -1583,7 +1599,7 @@ module Concrete : Memory = struct
           return fp
         
         | (Prov_some alloc_id, PVconcrete (_, addr)) ->
-            begin is_within_bound alloc_id ~loc ty addr >>= function
+            begin is_within_bound ~tagDefs alloc_id ~loc ty addr >>= function
               | false ->
                   fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
               | true ->
@@ -1592,7 +1608,7 @@ module Concrete : Memory = struct
                     | IsReadOnly ro_kind ->
                         fail ~loc (MerrWriteOnReadOnly ro_kind)
                     | IsWritable ->
-                        begin is_atomic_member_access ~loc alloc_id ty addr >>= function
+                        begin is_atomic_member_access ~tagDefs ~loc alloc_id ty addr >>= function
                           | true ->
                               fail ~loc (MerrAccess (LoadAccess, AtomicMemberof))
                           | false ->
@@ -1775,6 +1791,7 @@ module Concrete : Memory = struct
   
   
   let diff_ptrval loc diff_ty ptrval1 ptrval2 =
+    get_tagDefs >>= fun tagDefs ->
     let precond alloc addr1 addr2 =
          Z.leq alloc.base addr1
       && Z.leq addr1 (Z.add alloc.base alloc.size)
@@ -1787,7 +1804,7 @@ module Concrete : Memory = struct
             elem_ty
         | _ ->
             diff_ty in
-      return (IV (Prov_none, Z.div (Z.sub addr1 addr2) (sizeof diff_ty'))) in
+      return (IV (Prov_none, Z.div (Z.sub addr1 addr2) (sizeof ~tagDefs diff_ty'))) in
     let error_postcond =
       fail ~loc MerrPtrdiff in
     if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
@@ -1902,7 +1919,8 @@ module Concrete : Memory = struct
                 Printf.printf "addr: %s\n" (Z.to_string addr);
                 Printf.printf "align: %d\n" (alignof ref_ty);
 *)
-                return (Z.(equal (modulus addr (alignof ref_ty)) zero))
+                get_tagDefs >>= fun tagDefs ->
+                return (Z.(equal (modulus addr (alignof ~tagDefs ref_ty)) zero))
           end
   
   (* Following §6.5.3.3, footnote 102) *)
@@ -2023,10 +2041,10 @@ module Concrete : Memory = struct
       | None ->
           failwith "Concrete.offsetof_ival: invalid memb_ident"
   
-  let array_shift_ptrval loc (PV (prov, ptrval_)) ty (IV (_, ival)) =
+  let array_shift_ptrval tagDefs loc (PV (prov, ptrval_)) ty (IV (_, ival)) =
     (* As a GNU extension ty may be void, in which case the pointer arithmetic
        is performed at the byte granularity *)
-    let sz = if AilTypesAux.is_void ty then Z.one else sizeof ty in
+    let sz = if AilTypesAux.is_void ty then Z.one else sizeof ~tagDefs ty in
     let offset = (Z.(mul sz ival)) in
     match prov with
       (* PNVI-ae-udi *)
@@ -2044,10 +2062,10 @@ module Concrete : Memory = struct
               Undefined.return0 (PV (prov, PVconcrete (membr_opt, Z.add addr offset)))
           end
   
-  let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
-    let IV (_, offset) = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
+  let member_shift_ptrval tagDefs (PV (prov, ptrval_)) tag_sym memb_ident =
+    let IV (_, offset) = offsetof_ival tagDefs tag_sym memb_ident in
     let membr_opt =
-      match Pmap.lookup tag_sym (Tags.tagDefs ()) with
+      match Pmap.lookup tag_sym tagDefs with
         | Some (_, UnionDef _) ->
             Some memb_ident
         | _ ->
@@ -2066,8 +2084,9 @@ module Concrete : Memory = struct
           PVconcrete (membr_opt, Z.add addr offset))
   
   let eff_array_shift_ptrval loc ptrval ty (IV (_, ival)) =
+    get_tagDefs >>= fun tagDefs ->
     (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
-    let offset = (Z.(mul (sizeof ty) ival)) in
+    let offset = (Z.(mul (sizeof ~tagDefs ty) ival)) in
     match ptrval with
       | PV (_, PVnull _) ->
           (* TODO: this seems to be undefined in ISO C *)
@@ -2090,8 +2109,8 @@ module Concrete : Memory = struct
                || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
               get_allocation ~loc z >>= fun alloc ->
               if    Z.leq alloc.base shifted_addr
-                 && Z.leq (Z.add shifted_addr (sizeof ty))
-                          (Z.add (Z.add alloc.base alloc.size) (sizeof ty)) then
+                 && Z.leq (Z.add shifted_addr (sizeof ~tagDefs ty))
+                          (Z.add (Z.add alloc.base alloc.size) (sizeof ~tagDefs ty)) then
                 return true
               else
                 return false
@@ -2162,8 +2181,8 @@ module Concrete : Memory = struct
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
             get_allocation ~loc alloc_id >>= fun alloc ->
             if    Z.leq alloc.base shifted_addr
-               && Z.leq (Z.add shifted_addr (sizeof ty))
-                        (Z.add (Z.add alloc.base alloc.size) (sizeof ty)) then
+               && Z.leq (Z.add shifted_addr (sizeof ~tagDefs ty))
+                        (Z.add (Z.add alloc.base alloc.size) (sizeof ~tagDefs ty)) then
               return (PV (Prov_some alloc_id, PVconcrete (None, shifted_addr)))
             else
               fail ~loc MerrArrayShift
@@ -2180,7 +2199,8 @@ module Concrete : Memory = struct
           return (PV (Prov_device, PVconcrete (None, Z.add addr offset)))
 
 let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
-  return (member_shift_ptrval tag_sym membr_ident ptrval)
+  get_tagDefs >>= fun tagDefs ->
+  return (member_shift_ptrval tagDefs tag_sym membr_ident ptrval)
 
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
@@ -2452,12 +2472,13 @@ VIP:type pointer_value =
   
   (* TODO check *)
   let memcpy loc ptrval1 ptrval2 (IV (_, size_n)) =
+    get_tagDefs >>= fun tagDefs ->
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
       if Z.lt i size_n then
-        Nondeterminism.lift_undef (array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun ptrval1' ->
-        Nondeterminism.lift_undef (array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun ptrval2' ->
+        Nondeterminism.lift_undef (array_shift_ptrval tagDefs loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun ptrval1' ->
+        Nondeterminism.lift_undef (array_shift_ptrval tagDefs loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun ptrval2' ->
         load loc Ctype.unsigned_char ptrval2' >>= fun (_, mval) ->
         store loc Ctype.unsigned_char false ptrval1' mval >>= fun _ ->
         aux (Z.succ i)
@@ -2468,13 +2489,14 @@ VIP:type pointer_value =
   
   (* TODO: validate more, but looks good *)
   let memcmp loc ptrval1 ptrval2 (IV (_, size_n)) =
+    get_tagDefs >>= fun tagDefs ->
     let rec get_bytes ptrval acc = function
       | 0 ->
           return (List.rev acc)
       | size ->
           load loc Ctype.unsigned_char ptrval >>= function
             | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
-                Nondeterminism.lift_undef (array_shift_ptrval loc ptrval Ctype.unsigned_char (IV (Prov_none, Z.one))) >>= fun ptr' ->
+                Nondeterminism.lift_undef (array_shift_ptrval tagDefs loc ptrval Ctype.unsigned_char (IV (Prov_none, Z.one))) >>= fun ptr' ->
                 get_bytes ptr' (byte_n :: acc) (size-1)
             | _ ->
                 assert false in
@@ -2629,7 +2651,7 @@ VIP:type pointer_value =
     let mk_ui_values = mk_ui_values st in
     let mk_scalar kind v p bs_opt =
       (* TODO: the Z.to_int on the sizeof() will raise Overflow on huge objects *)
-      [{ kind; size = Z.to_int (sizeof ty); path = []; value = v;
+      [{ kind; size = Z.to_int (sizeof ~tagDefs:st.tagDefs ty); path = []; value = v;
          prov = p; typ = Some ty; bytes = bs_opt }] in
     let mk_pad n v =
       { kind = `Padding; size = n; typ = None; path = []; value = v;
@@ -2664,7 +2686,7 @@ VIP:type pointer_value =
       begin match ty with
         | Ctype (_, Array (elem_ty, _)) ->
           (* TODO: the Z.to_int on the sizeof() will raise Overflow on huge structs/unions *)
-          let size = Z.to_int (sizeof elem_ty) in
+          let size = Z.to_int (sizeof ~tagDefs:st.tagDefs elem_ty) in
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
               let row = List.map (add_path (string_of_int i)) @@ mk_ui_values acc_bs elem_ty mval in
               (row::acc, i+1, L.drop size acc_bs)
@@ -2677,18 +2699,18 @@ VIP:type pointer_value =
       let open Z in
       (* NOTE: we recombine the bytes to get paddings *)
       (* TODO: the Z.to_int on the sizeof() will raise Overflow on huge structs *)
-      let (bs1, bs2) = L.split_at (to_int (sizeof ty)) bs in
+      let (bs1, bs2) = L.split_at (to_int (sizeof ~tagDefs:st.tagDefs ty)) bs in
           let (rev_rowss, _, bs') = List.fold_left begin
           fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset) ->
             let pad = to_int (sub memb_offset previous_offset) in
             let acc_bs' = L.drop pad acc_bs in
-            let (_, mval, acc_bs'') = abst (find_overlaping st) ~addr:Z.zero(*TODO!!!!*) st.last_used_union_members st.funptrmap memb_ty acc_bs' in
+            let (_, mval, acc_bs'') = abst ~tagDefs:st.tagDefs (find_overlaping st) ~addr:Z.zero(*TODO!!!!*) st.last_used_union_members st.funptrmap memb_ty acc_bs' in
             let rows = mk_ui_values acc_bs' memb_ty mval in
             let rows' = List.map (add_path memb) rows in
             (* TODO: set padding value here *)
             let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
-            (rows''::acc_rowss, Z.add memb_offset (sizeof memb_ty), acc_bs'')
-        end ([], Z.zero, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
+            (rows''::acc_rowss, Z.add memb_offset (sizeof ~tagDefs:st.tagDefs memb_ty), acc_bs'')
+        end ([], Z.zero, bs1) (fst (offsetsof st.tagDefs tag_sym))
       in List.concat (List.rev rev_rowss)
     | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
@@ -2697,7 +2719,7 @@ VIP:type pointer_value =
     let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.size)) in
     let size = Z.to_int alloc.size in
     let bs = fetch_bytes st.bytemap alloc.base size in
-    let (_, mval, _) = abst (find_overlaping st) ~addr:alloc.base st.last_used_union_members st.funptrmap ty bs in
+    let (_, mval, _) = abst ~tagDefs:st.tagDefs (find_overlaping st) ~addr:alloc.base st.last_used_union_members st.funptrmap ty bs in
     { id = id;
       base = Z.to_string alloc.base;
       prefix = alloc.prefix;

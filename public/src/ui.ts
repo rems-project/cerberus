@@ -566,7 +566,6 @@ export class CerberusUI {
         lastId: state.interactive.last_node_id,
         state: active.state,
         active: active.id,
-        tagDefs: state.interactive.tag_defs
       })
     } else {
       this.request('step', (data: ResultRequest) => {

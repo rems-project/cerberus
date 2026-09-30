@@ -379,7 +379,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                             | Just cval3 ->
                                 match (cval1, cval2) with
                                   | (Vobject (OVinteger ival), Vctype ty) ->
-                                match memValueFromValue (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
+                                match memValueFromValue file.tagDefs (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
                                   | Just mem_val ->
                                       Step_action_request "CreateRequest" (
                                         E.fresh_action_id >>= fun create_aid ->
@@ -524,7 +524,7 @@ KKK
                     )
 *)
                 | _ ->
-                  match memValueFromValue (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval with
+                  match memValueFromValue file.tagDefs (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval with
                     | Just mem_val ->
                         Step_action_request "StoreRequest" (
                           E.fresh_action_id >>= fun store_aid ->
@@ -615,7 +615,7 @@ KKK
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3, valueFromPexpr pe4) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval_expected, Just cval_desired) ->
-              match (memValueFromValue ty cval_expected, memValueFromValue ty cval_desired) with
+              match (memValueFromValue file.tagDefs ty cval_expected, memValueFromValue file.tagDefs ty cval_desired) with
                 | (Just mval_expected, Just mval_desired) ->
                     Step_action_request "RMWRequest" (
                       E.fresh_action_id >>= fun rmw_aid ->
@@ -948,7 +948,7 @@ BEFORE EVAL_PEXPR2
                                       ty
                                     else
                                       Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty) in
-                                  match Core_aux.memValueFromValue arg_ty cval with
+                                  match Core_aux.memValueFromValue file.tagDefs arg_ty cval with
                                     | Just mval -> mval
                                     | Nothing -> error "Eccall memvalue"
                                   end) $ List.zip (List.map snd param_tys) cvals
@@ -1577,7 +1577,7 @@ BEFORE EVAL_PEXPR2
                         | Just psym ->
                             match Map.lookup psym file.funinfo with
                               | Just (_, _, ret_ty, _, _, _) ->
-                                  TSK_Return psym $ Core_aux.memValueFromValue ret_ty cval
+                                  TSK_Return psym $ Core_aux.memValueFromValue file.tagDefs ret_ty cval
                               | Nothing ->
                                   TSK_Misc
                             end

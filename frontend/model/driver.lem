@@ -181,6 +181,8 @@ let liftCore_run m =
 
 val drive_fs_step: Mem.thread_id -> Core_run.thread_state -> driver_state -> Core_run.fs_oper -> driverM unit
 let drive_fs_step tid th_st dr_st fs_oper =
+  (* NOTE: the Core file (and tagDefs) is read-only *)
+  let tagDefs = dr_st.core_file.Core.tagDefs in
   let alignof_ival ty = Mem.integer_ival (Implementation.alignof_ty dr_st.core_file.Core.tagDefs ty) in
   let th_st_from_int n =
     let (Core.Expr arena_annots _) = th_st.Core_run.arena in
@@ -288,7 +290,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let dirent_cty = Ctype.Ctype [] (Ctype.Struct sym) in
     let update_mem dir_name =
       Mem.bind (Mem.allocate_object tid (Symbol.PrefOther "dirent") (alignof_ival dirent_cty) dirent_cty Nothing Nothing) (fun dirent_ptr ->
-        let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Symbol.Identifier loc "d_name") in
+        let d_name_ptr = Mem.member_shift_ptrval tagDefs dirent_ptr sym (Symbol.Identifier loc "d_name") in
         Mem.bind (Formatted.store_chars_in_array true d_name_ptr dir_name) (fun _ ->
           (Mem.return dirent_ptr)))
     in
@@ -308,7 +310,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let update_mem stat =
       let loc = Loc.other "store struct stat" in
       let store iTy memb f =
-        let ptr = Mem.member_shift_ptrval stat_ptr sym (Symbol.Identifier loc memb) in
+        let ptr = Mem.member_shift_ptrval tagDefs stat_ptr sym (Symbol.Identifier loc memb) in
         let mval = Mem.integer_value_mval iTy (Mem.integer_ival (f stat)) in
         Mem.store loc (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer iTy))) false
                   ptr mval
@@ -680,8 +682,9 @@ let action_request_sequential2 loc tid aid = function
   
   | Core_reduction.LoadRequest2 mo lvalue_ty ptr_val mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST LOAD") in (* DEBUG *)
-      liftMem (Mem.load loc lvalue_ty ptr_val) >>= fun (fp, mval) ->
-      liftMem (Mem.prefix_of_pointer ptr_val)  >>= fun pref       ->
+      liftMem (Mem.load loc lvalue_ty ptr_val)            >>= fun (fp, mval) ->
+      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs) >>= fun tagDefs    ->
+      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)     >>= fun pref       ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval) dr_st.core_state;
@@ -693,8 +696,9 @@ let action_request_sequential2 loc tid aid = function
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST STORE") in (* DEBUG *)
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
-      liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp ->
-      liftMem (Mem.prefix_of_pointer ptr_val) >>= fun pref ->
+      liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp      ->
+      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs)          >>= fun tagDefs ->
+      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)              >>= fun pref    ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' aid fp) dr_st.core_state;
@@ -706,7 +710,8 @@ let action_request_sequential2 loc tid aid = function
       liftMem (Mem.load loc lvalue_ty ptr_val)              >>= fun (_, mval) ->
       liftCore_run (mk_mval' mval)                          >>= fun mval'     ->
       liftMem (Mem.store loc lvalue_ty false ptr_val mval') >>= fun fp        ->
-      liftMem (Mem.prefix_of_pointer ptr_val)               >>= fun pref      ->
+      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs)   >>= fun tagDefs   ->
+      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)       >>= fun pref      ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval mval') dr_st.core_state;
@@ -865,9 +870,10 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval')))
 
     | (Mem_common.CHERI_intrinsic str (ret_ty, tys), cvals) ->
+        ND.read (fun st -> st.core_file.Core.tagDefs) >>= fun tagDefs ->
         let mvals =
           Utils.map2 (fun ty cval ->
-            fromJust "CHERI_intrinsic call" (Caux.memValueFromValue ty cval)
+            fromJust "CHERI_intrinsic call" (Caux.memValueFromValue tagDefs ty cval)
           ) tys cvals in
         liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
         match res_opt with
@@ -1507,7 +1513,7 @@ let initial_driver_state file fs_state =
     core_extern=       Core_linking.create_extern_symmap file;
     core_state=        Core_run.initial_core_state;
     core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
-    layout_state=      Mem.initial_mem_state;
+    layout_state=      Mem.initial_mem_state file.Core.tagDefs;
     concurrency_state= Cmm_op.symInitialState Cmm_op.symInitialPre;
     fs_state=          fs_state;
     trace=             [];

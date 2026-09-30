@@ -619,9 +619,10 @@ type action_step =
   | ACTION_ILLTYPED of string
 
 val step_action:
-    list Annot.annot ->
-    (Core.pexpr -> core_runM Core.value) -> maybe nat -> Core.action core_run_annotation -> action_step
-let step_action e_annots full_eval_pexpr is_excluded (Action loc act_annots act) =
+  Ctype.tag_definitions ->
+  list Annot.annot ->
+  (Core.pexpr -> core_runM Core.value) -> maybe nat -> Core.action core_run_annotation -> action_step
+let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_annots act) =
   let wrap z =
     Action loc act_annots z in
   match act with
@@ -648,7 +649,7 @@ let step_action e_annots full_eval_pexpr is_excluded (Action loc act_annots act)
     | CreateReadOnly pe1 pe2 pe3 pref ->
         match (act_valueFromPexpr pe1, act_valueFromPexpr pe2, act_valueFromPexpr pe3) with
           | (Just (Vobject (OVinteger ival)), Just (Vctype ty), Just cval3) ->
-              match memValueFromValue (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
+              match memValueFromValue tagDefs (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
                 | Just mval ->
                     ACTION_REQUEST
                       "CreateRequest"
@@ -680,7 +681,7 @@ let step_action e_annots full_eval_pexpr is_excluded (Action loc act_annots act)
     | Store is_locking pe1 pe2 pe3 mo ->
         match (act_valueFromPexpr pe1, act_valueFromPexpr pe2, act_valueFromPexpr pe3) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptrval)), Just cval) ->
-              match memValueFromValue (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval with
+              match memValueFromValue tagDefs (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval with
                 | Just mval ->
                     ACTION_REQUEST
                       "StoreRequest"
@@ -1105,7 +1106,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                   | Just psym ->
                       match Map.lookup psym file.funinfo with
                         | Just (_, _, ret_ty, _, _, _) ->
-                            Core_run.TSK_Return psym (Core_aux.memValueFromValue ret_ty cval)
+                            Core_run.TSK_Return psym (Core_aux.memValueFromValue file.tagDefs ret_ty cval)
                         | Nothing ->
                             Core_run.TSK_Misc
                       end
@@ -1150,7 +1151,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
         end in
         let wrap_expr z = <| th_st with arena= apply_ctx ctx z |> in
         let process_action is_excluded wrap_act z =
-          match step_action e_annots full_eval_pexpr' is_excluded z with
+          match step_action file.tagDefs e_annots full_eval_pexpr' is_excluded z with
             | ACTION_REQUEST debug_str loc _request ->
                 let loc' =
                   if Loc.is_library_location loc then
@@ -1232,7 +1233,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                                       Map.insert sym (snd (Caux.valueFromMemValue mval)) x :: xs
                                 end |> in
                             full_eval_pexpr th_st_tmp core_extern mem_st file pe3 >>= fun cval3 ->
-                            match memValueFromValue (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
+                            match memValueFromValue file.tagDefs (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
                               | Just mval' ->
                                   E.return mval'
                               | Nothing ->

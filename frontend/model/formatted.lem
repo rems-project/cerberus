@@ -366,11 +366,7 @@ let rec load_character_array_aux loc elem_ty ptrval prec_n_opt acc =
                 Mem.return (List.reverse acc)
               else
                 Mem.bind
-                  begin if Global.is_CHERI () then
-                    Mem.eff_array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 1)
-                  else
-                    Nondeterminism.lift_undef (Mem.array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 1))
-                  end
+                  (Mem.eff_array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 1))
                   (fun ptrval' ->
                     load_character_array_aux loc elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc)))
               (fun () -> error "WIP: Formatted.load_character_array, non constant ival")
@@ -385,11 +381,7 @@ let rec load_character_array_aux loc elem_ty ptrval prec_n_opt acc =
 val load_character_array: Loc.t -> Ctype.ctype -> Mem.pointer_value -> maybe nat -> Mem.memM (list char)
 let load_character_array loc elem_ty ptrval prec_n_opt =
   Mem.bind
-    begin if Global.is_CHERI () then
-      Mem.eff_array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 0)
-    else
-      Nondeterminism.lift_undef (Mem.array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 0))
-    end
+    (Mem.eff_array_shift_ptrval loc ptrval elem_ty (Mem.integer_ival 0))
     (fun ptrval' -> load_character_array_aux loc elem_ty ptrval' prec_n_opt [])
   
 
@@ -773,11 +765,7 @@ let rec store_chars_in_array zero_terminated ptrval =
           (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
       (* TODO: maybe needs to be unsigned char *)
       Mem.store loc Ctype.char false ptrval c_mval >>= fun _ ->
-      begin if Global.is_CHERI () then
-        Mem.eff_array_shift_ptrval loc ptrval Ctype.char (Mem.integer_ival 1)
-      else
-        Nondeterminism.lift_undef (Mem.array_shift_ptrval loc ptrval Ctype.char (Mem.integer_ival 1))
-      end >>= fun ptrval' ->
+      Mem.eff_array_shift_ptrval loc ptrval Ctype.char (Mem.integer_ival 1) >>= fun ptrval' ->
       store_chars_in_array zero_terminated ptrval' cs
   end
 

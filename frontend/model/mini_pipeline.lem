@@ -96,7 +96,7 @@ let evalIntegerConstantExpressionAux
     let oTy = force_core_object_type_of_ctype ty in
     TranslateEff.elab_bind (translate_expression Nothing true ECTX_other
       ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib
-      (translate_tag_definitions sigm.A.tag_definitions: C.core_tag_definitions) a_e) (fun core_e ->
+      (translate_tag_definitions sigm.A.tag_definitions: Ctype.tag_definitions) a_e) (fun core_e ->
     TranslateEff.elab_bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy)) (fun e_wrp ->
     TranslateEff.elab_bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy)) (fun obj_wrp ->
     TranslateEff.elab_return begin
@@ -132,7 +132,7 @@ let evalIntegerConstantExpressionAux
         (* elaborate the typed expression into Core *)
         let (core_expr, translate_final_st) =
           TranslateEff.runElabM elab_conf (toCore a_expr) TranslateEff.elab_initial_state in
-        
+        let core_tagDefs = Translation.translate_tag_definitions sigm.A.tag_definitions in
         let dr_st =
           (* this just builds the shell of the driver state *)
           let dummy_core_file = Core_run_aux.convert_file
@@ -142,7 +142,7 @@ let evalIntegerConstantExpressionAux
              ; C.impl= impl
              ; C.globs= []
              ; C.funs= Map.empty
-             ; C.tagDefs= Map.empty
+             ; C.tagDefs= core_tagDefs
              ; C.extern= Map.empty
              ; C.funinfo= Map.empty
              ; C.loop_attributes= Map.empty
@@ -174,10 +174,7 @@ let evalIntegerConstantExpressionAux
               ND.return (Driver.finalize "Mini_pipeline" dr_st')
             )
           ) in
-        let execs = Ctype_aux.with_tagDefs (Translation.translate_tag_definitions sigm.A.tag_definitions) begin
-          fun () -> runND_proxy driver_action dr_st
-        end in
-        match execs with
+        match runND_proxy driver_action dr_st with
           | [(ND.Active dres, _, _ )] ->
               Eff.return dres.Driver.dres_core_value
           | [(ND.Killed _ (ND.Undef ub_loc [ub]), _, _)] ->

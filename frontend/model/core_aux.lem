@@ -134,8 +134,8 @@ let valueFromMemValue mem_val =
     (fun sym xs            -> (OTy_struct sym, Vloaded (LVspecified (OVstruct sym xs))))
     (fun sym ident mem_val -> (OTy_union sym, Vloaded (LVspecified (OVunion sym ident mem_val))))
 
-val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
-let rec memValueFromValue ty cval =
+val     memValueFromValue: Ctype.tag_definitions -> ctype -> value -> maybe Mem.mem_value
+let rec memValueFromValue tagDefs ty cval =
   let (Ctype annots ty_) = unatomic ty in
   match (ty_, cval) with
     | (_, Vunit) ->
@@ -172,7 +172,7 @@ let rec memValueFromValue ty cval =
         (* TODO: check that the sizes match? *)
         maybe Nothing (fun z -> Just (Mem.array_mval z)) $
           List.foldr (fun lval acc_opt ->
-            match (memValueFromValue elem_ty (Vloaded lval), acc_opt) with
+            match (memValueFromValue tagDefs elem_ty (Vloaded lval), acc_opt) with
               | (Just mem_val, Just acc) ->
                   Just (mem_val :: acc)
               | _ ->
@@ -181,7 +181,7 @@ let rec memValueFromValue ty cval =
           ) (Just []) lvals
     | (Struct tag_sym1, Vloaded (LVspecified (OVstruct tag_sym2 xs))) ->
         let () = Debug.print_debug 2 [] (fun () -> "Comparing struct tag symbols: " ^ Symbol.show_raw tag_sym1 ^ " = " ^ Symbol.show_raw tag_sym2) in
-        if Ctype_aux.are_compatible
+        if Ctype_aux.are_compatible tagDefs
           (no_qualifiers, Ctype [] (Struct tag_sym1))
           (no_qualifiers, Ctype [] (Struct tag_sym2))
         then
@@ -598,7 +598,7 @@ let rec zeros_aux tagDefs (Ctype _ ty) =
        error "Core_aux.zeros should only be called on complete types"
   end
 
-val zeros: core_tag_definitions -> ctype -> pexpr
+val zeros: Ctype.tag_definitions -> ctype -> pexpr
 let zeros tagDefs ty =
   (* TODO: yucky *)
   Pexpr [] ()
