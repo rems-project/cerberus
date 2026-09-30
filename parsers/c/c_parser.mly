@@ -1224,19 +1224,19 @@ direct_abstract_declarator:
 array_abstract_declarator:
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK
   tquals= ioption(type_qualifier_list) expr= assignment_expression? RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown,
+    { DAbs_array (dabs_decltor, ADecl (region ($startpos, $endpos) noCursor,
       Option.fold ~none:[] ~some:id tquals, false,
       Option.map (fun e -> ADeclSize_expression e) expr)) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK STATIC
   tquals= type_qualifier_list? expr= assignment_expression RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown,
+    { DAbs_array (dabs_decltor, ADecl (region ($startpos, $endpos) noCursor,
       Option.fold ~none:[] ~some:id tquals, true, Some (ADeclSize_expression expr))) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK
   tquals= type_qualifier_list STATIC expr= assignment_expression RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown, tquals, true,
+    { DAbs_array (dabs_decltor, ADecl (region ($startpos, $endpos) noCursor, tquals, true,
       Some (ADeclSize_expression expr))) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK STAR RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown, [], false,
+    { DAbs_array (dabs_decltor, ADecl (region ($startpos, $endpos) noCursor, [], false,
       Some ADeclSize_asterisk)) }
 ;
 
