@@ -67,6 +67,7 @@ type driver_state = <|
   blocked: bool; (* concurrency model ended by blocking *)
   (* DEBUG *)
   (*trace: list string;*)
+  do_stepping: bool;
   dr_step_counter: nat;
 |>
 
@@ -905,6 +906,46 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
 
 
 
+val step_kind_of_core_step2: Core_reduction.core_step2 -> step_kind
+let step_kind_of_core_step2 = function
+  | Core_reduction.Step_ccall2 _ _ ->
+      SK_misc ["ccall"]
+  | Core_reduction.Step_with_runstate2 (Core_reduction.RSK_eval debug_str) _ ->
+      SK_eval debug_str
+  | Core_reduction.Step_with_runstate2 (Core_reduction.RSK_tau debug_str _) _ ->
+      SK_tau debug_str
+  | Core_reduction.Step_tau2 debug_str _ _ ->
+      SK_tau debug_str
+  | Core_reduction.Step_action_request2 debug_str _ _ _ _ ->
+      SK_action_request debug_str
+  | Core_reduction.Step_blocked2 ->
+      SK_misc ["blocked"]
+  | Core_reduction.Step_error2 debug_str ->
+      SK_misc ["error"; debug_str]
+  | Core_reduction.Step_thread_done2 _ _ ->
+      SK_misc ["thread_done"]
+  | Core_reduction.Step_done2 _ ->
+      SK_done
+  | Core_reduction.Step_memop_request2 _ _ _ _ _ _ ->
+      SK_memop_request
+  | Core_reduction.Step_spawn_threads2 _ _ ->
+      SK_misc ["spawn_threads"]
+  | Core_reduction.Step_fs2 _ _ _ ->
+      SK_misc ["fs_step"]
+  | Core_reduction.Step_nd2 _ ->
+      SK_misc ["nd"]
+end
+
+(* When enabled, this adds NDstep nodes which is used by the web instance for the interactive
+ * execution stepping. *)
+val as_step: forall 'a. bool -> Core_reduction.core_step2 -> driverM 'a -> driverM 'a
+let as_step do_stepping step m =
+  if do_stepping then
+    let kind = step_kind_of_core_step2 step in
+    ND.mk_step kind [(kind, m)]
+  else
+    m
+
 let can_advance = function
   | Core_reduction.Step_ccall2 _ _ ->
       false
@@ -1077,7 +1118,9 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
         | Nothing ->
             drive_nonmemory_steps_aux2 (Map.insert tid steps acc) xs'
         | Just step ->
-            advance_step tid step >>= fun wakeups ->
+            ND.get >>= fun dr_st ->
+            as_step dr_st.do_stepping step (advance_step tid step)
+              >>= fun wakeups ->
             let xs'' =
               match wakeups with
                 | NOWAKEUP ->
@@ -1319,7 +1362,9 @@ let prepare_exit core_st cval =
 
 (* performing all action and memop requests until there are no more *)
 val process_core_step2: bool -> (bool -> driverM unit) -> Core_reduction.core_step2 -> driverM unit
-let process_core_step2 with_concurrency driver2 = function
+let process_core_step2 with_concurrency driver2 step =
+  ND.get >>= fun dr_st ->
+  as_step dr_st.do_stepping step $ match step with
   | Core_reduction.Step_action_request2 _ loc tid _ m_request ->
       liftCore_run m_request >>= fun request ->
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
@@ -1507,7 +1552,7 @@ let finalize debug_str dr_st =
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
-let initial_driver_state file fs_state =
+let initial_driver_state file fs_state do_stepping =
   <|
     core_file=         file;
     core_extern=       Core_linking.create_extern_symmap file;
@@ -1519,6 +1564,7 @@ let initial_driver_state file fs_state =
     trace=             [];
     symbolic_assoc=    Map.empty;
     blocked=           false;
+    do_stepping=       do_stepping;
     dr_step_counter=   0;
   |>
 

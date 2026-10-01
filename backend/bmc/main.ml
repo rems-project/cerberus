@@ -258,7 +258,7 @@ let cerberus debug_level progress core_obj
         end >>= fun core_file ->
         if exec then
           let open Driver_ocaml in
-          let driver_conf = {concurrency; exec_mode; fs_dump; trace} in
+          let driver_conf = {exec_mode; do_stepping= false; concurrency; fs_dump; trace} in
           interp_backend io core_file ~args ~batch ~fs ~driver_conf
         else
           match output_name with

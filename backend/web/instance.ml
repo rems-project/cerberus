@@ -223,7 +223,7 @@ let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
       return core
     end >>= fun core ->
     let open Driver_ocaml in
-    let driver_conf = {concurrency=false; exec_mode=mode; fs_dump=false; trace=false; } in
+    let driver_conf = {exec_mode=mode; do_stepping= true; concurrency=false; fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left (_, execs) ->
@@ -390,7 +390,7 @@ let json_of_step_kind step =
   | SK_done ->
     `Assoc [("kind", `String "done")]
   | SK_misc strs ->
-    `Assoc [("kind", `String "action request");
+    `Assoc [("kind", `String "misc");
             ("debug", `List (List.map (fun str -> `String str) strs))]
 
 let create_node node_info st next_state =
@@ -631,7 +631,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
       return core
     end >>= fun core ->
     let core'    = Core_run_aux.convert_file core in
-    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
+    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state true(*do_stepping*) in
     let (m, st)  = (Driver.drive false core' [], st0) in
     last_node_id := 0;
     let node_info= `Init in

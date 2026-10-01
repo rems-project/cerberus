@@ -11,6 +11,8 @@ let isActive = function
 type driver_conf = {
 (* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
   exec_mode: execution_mode;
+  do_stepping: bool; (* Stepping should only be enabled when really used (e.g. for Web instances)
+                      * because it impacts execution time *)
   concurrency: bool;
   fs_dump: bool;
   trace: bool;
@@ -170,7 +172,7 @@ let batch_drive (file: 'a Core.file) args fs_state conf =
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run_aux.convert_file file in
   (* computing the value (or values if exhaustive) *)
-  let initial_dr_st = Driver.initial_driver_state file fs_state in
+  let initial_dr_st = Driver.initial_driver_state file fs_state conf.do_stepping in
   let values = Smt2.runND conf.exec_mode Impl_mem.cs_module (Driver.drive conf.concurrency file args) initial_dr_st in
   List.mapi (fun i (res, z3_strs, nd_st) ->
     let result = begin match res with
@@ -207,7 +209,7 @@ let drive file args fs_state conf : execution_result =
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run_aux.convert_file file in
   (* computing the value (or values if exhaustive) *)
-  let initial_dr_st = Driver.initial_driver_state file fs_state in
+  let initial_dr_st = Driver.initial_driver_state file fs_state conf.do_stepping in
   let values = Smt2.runND conf.exec_mode Impl_mem.cs_module
       (Driver.drive conf.concurrency file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in

@@ -3,6 +3,8 @@ open Cerb_frontend
 type driver_conf = {
 (* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
   exec_mode: Cerb_global.execution_mode;
+  do_stepping: bool; (* Stepping should only be enabled when really used (e.g. for Web instances)
+                      * because it impacts execution time *)
   concurrency: bool;
   fs_dump: bool;
   trace: bool;
