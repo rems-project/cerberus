@@ -4,29 +4,16 @@ import Symbol AilTypesAux
 open import Utils Ctype
 import Map_extra
 
-(* SEE src/tags.mli for the documentation *)
-val tagDefs: unit -> map Symbol.sym (Loc.t * tag_definition)
-val set_tagDefs: map Symbol.sym (Loc.t * tag_definition) -> unit
-val with_tagDefs: forall 'a. map Symbol.sym (Loc.t * tag_definition) -> (unit -> 'a) -> 'a
+val get_membersDefs: Ctype.tag_definitions -> Symbol.sym -> tag_definition
+let get_membersDefs tagDefs tag_sym =
+  snd (fromJust ("Ctype_aux.get_membersDefs[" ^ show tag_sym ^ "]") (Map.lookup tag_sym tagDefs))
 
-declare ocaml target_rep function tagDefs = `Tags.tagDefs`
-declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
-declare ocaml target_rep function with_tagDefs = `Tags.with_tagDefs`
-
-declare hol target_rep function tagDefs = `tagDefs`
-declare hol target_rep function set_tagDefs = `set_tagDefs`
-declare hol target_rep function with_tagDefs = `with_tagDefs`
-
-val get_membersDefs: Symbol.sym -> tag_definition
-let get_membersDefs tag_sym =
-  snd $ fromJust "Ctype_aux.get_membersDefs" (Map.lookup tag_sym (tagDefs ()))
-
-val get_membersDefs_with_tagDefs: map Symbol.sym tag_definition -> Symbol.sym -> tag_definition
-let get_membersDefs_with_tagDefs tagDefs tag_sym =
-  fromJust ("Ctype_aux._with_tagDefs[" ^ show tag_sym ^ "]") (Map.lookup tag_sym tagDefs)
-
-val get_structDef_with_tagDefs: map Symbol.sym (Loc.t * tag_definition) -> Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
-let get_structDef_with_tagDefs tagDefs tag_sym =
+val get_structDef:
+  Ctype.tag_definitions ->
+  Symbol.sym ->
+  list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) *
+    maybe Ctype.flexible_array_member
+let get_structDef tagDefs tag_sym =
   match Map.lookup tag_sym tagDefs with
     | Just (_, StructDef xs flexible_opt) ->
         (xs, flexible_opt)
@@ -38,14 +25,13 @@ let get_structDef_with_tagDefs tagDefs tag_sym =
                "): couldn't find a struct/union definition")
   end
 
-val get_structDef: Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
-let get_structDef tag_sym =
-  get_structDef_with_tagDefs (tagDefs ()) tag_sym
-
-
-val get_unionDef: Symbol.sym -> (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
-let get_unionDef tag_sym =
-  match Map.lookup tag_sym (tagDefs ()) with
+val get_unionDef:
+  Ctype.tag_definitions ->
+  Symbol.sym ->
+  (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) *
+    list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
+let get_unionDef tagDefs tag_sym =
+  match Map.lookup tag_sym tagDefs with
     | Just (_, UnionDef []) ->
         error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
                "): found an empty union definition")
@@ -58,9 +44,6 @@ let get_unionDef tag_sym =
         error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
                "): couldn't find a struct/union definition")
   end
-
-val reset_tagDefs: unit -> unit
-declare ocaml target_rep function reset_tagDefs = `Tags.reset_tagDefs`
 
 
 
@@ -191,7 +174,7 @@ and are_compatible_params env params1 params2 =
   are_compatible_params_aux env true (params1, params2)
 
 
-let are_compatible qs_ty1 qs_ty2 =
+let are_compatible tagDefs qs_ty1 qs_ty2 =
   (* let tagDefs = Map_extra.fold (fun k v acc ->
     match k with
       | Symbol.Symbol _ _ (Symbol.SD_Id str) ->
@@ -200,7 +183,6 @@ let are_compatible qs_ty1 qs_ty2 =
           error "Ctype_aux.are_compatible"
     end
   ) (tagDefs ()) Map.empty in *)
-  let tagDefs = tagDefs () in
   are_compatible_aux (tagDefs, tagDefs) qs_ty1 qs_ty2
 
 (*

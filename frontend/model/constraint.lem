@@ -1,5 +1,5 @@
-open import Pervasives Symbol GenTypes Ctype
-import Loc
+open import Pervasives GenTypes Ctype
+import Loc Symbol
 
 type simple_assignment_violation =
   | IncompatibleType
@@ -62,13 +62,13 @@ type violation =
   (* 6.5.2.3 Structure and union members *)
   | MemberofReferenceBaseTypeLvalue of qualifiers * ctype  (* §6.5.2.3#1 *)
   | MemberofReferenceBaseTypeRvalue of genType  (* §6.5.2.3#1 *)
-  | MemberofNoMemberLvalue of identifier * qualifiers * ctype (* §6.5.2.3#1 *)
-  | MemberofNoMemberRvalue of identifier * genType (* §6.5.2.3#1 *)
+  | MemberofNoMemberLvalue of Symbol.identifier * qualifiers * ctype (* §6.5.2.3#1 *)
+  | MemberofNoMemberRvalue of Symbol.identifier * genType (* §6.5.2.3#1 *)
   | MemberofIncompleteLvalue of qualifiers * ctype (* §6.5.2.3#1 (indirect consequence of the need for a member to exist) *)
   | MemberofIncompleteRvalue of genType (* §6.5.2.3#1 (indirect consequence of the need for a member to exist) *)
   | MemberofptrReferenceBaseType of qualifiers * ctype  (* §6.5.2.3#2 *)
   | MemberofptrReferenceTypeNotPointer of genType  (* §6.5.2.3#2 *)
-  | MemberofptrNoMember of identifier * qualifiers * ctype (* §6.5.2.3#2 *)
+  | MemberofptrNoMember of Symbol.identifier * qualifiers * ctype (* §6.5.2.3#2 *)
   | MemberofptrIncomplete of qualifiers * ctype (* §6.5.2.3#1 (indirect consequence of the need for a member to exist) *)
   (* 6.5.2.5 Compound literals *)
   | InvalidTypeCompoundLiteral (* §6.5.2.5#1 *)
@@ -112,7 +112,7 @@ type violation =
   (* 6.6 Constant expressions *)
   | IntegerConstantOutRange (* §6.6#4 *)
   (* 6.7 Declarations *)
-  | NoLinkageMultipleDeclaration of identifier (* §6.7#3 *)
+  | NoLinkageMultipleDeclaration of Symbol.identifier (* §6.7#3 *)
   | TypedefRedefinition (* §6.7#3, 1st bullet *)
   | TypedefRedefinitionVariablyModifiedType (* §6.7#3, 1st bullet, sentence 2 *)
   | SameScopeIncompatibleDeclarations (* §6.7#4 *)
@@ -127,15 +127,15 @@ type violation =
   (* 6.7.2.1 Struct and union specifiers *)
   | StructDeclarationLacksDeclaratorList (* §6.7.2.1#2 *)
   | StructMemberIncompleteType of qualifiers * ctype (* §6.7.2.1#3, sentence 1 *)
-  | StructMemberFunctionType of identifier (* §6.7.2.1#3, sentence 1 *)
+  | StructMemberFunctionType of Symbol.identifier (* §6.7.2.1#3, sentence 1 *)
   | StructMemberFlexibleArray (* §6.7.2.1#3, sentence 2 *)
   | StructMemberFlexibleArrayInArray (* §6.7.2.1#3, sentence 2, "element of array" *)
-  | IllegalFlexibleArrayMember of identifier (* §6.7.2.1#18 *)
+  | IllegalFlexibleArrayMember of Symbol.identifier (* §6.7.2.1#18 *)
   (* 6.7.2.1 Enum specifiers *)
   | WrongTypeEnumConstant (* §6.7.2.2#2 *)
   (* 6.7.2.3 Tags *)
-  | TagRedefinition of sym (* §6.7.2.3#1 *)
-  | TagRedeclaration of sym (* §6.7.2.3#2 *)
+  | TagRedefinition of Symbol.sym (* §6.7.2.3#1 *)
+  | TagRedeclaration of Symbol.sym (* §6.7.2.3#2 *)
   | EnumTagIncomplete (* §6.7.2.3#3 *)
   (* 6.7.2.4 Atomic type specifiers *)
   | AtomicTypeConstraint (* §6.7.2.4#3 *)
@@ -172,18 +172,19 @@ type violation =
   (* 6.8 Statements and blocks *)
   (* 6.8.1 Labeled statements *)
   | LabelStatementOutsideSwitch (* §6.8.1#2 *)
-  | LabelRedefinition of identifier (* §6.8.1#3 *)
+  | LabelRedefinition of Symbol.identifier (* §6.8.1#3 *)
   (* 6.8.4.1 The if statement *)
   | IfStatementControllingExpressionNotScalar (* §6.8.4.1#1 *)
   (* 6.8.4.2 The switch statement *)
   | SwitchStatementControllingExpressionNotInteger (* §6.8.4.2#1 *)
+  | CaseNotIntegerConstantExpression (* §6.8.4.2#3, sentence 1 *)
   | CaseStatementOverlap of Loc.t
   | MutipleDefaultStatement of Loc.t
   (* 6.8.5 Iteration statements *)
   | IterationStatementControllingExpressionNotScalar (* §6.8.5#2 *)
   | IllegalStorageClassIterationStatement(* §6.8.5#3 *)
   (* 6.8.5 Jump statements *)
-  | UndeclaredLabel of identifier (* §6.8.6.1#1, sentence 1 *)
+  | UndeclaredLabel of Symbol.identifier (* §6.8.6.1#1, sentence 1 *)
   | ContinueOutsideLoop (* §6.8.6.2#1 *)
   | BreakOutsideSwitchOrLoop (* §6.8.6.3#1 *)
   (* 6.8.5.4 The return statement  *)
@@ -192,7 +193,7 @@ type violation =
   | ReturnAsSimpleAssignment of simple_assignment_violation * ctype * genType (* §6.8.6.4#3, sentence 2 *)
   (* 6.9 External definitions *)
   | IllegalStorageClassFileScoped (* §6.9#2 *)
-  | ExternalRedefinition of sym (* §6.9#3 *)
+  | ExternalRedefinition of Symbol.sym (* §6.9#3 *)
   (* 6.9.1 Function definitions *)
   | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
   | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
@@ -452,6 +453,8 @@ let std_of_violation = function
       ["§6.8.4.1#1"]
   | SwitchStatementControllingExpressionNotInteger ->
       ["§6.8.4.2#1"]
+  | CaseNotIntegerConstantExpression ->
+      ["§6.8.4.2#3, sentence 1"]
   | CaseStatementOverlap _ ->
       ["§6.8.4.2#3, sentence 1"]
   | MutipleDefaultStatement _ ->

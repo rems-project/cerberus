@@ -126,7 +126,6 @@
 (copy_files extracted/Sumbool.{ml,mli})
 (copy_files extracted/CoqSwitches.{ml,mli})
 (copy_files extracted/CoqSymbol.{ml,mli})
-(copy_files extracted/CoqTags.{ml,mli})
 (copy_files extracted/TypeCasts.{ml,mli})
 (copy_files extracted/Traversable.{ml,mli})
 (copy_files extracted/CoqUndefined.{ml,mli})

@@ -10,6 +10,21 @@ open Cerb_location
 open Cerb_colour
 open Cerb_pp_prelude
 
+let string_of_cause_kind = function
+  | CPP _ -> "cpp"
+  | CPARSER _ -> "parser"
+  | EXTENSION _ -> "extension"
+  | DESUGAR _ -> "desugar"
+  | AIL_TYPING _ -> "ail_typing"
+  | CORE_PARSER _ -> "core_parser"
+  | CORE_TYPING _ -> "core_typing"
+  | CORE_LINKING _ -> "core_linking"
+  | CORE_RUN _ -> "core_run"
+  | DRIVER _ -> "driver"
+  | UNSUPPORTED _ -> "unsupported"
+  | INTERNAL_ERROR _ -> "internal_error"
+
+
 type kind =
   | Error
   | Warning
@@ -214,7 +229,9 @@ let string_of_constraint_violation = function
   | LabelRedefinition l ->
       "redefinition of '" ^ string_of_cid l ^ "'"
   | SwitchStatementControllingExpressionNotInteger ->
-      "statement requires expression of integer type"
+      "switch statement requires expression of integer type"
+  | CaseNotIntegerConstantExpression ->
+      "expression is not an integer constant expression"
   | CaseStatementOverlap prev_loc ->
       "duplicate case value"
   | MutipleDefaultStatement prev_loc ->
@@ -391,7 +408,7 @@ let string_of_desugar_cause = function
   | Desugar_NotYetSupported str ->
       "feature not yet supported: " ^ str
   | Desugar_agnosticFailure str ->
-      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnotic)"
+      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnostic)"
   | Desugar_illtypedIntegerConstant ->
       "failed to typecheck an integer constant expression"
   | Desugar_CN e ->
@@ -424,7 +441,7 @@ let string_of_ail_typing_error = function
   | TError_NotYetSupported str ->
       "feature not yet supported: " ^ str
   | TError_AgnosticFailure str ->
-      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnotic)"
+      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnostic)"
   | TError_CN Cn.CNErr_typing_TODO ->
       "CN typing error"
 
@@ -474,6 +491,11 @@ let string_of_core_typing_cause = function
       (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
       (match m_found with Some found -> "this expression is of type '" ^ string_of_bty found ^ "' but " | None -> "") ^
       "an expression of type '" ^ expected ^ "' was expected"
+  | ArityMismatchRun (expected, found) ->
+      Printf.sprintf
+        "wrong number of arguments to a run(): expected %d but %d were found"
+        expected
+        found
   | CFunctionExpected nm ->
       "symbol '" ^ string_of_name nm ^ "' has incorrect type, a symbol of type 'cfunction' was expected"
   | CFunctionParamsType ->

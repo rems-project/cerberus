@@ -1,8 +1,0 @@
-(library
- (name mem_symbolic)
- ; (public_name cerberus.mem.symbolic)
- (flags (:standard -w -27-32))
- (private_modules mem_simplify)
- (implements cerb_frontend)
- (c_library_flags -lstdc++) ; FIXME
- (libraries z3))

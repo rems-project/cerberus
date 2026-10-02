@@ -67,6 +67,7 @@ type driver_state = <|
   blocked: bool; (* concurrency model ended by blocking *)
   (* DEBUG *)
   (*trace: list string;*)
+  do_stepping: bool;
   dr_step_counter: nat;
 |>
 
@@ -181,6 +182,8 @@ let liftCore_run m =
 
 val drive_fs_step: Mem.thread_id -> Core_run.thread_state -> driver_state -> Core_run.fs_oper -> driverM unit
 let drive_fs_step tid th_st dr_st fs_oper =
+  (* NOTE: the Core file (and tagDefs) is read-only *)
+  let tagDefs = dr_st.core_file.Core.tagDefs in
   let alignof_ival ty = Mem.integer_ival (Implementation.alignof_ty dr_st.core_file.Core.tagDefs ty) in
   let th_st_from_int n =
     let (Core.Expr arena_annots _) = th_st.Core_run.arena in
@@ -288,7 +291,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let dirent_cty = Ctype.Ctype [] (Ctype.Struct sym) in
     let update_mem dir_name =
       Mem.bind (Mem.allocate_object tid (Symbol.PrefOther "dirent") (alignof_ival dirent_cty) dirent_cty Nothing Nothing) (fun dirent_ptr ->
-        let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Symbol.Identifier loc "d_name") in
+        let d_name_ptr = Mem.member_shift_ptrval tagDefs dirent_ptr sym (Symbol.Identifier loc "d_name") in
         Mem.bind (Formatted.store_chars_in_array true d_name_ptr dir_name) (fun _ ->
           (Mem.return dirent_ptr)))
     in
@@ -308,7 +311,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let update_mem stat =
       let loc = Loc.other "store struct stat" in
       let store iTy memb f =
-        let ptr = Mem.member_shift_ptrval stat_ptr sym (Symbol.Identifier loc memb) in
+        let ptr = Mem.member_shift_ptrval tagDefs stat_ptr sym (Symbol.Identifier loc memb) in
         let mval = Mem.integer_value_mval iTy (Mem.integer_ival (f stat)) in
         Mem.store loc (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer iTy))) false
                   ptr mval
@@ -680,8 +683,9 @@ let action_request_sequential2 loc tid aid = function
   
   | Core_reduction.LoadRequest2 mo lvalue_ty ptr_val mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST LOAD") in (* DEBUG *)
-      liftMem (Mem.load loc lvalue_ty ptr_val) >>= fun (fp, mval) ->
-      liftMem (Mem.prefix_of_pointer ptr_val)  >>= fun pref       ->
+      liftMem (Mem.load loc lvalue_ty ptr_val)            >>= fun (fp, mval) ->
+      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs) >>= fun tagDefs    ->
+      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)     >>= fun pref       ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval) dr_st.core_state;
@@ -693,8 +697,9 @@ let action_request_sequential2 loc tid aid = function
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST STORE") in (* DEBUG *)
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
-      liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp ->
-      liftMem (Mem.prefix_of_pointer ptr_val) >>= fun pref ->
+      liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp      ->
+      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs)          >>= fun tagDefs ->
+      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)              >>= fun pref    ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' aid fp) dr_st.core_state;
@@ -706,7 +711,8 @@ let action_request_sequential2 loc tid aid = function
       liftMem (Mem.load loc lvalue_ty ptr_val)              >>= fun (_, mval) ->
       liftCore_run (mk_mval' mval)                          >>= fun mval'     ->
       liftMem (Mem.store loc lvalue_ty false ptr_val mval') >>= fun fp        ->
-      liftMem (Mem.prefix_of_pointer ptr_val)               >>= fun pref      ->
+      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs)   >>= fun tagDefs   ->
+      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)       >>= fun pref      ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval mval') dr_st.core_state;
@@ -809,7 +815,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     
     | (Mem_common.Memcmp, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
                           Core.Vobject (Core.OVinteger size_ival)]) ->
-        liftMem (Mem.memcmp ptr_val1 ptr_val2 size_ival) >>= fun res ->
+        liftMem (Mem.memcmp loc ptr_val1 ptr_val2 size_ival) >>= fun res ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
     
     | (Mem_common.PtrWellAligned, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptrval)]) ->
@@ -865,9 +871,10 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval')))
 
     | (Mem_common.CHERI_intrinsic str (ret_ty, tys), cvals) ->
+        ND.read (fun st -> st.core_file.Core.tagDefs) >>= fun tagDefs ->
         let mvals =
           Utils.map2 (fun ty cval ->
-            fromJust "CHERI_intrinsic call" (Caux.memValueFromValue ty cval)
+            fromJust "CHERI_intrinsic call" (Caux.memValueFromValue tagDefs ty cval)
           ) tys cvals in
         liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
         match res_opt with
@@ -898,6 +905,46 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
 
 
 
+
+val step_kind_of_core_step2: Core_reduction.core_step2 -> step_kind
+let step_kind_of_core_step2 = function
+  | Core_reduction.Step_ccall2 _ _ ->
+      SK_misc ["ccall"]
+  | Core_reduction.Step_with_runstate2 (Core_reduction.RSK_eval debug_str) _ ->
+      SK_eval debug_str
+  | Core_reduction.Step_with_runstate2 (Core_reduction.RSK_tau debug_str _) _ ->
+      SK_tau debug_str
+  | Core_reduction.Step_tau2 debug_str _ _ ->
+      SK_tau debug_str
+  | Core_reduction.Step_action_request2 debug_str _ _ _ _ ->
+      SK_action_request debug_str
+  | Core_reduction.Step_blocked2 ->
+      SK_misc ["blocked"]
+  | Core_reduction.Step_error2 debug_str ->
+      SK_misc ["error"; debug_str]
+  | Core_reduction.Step_thread_done2 _ _ ->
+      SK_misc ["thread_done"]
+  | Core_reduction.Step_done2 _ ->
+      SK_done
+  | Core_reduction.Step_memop_request2 _ _ _ _ _ _ ->
+      SK_memop_request
+  | Core_reduction.Step_spawn_threads2 _ _ ->
+      SK_misc ["spawn_threads"]
+  | Core_reduction.Step_fs2 _ _ _ ->
+      SK_misc ["fs_step"]
+  | Core_reduction.Step_nd2 _ ->
+      SK_misc ["nd"]
+end
+
+(* When enabled, this adds NDstep nodes which is used by the web instance for the interactive
+ * execution stepping. *)
+val as_step: forall 'a. bool -> Core_reduction.core_step2 -> driverM 'a -> driverM 'a
+let as_step do_stepping step m =
+  if do_stepping then
+    let kind = step_kind_of_core_step2 step in
+    ND.mk_step kind [(kind, m)]
+  else
+    m
 
 let can_advance = function
   | Core_reduction.Step_ccall2 _ _ ->
@@ -1071,7 +1118,9 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
         | Nothing ->
             drive_nonmemory_steps_aux2 (Map.insert tid steps acc) xs'
         | Just step ->
-            advance_step tid step >>= fun wakeups ->
+            ND.get >>= fun dr_st ->
+            as_step dr_st.do_stepping step (advance_step tid step)
+              >>= fun wakeups ->
             let xs'' =
               match wakeups with
                 | NOWAKEUP ->
@@ -1313,7 +1362,9 @@ let prepare_exit core_st cval =
 
 (* performing all action and memop requests until there are no more *)
 val process_core_step2: bool -> (bool -> driverM unit) -> Core_reduction.core_step2 -> driverM unit
-let process_core_step2 with_concurrency driver2 = function
+let process_core_step2 with_concurrency driver2 step =
+  ND.get >>= fun dr_st ->
+  as_step dr_st.do_stepping step $ match step with
   | Core_reduction.Step_action_request2 _ loc tid _ m_request ->
       liftCore_run m_request >>= fun request ->
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
@@ -1501,18 +1552,19 @@ let finalize debug_str dr_st =
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
-let initial_driver_state file fs_state =
+let initial_driver_state file fs_state do_stepping =
   <|
     core_file=         file;
     core_extern=       Core_linking.create_extern_symmap file;
     core_state=        Core_run.initial_core_state;
     core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
-    layout_state=      Mem.initial_mem_state;
+    layout_state=      Mem.initial_mem_state file.Core.tagDefs;
     concurrency_state= Cmm_op.symInitialState Cmm_op.symInitialPre;
     fs_state=          fs_state;
     trace=             [];
     symbolic_assoc=    Map.empty;
     blocked=           false;
+    do_stepping=       do_stepping;
     dr_step_counter=   0;
   |>
 

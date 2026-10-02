@@ -3,8 +3,8 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Utils Loc Show Symbol
-import Annot IntegerType
+open import Pervasives Utils Loc Show
+import Symbol Annot IntegerType
 include IntegerType
 
 (* STD §6.2.5#10, sentence 1 *)
@@ -83,6 +83,10 @@ type alignment =
 type tag_definition =
   | StructDef of list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe flexible_array_member
   | UnionDef of list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
+
+type tag_definitions =
+  map Symbol.sym (Loc.t * tag_definition)
+
 
 (** Type class instances *)
 

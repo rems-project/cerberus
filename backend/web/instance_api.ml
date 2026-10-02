@@ -14,7 +14,6 @@ type conf =
     core_impl: string;        (* core implementation file *)
     cerb_debug_level: int;    (* Cerberus debug level (not include server) *)
     timeout: int;             (* instance execution timeout *)
-    tagDefs: string;          (* marshalled tag defs *)
     switches: string list;
     n1570: Yojson.Basic.t;
   }
@@ -23,7 +22,6 @@ type active_node =
   { last_id: int; (* used to feed node id generation in the current instance *)
     marshalled_state: string;
     active_id: int;
-    tagDefs: string;
   }
 
 type filename = string
@@ -100,7 +98,7 @@ type elaboration_result =
 type result =
   | Elaboration of elaboration_result
   | Execution of string               (* cerberus result *)
-  | Interactive of string * (string * PPrint.range) list * exec_tree (* tagDefs * range list * execution tree *)
+  | Interactive of (string * PPrint.range) list * exec_tree (* range list * execution tree *)
   | Step of string option * int * exec_tree (* maybe result * active node id * execution tree *)
   | BMC of [ `Satisfiable of (string * string list) | `Unsatisfiable of (string * string list) | `Unknown of string ]
   | Shorten of string

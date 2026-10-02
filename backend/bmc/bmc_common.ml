@@ -135,13 +135,13 @@ let integer_value_to_z3 (ival: Impl_mem.integer_value) : Expr.expr =
   | None -> assert false
   | Some i -> big_num_to_z3 i
 
-let object_value_to_z3 (oval: object_value) : Expr.expr =
+let object_value_to_z3 ~tagDefs (oval: object_value) : Expr.expr =
   match oval with
   | OVinteger ival -> integer_value_to_z3 ival
   | OVfloating _ ->
         failwith "Floats are not supported."
   | OVpointer pv ->
-      assert (is_null pv);
+      assert (is_null ~tagDefs pv);
       PointerSort.mk_null
   | OVarray _
   | OVstruct _
@@ -163,7 +163,7 @@ let value_to_z3 (value: value) (file: unit typed_file) : Expr.expr =
   | Vlist _      -> assert false
   | Vtuple _     -> assert false
   | Vctype cty   -> CtypeSort.mk_expr cty
-  | Vobject oval -> object_value_to_z3 oval
+  | Vobject oval -> object_value_to_z3 ~tagDefs:file.tagDefs oval
   | Vloaded (LVspecified oval) ->
       begin match oval with
        | OVinteger ival ->

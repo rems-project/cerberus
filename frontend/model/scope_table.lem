@@ -1,6 +1,6 @@
 (* Symbols table with stacked scopes *)
-open import Pervasives Utils Symbol
-import Map_extra
+open import Pervasives Utils
+import Map_extra Symbol
 
 type t 'a_scope 'b_ident 'c_a = list ('a_scope * map 'b_ident 'c_a)
 

@@ -392,7 +392,7 @@ let rec typeof_value loc env cval =
   end
 
 
-(*val     infer_pexpr: foral 'bty. core_tag_definitions -> typing_env -> generic_pexpr 'bty Symbol.sym -> E.eff inferred_pexpr *)
+(*val     infer_pexpr: foral 'bty. Ctype.tag_definitions -> typing_env -> generic_pexpr 'bty Symbol.sym -> E.eff inferred_pexpr *)
 let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr 'bty Symbol.sym) =
   let loc = Annot.get_loc_ annot in
   match pexpr_ with
@@ -1205,12 +1205,12 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
   end
 
 
-(*val typecheck_export_pexpr: forall 'bty. core_tag_definitions -> typing_env -> core_base_type -> Core.generic_pexpr 'bty Symbol.sym -> E.eff typed_pexpr *)
+(*val typecheck_export_pexpr: forall 'bty. Ctype.tag_definitions -> typing_env -> core_base_type -> Core.generic_pexpr 'bty Symbol.sym -> E.eff typed_pexpr *)
 let typecheck_export_pexpr tagDefs env bTy pe =
   typecheck_pexpr tagDefs env bTy pe >>= export_pexpr
 
 
-(*val infer_action: foral 'a 'bty. core_tag_definitions -> typing_env -> generic_action 'a 'bty -> E.eff (core_base_type * typed_action 'a) *)
+(*val infer_action: foral 'a 'bty. Ctype.tag_definitions -> typing_env -> generic_action 'a 'bty -> E.eff (core_base_type * typed_action 'a) *)
 let infer_action tagDefs env (Action loc annot act_) =
   match act_ with
     | Create pe1 pe2 pref ->
@@ -1362,7 +1362,7 @@ let infer_action tagDefs env (Action loc annot act_) =
 
 
 val typecheck_action:
-  forall 'a 'bty. core_tag_definitions -> typing_env -> core_base_type -> generic_action 'a 'bty Symbol.sym -> E.eff (typed_action 'a)
+  forall 'a 'bty. Ctype.tag_definitions -> typing_env -> core_base_type -> generic_action 'a 'bty Symbol.sym -> E.eff (typed_action 'a)
 let typecheck_action tagDefs env bTy (Action loc annot act_) =
   Action loc annot <$> match act_ with
   | Create pe1 pe2 pref ->
@@ -1827,6 +1827,9 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
         match Map.lookup sym env.labs with
           | Just (bTy, bTys) ->
 (*            guard_match loc "run" expected_bTy bTy >> *) (* TODO check *)
+              if List.length pes <> List.length bTys then
+                E.fail loc (ArityMismatchRun (List.length bTys) (List.length pes))
+              else
               begin
                 Erun annot sym <$> E.mapM (fun (bTy, pe) ->
                   typecheck_pexpr tagDefs env bTy pe

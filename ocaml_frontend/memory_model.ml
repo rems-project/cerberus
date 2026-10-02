@@ -36,7 +36,7 @@ module type Memory = sig
   val overlapping: footprint -> footprint -> bool
   
   type mem_state
-  val initial_mem_state: mem_state
+  val initial_mem_state: Ctype.tag_definitions -> mem_state
   
   type 'a memM =
     ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
@@ -88,7 +88,10 @@ module type Memory = sig
   val diff_ptrval: Cerb_location.t -> Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
 
   val update_prefix: (Symbol.prefix * mem_value) -> unit memM
-  val prefix_of_pointer: pointer_value -> string option memM
+  val prefix_of_pointer:
+    Ctype.tag_definitions ->
+    pointer_value ->
+    string option memM
   
   val validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM
   val isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM
@@ -106,14 +109,19 @@ module type Memory = sig
   val null_cap : bool(* is_signed *) -> integer_value
 
   (* Pointer shifting constructors *)
-  val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
-  val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
+  val array_shift_ptrval:
+    Ctype.tag_definitions ->
+    Cerb_location.t -> pointer_value -> Ctype.ctype -> integer_value ->
+    pointer_value Undefined.t0
+  val member_shift_ptrval:
+    Ctype.tag_definitions ->
+    pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
   
   val eff_array_shift_ptrval: Cerb_location.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
   val eff_member_shift_ptrval: Cerb_location.t -> pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value memM
   
   val memcpy: Cerb_location.t -> pointer_value -> pointer_value -> integer_value -> pointer_value memM
-  val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
+  val memcmp: Cerb_location.t -> pointer_value -> pointer_value -> integer_value -> integer_value memM
   val realloc: Cerb_location.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
 
   val va_start: (Ctype.ctype * pointer_value) list -> integer_value memM
@@ -135,7 +143,7 @@ module type Memory = sig
   val max_ival: Ctype.integerType -> integer_value
   val min_ival: Ctype.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-  val offsetof_ival: (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
+  val offsetof_ival: Ctype.tag_definitions -> Symbol.sym -> Symbol.identifier -> integer_value
   
   val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
   val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
@@ -176,7 +184,6 @@ module type Memory = sig
   
   
   (* Memory value constructors *)
-  (*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
   val unspecified_mval: Ctype.ctype -> mem_value
   val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
   val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value

@@ -7,8 +7,8 @@ let ident_equal x y =
 
 let offsetsof = Ocaml_implementation.offsetsof
 (* TODO(state-removal) *)
-let sizeof ?(tagDefs= Tags.tagDefs ()) ty = Ocaml_implementation.sizeof tagDefs ty
-let alignof ?(tagDefs= Tags.tagDefs ()) ty = Ocaml_implementation.alignof tagDefs ty
+let sizeof ~tagDefs ty = Ocaml_implementation.sizeof tagDefs ty
+let alignof ~tagDefs ty = Ocaml_implementation.alignof tagDefs ty
 
 let ity_max ity =
   let open Z in

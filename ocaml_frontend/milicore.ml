@@ -30,7 +30,7 @@ type mi_funinfo = (Symbol.sym, (Cerb_location.t * Annot.attributes * Ctype.ctype
 (* a Core file is just a set of named functions *)
 type ('a, 'TY) mi_file = {
   mi_main    : symbol option;
-  mi_tagDefs : Core.core_tag_definitions;
+  mi_tagDefs : Ctype.tag_definitions;
   mi_stdlib  : 'TY mi_fun_map;
   mi_impl    : 'TY Core.generic_impl;
   mi_globs   : (Symbol.sym * ('a, 'TY) Core.generic_globs) list;

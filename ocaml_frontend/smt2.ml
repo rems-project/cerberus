@@ -131,6 +131,12 @@ let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st
                 end >>= fun xs2 ->
                 return (xs1 @ xs2)
                 end
+      | (NDstep (_, [(_, m_act')]), st') ->
+          (* A step with a single alternative (the driver wraps every step it
+             performs in such an NDstep, for the web UI): continue directly
+             with a tail call, so that long deterministic executions neither
+             grow the stack nor pay the cost of a choice at every step. *)
+          aux m_act' st'
       | (NDstep (info, str_ms), st') ->
           (* Printf.fprintf stderr "%sNDstep[%s]\n" (String.make !pad ' ')
             (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info);

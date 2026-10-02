@@ -17,7 +17,7 @@ From CheriCaps.Common Require Import Capabilities.
 From Common Require Import SimpleError Utils ZMap AMap.
 From Morello Require Import CapabilitiesGS MorelloCapsGS.
 
-Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CerbSwitches CoqAilTypesAux.
+Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqSwitches CerbSwitches CoqAilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -71,7 +71,6 @@ Module Type CheriMemoryImpl
          (Bounds)
          (Permissions)
          Capability_GS)
-  (TD: TagDefs)
   (SW: CerbSwitchesDefs)
 <: Memory(AddressValue)(Bounds)(MC).
 
@@ -302,6 +301,7 @@ Module Type CheriMemoryImpl
       next_varargs_id : Z;
       bytemap : AMap.M.t (option ascii);
       capmeta : AMap.M.t (bool* CapGhostState);
+      tagDefs: SymMap.t CoqCtype.tag_definition;
     }.
 
   (*
@@ -316,44 +316,46 @@ Module Type CheriMemoryImpl
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
+                tagDefs          := st.(tagDefs);
               |}
    *)
 
   Definition mem_state := mem_state_r.
 
   Definition mem_state_with_last_address last_address (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) last_address r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) last_address r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(tagDefs).
 
   Definition mem_state_with_bytemap bytemap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta) r.(tagDefs).
 
   Definition mem_state_with_allocations allocations (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(last_address) allocations r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) allocations r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(tagDefs).
 
   Definition mem_state_with_next_alloc_id next_alloc_id (r : mem_state) :=
-    Build_mem_state_r next_alloc_id r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r next_alloc_id r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(tagDefs).
 
   Definition mem_state_with_capmeta capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta.
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta r.(tagDefs).
 
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(tagDefs).
 
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(tagDefs).
 
   Definition mem_state_with_bytemap_capmeta bytemap capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap capmeta.
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap capmeta r.(tagDefs).
 
   Definition mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) bytemap capmeta.
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) bytemap capmeta r.(tagDefs).
 
   Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFFFFFF").
 
   Definition DEFAULT_FUEL:nat := 1000%nat. (* TODO maybe needs to be abstracted *)
   Definition MAX_STRFCAP_FORMAT_LEN := 4096%nat.
 
-  Definition initial_mem_state : mem_state :=
+  Definition initial_mem_state (tagDefs: SymMap.t CoqCtype.tag_definition)
+    : mem_state :=
     {|
       next_alloc_id := Z0;
       last_address := initial_address;
@@ -363,6 +365,7 @@ Module Type CheriMemoryImpl
       next_varargs_id := Z0;
       bytemap := AMap.M.empty _;
       capmeta := AMap.M.empty _;
+      tagDefs := tagDefs;
     |}.
 
   Definition memM := errS mem_state memMError.
@@ -545,6 +548,7 @@ Module Type CheriMemoryImpl
               next_varargs_id  := st.(next_varargs_id);
               bytemap          := st.(bytemap);
               capmeta          := (init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta));
+              tagDefs          := st.(tagDefs);
             |})
         ;;
         (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
@@ -552,14 +556,9 @@ Module Type CheriMemoryImpl
 
   Fixpoint alignof
     (fuel: nat)
-    (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
+    (tagDefs : SymMap.t CoqCtype.tag_definition)
     (ty: CoqCtype.ctype): serr nat
     :=
-    let tagDefs :=
-      match maybe_tagDefs with
-      | Some x => x
-      | None => TD.tagDefs tt
-      end in
     let fix alignof_ (fuel: nat) ty  :=
       match fuel with
       | O => raise "alignof out of fuel"
@@ -594,9 +593,9 @@ Module Type CheriMemoryImpl
                   monadic_fold_left
                     (fun acc '(_, (_, align_opt, _, ty)) =>
                        al <- match align_opt with
-                            | None => alignof fuel (Some tagDefs) ty
+                            | None => alignof fuel tagDefs ty
                             | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
-                            | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel tagDefs al_ty
                             end ;;
                        ret (Nat.max al acc)
                     )
@@ -612,9 +611,9 @@ Module Type CheriMemoryImpl
                   monadic_fold_left
                     (fun acc '(_, (_, align_opt, _, ty)) =>
                        al <- match align_opt with
-                            | None => alignof fuel (Some tagDefs) ty
+                            | None => alignof fuel tagDefs ty
                             | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
-                            | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel tagDefs al_ty
                             end ;;
                        ret (Nat.max al acc)
                     )
@@ -647,12 +646,12 @@ Module Type CheriMemoryImpl
             '(xs, maxoffset) <-
               monadic_fold_left
                 (fun '(xs, last_offset) '(membr, (_, align_opt, _, ty))  =>
-                   size  <- sizeof fuel (Some tagDefs) ty ;;
+                   size  <- sizeof fuel tagDefs ty ;;
                    align <-
                      match align_opt with
-                     | None => alignof fuel (Some tagDefs) ty
+                     | None => alignof fuel tagDefs ty
                      | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
-                     | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                     | Some (CoqCtype.AlignType al_ty) => alignof fuel tagDefs al_ty
                      end ;;
                    let x_value := Nat.modulo last_offset align in
                    let pad :=
@@ -667,17 +666,12 @@ Module Type CheriMemoryImpl
     end
   with sizeof
          (fuel: nat)
-         (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
+         (tagDefs : SymMap.t CoqCtype.tag_definition)
     : CoqCtype.ctype -> serr nat
        :=
          match fuel with
          | O => fun _ => raise "sizeof out of fuel"
          | S fuel =>
-             let tagDefs :=
-               match maybe_tagDefs with
-               | Some x => x
-               | None => TD.tagDefs tt
-               end in
              fun (function_parameter : CoqCtype.ctype) =>
                let '(CoqCtype.Ctype _ ty) as cty := function_parameter in
                match ty with
@@ -691,15 +685,15 @@ Module Type CheriMemoryImpl
                    option2serr "sizeof_fty not defined in Implementation" (IMP.get.(sizeof_fty) fty)
                | CoqCtype.Array elem_ty (Some asize) =>
                    sassert (Nat.ltb 0 asize) "Zero array size encountered" ;;
-                   sz <- sizeof fuel (Some tagDefs) elem_ty ;;
+                   sz <- sizeof fuel tagDefs elem_ty ;;
                    ret (asize * sz)%nat
                | CoqCtype.Pointer _ _ =>
                    ret (IMP.get.(sizeof_pointer))
                | CoqCtype.Atomic atom_ty =>
-                   sizeof fuel (Some tagDefs) atom_ty
+                   sizeof fuel tagDefs atom_ty
                | CoqCtype.Struct tag_sym =>
                    '(_, max_offset) <- offsetsof_struct fuel tagDefs tag_sym ;;
-                   align <- alignof fuel (Some tagDefs) cty ;;
+                   align <- alignof fuel tagDefs cty ;;
                    let x_value := Nat.modulo max_offset align in
                    ret (if Nat.eqb x_value 0%nat
                         then max_offset
@@ -713,11 +707,11 @@ Module Type CheriMemoryImpl
                        '(max_size, max_align) <-
                          monadic_fold_left
                            (fun '(acc_size, acc_align) '(_, (_, align_opt, _, ty)) =>
-                              sz <- sizeof fuel (Some tagDefs) ty ;;
+                              sz <- sizeof fuel tagDefs ty ;;
                               al <- match align_opt with
-                              | None => alignof fuel (Some tagDefs) ty
+                              | None => alignof fuel tagDefs ty
                               | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
-                              | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                              | Some (CoqCtype.AlignType al_ty) => alignof fuel tagDefs al_ty
                               end ;;
                               ret (Nat.max acc_size sz, Nat.max acc_align al)
                            )
@@ -878,6 +872,7 @@ Module Type CheriMemoryImpl
 
   Fixpoint repr
     (fuel: nat)
+    (tagDefs: SymMap.t CoqCtype.tag_definition)
     (addr : AddressValue.t)
     (mval : mem_value)
     (s: mem_state)
@@ -888,7 +883,7 @@ Module Type CheriMemoryImpl
     | S fuel =>
         match mval with
         | MVunspecified ty =>
-            sz <- sizeof DEFAULT_FUEL None ty ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs ty ;;
             sassert ((AddressValue.to_Z addr + (Z.of_nat sz)) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             let bs := List.repeat None sz in
             ret (mem_state_with_bytemap_capmeta
@@ -899,7 +894,7 @@ Module Type CheriMemoryImpl
                 AddressValue.with_offset addr (Z.of_nat sz))
         | MVinteger ity (IV ivalue) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
-            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss sz ivalue ;;
             let bs := List.map (Some) bs' in
             sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
@@ -934,7 +929,7 @@ Module Type CheriMemoryImpl
                 raise "invalid integer value (capability for non-(u)intptr_t"
             end
         | MVfloating fty fval =>
-            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
             sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             bs' <- bytes_of_Z true sz (bits_of_float fval) ;;
             let bs := List.map (Some) bs' in
@@ -981,21 +976,21 @@ Module Type CheriMemoryImpl
             end
         | MVarray mvals =>
             monadic_fold_left
-              (fun '(s', addr') (mval': mem_value) => repr fuel addr' mval' s')
+              (fun '(s', addr') (mval': mem_value) => repr fuel tagDefs addr' mval' s')
               mvals (s, addr)
         | MVunion tag_sym _ mval =>
-            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
             sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
-            '(s', pad_addr) <- repr fuel addr mval s ;;
+            '(s', pad_addr) <- repr fuel tagDefs addr mval s ;;
             let obj_sz := Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr) in
             sassert (obj_sz <=? sz)%nat "Union member is larger that the union" ;;
             let pad_size := Nat.sub sz obj_sz in
             let s'' := do_pad pad_addr pad_size s' in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
-            struct_typecheck tag_sym (TD.tagDefs tt) xs ;;
-            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
-            '(offs, final_off) <- offsetsof_struct DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
+            struct_typecheck tag_sym tagDefs xs ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
+            '(offs, final_off) <- offsetsof_struct DEFAULT_FUEL tagDefs tag_sym ;;
             '(s', final_pad_addr) <-
               monadic_fold_left2
                 (fun '(s0, addr0) '(ident, ty, off) '(_, _, mval) =>
@@ -1005,7 +1000,7 @@ Module Type CheriMemoryImpl
                    sassert ((AddressValue.to_Z addr0 + pad_size) <=? AddressValue.ADDR_LIMIT) "struct member padding does not fit in the address space" ;;
                    let s1 := do_pad addr0 (Z.to_nat pad_size) s0 in
                    (* write the value *)
-                   '(s2, end_addr) <- repr fuel value_a mval s1 ;;
+                   '(s2, end_addr) <- repr fuel tagDefs value_a mval s1 ;;
                    ret (s2, end_addr))
 
                 (s, addr) offs xs ;;
@@ -1053,7 +1048,8 @@ Module Type CheriMemoryImpl
     if align_n <=? 0
       then raise (InternalErr "non-positive aligment passed to allocate_object")
     else
-      size_n <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+      st <- get ;;
+      size_n <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) ty) ;;
       let size_z := Z.of_nat size_n in
       let mask := C.representable_alignment_mask size_z in
       let size_z' := C.representable_length size_z in
@@ -1133,6 +1129,7 @@ Module Type CheriMemoryImpl
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
+                tagDefs          := st.(tagDefs);
               |}).
 
   Definition get_allocation_opt (alloc_id : Z) : memM (option allocation) :=
@@ -1163,6 +1160,7 @@ Module Type CheriMemoryImpl
 
   Fixpoint abst
     (fuel: nat)
+    (tagDefs: SymMap.t CoqCtype.tag_definition)
     (funptrmap : ZMap.M.t (digest * string * C.t))
     (tag_query_f : AddressValue.t -> (bool* CapGhostState))
     (addr : AddressValue.t)
@@ -1174,8 +1172,8 @@ Module Type CheriMemoryImpl
     | O => raise "abst out of fuel"
     | S fuel =>
         let '(CoqCtype.Ctype _ ty) := cty in
-        let self f := abst f funptrmap tag_query_f in
-        sz <- sizeof DEFAULT_FUEL None cty ;;
+        let self f := abst f tagDefs funptrmap tag_query_f in
+        sz <- sizeof DEFAULT_FUEL tagDefs cty ;;
         sassert (negb (Nat.ltb (List.length bs) sz)) "abst, |bs| < sizeof(ty)" ;;
         match ty with
         | (CoqCtype.Void | CoqCtype.Array _ None |
@@ -1185,7 +1183,7 @@ Module Type CheriMemoryImpl
         | (CoqCtype.Basic (CoqCtype.Integer ((CoqIntegerType.Signed CoqIntegerType.Intptr_t) as ity))
           | CoqCtype.Basic (CoqCtype.Integer ((CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) as ity)))
           =>
-            sz <- sizeof DEFAULT_FUEL None cty ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs cty ;;
             let '(bs1, bs2) := split_at sz bs in
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             let _:bool := iss in (* hack to hint type checker *)
@@ -1208,7 +1206,7 @@ Module Type CheriMemoryImpl
             | None => ret (MVEunspecified cty, bs)
             end
         | CoqCtype.Basic (CoqCtype.Floating fty) =>
-            sz <- sizeof DEFAULT_FUEL None cty ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs cty ;;
             let '(bs1, bs2) := split_at sz bs in
             match extract_unspec bs1 with
             | Some cs =>
@@ -1217,7 +1215,7 @@ Module Type CheriMemoryImpl
             | None => ret (MVEunspecified cty, bs2)
             end
         | CoqCtype.Basic (CoqCtype.Integer ity) =>
-            sz <- sizeof DEFAULT_FUEL None cty ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs cty ;;
             let '(bs1, bs2) := split_at sz bs in
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             match extract_unspec bs1 with
@@ -1234,7 +1232,7 @@ Module Type CheriMemoryImpl
               match n_value with
               | O => ret ((MVEarray (List.rev mval_acc)), cs)
               | S n_value =>
-                  sz <- sizeof DEFAULT_FUEL None elem_ty ;;
+                  sz <- sizeof DEFAULT_FUEL tagDefs elem_ty ;;
                   let el_addr := AddressValue.with_offset addr (Z.of_nat (n_value * sz)%nat) in
                   '(mval, cs') <- self fuel el_addr elem_ty cs ;;
                   aux n_value (mval::mval_acc) cs'
@@ -1242,7 +1240,7 @@ Module Type CheriMemoryImpl
             in
             aux n_value [] bs
         | CoqCtype.Pointer _ ref_ty =>
-            sz <- sizeof DEFAULT_FUEL None cty ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs cty ;;
             let '(bs1, bs2) := split_at sz bs in
             match extract_unspec bs1 with
             | Some cs =>
@@ -1280,8 +1278,8 @@ Module Type CheriMemoryImpl
         | CoqCtype.Atomic atom_ty =>
             self fuel addr atom_ty bs
         | CoqCtype.Struct tag_sym =>
-            sz <- sizeof DEFAULT_FUEL None cty ;;
-            '(offsets,_) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
+            sz <- sizeof DEFAULT_FUEL tagDefs cty ;;
+            '(offsets,_) <- offsetsof DEFAULT_FUEL tagDefs tag_sym ;;
             let '(bs1, bs2) := split_at sz bs in
             '(rev_xs, _, bs') <-
               monadic_fold_left
@@ -1290,7 +1288,7 @@ Module Type CheriMemoryImpl
                    let memb_addr := AddressValue.with_offset addr (Z.of_nat memb_offset) in
                    '(mval, acc_bs') <-
                      self fuel memb_addr memb_ty (List.skipn pad acc_bs) ;;
-                   sz <- sizeof DEFAULT_FUEL None memb_ty ;;
+                   sz <- sizeof DEFAULT_FUEL tagDefs memb_ty ;;
                    ret ((memb_ident, memb_ty, mval)::acc_xs,
                        (memb_offset + sz)%nat, acc_bs'))
                 offsets
@@ -1544,11 +1542,12 @@ Module Type CheriMemoryImpl
           (MerrCHERI CheriMerrInvalidCap).
 
   Definition is_within_bound
+    (tagDefs: SymMap.t CoqCtype.tag_definition)
     (alloc_id : Z.t)
     (lvalue_ty : CoqCtype.ctype)
     (addr : Z) : memM bool
     :=
-    szn <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    szn <- serr2InternalErr (sizeof DEFAULT_FUEL tagDefs lvalue_ty) ;;
     let sz := Z.of_nat szn in
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
@@ -1558,12 +1557,13 @@ Module Type CheriMemoryImpl
                   AddressValue.to_Z alloc.(base) + Z.of_nat alloc.(size)))).
 
   Definition is_atomic_member_access
+    (tagDefs: SymMap.t CoqCtype.tag_definition)
     (alloc_id : Z.t)
     (lvalue_ty : CoqCtype.ctype)
     (addr : Z.t)
     : memM bool
     :=
-    szn <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    szn <- serr2InternalErr (sizeof DEFAULT_FUEL tagDefs lvalue_ty) ;;
     let sz := Z.of_nat szn in
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
@@ -1619,10 +1619,10 @@ Module Type CheriMemoryImpl
               bounds_unspecified := false |})
       in
       '(mval, bs') <-
-        serr2InternalErr (abst DEFAULT_FUEL st.(funptrmap) tag_query addr ty bs)
+        serr2InternalErr (abst DEFAULT_FUEL st.(tagDefs) st.(funptrmap) tag_query addr ty bs)
       ;;
       mval <- mem_value_strip_err loc mval ;;
-      szn <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+      szn <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) ty) ;;
       let fp := FP Read addr szn in
       match bs' with
       | [] =>
@@ -1657,13 +1657,14 @@ Module Type CheriMemoryImpl
          then fail loc (MerrAccess LoadAccess DeadPtr)
          else ret tt)
         ;;
-        inbounds <- is_within_bound alloc_id ty (cap_to_Z c) ;;
+        st <- get ;;
+        inbounds <- is_within_bound st.(tagDefs) alloc_id ty (cap_to_Z c) ;;
         if inbounds then
-          atomic <- is_atomic_member_access alloc_id ty  (cap_to_Z c) ;;
+          atomic <- is_atomic_member_access st.(tagDefs) alloc_id ty  (cap_to_Z c) ;;
           if atomic
           then fail loc (MerrAccess LoadAccess AtomicMemberof)
           else
-            (sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+            (sz <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) ty) ;;
              do_load_cap (Some alloc_id) c sz)
         else
           fail loc (MerrAccess LoadAccess OutOfBoundPtr)
@@ -1707,13 +1708,13 @@ Module Type CheriMemoryImpl
             (c_value : C.t)
         : memM footprint
         :=
-        szn <- serr2InternalErr (sizeof DEFAULT_FUEL None cty) ;;
+        s <- get ;;
+        szn <- serr2InternalErr (sizeof DEFAULT_FUEL s.(tagDefs) cty) ;;
         let sz := Z.of_nat szn in
         cap_check loc c_value 0 WriteIntent szn ;;
         let addr := C.cap_get_value c_value in
 
-        s <- get ;;
-        '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL addr mval s) ;;
+        '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL s.(tagDefs) addr mval s) ;;
         put s' ;;
         ret (FP Write addr szn)
       in
@@ -1722,14 +1723,15 @@ Module Type CheriMemoryImpl
         if cap_is_null c then
           fail loc (MerrAccess StoreAccess NullPtr)
         else
-          inbounds <- is_within_bound alloc_id cty (cap_to_Z c) ;;
+          st <- get ;;
+          inbounds <- is_within_bound st.(tagDefs) alloc_id cty (cap_to_Z c) ;;
           if inbounds then
             (alloc <- get_allocation alloc_id ;;
              match alloc.(is_readonly) with
              | IsReadOnly ro_kind =>
                  fail loc (MerrWriteOnReadOnly ro_kind)
              | IsWritable =>
-                 atomic <- is_atomic_member_access alloc_id cty (cap_to_Z c) ;;
+                 atomic <- is_atomic_member_access st.(tagDefs) alloc_id cty (cap_to_Z c) ;;
                  if atomic
                  then fail loc (MerrAccess LoadAccess AtomicMemberof)
                  else
@@ -1965,7 +1967,8 @@ Module Type CheriMemoryImpl
         | CoqCtype.Ctype _ (CoqCtype.Array elem_ty _) => elem_ty
         | _ => diff_ty
         end in
-      sz <- serr2InternalErr (sizeof DEFAULT_FUEL None diff_ty') ;;
+      st <- get ;;
+      sz <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) diff_ty') ;;
       ret (IV (Z.div (addr1 - addr2) (Z.of_nat sz)))
     in
 
@@ -2032,7 +2035,7 @@ Module Type CheriMemoryImpl
         ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ " + " ++ String.dec_str offset))
     | Some (CoqCtype.Ctype _ (CoqCtype.Struct tag_sym)) => (* TODO: nested structs *)
         let offset := Z.sub addr alloc.(base) in
-        '(offs, _) <- serr2InternalErr (offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym) ;;
+        '(offs, _) <- serr2InternalErr (offsetsof DEFAULT_FUEL tagDefs tag_sym) ;;
         let fix find y :=
           match y with
           | [] => None
@@ -2046,7 +2049,7 @@ Module Type CheriMemoryImpl
     | Some (CoqCtype.Ctype _ (CoqCtype.Array ty _)) =>
         let offset := Z.sub addr alloc.(base) in
         if offset <? alloc.(size) then
-          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+          sz <- serr2InternalErr (sizeof DEFAULT_FUEL tagDefs ty) ;;
           let n := Z.div offset sz in
           ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ "[" ++ String.dec_str n ++ "]"))
         else
@@ -2091,7 +2094,8 @@ Module Type CheriMemoryImpl
               (MerrOther
                  "called isWellAligned_ptrval on function pointer")
         | PVconcrete addr =>
-            sz <- serr2InternalErr (alignof DEFAULT_FUEL None ref_ty) ;;
+            st <- get ;;
+            sz <- serr2InternalErr (alignof DEFAULT_FUEL st.(tagDefs) ref_ty) ;;
             ret ((cap_to_Z addr) mod (Z.of_nat sz) =? 0)
         end
     end.
@@ -2393,13 +2397,13 @@ Module Type CheriMemoryImpl
   Definition null_cap (is_signed : bool) : integer_value :=
     IC is_signed (C.cap_c0 tt).
 
-  Definition array_shift_ptrval: pointer_value -> CoqCtype.ctype -> integer_value ->
+  Definition array_shift_ptrval: SymMap.t CoqCtype.tag_definition -> location_ocaml -> pointer_value -> CoqCtype.ctype -> integer_value ->
                                  serr pointer_value
-    := fun _ _ _ => raise "pure array_shift_ptrval not used in CHERI".
+    := fun _ _ _ _ _ => raise "pure array_shift_ptrval not used in CHERI".
 
-  Definition member_shift_ptrval: pointer_value -> CoqSymbol.sym ->
+  Definition member_shift_ptrval: SymMap.t CoqCtype.tag_definition ->  pointer_value -> CoqSymbol.sym ->
                                   CoqSymbol.identifier -> serr pointer_value
-    := fun _ _ _ => raise "members_shift_ptrval (pure) is not supported in CHERI".
+    := fun _ _ _ _ => raise "members_shift_ptrval (pure) is not supported in CHERI".
 
   Definition eff_array_shift_ptrval
     (loc : location_ocaml)
@@ -2408,8 +2412,9 @@ Module Type CheriMemoryImpl
     (ival_int : integer_value)
     : memM pointer_value
     :=
+    st <- get ;;
     let ival := num_of_int ival_int in
-    szn <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+    szn <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) ty) ;;
     let sz := Z.of_nat szn in
     let offset := Z.mul sz ival
     in
@@ -2460,7 +2465,8 @@ Module Type CheriMemoryImpl
     (tag_sym: CoqSymbol.sym)
     (memb_ident: CoqSymbol.identifier):  memM pointer_value
     :=
-    ioff <- serr2InternalErr (offsetof_ival (TD.tagDefs tt) tag_sym memb_ident) ;;
+    st <- get ;;
+    ioff <- serr2InternalErr (offsetof_ival st.(tagDefs) tag_sym memb_ident) ;;
     offset <-
       match ioff with
       | IV offset => ret (offset)
@@ -2692,6 +2698,7 @@ Module Type CheriMemoryImpl
     ret dst_p.
 
   Definition memcmp
+    (loc : location_ocaml)
     (ptrval1 ptrval2 : pointer_value)
     (size_int : integer_value)
     : memM integer_value
@@ -2897,16 +2904,6 @@ Module Type CheriMemoryImpl
     | IntRem_f => int_bin Z_integerRem_f v1 v2
     | IntExp => int_bin Z.pow v1 v2
     end.
-
-  Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
-    :=
-    sz <- sizeof DEFAULT_FUEL None ty ;;
-    ret (IV (Z.of_nat sz)).
-
-  Definition alignof_ival (ty: CoqCtype.ctype): serr integer_value
-    :=
-    a <- alignof DEFAULT_FUEL None ty ;;
-    ret (IV (Z.of_nat a)).
 
   Definition bitwise_complement_ival
     (ty : CoqIntegerType.integerType)
@@ -3253,7 +3250,8 @@ Module Type CheriMemoryImpl
         | MVinteger (CoqIntegerType.Size_t as ity) (IV z_value)
           =>
             iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
-            sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
+            st <- get ;;
+            sz <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
             bytes_value <- serr2InternalErr (bytes_of_Z iss sz z_value) ;;
             let bits := List.rev (bool_bits_of_bytes bytes_value) in
             let bits := list.take (BinNat.N.to_nat Permissions.len) bits in
@@ -3759,10 +3757,9 @@ Module CheriMemoryExe
          (Bounds)
          (Permissions)
          Capability_GS)
-  (TD: TagDefs)
   (SW: CerbSwitchesDefs)
-<: CheriMemoryImpl(MC)(C)(IMP)(TD)(SW).
+<: CheriMemoryImpl(MC)(C)(IMP)(SW).
 
-  Include CheriMemoryImpl(MC)(C)(IMP)(TD)(SW).
+  Include CheriMemoryImpl(MC)(C)(IMP)(SW).
 
 End CheriMemoryExe.

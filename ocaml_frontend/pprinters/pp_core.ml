@@ -280,10 +280,6 @@ let rec pp_object_value = function
       Impl_mem.case_fval fval
         (fun () -> !^ "unspec(floating)")
         (fun fval -> !^(string_of_float fval))
-(*
-  | OVsymbolic symb ->
-      !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_object_value Pp_mem.pp_pointer_value symb)
-*)
   | OVpointer ptr_val ->
       Impl_mem.pp_pointer_value ptr_val
   | OVarray lvals ->

@@ -75,19 +75,25 @@ fun loaded_fvfromint (ty: ctype, _n: loaded integer) : loaded floating :=
         Unspecified(ty)
   end
 
+-- NOTE: any change here must also be applied to the same function in
+-- std.core, and in Translation_aux.conv_arith
 -- TODO: we are not dealing with non-finite floating values
 fun loaded_ivfromfloat (ty: ctype, _f: loaded floating) : loaded integer :=
   case _f of
     | Specified(f:floating) =>
-        let n: integer = Ivfromfloat(ty, f) in
-        if ty = '_Bool' /\ not (n = 0) then
-          -- STD §6.3.1.2#1
-          Specified(1)
-        else if is_representable_integer(n, ty) then
-          Specified(n)
+        if ty = '_Bool' then
+          -- The comparison of equality "to 0" (STD §6.3.1.2#1) must be done
+          -- over the **floating type**, otherwise floating values of magnitude
+          -- less than one falsely compare equal to zero because of the
+          -- integer truncation.
+          Specified(if f = Fvfromint(0) then 0 else 1)
         else
-          -- STD §6.3.1.4#1, sentence 1
-          undef(<<UB017_out_of_range_floating_integer_conversion>>)
+          let n: integer = Ivfromfloat(ty, f) in
+          if is_representable_integer(n, ty) then
+            Specified(n)
+          else
+            -- STD §6.3.1.4#1, sentence 1
+            undef(<<UB017_out_of_range_floating_integer_conversion>>)
     | Unspecified(_: ctype) =>
         Unspecified(ty)
   end

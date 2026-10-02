@@ -70,6 +70,6 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci.sh
+        cd tests; USE_OPAM='' ./run-ci.sh --both-callconvs
         ./diff-prog.py cerberus bytes/elab.json
         ./diff-prog.py cerberus bytes/exec.json

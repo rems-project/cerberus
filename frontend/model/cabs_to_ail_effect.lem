@@ -216,6 +216,13 @@ type case_selector =
 type switch_info = <|
   cases_info: list (Loc.t * case_selector);
   default_info: maybe Loc.t;
+  promoted_ty: Ctype.ctype; (* the promoted type of the controlling expression *)
+|>
+
+
+import Translation_effect
+type desug_config = <|
+  elab_conf: Translation_effect.elab_config;
 |>
 
 type state = <|
@@ -278,6 +285,9 @@ type state = <|
 
   (* TODO TODO TODO *)
   core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
+
+  (* READ-ONLY, this will be moved to the `desug_config` type when the monad is updated *)
+  desug_conf: desug_config;
 |>
 
 type markers_env =
@@ -372,6 +382,9 @@ let modify_inner f =
     (a, <| st with inner= inner_st' |>)
   )
 
+
+let read_config =
+  read_inner (fun st -> st.desug_conf)
 
 val void: forall 'a. desugM 'a -> desugM unit
 let cabs_to_ail_effect_void m =
@@ -547,13 +560,15 @@ let hack_inject_idents_map idents_map =
   )
 
 
-let empty_switch_info =
-  <| cases_info= []; default_info= Nothing |>
+let init_switch_info promoted_ty =
+  <| cases_info= []; default_info= Nothing; promoted_ty= promoted_ty |>
 
 
 (* ========================================================================== *)
-val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> state_with_markers
-let initial_state core_eval_stuff cn_eval_stuff = <|
+val initial_state:
+  desug_config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
+  Cn_desugaring.init_scope -> state_with_markers
+let initial_state desug_conf core_eval_stuff cn_eval_stuff = <|
   inner= <|
     aux_supply=      0;
     scope_id_supply= 0;
@@ -583,6 +598,7 @@ let initial_state core_eval_stuff cn_eval_stuff = <|
     cn_state= Cn_desugaring.initial_cn_desugaring_state cn_eval_stuff;
     
     core_eval_stuff= core_eval_stuff;
+    desug_conf = desug_conf;
   |>;
   markers_env= Map.empty;
 |>
@@ -619,13 +635,16 @@ let fin_markers_env () =
   State_exception.return (id, st.markers_env)
 
 
-val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
-let cabs_to_ail_effect_eval core_eval_stuff cn_eval_stuff m =
+val eval:
+  forall 'a.
+  desug_config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
+  Cn_desugaring.init_scope -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
+let cabs_to_ail_effect_eval desug_conf core_eval_stuff cn_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->
     fin_markers_env () >>= fun markers ->
     State_exception.return (markers, res)
-  end (initial_state core_eval_stuff cn_eval_stuff)
+  end (initial_state desug_conf core_eval_stuff cn_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
 
@@ -917,19 +936,21 @@ end
 let check_case_overlaps xs =
   check_case_overlaps_aux [] xs
 
-val is_in_switch : desugM bool
-let is_in_switch =
+(* Use this to check whether inside a switch, and to get the (promoted) type of
+ * the controlling expression. *)
+val get_switch_promoted_type : desugM (maybe Ctype.ctype)
+let get_switch_promoted_type =
   read_inner (fun st ->
     match st.switch_context with
-      | []     -> false
-      | _ :: _ -> true
+      | []     -> Nothing
+      | ctx :: _ -> Just (ctx.promoted_ty)
     end
   )
 
-val as_switch_body: forall 'a. desugM 'a -> desugM 'a
-let as_switch_body m =
+val as_switch_body: forall 'a. Ctype.ctype -> desugM 'a -> desugM 'a
+let as_switch_body promoted_ty m =
   update_inner (fun st ->
-    <| st with switch_context= empty_switch_info :: st.switch_context |>
+    <| st with switch_context= init_switch_info promoted_ty :: st.switch_context |>
   ) >>= fun () ->
   m >>= fun ret ->
   get_inner >>= fun st ->

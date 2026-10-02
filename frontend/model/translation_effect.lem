@@ -6,8 +6,6 @@ import Core Core_aux Ctype
 module C    = Core
 module Caux = Core_aux
 
-include State
-
 type wrapped_symbol = <|
   sym_sym: Symbol.sym;
   sym_pat: C.pattern;
@@ -33,15 +31,37 @@ type elab_state = <|
   cheri_const_alias: map Symbol.sym Symbol.sym;
 
   errors: list string;
-  
-  (* readonly *)
-  calling_convention: C.calling_convention;
 |>
 
-type elabM 'a = stateM 'a elab_state
+type elab_ub_or_nd =
+  | Elab_UB
+  | Elab_ND
 
-val elab_init: C.calling_convention -> elab_state
-let elab_init callconv = <|
+type elab_config = <|
+  calling_convention: C.calling_convention;
+
+  (* TODO: properly classify what the following configure *)
+  is_PNVI: bool;
+  is_CHERI: bool;
+  is_CN: bool;
+  strict_pointer_arith: bool;
+  branching_on_unspec: elab_ub_or_nd;
+(*
+has_switch Global.SW_inner_arg_temps ---> USE calling_convention
+*)
+|>
+
+let elab_config callconv is_PNVI is_CHERI is_CN strict_pointer_arith branching_on_unspec = <|
+  calling_convention= callconv;
+  is_PNVI= is_PNVI;
+  is_CHERI= is_CHERI;
+  is_CN= is_CN;
+  strict_pointer_arith= strict_pointer_arith;
+  branching_on_unspec= branching_on_unspec;
+|>
+
+val elab_initial_state: elab_state
+let elab_initial_state = <|
   visible_objects_types= Map.empty;
   visible_objects= [[]];
   string_literals= [];
@@ -50,12 +70,55 @@ let elab_init callconv = <|
   visible_objects_types_markers_env = Map.empty;
   cheri_const_alias= Map.empty;
   errors = [];
-  calling_convention= callconv;
 |>
 
-val get_calling_convention: elabM C.calling_convention
-let get_calling_convention =
-  fun st -> (st.calling_convention, st)
+type elabM 'a =
+  elab_config -> elab_state -> ('a * elab_state)
+
+val elab_return: forall 'a. 'a -> elabM 'a
+let elab_return x = fun _ st -> (x, st)
+
+val elab_bind: forall 'a 'b. elabM 'a -> ('a -> elabM 'b) -> elabM 'b
+let elab_bind m f =
+  fun conf st ->
+    let (a, st') = m conf st in
+    f a conf st'
+
+let rec elab_mapM_aux f conf acc st = function
+  | [] -> (List.reverse acc, st)
+  | x :: xs ->
+      let (y, st') = f x conf st in
+      (* NOTE: this MUST remain in tail position *)
+      elab_mapM_aux f conf (y :: acc) st' xs
+end
+val elab_mapM: forall 'a 'b. ('a -> elabM 'b) -> list 'a -> elabM (list 'b)
+let elab_mapM f xs =
+  fun conf st -> elab_mapM_aux f conf [] st xs
+
+let rec elab_foldlM_aux f conf acc st = function
+  | [] -> (acc, st)
+  | x :: xs ->
+      let (acc', st') = f acc x conf st in
+      elab_foldlM_aux f conf acc' st' xs
+end
+val elab_foldlM: forall 'a 'b. ('a -> 'b -> elabM 'a) -> 'a -> list 'b -> elabM 'a
+let elab_foldlM f init xs = fun conf st -> elab_foldlM_aux f conf init st xs
+
+
+val elab_update: forall 'a. (elab_state -> elab_state) -> elabM unit
+let elab_update f =
+  fun _ st -> ((), f st)
+
+let inline return = elab_return
+let inline (>>=) = elab_bind
+let inline mapM = elab_mapM
+let inline foldlM = elab_foldlM
+
+
+
+val read_config: elabM elab_config
+let read_config =
+  fun conf st -> (conf, st)
 
 
 (* TODO: this does not need to be in the monad, but it is useful to unsure
@@ -71,12 +134,18 @@ let wrapped_fresh_symbol_ descr bTy =
   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
 
 val cheri_const_alias_map: elabM (map Symbol.sym Symbol.sym)
-let cheri_const_alias_map = fun st ->
+let cheri_const_alias_map = fun _ st ->
   (st.cheri_const_alias, st)
 
-val with_block_objects: forall 'a. list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM 'a ->
-  elabM (list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype * Symbol.sym)) * list compound_literal_info * 'a)
-let with_block_objects binds ma = fun st ->
+val with_block_objects:
+  forall 'a.
+  list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) ->
+  elabM 'a ->
+  elabM
+    ( list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype * Symbol.sym))
+    * list compound_literal_info
+    * 'a )
+let with_block_objects binds ma = fun conf st ->
   let (new_aliases, cheri_const_alias) = List.foldl (fun (xs_acc, map_acc) (sym, (qs, ty)) ->
     (* TODO: fail if sym IN acc *)
     if qs.Ctype.const then
@@ -91,66 +160,66 @@ let with_block_objects binds ma = fun st ->
     compound_literals= [];
     cheri_const_alias = cheri_const_alias;
   |> in
-  let (a, st'') = ma st' in
+  let (a, st'') = ma conf st' in
   ((new_aliases, st''.compound_literals, a), <| st'' with
     visible_objects=
       match st''.visible_objects with
-        | _ :: xs -> xs
-        | _       -> error "[Translation.E.with_block_objects] found an ill-formed scope stack."
+      | _ :: xs -> xs
+      | _       -> error "[Translation.E.with_block_objects] found an ill-formed scope stack."
       end;
     compound_literals= st.compound_literals |>)
 
 
 val track_temporary_objects: forall 'a. elabM 'a -> elabM (list (wrapped_symbol * Ctype.ctype) * 'a)
 let track_temporary_objects ma =
-  fun st ->
+  fun conf st ->
     if st.temporary_objects <> [] then
       error "[Translation.E.track_temporary_objects]"
     else
-      let (a, st') = ma st in
+      let (a, st') = ma conf st in
       ((st'.temporary_objects, a), <| st' with temporary_objects= [] |>)
 
 val register_temporary_object: wrapped_symbol -> Ctype.ctype -> elabM unit
 let register_temporary_object ptr_wrp ty =
-  fun st -> ((), <| st with temporary_objects= (ptr_wrp, ty) :: st.temporary_objects |>)
+  fun _ st -> ((), <| st with temporary_objects= (ptr_wrp, ty) :: st.temporary_objects |>)
 
 (* returns the list of all the C objects in scope. *)
 val get_visible_objects: elabM (list Symbol.sym)
-let get_visible_objects = fun st ->
+let get_visible_objects = fun _ st ->
   (foldl (++) [] st.visible_objects, st)
 
 val register_string_literal: Loc.t -> Symbol.sym -> Ctype.ctype -> C.pexpr -> elabM unit
-let register_string_literal loc sym ty pe = fun st ->
+let register_string_literal loc sym ty pe = fun _ st ->
   ((), <| st with string_literals= (loc, sym, ty, pe) :: st.string_literals |>)
 
 val get_string_literals: elabM (list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr))
-let get_string_literals = fun st ->
+let get_string_literals = fun _ st ->
   (st.string_literals, st)
 
 val register_compound_literal: Loc.t -> Symbol.prefix -> Symbol.sym -> bool -> Ctype.ctype -> elabM unit
-let register_compound_literal loc prefix sym is_const ty = fun st ->
+let register_compound_literal loc prefix sym is_const ty = fun _ st ->
   ((), <| st with compound_literals= (loc, prefix, sym, is_const, ty) :: st.compound_literals |>)
 
 val resolve_object_type: Symbol.sym -> elabM (Ctype.qualifiers * Ctype.ctype)
-let resolve_object_type sym = fun st ->
+let resolve_object_type sym = fun _ st ->
   match Map.lookup sym st.visible_objects_types with
-    | Just qs_ty ->
-        (qs_ty, st)
-    | Nothing ->
-        (* let sym_str = match sym with
-         *   | Symbol.Symbol _ n SD_None ->
-         *       "sym_" ^ show n
-         *   | Symbol.Symbol _ n (SD_Id str) ->
-         *       str ^ "{" ^ show n ^ "}"
-         * end in *)
-        error ("Translation_effect.resolve_object_type ===> " ^ show sym)
+  | Just qs_ty ->
+      (qs_ty, st)
+  | Nothing ->
+      (* let sym_str = match sym with
+        *   | Symbol.Symbol _ n SD_None ->
+        *       "sym_" ^ show n
+        *   | Symbol.Symbol _ n (SD_Id str) ->
+        *       str ^ "{" ^ show n ^ "}"
+        * end in *)
+      error ("Translation_effect.resolve_object_type ===> " ^ show sym)
   end
 
 
 
 (* similar to Cabs_to_ail_effect.record_marker *)
 val record_object_types_marker: unit -> elabM nat
-let record_object_types_marker () = 
+let record_object_types_marker () =
   let marker_id = Symbol.fresh_int () in
   begin
     if Global.backend_name () = "Cn" then
@@ -159,31 +228,47 @@ let record_object_types_marker () =
         resolve_object_type sym >>= fun (_, ty) ->
         return (sym, ty)
       ) visible_objects >>= fun visible_objects_typed ->
-      update (fun st ->
-          <| st with visible_objects_types_markers_env =
-                       Map.insert marker_id visible_objects_typed
-                         st.visible_objects_types_markers_env |>
+      elab_update (fun st ->
+        <| st with
+          visible_objects_types_markers_env =
+            Map.insert marker_id visible_objects_typed st.visible_objects_types_markers_env
+        |>
         )
     else
       return ()
-  end >>
+  end >>= fun () ->
   return marker_id
 
 
-(* record that an (unrecoverable) error occured, but don't abandon
+(* record that an (unrecoverable) error occurred, but don't abandon
    translation yet, so the user gets a full list of such errors *)
 val record_error: string -> elabM unit
 let record_error err =
     let () = Debug.print_unsupported err in
-    update (fun st -> <| st with errors = err :: st.errors |>)
+    elab_update (fun st -> <| st with errors = err :: st.errors |>)
 
 val record_error_at: Loc.t -> string -> elabM unit
 let record_error_at loc err = record_error
     ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": " ^ err)
 
-val runStateM_errors: forall 'a. elabM 'a -> elab_state -> 'a * elab_state
-let runStateM_errors m st =
-  let (rv, st) = runStateM m st in
+
+(*
+
+val runStateM: forall 'a 'st. stateM 'a 'st -> 'st -> ('a * 'st)
+let runStateM m st =
+  m st
+
+
+*)
+
+val runElabM: forall 'a. elab_config -> elabM 'a -> elab_state -> ('a * elab_state)
+let runElabM conf m st =
+  m conf st
+
+val runElabM_errors:
+  forall 'a. elab_config -> elabM 'a -> elab_state -> 'a * elab_state
+let runElabM_errors conf m st =
+  let (rv, st) = m conf st in
   match List.reverse st.errors with
     | [] -> (rv, st)
     | (err1 :: _) -> error err1

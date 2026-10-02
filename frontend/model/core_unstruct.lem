@@ -15,8 +15,11 @@ let insupported str =
   error ("Core_unstruct: unsupported ==> " ^ str)
 
 
-val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))))
-let extract_ctype_pe (Pexpr _ _ pexpr_) =
+val extract_ctype_pe:
+  Ctype.tag_definitions ->
+  typed_pexpr ->
+  maybe (either ctype (Symbol.sym * list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))))
+let extract_ctype_pe tagDefs (Pexpr _ _ pexpr_) =
   match pexpr_ with
     | PEval (Vctype (Ctype _ ty as cty)) ->
         Just match ty with
@@ -26,7 +29,7 @@ let extract_ctype_pe (Pexpr _ _ pexpr_) =
               insupported "atomic union"
           | Struct tag_sym ->
               (* TODO(check) ignoring flexible array members *)
-              Right (tag_sym, fst (get_structDef tag_sym))
+              Right (tag_sym, fst (get_structDef tagDefs tag_sym))
           | Union tag_sym ->
               (*let xs = get_unionDef tag_sym in*)
               insupported "(non atomic) union"
@@ -47,9 +50,8 @@ let extract_alignement_type (Pexpr _ _ pexpr_) =
   end
 
 
-val type_pexpr: pexpr -> typed_pexpr
-let type_pexpr pexpr =
-  let tagDefs = Ctype_aux.tagDefs () in
+val type_pexpr: Ctype.tag_definitions -> pexpr -> typed_pexpr
+let type_pexpr tagDefs pexpr =
   let m =
     Core_typing_effect.bind
       (Core_typing.infer_pexpr tagDefs Core_typing_aux.empty_env pexpr)
@@ -103,12 +105,12 @@ let explode_ptr_pexpr env (Pexpr annot bTy pexpr_) =
 
 
 (*val explode_paction: explode_env -> typed_paction unit -> list (typed_expr_ unit) *)
-let explode_paction env (Paction pol (Action loc a act_)) =
+let explode_paction tagDefs env (Paction pol (Action loc a act_)) =
   let wrap z =
     Eaction (Paction pol (Action loc a z)) in
   match act_ with
     | Create al_pe1 ty_pe2 pref ->
-        match (extract_alignement_type al_pe1, extract_ctype_pe ty_pe2) with
+        match (extract_alignement_type al_pe1, extract_ctype_pe tagDefs ty_pe2) with
           | (_, Just (Left _)) ->
               (* this is not allocating a struct, so no need to explode *)
               Nothing
@@ -128,7 +130,7 @@ let explode_paction env (Paction pol (Action loc a act_)) =
                         | Nothing ->
                             Caux.mk_alignof_pe ty_pe
                       end in
-                    (ident, wrap (Create (type_pexpr align_pe) (type_pexpr ty_pe) pref))
+                    (ident, wrap (Create (type_pexpr tagDefs align_pe) (type_pexpr tagDefs ty_pe) pref))
                   ) xs
                 end
           | (_, _) ->
@@ -231,8 +233,9 @@ let mk_ptr_sym_pe sym =
   Pexpr [] (BTy_object OTy_pointer) (PEsym sym)
 
 
-val     explode_expr: explode_env -> typed_expr unit -> typed_expr unit
-let rec explode_expr env (Expr annot expr_ as expr) =
+val     explode_expr: Ctype.tag_definitions -> explode_env -> typed_expr unit -> typed_expr unit
+let rec explode_expr tagDefs env (Expr annot expr_ as expr) =
+  let explode_expr = explode_expr tagDefs in
   let self e = explode_expr env e in
   let wrap z = Expr annot z in
   match expr_ with
@@ -251,7 +254,7 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         end
     
     | Esseq (Pattern pat_annot (CaseBase (Just sym, BTy_object OTy_pointer)) as pat) (Expr annot1 (Eaction pact) as e1) e2 ->
-        match explode_paction env pact with
+        match explode_paction tagDefs env pact with
           | Nothing ->
               wrap (Esseq pat e1 (explode_expr env e2))
           | Just xs ->
@@ -343,11 +346,11 @@ let rec explode_expr env (Expr annot expr_ as expr) =
 
 
 
-val explode_fun_map: typed_fun_map unit -> typed_fun_map unit
-let explode_fun_map funs =
+val explode_fun_map: Ctype.tag_definitions -> typed_fun_map unit -> typed_fun_map unit
+let explode_fun_map tagDefs funs =
   Map.map (function
     | Proc loc mrk bTy xs e ->
-        Proc loc mrk bTy xs (explode_expr Map.empty e)
+        Proc loc mrk bTy xs (explode_expr tagDefs Map.empty e)
     | z ->
         z
   end) funs
@@ -356,4 +359,4 @@ let explode_fun_map funs =
 val explode_file: typed_file unit -> typed_file unit
 let explode_file file =
   <| file with
-       funs= explode_fun_map file.funs |>
+       funs= explode_fun_map file.tagDefs file.funs |>

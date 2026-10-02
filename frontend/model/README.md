@@ -25,7 +25,6 @@ Classification of the files in model/
 * state_exception_undefined.lem
 * std.lem
 * symbol.lem
-* symbolic.lem
 * uniqueId.lem
 * utils.lem
 

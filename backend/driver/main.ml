@@ -20,13 +20,13 @@ let is_cheri_memory () =
       | Invalid_argument _ -> false in
   starts_with ~prefix:"cheri" Impl_mem.name
 
-let frontend (conf, io) ~is_lib filename core_std =
+let frontend elab_conf (conf, io) ~is_lib filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     read_core_object (conf, io) ~is_lib core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
+    c_frontend_and_elaboration elab_conf (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
@@ -141,17 +141,19 @@ let cerberus debug_level progress core_obj
     end else
       Switches.set switches
     end;
+    (* TODO: merge this with conf *)
+    let elab_conf = mk_elab_config () in
     io.pass_message (Printf.sprintf "Using '%s'" Impl_mem.name) >>
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
     load_core_impl core_stdlib impl_name >>= fun core_impl ->
     io.pass_message "Implementation file loaded." >>
-    return (core_stdlib, core_impl)
+    return ((core_stdlib, core_impl), elab_conf)
   in
-  let main core_std =
+  let main elab_conf core_std =
     Exception.except_foldlM (fun core_files (is_lib, file) ->
-      frontend ~is_lib (conf, io) file core_std >>= fun core_file ->
+      frontend ~is_lib elab_conf (conf, io) file core_std >>= fun core_file ->
       return (core_file::core_files)
     ) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ (List.map (fun z -> (false, z)) files))
   in
@@ -162,6 +164,18 @@ let cerberus debug_level progress core_obj
     else n
   in
   let success = Either.Right 0 in
+  (* --json-batch: the errors issued before any execution are reported on
+   * stdout as a JSON object of the same shape as the executions *)
+  let print_json_error ?(loc=Cerb_location.unknown) kind msg text =
+    print_string begin
+      Yojson.to_string begin
+        `Assoc [ ("status", `String "Error")
+               ; ("details", `Assoc [ ("kind", `String kind)
+                                    ; ("msg", `String msg)
+                                    ; ("loc", (Cerb_location.to_json loc :> Yojson.t))
+                                    ; ("text", `String text) ]) ]
+      end ^ "\n"
+    end in
   let runM = function
     | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch || batch = `JsonBatch) ->
         let open Driver_ocaml in
@@ -176,6 +190,11 @@ let cerberus debug_level progress core_obj
           string_of_batch_output ~json:(batch = `JsonBatch) ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
+        epilogue 1
+    | Exception.Exception (loc, err) when batch = `JsonBatch ->
+        print_json_error ~loc (Pp_errors.string_of_cause_kind err)
+          (Cerb_colour.without_colour Pp_errors.short_message err)
+          (Cerb_colour.without_colour Pp_errors.to_string (loc, err));
         epilogue 1
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
@@ -217,11 +236,17 @@ let cerberus debug_level progress core_obj
     | Exception.Result (Either.Right n) ->
         epilogue n 
   in
+  let run () =
   runM @@ match files with
     | [] ->
-      Pp_errors.fatal "no input file"
+      if batch = `JsonBatch then begin
+        print_json_error "fatal" "no input file" "no input file";
+        exit 1
+      end else
+        Pp_errors.fatal "no input file"
     | [file] when core_obj ->
-      prelude >>= frontend (conf, io) ~is_lib:false file >>= fun core_file ->
+      prelude >>= fun (core_std, elab_conf) ->
+      frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
       begin match output_name with
         | Some output_file ->
           write_core_object core_file output_file
@@ -241,9 +266,9 @@ let cerberus debug_level progress core_obj
         return success
       (* Dump a core object (-c) *)
       else if core_obj then
-        prelude >>= fun core_std ->
+        prelude >>= fun (core_std, elab_conf) ->
         Exception.except_foldlM (fun () file ->
-          frontend (conf, io) ~is_lib:false file core_std >>= fun core_file ->
+          frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file;
           return ()
@@ -251,9 +276,9 @@ let cerberus debug_level progress core_obj
         return success
       (* Parsing, Ail typing and stopping there *)
       else if syntax_only && List.for_all (fun z -> Filename.check_suffix z ".c") files then
-        prelude >>= fun core_std ->
+        prelude >>= fun (core_std, elab_conf) ->
         Exception.except_mapM (fun filename ->
-          c_frontend (conf, io) core_std ~filename
+          c_frontend Cabs_to_ail_effect.{ elab_conf } (conf, io) core_std ~filename
         ) files >>= fun _ ->
         return success
         (* Link and execute *)
@@ -263,16 +288,17 @@ let cerberus debug_level progress core_obj
         else
           return ()
         end >>= fun () ->
-        prelude >>= main >>= begin function
+        prelude >>= fun (core_std, elab_conf) ->
+        main elab_conf core_std >>= begin function
           | [] -> assert false
           | f::fs ->
             Core_linking.link (f::fs)
         end >>= fun core_file ->
         if exec then
           let open Driver_ocaml in
-          let () = Tags.reset_tagDefs () in (* TODO: check this *)
-          let () = Tags.set_tagDefs core_file.tagDefs in
-          let driver_conf = {concurrency; exec_mode; fs_dump; trace} in
+          (* Stepping is only enabled for Web instance because they impact execution time *)
+          let do_stepping = false in
+          let driver_conf = {exec_mode; do_stepping; concurrency; fs_dump; trace} in
           interp_backend io core_file ~args ~batch ~fs ~driver_conf
         else
           match output_name with
@@ -285,6 +311,16 @@ let cerberus debug_level progress core_obj
                 (write_core_object core_file (out ^ ".co"); create_executable out);
               return success
             end
+  in
+  if batch = `JsonBatch then
+    (* the OCaml exceptions escaping the pipeline (likely crashes) are reported
+     * as JSON too, and re-raised *)
+    try run () with
+      | e ->
+          print_json_error "uncaught_exception" (Printexc.to_string e) "";
+          raise e
+  else
+    run ()
 
 (* CLI stuff *)
 open Cmdliner
@@ -464,7 +500,7 @@ let batch =
   let doc = "makes the execution driver produce batch friendly output" in
   Arg.(value & vflag `NotBatch & [(`Batch, info["batch"] ~doc);
                                   (`CharonBatch, info["charon-batch"] ~doc:(doc^" (for Charon)"));
-                                  (`JsonBatch, info["json-batch"] ~doc:"outputs the executions in json") ])
+                                  (`JsonBatch, info["json-batch"] ~doc:"like --batch, but prints one JSON object per line on stdout (for each execution, or for the reported error)") ])
 
 let typecheck_core =
   let doc = "typecheck the elaborated Core program" in

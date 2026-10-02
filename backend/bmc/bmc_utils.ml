@@ -191,10 +191,10 @@ let ident_cmp = fun ident1 ident2 ->
 
 
 (* ========== Core memory functions ============= *)
-let is_null (ptr: Impl_mem.pointer_value) : bool =
+let is_null ~tagDefs (ptr: Impl_mem.pointer_value) : bool =
   let (Nondeterminism.ND f) =
     Impl_mem.eq_ptrval Cerb_location.unknown ptr (Impl_mem.null_ptrval Ctype.void) in
-  match f (Impl_mem.initial_mem_state) with
+  match f (Impl_mem.initial_mem_state tagDefs) with
   | (Nondeterminism.NDactive b,_) -> b
   | _ -> assert false
 

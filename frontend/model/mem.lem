@@ -32,7 +32,7 @@ declare ocaml target_rep function overlapping = `Impl_mem.overlapping`
 
 
 type mem_state
-val initial_mem_state: mem_state
+val initial_mem_state: Ctype.tag_definitions -> mem_state
 declare ocaml target_rep type mem_state = `Impl_mem.mem_state`
 declare ocaml target_rep function initial_mem_state = `Impl_mem.initial_mem_state`
 
@@ -110,7 +110,7 @@ declare ocaml target_rep function ge_ptrval = `Impl_mem.ge_ptrval`
 declare ocaml target_rep function diff_ptrval = `Impl_mem.diff_ptrval`
 
 val update_prefix: (Symbol.prefix * mem_value) -> memM unit
-val prefix_of_pointer: pointer_value -> memM (maybe string)
+val prefix_of_pointer: Ctype.tag_definitions -> pointer_value -> memM (maybe string)
 declare ocaml target_rep function update_prefix = `Impl_mem.update_prefix`
 declare ocaml target_rep function prefix_of_pointer = `Impl_mem.prefix_of_pointer`
 
@@ -138,8 +138,12 @@ declare ocaml target_rep function null_cap = `Impl_mem.null_cap`
 declare ocaml target_rep function ptr_t_int_value = `Impl_mem.ptr_t_int_value`
 
 (* Pointer shifting constructors *)
-val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
-val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
+val array_shift_ptrval:
+  Ctype.tag_definitions ->
+  Loc.t -> pointer_value -> Ctype.ctype -> integer_value -> Undefined.t pointer_value
+val member_shift_ptrval:
+  Ctype.tag_definitions ->
+  pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
 declare ocaml target_rep function array_shift_ptrval = `Impl_mem.array_shift_ptrval`
 declare ocaml target_rep function member_shift_ptrval = `Impl_mem.member_shift_ptrval`
 
@@ -151,7 +155,7 @@ declare ocaml target_rep function eff_member_shift_ptrval = `Impl_mem.eff_member
 
 
 val memcpy: Loc.t -> pointer_value -> pointer_value -> integer_value -> memM pointer_value
-val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
+val memcmp: Loc.t -> pointer_value -> pointer_value -> integer_value -> memM integer_value
 val realloc: Loc.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> memM pointer_value
 
 declare ocaml target_rep function memcpy = `Impl_mem.memcpy`
@@ -186,7 +190,7 @@ val integer_ival: integer -> integer_value
 val max_ival: Ctype.integerType -> integer_value
 val min_ival: Ctype.integerType -> integer_value
 val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-val offsetof_ival: map Symbol.sym (Loc.t * Ctype.tag_definition) -> Symbol.sym -> Symbol.identifier -> integer_value
+val offsetof_ival: Ctype.tag_definitions -> Symbol.sym -> Symbol.identifier -> integer_value
 val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
 val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
 val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value

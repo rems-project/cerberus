@@ -146,7 +146,6 @@ let create_conf w =
   { rewrite_core = false;
     sequentialise_core = false;
     link_libc = false;
-    tagDefs = "";
     switches = [];
     cpp_cmd = cpp_cmd ();
     core_impl = w.core_impl;
@@ -188,12 +187,10 @@ type action =
 (* implementation of the memory interface *)
 type model =
   [ `Concrete
-  | `Symbolic
   | `VIP ]
 
 let string_of_model = function
   | `Concrete -> "concrete"
-  | `Symbolic -> "symbolic"
   | `VIP      -> "vip"
 
 let string_of_action = function
@@ -232,7 +229,6 @@ let parse_incoming_msg content =
               }
   in
   let empty_node_id = { last_id= 0;
-                        tagDefs= "";
                         marshalled_state= "";
                         active_id= 0;
                       }
@@ -263,7 +259,6 @@ let parse_incoming_msg content =
   in
   let parse_model = function
     | "concrete" -> `Concrete
-    | "symbolic" -> `Symbolic
     | "vip"      -> `VIP
     | str -> 
         Debug.warn ("Unknown model: '" ^ str ^ "' (defaulting to 'concrete')");
@@ -294,9 +289,6 @@ let parse_incoming_msg content =
     | ("interactive[active]", [v]) ->
       { msg with interactive=
         Some { (get msg.interactive) with active_id = int_of_string v } }
-    | ("interactive[tagDefs]", [v]) ->
-      { msg with interactive=
-        Some { (get msg.interactive) with tagDefs = Base64.decode_exn v } }
     | (k, _) ->
       Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
       msg (* ignore unknown key *)
@@ -400,14 +392,13 @@ let json_of_result = function
       ("console", `String "");
       ("result", `String str);
     ]
-  | Interactive (tags, ranges, t) ->
+  | Interactive (ranges, t) ->
     `Assoc [
       ("steps", json_of_exec_tree t);
       ("status", `String "interactive");
       ("result", `String "");
       ("ranges",
        `Assoc (List.map (fun (uid, range) -> (uid, json_of_range range)) ranges));
-      ("tagDefs", `String (Base64.encode_string tags));
     ]
   | Step (res, activeId, t) ->
     `Assoc [
@@ -655,7 +646,6 @@ let cerberus ~rheader ~conf ~flow content =
          prevent the possibility of exploits since the string comes from the client *)
       "./webcerb." ^ begin match msg.model with
         | `Concrete -> "concrete"
-        | `Symbolic -> "symbolic"
         | `VIP      -> "vip"
       end in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in

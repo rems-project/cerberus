@@ -47,6 +47,7 @@ val cpp: (configuration * io_helpers) -> filename:string -> (string, Cerb_locati
 
 val c_frontend:
   ?cn_init_scope: Cn_desugaring.init_scope ->
+  Cabs_to_ail_effect.desug_config ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->
@@ -56,6 +57,7 @@ val c_frontend:
 
 val c_frontend_and_elaboration:
   ?cn_init_scope: Cn_desugaring.init_scope ->
+  Translation_effect.elab_config ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->
@@ -103,3 +105,5 @@ val write_core_object: unit Core.file -> string -> unit
 val untype_file: 
   'a Core.typed_file ->
   'a Core.file
+
+val mk_elab_config: unit -> Translation_effect.elab_config

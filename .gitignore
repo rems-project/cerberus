@@ -23,7 +23,6 @@ generated_tex/
 /public/node_modules/
 /cerberus-webserver
 /webcerb.concrete
-/webcerb.symbolic
 /webcerb.vip
 /public/dist/main.bundle.js
 /public/dist/main.bundle.js.map

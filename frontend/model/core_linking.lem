@@ -1,5 +1,6 @@
 open import Pervasives Utils Show Map Map_extra
-open import Loc Cabs Symbol Core Exception Errors
+open import Loc Cabs Core Exception Errors
+import Symbol
 
 let inline (>>=) = except_bind
 val link_fail: forall 'a. Loc.t -> core_linking_cause -> exceptM 'a (Loc.t * cause)
@@ -8,9 +9,9 @@ let link_fail loc cause =
 
 (* NOTE: the function returns an assoc list of redundant tentative to global definitions *)
 val link_extern: forall 'a. SetType 'a =>
-                 map identifier (list 'a * linking_kind) ->
-                 map identifier (list 'a * linking_kind) ->
-                 exceptM ((map identifier (list 'a * linking_kind)) * list (sym * sym)) (Loc.t * cause)
+                 map Symbol.identifier (list 'a * linking_kind) ->
+                 map Symbol.identifier (list 'a * linking_kind) ->
+                 exceptM ((map Symbol.identifier (list 'a * linking_kind)) * list (Symbol.sym * Symbol.sym)) (Loc.t * cause)
 let link_extern ext acc =
   Map_extra.fold (fun k (ds, lk_def) m_acc ->
     let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in
@@ -45,7 +46,7 @@ let link_extern ext acc =
   end) ext (return (acc, []))
 
 
-val link_main: maybe sym -> maybe sym -> exceptM (maybe sym) (Loc.t * cause)
+val link_main: maybe Symbol.sym -> maybe Symbol.sym -> exceptM (maybe Symbol.sym) (Loc.t * cause)
 let link_main opt_m1 opt_m2 =
   match (opt_m1, opt_m2) with
   | (Just _, Just _)   -> link_fail Loc.unknown DuplicateMain
@@ -230,7 +231,7 @@ let free acc = function
   | GlobalDecl _ -> acc
   end
 
-val empty_dep: list (sym * set sym) -> set sym
+val empty_dep: list (Symbol.sym * set Symbol.sym) -> set Symbol.sym
 let empty_dep map =
   Set.fromList (List.map fst (List.filter (fun (_, edges) -> Set.null edges) map))
 

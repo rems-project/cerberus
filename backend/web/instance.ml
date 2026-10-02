@@ -98,7 +98,9 @@ let elaborate ~is_bmc ~conf ~filename =
   try
     load_core_stdlib () >>= fun core_stdlib ->
     load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
-    c_frontend_and_elaboration (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
+    (* TODO: merge this with conf *)
+    let elab_conf = mk_elab_config () in
+    c_frontend_and_elaboration elab_conf (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
     >>= function
     | (Some cabs, Some (_, ail), core) ->
       core_passes (conf.pipeline, conf.io) ~filename core
@@ -173,7 +175,6 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
   try
     elaborate ~is_bmc:true ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
-    Tags.set_tagDefs core.tagDefs;
     let (cat_file_opt, mem_model) =
       match bmc_model with
       | `C11 ->
@@ -221,9 +222,8 @@ let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
     else
       return core
     end >>= fun core ->
-    Tags.set_tagDefs core.tagDefs;
     let open Driver_ocaml in
-    let driver_conf = {concurrency=false; exec_mode=mode; fs_dump=false; trace=false; } in
+    let driver_conf = {exec_mode=mode; do_stepping= true; concurrency=false; fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left (_, execs) ->
@@ -390,7 +390,7 @@ let json_of_step_kind step =
   | SK_done ->
     `Assoc [("kind", `String "done")]
   | SK_misc strs ->
-    `Assoc [("kind", `String "action request");
+    `Assoc [("kind", `String "misc");
             ("debug", `List (List.map (fun str -> `String str) strs))]
 
 let create_node node_info st next_state =
@@ -630,9 +630,8 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     else
       return core
     end >>= fun core ->
-    Tags.set_tagDefs core.tagDefs;
     let core'    = Core_run_aux.convert_file core in
-    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
+    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state true(*do_stepping*) in
     let (m, st)  = (Driver.drive false core' [], st0) in
     last_node_id := 0;
     let node_info= `Init in
@@ -640,11 +639,8 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let (c_loc, core_uid, arena, env, stdout, stderr) = get_state_details st in
     let next_state = Some (encode (m, st)) in
     let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; stdout; stderr } in
-    let tagDefs  = encode @@ Tags.tagDefs () in
-    return @@ Interactive (tagDefs, ranges, ([n], []))
+    return @@ Interactive (ranges, ([n], []))
   | Some n ->
-    let tagsMap : (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map = decode n.tagDefs in
-    Tags.set_tagDefs tagsMap;
     hack ~conf Random;
     Switches.set conf.instance.switches;
     last_node_id := n.last_id;

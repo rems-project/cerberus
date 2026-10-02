@@ -280,9 +280,9 @@ import AilSyntax
 
 type desugaring_init_funcs = <|
   desugar_expression: Cabs.cabs_expression -> E.desugM (AilSyntax.expression unit);
-  is_integer_constant_expression: AilSyntax.expression unit -> E.desugM bool;
+  is_integer_constant_expression: bool -> AilSyntax.expression unit -> E.desugM bool;
   is_initializer_constant_expression_or_string_literal: AilSyntax.expression unit -> E.desugM bool;
-  evaluate_integer_constant_expression: Loc.t -> maybe Ctype.ctype -> AilSyntax.expression unit -> E.desugM integer;
+  evaluate_integer_constant_expression: maybe Ctype.ctype -> AilSyntax.expression unit -> E.desugM integer;
 |>
 
 let liftM = function
@@ -314,12 +314,12 @@ let rec moveTo_aux tagDefs funcs is_top (ty_acc, cursor_acc) desigs =
     | Cabs.Desig_array e :: desigs' ->
         let loc = Loc.locOf e in
         let common e =
-          funcs.desugar_expression e               >>= fun d_e ->
-          funcs.is_integer_constant_expression d_e >>= function
+          funcs.desugar_expression e                    >>= fun d_e ->
+          funcs.is_integer_constant_expression true d_e >>= function
             | false ->
                 E.constraint_violation loc Constraint.IllegalTypeArrayDesignator
             | true ->
-              funcs.evaluate_integer_constant_expression loc Nothing d_e >>= fun idx ->
+              funcs.evaluate_integer_constant_expression Nothing d_e >>= fun idx ->
               if idx < 0 then
                 E.constraint_violation loc Constraint.IllegalSizeArrayDesignator
               else
