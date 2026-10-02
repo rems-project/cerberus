@@ -1,5 +1,4 @@
 open Cerb_frontend
-open Cerb_global
 open Cerb_diagnostic
 
 (* Pipeline *)
@@ -179,22 +178,27 @@ let cpp (conf, io) ~filename =
   end ()
 
 let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
-  desug_conf (conf, io) (core_stdlib, core_impl) ~filename
+  conf (pipeline_conf, io) (core_stdlib, core_impl) ~filename
 =
+  let module C_parser_driver = C_parser_driver.Make(
+    struct
+      let warn_extra_semicolon = not conf.Config.permissive
+    end
+  ) in
   Cerb_fresh.set_digest filename;
   let parse filename file_content =
     C_parser_driver.parse_from_string ~filename file_content >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
-    whenM (List.mem Cabs conf.astprints) begin
+    whenM (List.mem Cabs pipeline_conf.astprints) begin
       fun () -> io.run_pp None (Pp_cabs.pp_translation_unit true true cabs_tunit)
     end >>= fun () ->
-    whenM (List.mem Cabs conf.pprints) begin
+    whenM (List.mem Cabs pipeline_conf.pprints) begin
       fun () -> io.warn (fun () -> "TODO: Cabs pprint to yet supported")
     end >>= fun () -> return cabs_tunit in
   (* -- *)
   let mk_pp_program pp fout_opt file =
-    let fout_opt = List.assoc_opt Ail conf.ppouts in
+    let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
     let saved = !Cerb_colour.do_colour in
     Cerb_colour.do_colour := Unix.isatty Unix.stdout && Option.is_none fout_opt;
     let ret = pp file in
@@ -202,38 +206,39 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     ret in
   let desugar cabs_tunit =
     let (ailnames, core_stdlib_fun_map) = core_stdlib in
-    Cabs_to_ail.desugar desug_conf (ailnames, core_stdlib_fun_map, core_impl) cn_init_scope
+    Cabs_to_ail.desugar conf (ailnames, core_stdlib_fun_map, core_impl) cn_init_scope
       "main" cabs_tunit >>= fun (markers_env, ail_prog) ->
           io.set_progress "DESUG"
       >|> io.pass_message "Cabs -> Ail completed!"
           (* NOTE: if the debug level is lower the do the printing after the typing *)
-      >|> whenM (conf.debug_level > 4 && List.mem Ail conf.astprints) begin
+      >|> whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.astprints) begin
             fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)
           end
-      >|> whenM (conf.debug_level > 4 && List.mem Ail conf.pprints) begin
+      >|> whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.pprints) begin
             fun () ->
-            let fout_opt = List.assoc_opt Ail conf.ppouts in
+            let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
             io.run_pp fout_opt (mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ail_prog)
           end
       >>= fun () -> return (markers_env, ail_prog) in
   (* -- *)
   let ail_typechecking ail_prog =
     ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
+      conf
       (GenTyping.annotate_program ail_prog) >>= fun (ailtau_prog, _) ->
     io.pass_message "Ail typing completed!" >>= fun () ->
-    whenM (conf.debug_level <= 4 && List.mem Ail conf.astprints) begin
+    whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.astprints) begin
       fun () ->
-        let doc = if conf.debug_level = 4 then
+        let doc = if pipeline_conf.debug_level = 4 then
           (* (for debug 4) pretty-printing Ail with type annotations *)
           Pp_ail_ast.pp_program_with_annot ailtau_prog
         else
           Pp_ail_ast.pp_program true false ailtau_prog in
         io.run_pp None doc
     end >>= fun () ->
-    whenM (conf.debug_level <= 4 && List.mem Ail conf.pprints) begin
+    whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.pprints) begin
       fun () ->
-        let fout_opt = List.assoc_opt Ail conf.ppouts in
-        let doc = if conf.debug_level = 4 then
+        let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
+        let doc = if pipeline_conf.debug_level = 4 then
           (* (for debug 4) pretty-printing Ail with type annotations *)
           mk_pp_program Pp_ail.pp_program_with_annot fout_opt ailtau_prog
         else
@@ -242,16 +247,15 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     end >>= fun () -> return ailtau_prog in
   (* -- *)
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
-  cpp (conf, io) ~filename    >>= fun file_content            ->
-  parse filename file_content >>= fun cabs_tunit              ->
-  desugar cabs_tunit          >>= fun (markers_env, ail_prog) ->
-  ail_typechecking ail_prog   >>= fun ailtau_prog             ->
+  cpp (pipeline_conf, io) ~filename >>= fun file_content            ->
+  parse filename file_content       >>= fun cabs_tunit              ->
+  desugar cabs_tunit                >>= fun (markers_env, ail_prog) ->
+  ail_typechecking ail_prog         >>= fun ailtau_prog             ->
   return (cabs_tunit, (markers_env, ailtau_prog))
 
-let c_frontend_and_elaboration ?(cn_init_scope=Cn_desugaring.empty_init) elab_conf (conf, io) (core_stdlib, core_impl) ~filename =
-  let desug_conf = Cabs_to_ail_effect.{ elab_conf } in
-  c_frontend ~cn_init_scope desug_conf (conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
-  let core_file = Translation.translate core_stdlib elab_conf core_impl ailtau_prog in
+let c_frontend_and_elaboration ?(cn_init_scope=Cn_desugaring.empty_init) conf (pipeline_conf, io) (core_stdlib, core_impl) ~filename =
+  c_frontend ~cn_init_scope conf (pipeline_conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
+  let core_file = Translation.translate core_stdlib conf core_impl ailtau_prog in
   io.set_progress "ELABO" >>= fun () ->
   io.pass_message "Translation to Core completed!" >>= fun () ->
   return (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
@@ -264,7 +268,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
         (* Tags.set_tagDefs "Pipeline.core_frontend" tagDefs; *)
         return {
            Core.main=   Some sym_main;
-           Core.calling_convention= Core.Normal_callconv; (* TODO *)
+           Core.callconv= Config.Normal_callconv; (* TODO *)
            Core.tagDefs= tagDefs;
            Core.stdlib= snd core_stdlib;
            Core.impl=   core_impl;
@@ -493,7 +497,7 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
     | GlobalDecl _ as glob ->
         glob in
   { main= file.main
-  ; calling_convention= file.calling_convention
+  ; callconv= file.callconv
   ; tagDefs= file.tagDefs
   ; stdlib= Pmap.map untype_generic_fun_map_decl file.stdlib
   ; impl= Pmap.map untype_generic_impl_decl file.impl
@@ -576,7 +580,7 @@ let core_passes (conf, io) ~filename core_file =
       print_core (conf, io) ~filename core_file
   end
 
-let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
+let interp_backend ~conf io core_file ~args ~batch ~fs =
   let module D = Driver_ocaml in
   let fs_state = match fs with
     | None -> Sibylfs.fs_initial_state
@@ -585,11 +589,11 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
   (* TODO: temporary hack for the command name *)
   match batch with
   | (`Batch | `CharonBatch | `JsonBatch) as mode ->
-    let executions = D.batch_drive core_file ("cmdname" :: args) fs_state driver_conf in
+    let executions = D.batch_drive ~conf core_file ("cmdname" :: args) fs_state in
     return (Either.Left (mode, executions))
   | `NotBatch ->
     let open Core in
-    D.drive core_file ("cmdname" :: args) fs_state driver_conf >>= function
+    D.drive ~conf core_file ("cmdname" :: args) fs_state >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           return (Either.Right begin
             match Mem.eval_integer_value ival with
@@ -618,7 +622,7 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
  * program, with exactly the same compiled code. *)
 type 'a core_dump =
   { dump_main: Symbol.sym option;
-    dump_calling_convention: Core.calling_convention;
+    dump_callconv: Config.calling_convention;
     dump_tagDefs: (Symbol.sym * (Cerb_location.t * Ctype.tag_definition)) list;
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
@@ -652,15 +656,16 @@ let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filenam
     Cerb_debug.warn [] (fun () -> "read core_object file produced with a different version of Cerberus => " ^ v);
   let dump: 'a core_dump = Marshal.from_channel ic in
   close_in ic;
-  let core_file = { main=    dump.dump_main;
-    calling_convention= dump.dump_calling_convention;
-    tagDefs= map_from_assoc sym_compare dump.dump_tagDefs;
-    stdlib=  snd core_stdlib;
-    impl=    core_impl;
-    globs=   dump.dump_globs;
-    funs=    map_from_assoc sym_compare dump.dump_funs;
-    extern=  map_from_assoc cabsid_compare dump.dump_extern;
-    funinfo= map_from_assoc sym_compare dump.dump_funinfo;
+  let core_file = {
+    main=     dump.dump_main;
+    callconv= dump.dump_callconv;
+    tagDefs=  map_from_assoc sym_compare dump.dump_tagDefs;
+    stdlib=   snd core_stdlib;
+    impl=     core_impl;
+    globs=    dump.dump_globs;
+    funs=     map_from_assoc sym_compare dump.dump_funs;
+    extern=   map_from_assoc cabsid_compare dump.dump_extern;
+    funinfo=  map_from_assoc sym_compare dump.dump_funinfo;
     loop_attributes0= Pmap.empty compare(* map_from_assoc compare dump.dump_loop_attributes *);
     visible_objects_env= Pmap.empty compare
   } in
@@ -673,7 +678,7 @@ let write_core_object core_file fname =
   let open Core in
   let dump: 'a core_dump =
     { dump_main = core_file.main;
-      dump_calling_convention = core_file.calling_convention;
+      dump_callconv = core_file.callconv;
       dump_tagDefs = Pmap.bindings_list core_file.tagDefs;
       dump_globs = core_file.globs;
       dump_funs = Pmap.bindings_list core_file.funs;
@@ -699,16 +704,44 @@ let ocaml_backend (conf, io) ~filename ~ocaml_corestd core_file =
   >>= Codegen_ocaml.gen filename ocaml_corestd
 *)
 
-let mk_elab_config () =
-  Translation_effect.{
-    calling_convention0=
-      Core.(if Switches.has_switch SW_inner_arg_temps then Inner_arg_callconv else Normal_callconv);
+let mk_config
+  ~backend_name
+  ~agnostic
+  ~permissive
+  ~ignore_bitfields
+  ~allow_distinct_ptr_types_comparison
+  ~allow_void_ptr_arithmetic
+  ~allow_void_return
+  ~execution_mode
+  ~concurrency
+  ~do_stepping
+  ~do_tracing
+  ~fs_dump
+=
+  let is_CN = String.equal backend_name "Cn" in
+  Config.{
+    agnostic;
+    permissive;
+    ignore_bitfields;
+    allow_distinct_ptr_types_comparison;
+    allow_void_ptr_arithmetic;
+    allow_void_return;
+    calling_convention=
+      Config.(if Switches.has_switch SW_inner_arg_temps then Inner_arg_callconv else Normal_callconv);
     is_PNVI= Switches.is_PNVI ();
     is_CHERI= Switches.is_CHERI ();
-    is_CN= String.equal Cerb_global.(backend_name ()) "Cn";
+    is_CN;
+    with_record_marker= is_CN;
     strict_pointer_arith= Switches.has_strict_pointer_arith ();
     branching_on_unspec= Translation_effect.(
       if Switches.(has_switch SW_branching_on_unspec_is_nd)
-      then Elab_ND else Elab_UB)
+      then Elab_ND else Elab_UB
+    );
+    no_seq_rmw= is_CN || String.equal backend_name "Bmc";
+    execution_mode;
+    concurrency;
+    do_stepping;
+    do_tracing;
+    fs_dump;
   }
 

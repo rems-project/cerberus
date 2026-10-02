@@ -1,7 +1,7 @@
 open import Pervasives Utils Translation_effect Show Show_extra Ctype
 import Symbol Core Core_aux Mem
 import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
-import Boot Map_extra
+import Config Boot Map_extra
 
 module C    = Core
 module Caux = Core_aux
@@ -202,9 +202,9 @@ let exp_type_of a_expr =
 
 
 (* NOTE: it does not depend on the annotation state *)
-val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
-let ctype_of a_expr =
-  match ErrorMonad.runErrorMonad
+val ctype_of: Config.config -> AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let ctype_of conf a_expr =
+  match ErrorMonad.runErrorMonad conf
       (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) (Implementation.integerImpl ())
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (GenTypes.LValueType _ ty _) -> ty
@@ -215,9 +215,9 @@ let ctype_of a_expr =
   end
 
 (* NOTE: it does not depend on the annotation state *)
-val qualified_ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
-let qualified_ctype_of a_expr =
-  match ErrorMonad.runErrorMonad
+val qualified_ctype_of: Config.config -> AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
+let qualified_ctype_of conf a_expr =
+  match ErrorMonad.runErrorMonad conf
       (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) (Implementation.integerImpl ())
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (GenTypes.LValueType qs ty _) -> (qs, ty)
@@ -273,15 +273,18 @@ let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
 *)
 
 
-val     combine_params_args: list (Ctype.qualifiers * Ctype.ctype * bool) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
-                             list (Ctype.ctype * AilSyntax.expression GenTypes.genTypeCategory)
-let rec combine_params_args params es =
+val combine_params_args:
+  Config.config ->
+  list (Ctype.qualifiers * Ctype.ctype * bool) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
+  list (Ctype.ctype * AilSyntax.expression GenTypes.genTypeCategory)
+let rec combine_params_args conf params es =
+  let combine_params_args = combine_params_args conf in
   match (params, es) with
     | ((_, ty, _) :: params', e :: es') ->
         (ty, e) :: combine_params_args params' es'
     | ([], e :: es') ->
         (* argument promotion for variadic functions *)
-        (AilTypesAux.rvalue_coercion (ctype_of e), e) :: combine_params_args [] es'
+        (AilTypesAux.rvalue_coercion (ctype_of conf e), e) :: combine_params_args [] es'
     | (_::_, []) ->
         error "Translation_aux.combine_params_args"
     | ([], []) ->

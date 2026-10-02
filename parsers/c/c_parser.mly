@@ -91,7 +91,7 @@ let opt_magic_to_opt_attrs = function
 
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
-  if not (Cerb_global.isPermissive ()) then
+  if not M.warn_extra_semicolon then
     prerr_endline (Pp_errors.make_message
                     (point pos)
                     Errors.(CPARSER (Cparser_extra_semi ctx))
@@ -348,7 +348,11 @@ type asm_qualifier =
 %type<Cabs.external_declaration> cn_toplevel_elem
 %type<Cabs.external_declaration list> cn_toplevel
 
-
+%parameter<
+  M : sig
+    val warn_extra_semicolon: bool
+  end
+>
 
 %% (* ======================================================================= *)
 

@@ -1,0 +1,53 @@
+open import Pervasives
+
+type execution_mode =
+  | Exhaustive
+  | Random
+
+type elab_ub_or_nd =
+  | Elab_UB
+  | Elab_ND
+
+type calling_convention =
+  | Normal_callconv
+  | Inner_arg_callconv
+
+instance (Eq calling_convention)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+type config = <|
+  agnostic: bool;
+  permissive: bool;
+
+  (* Desugaring *)
+  ignore_bitfields: bool;
+
+  (* Ail typing *)
+  allow_distinct_ptr_types_comparison: bool; (* GNU extension: == or != between pointers to
+                                              * incompatible types *)
+  allow_void_ptr_arithmetic: bool; (* GNU extension: arithmetic over void pointers *)
+  allow_void_return: bool; (* GNU extension: allows return E; in a void function when the type of
+                            * E is void *)
+
+  (* Elaboration *)
+  calling_convention: calling_convention;
+  (* TODO: properly classify what the following configure *)
+  is_PNVI: bool;
+  is_CHERI: bool;
+  is_CN: bool;
+  with_record_marker: bool;
+  strict_pointer_arith: bool;
+  branching_on_unspec: elab_ub_or_nd;
+  no_seq_rmw: bool;
+
+  (* Driver *)
+  execution_mode: maybe execution_mode; (* Nothing if not executing the Core *)
+  concurrency: bool;
+  do_stepping: bool;
+  do_tracing: bool;
+
+  (* Driver_ocaml *)
+  fs_dump: bool;
+|>

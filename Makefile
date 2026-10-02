@@ -135,7 +135,7 @@ LEM_AIL           = typingError.lem errorMonad.lem ailSyntax.lem genTypes.lem
 LEM_CTYPE_AUX     = ctype_aux.lem
 LEM_CORE          = core.lem errors.lem core_aux.lem core_linking.lem
 LEM_CORE_TYPING   = core_typing.lem core_typing_aux.lem core_typing_effect.lem
-LEM_UTILS         = boot.lem exception_undefined.lem multiset.lem \
+LEM_UTILS         = boot.lem config.lem exception_undefined.lem multiset.lem \
                     state_exception.lem state_exception_undefined.lem \
                     std.lem monadic_parsing.lem fs.lem trace_event.lem \
 										cerb_attributes.lem

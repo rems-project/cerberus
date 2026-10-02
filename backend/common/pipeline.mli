@@ -47,7 +47,7 @@ val cpp: (configuration * io_helpers) -> filename:string -> (string, Cerb_locati
 
 val c_frontend:
   ?cn_init_scope: Cn_desugaring.init_scope ->
-  Cabs_to_ail_effect.desug_config ->
+  Config.config ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->
@@ -57,7 +57,7 @@ val c_frontend:
 
 val c_frontend_and_elaboration:
   ?cn_init_scope: Cn_desugaring.init_scope ->
-  Translation_effect.elab_config ->
+  Config.config ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->
@@ -84,8 +84,9 @@ val core_passes:
   (unit Core.file, Cerb_location.t * Errors.cause) Exception.exceptM
 
 val interp_backend:
+  conf:Config.config ->
   io_helpers -> 'a Core.file ->
-  args:(string list) -> batch:[`Batch | `CharonBatch | `JsonBatch | `NotBatch] -> fs:string option -> driver_conf:Driver_ocaml.driver_conf ->
+  args:(string list) -> batch:[`Batch | `CharonBatch | `JsonBatch | `NotBatch] -> fs:string option ->
   ((([`Batch | `CharonBatch | `JsonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Cerb_location.t * Errors.cause) Exception.exceptM
 
 (*
@@ -106,4 +107,17 @@ val untype_file:
   'a Core.typed_file ->
   'a Core.file
 
-val mk_elab_config: unit -> Translation_effect.elab_config
+val mk_config:
+  backend_name:string ->
+  agnostic:bool ->
+  permissive:bool ->
+  ignore_bitfields:bool ->
+  allow_distinct_ptr_types_comparison:bool ->
+  allow_void_ptr_arithmetic:bool ->
+  allow_void_return:bool ->
+  execution_mode:Config.execution_mode option ->
+  concurrency:bool ->
+  do_stepping:bool ->
+  do_tracing:bool ->
+  fs_dump:bool ->
+  Config.config

@@ -80,3 +80,10 @@
        %{dep:c_parser.mly}
        --list-errors)))
 
+; Functorising the parser made the build time significantly longer with the
+; default register allocator (except when using flambda), so using the
+; linear-scan one.  I haven't properly checked the performance hit, so only
+; doing so for the dev profile.
+(env
+ (dev
+  (ocamlopt_flags (:standard -linscan))))

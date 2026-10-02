@@ -87,8 +87,8 @@ let spawn_thread parent_tid_opt th_st st =
   )
 
 
-val kill_thread: Mem_common.thread_id -> Mem_common.thread_id -> set Cmm.aid -> Core.value -> core_state -> core_state
-let kill_thread tid parent_tid aswBefores v st =
+val kill_thread: bool -> Mem_common.thread_id -> Mem_common.thread_id -> set Cmm.aid -> Core.value -> core_state -> core_state
+let kill_thread concurrency tid parent_tid aswBefores v st =
   let () = Debug.print_debug 5 [Debug.DB_core_dynamics] (fun () -> "KILLING Thread " ^ show tid ^ " (child of thread " ^ show parent_tid ^ ")") in
   let _ = Set.map (fun aid ->
     Debug.print_debug 5 [Debug.DB_core_dynamics] (fun () -> "AID ==> " ^ show aid)
@@ -100,7 +100,7 @@ let kill_thread tid parent_tid aswBefores v st =
 (*
             arenas= List.map (subst_wait tid v) th_st.arenas; (* NOTE!!!! ==> in fact here arenas must be a singleton (since Epar is not allowed inside Eunseq) *)
 *)
-            stack= add_to_asw_stack aswBefores (subst_wait_stack tid v th_st.stack) |>)
+            stack= add_to_asw_stack concurrency aswBefores (subst_wait_stack tid v th_st.stack) |>)
        ) parent_tid $ assoc_remove tid st.thread_states
   |>
 
@@ -273,9 +273,10 @@ type core_step =
 
 
 val core_action_step:
+    bool ->
     list annot -> map Symbol.sym Symbol.sym -> Mem.mem_state -> Core.file core_run_annotation -> Mem_common.thread_id ->
     (maybe Mem_common.thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
-let core_action_step arena_annots core_extern mem_st file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
+let core_action_step concurrency arena_annots core_extern mem_st file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
   let sb_before =
     (* filter out actions from other threads *)
     Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
@@ -313,7 +314,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                                 create_aid current_tid pref ival ty Nothing
                                 (fun ptr_val -> <| th_st with
                                     arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
-                                    stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                                    stack= add_to_sb_stack concurrency {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                                 |>)
                                 )
                               )
@@ -388,7 +389,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                                             create_aid current_tid pref ival ty (Just mem_val)
                                             (fun ptr_val -> <| th_st with
                                                 arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
-                                                stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                                                stack= add_to_sb_stack concurrency {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                                             |>)
                                         )
                                       )
@@ -425,7 +426,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                           alloc_aid current_tid pref ival1 ival2
                           (fun ptr_val -> <| th_st with
                               arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
-                              stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                              stack= add_to_sb_stack concurrency {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>)
                           )
                         )
@@ -461,7 +462,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                     kill_aid current_tid (is_dynamic kind) ptr_val
                     <| th_st with
                       arena= Expr arena_annots (Epure (Pexpr [] () (PEval Vunit)));
-                      stack= add_to_sb_stack {(p, (current_tid, kill_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                      stack= add_to_sb_stack concurrency {(p, (current_tid, kill_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                     |>
                 )
               )
@@ -533,7 +534,7 @@ KKK
                               store_aid current_tid mo ty is_locking ptr_val mem_val
                               <| th_st with
                                 arena= Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))) (* Epure (PEval (objectValueFromMemValue mem_val)) *);
-                                stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                                stack= add_to_sb_stack concurrency {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                               |>
                           )
                         )
@@ -589,7 +590,7 @@ KKK
                         (* NOTE: the parenthesis are needed because of a Lem's bug... *)
                         arena= (let (oTy, cval) = valueFromMemValue mem_val in
                                 Expr arena_annots (Epure (Pexpr [] () (PEval cval))));
-                        stack= add_to_sb_stack {(p, (current_tid, load_aid))} (* TODO: remove for sequential !!! *) th_st.stack
+                        stack= add_to_sb_stack concurrency {(p, (current_tid, load_aid))} (* TODO: remove for sequential !!! *) th_st.stack
                     |>)
                 )
               )
@@ -624,7 +625,7 @@ KKK
                           rmw_aid current_tid mo1 mo2 ty ptr_val mval_expected mval_desired
                           <| th_st with
                             arena= Expr arena_annots (Epure (Pexpr [] () (PEval Vtrue))); (* TODO *)
-                            stack= add_to_sb_stack {(p, (current_tid, rmw_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                            stack= add_to_sb_stack concurrency {(p, (current_tid, rmw_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>
                       )
                     )
@@ -641,7 +642,7 @@ KKK
                           store_aid current_tid mo ty ptr_val mem_val
                           <| th_st with
                             arena= Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
-                            stack= (* add_to_sb_stack {(p, (current_tid, store_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
+                            stack= (* add_to_sb_stack concurrency {(p, (current_tid, store_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
                           |>
                       )
                     )
@@ -695,7 +696,7 @@ KKK
                     load_aid current_tid mo ty ptr_val val_sym
                     (fun mem_val -> <| th_st with
                         arena= Epure (PEval (objectValueFromMemValue mem_val));
-                        stack= (* add_to_sb_stack {(p, (current_tid, load_aid))} *) th_st.stack
+                        stack= (* add_to_sb_stack concurrency {(p, (current_tid, load_aid))} *) th_st.stack
                     |>)
                 )
               )
@@ -725,7 +726,7 @@ KKK
               fence_aid current_tid mo
               <| th_st with
                 arena= Expr arena_annots (Epure (Pexpr [] () (PEval Vunit)));
-                stack= add_to_sb_stack {(p, (current_tid, fence_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                stack= add_to_sb_stack concurrency {(p, (current_tid, fence_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
               |>
           )
         )
@@ -752,8 +753,8 @@ KKK
 
 
 
-val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym -> map Symbol.sym Core.object_value -> Mem_common.thread_id -> (maybe Mem_common.thread_id * thread_state) -> list core_step
-let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
+val core_thread_step2: bool -> Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym -> map Symbol.sym Core.object_value -> Mem_common.thread_id -> (maybe Mem_common.thread_id * thread_state) -> list core_step
+let core_thread_step2 concurrency mem_st file core_extern _ (*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   let Expr arena_annots expr_ = th_st.arena in
   let maybe_loc = Annot.get_loc arena_annots in
@@ -961,7 +962,7 @@ BEFORE EVAL_PEXPR2
                                 EU.return
                             ) >>= fun (proc_env, expr) ->
                             (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-                            let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                            let a_expr = add_to_sb concurrency (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                             E.return <| th_st with
                               arena= a_expr;
                               stack= push_empty_continuation (Just psym) sk;
@@ -1032,7 +1033,7 @@ BEFORE EVAL_PEXPR2
                           EU.return
                       ) >>= fun (proc_env, expr) ->
                       (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-                      let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                      let a_expr = add_to_sb concurrency (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                       E.return <| th_st with
                         arena= a_expr;
                         stack= push_empty_continuation (Just psym) sk;
@@ -1349,7 +1350,7 @@ BEFORE EVAL_PEXPR2
         end
     
     | (Eaction pact, _) ->
-        one $ core_action_step arena_annots core_extern mem_st file current_tid (parent_tid_opt, th_st) pact
+        one $ core_action_step concurrency arena_annots core_extern mem_st file current_tid (parent_tid_opt, th_st) pact
     
     | (Ememop memop pes, _) ->
         one match valueFromPexprs pes with

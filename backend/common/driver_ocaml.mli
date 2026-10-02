@@ -1,15 +1,5 @@
 open Cerb_frontend
 
-type driver_conf = {
-(* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
-  exec_mode: Cerb_global.execution_mode;
-  do_stepping: bool; (* Stepping should only be enabled when really used (e.g. for Web instances)
-                      * because it impacts execution time *)
-  concurrency: bool;
-  fs_dump: bool;
-  trace: bool;
-}
-
 type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
 type batch_exit =
@@ -26,7 +16,7 @@ val string_of_batch_exit: batch_exit -> string
 val string_of_batch_output: ?json:bool -> ?is_charon:bool -> int option -> (string list * batch_output) -> string
 
 val batch_drive:
-  'a Core.file -> string list -> Sibylfs.fs_state -> driver_conf -> (string list * batch_output) list
+  conf:Config.config -> 'a Core.file -> string list -> Sibylfs.fs_state -> (string list * batch_output) list
 
 val drive:
-  'a Core.file -> string list -> Sibylfs.fs_state -> driver_conf -> execution_result
+  conf:Config.config -> 'a Core.file -> string list -> Sibylfs.fs_state -> execution_result

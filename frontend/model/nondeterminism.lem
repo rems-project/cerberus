@@ -1,14 +1,3 @@
-(*
-open import Pervasives String_extra Show
-open import List Function
-open import Utils
-import Debug Dlist Constraints Symbolic Undefined Loc
-
-import Global
-
-import UniqueId
-*)
-
 open import Pervasives
 open import Utils Debug
 import Undefined

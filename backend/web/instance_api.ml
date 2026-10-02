@@ -1,8 +1,8 @@
 (* API between web server and a cerberus instance *)
-open Cerb_global
+open Cerb_frontend
 
 let string_of_exec_mode = function
-  | Random -> "random"
+  | Config.Random -> "random"
   | Exhaustive -> "exhaustive"
 
 (* user configuration per instance *)
@@ -37,8 +37,8 @@ type bmc_model =
 (* input: request *)
 type request =
   [ `Elaborate of conf * filename * string
-  | `Execute of conf * filename * string * execution_mode
-  | `Step of conf * filename * string * active_node option 
+  | `Execute of conf * filename * string * Config.execution_mode
+  | `Step of conf * filename * string * active_node option
   | `BMC of conf * bmc_model * filename * string ]
 
 type point = int * int

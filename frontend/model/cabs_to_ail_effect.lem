@@ -1,5 +1,5 @@
 open import Pervasives Utils Cabs Std Show Show_extra Set
-import Global Debug Pp Loc Errors Scope_table State_exception Symbol
+import Debug Pp Loc Errors Scope_table State_exception Symbol
 
 open import Cabs_to_ail_aux
 
@@ -220,11 +220,6 @@ type switch_info = <|
 |>
 
 
-import Translation_effect
-type desug_config = <|
-  elab_conf: Translation_effect.elab_config;
-|>
-
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
   aux_supply: nat;
@@ -286,8 +281,8 @@ type state = <|
   (* TODO TODO TODO *)
   core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
 
-  (* READ-ONLY, this will be moved to the `desug_config` type when the monad is updated *)
-  desug_conf: desug_config;
+  (* READ-ONLY, this will be moved to the config part when the monad is updated *)
+  conf: Config.config;
 |>
 
 type markers_env =
@@ -384,7 +379,7 @@ let modify_inner f =
 
 
 let read_config =
-  read_inner (fun st -> st.desug_conf)
+  read_inner (fun st -> st.conf)
 
 val void: forall 'a. desugM 'a -> desugM unit
 let cabs_to_ail_effect_void m =
@@ -566,9 +561,9 @@ let init_switch_info promoted_ty =
 
 (* ========================================================================== *)
 val initial_state:
-  desug_config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
+  Config.config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
   Cn_desugaring.init_scope -> state_with_markers
-let initial_state desug_conf core_eval_stuff cn_eval_stuff = <|
+let initial_state conf core_eval_stuff cn_eval_stuff = <|
   inner= <|
     aux_supply=      0;
     scope_id_supply= 0;
@@ -598,7 +593,7 @@ let initial_state desug_conf core_eval_stuff cn_eval_stuff = <|
     cn_state= Cn_desugaring.initial_cn_desugaring_state cn_eval_stuff;
     
     core_eval_stuff= core_eval_stuff;
-    desug_conf = desug_conf;
+    conf = conf;
   |>;
   markers_env= Map.empty;
 |>
@@ -620,7 +615,8 @@ let initial_state desug_conf core_eval_stuff cn_eval_stuff = <|
 val record_marker: unit -> desugM nat
 let record_marker () =
   let id = Symbol.fresh_int () in
-  begin if Global.backend_name () = "Cn" then
+  read_config >>= fun conf ->
+  begin if conf.Config.with_record_marker then
     get_inner >>= fun inner ->
     State_exception.update (fun old_state -> <| old_state with markers_env= Map.insert id inner old_state.markers_env |>)
   else
@@ -637,14 +633,14 @@ let fin_markers_env () =
 
 val eval:
   forall 'a.
-  desug_config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
+  Config.config -> (map string Symbol.sym) * Core.fun_map unit * Core.impl ->
   Cn_desugaring.init_scope -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
-let cabs_to_ail_effect_eval desug_conf core_eval_stuff cn_eval_stuff m =
+let cabs_to_ail_effect_eval conf core_eval_stuff cn_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->
     fin_markers_env () >>= fun markers ->
     State_exception.return (markers, res)
-  end (initial_state desug_conf core_eval_stuff cn_eval_stuff)
+  end (initial_state conf core_eval_stuff cn_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
 
@@ -2157,17 +2153,20 @@ let get_compatible_alignment_requirements loc new_align_opt prev_align_opt =
     | (Just (Ctype.AlignInteger new_n), Just (Ctype.AlignInteger prev_n)) ->
         common new_n prev_n
     | (Just (Ctype.AlignType new_ty), Just (Ctype.AlignType prev_ty)) ->
-        if Global.isAgnostic () then
+        read_config >>= fun conf ->
+        if conf.Config.agnostic then
           fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
         else
           common (alignof_ty new_ty) (alignof_ty prev_ty)
     | (Just (Ctype.AlignType new_ty), Just (Ctype.AlignInteger prev_n)) ->
-        if Global.isAgnostic () then
+        read_config >>= fun conf ->
+        if conf.Config.agnostic then
           fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
         else
           common (alignof_ty new_ty) prev_n
     | (Just (Ctype.AlignInteger new_n), Just (Ctype.AlignType prev_ty)) ->
-        if Global.isAgnostic () then
+        read_config >>= fun conf ->
+        if conf.Config.agnostic then
           fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
         else
           common new_n (alignof_ty prev_ty)
@@ -2404,7 +2403,8 @@ let resolve_enum_constant sym =
 
 val guard_extension: Loc.t -> Errors.extension_cause -> desugM unit
 let guard_extension loc ext =
-  if Global.isPermissive () then
+  read_config >>= fun conf ->
+    if conf.Config.permissive then
     return ()
   else
     State_exception.fail (loc, Errors.EXTENSION ext)

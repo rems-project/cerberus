@@ -37,8 +37,11 @@ module SEU = State_exception_undefined
 module ND  = Nondeterminism
 
 
-import Global
-
+let execution_mode_is_random conf =
+  match conf.Config.execution_mode with
+  | Just Config.Random -> true
+  | _ -> false
+  end
 
 
 (* DEBUG *)
@@ -61,15 +64,14 @@ type driver_state = <|
   concurrency_state: Cmm_op.symState;       (* state of the concurrency memmodel *)
   fs_state:          Fs.fs_state;           (* state of the file system *)
   trace:             list trace_event;
-  
+
   symbolic_assoc: map Symbol.sym Core.object_value;
-  
+
   blocked: bool; (* concurrency model ended by blocking *)
-  (* DEBUG *)
-  (*trace: list string;*)
-  do_stepping: bool;
-  do_trace: bool; (* record the trace of memory events (only consumed by --trace) *)
   dr_step_counter: nat;
+
+  (* TODO: this should be in the env once the monad has one *)
+  conf: Config.config;
 |>
 
 let driver_state_eq dr_st1 dr_st2 =
@@ -117,6 +119,9 @@ type driverM 'a = ND.ndM 'a step_kind driver_error Mem.mem_iv_constraint driver_
 let inline (>>=)      = ND.bind
 let inline (>>) m1 m2 = ND.bind m1 (fun _ -> m2)
 
+let read_config =
+  ND.get >>= fun st ->
+  ND.return st.conf
 
 val liftMem: forall 'a. Mem.memM 'a -> driverM 'a
 let liftMem m =
@@ -661,8 +666,8 @@ let update_core_state core_st dr_st =
 (* POST REDUCTION SEMANTICS *)
 val record_trace_event: driverM trace_event -> driverM unit
 let record_trace_event mk_event =
-  ND.get >>= fun dr_st ->
-  if dr_st.do_trace then
+  read_config >>= fun conf ->
+  if conf.Config.do_tracing then
     mk_event >>= fun event ->
     ND.update (fun dr_st -> <| dr_st with trace= event :: dr_st.trace |>)
   else
@@ -762,11 +767,6 @@ end
 val perform_action_request2:
   bool -> Loc.t -> Mem.thread_id -> Core_reduction.action_request2 Core_run.thread_state -> driverM unit
 let perform_action_request2 with_concurrency loc tid request =
-  let _execution_mode_is_random = match Global.current_execution_mode () with
-    | Nothing   -> false
-    | Just mode -> mode = Global.Random
-  end in
-  
   begin
     if with_concurrency then
       error "TODO: perform_action_request2 ==> concurrency"
@@ -1045,8 +1045,9 @@ let advance_step tid step =
             ) dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
           ) actions_of_current_thread
         ) >>= fun (last_actions_of_current_thread: set Cmm.action) ->
+        read_config >>= fun conf ->
         ND.update (fun dr_st -> <| dr_st with
-          core_state= Core_run.kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
+          core_state= Core_run.kill_thread conf.Config.concurrency tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
           dr_step_counter= dr_st.dr_step_counter + 1;
         |>) >>= fun () ->
         ND.return (WAKEUP true [parent_tid])
@@ -1122,8 +1123,8 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
         | Nothing ->
             drive_nonmemory_steps_aux2 (Map.insert tid steps acc) xs'
         | Just step ->
-            ND.get >>= fun dr_st ->
-            as_step dr_st.do_stepping step (advance_step tid step)
+            read_config >>= fun conf ->
+            as_step conf.Config.do_stepping step (advance_step tid step)
               >>= fun wakeups ->
             let xs'' =
               match wakeups with
@@ -1367,8 +1368,8 @@ let prepare_exit core_st cval =
 (* performing all action and memop requests until there are no more *)
 val process_core_step2: bool -> (bool -> driverM unit) -> Core_reduction.core_step2 -> driverM unit
 let process_core_step2 with_concurrency driver2 step =
-  ND.get >>= fun dr_st ->
-  as_step dr_st.do_stepping step $ match step with
+  read_config >>= fun conf ->
+  as_step conf.Config.do_stepping step $ match step with
   | Core_reduction.Step_action_request2 _ loc tid _ m_request ->
       liftCore_run m_request >>= fun request ->
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
@@ -1427,7 +1428,8 @@ let rec driver2 with_concurrency =
       Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info
   ) post_core_dr_st.core_state.Core_run.thread_states in
   
-  begin if Global.current_execution_mode () = Just Global.Random then
+  read_config >>= fun conf ->
+  begin if execution_mode_is_random conf then
     (* HACK The problem is that some threads are blocked (they wait
        for other threads to finish. If we randomly pick that thread to
        execute, there will not be any steps to execute, and the whole
@@ -1556,7 +1558,7 @@ let finalize debug_str dr_st =
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
-let initial_driver_state file fs_state do_stepping do_trace =
+let initial_driver_state file fs_state conf =
   <|
     core_file=         file;
     core_extern=       Core_linking.create_extern_symmap file;
@@ -1568,9 +1570,8 @@ let initial_driver_state file fs_state do_stepping do_trace =
     trace=             [];
     symbolic_assoc=    Map.empty;
     blocked=           false;
-    do_stepping=       do_stepping;
-    do_trace=          do_trace;
     dr_step_counter=   0;
+    conf=              conf
   |>
 
 
@@ -1728,7 +1729,7 @@ let prepare_main_args loc callconv alignof_ival tid0 main_sym arg_strs argc_sym 
   end >>= fun argv_array_ptr_val ->
     
   match callconv with
-    | Core.Normal_callconv ->
+    | Config.Normal_callconv ->
         let argc_mem_val = Mem.integer_mval (Ctype.Signed Ctype.Int_) number_of_args in
         liftMem begin
           let pref = Symbol.PrefSource loc [main_sym; argc_sym] in
@@ -1749,7 +1750,7 @@ let prepare_main_args loc callconv alignof_ival tid0 main_sym arg_strs argc_sym 
               , Core.Vobject (Core.OVpointer argv_ptr_val) )
           ))))
         end
-    | Core.Inner_arg_callconv ->
+    | Config.Inner_arg_callconv ->
         let argc_cval = Core.Vloaded (Core.LVspecified (Core.OVinteger (Mem.integer_ival number_of_args))) in
         let argv_cval = Core.Vloaded (Core.LVspecified (Core.OVpointer argv_array_ptr_val)) in
         ND.return (argc_cval, argv_cval)
@@ -1868,7 +1869,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                 ))))
               ) >>= fun argv_cval ->
 *)
-              prepare_main_args loc file.Core.calling_convention alignof_ival tid0 main_sym
+              prepare_main_args loc file.Core.callconv alignof_ival tid0 main_sym
                 arg_strs argc_sym argv_sym >>= fun (argc_cval, argv_cval) ->
 
               (* Adding the values of argc and argv to the Core symbol environment *)

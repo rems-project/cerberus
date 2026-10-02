@@ -1,5 +1,13 @@
 open Cerb_frontend
 
+module type Config = sig
+  val warn_extra_semicolon : bool
+end
+
+module Make(Conf: Config) = struct
+
+module C_parser = C_parser.Make(Conf)
+
 let after_before_msg offset buffer (lexbuf : Lexing.lexbuf) =
   let show_token (start, curr) =
     try
@@ -154,3 +162,5 @@ let parse_from_string ~filename str =
   let lexbuf = Lexing.from_string str in
   Lexing.set_filename lexbuf filename;
   parse lexbuf
+
+end

@@ -1,6 +1,5 @@
 open Cerb_frontend
 open Cerb_backend
-open Cerb_global
 open Cerb_diagnostic
 open Pipeline
 
@@ -21,17 +20,17 @@ let is_cheri_memory () =
       | Invalid_argument _ -> false in
   starts_with ~prefix:"cheri" Impl_mem.name
 
-let frontend elab_conf (conf, io) ~is_lib filename core_std =
+let frontend conf (cli_conf, io) ~is_lib filename core_std =
   if not (Sys.file_exists filename) then
     fatal ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
-    read_core_object (conf, io) ~is_lib core_std filename
+    read_core_object (cli_conf, io) ~is_lib core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend_and_elaboration elab_conf (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
-    core_passes (conf, io) ~filename core_file
+    c_frontend_and_elaboration conf (cli_conf, io) core_std ~filename >>= fun (_, _, core_file) ->
+    core_passes (cli_conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
-    core_frontend (conf, io) core_std ~filename
-    >>= core_passes (conf, io) ~filename
+    core_frontend (cli_conf, io) core_std ~filename
+    >>= core_passes (cli_conf, io) ~filename
   else
     Exception.fail (Cerb_location.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
@@ -121,10 +120,11 @@ let cerberus debug_level progress core_obj
     match pp_core_out with
       | Some file -> (Core, file) :: ppouts
       | None -> ppouts in
-  (* set global configuration *)
-  set_cerb_conf ~backend_name:"Driver" ~exec exec_mode ~concurrency QuoteStd ~defacto ~permissive ~agnostic ~ignore_bitfields;
-  let conf = { astprints; pprints; ppflags; ppouts; debug_level; typecheck_core;
-               rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true; cpp_save = None } in
+  (* Initialise the global state for printing diagnostics  *)
+  Cerb_diagnostic.init ~verbosity:QuoteStd ();
+  let cli_conf = {
+    astprints; pprints; ppflags; ppouts; debug_level; typecheck_core;
+    rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true; cpp_save = None } in
   let prelude =
     (* Looking for and parsing the core standard library *)
     let switches =
@@ -142,19 +142,28 @@ let cerberus debug_level progress core_obj
     end else
       Switches.set switches
     end;
-    (* TODO: merge this with conf *)
-    let elab_conf = mk_elab_config () in
+    let allow_distinct_ptr_types_comparison = defacto in
+    let allow_void_ptr_arithmetic = permissive in
+    let allow_void_return = permissive in
+    (* Stepping is only enabled for Web instance because it impacts execution time *)
+    let do_stepping = false in
+    let conf =
+      let execution_mode = if exec then Some exec_mode else None in
+      mk_config ~backend_name:"Driver" ~agnostic ~permissive ~ignore_bitfields
+        ~allow_distinct_ptr_types_comparison ~allow_void_ptr_arithmetic ~allow_void_return
+        ~execution_mode ~concurrency ~do_stepping ~do_tracing:trace ~fs_dump
+    in
     io.pass_message (Printf.sprintf "Using '%s'" Impl_mem.name) >>
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
     load_core_impl core_stdlib impl_name >>= fun core_impl ->
     io.pass_message "Implementation file loaded." >>
-    return ((core_stdlib, core_impl), elab_conf)
+    return ((core_stdlib, core_impl), conf)
   in
-  let main elab_conf core_std =
+  let main conf core_std =
     Exception.except_foldlM (fun core_files (is_lib, file) ->
-      frontend ~is_lib elab_conf (conf, io) file core_std >>= fun core_file ->
+      frontend ~is_lib conf (cli_conf, io) file core_std >>= fun core_file ->
       return (core_file::core_files)
     ) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ (List.map (fun z -> (false, z)) files))
   in
@@ -246,8 +255,8 @@ let cerberus debug_level progress core_obj
       end else
         fatal "no input file"
     | [file] when core_obj ->
-      prelude >>= fun (core_std, elab_conf) ->
-      frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
+      prelude >>= fun (core_std, conf) ->
+      frontend conf (cli_conf, io) ~is_lib:false file core_std >>= fun core_file ->
       begin match output_name with
         | Some output_file ->
           write_core_object core_file output_file
@@ -260,16 +269,16 @@ let cerberus debug_level progress core_obj
       (* Run only CPP *)
       if cpp_only then
         Exception.except_foldlM (fun () filename ->
-            cpp (conf, io) ~filename >>= fun processed_file ->
+            cpp (cli_conf, io) ~filename >>= fun processed_file ->
             print_file processed_file;
             return ()
           ) () files >>= fun () ->
         return success
       (* Dump a core object (-c) *)
       else if core_obj then
-        prelude >>= fun (core_std, elab_conf) ->
+        prelude >>= fun (core_std, conf) ->
         Exception.except_foldlM (fun () file ->
-          frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
+          frontend conf (cli_conf, io) ~is_lib:false file core_std >>= fun core_file ->
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file;
           return ()
@@ -277,9 +286,9 @@ let cerberus debug_level progress core_obj
         return success
       (* Parsing, Ail typing and stopping there *)
       else if syntax_only && List.for_all (fun z -> Filename.check_suffix z ".c") files then
-        prelude >>= fun (core_std, elab_conf) ->
+        prelude >>= fun (core_std, conf) ->
         Exception.except_mapM (fun filename ->
-          c_frontend Cabs_to_ail_effect.{ elab_conf } (conf, io) core_std ~filename
+          c_frontend conf (cli_conf, io) core_std ~filename
         ) files >>= fun _ ->
         return success
         (* Link and execute *)
@@ -289,18 +298,15 @@ let cerberus debug_level progress core_obj
         else
           return ()
         end >>= fun () ->
-        prelude >>= fun (core_std, elab_conf) ->
-        main elab_conf core_std >>= begin function
+        prelude >>= fun (core_std, conf) ->
+        main conf core_std >>= begin function
           | [] -> assert false
           | f::fs ->
             Core_linking.link (f::fs)
         end >>= fun core_file ->
         if exec then
           let open Driver_ocaml in
-          (* Stepping is only enabled for Web instance because they impact execution time *)
-          let do_stepping = false in
-          let driver_conf = {exec_mode; do_stepping; concurrency; fs_dump; trace} in
-          interp_backend io core_file ~args ~batch ~fs ~driver_conf
+          interp_backend ~conf io core_file ~args ~batch ~fs
         else
           match output_name with
           | None ->
@@ -437,7 +443,7 @@ let exec =
 
 let exec_mode =
   let doc = "Set the Core evaluation mode (interactive | exhaustive | random)." in
-  Arg.(value & opt (enum ["exhaustive", Exhaustive; "random", Random])
+  Arg.(value & opt (enum ["exhaustive", Config.Exhaustive; "random", Random])
          Random & info ["mode"] ~docv:"MODE" ~doc)
 
 let pprints =

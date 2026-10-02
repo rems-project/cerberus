@@ -1,6 +1,6 @@
 open Nondeterminism
 open Memory_model
-open Cerb_global
+open Config
 
 let pad = ref 0
 

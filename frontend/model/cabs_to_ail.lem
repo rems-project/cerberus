@@ -24,6 +24,52 @@ let inline (<$>)    = E.fmap
 let inline (<*>)    = E.app
 
 
+let fail_if_agnostic loc msg m_else =
+  E.read_config >>= fun conf ->
+  if conf.Config.agnostic then
+    E.fail loc (Errors.Desugar_agnosticFailure msg)
+  else
+    m_else
+
+
+let typecheckAil_with_ctx ctx expr =
+  (* TODO: this will move to a read-only config in the monad *)
+  let impl = Implementation.integerImpl () in
+  E.read_config                 >>= fun conf       ->
+  E.get_sigma_sofar             >>= fun sigm       ->
+  E.get_gamma_sofar             >>= fun gamm       ->
+  E.get_current_return_type_opt >>= fun ret_ty_opt ->
+  E.return begin
+    let m =
+    ErrorMonad.bind
+      (GenTyping.annotate_expression (fun loc ->
+        GenTyping.annotate_block loc ret_ty_opt) sigm gamm ctx expr)
+      (fun a_expr ->
+        GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) impl
+          (GenTypes.genTypeCategoryOf a_expr)) in
+    match ErrorMonad.runErrorMonad conf m with
+    | Left z -> Left z
+    | Right (GenTypes.LValueType qs ty _) -> Right (qs, ty)
+    | Right (GenTypes.RValueType ty) -> Right (Ctype.no_qualifiers, ty)
+    end
+  end
+
+(* Typechecks the Ail expression and returns its promoted type (as [Right (Just ty)]),
+ * or [Right Nothing] if it does not have an integer type, or returns the type error if
+ * it failed to typecheck *)
+let typecheckAil_promoted_with_ctx ctx expr =
+  (* TODO: this will move to a read-only config in the monad *)
+  let impl = Implementation.integerImpl () in
+  typecheckAil_with_ctx ctx expr >>= function
+  | Left x -> E.return (Left x)
+  | Right (_, ty) -> E.return (Right (AilTypesAux.promotion impl ty))
+  end
+
+let inline typecheckAil expr = typecheckAil_with_ctx GenTyping.CTXother expr
+let inline typecheckAil_promoted expr =
+  typecheckAil_promoted_with_ctx GenTyping.CTXother expr
+
+
 
 (* STD §6.9.2#2, sentence 1 *)
 (* TODO replace the bool by this type? *)
@@ -609,26 +655,25 @@ let rec is_integer_constant_expression is_constraint (AnnotatedExpression () _ l
             E.return false
           else
             E.undef loc Undefined.UB055_invalid_integer_constant_expression in
+        E.read_config >>= fun conf ->
         if not (AilTypesAux.is_integer cast_ty) then
           do_failure
-        else if Global.isAgnostic () then
-            E.fail loc (Errors.Desugar_agnosticFailure "cast in an integer constant expression")
         else
-          E.get_sigma_sofar >>= fun sigm ->
-          E.get_gamma_sofar >>= fun gamm ->
-          match Mini_pipeline.typecheckAil sigm gamm e with
-            | Left (loc, tcause) -> E.fail_ailtyping loc tcause
-            | Right ty ->
-                if not (AilTypesAux.is_arithmetic ty) then
-                  do_failure
-                else match e with
-                  | AnnotatedExpression () _ _ (AilEconst (ConstantFloating _)) ->
-                      (* STD §6.6#6: "floating constants that are the immediate
-                       * operands of casts" *)
-                      E.return true
-                  | _ ->
-                      is_integer_constant_expression e
-                end
+          fail_if_agnostic loc "cast in an integer constant expression" begin
+            typecheckAil e >>= function
+              | Left (loc, tcause) -> E.fail_ailtyping loc tcause
+              | Right (_, ty) ->
+                  if not (AilTypesAux.is_arithmetic ty) then
+                    do_failure
+                  else match e with
+                    | AnnotatedExpression () _ _ (AilEconst (ConstantFloating _)) ->
+                        (* STD §6.6#6: "floating constants that are the immediate
+                        * operands of casts" *)
+                        E.return true
+                    | _ ->
+                        is_integer_constant_expression e
+                  end
+            end
           end
     | AilEassert _ ->
         E.return false
@@ -1163,7 +1208,7 @@ let evaluate_integer_constant_expression_aux mode d_expr =
   E.get_sigma_sofar >>= fun sigm ->
   E.read_config >>= fun conf ->
   E.liftException
-      (Mini_pipeline.evalIntegerConstantExpression conf.E.elab_conf core_env sigm mode d_expr)
+      (Mini_pipeline.evalIntegerConstantExpression conf core_env sigm mode d_expr)
 
 (* If ty_opt is [Just ty], this checks that the value is representable in [ty]  *)
 val evaluate_integer_constant_expression: maybe Ctype.ctype -> expression unit -> E.desugM integer
@@ -1789,16 +1834,12 @@ let rec desugar_type_specifiers specs =
               end
 
           | [TSpec loc (TSpec_typeof_expr e)] ->
-              desugar_expression e          >>= fun d_e        ->
-              E.get_sigma_sofar             >>= fun sigm       ->
-              E.get_gamma_sofar             >>= fun gamm       ->
-              E.get_current_return_type_opt >>= fun ret_ty_opt ->
-              match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (fun loc -> GenTyping.annotate_block loc ret_ty_opt) sigm gamm GenTyping.CTXsizeof d_e) with
+              desugar_expression e >>= fun d_e ->
+              (* NOTE: reusing CTXsizeof for typeof() *)
+              typecheckAil_with_ctx GenTyping.CTXsizeof d_e >>= function
               | Left (loc, err) ->
                   E.fail_ailtyping loc err
-              | Right a_expr ->
-                  (* TODO: this is fixing an integer implementation... *)
-                  let (qs, ty) = Translation_aux.qualified_ctype_of a_expr in
+              | Right (qs, ty) ->
                   E.return (qs, ty)
               end
 
@@ -1823,7 +1864,8 @@ and register_enumerators tag_loc tag_sym enums =
       | Just loc_n ->
           loc_n
     end in
-    begin if Global.isAgnostic () then
+    E.read_config >>= fun conf ->
+    begin if conf.Config.agnostic then
       let minimal_int_range = IntegerImpl.min_integer_range (Ctype.Signed Ctype.Int_) in
       if Range.mem n minimal_int_range then
         E.return ()
@@ -2461,25 +2503,19 @@ STD_ "§6.5.2.1#2, sentence 2" $
         (desugar_expression e >>= fun d_e ->
         E.return $ AilEunary (translate_unary_operator uop) d_e)
     | CabsEsizeof_expr e ->
+        E.read_config >>= fun conf ->
         AnnotatedExpression () [] loc <$>
-          if Global.isAgnostic () then
-            E.fail loc (Errors.Desugar_NotYetSupported "sizeof(expr) in the implementation agnostic mode")
+          fail_if_agnostic loc "sizeof(expr) in the implementation agnostic mode"
             (* NOTE: use to be
                AilEsizeof_expr <$> desugar_expression e
              *)
-          else
-            desugar_expression e >>= fun d_e  ->
-            E.get_sigma_sofar    >>= fun sigm ->
-            E.get_gamma_sofar    >>= fun gamm ->
-            E.get_current_return_type_opt >>= fun ret_ty_opt ->
-            match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (fun loc -> GenTyping.annotate_block loc ret_ty_opt) sigm gamm GenTyping.CTXsizeof d_e) with
-              | Left (loc, err) ->
-                  E.fail_ailtyping loc err
-              | Right a_expr ->
-                  (* TODO: this is fixing an integer implementation... *)
-                  let (qs, ty) = Translation_aux.qualified_ctype_of a_expr in
-                  E.return (AilEsizeof qs ty)
+          begin
+            desugar_expression e >>= fun d_e ->
+            typecheckAil_with_ctx GenTyping.CTXsizeof d_e >>= function
+            | Left (loc, err) -> E.fail_ailtyping loc err
+            | Right (qs, ty) -> E.return (AilEsizeof qs ty)
             end
+          end
     | CabsEsizeof_type tyname ->
         (* TODO: STD check + annot *)
         AnnotatedExpression () [] loc <$>
@@ -2810,9 +2846,10 @@ and desugar_struct_declarator has_alignment struct_decltor =
     | SDecl_simple decltor ->
         desugar_declarator NotFunDef decltor
     | SDecl_bitfield decltor_opt (CabsExpression loc _) ->
+        E.read_config >>= fun conf ->
         if has_alignment then
           E.constraint_violation loc (IllegalAlignas IllegalAlignas_bitfield)
-        else if Global.isIgnoreBitfields () then
+        else if conf.Config.ignore_bitfields then
           match decltor_opt with
             | Nothing ->
                 E.fail loc (Errors.Desugar_NotYetSupported "bit-fields")
@@ -2889,10 +2926,8 @@ and desugar_alignment_specifiers loc decl_ty xs =
             | (Just (Ctype.AlignType prev_ty), Ctype.AlignType new_ty) ->
                 match AilTypesAux.agnostic_alignment_requirement_ord prev_ty new_ty with
                   | Nothing ->
-                      if Global.isAgnostic () then
-                        E.fail loc (Errors.Desugar_agnosticFailure "alignment specifiers are too complicated")
-                      else
-                        common (alignof_ty prev_ty) (alignof_ty new_ty)
+                      fail_if_agnostic loc "alignment specifiers are too complicated"
+                        (common (alignof_ty prev_ty) (alignof_ty new_ty))
                   | Just EQ ->
                       E.return acc_opt
                   | Just GT ->
@@ -2915,23 +2950,22 @@ and desugar_alignment_specifiers loc decl_ty xs =
         if AilTypesAux.is_character decl_ty then
           (* by construction we know that n >= 1 (and _Alignas(char) = 1)*)
           E.return (Just al)
-        else if Global.isAgnostic () then
-          E.fail loc (Errors.Desugar_agnosticFailure "alignment specifiers are too complicated")
         else
-          if (alignof_ty decl_ty) > al_n then
-            E.constraint_violation loc (AlignasLessThanRequired decl_ty)
-          else
-            E.return (Just al)
+          fail_if_agnostic loc "alignment specifiers are too complicated" begin
+            if (alignof_ty decl_ty) > al_n then
+              E.constraint_violation loc (AlignasLessThanRequired decl_ty)
+            else
+              E.return (Just al)
+          end
     | Just ((Ctype.AlignType al_ty) as al) ->
         match AilTypesAux.agnostic_alignment_requirement_ord decl_ty al_ty with
           | Nothing ->
-              if Global.isAgnostic () then
-                E.fail loc (Errors.Desugar_agnosticFailure "alignment specifiers are too complicated")
-              else
+              fail_if_agnostic loc "alignment specifiers are too complicated" begin
                 if (alignof_ty decl_ty) > (alignof_ty al_ty) then
                   E.constraint_violation loc (AlignasLessThanRequired decl_ty)
                 else
                   E.return (Just al)
+              end
           | Just EQ ->
               (* no change to the alignment from declaration type *)
               E.return Nothing
@@ -3244,11 +3278,9 @@ and foo_aux
 
                 | Init_expr e ->
                     desugar_expression e >>= fun d_e ->
-                    E.get_sigma_sofar >>= fun sigm ->
-                    E.get_gamma_sofar >>= fun gamm ->
-                    match Mini_pipeline.typecheckAil sigm gamm d_e with
+                    typecheckAil d_e >>= function
                       | Left (loc, tcause) -> E.fail_ailtyping loc tcause
-                      | Right ty ->
+                      | Right (_, ty) ->
                           if AilTypesAux.is_struct ty then
                             if ty = outer_ty then
                               let tag_sym = match Ctype.unatomic_ ty with
@@ -3844,33 +3876,31 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           end
       
       | CabsSswitch e s ->
-          if Global.isAgnostic () then
-            (* We fail because we need to typecheck the controlling expression *)
-            E.fail loc (Errors.Desugar_agnosticFailure "switch statements are not supported in the agnostic mode")
-          else
-            (* STD §6.8.4#3 both the switch-statement and its sub statement are distinct blocks *)
+          (* We fail because we need to typecheck the controlling expression *)
+          fail_if_agnostic loc "switch statements are not supported in the agnostic mode"
+          begin
+            (* STD §6.8.4#3 both the switch-statement and its sub statement are distinct
+             * blocks *)
             (* NOTE: see the note in CabsSif *)
             E.fresh_block_scope >>= fun switch_scope ->
             E.fresh_block_scope >>= fun s_scope      ->
             E.under_scope switch_scope begin
               desugar_expression e >>= fun d_e ->
-              E.get_sigma_sofar >>= fun sigm ->
-              E.get_gamma_sofar >>= fun gamm ->
-              (* TODO: this will move to a read-only config in the monad *)
-              let impl = Implementation.integerImpl () in
-              (* The expression in any enclosed case statement must be converted to the promoted
-              * type of the switch's controlling expression (STD §6.8.4.2#5).  So we perform the
-              * Ail typechecking and promotion here and save it for when we reach a case statement.
-              *)
-              match Mini_pipeline.typecheckAil_promoted impl sigm gamm d_e with
+              (* The expression in any enclosed case statement must be converted to the
+               * promoted type of the switch's controlling expression (STD §6.8.4.2#5).
+               * So we perform the Ail typechecking and promotion here and save it for
+               * when we reach a case statement. *)
+              typecheckAil_promoted d_e >>= function
                 | Left (loc, tcause) -> E.fail_ailtyping loc tcause
                 | Right Nothing ->
-                    E.constraint_violation loc SwitchStatementControllingExpressionNotInteger
+                    E.constraint_violation loc
+                      SwitchStatementControllingExpressionNotInteger
                 | Right (Just promoted_ty) ->
-                    E.under_scope s_scope (E.as_switch_body promoted_ty (self s)) >>= fun d_s ->
-                    E.return (AilSswitch d_e d_s)
+                    E.under_scope s_scope (E.as_switch_body promoted_ty (self s))
+                      >>= fun d_s -> E.return (AilSswitch d_e d_s)
               end
             end
+          end
       
       | CabsSwhile e s ->
           (* TODO: when supporting VLAs ==> §6.8.4.2#2 *)
@@ -5056,9 +5086,9 @@ let register_additional_cn_var id = E.register_cn_ident CN_vars id
 
 import Core
 val desugar:
-  E.desug_config ->
-  (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> string ->
-  translation_unit ->
+  Config.config ->
+  (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope ->
+  string -> translation_unit ->
   Exception.exceptM (E.fin_markers_env * ail_program unit) Errors.error
 let desugar desug_conf core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
 (*

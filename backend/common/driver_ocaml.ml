@@ -1,5 +1,4 @@
 open Cerb_frontend
-open Cerb_global
 
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
@@ -7,16 +6,6 @@ module SEU = State_exception_undefined
 let isActive = function
   | (ND.Active _, _, _) -> true
   | _ -> false
-
-type driver_conf = {
-(* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
-  exec_mode: execution_mode;
-  do_stepping: bool; (* Stepping should only be enabled when really used (e.g. for Web instances)
-                      * because it impacts execution time *)
-  concurrency: bool;
-  fs_dump: bool;
-  trace: bool;
-}
 
 type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
@@ -167,13 +156,16 @@ let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec
   end
 
 (* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
-let batch_drive (file: 'a Core.file) args fs_state conf =
+let batch_drive ~conf (file: 'a Core.file) args fs_state =
+  (* NOTE: this function should not have been called if execution_mode equals to None *)
+  let exec_mode = Option.value ~default:Random conf.Config.execution_mode in
   Random.self_init ();
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run_aux.convert_file file in
   (* computing the value (or values if exhaustive) *)
-  let initial_dr_st = Driver.initial_driver_state file fs_state conf.do_stepping conf.trace in
-  let values = Smt2.runND conf.exec_mode Impl_mem.cs_module (Driver.drive conf.concurrency file args) initial_dr_st in
+  let initial_dr_st = Driver.initial_driver_state file fs_state conf in
+  let values = Smt2.runND exec_mode Impl_mem.cs_module
+    (Driver.drive conf.Config.concurrency file args) initial_dr_st in
   List.mapi (fun i (res, z3_strs, nd_st) ->
     let result = begin match res with
       | ND.Active dres ->
@@ -204,14 +196,16 @@ let batch_drive (file: 'a Core.file) args fs_state conf =
     (z3_strs, result)
   ) values
 
-let drive file args fs_state conf : execution_result =
+let drive ~conf file args fs_state : execution_result =
+  (* NOTE: this function should not have been called if execution_mode equals to None *)
+  let exec_mode = Option.value ~default:Random conf.Config.execution_mode in
   Random.self_init ();
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run_aux.convert_file file in
   (* computing the value (or values if exhaustive) *)
-  let initial_dr_st = Driver.initial_driver_state file fs_state conf.do_stepping conf.trace in
-  let values = Smt2.runND conf.exec_mode Impl_mem.cs_module
-      (Driver.drive conf.concurrency file args) initial_dr_st in
+  let initial_dr_st = Driver.initial_driver_state file fs_state conf in
+  let values = Smt2.runND exec_mode Impl_mem.cs_module
+      (Driver.drive conf.Config.concurrency file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
   Cerb_debug.print_debug 2 [] (fun () ->
@@ -285,21 +279,23 @@ else
             "SKIPPING: " ^ if dres.Driver.dres_blocked then "(blocked)" else "" ^
             "eqs= " ^ "Pp_cmm.pp_old_constraints st.ND.eqs"
           );
-        if conf.fs_dump then begin
+        if conf.Config.fs_dump then begin
           print_endline "File System:";
-          print_endline @@ Sexplib.Sexp.to_string_hum @@ Sibylfs.sexp_of_fs_state st.Driver.fs_state
+          print_endline @@
+            Sexplib.Sexp.to_string_hum @@ Sibylfs.sexp_of_fs_state st.Driver.fs_state
         end;
-        if conf.trace then
+        if conf.Config.do_tracing then
           PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace);
 
       | (ND.Killed (dr_st, ND.Undef0 (loc, ubs)), _, st) ->
-          let stderr_xs = Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr in
+          let stderr_xs =
+            Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr in
           begin if List.length stderr_xs > 0 then
             let stderr_str = String.concat "" stderr_xs in
             Printf.fprintf stderr "BEGIN stderr\n%s\nEND stderr\n" stderr_str
           end;
           prerr_endline (Pp_errors.to_string (loc, Errors.(DRIVER (Driver_UB ubs))));
-          if conf.trace then
+          if conf.Config.do_tracing then
             PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace)
 
      (*

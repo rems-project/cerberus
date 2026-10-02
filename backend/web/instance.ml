@@ -65,20 +65,17 @@ let add_bmc_macro ~bmc_model conf =
   { conf with pipeline = { conf.pipeline with cpp_cmd } }
 
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
-let hack ?(is_bmc=false) ~conf mode =
-  let open Cerb_global in
-  let conf =
-   {  backend_name= if is_bmc then "Bmc" else "Web_instance";
-      exec_mode_opt=    Some (mode);
-      concurrency=      false;
-      error_verbosity=  Cerb_global.QuoteStd;
-      defacto=          false;
-      permissive=       false;
-      agnostic=         false;
-      ignore_bitfields= false;
-      n1570=            Some conf.instance.n1570;
-    }
-  in cerb_conf := fun () -> conf
+let hack ?(is_bmc=false) ~n1570 ~switches mode =
+  (* Initialise the global state for printing diagnostics  *)
+  Cerb_diagnostic.init ~verbosity:QuoteStd ~n1570:(Some n1570) ();
+  (* Setting up the switches must happen first *)
+  Switches.set switches;
+  let execution_mode = Some mode in
+  mk_config ~backend_name:(if is_bmc then "Bmc" else "Web_instance")
+    ~agnostic:false ~permissive:false ~ignore_bitfields:false
+    ~allow_distinct_ptr_types_comparison:false ~allow_void_ptr_arithmetic:false
+    ~allow_void_return:false ~execution_mode ~concurrency:false ~do_stepping:true
+    ~do_tracing:false ~fs_dump:false
 
 let respond filename name f = function
   | Exception.Result r ->
@@ -88,24 +85,22 @@ let respond filename name f = function
 
 (* elaboration *)
 
-let elaborate ~is_bmc ~conf ~filename =
+let elaborate ~is_bmc ~mode ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack ~is_bmc ~conf Random;
-  Switches.set conf.instance.switches;
+  let { n1570; switches } = conf.instance in
+  let new_conf = hack ~is_bmc ~n1570 ~switches mode in
   Debug.print 7 @@ List.fold_left (fun acc sw -> acc ^ " " ^ sw) "Switches: " conf.instance.switches;
   Debug.print 7 ("Elaborating: " ^ filename);
   try
     load_core_stdlib () >>= fun core_stdlib ->
     load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
-    (* TODO: merge this with conf *)
-    let elab_conf = mk_elab_config () in
-    c_frontend_and_elaboration elab_conf (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
+    c_frontend_and_elaboration new_conf (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
     >>= function
     | (Some cabs, Some (_, ail), core) ->
       core_passes (conf.pipeline, conf.io) ~filename core
       >>= fun core' ->
-      return (core_stdlib, core_impl, cabs, ail, core')
+      return (new_conf, (core_stdlib, core_impl, cabs, ail, core'))
     | _ ->
       failwith "fatal failure core pass"
   with
@@ -173,8 +168,8 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
   let (>>=)  = Exception.except_bind in
   Debug.print 7 ("Running BMC...");
   try
-    elaborate ~is_bmc:true ~conf ~filename
-    >>= fun (core_std, core_lib, cabs, ail, core) ->
+    elaborate ~is_bmc:true ~mode:Config.Random ~conf ~filename
+    >>= fun (_, (_, _, _, ail, core)) ->
     let (cat_file_opt, mem_model) =
       match bmc_model with
       | `C11 ->
@@ -208,14 +203,13 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
     raise e
 
 (* execution *)
-let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
+let execute ~conf ~filename (mode: Config.execution_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack ~conf mode;
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
-    elaborate ~is_bmc:false ~conf ~filename
-    >>= fun (core_std, core_lib, cabs, ail, core) ->
+    elaborate ~is_bmc:false ~mode ~conf ~filename
+    >>= fun (new_conf, (core_std, core_lib, _, _, core)) ->
     begin if conf.instance.link_libc then
       Pipeline.read_core_object (conf.pipeline, conf.io) ~is_lib:true (core_std, core_lib) @@ Cerb_runtime.in_runtime "libc/libc.co" >>= fun libc ->
       Core_linking.link [core; libc]
@@ -223,8 +217,7 @@ let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
       return core
     end >>= fun core ->
     let open Driver_ocaml in
-    let driver_conf = {exec_mode=mode; do_stepping= true; concurrency=false; fs_dump=false; trace=false; } in
-    interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
+    interp_backend ~conf:new_conf dummy_io core ~args:[] ~batch:`Batch ~fs:None
     >>= function
     | Either.Left (_, execs) ->
         let has_multiple = List.length execs > 1 in
@@ -256,12 +249,12 @@ let set_uid file =
       | PEimpl impl -> PEimpl impl
       | PEval v -> PEval v
       | PEconstrained cs ->
-        PEconstrained (List.mapi (fun i (m, pe) -> (m, set_pe pe)) cs)
+        PEconstrained (List.map (fun (m, pe) -> (m, set_pe pe)) cs)
       | PEundef (loc, undef) -> PEundef (loc, undef)
       | PEerror (err, pe) -> PEerror (err, set_pe pe)
       | PEctor (ctor, pes) -> PEctor (ctor, List.map set_pe pes)
       | PEcase (pe, cases) -> PEcase (set_pe pe,
-                                      List.mapi (fun i (pat, pe) -> (pat, set_pe pe)) cases)
+                                      List.map (fun (pat, pe) -> (pat, set_pe pe)) cases)
       | PEarray_shift (pe, cty, pes) -> PEarray_shift (set_pe pe, cty, set_pe pes)
       | PEmember_shift (pe, sym, cid) -> PEmember_shift (set_pe pe, sym, cid)
       | PEmemop (mop, pes) -> PEmemop (mop, List.map set_pe pes)
@@ -272,7 +265,7 @@ let set_uid file =
       | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
           PEcatch_exceptional_condition (ity, iop, set_pe pe1, set_pe pe2)
       | PEstruct (sym, fields) ->
-          PEstruct (sym, List.mapi (fun i (cid, pe) -> (cid, set_pe pe)) fields)
+          PEstruct (sym, List.map (fun (cid, pe) -> (cid, set_pe pe)) fields)
       | PEunion (sym, cid, pe) -> PEunion (sym, cid, set_pe pe)
       | PEcfunction pe -> PEcfunction (set_pe pe)
       | PEmemberof (tag_sym, memb_ident, pe) -> PEmemberof (tag_sym, memb_ident, set_pe pe)
@@ -293,7 +286,7 @@ let set_uid file =
       | Ememop (memop, pes) -> Ememop (memop, List.map set_pe pes)
       | Eaction pact -> Eaction pact
       | Ecase (pe, cases) ->
-        Ecase (set_pe pe, List.mapi (fun i (pat, e) -> (pat, set_e e)) cases)
+        Ecase (set_pe pe, List.map (fun (pat, e) -> (pat, set_e e)) cases)
       | Elet (pat, pe, e) -> Elet (pat, set_pe pe, set_e e)
       | Eif (pe, e1, e2) -> Eif (set_pe pe, set_e e1, set_e e2)
       | Eccall (x, pe1, pe2, args) -> Eccall (x, set_pe pe1, set_pe pe2, List.map set_pe args)
@@ -305,7 +298,7 @@ let set_uid file =
       | End es -> End (List.map set_e es)
       | Esave (lab_bty, args, e) ->
         Esave (lab_bty,
-               List.mapi (fun i (s, (bty, pe)) -> (s, (bty, set_pe pe))) args,
+               List.map (fun (s, (bty, pe)) -> (s, (bty, set_pe pe))) args,
                set_e e)
       | Erun (x, lab, pes) -> Erun (x, lab, List.map set_pe pes)
       | Epar es -> Epar (List.map set_e es)
@@ -314,7 +307,7 @@ let set_uid file =
       | Eexcluded (n, act) -> Eexcluded (n, act)
     in Expr (Annot.Auid (fresh ()) :: annots, e_')
   in
-  let set_fun fname = function
+  let set_fun = function
     | Proc (loc, marker_id, bty, args, e) ->
       Proc (loc, marker_id, bty, args, set_e e)
     | f -> f
@@ -328,12 +321,12 @@ let set_uid file =
     )
   in
   { main=    file.main;
-    calling_convention= file.calling_convention;
+    callconv= file.callconv;
     tagDefs= file.tagDefs;
     stdlib=  file.stdlib;
     impl=    file.impl;
     globs=   List.map set_globs file.globs;
-    funs=    Pmap.mapi set_fun file.funs;
+    funs=    Pmap.map set_fun file.funs;
     extern=  file.extern;
     funinfo= file.funinfo;
     loop_attributes0= file.loop_attributes0;
@@ -547,7 +540,7 @@ let multiple_steps step_state (m, st) =
                         | VIP_copy_alloc_id_invalid ->
                             None, "copy_alloc_id () on invalid pointer"
                       end
-                  | MerrCHERI err ->
+                  | MerrCHERI _ ->
                       None, "CHERI error"
                 end
             | Driver.DErr_concurrency str ->
@@ -620,8 +613,8 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   let (>>=)  = Exception.except_bind in
   match active_node_opt with
   | None -> (* no active node *)
-    hack ~conf Random;
-    elaborate ~is_bmc:false ~conf ~filename >>= fun (core_std, core_lib, _, _, core) ->
+    elaborate ~is_bmc:false ~mode:Config.Random ~conf ~filename
+      >>= fun (new_conf, (core_std, core_lib, _, _, core)) ->
     let core     = set_uid core in
     let ranges   = create_expr_range_list core in
     begin if conf.instance.link_libc then
@@ -631,7 +624,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
       return core
     end >>= fun core ->
     let core'    = Core_run_aux.convert_file core in
-    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state true(*do_stepping*) false(*do_trace*) in
+    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state new_conf in
     let (m, st)  = (Driver.drive false core' [], st0) in
     last_node_id := 0;
     let node_info= `Init in
@@ -641,8 +634,8 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; stdout; stderr } in
     return @@ Interactive (ranges, ([n], []))
   | Some n ->
-    hack ~conf Random;
-    Switches.set conf.instance.switches;
+    let { n1570; switches } = conf.instance in
+    let _ = hack ~n1570 ~switches Config.Random in
     last_node_id := n.last_id;
     decode n.marshalled_state
     |> multiple_steps ([], [], n.active_id)
@@ -652,7 +645,8 @@ let instance debug_level =
   Debug.level := debug_level;
   let do_action  : Instance_api.request -> Instance_api.result = function
     | `Elaborate (conf, filename, name) ->
-      elaborate ~is_bmc:false ~conf:(setup conf) ~filename
+      Exception.except_fmap snd @@ elaborate ~is_bmc:false ~mode:Config.Random
+        ~conf:(setup conf) ~filename
       |> respond filename name result_of_elaboration
     | `Execute (conf, filename, name, mode) ->
       execute ~conf:(setup conf) ~filename mode

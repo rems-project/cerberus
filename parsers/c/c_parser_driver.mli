@@ -1,3 +1,8 @@
+module type Config = sig
+  val warn_extra_semicolon : bool
+end
+
+module Make(Conf: Config) : sig
 
 (** Run only the lexer on a given string.
 The result is (token string, (line,column))
@@ -39,3 +44,42 @@ val parse_from_string :
   (Cerb_frontend.Cabs.translation_unit,
    Cerb_location.t * Cerb_frontend.Errors.cause)
   Cerb_frontend.Exception.exceptM
+
+module C_parser : sig
+  open Cerb_frontend
+  type token = Tokens.token
+
+  exception Error of int
+
+  val translation_unit :
+    (Lexing.lexbuf -> token) ->
+    Lexing.lexbuf ->
+    Cabs.translation_unit
+
+  val loop_spec :
+    (Lexing.lexbuf -> token) ->
+    Lexing.lexbuf ->
+    (Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec
+
+  val fundef_spec :
+    (Lexing.lexbuf -> token) ->
+    Lexing.lexbuf ->
+    (Symbol.identifier, Cabs.type_name) Cn.cn_func_spec
+
+  val cn_toplevel :
+    (Lexing.lexbuf -> token) ->
+    Lexing.lexbuf ->
+    Cabs.external_declaration list
+
+  val cn_statements :
+    (Lexing.lexbuf -> token) ->
+    Lexing.lexbuf ->
+    (Symbol.identifier, Cabs.type_name) Cn.cn_statement list
+
+  val cn_ghost_args :
+    (Lexing.lexbuf -> token) ->
+    Lexing.lexbuf ->
+    (Symbol.identifier, Cabs.type_name) Cn.cn_expr list
+    * Symbol.identifier list
+end
+end

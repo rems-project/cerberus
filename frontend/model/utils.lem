@@ -59,7 +59,7 @@ let rec foldl2 f z xs ys =
     | (a::xs', b::ys') ->
         foldl2 f (f z a b) xs' ys'
     | _ ->
-        error "[Global.foldl2] the twos weren't of same length"
+        error "[Util.foldl2] the twos weren't of same length"
   end
 
 (* TODO: get rid of this for the Coq backend *)
@@ -71,7 +71,7 @@ let rec map2_ f xs ys acc =
     | ([],[]) ->
         List.reverse acc
     | _ ->
-        error "[Global.foldl2] the twos weren't of same length"
+        error "[Util.foldl2] the twos weren't of same length"
   end
 let map2 f xs ys = map2_ f xs ys []
 
@@ -79,19 +79,19 @@ let fromJust debug_str = function
   | Just z ->
       z
   | Nothing ->
-      error ("Global.fromJust(" ^ debug_str ^ ")")
+      error ("Util.fromJust(" ^ debug_str ^ ")")
 end
 
 let fromLeft = function
   | Left z ->
       z
   | Right _ ->
-      error "Global.fromLeft"
+      error "Util.fromLeft"
 end
 
 let fromRight = function
   | Left _ ->
-      error "Global.fromRight"
+      error "Util.fromRight"
   | Right z ->
       z
 end
@@ -253,7 +253,7 @@ let second f (x, y) =
 val     list_index_update: forall 'a. nat -> ('a -> 'a) -> list 'a -> list 'a
 let rec list_index_update n f = function
   | [] ->
-      error "Global.list_index_update"
+      error "Util.list_index_update"
   | x::xs ->
       if n = 0 then
         f x :: xs

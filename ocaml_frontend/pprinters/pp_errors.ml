@@ -4,7 +4,6 @@ open Errors
 open TypingError
 open Constraint
 
-open Cerb_global
 open Cerb_location
 
 open Cerb_colour
@@ -649,17 +648,7 @@ let get_std_ref = function
   | _ ->
       NoRef
 
-let get_quote ref =
-  let key =
-    String.split_on_char ',' ref |> List.hd (* remove everything after ',' *)
-  in
-  match Cerb_global.n1570 () with
-  | Some (`Assoc xs) ->
-    begin match List.assoc_opt key xs with
-      | Some (`String b) -> "\n" ^ b
-      | _ -> "(ISO C11 quote not found)"
-    end
-  | _ -> failwith "Missing N1507 json file..."
+open Cerb_diagnostic
 
 let make_message loc err k =
   let (head, pos) = Cerb_location.head_pos_of_location loc in
@@ -672,14 +661,14 @@ let make_message loc err k =
   in
   let rec string_of_quotes = function
     | [] -> "no C11 reference"
-    | [ref] -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref
-    | ref::refs -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
+    | [ref] -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_std_quote ref
+    | ref::refs -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_std_quote ref ^ "\n\n" ^ string_of_quotes refs
   in
   match err with
   | INTERNAL_ERROR _ ->
       Printf.sprintf "%s %s %s\n%s" head kind msg pos
   | _ ->
-    match Cerb_global.verbose (), get_std_ref err with
+    match get_verbosity (), get_std_ref err with
     | Basic, _
     |  _, NoRef ->
         Printf.sprintf "%s %s %s\n%s" head kind msg pos

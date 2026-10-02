@@ -1,5 +1,8 @@
-open import Pervasives Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
-import Constraint Undefined Builtins Debug Pp Cmm_csem Global
+open import Pervasives Utils
+open import AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
+open import Config
+import Constraint Undefined Builtins Debug Pp Cmm_csem
+
 
 import Implementation
 
@@ -48,7 +51,8 @@ end
 
 val gen_typing_type_of_constant: Loc.t -> integerConstant -> E.errorM genIntegerType
 let gen_typing_type_of_constant loc iCst =
-  if Global.isAgnostic () then
+  E.read_config >>= fun conf ->
+  if conf.agnostic then
     let () = Debug.warn [] (fun () ->
       "The typing of Ail integer constants is imprecise because of the --agnostic flag"
     ) in
@@ -292,8 +296,6 @@ let well_typed_equality gty1 gty2 is_null1 is_null2 =
      is_arithmetic gty1 && is_arithmetic gty2
      (* STD §6.5.9#2, item 2 *)
   || are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2
-     (* Defacto extension. TODO: make it a specific flag *)
-  || (Global.isDefacto () && is_pointer_to_object gty1 && is_pointer_to_object gty2)
      (* STD §6.5.9#2, item 3 *)
   || is_pointer_to_void gty1 && is_pointer_to_object gty2
      (* STD §6.5.9#2, item 3 *)
@@ -613,6 +615,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | Nothing ->
         error "annotate_and_cast_arguments ==> no proto"
   end in
+  E.read_config >>= fun conf ->
   match expr_ with
     | AilEunary (Plus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
@@ -1144,7 +1147,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     
     | AilEgeneric e _ gas ->
         annotate_rvalue e >>= fun (e', gty) ->
-        if Global.isAgnostic () then
+        if conf.agnostic then
           E.fail loc (TError_AgnosticFailure "_Generic() is not supported")
         else
           GenTypesAux.interpret_genType loc (Implementation.integerImpl ()) gty >>= fun ty ->
@@ -1401,13 +1404,11 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
-        else if Global.isPermissive () && is_pointer_to_void gty1 && is_integer gty2 then
-          (* NOTE: this is a GNU extension (arithmetic on void pointers),
-             add a more fine-grained switch *)
+        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty1 && is_integer gty2 then
+          (* NOTE: this is a GNU extension (arithmetic on void pointers) *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if Global.isPermissive () && is_pointer_to_void gty2 && is_integer gty1 then
-          (* NOTE: this is a GNU extension (arithmetic on void pointers),
-             add a more fine-grained switch *)
+        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty2 && is_integer gty1 then
+          (* NOTE: this is a GNU extension (arithmetic on void pointers) *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
         else
           well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Add gty2 >>
@@ -1420,9 +1421,8 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger PtrdiffT)))
         else if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if Global.isPermissive () && is_pointer_to_void gty1 && is_integer gty2 then
-          (* TODO: this is a GNU extension (arithmetic on void pointers),
-             add a more fine-grained switch *)
+        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty1 && is_integer gty2 then
+          (* NOTE: this is a GNU extension (arithmetic on void pointers)  *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else
           well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Sub gty2 >>
@@ -1490,6 +1490,11 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else if
+          conf.allow_distinct_ptr_types_comparison &&
+          is_pointer_to_object gty1 && is_pointer_to_object gty2
+        then
+          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (EqualityInvalidOperandsType gty1 gty2)
     
@@ -1498,13 +1503,12 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else if
+          conf.allow_distinct_ptr_types_comparison &&
+          is_pointer_to_object gty1 && is_pointer_to_object gty2
+        then
+          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          let () = Debug.print_debug 2 [] (fun () ->
-            "gty1: " ^ Pp.stringFromAil_genType gty1 ^
-            " <--> gty2: " ^ Pp.stringFromAil_genType gty2 ^
-            " , are_pointers_to_compatible_types: " ^
-            if are_pointers_to_compatible_types gty1 gty2 then "true" else "false"
-          ) in
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (EqualityInvalidOperandsType gty1 gty2)
     
     | AilEsizeof qs ty ->
@@ -2181,7 +2185,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
   let annotate_expression = annotate_expression annotate_block sigm gamm CTXother in
   let annotate_rvalue     = annotate_rvalue annotate_block sigm gamm in
   let annotate_statement  = annotate_statement sigm gamm ty in
-  
+  E.read_config >>= fun conf ->
   match stmt with
     | AilSskip ->
         E.return AilSskip
@@ -2231,12 +2235,12 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
           E.constraint_violation loc NonVoidReturnVoidFunction
     | AilSreturn e ->
         if AAux.is_void ty then
-          if Global.isPermissive () then
+          if conf.allow_void_return then
             annotate_rvalue e >>= fun (e', gty) ->
             match gty with
             | GenVoid ->
-                (* NOTE: this is a GNU extension we support with --permissive *)
-                (* return E; in a void function when the type of E is void    *)
+                (* NOTE: this is a GNU extension which allow:
+                 * return E; in a void function when the type of E is void *)
                 E.return (AilSreturn e')
             | _ ->
                 E.constraint_violation loc NonVoidReturnVoidFunction

@@ -182,7 +182,6 @@ let under_scope (m: 'a Eff.t) : 'a Eff.t =
 let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
   Eff.get >>= fun st ->
   let sym = Symbol.Symbol (Cerb_fresh.digest(), Cerb_fresh.int(), SD_Id (fst _sym)) in
-(*  let sym = Symbol.Symbol (Cerb_global.new_int (), Some (fst _sym)) in *)
   Eff.put {st with
     sym_scopes=
       match st.sym_scopes with

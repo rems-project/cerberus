@@ -2,7 +2,7 @@ open import Pervasives
 import Map_extra
 
 open import Utils Errors Loc
-import Exception Pp Global
+import Exception Pp
 
 open import Core Core_aux
 import Mem_common Ctype Ctype_aux Implementation
@@ -1661,9 +1661,9 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
   let loc = Annot.get_loc_ annot in
   let typecheck_ccall_argument =
     match callconv with
-      | Normal_callconv ->
+      | Config.Normal_callconv ->
           fun _ pe -> typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
-      | Inner_arg_callconv ->
+      | Config.Inner_arg_callconv ->
           fun ty pe -> match Core_aux.core_object_type_of_ctype ty with
             | Just oTy ->
                 typecheck_export_pexpr tagDefs env (BTy_loaded oTy) pe
@@ -1864,7 +1864,7 @@ and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot e
 val typecheck_program: forall 'bty 'a. Core.generic_file 'bty 'a -> Exception.exceptM (Core.typed_file 'a) Errors.error
 let typecheck_program file =
   let typecheck_expr env expected_bTy expr =
-    typecheck_expr file.calling_convention file.tagDefs env expected_bTy expr in
+    typecheck_expr file.callconv file.tagDefs env expected_bTy expr in
   let aux =
     (* The startup function/procedure must be defined *)
     match file.main with
@@ -1970,7 +1970,7 @@ let typecheck_program file =
     
     E.return <|
       main= file.main;
-      calling_convention = file.calling_convention;
+      callconv = file.callconv;
       tagDefs= file.tagDefs;
       stdlib= stdlib';
       impl= impl';
