@@ -109,7 +109,6 @@ MORE DETAILS ABOUT THE INTERESTING MODULES:
 
 * core_run.lem
 * core_run_aux.lem
-* core_run_effect.lem
 : Small-step semantics for the Core expressions. This also calls the Core_eval
   module for the pure part of the dynamics.
 
