@@ -43,6 +43,9 @@ type cerb_switch =
   (* eliminate pure symbol rebindings: let alias = pure(sym) → substitute sym *)
   | SW_copy_prop
 
+  (* static over-approximating check for weak-sequencing races (assignment used as expression) *)
+  | SW_warn_wseq
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
