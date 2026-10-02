@@ -695,7 +695,3 @@ let to_string (loc, err) =
   match err with
   | CPP err -> err (* NOTE: the err string is already formatted by CPP *)
   | _ -> make_message loc err Error
-
-let fatal msg =
-  prerr_endline (ansi_format ~err:true [Bold; Red] "error: " ^ ansi_format ~err:true [Bold] msg);
-  exit 1

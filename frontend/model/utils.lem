@@ -13,7 +13,7 @@ instance (Default unit)
 end
 
 val error: forall 'a. string -> 'a
-declare ocaml target_rep function error = `Cerb_debug.error`
+declare ocaml target_rep function error = `Cerb_diagnostic.internal_error`
 declare hol target_rep function error = `ARB`
 
 val list_init : forall 'a. nat -> (nat -> 'a) -> list 'a

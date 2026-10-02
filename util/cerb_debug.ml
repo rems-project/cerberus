@@ -19,10 +19,6 @@ type debug_state = {
 }
 *)
 
-let error str =
-  prerr_string (Cerb_colour.ansi_format ~err:true [Red] "internal error: ");
-  prerr_endline str;
-  failwith @@ "internal error: " ^ str
 
 let debug_level = ref 0
 
@@ -124,7 +120,8 @@ let end_csv_timing (fun_name: string) =
      let t' = Unix.gettimeofday () in
      match !csv_timing_stack with
      | [] ->
-        error "empty timing stack when ending timing"
+        (* error "empty timing stack when ending timing" *)
+        ()
      | t :: xs ->
         Printf.fprintf oc "%s,%f\n" fun_name (t' -. t);
         csv_timing_stack := xs

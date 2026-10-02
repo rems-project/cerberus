@@ -1,6 +1,7 @@
 open Cerb_frontend
 open Cerb_backend
 open Cerb_global
+open Cerb_diagnostic
 open Pipeline
 
 let (>>=) = Exception.except_bind
@@ -13,7 +14,7 @@ let io, get_progress =
 
 let frontend elab_conf (conf, io) ~is_lib filename core_std =
   if not (Sys.file_exists filename) then
-    error ("The file `" ^ filename ^ "' doesn't exist.");
+    fatal ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     read_core_object (conf, io) ~is_lib core_std filename
   else if Filename.check_suffix filename ".c" then
@@ -185,9 +186,9 @@ let cerberus debug_level progress core_obj
   runM @@ match files with
     | [] ->
       if ocaml_corestd then
-        error "TODO: ocaml_corestd"
+        fatal "TODO: ocaml_corestd"
       else
-        Pp_errors.fatal "no input file"
+        fatal "no input file"
     | [file] when core_obj ->
       prelude >>= fun (core_std, elab_conf) ->
       frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->
@@ -202,7 +203,7 @@ let cerberus debug_level progress core_obj
     | files ->
       (* Ocaml backend mode *)
       if ocaml then
-        error "TODO: ocaml_backend"
+        fatal "TODO: ocaml_backend"
       (* BMC mode *)
       else if bmc then
         begin match files with
@@ -213,7 +214,7 @@ let cerberus debug_level progress core_obj
             ignore @@ Bmc.bmc core (Option.map snd ail_opt);
             return success
           | _ ->
-            Pp_errors.fatal "bmc mode accepts only one file"
+              fatal "bmc mode accepts only one file"
         end
       (* Run abstract interpretation *)
         (*

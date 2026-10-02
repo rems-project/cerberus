@@ -1,3 +1,5 @@
+open Cerb_diagnostic
+
 type cerb_switch =
   (* `PERMISSIVE allows out-of-bound pointer values. This the default behaviour
      for PNVI, whereas `STRICT (making out-of-bound pointer values creations
@@ -143,9 +145,11 @@ let set strs =
           if None = has_switch_pred (pred sw) then
             internal_ref := sw :: !internal_ref
           else
-            prerr_endline ("switch '" ^ String.escaped str ^ "' would override a previous switch --> ignoring.")
+            warn ~always:true [] @@ fun () ->
+              "switch '" ^ String.escaped str ^ "' would override a previous switch --> ignoring."
       | None ->
-          prerr_endline ("failed to parse switch '" ^ String.escaped str ^ "' --> ignoring.")
+          warn ~always:true [] @@ fun () ->
+            "failed to parse switch '" ^ String.escaped str ^ "' --> ignoring."
   ) strs
 
 let set_iso_switches () =

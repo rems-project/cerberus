@@ -1,6 +1,7 @@
 open Cerb_frontend
 open Cerb_backend
 open Cerb_global
+open Cerb_diagnostic
 open Pipeline
 
 let (>>=) = Exception.except_bind
@@ -22,7 +23,7 @@ let is_cheri_memory () =
 
 let frontend elab_conf (conf, io) ~is_lib filename core_std =
   if not (Sys.file_exists filename) then
-    error ("The file `" ^ filename ^ "' doesn't exist.");
+    fatal ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     read_core_object (conf, io) ~is_lib core_std filename
   else if Filename.check_suffix filename ".c" then
@@ -243,7 +244,7 @@ let cerberus debug_level progress core_obj
         print_json_error "fatal" "no input file" "no input file";
         exit 1
       end else
-        Pp_errors.fatal "no input file"
+        fatal "no input file"
     | [file] when core_obj ->
       prelude >>= fun (core_std, elab_conf) ->
       frontend elab_conf (conf, io) ~is_lib:false file core_std >>= fun core_file ->

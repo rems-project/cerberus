@@ -1,5 +1,6 @@
 open Cerb_frontend
 open Cerb_global
+open Cerb_diagnostic
 
 (* Pipeline *)
 
@@ -34,25 +35,25 @@ let load_core_stdlib () =
       if Switches.(has_switch SW_inner_arg_temps) then "std_inner_arg_temps.core" else "std.core" in
   let filepath = Filename.concat (core_stdlib_path ()) filename in
   if not (Sys.file_exists filepath) then
-    error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
+    fatal ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
     Core_parser_driver.parse_stdlib filepath >>= function
     | Core_parser_util.Rstd (ailnames, std_funs) ->
       return (ailnames, std_funs)
     | _ ->
-      error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
+      fatal "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
 
 (* == load the implementation file ============================================================== *)
 let load_core_impl core_stdlib impl_name =
   let iname = Filename.concat (core_stdlib_path ()) ("impls/" ^ impl_name ^ ".impl") in
   if not (Sys.file_exists iname) then
-    error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
+    fatal ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
     match Core_parser_driver.parse core_stdlib iname with
     | Exception.Result (Core_parser_util.Rimpl impl_map) ->
       return impl_map
     | _ ->
-      error "while parsing the Core impl, the parser didn't recognise it as an impl ."
+      fatal "while parsing the Core impl, the parser didn't recognise it as an impl ."
 
 let (>|>) m1 m2 =
   m1 >>= fun z  ->
@@ -275,7 +276,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
            Core.visible_objects_env= Pmap.empty compare;
          }
     | Core_parser_util.Rstd _ ->
-        error "Found no main function in the Core program"
+        fatal "Found no main function in the Core program"
     | Core_parser_util.Rimpl _ ->
         failwith "core_frontend found a Rimpl"
 

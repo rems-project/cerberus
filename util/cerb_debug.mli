@@ -14,7 +14,7 @@ type domain =
 
 
 (* val assert_false: unit -> 'a *)
-val error: string -> 'a
+(* val error: string -> 'a *)
 
 val debug_level: int ref
 val get_debug_level: unit -> int

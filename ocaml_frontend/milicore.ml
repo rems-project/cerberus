@@ -1,3 +1,4 @@
+open Cerb_diagnostic
 open Annot
 type symbol = Symbol.sym
 
@@ -99,8 +100,8 @@ let core_to_micore__funmap_decl update_loc = function
              (List.map (fun (sym1,(((_,mctb),_))) -> 
                   (match mctb with
                    | Some (ct1,b) -> (Some sym1, (ct1,b))
-                   | None -> 
-                      Cerb_debug.error "core_to_micore: label without c-type argument annotation"
+                   | None ->
+                      internal_error "core_to_micore: label without c-type argument annotation"
                   )
                 ) params) 
            in

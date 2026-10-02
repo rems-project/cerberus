@@ -56,6 +56,3 @@ val isIgnoreBitfields: unit -> bool
 (* NOTE: used in pp_errors.ml *)
 val verbose: unit -> error_verbosity
 val n1570: unit -> Yojson.Basic.t option
-
-(* print an error fatal message and exit with a given code (default is 1) *)
-val error: ?code:int -> string -> 'a

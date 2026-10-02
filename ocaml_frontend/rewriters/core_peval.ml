@@ -2,7 +2,7 @@
 open Core_rewriter
 open Core
 
-open Cerb_debug
+open Cerb_diagnostic
 
 
 (* TODO: move this to Core_aux *)
@@ -523,9 +523,9 @@ let core_peval file : 'bty RW.rewriter =
                             ( Identity.return (Pexpr (annots, bTy, PEval cval))
                             , Identity.return )
                       | Right (Undef (_, ubs)) ->
-                          error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
+                          internal_error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                       | Right (Error (_, str)) ->
-                          error str
+                          internal_error str
                       | Left err ->
                           Traverse
 (*
@@ -571,11 +571,11 @@ let core_peval file : 'bty RW.rewriter =
                             ( Identity.return pe3
                             , Identity.return )
                       | Right (Defined _) ->
-                          error "PEif -> not Vtrue or Vfalse"
+                          internal_error "PEif -> not Vtrue or Vfalse"
                       | Right (Undef (_, ubs)) ->
-                          error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
+                          internal_error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                       | Right (Error (_, str)) ->
-                          error str
+                          internal_error str
                       | Left err ->
                           Traverse
                     end
@@ -587,7 +587,7 @@ let core_peval file : 'bty RW.rewriter =
                           print_endline "\n===========================================";
                           PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout (Pp_core.Basic.pp_pexpr pe1);
                           print_endline "\n===========================================";
-                          error "PEcase mismatched"
+                          internal_error "PEcase mismatched"
                       | `MATCHED (None, pe') ->
                           ChangeDoChildrenPost
                             ( Identity.return pe'
@@ -713,11 +713,11 @@ let core_peval file : 'bty RW.rewriter =
                       ( Identity.return e3
                       , Identity.return )
                 | Right (Defined _) ->
-                    error "PEif -> not Vtrue or Vfalse"
+                    internal_error "PEif -> not Vtrue or Vfalse"
                 | Right (Undef (_, ubs)) ->
-                    error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
+                    internal_error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                 | Right (Error (_, str)) ->
-                    error str
+                    internal_error str
                 | Left err ->
                     Traverse
               end
@@ -727,7 +727,7 @@ let core_peval file : 'bty RW.rewriter =
                 | `MULTIPLE ->
                     Traverse
                 | `MISMATCHED ->
-                    error "Ecase mismatched"
+                    internal_error "Ecase mismatched"
                 | `MATCHED (None, e') ->
                     ChangeDoChildrenPost
                       ( Identity.return e'
