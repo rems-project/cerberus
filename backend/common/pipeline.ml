@@ -3,22 +3,21 @@ open Cerb_diagnostic
 
 (* Pipeline *)
 
-let (>>=) = Exception.except_bind
-(*let (>>) m f = m >>= fun _ -> f*)
-let (<$>)  = Exception.except_fmap
-let return = Exception.except_return
+let ( let* )   = Exception.except_bind
+let ( >>= )    = Exception.except_bind
+let (<$>)      = Exception.except_fmap
+let return     = Exception.except_return
 
 let run_pp fout_opt doc =
   let (is_fout, oc) =
     match fout_opt with
-      | Some filename -> true, Stdlib.open_out filename
-      | None -> false, Stdlib.stdout in
+    | Some filename -> true, Stdlib.open_out filename
+    | None -> false, Stdlib.stdout in
   let saved = !Cerb_colour.do_colour in
   Cerb_colour.do_colour := not is_fout;
   let term_col = match Cerb_util.terminal_size () with
-    | Some (_, col) -> col
-    | _ -> 80
-  in
+  | Some (_, col) -> col
+  | _ -> 80 in
   PPrint.ToChannel.pretty 1.0 term_col oc doc;
   if is_fout then
     close_out oc;
@@ -28,13 +27,17 @@ let run_pp fout_opt doc =
 let core_stdlib_path () =
   Cerb_runtime.in_runtime "libcore"
 
-(* == load the Core standard library ============================================================ *)
+(* == load the Core standard library ================================================== *)
 let load_core_stdlib () =
   let filename =
-      if Switches.(has_switch SW_inner_arg_temps) then "std_inner_arg_temps.core" else "std.core" in
+      if Switches.(has_switch SW_inner_arg_temps) then
+        "std_inner_arg_temps.core"
+      else
+        "std.core" in
   let filepath = Filename.concat (core_stdlib_path ()) filename in
   if not (Sys.file_exists filepath) then
-    fatal ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
+    fatal @@
+      "couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "')."
   else
     Core_parser_driver.parse_stdlib filepath >>= function
     | Core_parser_util.Rstd (ailnames, std_funs) ->
@@ -42,7 +45,7 @@ let load_core_stdlib () =
     | _ ->
       fatal "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
 
-(* == load the implementation file ============================================================== *)
+(* == load the implementation file ==================================================== *)
 let load_core_impl core_stdlib impl_name =
   let iname = Filename.concat (core_stdlib_path ()) ("impls/" ^ impl_name ^ ".impl") in
   if not (Sys.file_exists iname) then
@@ -54,13 +57,7 @@ let load_core_impl core_stdlib impl_name =
     | _ ->
       fatal "while parsing the Core impl, the parser didn't recognise it as an impl ."
 
-let (>|>) m1 m2 =
-  m1 >>= fun z  ->
-  m2 >>= fun () ->
-  return z
-
-let whenM cond m =
-  if cond then m () else return ()
+let whenM cond m = if cond then m () else return ()
 
 type language =
   | Cabs | Ail | Core | Types
@@ -95,35 +92,21 @@ type io_helpers = {
 let (default_io_helpers, get_progress) =
   let progress = ref 0 in
   { pass_message = begin
-        let ref = ref 0 in
-        fun str -> Cerb_debug.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
-                   incr ref;
-                   return ()
-      end;
-    set_progress = begin
-      fun _   -> incr progress;
-                 return ()
-      end;
-    run_pp = begin
-      fun fout_opt doc -> run_pp fout_opt doc;
-                          return ()
-      end;
-    print_endline = begin
-      fun str -> print_endline str;
-                 return ();
-      end;
-    print_debug = begin
-      fun n mk_str -> Cerb_debug.print_debug n [] mk_str;
-                      return ()
-      end;
-    warn = begin
-      fun ?(always=false) mk_str -> Cerb_debug.warn ~always [] mk_str;
-                                    return ()
-      end;
+      let ref = ref 0 in
+      fun str ->
+        Cerb_debug.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
+        incr ref;
+        return ()
+    end
+  ; set_progress= (fun _ -> incr progress; return ())
+  ; run_pp= (fun fout_opt doc -> run_pp fout_opt doc; return ())
+  ; print_endline= (fun str -> print_endline str; return ())
+  ; print_debug= (fun n mk_str -> Cerb_debug.print_debug n [] mk_str; return ())
+  ; warn= (fun ?(always=false) mk_str -> warn ~always [] mk_str; return ())
   }, fun () -> !progress
 
 let cpp (conf, io) ~filename =
-  io.print_debug 5 (fun () -> "C prepocessor") >>= fun () ->
+  let* () = io.print_debug 5 (fun () -> "C prepocessor") in
   Unix.handle_unix_error begin fun () ->
     let (out_read, out_write) = Unix.pipe () in
     Unix.set_close_on_exec out_read;
@@ -151,12 +134,11 @@ let cpp (conf, io) ~filename =
     let out = read [] out_ic in
     close_in out_ic;
     let err = match err_ic_opt with
-      | Some err_ic ->
-        let err = read [] err_ic in
-        close_in err_ic;
-        err
-      | None -> []
-    in
+    | Some err_ic ->
+      let err = read [] err_ic in
+      close_in err_ic;
+      err
+    | None -> [] in
     match Unix.waitpid [] cpp_pid with
     | _, WEXITED n
     | _, WSIGNALED n
@@ -168,11 +150,11 @@ let cpp (conf, io) ~filename =
         (match conf.cpp_save with
         | None -> ()
         | Some cpp_file ->
-          try 
+          try
             let out = open_out cpp_file in
             Printf.fprintf out "%s" txt;
             close_out out
-          with e -> ()
+          with _ -> ()
         );
         return txt
   end ()
@@ -187,15 +169,16 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
   ) in
   Cerb_fresh.set_digest filename;
   let parse filename file_content =
-    C_parser_driver.parse_from_string ~filename file_content >>= fun cabs_tunit ->
-    io.set_progress "CPARS" >>= fun () ->
-    io.pass_message "C parsing completed!" >>= fun () ->
-    whenM (List.mem Cabs pipeline_conf.astprints) begin
+    let* cabs_tunit = C_parser_driver.parse_from_string ~filename file_content in
+    let* () = io.set_progress "CPARS" in
+    let* () = io.pass_message "C parsing completed!" in
+    let* () = whenM (List.mem Cabs pipeline_conf.astprints) begin
       fun () -> io.run_pp None (Pp_cabs.pp_translation_unit true true cabs_tunit)
-    end >>= fun () ->
-    whenM (List.mem Cabs pipeline_conf.pprints) begin
+    end in
+    let* () = whenM (List.mem Cabs pipeline_conf.pprints) begin
       fun () -> io.warn (fun () -> "TODO: Cabs pprint to yet supported")
-    end >>= fun () -> return cabs_tunit in
+    end in
+    return cabs_tunit in
   (* -- *)
   let mk_pp_program pp fout_opt file =
     let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
@@ -206,27 +189,31 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     ret in
   let desugar cabs_tunit =
     let (ailnames, core_stdlib_fun_map) = core_stdlib in
-    Cabs_to_ail.desugar conf (ailnames, core_stdlib_fun_map, core_impl) cn_init_scope
-      "main" cabs_tunit >>= fun (markers_env, ail_prog) ->
-          io.set_progress "DESUG"
-      >|> io.pass_message "Cabs -> Ail completed!"
-          (* NOTE: if the debug level is lower the do the printing after the typing *)
-      >|> whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.astprints) begin
-            fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)
-          end
-      >|> whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.pprints) begin
-            fun () ->
-            let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
-            io.run_pp fout_opt (mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ail_prog)
-          end
-      >>= fun () -> return (markers_env, ail_prog) in
+    let* markers_env, ail_prog =
+      Cabs_to_ail.desugar conf (ailnames, core_stdlib_fun_map, core_impl)
+        cn_init_scope "main" cabs_tunit in
+    let* () = io.set_progress "DESUG" in
+    let* () = io.pass_message "Cabs -> Ail completed!" in
+    let* () =
+    (* NOTE: if the debug level is lower the do the printing after the typing *)
+      whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.astprints)
+        (fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)) in
+    let* () = whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.pprints)
+      begin
+        fun () ->
+        let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
+        io.run_pp fout_opt
+          (mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ail_prog)
+      end in
+    return (markers_env, ail_prog) in
   (* -- *)
   let ail_typechecking ail_prog =
+    let* ailtau_prog, _ =
     ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
       conf
-      (GenTyping.annotate_program ail_prog) >>= fun (ailtau_prog, _) ->
-    io.pass_message "Ail typing completed!" >>= fun () ->
-    whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.astprints) begin
+      (GenTyping.annotate_program ail_prog) in
+    let* () = io.pass_message "Ail typing completed!" in
+    let* () = whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.astprints) begin
       fun () ->
         let doc = if pipeline_conf.debug_level = 4 then
           (* (for debug 4) pretty-printing Ail with type annotations *)
@@ -234,8 +221,8 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
         else
           Pp_ail_ast.pp_program true false ailtau_prog in
         io.run_pp None doc
-    end >>= fun () ->
-    whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.pprints) begin
+    end in
+    let* () = whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.pprints) begin
       fun () ->
         let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
         let doc = if pipeline_conf.debug_level = 4 then
@@ -244,28 +231,33 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
         else
           mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ailtau_prog in
         io.run_pp fout_opt doc
-    end >>= fun () -> return ailtau_prog in
+    end in
+    return ailtau_prog in
   (* -- *)
-  io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
-  cpp (pipeline_conf, io) ~filename >>= fun file_content            ->
-  parse filename file_content       >>= fun cabs_tunit              ->
-  desugar cabs_tunit                >>= fun (markers_env, ail_prog) ->
-  ail_typechecking ail_prog         >>= fun ailtau_prog             ->
+  let* () = io.print_debug 2 (fun () -> "Using the C frontend") in
+  let* file_content = cpp (pipeline_conf, io) ~filename in
+  let* cabs_tunit = parse filename file_content in
+  let* markers_env, ail_prog = desugar cabs_tunit in
+  let* ailtau_prog = ail_typechecking ail_prog in
   return (cabs_tunit, (markers_env, ailtau_prog))
 
-let c_frontend_and_elaboration ?(cn_init_scope=Cn_desugaring.empty_init) conf (pipeline_conf, io) (core_stdlib, core_impl) ~filename =
-  c_frontend ~cn_init_scope conf (pipeline_conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
+let c_frontend_and_elaboration
+  ?(cn_init_scope=Cn_desugaring.empty_init) conf (pipeline_conf, io)
+  (core_stdlib, core_impl) ~filename
+=
+  let* cabs_tunit, (markers_env, ailtau_prog) =
+    c_frontend ~cn_init_scope conf (pipeline_conf, io)
+      (core_stdlib, core_impl) ~filename in
   let core_file = Translation.translate core_stdlib conf core_impl ailtau_prog in
-  io.set_progress "ELABO" >>= fun () ->
-  io.pass_message "Translation to Core completed!" >>= fun () ->
+  let* () = io.set_progress "ELABO" in
+  let* () = io.pass_message "Translation to Core completed!" in
   return (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Cerb_fresh.set_digest filename;
-  io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
+  let* () = io.print_debug 2 (fun () -> "Using the Core frontend") in
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
-        (* Tags.set_tagDefs "Pipeline.core_frontend" tagDefs; *)
         return {
            Core.main=   Some sym_main;
            Core.callconv= Config.Normal_callconv; (* TODO *)
@@ -278,204 +270,166 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
            Core.funinfo= Pmap.empty compare; (* TODO: need to parse funinfo! *)
            Core.loop_attributes0= Pmap.empty compare;
            Core.visible_objects_env= Pmap.empty compare;
-         }
+        }
     | Core_parser_util.Rstd _ ->
         fatal "Found no main function in the Core program"
     | Core_parser_util.Rimpl _ ->
         failwith "core_frontend found a Rimpl"
 
-(*
-let pp_core (conf, io) ~filename core_file =
-  let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
-  whenM (List.mem Core conf.astprints) begin
-    fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file core_file)
-  end >>= fun () ->
-  whenM (List.mem Core conf.pprints) begin
-    fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file core_file)
-  end
-*)
 
 let core_rewrite (conf, io) core_file =
-  let core_file2 = core_file in
-  (*   match Core_rewrite2.rw_file core_file with
-   *   | Exception.Result core_file -> core_file
-   *   | Exception.Exception err -> prerr_endline err; failwith "error"
-   * in  *)
-  return (Core_rewrite.rewrite_file (core_file2))
-  >|> whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
+  let* () = whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
     fun () ->
-      io.print_endline "BEGIN (before Core rewrite)" >>= fun () ->
-      io.run_pp None (Ast_core.ast_file core_file)   >>= fun () ->
+      let* () = io.print_endline "BEGIN (before Core rewrite)" in
+      let* () = io.run_pp None (Ast_core.ast_file core_file) in
       io.print_endline "END"
-  end
-  >|> whenM (conf.debug_level >= 5 && List.mem Core conf.pprints) begin
+  end in
+  let* () = whenM (conf.debug_level >= 5 && List.mem Core conf.pprints) begin
     fun () ->
-      io.print_endline "BEGIN (before Core rewrite)"   >>= fun () ->
-      io.run_pp None (Pp_core.Basic.pp_file core_file) >>= fun () ->
+      let* () = io.print_endline "BEGIN (before Core rewrite)" in
+      let* () = io.run_pp None (Pp_core.Basic.pp_file core_file) in
       io.print_endline "END"
-  end
+  end in
+  return (Core_rewrite.rewrite_file core_file)
 
 
 let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   let open Core in
-  let untype_ctor = fun ctor -> ctor (* function
-     * | Cnil _ ->
-     *     Cnil ()
-     * | (Ccons as ctor)
-     * | (Ctuple as ctor)
-     * | (Carray as ctor)
-     * | (Civmax as ctor)
-     * | (Civmin as ctor)
-     * | (Civsizeof as ctor)
-     * | (Civalignof as ctor)
-     * | (CivCOMPL as ctor)
-     * | (CivAND as ctor)
-     * | (CivOR as ctor)
-     * | (CivXOR as ctor)
-     * | (Cspecified as ctor)
-     * | (Cunspecified as ctor)
-     * | (Cfvfromint as ctor)
-     * | (Civfromfloat as ctor) ->
-     *     ctor in *)
-  in
   let rec untype_pattern (Pattern (annots, pat_)) =
     Pattern ( annots
             , match pat_ with
-                | (CaseBase _ as pat_) ->
-                    pat_
-                | CaseCtor (ctor, pats) ->
-                    CaseCtor (untype_ctor ctor, List.map untype_pattern pats) ) in
+              | (CaseBase _ as pat_) -> pat_
+              | CaseCtor (ctor, pats) ->
+                  CaseCtor (ctor, List.map untype_pattern pats) ) in
   let rec untype_pexpr (Pexpr (annots, _, pexpr_) : Core.typed_pexpr) : Core.pexpr =
     let aux = function
-      | (PEsym _ as pe)
-      | (PEimpl _ as pe)
-      | (PEval _ as pe)
-      | (PEundef _ as pe) ->
-          pe
-      | PEerror (str, pe) ->
-          PEerror (str, untype_pexpr pe)
-      | PEconstrained xs ->
-          PEconstrained (List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
-      | PEctor (ctor, pes) ->
-          PEctor (untype_ctor ctor, List.map untype_pexpr pes)
-      | PEcase (pe, pat_pes) ->
-          PEcase (untype_pexpr pe, List.map (fun (pat, pe) -> (untype_pattern pat, untype_pexpr pe)) pat_pes)
-      | PEarray_shift (pe1, ty, pe2) ->
-          PEarray_shift (untype_pexpr pe1, ty, untype_pexpr pe2)
-      | PEmember_shift (pe1, tag_sym, membr_ident) ->
-          PEmember_shift (untype_pexpr pe1, tag_sym, membr_ident)
-      | PEmemop (mop, pes) ->
-          PEmemop (mop, List.map untype_pexpr pes)
-      | PEnot pe ->
-          PEnot (untype_pexpr pe)
-      | PEop (binop, pe1, pe2) ->
-          PEop (binop, untype_pexpr pe1, untype_pexpr pe2)
-      | PEconv_int (ity, pe) ->
-          PEconv_int (ity, untype_pexpr pe)
-      | PEwrapI (ity, iop, pe1, pe2) ->
-          PEwrapI (ity, iop, untype_pexpr pe1, untype_pexpr pe2)
-      | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
-          PEcatch_exceptional_condition (ity, iop, untype_pexpr pe1, untype_pexpr pe2)
-      | PEstruct (tag_sym, xs) ->
-          PEstruct (tag_sym, List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
-      | PEunion (tag_sym, membr_ident, pe) ->
-          PEunion (tag_sym, membr_ident, untype_pexpr pe)
-      | PEcfunction pe ->
-          PEcfunction (untype_pexpr pe)
-      | PEmemberof (tag_sym, membr_ident, pe) ->
-          PEmemberof (tag_sym, membr_ident, untype_pexpr pe)
-      | PEcall (nm, pes) ->
-          PEcall (nm, List.map untype_pexpr pes)
-      | PElet (pat, pe1, pe2) ->
-          PElet (untype_pattern pat, untype_pexpr pe1, untype_pexpr pe2)
-      | PEif (pe1, pe2, pe3) ->
-          PEif (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3)
-      | PEis_scalar pe ->
-          PEis_scalar (untype_pexpr pe)
-      | PEis_integer pe ->
-          PEis_integer (untype_pexpr pe)
-      | PEis_signed pe ->
-          PEis_signed (untype_pexpr pe)
-      | PEis_unsigned pe ->
-          PEis_unsigned (untype_pexpr pe)
-      | PEbmc_assume pe ->
-          PEbmc_assume (untype_pexpr pe)
-      | PEare_compatible (pe1, pe2) ->
-          PEare_compatible (untype_pexpr pe1, untype_pexpr pe2)
+    | (PEsym _ as pe) | (PEimpl _ as pe) | (PEval _ as pe) | (PEundef _ as pe) ->
+        pe
+    | PEerror (str, pe) ->
+        PEerror (str, untype_pexpr pe)
+    | PEconstrained xs ->
+        PEconstrained (List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
+    | PEctor (ctor, pes) ->
+        PEctor (ctor, List.map untype_pexpr pes)
+    | PEcase (pe, pat_pes) ->
+        PEcase
+          ( untype_pexpr pe
+          , List.map (fun (pat, pe) -> (untype_pattern pat, untype_pexpr pe)) pat_pes )
+    | PEarray_shift (pe1, ty, pe2) ->
+        PEarray_shift (untype_pexpr pe1, ty, untype_pexpr pe2)
+    | PEmember_shift (pe1, tag_sym, membr_ident) ->
+        PEmember_shift (untype_pexpr pe1, tag_sym, membr_ident)
+    | PEmemop (mop, pes) ->
+        PEmemop (mop, List.map untype_pexpr pes)
+    | PEnot pe ->
+        PEnot (untype_pexpr pe)
+    | PEop (binop, pe1, pe2) ->
+        PEop (binop, untype_pexpr pe1, untype_pexpr pe2)
+    | PEconv_int (ity, pe) ->
+        PEconv_int (ity, untype_pexpr pe)
+    | PEwrapI (ity, iop, pe1, pe2) ->
+        PEwrapI (ity, iop, untype_pexpr pe1, untype_pexpr pe2)
+    | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+        PEcatch_exceptional_condition (ity, iop, untype_pexpr pe1, untype_pexpr pe2)
+    | PEstruct (tag_sym, xs) ->
+        PEstruct (tag_sym, List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
+    | PEunion (tag_sym, membr_ident, pe) ->
+        PEunion (tag_sym, membr_ident, untype_pexpr pe)
+    | PEcfunction pe ->
+        PEcfunction (untype_pexpr pe)
+    | PEmemberof (tag_sym, membr_ident, pe) ->
+        PEmemberof (tag_sym, membr_ident, untype_pexpr pe)
+    | PEcall (nm, pes) ->
+        PEcall (nm, List.map untype_pexpr pes)
+    | PElet (pat, pe1, pe2) ->
+        PElet (untype_pattern pat, untype_pexpr pe1, untype_pexpr pe2)
+    | PEif (pe1, pe2, pe3) ->
+        PEif (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3)
+    | PEis_scalar pe ->
+        PEis_scalar (untype_pexpr pe)
+    | PEis_integer pe ->
+        PEis_integer (untype_pexpr pe)
+    | PEis_signed pe ->
+        PEis_signed (untype_pexpr pe)
+    | PEis_unsigned pe ->
+        PEis_unsigned (untype_pexpr pe)
+    | PEbmc_assume pe ->
+        PEbmc_assume (untype_pexpr pe)
+    | PEare_compatible (pe1, pe2) ->
+        PEare_compatible (untype_pexpr pe1, untype_pexpr pe2)
     in Pexpr (annots, (), aux pexpr_) in
   let untype_action (Action (loc, a, act_)) =
-    Action ( loc, a
-           , match act_ with
-               | Create (pe1, pe2, pref) ->
-                   Create (untype_pexpr pe1, untype_pexpr pe2, pref)
-               | CreateReadOnly (pe1, pe2, pe3, pref) ->
-                   CreateReadOnly (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, pref)
-               | Alloc0 (pe1, pe2, pref) ->
-                   Alloc0 (untype_pexpr pe1, untype_pexpr pe2, pref)
-               | Kill (kind, pe) ->
-                   Kill (kind, untype_pexpr pe)
-               | Store0 (b, pe1, pe2, pe3, mo) ->
-                   Store0 (b, untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
-               | Load0 (pe1, pe2, mo) ->
-                   Load0 (untype_pexpr pe1, untype_pexpr pe2, mo)
-               | SeqRMW (b, pe1, pe2, sym, pe3) ->
-                   SeqRMW (b, untype_pexpr pe1, untype_pexpr pe2, sym, untype_pexpr pe3)
-               | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
-                   RMW0 (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
-               | Fence0 mo ->
-                   Fence0 mo
-               | CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2) ->
-                   CompareExchangeStrong (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
-               | CompareExchangeWeak (pe1, pe2, pe3, pe4, mo1, mo2) ->
-                   CompareExchangeWeak (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
-               | LinuxFence mo ->
-                   LinuxFence mo
-               | LinuxLoad (pe1, pe2, mo) ->
-                   LinuxLoad (untype_pexpr pe1, untype_pexpr pe2, mo)
-               | LinuxStore ( pe1, pe2, pe3, mo) ->
-                   LinuxStore ( untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
-               | LinuxRMW (pe1, pe2, pe3, mo) ->
-                   LinuxRMW (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo) ) in
+    Action
+      ( loc, a
+      , match act_ with
+        | Create (pe1, pe2, pref) ->
+            Create (untype_pexpr pe1, untype_pexpr pe2, pref)
+        | CreateReadOnly (pe1, pe2, pe3, pref) ->
+            CreateReadOnly (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, pref)
+        | Alloc0 (pe1, pe2, pref) ->
+            Alloc0 (untype_pexpr pe1, untype_pexpr pe2, pref)
+        | Kill (kind, pe) ->
+            Kill (kind, untype_pexpr pe)
+        | Store0 (b, pe1, pe2, pe3, mo) ->
+            Store0 (b, untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
+        | Load0 (pe1, pe2, mo) ->
+            Load0 (untype_pexpr pe1, untype_pexpr pe2, mo)
+        | SeqRMW (b, pe1, pe2, sym, pe3) ->
+            SeqRMW (b, untype_pexpr pe1, untype_pexpr pe2, sym, untype_pexpr pe3)
+        | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+            RMW0 (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
+        | Fence0 mo ->
+            Fence0 mo
+        | CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2) ->
+            CompareExchangeStrong (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
+        | CompareExchangeWeak (pe1, pe2, pe3, pe4, mo1, mo2) ->
+            CompareExchangeWeak (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
+        | LinuxFence mo ->
+            LinuxFence mo
+        | LinuxLoad (pe1, pe2, mo) ->
+            LinuxLoad (untype_pexpr pe1, untype_pexpr pe2, mo)
+        | LinuxStore ( pe1, pe2, pe3, mo) ->
+            LinuxStore ( untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
+        | LinuxRMW (pe1, pe2, pe3, mo) ->
+            LinuxRMW (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo) ) in
   let rec untype_expr (Expr (annots, expr_)) =
     let aux = function
-      | Epure pe ->
-          Epure (untype_pexpr pe)
-      | Ememop (memop, pes) ->
-          Ememop (memop, List.map untype_pexpr pes)
-      | Eaction (Paction (p, act)) ->
-          Eaction (Paction (p, untype_action act))
-      | Ecase (pe, xs) ->
-          Ecase (untype_pexpr pe, List.map (fun (pat, e) -> (untype_pattern pat, untype_expr e)) xs)
-      | Elet (pat, pe1, e2) ->
-          Elet (untype_pattern pat, untype_pexpr pe1, untype_expr e2)
-      | Eif (pe, e1, e2) ->
-          Eif (untype_pexpr pe, untype_expr e1, untype_expr e2)
-      | Eccall (a, pe1, pe2, pes) ->
-          Eccall (a, untype_pexpr pe1, untype_pexpr pe2, List.map untype_pexpr pes)
-      | Eproc (a, nm, pes) ->
-          Eproc (a, nm, List.map untype_pexpr pes)
-      | Eunseq es ->
-          Eunseq (List.map untype_expr es)
-      | Ewseq (pat, e1, e2) ->
-          Ewseq (untype_pattern pat, untype_expr e1, untype_expr e2)
-      | Esseq (pat, e1, e2) ->
-          Esseq (untype_pattern pat, untype_expr e1, untype_expr e2)
-      | Ebound e ->
-          Ebound (untype_expr e)
-      | End es ->
-          End (List.map untype_expr es)
-      | Esave (sym_bTy, xs, e) ->
-          Esave (sym_bTy, List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, untype_pexpr pe))) xs, untype_expr e)
-      | Erun (a, sym, pes) ->
-          Erun (a, sym, List.map untype_pexpr pes)
-      | Epar es ->
-          Epar (List.map untype_expr es)
-      | Ewait tid ->
-          Ewait tid
-      | Eannot _ | Eexcluded _ ->
-          assert false (* only exists during Core runtime *)
+    | Epure pe ->
+        Epure (untype_pexpr pe)
+    | Ememop (memop, pes) ->
+        Ememop (memop, List.map untype_pexpr pes)
+    | Eaction (Paction (p, act)) ->
+        Eaction (Paction (p, untype_action act))
+    | Ecase (pe, xs) ->
+        Ecase (untype_pexpr pe, List.map (fun (pat, e) -> (untype_pattern pat, untype_expr e)) xs)
+    | Elet (pat, pe1, e2) ->
+        Elet (untype_pattern pat, untype_pexpr pe1, untype_expr e2)
+    | Eif (pe, e1, e2) ->
+        Eif (untype_pexpr pe, untype_expr e1, untype_expr e2)
+    | Eccall (a, pe1, pe2, pes) ->
+        Eccall (a, untype_pexpr pe1, untype_pexpr pe2, List.map untype_pexpr pes)
+    | Eproc (a, nm, pes) ->
+        Eproc (a, nm, List.map untype_pexpr pes)
+    | Eunseq es ->
+        Eunseq (List.map untype_expr es)
+    | Ewseq (pat, e1, e2) ->
+        Ewseq (untype_pattern pat, untype_expr e1, untype_expr e2)
+    | Esseq (pat, e1, e2) ->
+        Esseq (untype_pattern pat, untype_expr e1, untype_expr e2)
+    | Ebound e ->
+        Ebound (untype_expr e)
+    | End es ->
+        End (List.map untype_expr es)
+    | Esave (sym_bTy, xs, e) ->
+        Esave (sym_bTy, List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, untype_pexpr pe))) xs, untype_expr e)
+    | Erun (a, sym, pes) ->
+        Erun (a, sym, List.map untype_pexpr pes)
+    | Epar es ->
+        Epar (List.map untype_expr es)
+    | Ewait tid ->
+        Ewait tid
+    | Eannot _ | Eexcluded _ ->
+        assert false (* only exists during Core runtime *)
     in Expr (annots, aux expr_) in
   let untype_generic_fun_map_decl = function
     | Fun (bty, xs, pe) ->
@@ -510,19 +464,19 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
  }
 
 let typed_core_passes (conf, io) core_file =
-  whenM conf.typecheck_core begin
+  let* () = whenM conf.typecheck_core begin
     fun () ->
-      Core_typing.typecheck_program core_file >>= fun _ ->
+      let* _ = Core_typing.typecheck_program core_file in
       io.pass_message "Core typechecking completed!"
-  end >>= fun () ->
+  end in
   (* TODO: for now assuming a single order comes from indet expressions *)
-  Core_indet.hackish_order <$> begin
+  let* core_file' = Core_indet.hackish_order <$> begin
     if conf.rewrite_core then core_rewrite (conf, io) core_file
     else return core_file
-  end >>= fun core_file' ->
+  end in
   (* NOTE: unlike the earlier call, this is typechecking after the rewriting and
      the indet passes *)
-  Core_typing.typecheck_program core_file' >>= fun typed_core_file' ->
+  let* typed_core_file' = Core_typing.typecheck_program core_file' in
   let typed_core_file'' =
     if conf.sequentialise_core then
       Core_sequentialise.sequentialise_file typed_core_file'
@@ -531,11 +485,11 @@ let typed_core_passes (conf, io) core_file =
   return (untype_file typed_core_file'', typed_core_file'')
 
 let print_core (conf, io) ~filename core_file =
-  whenM (List.mem Core conf.astprints) begin
+  let* () = whenM (List.mem Core conf.astprints) begin
     fun () ->
       io.run_pp None (Pp_core_ast.pp_file core_file)
-  end >>= fun () ->
-  whenM (List.mem Core conf.pprints) begin
+  end in
+  let* () = whenM (List.mem Core conf.pprints) begin
       fun () ->
       let fout_opt = List.assoc_opt Core conf.ppouts in
       let pp_file file =
@@ -550,7 +504,7 @@ let print_core (conf, io) ~filename core_file =
         Cerb_colour.do_colour := saved;
         ret in
       io.run_pp fout_opt (pp_file core_file)
-  end >>= fun () ->
+  end in
   return core_file
 
 let core_passes (conf, io) ~filename core_file =
@@ -571,8 +525,8 @@ let core_passes (conf, io) ~filename core_file =
       core_file in
   Core_indet.hackish_order <$> begin
     if conf.sequentialise_core || conf.typecheck_core then
-      typed_core_passes (conf, io) core_file >>= fun (core_file, typed_core_file) ->
-      print_core (conf, io) ~filename typed_core_file >>= fun _ ->
+      let* (core_file, typed_core_file) = typed_core_passes (conf, io) core_file in
+      let* _ = print_core (conf, io) ~filename typed_core_file in
       return core_file
     else if conf.rewrite_core then
       core_rewrite (conf, io) core_file >>= print_core (conf, io) ~filename
@@ -583,8 +537,8 @@ let core_passes (conf, io) ~filename core_file =
 let interp_backend ~conf io core_file ~args ~batch ~fs =
   let module D = Driver_ocaml in
   let fs_state = match fs with
-    | None -> Sibylfs.fs_initial_state
-    | Some fs -> Fs_ocaml.initialise fs
+  | None -> Sibylfs.fs_initial_state
+  | Some fs -> Fs_ocaml.initialise fs
   in
   (* TODO: temporary hack for the command name *)
   match batch with
@@ -597,23 +551,23 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           return (Either.Right begin
             match Mem.eval_integer_value ival with
-              | Some n ->
-                  begin try
-                    Z.to_int n
-                  with
-                    | Z.Overflow ->
-                        Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
-                        Z .(to_int (n mod (of_int 256)))
-                  end 
-              | None ->
-                  Cerb_debug.warn [] (fun () -> "Return value was not a (simple) specified integer");
-                  0
+            | Some n ->
+                begin try
+                  Z.to_int n
+                with
+                | Z.Overflow ->
+                    warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                    Z .(to_int (n mod (of_int 256)))
+                end 
+            | None ->
+                warn [] (fun () -> "Return value was not a (simple) specified integer");
+                0
           end)
       | (cval :: _) ->
-          io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) >>= fun () ->
+          let* () = io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) in
           return (Either.Right 0)
       | [] ->
-          io.warn (fun () -> "BACKEND FOUND EMPTY RESULT") >>= fun () ->
+          let* () = io.warn (fun () -> "BACKEND FOUND EMPTY RESULT") in
           return (Either.Right 0)
 
 (* NOTE: Every map needs to be serialised as associated lists, since marshalling
@@ -653,7 +607,9 @@ let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filenam
   let v = input_line ic in
   if v <> version_info
   then
-    Cerb_debug.warn [] (fun () -> "read core_object file produced with a different version of Cerberus => " ^ v);
+    warn [] (fun () ->
+      "read core_object file produced with a different version of Cerberus => " ^ v
+    );
   let dump: 'a core_dump = Marshal.from_channel ic in
   close_in ic;
   let core_file = {
@@ -727,7 +683,8 @@ let mk_config
     allow_void_ptr_arithmetic;
     allow_void_return;
     calling_convention=
-      Config.(if Switches.has_switch SW_inner_arg_temps then Inner_arg_callconv else Normal_callconv);
+      Config.(if Switches.has_switch SW_inner_arg_temps
+        then Inner_arg_callconv else Normal_callconv);
     is_PNVI= Switches.is_PNVI ();
     is_CHERI= Switches.is_CHERI ();
     is_CN;
@@ -744,4 +701,3 @@ let mk_config
     do_tracing;
     fs_dump;
   }
-
