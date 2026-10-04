@@ -509,13 +509,19 @@ let is_other = function
   | Loc_other str -> Some str
   | _ -> None
 
-let is_library_location loc =
-  let excluded =
+(* This is called very often during the Core execution, so the hash table is (lazily)
+ * built once.  This is not sound if the runtime path changes during the execution, but
+ * I don't see why this would happen. *)
+let is_library_location =
+  let excluded = lazy begin
     let tbl = Hashtbl.create 3 in
     Hashtbl.add tbl (Cerb_runtime.in_runtime "libc/include") ();
     Hashtbl.add tbl (Cerb_runtime.in_runtime "libcore") ();
     Hashtbl.add tbl (Cerb_runtime.in_runtime "libcore/impls") ();
-    tbl in
+    tbl
+  end in
+  fun loc ->
+  let excluded = Lazy.force excluded in
   match get_filename loc with
     | Some path ->
         Hashtbl.mem excluded (Filename.dirname path)
