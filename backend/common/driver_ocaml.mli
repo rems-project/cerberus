@@ -1,6 +1,6 @@
 open Cerb_frontend
 
-type execution_result = (Core.value list, Errors.error) Exception.exceptM
+type execution_result = (Core.value list, Errors.error) Result.t
 
 type batch_exit =
   | Unspecified of Ctype.ctype

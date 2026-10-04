@@ -7,7 +7,7 @@ let isActive = function
   | (ND.Active _, _, _) -> true
   | _ -> false
 
-type execution_result = (Core.value list, Errors.error) Exception.exceptM
+type execution_result = (Core.value list, Errors.error) Result.t
 
 
 let string_of_driver_error = function
@@ -319,4 +319,4 @@ else
       | (ND.Killed (_, ND.Other reason), _, st) ->
           print_endline (Cerb_colour.(ansi_format [Red] ("OTHER ERROR: " ^ string_of_driver_error reason)))
   ) values;
-  Exception.except_return !ret
+  Result.ok !ret

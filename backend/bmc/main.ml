@@ -3,9 +3,8 @@ open Cerb_backend
 open Cerb_diagnostic
 open Pipeline
 
-let (>>=) = Exception.except_bind
+let (>>=) = Result.bind
 let (>>) m f = m >>= fun _ -> f
-let return = Exception.except_return
 
 let io, get_progress =
   let open Pipeline in
@@ -23,7 +22,7 @@ let frontend elab_conf (cli_conf, io) ~is_lib filename core_std =
     core_frontend (cli_conf, io) core_std ~filename
     >>= core_passes (cli_conf, io) ~filename
   else
-    Exception.fail (Cerb_location.unknown, Errors.UNSUPPORTED
+    Result.Error (Cerb_location.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
@@ -124,12 +123,12 @@ let cerberus debug_level progress core_obj
     (* Looking for and parsing the implementation file *)
     load_core_impl core_stdlib impl_name >>= fun core_impl ->
     io.pass_message "Implementation file loaded." >>
-    return ((core_stdlib, core_impl), conf)
+    Result.ok ((core_stdlib, core_impl), conf)
   in
   let main core_std elab_conf =
     Exception.except_foldlM (fun core_files (is_lib, file) ->
       frontend elab_conf (cli_conf, io) ~is_lib file core_std >>= fun core_file ->
-      return (core_file::core_files)
+      Result.ok (core_file::core_files)
     ) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ (List.map (fun z -> (false, z)) files))
   in
   let epilogue n =
@@ -140,24 +139,24 @@ let cerberus debug_level progress core_obj
   in
   let success = Either.Right 0 in
   let runM = function
-      | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+      | Result.Error (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
         let open Driver_ocaml in
         print_string begin
           string_of_batch_output ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
         epilogue 1
-    | Exception.Exception (loc, Errors.(AIL_TYPING (TypingError.TError_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+    | Result.Error (loc, Errors.(AIL_TYPING (TypingError.TError_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
         let open Driver_ocaml in
         print_string begin
           string_of_batch_output ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
         epilogue 1
-    | Exception.Exception err ->
+    | Result.Error err ->
         prerr_endline (Pp_errors.to_string err);
         epilogue 1
-    | Exception.Result (Either.Left (batch_mode, execs)) ->
+    | Result.Ok (Either.Left (batch_mode, execs)) ->
         let is_charon =
           match batch_mode with
             | `CharonBatch -> true
@@ -190,7 +189,7 @@ let cerberus debug_level progress core_obj
           end
         ) execs;
         epilogue exit
-    | Exception.Result (Either.Right n) ->
+    | Result.Ok (Either.Right n) ->
         epilogue n
   in
   runM @@ match files with
@@ -209,7 +208,7 @@ let cerberus debug_level progress core_obj
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file
       end;
-      return success
+      Result.ok success
     | files ->
       (* Ocaml backend mode *)
       if ocaml then
@@ -222,7 +221,7 @@ let cerberus debug_level progress core_obj
             c_frontend_and_elaboration elab_conf (cli_conf, io) core_std ~filename >>= fun (_, ail_opt, core) ->
             core_passes (cli_conf, io) ~filename core >>= fun core ->
             ignore @@ Bmc.bmc core (Option.map snd ail_opt);
-            return success
+            Result.ok success
           | _ ->
               fatal "bmc mode accepts only one file"
         end
@@ -235,7 +234,7 @@ let cerberus debug_level progress core_obj
             c_frontend_and_elaboration (cli_conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             typed_core_passes (cli_conf, io) core >>= fun (core, _) ->
             ignore (Absint.solve absdomain core);
-            return success
+            Result.ok success
           | _ ->
             Pp_errors.fatal "absint mode accepts only one file"
         end
@@ -245,9 +244,9 @@ let cerberus debug_level progress core_obj
         Exception.except_foldlM (fun () filename ->
             cpp (cli_conf, io) ~filename >>= fun processed_file ->
             print_file processed_file;
-            return ()
+            Result.ok ()
           ) () files >>= fun () ->
-        return success
+        Result.ok success
       (* Dump a core object (-c) *)
       else if core_obj then
         prelude >>= fun (core_std, elab_conf) ->
@@ -255,9 +254,9 @@ let cerberus debug_level progress core_obj
           frontend elab_conf (cli_conf, io) ~is_lib:false file core_std >>= fun core_file ->
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file;
-          return ()
+          Result.ok ()
           ) () files >>= fun () ->
-        return success
+        Result.ok success
       (* Link and execute *)
       else
         prelude >>= fun (core_std, conf) ->
@@ -273,13 +272,13 @@ let cerberus debug_level progress core_obj
         else
           match output_name with
           | None ->
-            return success
+            Result.ok success
           | Some out -> begin
               if Filename.check_suffix out ".co" || Filename.check_suffix out ".o" then
                 write_core_object core_file out
               else
                 (write_core_object core_file (out ^ ".co"); create_executable out);
-              return success
+              Result.ok success
             end
 
 (* CLI stuff *)

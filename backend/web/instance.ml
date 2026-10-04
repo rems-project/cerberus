@@ -78,9 +78,9 @@ let hack ?(is_bmc=false) ~n1570 ~switches mode =
     ~do_tracing:false ~fs_dump:false
 
 let respond filename name f = function
-  | Exception.Result r ->
+  | Result.Ok r ->
     f r
-  | Exception.Exception err ->
+  | Result.Error err ->
     Failure (Str.replace_first (Str.regexp_string filename) name @@ Pp_errors.to_string err)
 
 (* elaboration *)

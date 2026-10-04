@@ -519,7 +519,7 @@ let find_function (f_name: string)
 let bmc (core_file  : unit file)
         (ail_opt    : GenTypes.genTypeCategory AilSyntax.ail_program option) =
   match Core_typing.typecheck_program core_file with
-  | Result typed_core -> begin
+  | Result.Ok typed_core -> begin
       let t = Sys.time() in
       let core_to_check =
           if !!bmc_conf.sequentialise then
@@ -536,7 +536,7 @@ let bmc (core_file  : unit file)
                                    (Sys.time() -. t));
         ret
     end
-    | Exception msg ->
+    | Result.Error msg ->
         let str_err = Pp_errors.to_string msg in
         printf "Typechecking error: %s\n" str_err;
         `Unknown str_err

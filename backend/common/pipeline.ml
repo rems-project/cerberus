@@ -3,10 +3,9 @@ open Cerb_diagnostic
 
 (* Pipeline *)
 
-let ( let* )   = Exception.except_bind
-let ( >>= )    = Exception.except_bind
+let ( let* )   = Result.bind
+let ( >>= )    = Result.bind
 let (<$>)      = Exception.except_fmap
-let return     = Exception.except_return
 
 let run_pp fout_opt doc =
   let (is_fout, oc) =
@@ -41,7 +40,7 @@ let load_core_stdlib () =
   else
     Core_parser_driver.parse_stdlib filepath >>= function
     | Core_parser_util.Rstd (ailnames, std_funs) ->
-      return (ailnames, std_funs)
+      Result.ok (ailnames, std_funs)
     | _ ->
       fatal "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
 
@@ -52,12 +51,12 @@ let load_core_impl core_stdlib impl_name =
     fatal ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
     match Core_parser_driver.parse core_stdlib iname with
-    | Exception.Result (Core_parser_util.Rimpl impl_map) ->
-      return impl_map
+    | Result.Ok (Core_parser_util.Rimpl impl_map) ->
+      Result.ok impl_map
     | _ ->
       fatal "while parsing the Core impl, the parser didn't recognise it as an impl ."
 
-let whenM cond m = if cond then m () else return ()
+let whenM cond m = if cond then m () else Result.ok ()
 
 type language =
   | Cabs | Ail | Core | Types
@@ -81,12 +80,12 @@ type configuration = {
 }
 
 type io_helpers = {
-  pass_message: string -> (unit, Errors.error) Exception.exceptM;
-  set_progress: string -> (unit, Errors.error) Exception.exceptM;
-  run_pp: string option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
-  print_endline: string -> (unit, Errors.error) Exception.exceptM;
-  print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
-  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
+  pass_message: string -> (unit, Errors.error) Result.t;
+  set_progress: string -> (unit, Errors.error) Result.t;
+  run_pp: string option -> PPrint.document -> (unit, Errors.error) Result.t;
+  print_endline: string -> (unit, Errors.error) Result.t;
+  print_debug: int -> (unit -> string) -> (unit, Errors.error) Result.t;
+  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Result.t;
 }
 
 let (default_io_helpers, get_progress) =
@@ -96,13 +95,13 @@ let (default_io_helpers, get_progress) =
       fun str ->
         Cerb_debug.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
         incr ref;
-        return ()
+        Result.ok ()
     end
-  ; set_progress= (fun _ -> incr progress; return ())
-  ; run_pp= (fun fout_opt doc -> run_pp fout_opt doc; return ())
-  ; print_endline= (fun str -> print_endline str; return ())
-  ; print_debug= (fun n mk_str -> Cerb_debug.print_debug n [] mk_str; return ())
-  ; warn= (fun ?(always=false) mk_str -> warn ~always [] mk_str; return ())
+  ; set_progress= (fun _ -> incr progress; Result.ok ())
+  ; run_pp= (fun fout_opt doc -> run_pp fout_opt doc; Result.ok ())
+  ; print_endline= (fun str -> print_endline str; Result.ok ())
+  ; print_debug= (fun n mk_str -> Cerb_debug.print_debug n [] mk_str; Result.ok ())
+  ; warn= (fun ?(always=false) mk_str -> warn ~always [] mk_str; Result.ok ())
   }, fun () -> !progress
 
 let cpp (conf, io) ~filename =
@@ -144,7 +143,7 @@ let cpp (conf, io) ~filename =
     | _, WSIGNALED n
     | _, WSTOPPED n ->
       if n <> 0 then
-        Exception.fail (Cerb_location.unknown, Errors.CPP (String.concat "\n" err))
+        Result.error (Cerb_location.unknown, Errors.CPP (String.concat "\n" err))
       else
         let txt = String.concat "\n" out in
         (match conf.cpp_save with
@@ -156,7 +155,7 @@ let cpp (conf, io) ~filename =
             close_out out
           with _ -> ()
         );
-        return txt
+        Result.ok txt
   end ()
 
 let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
@@ -178,7 +177,7 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     let* () = whenM (List.mem Cabs pipeline_conf.pprints) begin
       fun () -> io.warn (fun () -> "TODO: Cabs pprint to yet supported")
     end in
-    return cabs_tunit in
+    Result.ok cabs_tunit in
   (* -- *)
   let mk_pp_program pp fout_opt file =
     let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
@@ -205,7 +204,7 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
         io.run_pp fout_opt
           (mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ail_prog)
       end in
-    return (markers_env, ail_prog) in
+    Result.ok (markers_env, ail_prog) in
   (* -- *)
   let ail_typechecking ail_prog =
     let* ailtau_prog, _ =
@@ -232,14 +231,14 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
           mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ailtau_prog in
         io.run_pp fout_opt doc
     end in
-    return ailtau_prog in
+    Result.ok ailtau_prog in
   (* -- *)
   let* () = io.print_debug 2 (fun () -> "Using the C frontend") in
   let* file_content = cpp (pipeline_conf, io) ~filename in
   let* cabs_tunit = parse filename file_content in
   let* markers_env, ail_prog = desugar cabs_tunit in
   let* ailtau_prog = ail_typechecking ail_prog in
-  return (cabs_tunit, (markers_env, ailtau_prog))
+  Result.ok (cabs_tunit, (markers_env, ailtau_prog))
 
 let c_frontend_and_elaboration
   ?(cn_init_scope=Cn_desugaring.empty_init) conf (pipeline_conf, io)
@@ -251,14 +250,14 @@ let c_frontend_and_elaboration
   let core_file = Translation.translate core_stdlib conf core_impl ailtau_prog in
   let* () = io.set_progress "ELABO" in
   let* () = io.pass_message "Translation to Core completed!" in
-  return (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
+  Result.ok (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Cerb_fresh.set_digest filename;
   let* () = io.print_debug 2 (fun () -> "Using the Core frontend") in
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
-        return {
+        Result.ok {
            Core.main=   Some sym_main;
            Core.callconv= Config.Normal_callconv; (* TODO *)
            Core.tagDefs= tagDefs;
@@ -290,7 +289,7 @@ let core_rewrite (conf, io) core_file =
       let* () = io.run_pp None (Pp_core.Basic.pp_file core_file) in
       io.print_endline "END"
   end in
-  return (Core_rewrite.rewrite_file core_file)
+  Result.ok (Core_rewrite.rewrite_file core_file)
 
 
 let untype_file (file: 'a Core.typed_file) : 'a Core.file =
@@ -472,7 +471,7 @@ let typed_core_passes (conf, io) core_file =
   (* TODO: for now assuming a single order comes from indet expressions *)
   let* core_file' = Core_indet.hackish_order <$> begin
     if conf.rewrite_core then core_rewrite (conf, io) core_file
-    else return core_file
+    else Result.ok core_file
   end in
   (* NOTE: unlike the earlier call, this is typechecking after the rewriting and
      the indet passes *)
@@ -482,7 +481,7 @@ let typed_core_passes (conf, io) core_file =
       Core_sequentialise.sequentialise_file typed_core_file'
     else
       typed_core_file' in
-  return (untype_file typed_core_file'', typed_core_file'')
+  Result.ok (untype_file typed_core_file'', typed_core_file'')
 
 let print_core (conf, io) ~filename core_file =
   let* () = whenM (List.mem Core conf.astprints) begin
@@ -505,7 +504,7 @@ let print_core (conf, io) ~filename core_file =
         ret in
       io.run_pp fout_opt (pp_file core_file)
   end in
-  return core_file
+  Result.ok core_file
 
 let core_passes (conf, io) ~filename core_file =
   (* If using the switch making load() returning unspecified value undefined, then
@@ -527,7 +526,7 @@ let core_passes (conf, io) ~filename core_file =
     if conf.sequentialise_core || conf.typecheck_core then
       let* (core_file, typed_core_file) = typed_core_passes (conf, io) core_file in
       let* _ = print_core (conf, io) ~filename typed_core_file in
-      return core_file
+      Result.ok core_file
     else if conf.rewrite_core then
       core_rewrite (conf, io) core_file >>= print_core (conf, io) ~filename
     else
@@ -544,12 +543,12 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
   match batch with
   | (`Batch | `CharonBatch | `JsonBatch) as mode ->
     let executions = D.batch_drive ~conf core_file ("cmdname" :: args) fs_state in
-    return (Either.Left (mode, executions))
+    Result.ok (Either.Left (mode, executions))
   | `NotBatch ->
     let open Core in
     D.drive ~conf core_file ("cmdname" :: args) fs_state >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
-          return (Either.Right begin
+          Result.ok (Either.Right begin
             match Mem.eval_integer_value ival with
             | Some n ->
                 begin try
@@ -565,10 +564,10 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
           end)
       | (cval :: _) ->
           let* () = io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) in
-          return (Either.Right 0)
+          Result.ok (Either.Right 0)
       | [] ->
           let* () = io.warn (fun () -> "BACKEND FOUND EMPTY RESULT") in
-          return (Either.Right 0)
+          Result.ok (Either.Right 0)
 
 (* NOTE: Every map needs to be serialised as associated lists, since marshalling
  * maps would require the flag Marshal.Closures. In this case, the output of
@@ -628,7 +627,7 @@ let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filenam
   if not is_lib then
     print_core (conf, io) ~filename core_file
   else
-    return core_file
+    Result.ok core_file
 
 let write_core_object core_file fname =
   let open Core in

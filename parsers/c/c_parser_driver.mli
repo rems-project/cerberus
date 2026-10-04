@@ -19,17 +19,15 @@ the second one is a located string that needs to be parsed. *)
 val parse_loc_string :
   ((Lexing.lexbuf -> Tokens.token) -> Lexing.lexbuf -> 'a) ->
   Cerb_location.t * string ->
-  ('a, Cerb_location.t * Cerb_frontend.Errors.cause)
-  Cerb_frontend.Exception.exceptM
+  ('a, Cerb_location.t * Cerb_frontend.Errors.cause) Result.t
 
 
 (** Parse a C translation unit from a file.
 The first argument is the name of the file to parse. *)
 val parse_from_channel :
   string ->
-  (Cerb_frontend.Cabs.translation_unit,
-   Cerb_location.t * Cerb_frontend.Errors.cause)
-  Cerb_frontend.Exception.exceptM
+  ( Cerb_frontend.Cabs.translation_unit
+  , Cerb_location.t * Cerb_frontend.Errors.cause ) Result.t
 
 
 (** Parse a C translation unit from the given string.
@@ -41,9 +39,8 @@ from the pre-processing annotations.
 val parse_from_string :
   filename:string ->
   string ->
-  (Cerb_frontend.Cabs.translation_unit,
-   Cerb_location.t * Cerb_frontend.Errors.cause)
-  Cerb_frontend.Exception.exceptM
+  ( Cerb_frontend.Cabs.translation_unit
+  , Cerb_location.t * Cerb_frontend.Errors.cause ) Result.t
 
 module C_parser : sig
   open Cerb_frontend
