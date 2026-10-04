@@ -183,8 +183,13 @@ module E = struct
   let fresh_action_id =
     SEU.runS fresh_action_id'
 end
-open SEU.Operators
 
+(* The dance with the module is needed because Lem doesn't allow a second declaration of
+ * (>>=) at file scope... *)
+module Operators = struct
+  let inline (>>=) = SEU.bind
+end
+open Operators
 
 type action_request =
   (* RequestName  of location * sbBefore * ddBefore * aswBefore
@@ -1494,7 +1499,7 @@ BEFORE EVAL_PEXPR2
     
     | (Esave (sym, _) sym_bTy_pes e, _) ->
         one $ Step_eval "Esave" (
-          SEU.foldM (fun acc (sym, (bTy, pe)) ->
+          SEU.foldlM (fun acc (sym, (bTy, pe)) ->
             E.eval_pexpr th_st core_extern mem_st file pe >>= fun cval ->
             E.return (subst_sym_expr sym cval acc)
           ) e sym_bTy_pes >>= fun e' ->

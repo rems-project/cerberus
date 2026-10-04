@@ -28,9 +28,24 @@ let inline bind = stExceptUndef_bind
 val  mapM: forall 'a 'b 's 'msg. ('a -> stExceptUndefM 'b 's 'msg) ->
                                   list 'a              ->
                                   stExceptUndefM (list 'b) 's 'msg
-let stExceptUndef_mapM f xs =
-  State_exception.bind (State_exception.mapM f xs)
-    (fun us -> State_exception.return $ Undefined.mapM id us)
+val stExceptUndef_mapM_aux:
+  forall 'a 'b 's 'msg.
+    ('a -> stExceptUndefM 'b 's 'msg) -> Undefined.t (list 'b) -> list 'a ->
+    stExceptUndefM (list 'b) 's 'msg
+let rec stExceptUndef_mapM_aux f acc = function
+  | [] ->
+      State_exception.return (Undefined.bind acc
+        (fun ys -> Undefined.return (List.reverse ys)))
+  | x :: xs ->
+      State_exception.bind (f x) (fun u ->
+        stExceptUndef_mapM_aux f
+          (Undefined.bind acc (fun ys -> Undefined.bind u
+            (fun y -> Undefined.return (y :: ys))))
+          xs
+      )
+end
+
+let stExceptUndef_mapM f xs = stExceptUndef_mapM_aux f (Undefined.return []) xs
 let inline mapM = stExceptUndef_mapM
 
 
@@ -71,40 +86,15 @@ let inline run = stExceptUndef_run
 
 
 (* NOTE: this is foldl *)
-val     foldM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptUndefM 'a 's 'msg) -> 'a -> list 'b -> stExceptUndefM 'a 's 'msg
-let rec stExceptUndef_foldM f a = function
+val     foldlM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptUndefM 'a 's 'msg) -> 'a -> list 'b -> stExceptUndefM 'a 's 'msg
+let rec stExceptUndef_foldlM f a = function
   | [] ->
       return a
   | x::xs ->
-      bind (f a x) (fun z -> stExceptUndef_foldM f z xs)
+      bind (f a x) (fun z -> stExceptUndef_foldlM f z xs)
 end
-let inline foldM = stExceptUndef_foldM
+let inline foldlM = stExceptUndef_foldlM
 
-val     filterM: forall 'a 's 'msg. ('a -> stExceptUndefM bool 's 'msg) -> list 'a -> stExceptUndefM (list 'a) 's 'msg
-let rec filterM pred = function
-  | [] ->
-      return []
-  | (x::xs) ->
-      bind (pred x)          (fun b  ->
-      bind (filterM pred xs) (fun ys ->
-      return (if b then x::ys else ys)
-      ))
-end
-
-
-val        sequence: forall 'a 's 'msg. list (stExceptUndefM  'a 's 'msg) -> stExceptUndefM (list 'a) 's 'msg
-let inline sequence ms =
-  let k m m' =
-    bind m (fun x ->
-      bind m' (fun xs ->
-        return (x::xs)
-      )
-    ) in
-  List.foldr k (return []) ms
-
-val replicateM: forall 'a 's 'msg. nat -> (stExceptUndefM 'a 's 'msg) -> stExceptUndefM (list 'a) 's 'msg
-let replicateM n x =
-  sequence (List.replicate n x)
 
 
 val stExceptUndef_fail: forall 'a 's 'msg. 'msg -> stExceptUndefM 'a 's 'msg
@@ -118,16 +108,6 @@ val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> stExceptUndefM 'a 's 'msg -> stExc
 let stExceptUndef_fmap f m =
   bind m (fun z -> return (f z))
 let inline fmap = stExceptUndef_fmap
-
-
-module Operators = struct
-  let inline (>>=)      = bind
-  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
-  let inline (<$>) = fmap
-end
-(*
-open Operators
-*)
 
 
 val        update: forall 's 'msg. ('s -> 's) -> stExceptUndefM unit 's 'msg

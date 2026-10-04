@@ -1441,35 +1441,17 @@ type t 'a =
 val return: forall 'a. 'a -> t 'a
 let return x = Defined x
 
-val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-let bind m f =
+val undef_bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let undef_bind m f =
   match m with
     | Defined x -> f x
-    | Undef loc us  -> Undef loc us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
+    | Undef loc us  -> Undef loc us
     | Error loc str -> Error loc str
-end 
-
-let inline (>>=) = bind
-
-let sequence ms = foldr (fun m acc ->
-  m   >>= fun x  ->
-  acc >>= fun xs ->
-  return (x::xs)) (return []) ms
-val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
-let mapM f xs = sequence (List.map f xs)
-
+end
+let inline bind = undef_bind
 
 val undef: forall 'a. Loc.t -> list undefined_behaviour -> t 'a
 let undef loc us = Undef loc us
 
 val error: forall 'a. Loc.t -> string -> t 'a
 let error loc str = Error loc str
-
-
-val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
-let fmap f m =
-  match m with
-    | Defined x -> Defined (f x)
-    | Undef loc us  -> Undef loc us
-    | Error loc str -> Error loc str
-  end

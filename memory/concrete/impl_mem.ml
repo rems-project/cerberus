@@ -2059,7 +2059,7 @@ module Concrete : Memory = struct
           | PVfunction _ ->
               Undefined.(undef loc [UB046_array_pointer_outside])
           | PVconcrete (membr_opt, addr) ->
-              Undefined.return0 (PV (prov, PVconcrete (membr_opt, Z.add addr offset)))
+              Undefined.return (PV (prov, PVconcrete (membr_opt, Z.add addr offset)))
           end
   
   let member_shift_ptrval tagDefs (PV (prov, ptrval_)) tag_sym memb_ident =

@@ -2,30 +2,46 @@ open import Pervasives Utils
 
 type stateM 'a 's = 's -> ('a * 's)
 
-val return : forall 'a 's. 'a -> stateM 'a 's
-let return a = fun s -> (a, s)
+let state_return a = fun s -> (a, s)
 
-val bind : forall 'a 'b 's. stateM 'a 's -> ('a -> stateM 'b 's) -> stateM 'b 's
-let bind m f =
+let state_bind m f =
   fun s ->
     let (a, s') = m s in
     f a s'
 
-val runStateM: forall 'a 'st. stateM 'a 'st -> 'st -> ('a * 'st)
-let runStateM m st =
-  m st
+let state_app mf m = state_bind mf (fun f -> state_bind m (state_return -| f))
+let state_fmap f m = state_bind m (state_return -| f)
 
 
-let join m = bind m (fun x -> x)
+let rec state_mapM_aux f acc = function
+  | [] ->
+      state_return (List.reverse acc)
+  | x :: xs ->
+      state_bind (f x) (fun y -> state_mapM_aux f (y :: acc) xs)
+end
+let state_mapM f xs = state_mapM_aux f [] xs
 
-val map : forall 'a 'b 's. ('a -> 'b) -> stateM 'a 's -> stateM 'b 's
-let inline map f m = bind m (return -| f)
+let rec state_mapM_ f = function
+  | [] ->
+      state_return ()
+  | x :: xs ->
+      state_bind (f x) (fun _ -> state_mapM_ f xs)
+end
 
-val state_fmap: forall 'a 'b 'st. ('a -> 'b) -> stateM 'a 'st -> stateM 'b 'st
-let state_fmap f m = bind m (return -| f)
 
-val app : forall 'a 'b 's. stateM ('a -> 'b) 's -> stateM 'a 's -> stateM 'b 's
-let app mf m = bind mf (fun f -> map f m)
+let rec state_foldlM f a = function
+  | [] ->
+      state_return a
+  | x::xs ->
+      state_bind (f a x) (fun z -> state_foldlM f z xs)
+end
+
+
+val get: forall 's. stateM 's 's
+let get = fun st -> (st, st)
+
+val put: forall 's. 's -> stateM unit 's
+let put st = fun _ -> ((), st)
 
 val update : forall 'a 's. ('s -> 's) -> stateM unit 's
 let update f = fun s -> ((), f s)
@@ -34,69 +50,27 @@ val modify : forall 'a 's. ('s -> 'a * 's) -> stateM 'a 's
 let modify f = fun s -> f s
 
 val read : forall 'a 's. ('s -> 'a) -> stateM 'a 's
-let read   f = fun s -> (f s, s)
-
-val eval : forall 'a 's. stateM 'a 's -> 's -> 'a
-let eval m st = fst (m st)
+let read f = fun s -> (f s, s)
 
 
+val runStateM: forall 'a 'st. stateM 'a 'st -> 'st -> ('a * 'st)
+let runStateM m st =
+  m st
 
-let inline (>>=)    = bind
-let inline (>>) m f = bind m (fun _ -> f)
 
-
-let sequence ms =
-  foldr
-    (fun m m' ->
-      m  >>= fun x  ->
-      m' >>= fun xs ->
-      return (x::xs)
-    ) (return []) ms
-
-let listM t xs = sequence (t xs)
-
+val return : forall 'a 's. 'a -> stateM 'a 's
+val bind : forall 'a 'b 's. stateM 'a 's -> ('a -> stateM 'b 's) -> stateM 'b 's
+val app : forall 'a 'b 's. stateM ('a -> 'b) 's -> stateM 'a 's -> stateM 'b 's
+val fmap: forall 'a 'b 'st. ('a -> 'b) -> stateM 'a 'st -> stateM 'b 'st
 val mapM: forall 'a 'b 's. ('a -> stateM 'b 's) -> list 'a -> stateM (list 'b) 's
-let mapM f = listM (List.map f)
-
-val state_replicateM: forall 'a 'st. nat -> stateM 'a 'st -> stateM (list 'a) 'st
-let state_replicateM n x = sequence (replicate n x)
-
-let sequence_ ms = foldr (>>) (return ()) ms
-
 val mapM_: forall 'a 'b 's. ('a -> stateM 'b 's) -> list 'a -> stateM unit 's
-let mapM_ f _as = sequence_ (List.map f _as)
-
-
-
-
-val     foldlM: forall 'a 'b 's. ('a -> 'b -> stateM 'a 's) -> 'a -> list 'b -> stateM 'a 's
-let rec foldlM f a = function
-  | [] ->
-      return a
-  | x::xs ->
-      bind (f a x) (fun z -> foldlM f z xs)
-end
-
-
-val     foldrM: forall 'a 'b 's. ('a -> 'b -> stateM 'b 's) -> list 'a -> 'b -> stateM 'b 's
-let rec foldrM f xs y = 
-  match xs with
-  | [] ->
-      return y
-  | x::xs ->
-     bind (foldrM f xs y) (fun y' -> f x y')
-  end
-
-
-val get: forall 's. stateM 's 's
-let get =
-  fun st -> (st, st)
-
-val put: forall 's. 's -> stateM unit 's
-let put st =
-  fun _ -> ((), st)
-
+val foldlM: forall 'a 'b 's. ('a -> 'b -> stateM 'a 's) -> 'a -> list 'b -> stateM 'a 's
 
 (* HACK: inline only added to prevent Lem's renaming *)
+let inline return = state_return
+let inline bind = state_bind
+let inline app = state_app
 let inline fmap = state_fmap
-let inline replicateM = state_replicateM
+let inline mapM = state_mapM
+let inline mapM_ = state_mapM_
+let inline foldlM = state_foldlM

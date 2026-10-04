@@ -326,10 +326,6 @@ let inline mapM_ = State_exception.mapM_
 let inline foldlM = State_exception.foldlM
 let inline foldrM = State_exception.foldrM
 
-let inline iter = State_exception.iter
-
-val tryWith: forall 'a. Errors.error -> desugM 'a -> desugM 'a
-let inline tryWith = State_exception.tryWith
 
 val catch: forall 'a. desugM 'a -> (Errors.error -> desugM 'a) -> desugM 'a
 let catch m f = fun s ->

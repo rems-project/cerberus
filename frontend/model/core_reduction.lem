@@ -24,7 +24,7 @@ module E = struct
   let inline return = SEU.return
   let inline undef  = SEU.undef
   let inline mapM   = SEU.mapM
-  let inline foldlM = SEU.foldM
+  let inline foldlM = SEU.foldlM
   
   let fresh_excluded_id =
     SEU.runS (fun run_st ->

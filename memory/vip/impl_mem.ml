@@ -900,7 +900,7 @@ let array_shift_ptrval tagDefs loc ptrval ty ival : pointer_value Undefined.t0 =
           failwith "TODO UB, array_offset ==> out-of-bound"
         else *)
           (* TODO: hack *)
-          Undefined.return0 (PVloc (Prov_some alloc_id, addr'))
+          Undefined.return (PVloc (Prov_some alloc_id, addr'))
     | PVfunptr sym ->
         Undefined.(undef loc [UB046_array_pointer_outside])
 
