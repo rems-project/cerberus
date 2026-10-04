@@ -68,6 +68,7 @@ type driver_state = <|
   (* DEBUG *)
   (*trace: list string;*)
   do_stepping: bool;
+  do_trace: bool; (* record the trace of memory events (only consumed by --trace) *)
   dr_step_counter: nat;
 |>
 
@@ -658,38 +659,49 @@ let update_core_state core_st dr_st =
 
 
 (* POST REDUCTION SEMANTICS *)
+val record_trace_event: driverM trace_event -> driverM unit
+let record_trace_event mk_event =
+  ND.get >>= fun dr_st ->
+  if dr_st.do_trace then
+    mk_event >>= fun event ->
+    ND.update (fun dr_st -> <| dr_st with trace= event :: dr_st.trace |>)
+  else
+    ND.return ()
+
 val action_request_sequential2:
   Loc.t -> Mem.thread_id -> Cmm.aid -> Core_reduction.action_request2 Core_run.thread_state -> driverM unit
 let action_request_sequential2 loc tid aid = function
   | Core_reduction.AllocRequest2 pref align_ival size_ival mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST ALLOC") in (* DEBUG *)
       liftMem (Mem.allocate_region tid pref align_ival size_ival) >>= fun ptrval ->
+      record_trace_event (ND.return (ME_allocate_region tid pref align_ival size_ival ptrval)) >>= fun () ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid ptrval) dr_st.core_state;
-          trace= ME_allocate_region tid pref align_ival size_ival ptrval :: dr_st.trace
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid ptrval) dr_st.core_state
         |>
       )
   
   | Core_reduction.CreateRequest2 pref align_ival lvalue_ty req_addr_opt init_opt mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST CREATE") in (* DEBUG *)
       liftMem (Mem.allocate_object tid pref align_ival lvalue_ty req_addr_opt init_opt) >>= fun ptrval ->
+      record_trace_event (ND.return (ME_allocate_object tid pref align_ival lvalue_ty init_opt ptrval)) >>= fun () ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid ptrval) dr_st.core_state;
-          trace= ME_allocate_object tid pref align_ival lvalue_ty init_opt ptrval :: dr_st.trace
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid ptrval) dr_st.core_state
         |>
       )
   
   | Core_reduction.LoadRequest2 mo lvalue_ty ptr_val mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST LOAD") in (* DEBUG *)
       liftMem (Mem.load loc lvalue_ty ptr_val)            >>= fun (fp, mval) ->
-      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs) >>= fun tagDefs    ->
-      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)     >>= fun pref       ->
+      record_trace_event begin
+        ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs) >>= fun tagDefs ->
+        liftMem (Mem.prefix_of_pointer tagDefs ptr_val)     >>= fun pref    ->
+        ND.return (ME_load loc pref lvalue_ty ptr_val mval)
+      end >>= fun () ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval) dr_st.core_state;
-          trace= ME_load loc pref lvalue_ty ptr_val mval :: dr_st.trace
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval) dr_st.core_state
         |>
       )
   
@@ -698,12 +710,14 @@ let action_request_sequential2 loc tid aid = function
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp      ->
-      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs)          >>= fun tagDefs ->
-      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)              >>= fun pref    ->
+      record_trace_event begin
+        ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs) >>= fun tagDefs ->
+        liftMem (Mem.prefix_of_pointer tagDefs ptr_val)     >>= fun pref    ->
+        ND.return (ME_store loc pref lvalue_ty is_locking ptr_val mem_val)
+      end >>= fun () ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp) dr_st.core_state;
-          trace= ME_store loc pref lvalue_ty is_locking ptr_val mem_val :: dr_st.trace
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp) dr_st.core_state
         |>
       )
   
@@ -711,12 +725,14 @@ let action_request_sequential2 loc tid aid = function
       liftMem (Mem.load loc lvalue_ty ptr_val)              >>= fun (_, mval) ->
       liftCore_run (mk_mval' mval)                          >>= fun mval'     ->
       liftMem (Mem.store loc lvalue_ty false ptr_val mval') >>= fun fp        ->
-      ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs)   >>= fun tagDefs   ->
-      liftMem (Mem.prefix_of_pointer tagDefs ptr_val)       >>= fun pref      ->
+      record_trace_event begin
+        ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs) >>= fun tagDefs ->
+        liftMem (Mem.prefix_of_pointer tagDefs ptr_val)     >>= fun pref    ->
+        ND.return (ME_seq_rmw loc pref lvalue_ty ptr_val mval mval')
+      end >>= fun () ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval mval') dr_st.core_state;
-          trace= ME_seq_rmw loc pref lvalue_ty ptr_val mval mval' :: dr_st.trace
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval mval') dr_st.core_state
         |>
       )
   
@@ -734,10 +750,10 @@ let action_request_sequential2 loc tid aid = function
   | Core_reduction.KillRequest2 is_dynamic ptr_val mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST KILL") in (* DEBUG *)
       liftMem (Mem.kill loc is_dynamic ptr_val) >>
+      record_trace_event (ND.return (ME_kill loc is_dynamic ptr_val)) >>= fun () ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid) dr_st.core_state;
-          trace= ME_kill loc is_dynamic ptr_val :: dr_st.trace
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid) dr_st.core_state
         |>
       )
 end
@@ -829,20 +845,12 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
 
     | (Mem_common.PtrArrayShift, [Core.Vobject (Core.OVpointer ptrval); Core.Vctype ty; Core.Vobject (Core.OVinteger n_ival)]) ->
         liftMem (Mem.eff_array_shift_ptrval loc ptrval ty n_ival) >>= fun res ->
-        ND.update (fun dr_st ->
-          <| dr_st with
-            trace= ME_eff_array_shift_ptrval ptrval ty n_ival res :: dr_st.trace
-          |>
-        ) >>
+        record_trace_event (ND.return (ME_eff_array_shift_ptrval ptrval ty n_ival res)) >>
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
     | (Mem_common.PtrMemberShift tag_sym membr_ident, [Core.Vobject (Core.OVpointer ptrval)]) ->
         liftMem (Mem.eff_member_shift_ptrval loc ptrval tag_sym membr_ident) >>= fun res ->
-        ND.update (fun dr_st ->
-          <| dr_st with
-            trace= ME_eff_member_shift_ptrval tag_sym membr_ident ptrval res :: dr_st.trace
-          |>
-        ) >>
+        record_trace_event (ND.return (ME_eff_member_shift_ptrval tag_sym membr_ident ptrval res)) >>
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
     | (Mem_common.Va_start, [Core.Vlist _ ty_cvals]) ->
@@ -986,9 +994,7 @@ let advance_step tid step =
     | Core_reduction.Step_with_runstate2 rsk step_m ->
         match rsk with
           | Core_reduction.RSK_tau _ (Core_run.TSK_Return sym mval_opt) ->
-              ND.update (fun dr_st ->
-                <| dr_st with trace= ME_function_return sym mval_opt :: dr_st.trace |>
-              )
+              record_trace_event (ND.return (ME_function_return sym mval_opt))
           | _ ->
               ND.return ()
         end >>= fun () ->
@@ -1002,9 +1008,7 @@ let advance_step tid step =
     | Core_reduction.Step_tau2 debug_str tsk th_st' ->
         match tsk with
           | Core_run.TSK_Return sym mval_opt ->
-              ND.update (fun dr_st ->
-                <| dr_st with trace= ME_function_return sym mval_opt :: dr_st.trace |>
-              )
+              record_trace_event (ND.return (ME_function_return sym mval_opt))
           | _ ->
               ND.return ()
         end >>= fun () ->          
@@ -1552,7 +1556,7 @@ let finalize debug_str dr_st =
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
-let initial_driver_state file fs_state do_stepping =
+let initial_driver_state file fs_state do_stepping do_trace =
   <|
     core_file=         file;
     core_extern=       Core_linking.create_extern_symmap file;
@@ -1565,6 +1569,7 @@ let initial_driver_state file fs_state do_stepping =
     symbolic_assoc=    Map.empty;
     blocked=           false;
     do_stepping=       do_stepping;
+    do_trace=          do_trace;
     dr_step_counter=   0;
   |>
 

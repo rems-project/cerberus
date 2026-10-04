@@ -631,7 +631,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
       return core
     end >>= fun core ->
     let core'    = Core_run_aux.convert_file core in
-    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state true(*do_stepping*) in
+    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state true(*do_stepping*) false(*do_trace*) in
     let (m, st)  = (Driver.drive false core' [], st0) in
     last_node_id := 0;
     let node_info= `Init in

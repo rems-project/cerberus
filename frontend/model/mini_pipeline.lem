@@ -153,7 +153,8 @@ let evalIntegerConstantExpressionAux
             Driver.initial_driver_state
               dummy_core_file
               Fs.fs_initial_state
-              false (* no stepping *) in
+              false (* no stepping *)
+              false (* no trace *) in
           (* spawning a thread with the Core expression we just generated as it's arena *)
           let ((tid, core_st), run_st) = State.runStateM (
             Core_run.spawn_thread Nothing <|
