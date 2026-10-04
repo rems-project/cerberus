@@ -264,10 +264,9 @@ type state = <|
      of switch statements being desugared *)
   switch_context: list switch_info;
   
-  (* TODO: this is idiotically inefficient, should store here the converse *)
   (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
      This is particularly useful when stdlib headers are included *)
-  used_identifier: list A.ail_identifier;
+  used_identifier: set A.ail_identifier;
   current_return_type: maybe Ctype.ctype;
   
   loop_attributes: Annot.loop_attributes;
@@ -585,7 +584,7 @@ let initial_state conf core_eval_stuff cn_eval_stuff = <|
     typedef_definitions=         Map.empty;
     static_assertions=           [];
     
-    used_identifier= [];
+    used_identifier= Set.empty;
     current_return_type= Nothing;
     
     loop_attributes= Map.empty;
@@ -2355,10 +2354,10 @@ val add_used_identifier: A.ail_identifier -> desugM unit
 let add_used_identifier sym =
   update_inner (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "USED IDENTIFIER") in
-    <| st with used_identifier= Utils.list_insert sym st.used_identifier |>
+    <| st with used_identifier= Set.insert sym st.used_identifier |>
   )
 
-val get_used_identifier: desugM (list A.ail_identifier)
+val get_used_identifier: desugM (set A.ail_identifier)
 let get_used_identifier =
   read_inner (fun st ->
     st.used_identifier
@@ -2409,10 +2408,9 @@ let guard_extension loc ext =
   else
     State_exception.fail (loc, Errors.EXTENSION ext)
 
-(* TODO: hackish, uber inefficient *)
 val remove_unused_identifiers: forall 'a. state -> A.ail_identifier -> list (A.ail_identifier * 'a) -> list (A.ail_identifier * 'a)
 let remove_unused_identifiers st startup_sym xs =
-  List.filter (fun (sym, _) -> sym = startup_sym || List.elem sym st.used_identifier) xs
+  List.filter (fun (sym, _) -> sym = startup_sym || Set.member sym st.used_identifier) xs
 
 (*
 val remove_block_scoped_identifiers: forall 'a. state -> list (A.ail_identifier * 'a) -> list (A.ail_identifier * 'a)
@@ -2579,7 +2577,7 @@ let extract_program startup_str =
        or _Alignof operator whose result is an integer constant") *)
     match link_opt with
       | Just Linkage_internal ->
-          if    List.elem sym st.used_identifier
+          if    Set.member sym st.used_identifier
              && (kind = Kind_ordinary (OK_object false) || kind = Kind_ordinary OK_function)
              && List.lookup sym object_defs = Nothing
              && not (Map.member sym st.function_definitions) then
@@ -2591,7 +2589,7 @@ let extract_program startup_str =
       | Just Linkage_external ->
           (* TODO: the error is desactivated for functions for now. We need to have a way of telling the desugaring that
              some function are implemented in Core (i.e. printf()) *)
-          if    List.elem sym st.used_identifier
+          if    Set.member sym st.used_identifier
              && kind = Kind_ordinary (OK_object false)
              && List.lookup sym object_defs = Nothing
              && not (Map.member sym st.function_definitions) then
