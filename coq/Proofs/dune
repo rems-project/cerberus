@@ -1,4 +1,4 @@
-(coq.theory
+(rocq.theory
  (mode vo)
  (name Proofs)
  (package cerberus-cheri)

@@ -1,4 +1,4 @@
-(coq.theory
+(rocq.theory
  (mode vo)
  (name CheriMemory)
  (package cerberus-cheri)
