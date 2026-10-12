@@ -649,7 +649,7 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_) =
     | AilEoffsetof _ _ ->
         (* STD §7.19#3 *)
         E.return true
-    | AilEgeneric _ _ ->
+    | AilEgeneric _ _ _ ->
         (* TODO: this should be true if the selected expression is
             an integer constant *)
         E.return false
