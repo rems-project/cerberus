@@ -1,0 +1,6 @@
+{
+    "name": "strict",
+    "args": ["--switches", "inner_arg_temps,const_prop,mem2reg,strict_reads", "--typecheck-core", "--exec", "--batch"],
+    "filter": "^(.*\\.c)$",
+    "timeout": 5
+}

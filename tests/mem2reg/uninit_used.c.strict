@@ -1,0 +1,2 @@
+return code: 1
+Undefined {ub: "UB011_use_indeterminate_automatic_object", stderr: "", loc: "<8:12--8:13>"}

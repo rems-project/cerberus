@@ -1,0 +1,15 @@
+return code: 0
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer) =
+    let strong (x: loaded integer) =
+      let strong (x: loaded integer) = pure((Unspecified('signed int'))) in
+      bound(pure(Unit)) ;
+      pure(Unit) ;
+      run ret_425(conv_loaded_int('signed int', Specified(0))) ;
+      pure(Unit) ;
+      pure((x)) in
+    pure((x)) in
+  save ret_425: loaded integer (a_427: loaded integer:= Specified(0)) in
+    pure(a_427)
+
+Defined {value: "Specified(0)", stdout: "", stderr: "", blocked: "false"}

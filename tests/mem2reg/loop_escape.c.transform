@@ -1,0 +1,89 @@
+return code: 0
+proc fn (p: loaded pointer): eff loaded integer :=
+  let strong (p: loaded pointer) =
+    let strong (p: loaded pointer) = pure((p)) in
+    let strong a_462: loaded integer =
+      bound(
+        let weak a_461: pointer =
+          let weak a_457: loaded pointer =
+            let weak _: unit = pure(Unit) in
+            pure(p) in
+          case a_457 of
+            | Specified(a_458: pointer) =>
+                let weak a_459: boolean =
+                  memop(PtrValidForDeref, 'signed int', a_458) in
+                pure(
+                  if a_459 then
+                    a_458
+                  else
+                    undef(<<UB043_indirection_invalid_value>>)
+                )
+            | Unspecified(_: ctype) =>
+                pure(undef(<<UB043_indirection_invalid_value>>))
+          end in
+        load('signed int', a_461)
+      ) in
+    pure(Unit) ;
+    run ret_456(conv_loaded_int('signed int', a_462)) ;
+    pure(Unit) ;
+    pure(Unit) ;
+    pure((p)) in
+  save ret_456: loaded integer (a_463: loaded integer:= undef(<<UB088_reached_end_of_function>>)) in
+    pure(a_463)
+
+proc main (): eff loaded integer :=
+  let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+  bound(pure(Unit)) ;
+  store('signed int', x, conv_loaded_int('signed int', Specified(0))) ;
+  save do_434: unit (x: pointer:= x) in
+    let strong _: loaded integer =
+      bound(
+        let strong ((_: unit,
+        (a_440: ctype, a_441: [ctype], a_442: boolean, a_443: boolean)), _: unit) =
+          unseq(
+            pure(Unit) ;
+            pure((Unit, cfunction(Specified(Cfunction(fn)))))
+          ,
+            let weak _: unit = pure(Unit) in
+            pure(Unit)
+          ) in
+        if not(params_length(a_441) = 1) then
+          pure(undef(<<UB038_number_of_args>>))
+        else
+          if a_442 \/ not(are_compatible ('signed int', a_440)) then
+            pure(undef(<<UB041_function_not_compatible>>))
+          else
+            ccall('signed int (*) (signed int*)', Specified(Cfunction(fn)),
+            let a_449: ctype = params_nth(a_441, 0) in
+            if not(are_compatible ('signed int*', a_449)) then
+              undef(<<UB041_function_not_compatible>>)
+            else
+              Specified(x))
+      ) in
+    pure(Unit) ;
+    pure(Unit) ;
+    save continue_432: unit (x: pointer:= x) in  pure(Unit) ;
+    pure(Unit) ;
+    bound(pure(Unit)) ;
+    case Specified(0) of
+      | Specified(_: integer) =>
+          if not(0 = 0) then run do_434(x) else pure(Unit)
+      | Unspecified(_: ctype) =>
+          pure(undef(<<DUMMY(unspecified AilSdo)>>))
+    end ;
+  save break_433: unit (x: pointer:= x) in  pure(Unit) ;
+  pure(Unit) ;
+  let strong a_453: loaded integer =
+    bound(
+      let weak _: unit = pure(Unit) in
+      load('signed int', x)
+    ) in
+  kill('signed int', x) ;
+  run ret_431(conv_loaded_int('signed int', a_453)) ;
+  kill('signed int', x) ;
+  pure(Unit) ;
+  pure(Unit) ;
+  save ret_431: loaded integer (a_454: loaded integer:= Specified(0)) in
+    pure(a_454)
+
+Defined {value: "Specified(0)", stdout: "", stderr: "", blocked: "false"}

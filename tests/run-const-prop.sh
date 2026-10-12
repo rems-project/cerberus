@@ -1,5 +1,5 @@
 #!/bin/bash
-# Verifies that --sw copy_prop does not change output of existing CI tests
+# Verifies that --switches const_prop does not change output of existing CI tests
 
 TESTSDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 cd "$TESTSDIR"
@@ -51,8 +51,6 @@ fi
 
 set_cerberus_exec "cerberus"
 
-echo "=== Phase 1: regression (--sw copy_prop must not change output of existing tests) ==="
-
 for file in "${citests[@]}"; do
   if [[ ! -f ./ci/$file ]]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m"
@@ -66,9 +64,9 @@ for file in "${citests[@]}"; do
   fi
 
   if [[ $file == *.syntax-only.c ]]; then
-    $CERB --nolibc --typecheck-core --sw copy_prop ci/$file > tmp/result 2> tmp/stderr
+    $CERB --nolibc --typecheck-core --switches const_prop ci/$file > tmp/result 2> tmp/stderr
   else
-    $CERB --nolibc --typecheck-core --exec --batch --sw copy_prop ci/$file > tmp/result 2> tmp/stderr
+    $CERB --nolibc --typecheck-core --exec --batch --switches const_prop ci/$file > tmp/result 2> tmp/stderr
   fi
   ret=$?
 
@@ -96,10 +94,10 @@ for file in "${citests[@]}"; do
     continue
   fi
 
-  report "$file [+copy_prop]" "$file" "$ret"
+  report "$file [+const_prop]" "$file" "$ret"
 done
 
 echo ""
-echo "COPY_PROP PASSED: $pass"
-echo "COPY_PROP FAILED: $fail"
+echo "CONST_PROP PASSED: $pass"
+echo "CONST_PROP FAILED: $fail"
 [ $fail -eq 0 ]

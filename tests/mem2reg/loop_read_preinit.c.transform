@@ -1,0 +1,49 @@
+return code: 0
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer) =
+    let strong (x: loaded integer) =
+      let strong (x: loaded integer) =
+        bound(pure(Unit)) ;
+        pure((conv_loaded_int('signed int', Specified(42)))) in
+      let strong (x: loaded integer) =
+        let strong (x: loaded integer) =
+          save do_431: (loaded integer) (x: loaded integer:= x) in
+            let strong (x: loaded integer) =
+              bound(
+                let weak a_435: loaded integer =
+                  let weak _: unit = pure(Unit) in
+                  pure(x) in
+                pure(Unit)
+              ) ;
+              pure(Unit) ;
+              pure(Unit) ;
+              let strong (x: loaded integer) =
+                save continue_429: (loaded integer) (x: loaded integer:= x) in
+                  pure((x)) in
+              pure((x)) in
+            bound(pure(Unit)) ;
+            case Specified(0) of
+              | Specified(_: integer) =>
+                  if not(0 = 0) then run do_431(x) else pure(Unit) ;
+                  pure((x))
+              | Unspecified(_: ctype) =>
+                  pure(undef(<<DUMMY(unspecified AilSdo)>>)) ;
+                  pure((x))
+            end in
+        let strong (x: loaded integer) =
+          save break_430: (loaded integer) (x: loaded integer:= x) in  pure((x)) in
+        pure((x)) in
+      let strong a_440: loaded integer =
+        bound(
+          let weak _: unit = pure(Unit) in
+          pure(x)
+        ) in
+      pure(Unit) ;
+      run ret_428(conv_loaded_int('signed int', a_440)) ;
+      pure(Unit) ;
+      pure((x)) in
+    pure((x)) in
+  save ret_428: loaded integer (a_441: loaded integer:= Specified(0)) in
+    pure(a_441)
+
+Defined {value: "Specified(42)", stdout: "", stderr: "", blocked: "false"}

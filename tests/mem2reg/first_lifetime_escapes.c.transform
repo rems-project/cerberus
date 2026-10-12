@@ -1,0 +1,63 @@
+return code: 0
+proc main (): eff loaded integer :=
+  let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+  bound(pure(Unit)) ;
+  store('signed int', x, conv_loaded_int('signed int', Specified(4))) ;
+  let strong _: loaded integer =
+    bound(
+      let weak (a_429: pointer, _: unit) =
+        unseq(
+          let weak _: unit =
+            let weak _: unit = pure(Unit) in
+            pure(Unit) in
+          case Specified(x) of
+            | Specified(_: pointer) =>
+                let weak a_432: boolean =
+                  memop(PtrValidForDeref, 'signed int', x) in
+                pure(
+                  if a_432 then
+                    x
+                  else
+                    undef(<<UB043_indirection_invalid_value>>)
+                )
+            | Unspecified(_: ctype) =>
+                pure(undef(<<UB043_indirection_invalid_value>>))
+          end
+        ,
+          pure(Unit)
+        ) in
+      let weak _: unit =
+        neg(store('signed int', a_429,
+        conv_loaded_int('signed int', Specified(5)))) in
+      pure(conv_loaded_int('signed int', Specified(5)))
+    ) in
+  pure(Unit) ;
+  kill('signed int', x) ;
+  run l2() ;
+  save l1: unit (x: pointer:= x) in
+    let strong _: loaded integer =
+      bound(
+        let weak (_: unit, _: unit) = unseq(pure(Unit), pure(Unit)) in
+        let weak _: unit =
+          neg(store('signed int', x, conv_loaded_int('signed int', Specified(0)))) in
+        pure(conv_loaded_int('signed int', Specified(0)))
+      ) in
+    pure(Unit) ;
+  let strong a_438: loaded integer =
+    bound(
+      let weak _: unit = pure(Unit) in
+      load('signed int', x)
+    ) in
+  kill('signed int', x) ;
+  run ret_427(conv_loaded_int('signed int', a_438)) ;
+  kill('signed int', x) ;
+  pure(Unit) ;
+  save l2: unit () in
+    let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+    run l1(x) ;
+  pure(Unit) ;
+  pure(Unit) ;
+  save ret_427: loaded integer (a_439: loaded integer:= Specified(0)) in
+    pure(a_439)
+
+Defined {value: "Specified(0)", stdout: "", stderr: "", blocked: "false"}

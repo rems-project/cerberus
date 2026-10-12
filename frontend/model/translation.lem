@@ -3814,6 +3814,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
           E.resolve_object_type sym >>= fun (_, ty) ->
           E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
         ) visible_syms >>= fun args ->
+          (* The mem2reg analysis and transform will need to be updated if the
+             binders (fst <$> args) are ever fresh rather than re-used. *)
         E.return begin
           Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop loop_id)] (sym_loop, C.BTy_unit) args begin
             Caux.mk_sseq_e test_wrp.E.sym_pat core_test begin
@@ -3850,6 +3852,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return begin
+          (* The mem2reg analysis and transform will need to be updated if the
+             binders (fst <$> args) are ever fresh rather than re-used. *)
           Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop loop_id)] (sym_loop, C.BTy_unit) args (
             (* loop body *)
             Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
@@ -4016,6 +4020,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
+          (* The mem2reg analysis and transform will need to be updated if the
+             binders (fst <$> visible_pes) are ever fresh rather than re-used. *)
         match List.lookup (CaseSelectConstant n) env.case_labs with
           | Just lab ->
               E.return (Caux.mk_save_e_ [Annot.Alabel (Annot.LAcase)] (lab, C.BTy_unit) visible_pes core_s)
@@ -4030,6 +4036,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
+          (* The mem2reg analysis and transform will need to be updated if the
+             binders (fst <$> visible_pes) are ever fresh rather than re-used. *)
         match List.lookup (CaseSelectRange n1 n2) env.case_labs with
           | Just lab ->
               E.return (Caux.mk_save_e_ [Annot.Alabel (Annot.LAcase)] (lab, C.BTy_unit) visible_pes core_s)
@@ -4044,6 +4052,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
+          (* The mem2reg analysis and transform will need to be updated if the
+             binders (fst <$> visible_pes) are ever fresh rather than re-used. *)
         match env.default_lab with
           | Just lab ->
               E.return (Caux.mk_save_e_ [Annot.Alabel (Annot.LAdefault)] (lab, C.BTy_unit) visible_pes core_s)
@@ -4058,6 +4068,8 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
             E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
+          (* The mem2reg analysis and transform will need to be updated if the
+             binders (fst <$> visible_pes) are ever fresh rather than re-used. *)
         (* Some AilSlabel's are added by cabs-to-ail: continue labels 
            created for different kinds of loops. Those will have an
            m_label_annot of the form `Just`, rather than `Nothing`. 

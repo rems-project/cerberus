@@ -1,0 +1,49 @@
+return code: 0
+proc main (): eff loaded integer :=
+  let strong (x: loaded integer, y: loaded integer, z: loaded integer) =
+    let strong (x: loaded integer, y: loaded integer, z: loaded integer) =
+      let strong (x: loaded integer) =
+        bound(pure(Unit)) ;
+        pure((conv_loaded_int('signed int', Specified(10)))) in
+      let strong (y: loaded integer) =
+        bound(pure(Unit)) ;
+        pure((conv_loaded_int('signed int', Specified(20)))) in
+      let strong (z: loaded integer) =
+        let strong a_430: loaded integer =
+          bound(
+            let weak (a_431: loaded integer, a_432: loaded integer) =
+              unseq(
+                let weak _: unit = pure(Unit) in
+                pure(x)
+              ,
+                let weak _: unit = pure(Unit) in
+                pure(y)
+              ) in
+            pure(
+              case (a_431, a_432) of
+                | (Specified(a_433: integer), Specified(a_434: integer)) =>
+                    Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_433), __conv_int__('signed int', a_434)))
+                | _: (loaded integer,loaded integer) =>
+                    undef(<<UB036_exceptional_condition>>)
+              end
+            )
+          ) in
+        pure((conv_loaded_int('signed int', a_430))) in
+      let strong a_439: loaded integer =
+        bound(
+          let weak _: unit = pure(Unit) in
+          pure(z)
+        ) in
+      pure(Unit) ;
+      pure(Unit) ;
+      pure(Unit) ;
+      run ret_427(conv_loaded_int('signed int', a_439)) ;
+      pure(Unit) ;
+      pure(Unit) ;
+      pure(Unit) ;
+      pure((x, y, z)) in
+    pure((x, y, z)) in
+  save ret_427: loaded integer (a_440: loaded integer:= Specified(0)) in
+    pure(a_440)
+
+Defined {value: "Specified(30)", stdout: "", stderr: "", blocked: "false"}
