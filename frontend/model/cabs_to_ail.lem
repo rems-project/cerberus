@@ -579,9 +579,8 @@ let constructValue tagDefs elems ty =
 
 (* BEGIN predicates on Ail syntax *)
 (* see §6.6#6 *)
-(* TODO: make the function pure, when complete *)
 val     is_integer_constant_expression: expression unit -> E.desugM bool
-let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as expr) =
+let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_) =
   STD_ "§6.6#6" match expr_ with
     | AilEunary uop e ->
         match uop with
@@ -600,120 +599,6 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
           | PostfixDecr ->
               E.return false
         end
-    | AilEcast _ _ _ ->
-        E.fail loc (Errors.Desugar_NotYetSupported "cast operator in `integer constant expressions'")
-    | AilEassert _ ->
-        E.return false
-    | AilEoffsetof _ _ ->
-        (* STD §7.19#3 *)
-        E.return true
-    | AilEstr _ ->
-        E.return false
-(*
-    | AilEgeneric of expression 'a * list (generic_association 'a)
-    | AilEarray of bool * ctype * list (maybe (expression 'a))
-    | AilEstruct of ail_identifier * list (Symbol.identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
-    | AilEunion of ail_identifier * Symbol.identifier * maybe (expression 'a)
-    | AilEcompound of ctype * expression 'a
-    | AilEmemberof of expression 'a * Symbol.identifier
-    | AilEmemberofptr of expression 'a * Symbol.identifier
-    | AilEbuiltin of string (* TODO: see if that can be moved to [constant] *)
-    | AilEstr of stringLiteral
-    | AilEconst of constant
-    | AilEident of ail_identifier
-*)
-    | AilEannot _ e ->
-        is_integer_constant_expression e
-
-    | AilEva_start _ _ ->
-        E.return false
-    | AilEva_copy _ _ ->
-        E.return false
-    | AilEva_arg _ _ ->
-        E.return false
-    | AilEva_end _ ->
-        E.return false
-    | AilEprint_type e ->
-        is_integer_constant_expression e
-    | AilEbmc_assume _ ->
-        E.return false
-    | AilErvalue _ ->
-        (* NOTE: this only exists after the Ail typing *)
-        error "cabs_to_ail.is_integer_constant_expression (AilErvalue _)"
-    | AilEarray_decay _ ->
-        (* NOTE: this only exists after the Ail typing *)
-        error "cabs_to_ail.is_integer_constant_expression (AilEarray_decay _)"
-    | AilEfunction_decay _ ->
-        (* NOTE: this only exists after the Ail typing *)
-        error "cabs_to_ail.is_integer_constant_expression (AilEfunction_decay _)"
-    | AilEatomic _ ->
-        (* NOTE: this only exists after the Ail typing *)
-        error "cabs_to_ail.is_integer_constant_expression (AilEatomic _)"
-
-    | AilEconst (ConstantInteger _) ->
-        (* NOTE: this includes enumeration constants *)
-        E.return true
-    | AilEconst (ConstantFloating _) ->
-        E.return false
-    | AilEconst (ConstantCharacter _) ->
-        E.return true
-    | AilEconst (ConstantPredefined PConstantFalse) ->
-        E.return true
-    | AilEconst (ConstantPredefined PConstantTrue) ->
-        E.return true
-    | AilEsizeof _ ty ->
-        if AilTypesAux.is_vla ty then
-          (* STD §6.5.3.4#2, sentence 4 *)
-          E.return false
-        else
-          E.return true
-    | AilEsizeof_expr _ ->
-        (* TODO: this is wrong if the expression is a VLA *)
-        (* but I can't easily ask the Ail typing for now ... *)
-(*
-        if AilTypesAux.is_vla ty then
-          (* STD §6.5.3.4#2, sentence 4 *)
-          E.return false
-        else
-*)
-          E.return true
-    | AilEalignof _ _ ->
-        E.return true
-
-
-(*
-
-floating constants that are the immediate operands of casts.
-
-Cast operators in an integer constant expression shall only convert arithmetic types to integer types, except as part of an operand to the sizeof or _Alignof operator.
-*)
-
-
-(*
-Constant expressions shall not
-
-
-increment
-
-decrement
-
-function-call
-
-or comma operators
-
-except when they are contained within a subexpression that is not evaluated.115)
-*)
-
-    | AilEassign _ _ ->
-        (* STD §6.6#3 *)
-        E.return false
-    | AilEcompoundAssign _ _ _ ->
-        (* STD §6.6#3 *)
-        E.return false
-
-    | AilEcall _ _ ->
-        (* STD §6.6#3 *)
-        E.return false
     | AilEbinary _ Comma _ ->
         (* STD §6.6#3 *)
         E.return false
@@ -723,7 +608,12 @@ except when they are contained within a subexpression that is not evaluated.115)
           is_integer_constant_expression e2
         else
           E.return false
-    
+    | AilEassign _ _ ->
+        (* STD §6.6#3 *)
+        E.return false
+    | AilEcompoundAssign _ _ _ ->
+        (* STD §6.6#3 *)
+        E.return false
     | AilEcond e1 Nothing e3 ->
         is_integer_constant_expression e1 >>= fun b1 ->
         if b1 then
@@ -741,50 +631,125 @@ except when they are contained within a subexpression that is not evaluated.115)
           E.return (b2 && b3)
         else
           E.return false
-    
-    
+    | AilEcast _ cast_ty e ->
+        E.get_sigma_sofar >>= fun sigm ->
+        E.get_gamma_sofar >>= fun gamm ->
+        match Mini_pipeline.typecheckAil sigm gamm e with
+          | Left _ ->
+              E.return false
+          | Right ty ->
+              E.return (AilTypesAux.is_arithmetic ty && AilTypesAux.is_integer cast_ty)
+              (* TODO: except as part of an operand to the sizeofor _Alignofoperator. *)
+        end
+    | AilEcall _ _ ->
+        (* STD §6.6#3 *)
+        E.return false
+    | AilEassert _ ->
+        E.return false
+    | AilEoffsetof _ _ ->
+        (* STD §7.19#3 *)
+        E.return true
+    | AilEgeneric _ _ _ ->
+        (* TODO: this should be true if the selected expression is
+            an integer constant *)
+        E.return false
+    | AilEarray _ _ _ ->
+        E.return false
+    | AilEstruct _ _ ->
+        E.return false
+    | AilEunion _ _ _ ->
+        E.return false
+    | AilEcompound _ _ _ ->
+        E.return false
     | AilEmemberof _ _ ->
         E.return false
     | AilEmemberofptr _ _ ->
         E.return false
-    
-    
+    | AilEbuiltin _ ->
+        E.return false
+    | AilEstr _ ->
+        E.return false
+    | AilEconst (ConstantIndeterminate _) ->
+        E.return false
+    | AilEconst ConstantNull ->
+        E.return false
+    | AilEconst (ConstantInteger _) ->
+        (* NOTE: this includes enumeration constants *)
+        E.return true
+    | AilEconst (ConstantFloating _) ->
+        E.return false
+    | AilEconst (ConstantCharacter _) ->
+        E.return true
+    | AilEconst (ConstantArray _ _) ->
+        E.return false
+    | AilEconst (ConstantStruct _ _) ->
+        E.return false
+    | AilEconst (ConstantUnion _ _ _) ->
+        E.return false
+    | AilEconst (ConstantPredefined PConstantFalse) ->
+        E.return true
+    | AilEconst (ConstantPredefined PConstantTrue) ->
+        E.return true
     | AilEident _ ->
         E.return false
-    
+    | AilEsizeof _ ty ->
+        if AilTypesAux.is_vla ty then
+          (* STD §6.5.3.4#2, sentence 4 *)
+          E.return false
+        else
+          E.return true
+    | AilEsizeof_expr e ->
+        E.get_sigma_sofar >>= fun sigm ->
+        E.get_gamma_sofar >>= fun gamm ->
+        match Mini_pipeline.typecheckAil sigm gamm e with
+          | Left _ ->
+              E.return false
+          | Right ty ->
+              (* STD §6.5.3.4#2, sentence 4 *)
+              E.return (not (AilTypesAux.is_vla ty))
+        end
+    | AilEalignof _ _ ->
+        E.return true
+    | AilEannot _ e ->
+        is_integer_constant_expression e
+    | AilEva_start _ _ ->
+        E.return false
+    | AilEva_arg _ _ ->
+        E.return false
+    | AilEva_copy _ _ ->
+        E.return false
+    | AilEva_end _ ->
+        E.return false
+    | AilEprint_type e ->
+        is_integer_constant_expression e
+    | AilEbmc_assume _ ->
+        E.return false
+    | AilEreg_load _ ->
+        E.return false
+    (* | AilErvalue of expression 'a *)
+    | AilErvalue _ ->
+        (* NOTE: this only exists after the Ail typing *)
+        error "cabs_to_ail.is_integer_constant_expression (AilErvalue _)"
+    (* | AilEarray_decay of expression 'a *)
+    | AilEarray_decay _ ->
+        (* NOTE: this only exists after the Ail typing *)
+        error "cabs_to_ail.is_integer_constant_expression (AilEarray_decay _)"
+    (* | AilEfunction_decay of expression 'a *)
+    | AilEfunction_decay _ ->
+        (* NOTE: this only exists after the Ail typing *)
+        error "cabs_to_ail.is_integer_constant_expression (AilEfunction_decay _)"
+    (* | AilEatomic of expression 'a *)
+    | AilEatomic _ ->
+        (* NOTE: this only exists after the Ail typing *)
+        error "cabs_to_ail.is_integer_constant_expression (AilEatomic _)"
+    | AilElabel_addressGNU _ ->
+        E.return false
     | AilEgcc_statement _ _ ->
-        E.fail loc (Errors.Desugar_NotYetSupported "GNU statement as expression in constant expression")
-    
-    | _ ->
-        error ("TODO: Cabs_to_ail.is_integer_constant_expression, wildcard ==> " ^
-               Pp.stringFromAil_expression expr)
+        E.return false
+    | AilEinvalid _ _ ->
+        (* TODO: might want to allow this later *)
+        E.return false
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 (* STD §6.6#8 *)
@@ -4058,9 +4023,8 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSpar ss ->
           AilSpar <$> E.mapM self ss
       
-      | CabsSasm is_volatile is_inline xs (* list (list string) *) ->
-          (* TODO: erasing inline assembly for now *)
-          E.return AilSskip
+      | CabsSasm _ _ _ ->
+          E.return (AilSinvalid (AilInvalid_unsupported "inline assembly"))
       
       | CabsScaseGNU e1 e2 s ->
           let desugar_case_constant e =

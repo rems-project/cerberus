@@ -108,7 +108,8 @@ let collect_memory_accesses (_, sigm) =
       | AilSbreak
       | AilScontinue
       | AilSreturnVoid
-      | AilSgoto _ ->
+      | AilSgoto _
+      | AilSinvalid _ ->
           ()
       | AilSexpr e
       | AilSreturn e

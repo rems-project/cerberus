@@ -15,6 +15,16 @@ type execution_mode =
   | Exhaustive
   | Random
 
+type lexicon = {
+  with_c23: bool;     (* add keywords introduced by C23 *)
+  with_gnu: bool;     (* add GCC keywords extensions *)
+  without_cerb: bool; (* remove Cerberus keywords *)
+}
+
+(* Default to C11 lexicon with no GCC extensions, but with Cerberus keywords *)
+let default_lexicon =
+  { with_c23= false; with_gnu= false; without_cerb= false }
+
 type cerberus_conf = {
   backend_name:       string;
   exec_mode_opt:      execution_mode option;
@@ -23,6 +33,7 @@ type cerberus_conf = {
   defacto:            bool;
   permissive:         bool; (* allows GCC extensions and stuff *)
   agnostic:           bool;
+  lexicon:            lexicon;
   ignore_bitfields:   bool;
   n1570:              Yojson.Basic.t option;
 }
@@ -32,13 +43,17 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-let set_cerb_conf ~backend_name ~exec exec_mode ~concurrency error_verbosity ~defacto ~permissive ~agnostic ~ignore_bitfields =
+let set_cerb_conf
+  ?(lexicon=default_lexicon)
+  ~backend_name ~exec exec_mode ~concurrency error_verbosity ~defacto
+  ~permissive ~agnostic ~ignore_bitfields =
   let exec_mode_opt = if exec then Some exec_mode else None in
   let n1570 =
     if error_verbosity <> QuoteStd then None else Some (Lazy.force N1570.data)
   in
   let conf =
-    {backend_name; defacto; concurrency; error_verbosity; agnostic; ignore_bitfields; permissive; exec_mode_opt; n1570}
+    { backend_name; defacto; concurrency; error_verbosity; agnostic; lexicon
+    ; ignore_bitfields; permissive; exec_mode_opt; n1570 }
   in
   cerb_conf := fun () -> conf
 

@@ -92,7 +92,7 @@ let create_executable out =
   Unix.chmod out 0o755
 
 let cerberus debug_level progress core_obj
-             cpp_cmd syntax_only nostdinc nolibc agnostic macros macros_undef
+             cpp_cmd syntax_only nostdinc nolibc lexicon agnostic macros macros_undef
              runtime_path_opt incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
@@ -121,7 +121,7 @@ let cerberus debug_level progress core_obj
       | Some file -> (Core, file) :: ppouts
       | None -> ppouts in
   (* set global configuration *)
-  set_cerb_conf ~backend_name:"Driver" ~exec exec_mode ~concurrency QuoteStd ~defacto ~permissive ~agnostic ~ignore_bitfields;
+  set_cerb_conf ~lexicon ~backend_name:"Driver" ~exec exec_mode ~concurrency QuoteStd ~defacto ~permissive ~agnostic ~ignore_bitfields;
   let conf = { astprints; pprints; ppflags; ppouts; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true; cpp_save = None } in
   let prelude =
@@ -386,6 +386,14 @@ let agnostic =
              as possible. This makes the pipeline somewhat implementation agnostic." in
   Arg.(value & flag & info ["agnostic"] ~doc)
 
+let std =
+  let open Cerb_global in
+  let c23 = { with_c23= true; with_gnu= false; without_cerb= false } in
+  let gnu23 = { with_c23= true; with_gnu= true; without_cerb= false } in
+  let doc = "Set the lexer's lexicon to the either c11, c23, gnu23" in
+  Arg.(value & opt (enum ["c11", default_lexicon; "c23", c23; "gnu23", gnu23])
+    gnu23 & info ["std"] ~doc)
+
  let ignore_bitfields =
   let doc = "(DEBUG) accept and ignore bit-field width specifiers. \
              CAUTION: the constraints relating to bit-fields are NOT checked, \
@@ -501,7 +509,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(const cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ syntax_only $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
+                         cpp_cmd $ syntax_only $ nostdinc $ nolibc $ std $ agnostic $ macros $ macros_undef $
                          runtime_path $ incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $

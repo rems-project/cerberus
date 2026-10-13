@@ -7,9 +7,10 @@ open Tokens
 exception Error of Errors.cparser_cause
 
 type flags = {
-  inside_cn : bool;           (* We are lexing in a CN comment *)
-  magic_comment_char : char;  (* The character after a comment indicating to start a CN comment *)
-  at_magic_comments : bool;   (* Should we process CN comments (true) or treat them as normal comments (false) *)
+  inside_cn : bool;             (* We are lexing in a CN comment *)
+  magic_comment_char : char;    (* The character after a comment indicating to start a CN comment *)
+  at_magic_comments : bool;     (* Should we process CN comments (true) or treat them as normal comments (false) *)
+  lexicon: Cerb_global.lexicon; (* Requested lexicon configuration *)
 }
 
 (* WARNING: GLOBAL STATE
@@ -58,76 +59,182 @@ let offset_location lexbuf pos_fname pos_lnum =
   
 
 (* STD §6.4.1#1 *)
-let keywords: (string * Tokens.token) list = [
-    "auto"           , AUTO;
-    "break"          , BREAK;
-    "case"           , CASE;
-    "char"           , CHAR;
-    "const"          , CONST;
-    "continue"       , CONTINUE;
-    "default"        , DEFAULT;
-    "do"             , DO;
-    "double"         , DOUBLE;
-    "else"           , ELSE;
-    "enum"           , ENUM;
-    "extern"         , EXTERN;
-    "float"          , FLOAT;
-    "for"            , FOR;
-    "goto"           , GOTO;
-    "if"             , IF;
-    "inline"         , INLINE;
-    "int"            , INT;
-    "long"           , LONG;
-    "register"       , REGISTER;
-    "restrict"       , RESTRICT;
-    "return"         , RETURN;
-    "short"          , SHORT;
-    "signed"         , SIGNED;
-    "sizeof"         , SIZEOF;
-    "static"         , STATIC;
-    "struct"         , STRUCT;
-    "switch"         , SWITCH;
-    "typedef"        , TYPEDEF;
-    "typeof"         , TYPEOF;
-    "union"          , UNION;
-    "unsigned"       , UNSIGNED;
-    "void"           , VOID;
-    "volatile"       , VOLATILE;
-    "while"          , WHILE;
-    "_Alignas"       , ALIGNAS;
-    "_Alignof"       , ALIGNOF;
-    "_Atomic"        , ATOMIC;
-    "_Bool"          , BOOL;
-    "_Complex"       , COMPLEX;
-    "_Generic"       , GENERIC;
-    (* "_Imaginary"     , IMAGINARY; *)
-    "_Noreturn"      , NORETURN;
-    "_Static_assert" , STATIC_ASSERT;
-    "_Thread_local"  , THREAD_LOCAL;
+let c11_keywords: (string * Tokens.token) list = [
+  "auto"           , AUTO;
+  "break"          , BREAK;
+  "case"           , CASE;
+  "char"           , CHAR;
+  "const"          , CONST;
+  "continue"       , CONTINUE;
+  "default"        , DEFAULT;
+  "do"             , DO;
+  "double"         , DOUBLE;
+  "else"           , ELSE;
+  "enum"           , ENUM;
+  "extern"         , EXTERN;
+  "float"          , FLOAT;
+  "for"            , FOR;
+  "goto"           , GOTO;
+  "if"             , IF;
+  "inline"         , INLINE;
+  "int"            , INT;
+  "long"           , LONG;
+  "register"       , REGISTER;
+  "restrict"       , RESTRICT;
+  "return"         , RETURN;
+  "short"          , SHORT;
+  "signed"         , SIGNED;
+  "sizeof"         , SIZEOF;
+  "static"         , STATIC;
+  "struct"         , STRUCT;
+  "switch"         , SWITCH;
+  "typedef"        , TYPEDEF;
+  "union"          , UNION;
+  "unsigned"       , UNSIGNED;
+  "void"           , VOID;
+  "volatile"       , VOLATILE;
+  "while"          , WHILE;
 
-    "assert", ASSERT;
-    "offsetof", OFFSETOF;
-    "__cerb_va_start", VA_START;
-    "__cerb_va_copy", VA_COPY;
-    "__cerb_va_arg", VA_ARG;
-    "__cerb_va_end", VA_END;
+  "_Alignas"       , ALIGNAS;
+  "_Alignof"       , ALIGNOF;
+  "_Atomic"        , ATOMIC;
+  "_Bool"          , BOOL;
+  "_Complex"       , COMPLEX;
+  "_Generic"       , GENERIC;
+  (* "_Imaginary"     , IMAGINARY; *)
+  "_Noreturn"      , NORETURN;
+  "_Static_assert" , STATIC_ASSERT;
+  "_Thread_local"  , THREAD_LOCAL;
+]
 
-    "__cerb_printtype", PRINT_TYPE;
+let c23_keywords: (string * Tokens.token) list =
+  [ "alignas"       , ALIGNAS
+  ; "alignof"       , ALIGNOF
+  ; "bool"          , BOOL
+  (* ; "constexpr"     , CONSTEXPR *)
+  (* ; "false"         , FALSE *)
+  (* ; "nullptr"       , NULLPTR *)
+  ; "static_assert" , STATIC_ASSERT
+  ; "thread_local"  , THREAD_LOCAL
+  (* ; "true"          , TRUE *)
+  ; "typeof"        , TYPEOF ]
+  (* ; "typeof_unqual" , TYPEOF_UNQUAL *)
+  (* ; "_BitInt"       , BITINT *)
+  (* ; "_Decimal128"   , DECIMAL128 *)
+  (* ; "_Decimal32"    , DECIMAL32 *)
+  (* ; "_Decimal64"    , DECIMAL64 ] *)
 
-    "__BMC_ASSUME", BMC_ASSUME;
 
-    (* some GCC extensions *)
-    "asm", ASM;
-    "__asm__", ASM;
-    "__volatile__", ASM_VOLATILE;
-    "__builtin_types_compatible_p", BUILTIN_TYPES_COMPATIBLE_P;
-    "__builtin_choose_expr", BUILTIN_CHOOSE_EXPR;
-  ]
+let required_cerb_keywords: (string * Tokens.token) list =
+  [ "asm" , ASM
+  ; "assert", ASSERT
+  ; "offsetof", OFFSETOF
+  ; "__cerb_va_start", VA_START
+  ; "__cerb_va_copy", VA_COPY
+  ; "__cerb_va_arg", VA_ARG
+  ; "__cerb_va_end", VA_END ]
 
-let lexicon: (string, token) Hashtbl.t =
+let optional_cerb_keywords: (string * Tokens.token) list =
+  [ "__cerb_printtype", PRINT_TYPE
+  ; "__BMC_ASSUME", BMC_ASSUME ]
+
+(* NOTE: the following are GCC (C relevant) keywords we do not yet support
+ * __auto_type
+ * __builtin_assoc_barrier
+ * __builtin_c23_va_start
+ * __builtin_call_with_static_chain
+ * __builtin_complex
+ * __builtin_convertvector
+ * __builtin_counted_by_ref
+ * __builtin_has_attribute
+ * __builtin_offsetof
+ * __builtin_shuffle
+ * __builtin_shufflevector
+ * __builtin_stdc_bit_ceil
+ * __builtin_stdc_bit_floor
+ * __builtin_stdc_bit_width
+ * __builtin_stdc_count_ones
+ * __builtin_stdc_count_zeros
+ * __builtin_stdc_first_leading_one
+ * __builtin_stdc_first_leading_zero
+ * __builtin_stdc_first_trailing_one
+ * __builtin_stdc_first_trailing_zer
+ * __builtin_stdc_has_single_bit
+ * __builtin_stdc_leading_ones
+ * __builtin_stdc_leading_zeros
+ * __builtin_stdc_rotate_left
+ * __builtin_stdc_rotate_right
+ * __builtin_stdc_trailing_ones
+ * __builtin_stdc_trailing_zeros
+ * __builtin_tgmath
+ * __builtin_va_arg
+ * __extension__
+ * __func__
+ * __imag
+ * __imag__
+ * __label__
+ * __null
+ * __PRETTY_FUNCTION__
+ * __real
+ * __real__
+ * __thread
+ * __transaction_atomic
+ * __transaction_cancel
+ * __transaction_relaxed
+ *)
+let gnu_keywords: (string * Tokens.token) list =
+  (* alternative spelling for ISO C11 keywords *)
+  [ "__alignof"    , ALIGNOF
+  ; "__alignof__"  , ALIGNOF
+  ; "__asm__"      , ASM
+  ; "__asm"        , ASM
+  ; "__complex__"  , COMPLEX
+  ; "__complex"    , COMPLEX
+  ; "__const__"    , CONST
+  ; "__const"      , CONST
+  ; "__inline__"   , INLINE
+  ; "__inline"     , INLINE
+  ; "__restrict__" , RESTRICT
+  ; "__restrict"   , RESTRICT
+  ; "__signed__"   , SIGNED
+  ; "__signed"     , SIGNED
+  ; "__volatile__" , ASM_VOLATILE
+  ; "__volatile"   , VOLATILE
+  (* alternative spelling for ISO C23 keywords *)
+  ; "__typeof__"        , TYPEOF
+  (* ; "__typeof_unqual__" , TYPEOF_UNQUAL *)
+  (* ; "__typeof_unqual"   , TYPEOF_UNQUAL *)
+  ; "__typeof"          , TYPEOF
+
+  (* ; "__attribute__", ATTRIBUTE *)
+  (* ; "__attribute"  , ATTRIBUTE *)
+  ; "__builtin_choose_expr", BUILTIN_CHOOSE_EXPR
+  ; "__builtin_types_compatible_p", BUILTIN_TYPES_COMPATIBLE_P ]
+
+module Dialect = struct
+  type t =
+  | C11
+  | C23
+  | GNU
+  | CERB_required
+  | CERB_optional
+
+  let accepted = function
+  | C11 | CERB_required -> true
+  | _ -> false
+
+end
+
+let lexicon: (string, token * Dialect.t) Hashtbl.t =
+  let open Dialect in
   let lexicon = Hashtbl.create 0 in
-  let add (key, builder) = Hashtbl.add lexicon key builder in
-  List.iter add keywords; lexicon
+  let add dialect (key, tok) = Hashtbl.add lexicon key (tok, dialect) in
+  List.iter (add C11) c11_keywords;
+  List.iter (add C23) c23_keywords;
+  List.iter (add CERB_required) required_cerb_keywords;
+  List.iter (add CERB_optional) optional_cerb_keywords;
+  List.iter (add GNU) gnu_keywords;
+  lexicon
 
 
 (* BEGIN CN *)
@@ -668,16 +775,24 @@ and initial flags = parse
       }
 
   | identifier as id
-    { try
-        Hashtbl.find lexicon id
-      with Not_found ->
-        if flags.inside_cn then
-          try
-            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p
-          with Not_found ->
+    { let open Cerb_global in
+      let accept = function
+      | Dialect.C11 | CERB_required -> true
+      | C23 -> flags.lexicon.with_c23
+      | GNU -> flags.lexicon.with_gnu
+      | CERB_optional -> not flags.lexicon.without_cerb in
+      match Hashtbl.find lexicon id with
+      | tok, dialect when accept dialect ->
+          tok
+      | _ (* token not accepted by selected dialect *)
+      | exception Not_found ->
+          if flags.inside_cn then
+            try
+              cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p
+            with Not_found ->
+              LNAME id
+          else
             LNAME id
-        else
-          LNAME id
     }
   | eof
       { EOF }
@@ -703,7 +818,10 @@ let create_lexer ~(inside_cn:bool) : [ `LEXER of lexbuf -> token ] =
         then '$'
         else '@'
       in
-      begin match initial { inside_cn; at_magic_comments; magic_comment_char } lexbuf with
+      let flags =
+        { inside_cn; at_magic_comments; magic_comment_char
+        ; lexicon= Cerb_global.(!!cerb_conf.lexicon) } in
+      begin match initial flags lexbuf with
       | LNAME i as tok -> lexer_state := LSIdentifier i; tok
       | UNAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok

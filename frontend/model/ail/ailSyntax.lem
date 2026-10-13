@@ -146,6 +146,7 @@ type desug_info = <|
 
 type ail_invalid_reason =
   | AilInvalid_desugaring_init_failed of string
+  | AilInvalid_unsupported of string (* a construct that Cerberus does not support *)
   | AilInvalid_other of string
 
 type expression_ 'a [name = "e*"] = 
@@ -231,6 +232,8 @@ and statement_ 'a [name="s*"] =
   | AilSdeclaration of list (ail_identifier * maybe (expression 'a))
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
+  (* Statement counterpart of AilEinvalid *)
+  | AilSinvalid of ail_invalid_reason
 (* for CN *)
   | AilSmarker of nat * statement 'a (* NOTE: this is placeholder we used to carry annotations for CN *)
 and statement 'a [name="s*"] = <|
