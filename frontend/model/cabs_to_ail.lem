@@ -4023,9 +4023,8 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSpar ss ->
           AilSpar <$> E.mapM self ss
       
-      | CabsSasm is_volatile is_inline xs (* list (list string) *) ->
-          (* TODO: erasing inline assembly for now *)
-          E.return AilSskip
+      | CabsSasm _ _ _ ->
+          E.return (AilSinvalid (AilInvalid_unsupported "inline assembly"))
       
       | CabsScaseGNU e1 e2 s ->
           let desugar_case_constant e =

@@ -737,6 +737,8 @@ and pp_statement_aux pp_annot ~bs {attrs= Annot.Attrs attrs; node; _} =
         ) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
     | AilSreg_store (r, e) ->
         !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux pp_annot e ^^ P.semi
+    | AilSinvalid _ ->
+        pp_ail_keyword "INVALID" ^^ P.semi
 
     | AilSmarker (_, s) ->
         pp_comment "// marker" ^^ P.break 1 ^^

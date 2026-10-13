@@ -257,6 +257,11 @@ let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
          ^^^ pp_cond is_reg (pp_type_keyword "register") (P.squotes (pp_ctype qs ty))
          ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
 
+let string_of_invalid_reason = function
+  | AilInvalid_desugaring_init_failed _ -> "initialiser-desugaring-BUG"
+  | AilInvalid_unsupported str -> "unsupported: " ^ str
+  | AilInvalid_other str -> str
+
 let rec dtree_of_expression pp_annot expr =
   let rec self (AnnotatedExpression (annot, annots, loc, expr_)) =
     let module E = Stdlib.Either in
@@ -274,9 +279,7 @@ let rec dtree_of_expression pp_annot expr =
       pp_std_annot ^^^ !^ (ansi_format [Bold; Blue] str) ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
 
     let pp_invalid_ctor reason =
-      let str = match reason with
-        | AilInvalid_desugaring_init_failed _ -> "initialiser-desugaring-BUG"
-        | AilInvalid_other str -> str in
+      let str = string_of_invalid_reason reason in
       pp_std_annot ^^^ !^ (ansi_format [Bold; Red] "AilEinvalid") ^^^ P.brackets (!^ str) ^^^
         Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
 
@@ -527,6 +530,8 @@ and dtree_of_statement pp_annot stmt =
     | AilSreg_store (r, e) ->
         Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
               , [dtree_of_expression e])
+    | AilSinvalid reason ->
+        Dleaf (pp_stmt_ctor "AilSinvalid" ^^^ P.brackets (!^ (string_of_invalid_reason reason)))
     | AilSmarker (n, s) ->
         Dnode ( pp_stmt_ctor "AilSmarker" ^^^ !^("#" ^ string_of_int n)
               , [dtree_of_statement s] )
