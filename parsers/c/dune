@@ -12,6 +12,69 @@
  (flags (--external-tokens Tokens --exn-carries-state))
  (modules c_parser))
 
+(ocamllex cn_lexer)
+(menhir
+ (flags (--external-tokens Cn_tokens --exn-carries-state))
+ (modules cn_parser))
+
+(rule
+  (deps cn_parser_error.check)
+  (action (with-stdout-to cn_parser_error.ml
+    (run menhir
+      %{dep:cn_parser.mly}
+      --compile-errors %{dep:cn_parser_error.messages}))))
+
+(rule
+  (with-outputs-to cn_parser_error.check
+  (run menhir
+    %{dep:cn_parser.mly}
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;
+    ; If you're seeing this, then run `cat  _build/default/parsers/c/cn_parser_error.check`
+    ;
+    ; # Updating for new error states
+    ; ```
+    ; File "cn_parser_error.auto.messages", line XXXX, characters 0-XX:
+    ; Error: this sentence leads to an error in state XXX.
+    ; No sentence that leads to this state exists in "cn_parser_error.messages".
+    ; ```
+    ;
+    ; This means should run `make -f Makefile.messages complete_cn` and then re-build.
+    ;
+    ; # Duplicate states
+    ; ```
+    ; Read XXXX sample input sentences and XXXX error messages.
+    ; File "cn_parser_error.messages", line XXXX, characters 0-XX:
+    ; File "cn_parser_error.messages", line XXXXX, characters 0-XX:
+    ; Error: these sentences both cause an error in state XXX.
+    ; ```
+    ;
+    ; Delete one of the lines, optional comments and error messages.
+    ;
+    ; # Not error states (syntax becomes more permissive)
+    ; ```
+    ; File "cn_parser_error.messages", line XXXXX, characters 0-XX:
+    ; Error: this sentence does not end with a syntax error, as it should:
+    ; no syntax error occurs.
+    ;
+    ; Delete one of the lines, optional comments and error messages.
+    ;
+    ; # Something else
+    ; Please update this dune file with the right instructions after you figure it out.
+    ;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    --compare-errors %{dep:cn_parser_error.auto.messages}
+    --compare-errors %{dep:cn_parser_error.messages})))
+
+; generate "cn_parser_error.auto.messages" file used for completeness check above
+
+(rule
+  (with-stdout-to cn_parser_error.auto.messages
+    (run menhir
+       %{dep:cn_parser.mly}
+       --list-errors)))
+
+
 ;; integrating and checking .messages file
 ;; based on https://gitlab.inria.fr/fpottier/menhir/-/blob/master/demos/calc-syntax-errors/dune
 

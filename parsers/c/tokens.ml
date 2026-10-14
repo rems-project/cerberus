@@ -52,8 +52,7 @@ type token =
   | THREAD_LOCAL
 
   (* §6.4.2 Identifiers *)
-  | UNAME of string
-  | LNAME of string
+  | NAME of string
   | VARIABLE
   | TYPE
 
@@ -135,60 +134,6 @@ type token =
   (* Magic comments as tokens *)
   | CERB_MAGIC of (Cerb_location.t * (char * string))
 
-  (* CN syntax *)
-  | CN_CONSTANT of (string * [`I|`U] * int)
-  | CN_FUNCTION
-  | CN_LIFT_FUNCTION
-  | CN_PREDICATE
-  | CN_LEMMA
-  | CN_SPEC
-  | CN_DATATYPE
-  | CN_TYPE_SYNONYM
-  | CN_GOOD
-  | CN_PACK
-  | CN_UNPACK
-  | CN_DERIVE_CONSTRAINTS
-  | CN_HAVE
-  | CN_EXTRACT
-  | CN_ARRAY_SHIFT
-  | CN_MEMBER_SHIFT
-  | CN_INSTANTIATE
-  | CN_SPLIT_CASE
-  | CN_UNFOLD
-  | CN_APPLY
-  | CN_PRINT
-  | CN_MATCH
-  (* | CN_PREDNAME of string *)
-  | CN_BITS of ([`U|`I] * int)
-  | CN_BOOL
-  | CN_INTEGER
-  | CN_REAL
-  | CN_POINTER
-  | CN_ALLOC_ID
-  | CN_MAP
-  | CN_LIST
-  | CN_TUPLE
-  | CN_SET
-  | CN_LET
-  | CN_TAKE
-  | CN_OWNED
-  | CN_BLOCK
-  | CN_EACH
-  | CN_NULL
-  | CN_TRUE
-  | CN_FALSE
-  | CN_REQUIRES
-  | CN_GHOST
-  | CN_ENSURES
-  | CN_INV
-  | CN_ACCESSES
-  | CN_TRUSTED
-  | CN_UNCHANGED
-  | CN_WILD
-  | CN_IMPLIES
-  | CN_TO_BYTES
-  | CN_FROM_BYTES
-
 
 let string_of_token = function
   | AUTO -> "AUTO"
@@ -236,8 +181,7 @@ let string_of_token = function
   | NORETURN -> "NORETURN"
   | STATIC_ASSERT -> "STATIC_ASSERT"
   | THREAD_LOCAL -> "THREAD_LOCAL"
-  | UNAME s -> "UNAME(" ^ s ^ ")"
-  | LNAME s -> "LNAME(" ^ s ^ ")"
+  | NAME s -> "NAME(" ^ s ^ ")"
   | VARIABLE -> "VARIABLE"
   | TYPE -> "TYPE"
   | CONSTANT _ -> "CONSTANT"
@@ -309,55 +253,3 @@ let string_of_token = function
   | BUILTIN_CHOOSE_EXPR -> "BUILTIN_CHOOSE_EXPR"
   | EOF -> "EOF"
   | CERB_MAGIC (_, (c,str)) -> Printf.sprintf "/*%c %s %c*/" c str c
-  | CN_CONSTANT _ -> "CN_CONSTANT"
-  | CN_GOOD -> "CN_GOOD"
-  | CN_PACK -> "CN_PACK"
-  | CN_UNPACK -> "CN_UNPACK"
-  | CN_DERIVE_CONSTRAINTS -> "CN_DERIVE_CONSTRAINTS"
-  | CN_HAVE -> "CN_HAVE"
-  | CN_EXTRACT -> "CN_EXTRACT"
-  | CN_ARRAY_SHIFT -> "CN_ARRAY_SHIFT"
-  | CN_MEMBER_SHIFT -> "CN_MEMBER_SHIFT"
-  | CN_INSTANTIATE -> "CN_INSTANTIATE"
-  | CN_SPLIT_CASE -> "CN_SPLIT_CASE"
-  | CN_UNFOLD -> "CN_UNFOLD"
-  | CN_APPLY -> "CN_APPLY"
-  | CN_PRINT -> "CN_PRINT"
-  | CN_MATCH -> "CN_MATCH"
-  | CN_BOOL -> "CN_BOOL"
-  | CN_BITS _ -> "CN_BITS"
-  | CN_INTEGER -> "CN_INTEGER"
-  | CN_REAL -> "CN_REAL"
-  | CN_POINTER -> "CN_POINTER"
-  | CN_ALLOC_ID -> "CN_ALLOC_ID"
-  | CN_MAP -> "CN_MAP"
-  | CN_LIST -> "CN_LIST"
-  | CN_TUPLE -> "CN_TUPLE"
-  | CN_SET -> "CN_SET"
-  | CN_LET -> "CN_LET"
-  | CN_TAKE -> "CN_TAKE"
-  | CN_OWNED -> "CN_OWNED"
-  | CN_BLOCK -> "CN_BLOCK"
-  | CN_EACH -> "CN_EACH"
-  | CN_NULL -> "CN_NULL"
-  | CN_TRUE -> "CN_TRUE"
-  | CN_FALSE -> "CN_FALSE"
-  | CN_FUNCTION -> "CN_FUNCTION"
-  | CN_LIFT_FUNCTION -> "CN_LIFT_FUNCTION"
-  | CN_PREDICATE -> "CN_PREDICATE"
-  | CN_LEMMA -> "CN_LEMMA"
-  | CN_SPEC -> "CN_SPEC"
-  | CN_DATATYPE -> "CN_DATATYPE"
-  | CN_TYPE_SYNONYM -> "CN_TYPE_SYNONYM"
-  | CN_REQUIRES -> "CN_REQUIRES"
-  | CN_GHOST -> "CN_GHOST"
-  | CN_ENSURES -> "CN_ENSURES"
-  | CN_INV -> "CN_INV"
-  | CN_ACCESSES -> "CN_ACCESSES"
-  | CN_TRUSTED -> "CN_TRUSTED"
-  | CN_UNCHANGED -> "CN_UNCHANGED"
-  | CN_WILD -> "CN_WILD"
-  | CN_IMPLIES -> "CN_IMPLIES"
-  | CN_TO_BYTES -> "CN_TO_BYTES"
-  | CN_FROM_BYTES -> "CN_FROM_BYTES"
-

@@ -63,21 +63,28 @@ type extra_semi_context =
   | INSIDE_STRUCT
   | INSIDE_UNION
 
-type cparser_cause =
-  | Cparser_invalid_symbol
-  | Cparser_invalid_string_character
-  | Cparser_invalid_line_number of string
-  | Cparser_unexpected_eof
+type cparsing_cause =
+  | Clexer_invalid_symbol
+  | Clexer_invalid_string_character
+  | Clexer_invalid_line_number of string
+  | Clexer_unexpected_eof
+  | Clexer_nested_comment
+  | Clexer_unterminated_comment of string
+  | Clexer_mismatched_magic_comment
   | Cparser_unexpected_token of string
   | Cparser_non_standard_string_concatenation
   | Cparser_extra_semi of extra_semi_context
-  | Cparser_KnR_declaration (* we don't support K&R syntax for declarations *)
-  | Cparser_nested_comment
-  | Cparser_unterminated_comment of string
-  | Cparser_mismatched_magic_comment
-  | Cparser_experimental_keyword of string 
-  | Cparser_unimplemented_keyword of string
-  | Cparser_deprecated_keyword of string * string
+  | Cparser_KnR_declaration (* we don't support K&R syntax for declarations *) (* DEAD? *)
+
+type cnparsing_cause =
+  | Cnlexer_nested_comment
+  | Cnlexer_unterminated_comment of string
+  | Cnlexer_invalid_symbol
+  | Cnlexer_unexpected_token of string
+  | Cnlexer_deprecated_keyword of string * string
+  | Cnlexer_experimental_keyword of string
+  | Cnlexer_unimplemented_keyword of string
+
 
 type core_lexer_cause =
   | Core_lexer_invalid_symbol of char
@@ -102,7 +109,8 @@ type internal_error =
 
 type cause =
   | CPP of string (* NOTE: this is an empty string when piping to stderr *)
-  | CPARSER of cparser_cause
+  | C_PARSING of cparsing_cause
+  | CN_PARSING of cnparsing_cause
   | EXTENSION of extension_cause
   | DESUGAR of desugar_cause
   | AIL_TYPING of TypingError.typing_error

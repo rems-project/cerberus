@@ -11,7 +11,8 @@ open Cerb_pp_prelude
 
 let string_of_cause_kind = function
   | CPP _ -> "cpp"
-  | CPARSER _ -> "parser"
+  | C_PARSING _ -> "parser"
+  | CN_PARSING _ -> "parser"
   | EXTENSION _ -> "extension"
   | DESUGAR _ -> "desugar"
   | AIL_TYPING _ -> "ail_typing"
@@ -47,15 +48,21 @@ let string_of_extension_cause = function
   | EXT_GNUlabelAsValue ->
       "GNU address-of-label"
 
-let string_of_cparser_cause = function
-  | Cparser_invalid_symbol ->
+let string_of_cparsing_cause = function
+  | Clexer_invalid_symbol ->
       "invalid symbol"
-  | Cparser_invalid_string_character ->
+  | Clexer_invalid_string_character ->
       "invalid string character"
-  | Cparser_invalid_line_number n ->
+  | Clexer_invalid_line_number n ->
       "invalid line directive:" ^ n
-  | Cparser_unexpected_eof ->
+  | Clexer_unexpected_eof ->
       "unexpected end of file"
+  | Clexer_nested_comment ->
+      "nested comment"
+  | Clexer_unterminated_comment str ->
+      "unterminated " ^ str ^ " comment"
+  | Clexer_mismatched_magic_comment ->
+      "magic comment syntax at open but not close"
   | Cparser_unexpected_token str ->
       "unexpected token " ^ str
   | Cparser_non_standard_string_concatenation ->
@@ -70,19 +77,22 @@ let string_of_cparser_cause = function
       "found an extra semicolon inside a union definition"
   | Cparser_KnR_declaration ->
       "found K&R-style declaration (unsupported)"
-  | Cparser_nested_comment ->
-      "nested comment"
-  | Cparser_unterminated_comment str ->
-      "unterminated " ^ str ^ " comment"
-  | Cparser_mismatched_magic_comment ->
-      "magic comment syntax at open but not close"
-  | Cparser_experimental_keyword str -> 
-      "experimental keyword '" ^ str ^ "' (use of experimental features is discouraged)"
-  | Cparser_unimplemented_keyword str -> 
-      "unimplemented keyword '" ^ str ^ "'"
-  | Cparser_deprecated_keyword (str, instead) -> 
-      "deprecated keyword '" ^ str ^ "', use '" ^ instead ^ "' instead"
 
+let string_of_cnparsing_cause = function
+  | Cnlexer_nested_comment ->
+      "nested comment"
+  | Cnlexer_unterminated_comment str ->
+      "unterminated " ^ str ^ " comment"
+  | Cnlexer_invalid_symbol ->
+      "invalid symbol"
+  | Cnlexer_unexpected_token str ->
+      "unexpected token " ^ str
+  | Cnlexer_deprecated_keyword (str, instead) ->
+      "deprecated keyword '" ^ str ^ "', use '" ^ instead ^ "' instead"
+  | Cnlexer_experimental_keyword str -> 
+      "experimental keyword '" ^ str ^ "' (use of experimental features is discouraged)"
+  | Cnlexer_unimplemented_keyword str -> 
+      "unimplemented keyword '" ^ str ^ "'"
 
 let string_of_constraint_violation = function
   | GenericSelectionMultipleDefault ->
@@ -568,8 +578,10 @@ let string_of_driver_cause = function
 let short_message = function
   | CPP err ->
       err
-  | CPARSER ccause ->
-      string_of_cparser_cause ccause
+  | C_PARSING ccause ->
+      string_of_cparsing_cause ccause
+  | CN_PARSING ccause ->
+      string_of_cnparsing_cause ccause
   | EXTENSION ecause ->
       "use of " ^ string_of_extension_cause ecause ^ " extension (try --permissive)"
   | DESUGAR dcause ->
@@ -637,7 +649,7 @@ let get_driver_ref = function
                    | None -> []) ubs))
 
 let get_std_ref = function
-  | CPARSER _ ->
+  | C_PARSING _ | CN_PARSING _ ->
       NoRef
   | DESUGAR dcause ->
       get_desugar_ref dcause

@@ -4,10 +4,9 @@ open Cerb_frontend
 open Lexing
 open Tokens
 
-exception Error of Errors.cparser_cause
+exception Error of Errors.cparsing_cause
 
 type flags = {
-  inside_cn : bool;           (* We are lexing in a CN comment *)
   magic_comment_char : char;  (* The character after a comment indicating to start a CN comment *)
   at_magic_comments : bool;   (* Should we process CN comments (true) or treat them as normal comments (false) *)
 }
@@ -129,139 +128,6 @@ let lexicon: (string, token) Hashtbl.t =
   let add (key, builder) = Hashtbl.add lexicon key builder in
   List.iter add keywords; lexicon
 
-
-(* BEGIN CN *)
-
-type cn_keyword_kind =
- | Deprecated of string (* string: what to use instead *)
- | Production
- | Experimental
- | Unimplemented
-
-let cn_keywords: (string * (cn_keyword_kind * Tokens.token)) list = [
-    (* CN 'production' keywords: well-supported and suitable for general use *)
-    "good"          , (Production, CN_GOOD);
-    "boolean"       , (Production, CN_BOOL);
-    "integer"       , (Production, CN_INTEGER);
-    "u8"            , (Production, CN_BITS (`U,8));
-    "u16"           , (Production, CN_BITS (`U,16));
-    "u32"           , (Production, CN_BITS (`U,32));
-    "u64"           , (Production, CN_BITS (`U,64));
-    "u128"          , (Production, CN_BITS (`U,128));
-    "i8"            , (Production, CN_BITS (`I,8));
-    "i16"           , (Production, CN_BITS (`I,16));
-    "i32"           , (Production, CN_BITS (`I,32));
-    "i64"           , (Production, CN_BITS (`I,64));
-    "i128"          , (Production, CN_BITS (`I,128));
-    "real"          , (Production, CN_REAL);
-    "pointer"       , (Production, CN_POINTER);
-    "alloc_id"      , (Production, CN_ALLOC_ID);
-    "map"           , (Production, CN_MAP);
-    "let"           , (Production, CN_LET);
-    "take"          , (Production, CN_TAKE);
-    "RW"            , (Production, CN_OWNED);
-    "Owned"         , (Deprecated "RW", CN_OWNED);
-    "W"             , (Production, CN_BLOCK);
-    "Block"         , (Deprecated "W", CN_BLOCK);
-    "each"          , (Production, CN_EACH);
-    "NULL"          , (Production, CN_NULL);
-    "true"          , (Production, CN_TRUE);
-    "false"         , (Production, CN_FALSE);
-    "requires"      , (Production, CN_REQUIRES);
-    "ensures"       , (Production, CN_ENSURES);
-    "inv"           , (Production, CN_INV);
-    "accesses"      , (Production, CN_ACCESSES);
-    "trusted"       , (Production, CN_TRUSTED);
-    "spec"          , (Production, CN_SPEC);
-    "unchanged"     , (Production, CN_UNCHANGED);
-    "instantiate"   , (Production, CN_INSTANTIATE);
-    "split_case"    , (Production, CN_SPLIT_CASE);
-    "focus"         , (Production, CN_EXTRACT);
-    "extract"       , (Deprecated "focus", CN_EXTRACT);
-    "array_shift"   , (Production, CN_ARRAY_SHIFT);
-    "member_shift"  , (Production, CN_MEMBER_SHIFT);
-    "unfold"        , (Production, CN_UNFOLD);
-    "apply"         , (Production, CN_APPLY);
-    "match"         , (Production, CN_MATCH);
-    "predicate"     , (Production, CN_PREDICATE);
-    "function"      , (Production, CN_FUNCTION);
-    "lemma"         , (Production, CN_LEMMA);
-    "datatype"      , (Production, CN_DATATYPE);
-    "type_synonym"  , (Production, CN_TYPE_SYNONYM);
-    "_"             , (Production, CN_WILD);
-    "implies"       , (Production, CN_IMPLIES);
-
-    (* CN 'experimental' keywords - functional in some cases but not recommended for
-    general use *)
-    "cn_list"       , (Experimental, CN_LIST);
-    "cn_tuple"      , (Experimental, CN_TUPLE);
-    "cn_set"        , (Experimental, CN_SET);
-    "cn_have"       , (Experimental, CN_HAVE);
-    "cn_function"   , (Experimental, CN_LIFT_FUNCTION);
-    "cn_print"      , (Experimental, CN_PRINT);
-    "cn_ghost"      , (Experimental, CN_GHOST);
-    "to_bytes"      , (Experimental, CN_TO_BYTES);
-    "from_bytes"    , (Experimental, CN_FROM_BYTES);
-
-    (* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
-    "pack"          , (Unimplemented, CN_PACK);
-    "unpack"        , (Production, CN_UNPACK);
-    "derive_constraints", (Production, CN_DERIVE_CONSTRAINTS);
-  ]
-
-
-(* This table is mutated during lexing to reduce the number of warnings
-   for experimental features. Unfortunately, this makes it so that the
-   behaviour of the lexer implicitly changes across multiple calls
-   to [create_lexer].
-
-   In some sense, this is fine, since Cerberus/CN only processes one
-   translation unit per invocation from the command line, and we would
-   likely want warnings to only occur once per invocation.
-
-   However, if this were to change, and especially if this were to be
-   made concurrent, this would need to be revisited.
-
-   It is possible to thread the seen experimental tokens back to the caller for
-   them to decide; it is also ugly. *)
-let cn_keywords =
-  let table = Hashtbl.create 0 in
-  List.iter (fun (key, builder) -> Hashtbl.add table key builder) cn_keywords;
-  table
-
-(* Attempt to lex a CN keyword. These may be:
-  * 'production' - well-supported and suitable for general use
-  * 'experimental' - functional in some cases but not recommended for general use
-  * 'unimplemented' - non-functional, but the keyword is reserved
-
-May raise `Not_found`, indicating `id` is not a recognized CN keyword. *)
-let cn_lex_keyword id start_pos end_pos =
-  (* Try to lex CN production keywords *)
-  match Hashtbl.find cn_keywords id with
-  | (Production, kw) -> kw
-  | (Experimental, kw) ->
-    (* Only want to warn once _per CN/Cerberus invocation_ *)
-    Hashtbl.replace cn_keywords id (Production, kw);
-    prerr_endline
-      (Pp_errors.make_message
-        Cerb_location.(region (LineMap.position start_pos, LineMap.position end_pos) NoCursor)
-        Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
-        Warning);
-    kw
-  | (Deprecated instead, kw) ->
-    (* Only want to warn once _per CN/Cerberus invocation_ *)
-    Hashtbl.replace cn_keywords id (Production, kw);
-    prerr_endline
-      (Pp_errors.make_message
-        Cerb_location.(region (LineMap.position start_pos, LineMap.position end_pos) NoCursor)
-        Errors.(CPARSER (Errors.Cparser_deprecated_keyword (id, instead)))
-        Warning);
-    kw
-  | (Unimplemented, _) -> raise (Error (Errors.Cparser_unimplemented_keyword id))
-
-(* END CN *)
-
-
 let lex_comment remainder lexbuf =
   let ch = lexeme_char lexbuf 0 in
   if ch = '\n' then new_line lexbuf;
@@ -280,7 +146,7 @@ let magic_token flags start_pos end_pos chars =
     prerr_endline
       (Pp_errors.make_message
          (Cerb_location.point (LineMap.position end_pos))
-         Errors.(CPARSER Cparser_mismatched_magic_comment)
+         Errors.(C_PARSING Clexer_mismatched_magic_comment)
          Warning);
     None
   ) else (
@@ -454,14 +320,14 @@ rule s_char_sequence = parse
   | '"'
       { [] }
   | _
-      { raise (Error Errors.Cparser_invalid_string_character) }
+      { raise (Error Errors.Clexer_invalid_string_character) }
 
 and magic flags start_of_comment = parse
   (* End of the magic comment *)
   | "*/" {[]}
-  | "/*" { raise (Error Errors.Cparser_nested_comment) }
+  | "/*" { raise (Error Errors.Clexer_nested_comment) }
   | eof  { lexbuf.lex_start_p <- start_of_comment;
-           raise (Error (Errors.Cparser_unterminated_comment (Printf.sprintf "/*%c" flags.magic_comment_char))) }
+           raise (Error (Errors.Clexer_unterminated_comment (Printf.sprintf "/*%c" flags.magic_comment_char))) }
   | _    {lex_magic (magic flags start_of_comment) lexbuf}
 
 (* Consume a comment: /* ... */ *)
@@ -469,9 +335,9 @@ and magic flags start_of_comment = parse
 and comment start_of_comment = parse
   (* End of the comment *)
   | "*/" {()}
-  | "/*" { raise (Error Errors.Cparser_nested_comment) }
+  | "/*" { raise (Error Errors.Clexer_nested_comment) }
   | eof  { lexbuf.lex_start_p <- start_of_comment;
-           raise (Error (Errors.Cparser_unterminated_comment "/*")) }
+           raise (Error (Errors.Clexer_unterminated_comment "/*")) }
   | _    {lex_comment (comment start_of_comment) lexbuf}
 
 
@@ -490,16 +356,16 @@ and hash = parse
         let n =
           try int_of_string n
           with Failure _ ->
-            raise (Error (Errors.Cparser_invalid_line_number n))
+            raise (Error (Errors.Clexer_invalid_line_number n))
         in
         offset_location lexbuf file n
       )}
   | ("pragma" [^ '\n']* '\n')
       { new_line lexbuf }
   | [^ '\n']* eof
-      { raise (Error Errors.Cparser_unexpected_eof) }
+      { raise (Error Errors.Clexer_unexpected_eof) }
   | _
-      { raise (Error Errors.Cparser_invalid_symbol) }
+      { raise (Error Errors.Clexer_invalid_symbol) }
 
 (* Entry point *)
 and initial flags = parse
@@ -542,12 +408,6 @@ and initial flags = parse
       { CONSTANT (Cabs.CabsInteger_const (str, Some Cabs.CabsSuffix_UL)) }
   | (integer_constant as str) long_long_suffix unsigned_suffix
       { CONSTANT (Cabs.CabsInteger_const (str, Some Cabs.CabsSuffix_ULL)) }
-    (* For CN. Copying and adjusting Kayvan's code from above. *)
-  | (integer_constant as str) 'u' (cn_integer_width as n)
-      { CN_CONSTANT (str, `U, int_of_string n) }
-  | (integer_constant as str) 'i' (cn_integer_width as n)
-      { CN_CONSTANT (str, `I, int_of_string n) }
-    (* /For CN. *)
   | (integer_constant as str)
       { CONSTANT (Cabs.CabsInteger_const (str, None)) }
 
@@ -655,34 +515,13 @@ and initial flags = parse
   | "|||" { PIPES   }
   | "}-}" { RBRACES }
 
-    (* copied over from (now extinct) backend/cn/assertion_lexer.mll *)
-  | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
-      {
-        if flags.inside_cn then
-          try
-            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p
-          with Not_found ->
-            UNAME id
-        else
-          UNAME id
-      }
-
   | identifier as id
-    { try
-        Hashtbl.find lexicon id
-      with Not_found ->
-        if flags.inside_cn then
-          try
-            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p
-          with Not_found ->
-            LNAME id
-        else
-          LNAME id
-    }
+    { try Hashtbl.find lexicon id with Not_found -> NAME id }
+
   | eof
       { EOF }
   | _
-      { raise (Error Errors.Cparser_invalid_symbol) }
+      { raise (Error Errors.Clexer_invalid_symbol) }
 
 (* ========================================================================== *)
 
@@ -692,20 +531,19 @@ type lexer_state =
   | LSIdentifier of string
 
 
-let create_lexer ~(inside_cn:bool) : [ `LEXER of lexbuf -> token ] =
+let create_lexer () : [ `LEXER of lexbuf -> token ] =
   let lexer_state = ref LSRegular in
+  let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
+  let magic_comment_char =
+    if Switches.(has_switch SW_magic_comment_char_dollar)
+    then '$'
+    else '@'
+  in
   `LEXER (fun lexbuf ->
   match !lexer_state with
   | LSRegular ->
-      let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
-      let magic_comment_char =
-        if Switches.(has_switch SW_magic_comment_char_dollar)
-        then '$'
-        else '@'
-      in
-      begin match initial { inside_cn; at_magic_comments; magic_comment_char } lexbuf with
-      | LNAME i as tok -> lexer_state := LSIdentifier i; tok
-      | UNAME i as tok -> lexer_state := LSIdentifier i; tok
+      begin match initial { at_magic_comments; magic_comment_char } lexbuf with
+      | NAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok
       end
   | LSIdentifier i ->

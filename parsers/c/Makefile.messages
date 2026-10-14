@@ -18,6 +18,16 @@ complete:
 	./err_msg.py /tmp/c_parser_error.merged > /tmp/c_parser_error.easy
 	mv /tmp/c_parser_error.easy c_parser_error.messages
 
+.PHONY: complete_cn
+complete_cn:
+	dune exec menhir -- cn_parser.mly --list-errors > /tmp/cn_parser_error.auto.messages
+	dune exec menhir -- cn_parser.mly \
+	    --merge-errors /tmp/cn_parser_error.auto.messages \
+	    --merge-errors cn_parser_error.messages \
+	    > /tmp/cn_parser_error.merged
+	./err_msg.py /tmp/cn_parser_error.merged > /tmp/cn_parser_error.easy
+	mv /tmp/cn_parser_error.easy cn_parser_error.messages
+
 # [make regen-comments] is used under the programmer's manual control, after the
 # grammar in [c_parser.mly] has been modified.
 
