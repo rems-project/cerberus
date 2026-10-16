@@ -580,9 +580,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         E.return (Pexpr annot (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
     | PEmember_shift pe tag_sym memb_ident ->
         let xs = match snd $ fromJust "Core_typing.infer_pexpr, PEmember_shift" (Map.lookup tag_sym tagDefs) with
-          | Cty.StructDef z Nothing -> z
-          | Cty.StructDef z (Just _) ->
-                error "TODO: Core_typing, PEmember_shift => struct with flexible array member"
+          | Cty.StructDef z _ -> z
           | Cty.UnionDef  z -> z
         end in
         typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe >>= fun pe' ->
