@@ -324,7 +324,6 @@ let inline mapM = State_exception.mapM
 let inline mapM_ = State_exception.mapM_
 
 let inline foldlM = State_exception.foldlM
-let inline foldrM = State_exception.foldrM
 
 
 val catch: forall 'a. desugM 'a -> (Errors.error -> desugM 'a) -> desugM 'a

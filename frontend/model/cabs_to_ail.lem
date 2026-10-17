@@ -3985,7 +3985,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             let loop_id = Symbol.fresh_int () in
             E.record_loop_attribute loop_id attrs_outer (match e2_opt with Just e2 -> Loc.locOf e2 | Nothing -> Loc.unknown end) loc >> 
             (* for each [init_declarator] *)
-            E.foldrM (fun opt (acc1, acc2) ->
+            E.foldlM (fun (acc1, acc2) opt ->
               match opt with
                 | Nothing ->
                     (* Case of a typedef *)
@@ -4033,7 +4033,9 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                                          , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), Nothing, qs, ty)) :: acc2 )
                           end
                     end
-              end) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->
+              end) ([], []) xs >>= fun (rev_sym_d_es, rev_bindings) ->
+              let sym_d_es = List.reverse rev_sym_d_es in
+              let bindings = List.reverse rev_bindings in
               (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
               maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
               (* STD §6.8.5#5 the body has its own scope *)

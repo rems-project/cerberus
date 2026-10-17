@@ -55,8 +55,6 @@ let rec stExcept_foldlM f a = function
   | b::bs -> stExcept_bind (f a b) (fun a' -> stExcept_foldlM f a' bs)
 end
 
-val foldrM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'b 's 'msg) -> 'b -> list 'a -> stExceptM 'b 's 'msg
-let foldrM f a xs = stExcept_foldlM (fun b x -> f x b) a (List.reverse xs)
 
 (* Exception failure *)
 let inline fail msg = fun _ -> Exception.fail msg
