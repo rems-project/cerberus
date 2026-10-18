@@ -46,6 +46,15 @@ let get_unionDef tagDefs tag_sym =
   end
 
 
+let is_memberof tagDefs tag_sym membr_ident =
+  let is_found xs = isJust (List.lookup membr_ident xs) in
+  match Map.lookup tag_sym tagDefs with
+  | Nothing -> false
+  | Just (_, StructDef xs Nothing) -> is_found xs
+  | Just (_, StructDef xs (Just (FlexibleArrayMember _ flex_ident _ _))) ->
+      is_found xs || membr_ident = flex_ident
+  | Just (_, UnionDef xs) -> is_found xs
+  end
 
 
 val     are_compatible_aux: (map Symbol.sym (Loc.t * tag_definition) * map Symbol.sym (Loc.t * tag_definition)) -> (qualifiers * ctype) -> (qualifiers * ctype) -> bool

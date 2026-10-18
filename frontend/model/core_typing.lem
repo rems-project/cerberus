@@ -578,20 +578,14 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe1 >>= fun pe1' ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
         E.return (Pexpr annot (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
-    | PEmember_shift pe tag_sym memb_ident ->
-        let xs = match snd $ fromJust "Core_typing.infer_pexpr, PEmember_shift" (Map.lookup tag_sym tagDefs) with
-          | Cty.StructDef z Nothing -> z
-          | Cty.StructDef z (Just _) ->
-                error "TODO: Core_typing, PEmember_shift => struct with flexible array member"
-          | Cty.UnionDef  z -> z
-        end in
-        typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe >>= fun pe' ->
-          match List.lookup memb_ident xs with
-            | Nothing ->
-                E.fail loc (InvalidMember tag_sym memb_ident)
-            | _ ->
-                E.return (Pexpr annot (InferredType_object OTy_pointer) (PEmember_shift pe' tag_sym memb_ident))
-          end
+    | PEmember_shift pe tag_sym membr_ident ->
+        if Cty.is_memberof tagDefs tag_sym membr_ident then
+          typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe >>= fun pe' ->
+          E.return
+            (Pexpr annot (InferredType_object OTy_pointer)
+              (PEmember_shift pe' tag_sym membr_ident))
+        else
+          E.fail loc (InvalidMember tag_sym membr_ident)
     | PEmemop (Mem_common.DeriveCap bop is_signed) [pe1; pe2] ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
@@ -980,21 +974,13 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                        <*> E.return cTy
                        <*> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2)
     | PEmember_shift pe tag_sym memb_ident ->
-          let xs = match snd $ fromJust "Core_typing.typecheck_pexpr, PEmember_shift 1" (Map.lookup tag_sym tagDefs) with
-            | Cty.StructDef z Nothing -> z
-            | Cty.StructDef z (Just _) ->
-                error "TODO: Core_typing, PEmember_shift => struct with flexible array member"
-            | Cty.UnionDef  z -> z
-          end in
-          match List.lookup memb_ident xs with
-            | Nothing ->
-                E.fail loc (InvalidMember tag_sym memb_ident)
-            | _ ->
-                guard_match loc "member_shift()" bTy (BTy_object OTy_pointer) >>
-                (PEmember_shift <$> typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe
-                                <*> E.return tag_sym
-                                <*> E.return memb_ident)
-          end
+        if Cty.is_memberof tagDefs tag_sym memb_ident then
+          guard_match loc "member_shift()" bTy (BTy_object OTy_pointer) >>= fun () ->
+          (PEmember_shift <$> typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe
+                          <*> E.return tag_sym
+                          <*> E.return memb_ident)
+        else
+          E.fail loc (InvalidMember tag_sym memb_ident)
     | PEmemop (Mem_common.DeriveCap bop is_signed) [pe1; pe2] ->
         guard_match loc "memop(derive_cap)" bTy (BTy_object OTy_integer) >>
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
