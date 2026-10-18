@@ -98,10 +98,6 @@ MORE DETAILS ABOUT THE INTERESTING MODULES:
 * core_eval.lem
 : Big-step semantics for the Core pure expressions
 
-* core_indet.lem
-: Core to Core rewriting functions to solve C's "indeterminate sequencing"
-  (currently the code actually doing the work is commented out)
-
 * core_rewrite.lem
 : some Core to Core rewriting functions. These rewrites are technically not
   necessary, but they help make the generated Core more readable and reduce

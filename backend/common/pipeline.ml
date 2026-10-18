@@ -468,11 +468,10 @@ let typed_core_passes (conf, io) core_file =
       let* _ = Core_typing.typecheck_program core_file in
       io.pass_message "Core typechecking completed!"
   end in
-  (* TODO: for now assuming a single order comes from indet expressions *)
-  let* core_file' = Core_indet.hackish_order <$> begin
+  let* core_file' =
     if conf.rewrite_core then core_rewrite (conf, io) core_file
     else Result.ok core_file
-  end in
+  in
   (* NOTE: unlike the earlier call, this is typechecking after the rewriting and
      the indet passes *)
   let* typed_core_file' = Core_typing.typecheck_program core_file' in
@@ -522,16 +521,14 @@ let core_passes (conf, io) ~filename core_file =
       Copy_propagation.transform_file ~unwrap_loaded:rm_unspecs core_file
     else
       core_file in
-  Core_indet.hackish_order <$> begin
-    if conf.sequentialise_core || conf.typecheck_core then
-      let* (core_file, typed_core_file) = typed_core_passes (conf, io) core_file in
-      let* _ = print_core (conf, io) ~filename typed_core_file in
-      Result.ok core_file
-    else if conf.rewrite_core then
-      core_rewrite (conf, io) core_file >>= print_core (conf, io) ~filename
-    else
-      print_core (conf, io) ~filename core_file
-  end
+  if conf.sequentialise_core || conf.typecheck_core then
+    let* (core_file, typed_core_file) = typed_core_passes (conf, io) core_file in
+    let* _ = print_core (conf, io) ~filename typed_core_file in
+    Result.ok core_file
+  else if conf.rewrite_core then
+    core_rewrite (conf, io) core_file >>= print_core (conf, io) ~filename
+  else
+    print_core (conf, io) ~filename core_file
 
 let interp_backend ~conf io core_file ~args ~batch ~fs =
   let module D = Driver_ocaml in
