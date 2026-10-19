@@ -202,6 +202,9 @@ type asm_qualifier =
 %type<Cabs.cabs_declaration>
   declaration
 
+%type<Cabs.cabs_declaration>
+  declaration_ext
+
 %type<Cabs.specifiers>
   declaration_specifiers
 
@@ -575,6 +578,8 @@ unary_expression:
 | op= unary_operator expr= cast_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos(op))
                      , CabsEunary (op, expr) ) }
+| EXTENSION expr= cast_expression
+    { expr }
 | SIZEOF expr= unary_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($1))
                      , CabsEsizeof_expr expr ) }
@@ -816,6 +821,15 @@ declaration:
       Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
+(* GNU extension: a declaration in a compound statement or in a for clause can
+ * be preceded by __extension__ *)
+declaration_ext:
+| xs_decl= declaration
+    { xs_decl }
+| EXTENSION xs_decl= declaration_ext
+    { xs_decl }
+;
+
 declaration_specifier:
 | sc= storage_class_specifier ioption(attribute_specifier_sequence)
     { { empty_specs with storage_classes=      [sc]; } }
@@ -969,6 +983,8 @@ struct_declaration:
                           opt_to_rev_list rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
+| EXTENSION decl= struct_declaration
+    { decl }
 ;
 
 specifier_qualifier_list:
@@ -1319,7 +1335,8 @@ block_item_list: (* NOTE: the list is in reverse *)
 ;
 
 block_item:
-| xs_decl= declaration
+(* GNU extension: allowing __extension__ keywords to precede the declaration *)
+| xs_decl= declaration_ext
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
         , Annot.no_attributes
@@ -1397,7 +1414,8 @@ iteration_statement:
         ( region ($startpos, $endpos) noCursor
         , magic_to_attrs magic
         , CabsSfor (Option.map (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
-| FOR LPAREN xs_decl= declaration expr2_opt= expression? SEMICOLON
+(* GNU extension: allowing __extension__ keywords to precede the declaration *)
+| FOR LPAREN xs_decl= declaration_ext expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
@@ -1529,6 +1547,8 @@ external_declaration:
 | xs_decl= declaration has_extra= boption(SEMICOLON+)
     { if has_extra then warn_extra_semicolon $startpos(has_extra) AFTER_EDECL;
       EDecl_decl xs_decl }
+| EXTENSION decl= external_declaration
+    { decl }
 ;
 
 (* §6.9.1 Function definitions *)

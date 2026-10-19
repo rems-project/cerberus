@@ -18,7 +18,6 @@
         --unused-token DECIMAL32
         --unused-token DECIMAL64
         --unused-token DECIMAL128
-        --unused-token EXTENSION
         --unused-token FALSE
         --unused-token INT128
         --unused-token LABEL
