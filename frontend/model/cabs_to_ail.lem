@@ -3893,7 +3893,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               typecheckAil_promoted d_e >>= function
                 | Left (loc, tcause) -> E.fail_ailtyping loc tcause
                 | Right Nothing ->
-                    E.constraint_violation loc
+                    E.constraint_violation (Loc.locOf e)
                       SwitchStatementControllingExpressionNotInteger
                 | Right (Just promoted_ty) ->
                     E.under_scope s_scope (E.as_switch_body promoted_ty (self s))
