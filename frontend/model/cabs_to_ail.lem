@@ -433,7 +433,7 @@ let rec _UNUSED_ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
     (* TODO: union *)
     | _ ->
         error ("ctypeAtPath: wildcard ==> " ^
-               Pp.stringFromAil_ctype Ctype.no_qualifiers cty ^
+               Pp.stringFromCtype_human Ctype.no_qualifiers cty ^
                " --- path: " ^ stringFromInit_path path)
   end
 
@@ -3057,7 +3057,7 @@ OTHER
 (* STD §6.7.9#10, second sentence *)
 and _UNUSED_static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
   let () = Debug.print_debug 8 [Debug.DB_desugaring]
-      (fun () -> "ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers cty) in
+      (fun () -> "ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers cty) in
   match ty with
     | Ctype.Pointer _ _ ->
         ConstantNull
@@ -3065,7 +3065,7 @@ and _UNUSED_static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty)
         if AilTypesAux.is_arithmetic cty then
           ConstantInteger (IConstant 0 Octal Nothing)
         else
-          error ("type error 1: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers cty)
+          error ("type error 1: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers cty)
     | Ctype.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
@@ -3105,7 +3105,7 @@ and _UNUSED_static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty)
         end
 
     | _ ->
-        error ("type error 2: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers cty)
+        error ("type error 2: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers cty)
 (*  | Function ty qs_tys is_variadic ->
         
     | Atomic ty ->
@@ -3215,8 +3215,8 @@ and foo_aux
                 E.get_tag_definitions >>= fun tagDefs ->
                 let cursor_ty = innerCtype tagDefs outer_ty in
                 E.print_debugM 2 (fun () ->
-                  "Init_expr, cursor_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers cursor_ty ^
-                  ", outer_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers outer_ty ^
+                  "Init_expr, cursor_ty: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers cursor_ty ^
+                  ", outer_ty: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers outer_ty ^
                   " ===> " ^ Pp.stringFromAil_expression d_e
                 ) >>= fun () ->
                 (* TODO: should use Ail typing instead of this *)
@@ -3406,7 +3406,7 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
           "HELLO 2\n" ^
           stringFromList (fun (x,y,z) ->
             stringFromInit_path x ^ " -- " ^ stringFromInit_path y
-                                  ^ " -- " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers z ^ "\n"
+                                  ^ " -- " ^ Pp.stringFromCtype_human Ctype.no_qualifiers z ^ "\n"
           ) elems
         ) >>= fun () ->
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
@@ -3417,7 +3417,7 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
           "HELLO 1\n" ^
           stringFromList (fun (x,y,z) ->
             stringFromInit_path x ^ " -- " ^ stringFromInit_path y
-                                  ^ " -- " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers z ^ "\n"
+                                  ^ " -- " ^ Pp.stringFromCtype_human Ctype.no_qualifiers z ^ "\n"
           ) elems
         ) >>= fun () ->
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
@@ -3606,7 +3606,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
           foo current_ty init >>= fun (current_ty', xs) ->
           
           E.print_debugM 2 (fun () ->
-            "current_ty': " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers current_ty' ^
+            "current_ty': " ^ Pp.stringFromCtype_human Ctype.no_qualifiers current_ty' ^
             ", FOO ==> " ^ stringFromList (fun (path, expr) ->
               stringFromInit_path path ^
               " := " ^ Pp.stringFromAil_expression expr
@@ -3701,7 +3701,7 @@ and desugar_declaration_base attrs specifs idecltors =
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
                           E.print_debugM 2 (fun () ->
-                            "Hello, ty' = " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty'
+                            "Hello, ty' = " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty'
                           ) >>= fun () ->
                           begin if cty <> ty' then
                             E.print_debugM 2 (fun () ->
@@ -4010,7 +4010,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                             | Just (ty', d_e) ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
                                 E.print_debugM 2 (fun () ->
-                                  "Hello, ty' = " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty'
+                                  "Hello, ty' = " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty'
                                 ) >>= fun () ->
                                 begin if ty <> ty' then
                                   E.print_debugM 2 (fun () ->
@@ -4833,7 +4833,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
           (* NOTE: the constraint in §6.9.1#3 is enforced later in the Ail
             typechecker *)
           let () = Debug.print_debug 4 [] (fun () ->
-            show fun_ident ^ " ===> " ^ Pp.stringFromAil_ctype qs ty
+            show fun_ident ^ " ===> " ^ Pp.stringFromCtype_human qs ty
           ) in
           E.function_is_defined fun_sym >>= function
             | true  -> E.constraint_violation (Loc.locOf fun_ident) (ExternalRedefinition fun_sym)
@@ -4977,7 +4977,7 @@ let desugar_and_register_external_declaration edecl =
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
                           E.print_debugM 2 (fun () ->
-                            "Hello, ty' = " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty'
+                            "Hello, ty' = " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty'
                           ) >>=fun () ->
                           begin if ty <> ty' then
                             E.print_debugM 2 (fun () ->
@@ -5114,17 +5114,17 @@ let desugar desug_conf core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) 
       desugar_pointer_declarator ptr_decltor1 >>= fun mk_type1 ->
       let (qs1, ty1) = mk_type1 base_qs1 base_ty1 in
       let () = Debug.print_debug 2 [] (fun () -> "int const **ptrToPtrToConstInt") in
-      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs1 ty1)) in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromCtype_human qs1 ty1)) in
       
       desugar_pointer_declarator ptr_decltor2 >>= fun mk_type2 ->
       let (qs2, ty2) = mk_type2 base_qs2 base_ty2 in
       let () = Debug.print_debug 2 [] (fun () -> "int * const *ptrToConstPtrToInt") in
-      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs2 ty2)) in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromCtype_human qs2 ty2)) in
       
       desugar_pointer_declarator ptr_decltor3 >>= fun mk_type3 ->
       let (qs3, ty3) = mk_type3 base_qs3 base_ty3 in
       let () = Debug.print_debug 2 [] (fun () -> "int ** const constPtrToPtrToInt") in
-      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs3 ty3)) in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromCtype_human qs3 ty3)) in
       
       (* ----- *)
       
@@ -5148,7 +5148,7 @@ let desugar desug_conf core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) 
         mk_qs_type1 (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
       
       let () = Debug.print_debug 2 [] (fun () -> "DECLTOR1:") in
-      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs ty)) in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromCtype_human qs ty)) in
       
       (* ----- *)
       
@@ -5157,7 +5157,7 @@ let desugar desug_conf core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) 
         (InitDecl Loc.unknown decltor1 Nothing) >>= fun (ident, (qs, ty), mk_desug_init) ->
       
       let () = Debug.print_debug 2 [] (fun () -> "INIT DECLARATOR:") in
-      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs ty)) in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromCtype_human qs ty)) in
       
       
       

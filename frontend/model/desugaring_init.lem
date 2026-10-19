@@ -103,7 +103,7 @@ let go_down_aux tagDefs entering_block pos =
           let ((first_ident, first_ty), _) = lookup_union_members tagDefs tag_sym in
           DInit_ok <| pos with ty= first_ty; cursor= mk_cursor_elem (Init_union tag_sym first_ident) :: pos.cursor |>
       | _ ->
-          let ty_str = Pp.stringFromAil_ctype no_qualifiers pos.ty in
+          let ty_str = Pp.stringFromCtype_human no_qualifiers pos.ty in
           DInit_internal_error ("Desugaring_init.go_down_aux NOT Basic, Array, Struct, Union ==> " ^ ty_str)
     end
 

@@ -662,7 +662,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                 | Nothing ->
                     ACTION_ILLTYPED begin
                       (Loc.stringFromLocation loc) ^ "the value of a create_readonly(" ^
-                      Pp.stringFromCore_ctype (Ctype.Ctype [] (Ctype.unatomic_ ty)) ^
+                      Pp.stringFromCtype (Ctype.Ctype [] (Ctype.unatomic_ ty)) ^
                       ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval3
                     end
               end
@@ -701,7 +701,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                 | Nothing ->
                     ACTION_ILLTYPED begin
                       (Loc.stringFromLocation loc) ^ "the value of a store(" ^
-                      Pp.stringFromCore_ctype (Ctype.Ctype [] (Ctype.unatomic_ ty)) ^
+                      Pp.stringFromCtype (Ctype.Ctype [] (Ctype.unatomic_ ty)) ^
                       ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval
                     end
               end

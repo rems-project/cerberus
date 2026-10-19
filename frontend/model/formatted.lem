@@ -426,9 +426,9 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
       | (arg_ty, arg_ptr) :: args' ->
           let (is_illtyped, conv_ty_opt) = match expected_pred_opt with
             | Just expected_pred ->
-                (* let () = Debug.print_debug 0 [] (fun () -> "expected_ty= " ^ Pp.stringFromCore_ctype expected_ty) in *)
-                (* let () = Debug.print_debug 0 [] (fun () -> "arg_ty= " ^ Pp.stringFromCore_ctype arg_ty) in
-                let () = Debug.print_debug 0 [] (fun () -> "arg_ty'= " ^ Pp.stringFromCore_ctype (Implementation.normalise_ctype arg_ty)) in *)
+                (* let () = Debug.print_debug 0 [] (fun () -> "expected_ty= " ^ Pp.stringFromCtype expected_ty) in *)
+                (* let () = Debug.print_debug 0 [] (fun () -> "arg_ty= " ^ Pp.stringFromCtype arg_ty) in
+                let () = Debug.print_debug 0 [] (fun () -> "arg_ty'= " ^ Pp.stringFromCtype (Implementation.normalise_ctype arg_ty)) in *)
                 (* (expected_ty <> Implementation.normalise_ctype arg_ty, _conv_ty_opt) *)
                 (* (is_illtyped_conversion expected_ty arg_ty, _conv_ty_opt) *)
                 (not (expected_pred (Implementation.normalise_ctype arg_ty)), _conv_ty_opt)
@@ -649,7 +649,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                         end
                 | (ty, pe) :: _ ->
                     error ("WIP, Formatted => CS_s, ty <> Pointer ==> " ^
-                           stringFromPair Pp.stringFromCore_ctype Pp.stringFromMem_mem_value (ty, Mem.pointer_mval ty pe) )
+                           stringFromPair Pp.stringFromCtype Pp.stringFromMem_mem_value (ty, Mem.pointer_mval ty pe) )
               end
         end
     | CS_p ->

@@ -24,29 +24,31 @@ declare ocaml target_rep function stringFromCabs_declarator = `String_cabs.strin
 
 
 
-val stringFromAil_qualifiers: Ctype.qualifiers -> string
-val stringFromAil_ctype:      Ctype.qualifiers -> Ctype.ctype -> string
+val stringFromQualifiers: Ctype.qualifiers -> string
+val stringFromCtype_human: Ctype.qualifiers -> Ctype.ctype -> string
+
+declare ocaml target_rep function stringFromQualifiers = `String_ail.string_of_qualifiers_human`
+declare hol   target_rep function stringFromQualifiers = `pp_ail$pp_qualifiers`
+
+declare ocaml target_rep function stringFromCtype_human = `String_ail.string_of_ctype_human`
+declare hol   target_rep function stringFromCtype_human = `pp_ail$pp_ail_ctype`
+
+val stringFromCtype: Ctype.ctype -> string
+declare ocaml target_rep function stringFromCtype = `String_ail.string_of_ctype`
+declare hol   target_rep function stringFromCtype = `pp_ail$pp_core_ctype`
+
+
 val stringFromAil_genType:    GenTypes.genType -> string
 val stringFromAil_expression: forall 'a. AilSyntax.expression 'a -> string
 val stringFromAil_statement: forall 'a. AilSyntax.statement 'a -> string
 
 
-declare ocaml target_rep function stringFromAil_qualifiers = `String_ail.string_of_qualifiers_human`
-declare ocaml target_rep function stringFromAil_ctype = `String_ail.string_of_ctype_human`
 declare ocaml target_rep function stringFromAil_genType = `String_ail.string_of_genType`
 declare ocaml target_rep function stringFromAil_expression = `String_ail.string_of_expression`
 declare ocaml target_rep function stringFromAil_statement = `String_ail.string_of_statement`
-declare hol   target_rep function stringFromAil_qualifiers =
-                                  `pp_ail$pp_qualifiers`
-declare hol   target_rep function stringFromAil_ctype = `pp_ail$pp_ail_ctype`
 declare hol   target_rep function stringFromAil_expression =
                                   `pp_ail$pp_expression`
 
-val stringFromAil_human_ctype: Ctype.qualifiers -> Ctype.ctype -> string
-declare ocaml target_rep function stringFromAil_human_ctype = `String_ail.string_of_ctype_human`
-
-
-val stringFromCore_ctype:  Ctype.ctype -> string
 val stringFromCore_core_base_type:  Core.core_base_type -> string
 val stringFromCore_value:  Core.value -> string
 val stringFromCore_pexpr:  forall 'ty. Core.generic_pexpr 'ty Symbol.sym -> string
@@ -56,7 +58,6 @@ val stringFromCore_params: forall 'a. list (Symbol.sym * Core.core_base_type) ->
 val stringFromCore_file:   forall 'a. Core.file 'a -> string
 (*val stringFromCore_stack:  forall 'a. Core.stack 'a -> string*)
 
-declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.string_of_ctype`
 declare ocaml target_rep function stringFromCore_core_base_type  = `String_core.string_of_core_base_type`
 declare ocaml target_rep function stringFromCore_value  = `String_core.string_of_value`
 declare ocaml target_rep function stringFromCore_pexpr  = `String_core.string_of_pexpr`
@@ -66,7 +67,6 @@ declare ocaml target_rep function stringFromCore_params = `String_core.string_of
 declare ocaml target_rep function stringFromCore_file   = `String_core.string_of_file`
 (*declare ocaml target_rep function stringFromCore_stack  = `String_core.string_of_stack`*)
 
-declare hol target_rep function stringFromCore_ctype  = `pp_core$pp_core_ctype`
 declare hol target_rep function stringFromCore_core_base_type  = `pp_core.pp_core_base_type`
 declare hol target_rep function stringFromCore_value  = `pp_core$pp_core_value`
 declare hol target_rep function stringFromCore_pexpr  = `pp_core$pp_core_pexpr`

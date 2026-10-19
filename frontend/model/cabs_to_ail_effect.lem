@@ -826,7 +826,7 @@ let register_typedef ident (attrs, qs, ty) =
         return ty in
   let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
     "registering typedef identifier: " ^ show ident ^
-    " with (qs, ty) = " ^ byte_attr_str ^ Pp.stringFromAil_ctype qs ty
+    " with (qs, ty) = " ^ byte_attr_str ^ Pp.stringFromCtype_human qs ty
   ) in
   (* if the identifier is already declared we reuse that existing declaration *)
   internal_register_identifier
@@ -1949,8 +1949,8 @@ let register_global_object_definition2 loc sym link gdef =
               match AilTypesAux.make_composite prev_ty ty with
                 | Nothing ->
                     let () = Debug.print_debug 0 [] (fun () ->
-                      "  prev_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers prev_ty ^ "\n" ^
-                      "  ty:      " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty
+                      "  prev_ty: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers prev_ty ^ "\n" ^
+                      "  ty:      " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty
                     ) in
                     error "[register_global_object_definition2] make_composite failed"
                 | Just ty' ->
@@ -2056,13 +2056,13 @@ let register_function_declaration loc attrs sym is_proto decl =
       | Just params ->
           Ctype.Ctype [Annot.Aloc loc] (Ctype.Function (ret_qs, ret_ty) params isVariadic)
     end in
-    Pp.stringFromAil_ctype Ctype.no_qualifiers fun_ty ^
+    Pp.stringFromCtype_human Ctype.no_qualifiers fun_ty ^
     (if Maybe.isNothing params_opt && isVariadic then " WARNING: isVariadic when NOPARAMS" else "")
   in
 (*
-    Pp.stringFromAil_ctype ret_qs ret_ty ^ "(" ^ stringFromList (
+    Pp.stringFromCtype_human ret_qs ret_ty ^ "(" ^ stringFromList (
       fun (qs, ty, isRegister) ->
-        (if isRegister then "register " else "") ^ Pp.stringFromAil_ctype qs ty
+        (if isRegister then "register " else "") ^ Pp.stringFromCtype_human qs ty
     ) params ^ ")" in
 *)
   
@@ -2172,7 +2172,7 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
-      "' with dur: " ^ string_of_storageDuration new_dur ^ " qs, ty: " ^ Pp.stringFromAil_ctype new_qs new_ty)
+      "' with dur: " ^ string_of_storageDuration new_dur ^ " qs, ty: " ^ Pp.stringFromCtype_human new_qs new_ty)
   ) >>
   
   read_inner (fun st ->
@@ -2181,7 +2181,7 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
     | Just (_, _, _, prev_dur, _, prev_align_opt, prev_qs, prev_ty) ->
         let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
           "has previous decl ==> with dur: " ^ string_of_storageDuration prev_dur ^
-          " qs, ty: " ^ Pp.stringFromAil_ctype prev_qs prev_ty ^
+          " qs, ty: " ^ Pp.stringFromCtype_human prev_qs prev_ty ^
           " are_compatible ?= " ^
           (if AilTypesAux.are_compatible (new_qs, new_ty) (prev_qs, prev_ty)
            then "true" else "false")
@@ -2218,8 +2218,8 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
                   )
               | Nothing ->
                   let () = Debug.print_debug 0 [] (fun () ->
-                    "prev_ty= " ^ Pp.stringFromAil_ctype prev_qs prev_ty ^ "\n" ^
-                    "new_ty= " ^ Pp.stringFromAil_ctype new_qs new_ty
+                    "prev_ty= " ^ Pp.stringFromCtype_human prev_qs prev_ty ^ "\n" ^
+                    "new_ty= " ^ Pp.stringFromCtype_human new_qs new_ty
                   ) in
                   error "WIP: register_external_object_declaration, make_composite failed"
             end
@@ -2236,7 +2236,7 @@ let update_external_object_type sym ty =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "updating external object type of `" ^ show sym ^
-      "' with ty= " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty)
+      "' with ty= " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty)
   ) >>
   update_inner (fun st ->
     match Map.lookup sym st.external_object_declarations with
@@ -2257,7 +2257,7 @@ let register_internal_object_declaration sym ((loc, _, _, _, _, _) as decl) =
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       let (_, _, _, _, new_qs, new_ty) = decl in
       "attempting to register internal object declaration of `" ^ show sym ^
-      "' with qs, ty= " ^ Pp.stringFromAil_ctype new_qs new_ty)
+      "' with qs, ty= " ^ Pp.stringFromCtype_human new_qs new_ty)
   ) >>
   
   read_inner (fun st ->
@@ -2281,7 +2281,7 @@ let update_internal_object_type sym ty =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "updating internal object type of `" ^ show sym ^
-      "' with ty= " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty)
+      "' with ty= " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty)
   ) >>
   update_inner (fun st ->
     match Map.lookup sym st.internal_object_declarations with

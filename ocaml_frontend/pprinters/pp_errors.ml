@@ -40,7 +40,8 @@ let string_of_kind = function
 
 
 let string_of_cid (Symbol.Identifier (_, s)) = s
-let string_of_ctype ?(qs=Ctype.no_qualifiers) ty = String_ail.string_of_ctype ~is_human:true qs ty
+let string_of_ctype ?(qs=Ctype.no_qualifiers) ty =
+  String_ail.string_of_qualified_ctype ~is_human:true qs ty
 let string_of_sym = Pp_symbol.to_string_pretty
 let string_of_gentype = String_ail.string_of_genType
 
@@ -120,26 +121,26 @@ let string_of_constraint_violation = function
   | FunctionCallTooFewArguments (expected, have) ->
       "too few arguments to function call, expected " ^ string_of_int expected ^ ", have " ^ string_of_int have
   | MemberofReferenceBaseTypeLvalue (qs, ty) ->
-      "member reference base type '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "' is not a structure or union"
+      "member reference base type '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "' is not a structure or union"
   | MemberofReferenceBaseTypeRvalue gty ->
       "member reference base type '" ^ string_of_gentype gty ^ "' is not a structure or union"
   | MemberofNoMemberLvalue (memb, qs, ty) ->
-      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "'"
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "'"
   | MemberofNoMemberRvalue (memb, gty) ->
       "no member named '" ^ string_of_cid memb ^ "' in '" ^ string_of_gentype gty ^ "'"
   | MemberofIncompleteLvalue (qs, ty) ->
-      "struct/union type '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "' in . operator is incomplete"
+      "struct/union type '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "' in . operator is incomplete"
   | MemberofIncompleteRvalue gty ->
       "struct/union type '" ^ string_of_gentype gty ^ "' in . operator is incomplete"
   | MemberofptrReferenceTypeNotPointer gty ->
       "member reference type '" ^ string_of_gentype gty ^ "' is not a pointer" ^
       (if GenTypesAux.is_struct_or_union0 gty then "; did you mean to use '.'?" else "")
   | MemberofptrReferenceBaseType (qs, ty) ->
-      "member reference base type '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "' is not a structure or union"
+      "member reference base type '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "' is not a structure or union"
   | MemberofptrNoMember (memb, qs, ty) ->
-      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "'"
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "'"
   | MemberofptrIncomplete (qs, ty) ->
-      "struct/union type '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "' in -> operator is incomplete"
+      "struct/union type '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "' in -> operator is incomplete"
   | InvalidTypeCompoundLiteral ->
       "compound literal has invalid type"
   | UnaryExpressionNotLvalue ->
@@ -164,10 +165,10 @@ let string_of_constraint_violation = function
   | AlignofInvalidApplication (qs, ty) ->
       let suffix =
         if AilTypesAux.is_function ty then "a function type"
-        else "an incomplete type '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "'"
+        else "an incomplete type '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "'"
       in "invalid application of '_Alignof' to " ^ suffix
   | CastInvalidType (qs, ty) ->
-      "used type '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "' where scalar type is required"
+      "used type '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "' where scalar type is required"
   | CastPointerToFloat ->
       "pointer cannot be cast to type 'float'"
   | CastFloatToPointer ->
@@ -215,7 +216,7 @@ let string_of_constraint_violation = function
   | ThreadLocalFunctionDeclaration ->
       "_Thread_local in function declaration"
   | StructMemberIncompleteType (qs, ty) ->
-      "member has incomplete type '" ^ String_ail.string_of_ctype ~is_human:true qs ty ^ "'"
+      "member has incomplete type '" ^ String_ail.string_of_qualified_ctype ~is_human:true qs ty ^ "'"
   | StructMemberFunctionType f ->
       "member '" ^ string_of_cid f ^ "' declared as a function"
   | StructMemberFlexibleArray ->

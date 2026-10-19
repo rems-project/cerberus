@@ -685,7 +685,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
                       match core_object_type_of_ctype ty with
                         | Nothing ->
                             E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
-                                        Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                                        Pp.stringFromCtype ty ^ "' to a Core object type"))
                         | Just oTy ->
                             typecheck_pexpr tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
                             E.return (ident, pe')
@@ -709,7 +709,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
                     match core_object_type_of_ctype ty with
                       | Nothing ->
                           E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
-                                                       Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                                                       Pp.stringFromCtype ty ^ "' to a Core object type"))
                       | Just oTy ->
                           typecheck_pexpr tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
                             Pexpr annot (InferredType_object (OTy_union tag_sym)) <$>
@@ -737,7 +737,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
               match core_object_type_of_ctype ty with
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^
-                                                 Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                                                 Pp.stringFromCtype ty ^ "' to a Core object type"))
                 | Just oTy ->
                     Pexpr annot (InferredType_loaded oTy) <$>
                        (PEmemberof tag_sym memb_ident <$>
@@ -1082,7 +1082,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                       match core_object_type_of_ctype ty with
                         | Nothing ->
                             E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
-                                        Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                                        Pp.stringFromCtype ty ^ "' to a Core object type"))
                         | Just oTy ->
                             typecheck_pexpr tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
                             E.return (ident, pe')
@@ -1104,7 +1104,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                     match core_object_type_of_ctype ty with
                       | Nothing ->
                           E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
-                                                       Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                                                       Pp.stringFromCtype ty ^ "' to a Core object type"))
                       | Just oTy ->
                           typecheck_pexpr tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
                           E.return (PEunion tag_sym ident pe')
@@ -1130,7 +1130,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               match core_object_type_of_ctype ty with
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^
-                                                 Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                                                 Pp.stringFromCtype ty ^ "' to a Core object type"))
                 | Just oTy ->
                     guard_match loc "memberof()" bTy (BTy_loaded oTy) >>= fun () ->
                     PEmemberof tag_sym memb_ident <$>

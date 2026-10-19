@@ -195,7 +195,7 @@ let rec memValueFromValue tagDefs ty cval =
           Nothing
     | _ ->
         let () = Debug.print_debug 5 [] (fun () -> "memValueFromValue("
-                 ^ Pp.stringFromCore_ctype (Ctype [] ty_) ^ ", " ^  Pp.stringFromCore_value cval ^ ")") in
+                 ^ Pp.stringFromCtype (Ctype [] ty_) ^ ", " ^  Pp.stringFromCore_value cval ^ ")") in
         Nothing
   end
 

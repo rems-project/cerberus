@@ -51,8 +51,8 @@ let floating_conversion_TODO to_ty from_ty z =
   (* NOTE: our current implementation of floating types has them all behave like double *)
   let () = Debug.warn [Debug.DB_elaboration] (fun () ->
     "casts between floating types is currently a NOP: " ^
-    Pp.stringFromCore_ctype to_ty ^ " <== " ^
-    Pp.stringFromCore_ctype from_ty
+    Pp.stringFromCtype to_ty ^ " <== " ^
+    Pp.stringFromCtype from_ty
   ) in
   z
 
@@ -258,7 +258,7 @@ let translate_function_designator translate_expr stdlib (A.AnnotatedExpression _
         E.return (Caux.mk_pure_e fid_pe)
     | (*BISECT-IGNORE*) _ ->
         error ("[Translation.translate_function_designator] wildcard case ==> " ^
-               Pp.stringFromAil_expression a_expr ^ " and type= " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty)
+               Pp.stringFromAil_expression a_expr ^ " and type= " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty)
   end
 
 
@@ -3132,7 +3132,7 @@ end
       | A.AilEprint_type e ->
           let (qs, ty) = qualified_ctype_of conf e in
           let () = Debug.print_debug_located 0 [] loc (fun () ->
-            "PRINT_TYPE: " ^ Pp.stringFromAil_ctype qs ty
+            "PRINT_TYPE: " ^ Pp.stringFromCtype_human qs ty
           ) in
           self e
       | A.AilEbmc_assume e ->

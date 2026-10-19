@@ -196,7 +196,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           (* TODO: this is maybe too conservative *)
           let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
-            Pp.stringFromAil_ctype no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
+            Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           if tag_sym1 = tag_sym2 then
             E.return ()
           else
@@ -205,7 +205,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           (* TODO: this is maybe too conservative *)
           let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
-            Pp.stringFromAil_ctype no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
+            Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           if tag_sym1 = tag_sym2 then
             E.return ()
           else
@@ -220,7 +220,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
     ) in
     AAux.lvalue_conversion s ty1 >>= fun conv_ty1 ->
     let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
-      "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromAil_ctype no_qualifiers conv_ty1  ^
+      "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromCtype_human no_qualifiers conv_ty1  ^
       " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
     match ((proj_ctype_ (unatomic ty1)), proj_ctype_ conv_ty1, gty2) with
       | (Pointer ref_qs1 _, Pointer _ conv_ref_ty1, GenPointer ref_qs2 ref_ty2) ->
@@ -250,8 +250,8 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           else
             let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
               "[well_typed_assignment] KO: is_pointer ty1 && gty2 ==> (ref_qs1, conv_ref_ty1)= " ^
-              Pp.stringFromAil_human_ctype ref_qs1 conv_ref_ty1 ^ ", (ref_qs2, ref_ty2)= " ^
-              Pp.stringFromAil_human_ctype ref_qs2 ref_ty2
+              Pp.stringFromCtype_human ref_qs1 conv_ref_ty1 ^ ", (ref_qs2, ref_ty2)= " ^
+              Pp.stringFromCtype_human ref_qs2 ref_ty2
             ) in (* DEBUG *)
             if AAux.are_compatible (no_qualifiers, conv_ref_ty1) (no_qualifiers, ref_ty2) then
               throw DiscardsQualifiers
@@ -741,7 +741,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
              the types compatibles? *)
           if inject_type elem_ty <> gty then
             let () = Debug.print_debug 2 [] (fun () ->
-              "elem_ty: " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty
+              "elem_ty: " ^ Pp.stringFromCtype_human no_qualifiers elem_ty
             ) in
             let () = Debug.print_debug 2 [] (fun () ->
               "gty: " ^ Pp.stringFromAil_genType gty
@@ -865,12 +865,12 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         match (List.lookup sym gamm, List.lookup sym sigm.declarations) with
           | (Just ((_, _, isRegister), _, qs, ty), Nothing) ->
               let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
-                "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
+                "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromCtype_human qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (_, _, Decl_object (_, isRegister) _ qs ty)) ->
               let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
-                "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
+                "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromCtype_human qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (_, _, Decl_function has_proto (ret_qs, ret_ty) params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
@@ -1065,13 +1065,13 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                       E.return (ty, AilSyntaxAux.is_null_pointer_constant e)
                     ) xs >>= fun tys ->
                     (* let () = Debug.print_debug 0 [] (fun () ->
-                      "===> tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) tys) ^
+                      "===> tys: " ^ (stringFromList (Pp.stringFromCtype_human no_qualifiers) tys) ^
                       "--- specs: " ^ show specs
                     ) in *)
                     match Mem_common.derive_intrinsic_signature tys spec with
                       | Right (ret_ty, args_tys) ->
                           (* let () = Debug.print_debug 0 [] (fun () ->
-                            "===> args_tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) args_tys)
+                            "===> args_tys: " ^ (stringFromList (Pp.stringFromCtype_human no_qualifiers) args_tys)
                           ) in
                           let () = Debug.print_debug 0 [] (fun () ->
                             "===> args: " ^ (stringFromList (Pp.stringFromAil_expression) args)
@@ -1818,7 +1818,7 @@ and perform_decays sigm ctx a_expr =
   match annotations a_expr with
     | (std_annots, GenLValueType qs ty isRegister) ->
         let () = Debug.print_debug 2 [] (fun () ->
-          "GenLValueType ==>" ^ Pp.stringFromAil_ctype qs ty
+          "GenLValueType ==>" ^ Pp.stringFromCtype_human qs ty
         ) in
         if    not (AAux.is_array ty)
            && not (List.elem ctx [CTXsizeof; CTXaddr; CTXincr; CTXdecr; CTXmemberof; CTXassign]) then
@@ -2009,7 +2009,7 @@ and annotate_initialization sigm gamm ty e =
   
   (* STD §6.7.9#14 *)
   else if AAux.is_array_of_character ty then
-    error ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ Pp.stringFromAil_ctype ty)
+    error ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ Pp.stringFromCtype_human ty)
   
   (* STD §6.7.9#15 *)
   else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
@@ -2028,14 +2028,14 @@ and annotate_initialization sigm gamm ty e =
             E.return (a_e, Array elem_ty1 (Just n2))
           else
             error ("TODO(annotate_initialisation, 1): error message: array object definition, types didn't match ==> " ^
-                   Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
+                   Pp.stringFromCtype_human elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human elem_ty2)
      | (Array _ elem_ty1 (Just n1), GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
           (* TODO: check, but I don't think we need to do anything regarding qualifiers here *)
          if AAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
            E.return (a_e, Array elem_ty1 (Just n1))
          else
             error ("TODO(annotate_initialisation, 2): error message: array object definition, types didn't match ==> " ^
-                   Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
+                   Pp.stringFromCtype_human elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human elem_ty2)
      | _ ->
          error "WIP: annotate_initialization, not(is_scalar ty), not array (or had no size)"
     end
@@ -2102,13 +2102,13 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
               E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
             else
               error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
-                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+                      Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human no_qualifiers elem_ty2)
         | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
               E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
             else
               error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
-                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+                      Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human no_qualifiers elem_ty2)
 
         | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
             (* TODO: isRegister? *)
@@ -2118,22 +2118,22 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
               E.return a_e
             else
               error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
-                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
-                      Pp.stringFromAil_ctype no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
+                      Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
+                      Pp.stringFromCtype_human no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
         | _ ->
             (* STD §6.7.9#14 *)
             if AAux.is_array_of_character ty then
               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
-                    Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
+                    Pp.stringFromCtype_human no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
             else
               let () = Debug.print_debug 0 [] (fun () ->
                 "a_e: " ^ Pp.stringFromAil_expression a_e
               ) in
               let () = Debug.print_debug 0 [] (fun () ->
-                "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
+                "ty: " ^ Pp.stringFromCtype_human no_qualifiers ty ^ " <--> gty: " ^
                 match GenTypes.genTypeCategoryOf a_e with
                   | GenLValueType qs' ty' _ ->
-                      "lvalue " ^ Pp.stringFromAil_ctype qs' ty'
+                      "lvalue " ^ Pp.stringFromCtype_human qs' ty'
                   | GenRValueType gty ->
                       "rvalue " ^ Pp.stringFromAil_genType gty
                 end

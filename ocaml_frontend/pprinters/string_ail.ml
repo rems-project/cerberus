@@ -6,8 +6,11 @@ let string_of_integerType ity =
 let string_of_integerType_raw ity =
   Pp_utils.to_plain_string (Pp_ail_raw.pp_integerType_raw ity)
 
-let string_of_ctype ?(is_human=false) qs ty =
+let string_of_qualified_ctype ?(is_human=false) qs ty =
   Pp_utils.to_plain_string (pp_ctype ~is_human qs ty)
+
+let string_of_ctype ?(is_human=false) ty =
+  Pp_utils.to_plain_string (pp_ctype ~is_human Ctype.no_qualifiers ty)
 
 let string_of_id sym
   = Pp_utils.to_plain_string (pp_id sym)
