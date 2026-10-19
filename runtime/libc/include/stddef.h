@@ -20,6 +20,6 @@ typedef struct {
 
 #define NULL                 __cerbvar_NULL
 
-// offsetof() is now builtin in the parser
+#define offsetof(type, memb)  __builtin_offsetof(type, memb)
 
 #endif

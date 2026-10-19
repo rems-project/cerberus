@@ -135,13 +135,20 @@ type asm_qualifier =
   LBRACK_LBRACK (*RBRACK_RBRACK*)
 %token LBRACE RBRACE SEMICOLON
 
-(* NON-STD: *)
-  ASSERT OFFSETOF TYPEOF BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
+(* C23 keywords *)
+%token BITINT CONSTEXPR DECIMAL32 DECIMAL64 DECIMAL128 FALSE NULLPTR TYPEOF
+  TRUE TYPEOF_UNQUAL
+
+(* GNU keywords *)
+%token ATTRIBUTE AUTO_TYPE EXTENSION INT128 LABEL
+
+(* Builtin requiring special parsing *)
+  BUILTIN_ASSERT BUILTIN_OFFSETOF BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
+%token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM
 
 (* BMC syntax *)
 %token BMC_ASSUME
@@ -514,7 +521,7 @@ postfix_expression:
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEcompound (ty, List.rev inits)) }
 (* NOTE: non-std way of dealing with these *)
-| ASSERT LPAREN expr= assignment_expression RPAREN
+| BUILTIN_ASSERT LPAREN expr= assignment_expression RPAREN
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEassert expr) }
 | VA_START LPAREN expr= assignment_expression COMMA i= general_identifier RPAREN
@@ -529,7 +536,7 @@ postfix_expression:
 | VA_END LPAREN expr= assignment_expression RPAREN
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEva_end(expr) ) }
-| OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
+| BUILTIN_OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
     { CabsExpression ( region ($startpos, $endpos) noCursor
                      , CabsEoffsetof (ty, i) ) }
 | BUILTIN_TYPES_COMPATIBLE_P LPAREN ty1= type_name COMMA ty2= type_name RPAREN
@@ -1429,7 +1436,6 @@ asm_register:
 
 asm_qualifier:
 | VOLATILE
-| ASM_VOLATILE
     { ASM_VOLATILE }
 | INLINE
     { ASM_INLINE }

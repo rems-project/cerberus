@@ -6,9 +6,12 @@ open Tokens
 
 exception Error of Errors.cparsing_cause
 
-type flags = {
-  magic_comment_char : char;  (* The character after a comment indicating to start a CN comment *)
-  at_magic_comments : bool;   (* Should we process CN comments (true) or treat them as normal comments (false) *)
+type env = {
+  lexicon : (string, token) Hashtbl.t;
+  magic_comment_char : char; (* The character after a comment indicating to
+                              * start a CN comment *)
+  magic_comments : bool; (* Should we process CN comments (true) or treat them
+                          * as normal comments (false) *)
 }
 
 (* WARNING: GLOBAL STATE
@@ -57,76 +60,142 @@ let offset_location lexbuf pos_fname pos_lnum =
   
 
 (* STD §6.4.1#1 *)
-let keywords: (string * Tokens.token) list = [
-    "auto"           , AUTO;
-    "break"          , BREAK;
-    "case"           , CASE;
-    "char"           , CHAR;
-    "const"          , CONST;
-    "continue"       , CONTINUE;
-    "default"        , DEFAULT;
-    "do"             , DO;
-    "double"         , DOUBLE;
-    "else"           , ELSE;
-    "enum"           , ENUM;
-    "extern"         , EXTERN;
-    "float"          , FLOAT;
-    "for"            , FOR;
-    "goto"           , GOTO;
-    "if"             , IF;
-    "inline"         , INLINE;
-    "int"            , INT;
-    "long"           , LONG;
-    "register"       , REGISTER;
-    "restrict"       , RESTRICT;
-    "return"         , RETURN;
-    "short"          , SHORT;
-    "signed"         , SIGNED;
-    "sizeof"         , SIZEOF;
-    "static"         , STATIC;
-    "struct"         , STRUCT;
-    "switch"         , SWITCH;
-    "typedef"        , TYPEDEF;
-    "typeof"         , TYPEOF;
-    "union"          , UNION;
-    "unsigned"       , UNSIGNED;
-    "void"           , VOID;
-    "volatile"       , VOLATILE;
-    "while"          , WHILE;
-    "_Alignas"       , ALIGNAS;
-    "_Alignof"       , ALIGNOF;
-    "_Atomic"        , ATOMIC;
-    "_Bool"          , BOOL;
-    "_Complex"       , COMPLEX;
-    "_Generic"       , GENERIC;
+let c11_keywords: (string * Tokens.token) list =
+  [ "auto"           , AUTO
+  ; "break"          , BREAK
+  ; "case"           , CASE
+  ; "char"           , CHAR
+  ; "const"          , CONST
+  ; "continue"       , CONTINUE
+  ; "default"        , DEFAULT
+  ; "do"             , DO
+  ; "double"         , DOUBLE
+  ; "else"           , ELSE
+  ; "enum"           , ENUM
+  ; "extern"         , EXTERN
+  ; "float"          , FLOAT
+  ; "for"            , FOR
+  ; "goto"           , GOTO
+  ; "if"             , IF
+  ; "inline"         , INLINE
+  ; "int"            , INT
+  ; "long"           , LONG
+  ; "register"       , REGISTER
+  ; "restrict"       , RESTRICT
+  ; "return"         , RETURN
+  ; "short"          , SHORT
+  ; "signed"         , SIGNED
+  ; "sizeof"         , SIZEOF
+  ; "static"         , STATIC
+  ; "struct"         , STRUCT
+  ; "switch"         , SWITCH
+  ; "typedef"        , TYPEDEF
+  ; "union"          , UNION
+  ; "unsigned"       , UNSIGNED
+  ; "void"           , VOID
+  ; "volatile"       , VOLATILE
+  ; "while"          , WHILE
+  ; "_Alignas"       , ALIGNAS
+  ; "_Alignof"       , ALIGNOF
+  ; "_Atomic"        , ATOMIC
+  ; "_Bool"          , BOOL
+  ; "_Complex"       , COMPLEX
+  ; "_Generic"       , GENERIC
     (* "_Imaginary"     , IMAGINARY; *)
-    "_Noreturn"      , NORETURN;
-    "_Static_assert" , STATIC_ASSERT;
-    "_Thread_local"  , THREAD_LOCAL;
+  ; "_Noreturn"      , NORETURN
+  ; "_Static_assert" , STATIC_ASSERT
+  ; "_Thread_local"  , THREAD_LOCAL ]
 
-    "assert", ASSERT;
-    "offsetof", OFFSETOF;
-    "__cerb_va_start", VA_START;
-    "__cerb_va_copy", VA_COPY;
-    "__cerb_va_arg", VA_ARG;
-    "__cerb_va_end", VA_END;
+let gnu11_extra_keywords: (string * Tokens.token) list =
+  (* alternative spelling for ISO C11 keywords *)
+  [ "__alignof"    , ALIGNOF
+  ; "__alignof__"  , ALIGNOF
+  ; "__asm"        , ASM
+  ; "__asm__"      , ASM
+  ; "__complex"    , COMPLEX
+  ; "__complex__"  , COMPLEX
+  ; "__const"      , CONST
+  ; "__const__"    , CONST
+  ; "__inline"     , INLINE
+  ; "__inline__"   , INLINE
+  ; "__restrict"   , RESTRICT
+  ; "__restrict__" , RESTRICT
+  ; "__signed"     , SIGNED
+  ; "__signed__"   , SIGNED
+  ; "__volatile"   , VOLATILE
+  ; "__volatile__" , VOLATILE
+  (* GNU11 extensions *)
+  ; "__auto_type"       , AUTO_TYPE
+  ; "__int128"          , INT128
+  ; "__label__"         , LABEL
+  ; "typeof"            , TYPEOF
+  ; "__typeof__"        , TYPEOF
+  ; "__typeof"          , TYPEOF
+  ; "__typeof_unqual__" , TYPEOF_UNQUAL
+  ; "__typeof_unqual"   , TYPEOF_UNQUAL
+  ; "__extension__"     , EXTENSION
+  (* ; "__thread"          , GNU_THREAD *)
 
-    "__cerb_printtype", PRINT_TYPE;
+  ; "asm"               , ASM
 
-    "__BMC_ASSUME", BMC_ASSUME;
-
-    (* some GCC extensions *)
-    "asm", ASM;
-    "__asm__", ASM;
-    "__volatile__", ASM_VOLATILE;
-    "__builtin_types_compatible_p", BUILTIN_TYPES_COMPATIBLE_P;
-    "__builtin_choose_expr", BUILTIN_CHOOSE_EXPR;
+  ; "__attribute__" , ATTRIBUTE
+  ; "__attribute"   , ATTRIBUTE
+  ; "__builtin_offsetof"           , BUILTIN_OFFSETOF
+  ; "__builtin_choose_expr"        , BUILTIN_CHOOSE_EXPR
+  ; "__builtin_types_compatible_p" , BUILTIN_TYPES_COMPATIBLE_P
+  (* ; "__builtin_has_attribute"      , BUILTIN_HAS_ATTRIBUTE *)
   ]
 
-let lexicon: (string, token) Hashtbl.t =
-  let lexicon = Hashtbl.create 0 in
-  let add (key, builder) = Hashtbl.add lexicon key builder in
-  List.iter add keywords; lexicon
+let c23_extra_keywords: (string * Tokens.token) list =
+  [ "alignas"       , ALIGNAS
+  ; "alignof"       , ALIGNOF
+  ; "bool"          , BOOL
+  ; "constexpr"     , CONSTEXPR
+  ; "false"         , FALSE
+  ; "nullptr"       , NULLPTR
+  ; "static_assert" , STATIC_ASSERT
+  ; "thread_local"  , THREAD_LOCAL
+  ; "true"          , TRUE
+  ; "typeof"        , TYPEOF
+  ; "typeof_unqual" , TYPEOF_UNQUAL
+  ; "_BitInt"       , BITINT
+  ; "_Decimal32"    , DECIMAL32
+  ; "_Decimal64"    , DECIMAL64
+  ; "_Decimal128"   , DECIMAL128 ]
+
+let cerb_extra_keywords: (string * Tokens.token) list =
+  [ "__cerb_va_start", VA_START
+  ; "__cerb_va_copy", VA_COPY
+  ; "__cerb_va_arg", VA_ARG
+  ; "__cerb_va_end", VA_END
+
+  ; "__cerb_printtype", PRINT_TYPE
+  ; "__BMC_ASSUME", BMC_ASSUME ]
+
+let cerb_builtins: (string * Tokens.token) list =
+  [ "__builtin_assert"  , BUILTIN_ASSERT
+  ; "__builtin_offsetof", BUILTIN_OFFSETOF ]
+
+
+let mk_lexicon conf : (string, token) Hashtbl.t =
+  let ret = Hashtbl.create 0 in
+  let add (key, builder) = Hashtbl.add ret key builder in
+  List.iter add c11_keywords;
+  let () = match conf.Config.lexicon with
+  | C11 -> ()
+  | GNU11 -> List.iter add gnu11_extra_keywords
+  | C23 -> List.iter add c23_extra_keywords
+  | GNU23 ->
+      List.iter add gnu11_extra_keywords;
+      List.iter add c23_extra_keywords
+  in
+  if conf.cerb_keywords then
+    List.iter add cerb_extra_keywords;
+  if conf.cerb_builtins then
+    List.iter add cerb_builtins;
+  if conf.asm_keyword then
+    add ("asm", ASM);
+  ret
 
 let lex_comment remainder lexbuf =
   let ch = lexeme_char lexbuf 0 in
@@ -138,11 +207,11 @@ let lex_magic remainder lexbuf =
   if ch = '\n' then new_line lexbuf;
   ch :: remainder lexbuf
 
-let magic_token flags start_pos end_pos chars =
+let magic_token env start_pos end_pos chars =
   let len = List.length chars in
-  if not flags.at_magic_comments || len < 2 || List.hd chars != flags.magic_comment_char then
+  if not env.magic_comments || len < 2 || List.hd chars != env.magic_comment_char then
     None
-  else if List.nth chars (len - 1) != flags.magic_comment_char then (
+  else if List.nth chars (len - 1) != env.magic_comment_char then (
     prerr_endline
       (Pp_errors.make_message
          (Cerb_location.point (LineMap.position end_pos))
@@ -328,13 +397,13 @@ rule s_char_sequence = parse
   | _
       { raise (Error Errors.Clexer_invalid_string_character) }
 
-and magic flags start_of_comment = parse
+and magic env start_of_comment = parse
   (* End of the magic comment *)
   | "*/" {[]}
   | "/*" { raise (Error Errors.Clexer_nested_comment) }
   | eof  { lexbuf.lex_start_p <- start_of_comment;
-           raise (Error (Errors.Clexer_unterminated_comment (Printf.sprintf "/*%c" flags.magic_comment_char))) }
-  | _    {lex_magic (magic flags start_of_comment) lexbuf}
+           raise (Error (Errors.Clexer_unterminated_comment (Printf.sprintf "/*%c" env.magic_comment_char))) }
+  | _    {lex_magic (magic env start_of_comment) lexbuf}
 
 (* Consume a comment: /* ... */ *)
 (* STD §6.4.9#1 *)
@@ -374,30 +443,30 @@ and hash = parse
       { raise (Error Errors.Clexer_invalid_symbol) }
 
 (* Entry point *)
-and initial flags = parse
+and initial env = parse
   (* Magic comments *)
   | "/*@" { let curr_p = lexbuf.lex_curr_p in
-            let xs = magic flags lexbuf.lex_start_p lexbuf in
-            match magic_token flags curr_p lexbuf.lex_start_p ('@' :: xs) with
+            let xs = magic env lexbuf.lex_start_p lexbuf in
+            match magic_token env curr_p lexbuf.lex_start_p ('@' :: xs) with
             | Some tok -> tok
-            | None -> initial flags lexbuf
+            | None -> initial env lexbuf
             }
   (* Alternative magic comments *)
   | "/*$" { let curr_p = lexbuf.lex_curr_p in
-            let xs = magic flags lexbuf.lex_start_p lexbuf in
-            match magic_token flags curr_p lexbuf.lex_start_p ('$' :: xs) with
+            let xs = magic env lexbuf.lex_start_p lexbuf in
+            match magic_token env curr_p lexbuf.lex_start_p ('$' :: xs) with
             | Some tok -> tok
-            | None -> initial flags lexbuf
+            | None -> initial env lexbuf
             }
   (* Beginning of a comment *)
-  | "/*" { ignore (comment lexbuf.lex_start_p lexbuf); initial flags lexbuf}
+  | "/*" { ignore (comment lexbuf.lex_start_p lexbuf); initial env lexbuf}
 
   (* Single-line comment *)
-  | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial flags lexbuf}
+  | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial env lexbuf}
 
-  | '\n'             { new_line lexbuf; initial flags lexbuf }
-  | whitespace_char+ { initial flags lexbuf }
-  | '#'              { hash lexbuf; initial flags lexbuf }
+  | '\n'             { new_line lexbuf; initial env lexbuf }
+  | whitespace_char+ { initial env lexbuf }
+  | '#'              { hash lexbuf; initial env lexbuf }
 
   (* NOTE: we decode integer constants here *)
   | (integer_constant as str) unsigned_suffix
@@ -519,7 +588,7 @@ and initial flags = parse
   | "}-}" { RBRACES }
 
   | identifier as id
-    { try Hashtbl.find lexicon id with Not_found -> NAME id }
+    { try Hashtbl.find env.lexicon id with Not_found -> NAME id }
 
   | eof
       { EOF }
@@ -546,18 +615,15 @@ let merge_encoding_prefixes pref_opt1 pref_opt2 =
       if pref1 = pref2 then pref_opt1 else
         raise (Error Errors.Cparser_non_standard_string_concatenation)
 
-let create_lexer () : [ `LEXER of lexbuf -> token ] =
+let create_lexer conf : [ `LEXER of lexbuf -> token ] =
   let lexer_state = ref LSRegular in
-  let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
-  let magic_comment_char =
-    if Switches.(has_switch SW_magic_comment_char_dollar)
-    then '$'
-    else '@'
-  in
+  let Config.{ magic_comments; magic_comment_char } = conf in
+  let lexicon = mk_lexicon conf in
+  let env = { lexicon; magic_comments; magic_comment_char } in
   let lexer lexbuf =
     match !lexer_state with
     | LSRegular ->
-        begin match initial { at_magic_comments; magic_comment_char } lexbuf with
+        begin match initial env lexbuf with
         | NAME i as tok -> lexer_state := LSIdentifier i; tok
         | _      as tok -> lexer_state := LSRegular; tok
         end

@@ -97,7 +97,8 @@ let cerberus debug_level progress core_obj
              impl_name
              exec exec_mode iso_switches switches batch concurrency
              astprints pprints ppflags pp_ail_out pp_core_out
-             sequentialise_core rewrite_core typecheck_core defacto permissive ignore_bitfields
+             sequentialise_core rewrite_core typecheck_core defacto permissive
+             lexicon asm_keyword ignore_bitfields
              fs_dump fs trace
              output_name
              files args_opt =
@@ -141,6 +142,8 @@ let cerberus debug_level progress core_obj
     end else
       Switches.set switches
     end;
+    let cerb_keywords = true in
+    let cerb_builtins = true in
     let allow_distinct_ptr_types_comparison = defacto in
     let allow_void_ptr_arithmetic = permissive in
     let allow_void_return = permissive in
@@ -148,9 +151,22 @@ let cerberus debug_level progress core_obj
     let do_stepping = false in
     let conf =
       let execution_mode = if exec then Some exec_mode else None in
-      mk_config ~backend_name:"Driver" ~agnostic ~permissive ~ignore_bitfields
-        ~allow_distinct_ptr_types_comparison ~allow_void_ptr_arithmetic ~allow_void_return
-        ~execution_mode ~concurrency ~do_stepping ~do_tracing:trace ~fs_dump
+      mk_config ~backend_name:"Driver"
+        ~agnostic
+        ~permissive
+        ~lexicon
+        ~asm_keyword
+        ~cerb_keywords
+        ~cerb_builtins
+        ~ignore_bitfields
+        ~allow_distinct_ptr_types_comparison
+        ~allow_void_ptr_arithmetic
+        ~allow_void_return
+        ~execution_mode
+        ~concurrency
+        ~do_stepping
+        ~do_tracing:trace
+        ~fs_dump
     in
     io.pass_message (Printf.sprintf "Using '%s'" Impl_mem.name) >>
     load_core_stdlib () >>= fun core_stdlib ->
@@ -436,6 +452,15 @@ let agnostic =
              for bit-fields is added." in
   Arg.(value & flag & info ["dignore-bitfields"] ~doc)
 
+let lexicon =
+  let doc = "Select lexicon (c11 | gnu11 | c23 | gnu23)." in
+  Arg.(value & opt (enum ["c11", Config.C11; "gnu11", GNU11; "c23", C23; "gnu23", GNU23])
+         C11 & info ["lexicon"] ~docv:"LEXICON" ~doc)
+
+let asm_keyword =
+  let doc = "Enables the asm keyword (selecting a GNU lexicon also enables it)." in
+  Arg.(value & flag & info ["asm-keyword"] ~doc)
+
 let exec =
   let doc = "Execute the Core program after the elaboration." in
   Arg.(value & flag & info ["exec"] ~doc)
@@ -550,7 +575,8 @@ let () =
                          exec $ exec_mode $ iso $ switches $ batch $
                          concurrency $
                          astprints $ pprints $ ppflags $ pp_ail_out $ pp_core_out $
-                         sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $ ignore_bitfields $
+                         sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $
+                         lexicon $ asm_keyword $ ignore_bitfields $
                          fs_dump $ fs $ trace $
                          output_file $
                          files $ args) in

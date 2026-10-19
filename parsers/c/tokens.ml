@@ -34,7 +34,6 @@ type token =
   | STRUCT
   | SWITCH
   | TYPEDEF
-  | TYPEOF
   | UNION
   | UNSIGNED
   | VOID
@@ -115,22 +114,40 @@ type token =
   | LBRACK_LBRACK
   (* | RBRACK_RBRACK *)
 
+  (* C23 keywords *)
+  | BITINT
+  | CONSTEXPR
+  | DECIMAL32
+  | DECIMAL64
+  | DECIMAL128
+  | FALSE
+  | NULLPTR
+  | TRUE
+  | TYPEOF
+  | TYPEOF_UNQUAL
+
+  (* GNU extensions *)
+  | ATTRIBUTE
+  | AUTO_TYPE
+  | EXTENSION
+  | INT128
+  | LABEL
+
   (* NON-STD *)
-  | ASSERT
-  | OFFSETOF
+  | ASM
+  | BMC_ASSUME
+  | BUILTIN_ASSERT
+  | BUILTIN_CHOOSE_EXPR
+  | BUILTIN_OFFSETOF
+  | BUILTIN_TYPES_COMPATIBLE_P
   | LBRACES
   | PIPES
-  | RBRACES
-  | VA_START
-  | VA_COPY
-  | VA_ARG
-  | VA_END
-  | BMC_ASSUME
   | PRINT_TYPE
-  | ASM
-  | ASM_VOLATILE
-  | BUILTIN_TYPES_COMPATIBLE_P
-  | BUILTIN_CHOOSE_EXPR
+  | RBRACES
+  | VA_ARG
+  | VA_COPY
+  | VA_END
+  | VA_START
 
   (* Magic comments as tokens *)
   | CERB_MAGIC of (Cerb_location.t * (char * string))
@@ -166,7 +183,6 @@ let string_of_token = function
   | STRUCT -> "STRUCT"
   | SWITCH -> "SWITCH"
   | TYPEDEF -> "TYPEDEF"
-  | TYPEOF -> "TYPEOF"
   | UNION -> "UNION"
   | UNSIGNED -> "UNSIGNED"
   | VOID -> "VOID"
@@ -236,8 +252,26 @@ let string_of_token = function
   | CARET_EQ -> "CARET_EQ"
   | PIPE_EQ -> "PIPE_EQ"
   | COMMA -> "COMMA"
-  | ASSERT -> "ASSERT"
-  | OFFSETOF -> "OFFSETOF"
+
+  | BITINT -> "BITINT"
+  | CONSTEXPR -> "CONSTEXPR"
+  | DECIMAL32 -> "DECIMAL32"
+  | DECIMAL64 -> "DECIMAL64"
+  | DECIMAL128 -> "DECIMAL128"
+  | FALSE -> "FALSE"
+  | NULLPTR -> "NULLPTR"
+  | TRUE -> "TRUE"
+  | TYPEOF -> "TYPEOF"
+  | TYPEOF_UNQUAL -> "TYPEOF_UNQUAL"
+
+  | ATTRIBUTE -> "ATTRIBUTE"
+  | AUTO_TYPE -> "AUTO_TYPE"
+  | EXTENSION -> "EXTENSION"
+  | INT128 -> "INT128"
+  | LABEL -> "LABEL"
+
+  | BUILTIN_ASSERT -> "BUILTIN_ASSERT"
+  | BUILTIN_OFFSETOF -> "BUILTIN_OFFSETOF"
   | LBRACES -> "LBRACES"
   | PIPES -> "PIPES"
   | RBRACES -> "RBRACES"
@@ -248,7 +282,6 @@ let string_of_token = function
   | BMC_ASSUME -> "__bmc_assume"
   | PRINT_TYPE -> "__cerb_printtype"
   | ASM -> "ASM"
-  | ASM_VOLATILE -> "ASM_VOLATILE"
   | BUILTIN_TYPES_COMPATIBLE_P -> "BUILTIN_TYPES_COMPATIBLE_P"
   | BUILTIN_CHOOSE_EXPR -> "BUILTIN_CHOOSE_EXPR"
   | EOF -> "EOF"

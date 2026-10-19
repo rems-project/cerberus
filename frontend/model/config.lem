@@ -17,9 +17,26 @@ instance (Eq calling_convention)
   let (<>) = unsafe_structural_inequality
 end
 
+type lexicon =
+  | C11
+  | GNU11
+  | C23
+  | GNU23
+
 type config = <|
   agnostic: bool;
   permissive: bool;
+
+  (* C lexing *)
+  lexicon: lexicon;
+  asm_keyword: bool;
+  cerb_keywords:bool;
+  cerb_builtins: bool;
+  magic_comments: bool; (* Whether magic comments (/*@ ... @*/) should be processed
+                         * using the backend provided parser (e.g. CN) or treated as
+                         * normal comments *)
+  magic_comment_char: char; (* The character used to mark magic comments (e.g. @ above) *)
+
 
   (* Desugaring *)
   ignore_bitfields: bool;

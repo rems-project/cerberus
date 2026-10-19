@@ -115,9 +115,23 @@ let cerberus debug_level progress core_obj
     let do_stepping = false in
     let conf =
       let execution_mode = if exec then Option.some exec_mode else Option.none in
-      mk_config ~backend_name:"Bmc" ~agnostic:false ~permissive:false ~ignore_bitfields:false
-        ~allow_distinct_ptr_types_comparison ~allow_void_ptr_arithmetic ~allow_void_return
-        ~execution_mode ~concurrency ~do_stepping ~do_tracing:trace ~fs_dump in
+      mk_config
+        ~backend_name:"Bmc"
+        ~agnostic:false
+        ~permissive:false
+        ~lexicon:C11
+        ~asm_keyword:false
+        ~cerb_keywords:true
+        ~cerb_builtins:true
+        ~ignore_bitfields:false
+        ~allow_distinct_ptr_types_comparison
+        ~allow_void_ptr_arithmetic
+        ~allow_void_return
+        ~execution_mode
+        ~concurrency
+        ~do_stepping
+        ~do_tracing:trace
+        ~fs_dump in
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)

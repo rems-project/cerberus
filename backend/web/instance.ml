@@ -71,11 +71,23 @@ let hack ?(is_bmc=false) ~n1570 ~switches mode =
   (* Setting up the switches must happen first *)
   Switches.set switches;
   let execution_mode = Some mode in
-  mk_config ~backend_name:(if is_bmc then "Bmc" else "Web_instance")
-    ~agnostic:false ~permissive:false ~ignore_bitfields:false
-    ~allow_distinct_ptr_types_comparison:false ~allow_void_ptr_arithmetic:false
-    ~allow_void_return:false ~execution_mode ~concurrency:false ~do_stepping:true
-    ~do_tracing:false ~fs_dump:false
+  mk_config
+    ~backend_name:(if is_bmc then "Bmc" else "Web_instance")
+    ~agnostic:false
+    ~permissive:false
+    ~lexicon:GNU11
+    ~asm_keyword:true(* this doesn't matter since we use a GNU lexicon *)
+    ~cerb_keywords:true
+    ~cerb_builtins:true
+    ~ignore_bitfields:false
+    ~allow_distinct_ptr_types_comparison:false
+    ~allow_void_ptr_arithmetic:false
+    ~allow_void_return:false
+    ~execution_mode
+    ~concurrency:false
+    ~do_stepping:true
+    ~do_tracing:false
+    ~fs_dump:false
 
 let respond filename name f = function
   | Result.Ok r ->
