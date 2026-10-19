@@ -134,7 +134,7 @@ type asm_qualifier =
 %token LBRACE RBRACE SEMICOLON
 
 (* NON-STD: *)
-  ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
+  ASSERT OFFSETOF TYPEOF BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
@@ -732,7 +732,7 @@ conditional_expression:
                                COLON    expr3= conditional_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEcond (expr1, expr2, expr3) ) }
-| expr1= logical_OR_expression QUESTION_COLON expr2= conditional_expression
+| expr1= logical_OR_expression QUESTION COLON expr2= conditional_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEcondGNU (expr1, expr2) ) }
 ;

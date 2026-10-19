@@ -507,9 +507,6 @@ and initial flags = parse
 (*  | "%:"   *)
 (*  | "%:%:" *)
 
-  (* NON-STD GNU extensions *)
-  | "?:" { QUESTION_COLON }
-
   (* NON-STD (cppmem-like thread syntax) *)
   | "{-{" { LBRACES }
   | "|||" { PIPES   }
