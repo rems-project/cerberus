@@ -1124,10 +1124,14 @@ Module CheriMemoryImplWithProofs
     autospecialize SS.
     eapply ZMapProofs.map_forall_Forall_elements;eauto.
     clear H.
+    Transparent bind.
     apply bind_SameState.
+    Opaque bind.
     assumption.
     intros x.
+    Transparent ret.
     apply ret_SameState.
+    Opaque ret.
   Qed.
 
   Instance amap_sequence_SameState
@@ -1143,10 +1147,14 @@ Module CheriMemoryImplWithProofs
     autospecialize SS.
     eapply AMapProofs.map_forall_Forall_elements;eauto.
     clear H.
+    Transparent bind.
     apply bind_SameState.
+    Opaque bind.
     assumption.
     intros x.
+    Transparent ret.
     apply ret_SameState.
+    Opaque ret.
   Qed.
 
 
@@ -2545,9 +2553,13 @@ Module CheriMemoryImplWithProofs
       apply ZMapProofs.map_maps_to_elements_p in H.
       unfold ZMap.map_sequence.
       break_let.
+      Transparent bind.
       apply bind_PreservesInvariant.
+      Opaque bind.
       -
-        apply sequence_PreservesInvariant.
+        Transparent bind ret.
+        apply (sequence_PreservesInvariant s l0).
+        Opaque bind ret.
         generalize dependent (ZMap.M.elements (elt:=memM A) mv).
         intros ls H S.
         clear mv.
@@ -2573,7 +2585,9 @@ Module CheriMemoryImplWithProofs
         assumption.
       -
         intros s' x.
+        Transparent ret.
         apply ret_PreservesInvariant.
+        Opaque ret.
     Qed.
 
     Instance amap_sequence_PreservesInvariant
@@ -2587,9 +2601,13 @@ Module CheriMemoryImplWithProofs
       apply AMapProofs.map_maps_to_elements_p in H.
       unfold AMap.map_sequence.
       break_let.
+      Transparent bind.
       apply bind_PreservesInvariant.
+      Opaque bind.
       -
-        apply sequence_PreservesInvariant.
+        Transparent bind ret.
+        apply (sequence_PreservesInvariant s l0).
+        Opaque bind ret.
         generalize dependent (AMap.M.elements (elt:=memM A) mv).
         intros ls H S.
         clear mv.
@@ -2615,7 +2633,9 @@ Module CheriMemoryImplWithProofs
         assumption.
       -
         intros s' x.
+        Transparent ret.
         apply ret_PreservesInvariant.
+        Opaque ret.
     Qed.
 
     Instance zmap_mmapi_PreservesInvariant
@@ -3164,7 +3184,9 @@ Module CheriMemoryImplWithProofs
 
       (* end prep *)
 
-      apply sequence_spec_same_state_memM in SEQ.
+      Transparent bind ret.
+      apply (sequence_spec_same_state_memM s newcaps rescaps) in SEQ.
+      Opaque bind ret.
       -
         destruct (@AMap.F.In_dec _ newmeta k) as [I|NI].
         +
@@ -4960,6 +4982,13 @@ Module CheriMemoryImplWithProofs
                 lia.
               }
               clear Heqf.
+              Transparent bind ret.
+              apply bind_serr_inv in H0.
+              Opaque bind ret.
+              let H1 := fresh H0 in
+              let H2 := fresh H0 in
+              let x' := fresh a' in
+              destruct H0 as [x' [H1 H2]].
               state_inv_steps.
               (* this generates 3 very similar subgoals with the same proof *)
               all: apply IHfuel in H0.
@@ -4974,7 +5003,9 @@ Module CheriMemoryImplWithProofs
               1,3,5: now invc H2.
 
               (* induction step for 3 cases *)
+              Transparent bind ret.
               all: apply bind_serr_inv in H2.
+              Opaque bind ret.
               all: destruct H2 as ((sz' & al') & FA & H).
               all: apply IHl in H.
               all: apply f_mon in FA.
@@ -5038,7 +5069,9 @@ Module CheriMemoryImplWithProofs
       clear - f_mon H1; rename H1 into F.
 
       cbn in F.
+      Transparent bind ret.
       apply bind_serr_inv in F.
+      Opaque bind ret.
       destruct F as ((x0, off0) & F0 & F).
       apply f_mon in F0.
 
@@ -5049,7 +5082,9 @@ Module CheriMemoryImplWithProofs
         now invc F.
       +
         cbn in F.
+        Transparent bind ret.
         apply bind_serr_inv in F.
+        Opaque bind ret.
         destruct F as ((x1 & off1) & F1 & F).
         apply IHl in F.
         easy.
@@ -5954,7 +5989,9 @@ Module CheriMemoryImplWithProofs
       --
         destruct offs.
         cbn in *.
+        Transparent bind ret.
         inl_inr_inv;subst;assumption.
+        Opaque bind ret.
         cbn in L.
         lia.
       --
