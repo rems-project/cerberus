@@ -1,0 +1,6 @@
+-- Capturing the suffix changes the label body's result from boolean to unit.
+-- The save body and every run are in boolean contexts in the source.
+proc main(): eff unit :=
+  let strong _: boolean = save label: boolean () in pure(True) in
+  if True then pure(Unit)
+  else let strong _: boolean = run label() in pure(Unit)

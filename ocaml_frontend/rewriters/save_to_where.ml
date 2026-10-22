@@ -390,10 +390,10 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
   let unwrap_set_defs capturing =
     let default = (Pset.empty Symbol.symbol_compare, []) in
     Option.value ~default capturing in
-  let map_exit f e defs =
+  let map_exit bTy f e defs =
     match defs with
     | [] -> (f e, defs)
-    | def :: defs -> (e, { def with body = f def.body } :: defs) in
+    | def :: defs -> (e, { def with body = f def.body; ret_bTy = bTy } :: defs) in
   begin match node with
   | If (pexpr, true_, false_) ->
     let (true_, capturing_t) = to_where bTy true_ in
@@ -441,9 +441,9 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
             let jump = new_ (singleton label) (Jump (label, [Helper.pe_sym sym])) in
             new_ (Pset.add label body.info) (Sseq (pat, body, jump)) in
           let (true_j, defs_t) =
-            map_exit sseq_jump true_ defs_t in
+            map_exit bTy sseq_jump true_ defs_t in
           let (false_j, defs_f) =
-            map_exit sseq_jump false_ defs_f in
+            map_exit bTy sseq_jump false_ defs_f in
           let def =
             let param = {
               name = Symbol.fresh ();
@@ -482,7 +482,7 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
            be place inside the head of its body. *)
         let sseq_e2 body = wrap (Pset.union body.info e2.info) (Sseq (pat, body, e2)) in
         let (live1, defs1) = unwrap_set_defs capturing1 in
-        let (e, defs1) = map_exit sseq_e2 e1 defs1 in
+        let (e, defs1) = map_exit bTy sseq_e2 e1 defs1 in
         let (live2, defs2) = unwrap_set_defs capturing2 in
         let live =
           let unioned = Pset.union live1 live2 in

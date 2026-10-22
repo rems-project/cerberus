@@ -51,6 +51,24 @@ fi
 
 set_cerberus_exec "cerberus"
 
+# Core regressions must typecheck and return the expected result in both modes.
+# A positional argument selects a CI test, so run these only in the full suite.
+if [[ $# == 0 ]]; then
+  for file in where/*.core; do
+    [[ -f "$file" ]] || continue
+    for mode in source save_to_where; do
+      args=(--nolibc --typecheck-core --exec --batch)
+      [[ $mode == save_to_where ]] && args+=(--switches save_to_where)
+      $CERB "${args[@]}" "$file" > tmp/result 2> tmp/stderr
+      ret=$?
+      if ! cmp --silent tmp/result "where/expected/$(basename "$file").expected"; then
+        ret=1
+      fi
+      report "$file [$mode]" "$file" "$ret"
+    done
+  done
+fi
+
 for file in "${citests[@]}"; do
   if [[ ! -f ./ci/$file ]]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m"
