@@ -16,6 +16,7 @@ module Make(Conf: Config) = struct
       let message_file = "c_parser_error.messages"
       let unexpected_token str = Errors.(C_PARSING (Cparser_unexpected_token str))
       let lift_cause cause = Errors.C_PARSING cause
+      let error_message = C_parser_error.message
     end) in
     M.handle parse (token_pos_buffer, lexer) ~offset lexbuf
 
