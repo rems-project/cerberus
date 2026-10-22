@@ -1,0 +1,37 @@
+return code: 0
+let [unused:1, ret_506:2] _: unit =
+  let [unused:1, ret_506:1] _: unit =
+    save [unused:1, ret_506:1] unused: unit () in
+      let [ret_506:1] a_507: loaded integer = ... in
+      run [ret_506:1] ret_506(conv_loaded_int('signed int', a_507)) in
+  ... in
+save [ret_506:1] ret_506: loaded integer (a_508: loaded integer:= ..) in
+  ...
+let [ret_506] _: unit =
+  let _: unit =
+    save [!unused] unused: unit () in
+      let a_507: loaded integer = ... in
+      run ret_506(conv_loaded_int('signed int', a_507)) in
+  ... in
+save ret_506: loaded integer (a_508: loaded integer:= ..) in
+  ...
+(let [ret_506] _: unit =
+  let [ret_506] _: unit =
+    let [ret_506] () = ... in
+    let [ret_506] a_507: loaded integer = ... in
+    jump [ret_506] ret_506(conv_loaded_int('signed int', a_507)) in
+  ... in
+jump [ret_506] ret_506(Specified(0)))
+  where ret_506 (a_508: loaded integer) : loaded integer :=
+    ...
+  end
+(let [ret_506] _: unit =
+  let [ret_506] _: unit =
+    let [ret_506] () = ... in
+    let [ret_506] a_507: loaded integer = ... in
+    jump [ret_506] ret_506(conv_loaded_int('signed int', a_507)) in
+  ... in
+jump [ret_506] ret_506(Specified(0)))
+  where ret_506 (a_508: loaded integer) : loaded integer :=
+    ...
+  end

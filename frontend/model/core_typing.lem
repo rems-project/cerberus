@@ -1613,8 +1613,8 @@ let merge_styles loc s1 s2 =
     | _ -> E.fail loc MixedLabelStyles
   end
 
-val check_label_style_aux: forall 'a 'bty. bool -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
-let rec check_label_style_aux in_ctx (Expr annots expr_) =
+val check_label_style_aux: forall 'a 'bty. bool -> bool -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
+let rec check_label_style_aux run_save_ok jump_where_ok (Expr annots expr_) =
   let loc = Annot.get_loc_ annots in
   match expr_ with
     | Epure _ ->
@@ -1632,73 +1632,76 @@ let rec check_label_style_aux in_ctx (Expr annots expr_) =
     | Eexcluded _ _ ->
         E.return Nothing
     | Eannot _ e ->
-        check_label_style_aux in_ctx e
+        check_label_style_aux run_save_ok jump_where_ok e
     | Eif _ e1 e2 ->
-        check_label_style_aux in_ctx e1 >>= fun s1 ->
-        check_label_style_aux in_ctx e2 >>= fun s2 ->
+        check_label_style_aux run_save_ok jump_where_ok e1 >>= fun s1 ->
+        check_label_style_aux run_save_ok jump_where_ok e2 >>= fun s2 ->
         merge_styles loc s1 s2
     | Esseq _ e1 e2 ->
-        check_label_style_aux in_ctx e1 >>= fun s1 ->
-        check_label_style_aux in_ctx e2 >>= fun s2 ->
+        check_label_style_aux run_save_ok jump_where_ok e1 >>= fun s1 ->
+        check_label_style_aux run_save_ok jump_where_ok e2 >>= fun s2 ->
         merge_styles loc s1 s2
     | Elet _ _ e ->
-        check_label_style_aux false e
+        (* The save to where transform assumes that no Esave occurs inside an
+           Elet but may produce Ewhere inside an Elet, hence the two parameters
+           to this function, and only place of differing treatment here. *)
+        check_label_style_aux false jump_where_ok e
     | Ewseq _ e1 e2 ->
-        check_label_style_aux false e1 >>= fun s1 ->
-        check_label_style_aux false e2 >>= fun s2 ->
+        check_label_style_aux false false e1 >>= fun s1 ->
+        check_label_style_aux false false e2 >>= fun s2 ->
         merge_styles loc s1 s2
     | Ecase _ cases ->
         E.foldlM (fun acc (_, e) ->
-          check_label_style_aux in_ctx e >>= fun s ->
+          check_label_style_aux run_save_ok jump_where_ok e >>= fun s ->
           merge_styles loc acc s
         ) Nothing cases
     | Ebound e ->
-        check_label_style_aux false e
+        check_label_style_aux false false e
     | End es ->
         E.foldlM (fun acc e ->
-          check_label_style_aux false e >>= fun s ->
+          check_label_style_aux false false e >>= fun s ->
           merge_styles loc acc s
         ) Nothing es
     | Eunseq es ->
         E.foldlM (fun acc e ->
-          check_label_style_aux false e >>= fun s ->
+          check_label_style_aux false false e >>= fun s ->
           merge_styles loc acc s
         ) Nothing es
     | Epar es ->
         E.foldlM (fun acc e ->
-          check_label_style_aux false e >>= fun s ->
+          check_label_style_aux false false e >>= fun s ->
           merge_styles loc acc s
         ) Nothing es
     | Erun _ _ _ ->
-        if not in_ctx then
+        if not run_save_ok then
           E.fail loc (LabelOutsideContext "Erun")
         else
           E.return (Just ExprStyle_save)
     | Esave _ _ e ->
-        if not in_ctx then
+        if not run_save_ok then
           E.fail loc (LabelOutsideContext "Esave")
         else
-          check_label_style_aux true e >>= fun s ->
+          check_label_style_aux true true e >>= fun s ->
           merge_styles loc (Just ExprStyle_save) s
     | Ejump _ _ _ ->
-        if not in_ctx then
+        if not jump_where_ok then
           E.fail loc (LabelOutsideContext "Ejump")
         else
           E.return (Just ExprStyle_where)
     | Ewhere e defs ->
-        if not in_ctx then
+        if not jump_where_ok then
           E.fail loc (LabelOutsideContext "Ewhere")
         else
-          check_label_style_aux true e >>= fun s ->
+          check_label_style_aux true true e >>= fun s ->
           E.foldlM (fun acc (_, _, body) ->
-            check_label_style_aux true body >>= fun s' ->
+            check_label_style_aux true true body >>= fun s' ->
             merge_styles loc acc s'
           ) s defs >>= fun s_defs ->
           merge_styles loc (Just ExprStyle_where) s_defs
   end
 
 val check_label_style: forall 'a 'bty. Core.generic_expr 'a 'bty Symbol.sym -> E.eff (maybe expr_style)
-let check_label_style e = check_label_style_aux true e
+let check_label_style e = check_label_style_aux true true e
 
 
 val     collect_labels: forall 'bty 'a. typing_env -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff typing_env
