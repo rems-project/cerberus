@@ -1,4 +1,4 @@
-return code: 1
+return code: 0
 let [L:1, ret_506:2] _: unit =
   let [L:1, ret_506:1] _: unit =
     let [L:1, ret_506:1] a_508: loaded integer = ... in
@@ -43,10 +43,10 @@ let [ret_506] _: unit =
   ... in
 save ret_506: loaded integer (a_516: loaded integer:= ..) in
   ...
-(let [ret_506, join] _: unit =
-  let [ret_506, join] _: unit =
-    let [ret_506, join] a_508: loaded integer = ... in
-    let [ret_506, join] a_507: boolean =
+(let [ret_506] _: unit =
+  let [ret_506] _: unit =
+    let [ret_506] a_508: loaded integer = ... in
+    let [ret_506] a_507: boolean =
       case a_508 of
         | Specified(a_509: integer) =>
             ...
@@ -58,47 +58,41 @@ save ret_506: loaded integer (a_516: loaded integer:= ..) in
     else
       let [L] _: unit = jump [L] L() in
       ...)
-      where [ret_506, join] L () : unit :=
-        let [ret_506, join] a_518: unit =
-          let [ret_506] _: unit =
-            let [ret_506] a_515: loaded integer = ... in
-            jump [ret_506] ret_506(conv_loaded_int('signed int', a_515)) in
-          ... in
-        jump [join] join(a_518)
+      where [ret_506] L () : unit :=
+        let [ret_506] _: unit =
+          let [ret_506] a_515: loaded integer = ... in
+          jump [ret_506] ret_506(conv_loaded_int('signed int', a_515)) in
+        ...
       end in
   ... in
 jump [ret_506] ret_506(Specified(0)))
-  where [join] ret_506 (a_516: loaded integer) : loaded integer :=
+  where ret_506 (a_516: loaded integer) : loaded integer :=
     ...
   end
-(let [ret_506, join] _: unit =
-  let [ret_506, join] _: unit =
-    let [ret_506, join] a_508: loaded integer = ... in
-    let [ret_506, join] a_507: boolean =
+(let [ret_506] _: unit =
+  let [ret_506] _: unit =
+    let [ret_506] a_508: loaded integer = ... in
+    let [ret_506] a_507: boolean =
       case a_508 of
         | Specified(a_509: integer) =>
             ...
         | Unspecified(_: ctype) =>
             ...
         end in
-    let [ret_506, join] a_518: unit =
-      let [ret_506, join] _: unit =
-        let [ret_506, join] a_515: loaded integer =
-          (if [L] a_507 then
-            jump [L] L()
-          else
-            let [L] _: unit = jump [L] L() in
-            ...)
-            where [ret_506, join] L () : loaded integer :=
-              ...
-            end in
-        jump [ret_506] ret_506(conv_loaded_int('signed int', a_515)) in
-      ... in
-    jump [join] join(a_518) in
+    let [ret_506] _: unit =
+      let [ret_506] a_515: loaded integer =
+        (if [L] a_507 then
+          jump [L] L()
+        else
+          let [L] _: unit = jump [L] L() in
+          ...)
+          where [ret_506] L () : loaded integer :=
+            ...
+          end in
+      jump [ret_506] ret_506(conv_loaded_int('signed int', a_515)) in
+    ... in
   ... in
 jump [ret_506] ret_506(Specified(0)))
-  where [join] ret_506 (a_516: loaded integer) : loaded integer :=
+  where ret_506 (a_516: loaded integer) : loaded integer :=
     ...
   end
-unknown location  error: undeclared label 'join'
-

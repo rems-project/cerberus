@@ -390,11 +390,10 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
   let unwrap_set_defs capturing =
     let default = (Pset.empty Symbol.symbol_compare, []) in
     Option.value ~default capturing in
-  let map_e_or_fst_def f e capturing =
-    let (live, defs) = unwrap_set_defs capturing in
+  let map_exit f e defs =
     match defs with
-    | [] -> (f e, live, defs)
-    | def :: defs -> (e, live, { def with body = f def.body } :: defs) in
+    | [] -> (f e, defs)
+    | def :: defs -> (e, { def with body = f def.body } :: defs) in
   begin match node with
   | If (pexpr, true_, false_) ->
     let (true_, capturing_t) = to_where bTy true_ in
@@ -420,43 +419,45 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
 
            Note that join is first, so that any continuations captured will
            thus be place inside its body. *)
-        let label = Symbol.fresh_pretty "join" in
-        let sseq_jump body =
-          let sym = Symbol.fresh () in
-          let pat = Helper.pat ~sym bTy in
-          let jump = new_ (singleton label) (Jump (label, [Helper.pe_sym sym])) in
-          new_ (Pset.add label body.info) (Sseq (pat, body, jump)) in
-        let (true_j, live_t, defs_t) =
-          map_e_or_fst_def sseq_jump true_ capturing_t in
-        let (false_j, live_f, defs_f) =
-          map_e_or_fst_def sseq_jump false_ capturing_f in
-        let def =
-          let param = {
-            name = Symbol.fresh ();
-            bTy;
-            optCTy = None;
-            pexpr = ();
-          } in {
-            label;
-            ret_bTy = bTy;
-            params = [ param ];
-            body = new_ empty_set (Base (Epure (Helper.pe_sym param.name)));
-          } in
+        let (live_t, defs_t) = unwrap_set_defs capturing_t in
+        let (live_f, defs_f) = unwrap_set_defs capturing_f in
         let live =
           let unioned = Pset.union live_t live_f in
           assert (Pset.subset dominators unioned);
           Pset.diff unioned dominators in
-        let defs = defs_t @ defs_f in
         if Pset.is_empty live then
           (* We don't add the join-point def here because we're not capturing
              any more continuations. *)
+          let defs = defs_t @ defs_f in
           let (labels, used) = labels_info defs in
           let if_info = Pset.union true_.info false_.info in
           let where_info = Pset.diff (Pset.union used if_info) labels in
           (new_ where_info (Where (wrap if_info (If (pexpr, true_, false_)), defs)), None)
         else
+          let label = Symbol.fresh_pretty "join" in
+          let sseq_jump body =
+            let sym = Symbol.fresh () in
+            let pat = Helper.pat ~sym bTy in
+            let jump = new_ (singleton label) (Jump (label, [Helper.pe_sym sym])) in
+            new_ (Pset.add label body.info) (Sseq (pat, body, jump)) in
+          let (true_j, defs_t) =
+            map_exit sseq_jump true_ defs_t in
+          let (false_j, defs_f) =
+            map_exit sseq_jump false_ defs_f in
+          let def =
+            let param = {
+              name = Symbol.fresh ();
+              bTy;
+              optCTy = None;
+              pexpr = ();
+            } in {
+              label;
+              ret_bTy = bTy;
+              params = [ param ];
+              body = new_ empty_set (Base (Epure (Helper.pe_sym param.name)));
+            } in
           let info = Pset.union true_j.info false_j.info in
-          (wrap info (If (pexpr, true_j, false_j)), Some (live, def :: defs))
+          (wrap info (If (pexpr, true_j, false_j)), Some (live, def :: defs_t @ defs_f))
     end
   | Sseq (pat, e1, e2) ->
     let inner_bTy = bTy_of_pat pat in
@@ -480,7 +481,8 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
            Note that defs2 is first, so that any continuations captured will
            be place inside the head of its body. *)
         let sseq_e2 body = wrap (Pset.union body.info e2.info) (Sseq (pat, body, e2)) in
-        let (e, live1, defs1) = map_e_or_fst_def sseq_e2 e1 capturing1 in
+        let (live1, defs1) = unwrap_set_defs capturing1 in
+        let (e, defs1) = map_exit sseq_e2 e1 defs1 in
         let (live2, defs2) = unwrap_set_defs capturing2 in
         let live =
           let unioned = Pset.union live1 live2 in
