@@ -25,6 +25,7 @@ module Make(M: sig
   val message_file : string
   val unexpected_token : string -> Errors.cause
   val lift_cause : cause -> Errors.cause
+  val error_message : int -> string
 end) = struct
   let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
     try Result.ok (parse lexer lexbuf) with
@@ -35,7 +36,7 @@ end) = struct
     | M.Parser_error state ->
       let message =
         try
-          let msg = Cn_parser_error.message state in
+          let msg = M.error_message state in
           if String.equal msg "<YOUR SYNTAX ERROR MESSAGE HERE>\n"
             then raise Not_found else msg
         with Not_found ->

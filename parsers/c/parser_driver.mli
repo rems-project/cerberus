@@ -10,6 +10,7 @@ module Make (M : sig
   val message_file : string
   val unexpected_token : string -> Errors.cause
   val lift_cause : cause -> Errors.cause
+  val error_message : int -> string
 end) : sig
   val handle :
     ((Lexing.lexbuf -> M.token) -> Lexing.lexbuf -> 'a) ->

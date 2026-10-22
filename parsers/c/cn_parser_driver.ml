@@ -9,6 +9,7 @@ let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
     let message_file = "cn_parser_error.messages"
     let unexpected_token str = Errors.(CN_PARSING (Cnlexer_unexpected_token str))
     let lift_cause cause = Errors.CN_PARSING cause
+    let error_message = Cn_parser_error.message
   end) in
   M.handle parse (token_pos_buffer, lexer) ~offset lexbuf
 
