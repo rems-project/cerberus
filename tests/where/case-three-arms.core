@@ -1,0 +1,9 @@
+-- The third arm must not erase the shared count for label in the first two.
+-- The selected second arm resumes the first arm's saved body and returns True.
+proc main(): eff boolean :=
+  case (Specified(0), Specified(1)) of
+    | (Specified(_: integer), Unspecified(_: ctype)) =>
+        save label: boolean () in pure(True)
+    | (Specified(_: integer), Specified(_: integer)) => run label()
+    | (Unspecified(_: ctype), _: loaded integer) => pure(False)
+  end

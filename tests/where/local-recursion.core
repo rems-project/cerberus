@@ -1,0 +1,5 @@
+-- Internal uses of label must not move its definition outside x's scope.
+proc main(): eff boolean :=
+  let strong x: boolean = pure(False) in
+  save label: boolean () in
+    if x then run label() else pure(True)

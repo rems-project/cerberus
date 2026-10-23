@@ -1,0 +1,10 @@
+-- The run lies outside the case, so its capturing arm needs a fresh join.
+-- Start in the other arm, run the label, then finish through the shared suffix.
+proc main(): eff boolean :=
+  let strong value: boolean =
+    case Unspecified('signed int') of
+      | Specified(_: integer) => save label: boolean () in pure(False)
+      | Unspecified(_: ctype) => pure(True)
+    end
+  in
+  if value then run label() else pure(False)

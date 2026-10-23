@@ -206,6 +206,7 @@ citests=(
   0338-cast-pointer-to-_Bool.c
   0339-invalid-string-character.error.c
   0340-shl_promotion_to_signed.undef.c
+  0341-goto_into_switch_arm.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

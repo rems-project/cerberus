@@ -1,0 +1,7 @@
+-- The case contains both the save and its run. It must close the definitions
+-- here without leaving a jump to an undefined fresh join.
+proc main(): eff boolean :=
+  case Unspecified('signed int') of
+    | Specified(_: integer) => save label: boolean () in pure(True)
+    | Unspecified(_: ctype) => run label()
+  end

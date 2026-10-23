@@ -189,16 +189,20 @@ let pp_count_map map =
     let pp_bind (sym, count) = pp_sym sym ^^ P.colon ^^ pp_int count in
     Some (P.separate_map (P.comma ^^ P.space) pp_bind @@ Pmap.bindings_list map)
 
-let add_counts sym int_opt1 int_opt2 =
-  match int_opt1, int_opt2 with
+(* [accumulated] is the number of children which mention [_sym]
+   [child] is same recursively - we ignore its internal count *)
+let add_counts _sym accumulated child =
+  match accumulated, child with
   | None, None -> assert false
-  | Some _, None
+  | Some count, None -> Some count
   | None, Some _ -> Some 1
-  | Some _, Some _ -> Some 2
-
-let merge_counts count1 count2 = Pmap.merge add_counts count1 count2
+  | Some count, Some _ -> Some (count + 1)
 
 let empty_map = Pmap.empty Symbol.compare_sym
+
+(* Start afresh at each parent so a child's internal uses count only once. *)
+let merge_counts children =
+  List.fold_left (Pmap.merge add_counts) empty_map children
 
 let singleton_count sym = Pmap.add sym 1 empty_map
 
@@ -207,16 +211,14 @@ let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
   | Eif (pe, e1, e2) ->
     let w1 = count_labels e1 in
     let w2 = count_labels e2 in
-    { info = merge_counts w1.info w2.info; annot; node = If (pe, w1, w2) }
+    { info = merge_counts [w1.info; w2.info]; annot; node = If (pe, w1, w2) }
   | Esseq (pat, e1, e2) ->
     let w1 = count_labels e1 in
     let w2 = count_labels e2 in
-    { info = merge_counts w1.info w2.info; annot; node = Sseq (pat, w1, w2) }
+    { info = merge_counts [w1.info; w2.info]; annot; node = Sseq (pat, w1, w2) }
   | Ecase (pe, cases) ->
     let wcases = List.map (fun (pat, e) -> (pat, count_labels e)) cases in
-    let info = List.fold_left
-      (fun acc (_, w) -> merge_counts acc w.info)
-      empty_map wcases in
+    let info = merge_counts (List.map (fun (_, w) -> w.info) wcases) in
     { info; annot; node = Case (pe, wcases) }
   | Erun ((), sym, pes) ->
     { info = singleton_count sym; annot; node = Run (sym, pes) }
@@ -225,7 +227,7 @@ let rec count_labels (Expr (annot, expr_) : expr) : count_labels where =
     let params = List.map (fun (name, ((bTy, optCTy), pe)) ->
       { name; bTy; optCTy; pexpr = pe }
     ) params_list in
-    { info = merge_counts wbody.info (singleton_count sym);
+    { info = merge_counts [wbody.info; singleton_count sym];
       annot;
       node = Save { label = sym; ret_bTy; params; body = wbody } }
   | Ejump _ -> assert false
@@ -371,7 +373,7 @@ let bTy_of_pat pat =
    Note that by convention, the first def in defs is will always be the one
    capturing the continuation. In E where (def :: defs), E can be thought of as
    an "entry block" and def as the "exit" block. There is always exactly one
-   because we synthesise join-point labels for any capturing if-expressions.
+   because we synthesise join-point labels for capturing conditionals and cases.
 
    NOTE: the analysis doesn't take into account free and bound variables when
    moving expressions around, but this doesn't seem to matter much because the
@@ -499,13 +501,53 @@ let rec to_where bTy ({ info; annot; node } : dominates where) =
   | Case (pexpr, branches) ->
     let do_branch (pat, body) =
       let (body, capturing) = to_where bTy body in
-      (* Case expressions can have runs inside them, but not saves,
-         so they'll never capture any continuations *)
-      assert (Option.is_none capturing);
-      (pat, body) in
-    let branches = List.map do_branch branches in
-    let info = List.fold_left (fun acc (_, body) -> Pset.union acc body.info) empty_set branches in
-    (wrap info (Case (pexpr, branches)), None)
+      ((pat, body), capturing) in
+    let branches, capturing = List.split (List.map do_branch branches) in
+    let case branches =
+      let info = List.fold_left
+        (fun acc (_, body) -> Pset.union acc body.info) empty_set branches in
+      wrap info (Case (pexpr, branches)) in
+    if List.for_all Option.is_none capturing then
+      (case branches, None)
+    else
+      let capturing = List.map unwrap_set_defs capturing in
+      let live =
+        let unioned = List.fold_left
+          (fun acc (live, _) -> Pset.union acc live) empty_set capturing in
+        assert (Pset.subset dominators unioned);
+        Pset.diff unioned dominators in
+      if Pset.is_empty live then
+        (* As for If, closing all captures here needs no fresh join. *)
+        let defs = List.concat_map snd capturing in
+        let (labels, used) = labels_info defs in
+        let body = case branches in
+        let info = Pset.diff (Pset.union used body.info) labels in
+        (new_ info (Where (body, defs)), None)
+      else
+        (* All normal arm exits share the join that captures the suffix. *)
+        let label = Symbol.fresh_pretty "join" in
+        let sseq_jump body =
+          let sym = Symbol.fresh () in
+          let pat = Helper.pat ~sym bTy in
+          let jump = new_ (singleton label) (Jump (label, [Helper.pe_sym sym])) in
+          new_ (Pset.add label body.info) (Sseq (pat, body, jump)) in
+        let branches, defs = List.split (List.map2
+          (fun (pat, body) (_, defs) ->
+            let body, defs = map_exit bTy sseq_jump body defs in
+            ((pat, body), defs)) branches capturing) in
+        let param = {
+          name = Symbol.fresh ();
+          bTy;
+          optCTy = None;
+          pexpr = ();
+        } in
+        let def = {
+          label;
+          ret_bTy = bTy;
+          params = [ param ];
+          body = new_ empty_set (Base (Epure (Helper.pe_sym param.name)));
+        } in
+        (case branches, Some (live, def :: List.concat defs))
   | Run (label, pexprs) ->
     (wrap (singleton label) (Jump (label, pexprs)), None)
   | Save { label; ret_bTy; params; body } ->
