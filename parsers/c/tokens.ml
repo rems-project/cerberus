@@ -60,7 +60,9 @@ type token =
   | CONSTANT of Cabs.cabs_constant
 
   (* §6.4.5 String Literals *)
-  | STRING_LITERAL of (Cabs.cabs_encoding_prefix option * string list)
+  (* NOTE: adjacent string literals are concatenated by the lexer (C_lexer.create_lexer),
+     the list keeps the location and content of each of them *)
+  | STRING_LITERAL of Cabs.cabs_string_literal
 
   (* §6.4.6 Punctuators *)
   | LBRACK

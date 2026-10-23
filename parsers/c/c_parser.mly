@@ -121,7 +121,9 @@ type asm_qualifier =
 %token<Cabs.cabs_constant> CONSTANT
 
 (* §6.4.5 String literals *)
-%token<Cabs.cabs_encoding_prefix option * string list> STRING_LITERAL
+(* NOTE: adjacent string literals are concatenated by the lexer
+ * (see C_lexer.create_lexer) *)
+%token<Cabs.cabs_string_literal> STRING_LITERAL
 
 (* §6.4.6 Punctuators *)
 %token LBRACK RBRACK LPAREN RPAREN (*LBRACE RBRACE*) DOT MINUS_GT
@@ -299,12 +301,6 @@ type asm_qualifier =
 %type<Cabs.function_definition>
   function_definition
 
-%type<Cabs.cabs_encoding_prefix option * (Cerb_location.t * string list)>
-  string_literal_component
-
-%type<Cabs.cabs_string_literal>
-  string_literal
-
 %type<Cerb_location.t * string * (Cerb_location.t * string) list>
   located_string_literal
 
@@ -456,7 +452,7 @@ primary_expression:
 | cst= CONSTANT
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEconst cst) }
-| lit= string_literal
+| lit= STRING_LITERAL
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
@@ -1248,7 +1244,7 @@ designator:
 (* §6.7.10 Static assertions *)
 static_assert_declaration:
 | STATIC_ASSERT LPAREN expr= constant_expression COMMA
-  lit= string_literal RPAREN SEMICOLON
+  lit= STRING_LITERAL RPAREN SEMICOLON
     { Static_assert (expr, lit) }
 ;
 
@@ -1428,7 +1424,7 @@ jump_statement:
 
 (* GCC inline assembly extension *)
 asm_register:
-| ASM LPAREN string_literal RPAREN
+| ASM LPAREN STRING_LITERAL RPAREN
     { () }
 
 asm_qualifier:
@@ -1442,12 +1438,12 @@ asm_qualifier:
 ;
 
 asm_output_input:
-|                             string_literal LPAREN expression RPAREN
-| LBRACK NAME VARIABLE RBRACK string_literal LPAREN expression RPAREN
+|                             STRING_LITERAL LPAREN expression RPAREN
+| LBRACK NAME VARIABLE RBRACK STRING_LITERAL LPAREN expression RPAREN
     { () }
 
 asm_clobber:
-| string_literal
+| STRING_LITERAL
     { () }
 
 asm_label:
@@ -1486,7 +1482,7 @@ asm_with_labels:
     { xs }
 
 asm_statement:
-| ASM qs= asm_qualifier* LPAREN s= string_literal RPAREN SEMICOLON
+| ASM qs= asm_qualifier* LPAREN s= STRING_LITERAL RPAREN SEMICOLON
     { let is_volatile = List.mem ASM_VOLATILE qs in
       let is_inline = List.mem ASM_INLINE qs in
       let strs =
@@ -1496,7 +1492,7 @@ asm_statement:
       in
       CabsStatement (region ($startpos, $endpos) noCursor, Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs)) }
-| ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN SEMICOLON
+| ASM qs= asm_qualifier* LPAREN s= STRING_LITERAL args= asm_with_output RPAREN SEMICOLON
     { let is_volatile = List.mem ASM_VOLATILE qs in
       let is_inline = List.mem ASM_INLINE qs in
       let strs =
@@ -1708,30 +1704,8 @@ balanced_token_sequence: (* NOTE: the list is in reverse *)
     { tk :: tks }
 ;
 
-string_literal_component:
-| STRING_LITERAL
-    { let loc = region ($startpos, $endpos) noCursor in
-      (fst $1, (loc, snd $1)) }
-;
-
-string_literal:
-| string_literal_component+
-    { let (pref_opts, components) = List.split $1 in
-      (* Check that the encoding prefixes are not inconsistent. *)
-      let rec merge_prefix pref_opt ls =
-        match (pref_opt, ls) with
-        | (_         , []              ) -> pref_opt
-        | (_         , None       :: ls) -> merge_prefix pref_opt ls
-        | (None      , pref_opt   :: ls) -> merge_prefix pref_opt ls
-        | (Some pref1, Some pref2 :: ls) ->
-            if pref1 = pref2 then merge_prefix pref_opt ls else
-              raise (C_lexer.Error Errors.Cparser_non_standard_string_concatenation)
-      in
-      (merge_prefix None pref_opts, components) }
-;
-
 located_string_literal:
-| string_literal
+| STRING_LITERAL
     { let loc = region ($startpos, $endpos) noCursor in
       let strs = List.map (fun (loc, s) -> (loc, String.concat "" s)) (snd $1) in
       (loc, String.concat "" (List.map snd strs), strs) }

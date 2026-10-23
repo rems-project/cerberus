@@ -156,6 +156,12 @@ let magic_token flags start_pos end_pos chars =
     Some (CERB_MAGIC (loc, (c,str)))
   )
 
+let region_of_lexbuf lexbuf =
+  let open Cerb_location in
+  region
+    (LineMap.position lexbuf.lex_start_p, LineMap.position lexbuf.lex_curr_p)
+    NoCursor
+
 }
 
 (* ========================================================================== *)
@@ -433,7 +439,7 @@ and initial flags = parse
       { let saved_start_p = lexbuf.lex_start_p in
         let strs = s_char_sequence lexbuf in
         lexbuf.lex_start_p <- saved_start_p;
-        STRING_LITERAL (None, strs) }
+        STRING_LITERAL (None, [(region_of_lexbuf lexbuf, strs)]) }
   | ("u8" | 'u' | 'U' | 'L') as pref '"'
       { let pref = match pref with
           | "u8" -> Cabs.CabsEncPrefix_u8
@@ -444,7 +450,7 @@ and initial flags = parse
         let saved_start_p = lexbuf.lex_start_p in
         let strs = s_char_sequence lexbuf in
         lexbuf.lex_start_p <- saved_start_p;
-        STRING_LITERAL (Some pref, strs) }
+        STRING_LITERAL (Some pref, [(region_of_lexbuf lexbuf, strs)]) }
 
   (* STD §6.4.6#1 Punctuators *)
   | '['   { LBRACK              }
@@ -528,6 +534,18 @@ type lexer_state =
   | LSIdentifier of string
 
 
+(* Check that the encoding prefixes of concatenated string literals are not
+ * inconsistent. *)
+let merge_encoding_prefixes pref_opt1 pref_opt2 =
+  match pref_opt1, pref_opt2 with
+  | _, None ->
+      pref_opt1
+  | None, _ ->
+      pref_opt2
+  | Some pref1, Some pref2 ->
+      if pref1 = pref2 then pref_opt1 else
+        raise (Error Errors.Cparser_non_standard_string_concatenation)
+
 let create_lexer () : [ `LEXER of lexbuf -> token ] =
   let lexer_state = ref LSRegular in
   let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
@@ -536,14 +554,46 @@ let create_lexer () : [ `LEXER of lexbuf -> token ] =
     then '$'
     else '@'
   in
+  let lexer lexbuf =
+    match !lexer_state with
+    | LSRegular ->
+        begin match initial { at_magic_comments; magic_comment_char } lexbuf with
+        | NAME i as tok -> lexer_state := LSIdentifier i; tok
+        | _      as tok -> lexer_state := LSRegular; tok
+        end
+    | LSIdentifier i ->
+        lexer_state := LSRegular;
+        if Lexer_feedback.is_typedefname i then TYPE else VARIABLE in
+  (* The token read after a sequence of string literals, with its positions. *)
+  let pending = ref None in
   `LEXER (fun lexbuf ->
-  match !lexer_state with
-  | LSRegular ->
-      begin match initial { at_magic_comments; magic_comment_char } lexbuf with
-      | NAME i as tok -> lexer_state := LSIdentifier i; tok
-      | _      as tok -> lexer_state := LSRegular; tok
-      end
-  | LSIdentifier i ->
-      lexer_state := LSRegular;
-      if Lexer_feedback.is_typedefname i then TYPE else VARIABLE)
+  match !pending with
+  | Some (tok, start_p, curr_p) ->
+      pending := None;
+      lexbuf.lex_start_p <- start_p;
+      lexbuf.lex_curr_p  <- curr_p;
+      tok
+  | None ->
+      begin match lexer lexbuf with
+      | STRING_LITERAL (pref_opt, strs) ->
+          (* STD §5.1.1.2#1, translation phase 6: "Adjacent string literal
+             tokens are concatenated.". This happens before the tokens are
+             analysed (phase 7), so the consecutive STRING_LITERAL tokens are
+             merged here into one, which keeps the location and content of
+             each string literal. *)
+          let start_p = lexbuf.lex_start_p in
+          let rec concat pref_opt rev_strs end_p =
+            match lexer lexbuf with
+            | STRING_LITERAL (pref_opt', strs') ->
+                concat (merge_encoding_prefixes pref_opt pref_opt')
+                  (List.rev_append strs' rev_strs) lexbuf.lex_curr_p
+            | tok ->
+                pending := Some (tok, lexbuf.lex_start_p, lexbuf.lex_curr_p);
+                lexbuf.lex_start_p <- start_p;
+                lexbuf.lex_curr_p  <- end_p;
+                STRING_LITERAL (pref_opt, List.rev rev_strs) in
+          concat pref_opt (List.rev strs) lexbuf.lex_curr_p
+      | tok ->
+          tok
+      end)
 }
