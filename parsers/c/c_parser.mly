@@ -1,10 +1,8 @@
 (* Grammar based on Jacques-Henri Jourdan and Francois Pottier TOPLAS 2017:
-   "A simple, possibly correct LR parser for C11"
-
-   NOTE: There is a reduce/reduce conflict in the grammar, which is solved
-         by reducing to the first production (Menhir's default behaviour).
-         See Jourdan's paper.
-*)
+ * "A simple, possibly correct LR parser for C11"
+ *
+ * NOTE: we parameterise the declarator rules to avoid the conflicts left
+ * in their grammar (see parameter_declarator_varname). *)
 
 %{
 open Cerb_frontend
@@ -169,8 +167,11 @@ type asm_qualifier =
 
 %type<LF.context> save_context
 
-%type<LF.declarator> declarator direct_declarator declarator_varname
+%type<LF.declarator>
+  declarator
+  declarator_varname
   declarator_typedefname
+  parameter_declarator_varname
 
 %type<Symbol.identifier>
   enumeration_constant
@@ -414,8 +415,6 @@ var_name:
     { n }
 ;
 
-(* NOTE: This rule is declared early, so that reduce/reduce conflict is
-   resolved using it. *)
 typedef_name_spec:
 | i= typedef_name
     { TSpec ((region ($startpos, $endpos) noCursor),
@@ -446,6 +445,25 @@ declarator_varname:
 declarator_typedefname:
 | decl = declarator
     { LF.declare_typedefname (LF.identifier decl); decl }
+;
+
+(* STD §6.7.6.3#11: "If, in a parameter declaration, an identifier can be
+ * treated either as a typedef name or as a parameter name, it shall be taken
+ * as a typedef name."
+ * This happens when a typedef name is the first token of a parenthesised
+ * declarator, e.g. in [int f(int (T));], where [(T)] can either be a
+ * parenthesised declarator for a parameter named T or (taken here) the
+ * parameter list of an abstract function declarator. So the identifier of a
+ * parenthesised declarator in a parameter declaration cannot be a typedef name.
+ * After a pointer, as in [int f(int ( *T))], T can only be a parameter name. *)
+parameter_declarator_varname:
+| decl = declarator_(general_identifier, var_identifier)
+    { LF.declare_varname (LF.identifier decl); decl }
+;
+
+var_identifier:
+| i= var_name
+    { Symbol.Identifier (region ($startpos, $endpos) noCursor, i) }
 ;
 
 (* §6.4.4.3 Enumeration constants Primary expressions *)
@@ -1083,52 +1101,69 @@ attribute_alignment_specifier:
 
 (* §6.7.6 Declarators *)
 
+(* NOTE: the declarator rules are parameterised by [ident], the identifiers
+ * allowed as the identifier of the declarator, and by [paren_ident], those
+ * allowed as the identifier of a parenthesised declarator. They are both
+ * general_identifier, except in parameter declarations,
+ * see parameter_declarator_varname. *)
 declarator:
-| dd= direct_declarator
+| decl= declarator_(general_identifier, general_identifier)
+    { decl }
+;
+
+declarator_(ident, paren_ident):
+| dd= direct_declarator(ident, paren_ident)
     { dd }
-| pdecl= pointer dd= direct_declarator
+(* NOTE: after a pointer, the identifier cannot be confused with a typedef name
+ * starting a parameter list *)
+| pdecl= pointer dd= direct_declarator(general_identifier, paren_ident)
     { LF.pointer_decl pdecl dd }
 ;
 
-direct_declarator:
-| i = general_identifier attr_opt= ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
+direct_declarator(ident, paren_ident):
+(* NOTE: using [ident] rather than [general_identifier], this is to prevent
+ * a reduce/reduce conflict: in a parameter declaration, the first identifier
+ * of a parenthesised declarator cannot be a typedef name, which starts the
+ * parameter list of an abstract function declarator instead (STD §6.7.6.3#11),
+ * see parameter_declarator_varname *)
+| i = ident attr_opt= ioption(attribute_specifier_sequence)
     { LF.identifier_decl (to_attrs attr_opt) i }
-| LPAREN save_context decltor= declarator RPAREN
+| LPAREN save_context decltor= declarator_(paren_ident, paren_ident) RPAREN
     { LF.declarator_decl decltor }
-| decl= array_declarator ioption(attribute_specifier_sequence)
-| decl= function_declarator ioption(attribute_specifier_sequence)
+| decl= array_declarator(ident, paren_ident) ioption(attribute_specifier_sequence)
+| decl= function_declarator(ident, paren_ident) ioption(attribute_specifier_sequence)
     { decl }
-| ddecltor= direct_declarator LPAREN ctxt=save_context RPAREN
+| ddecltor= direct_declarator(ident, paren_ident) LPAREN ctxt=save_context RPAREN
     { LF.fun_decl (Params ([], false)) ctxt ddecltor }
-| ddecltor= direct_declarator LPAREN ctxt=save_context
+| ddecltor= direct_declarator(ident, paren_ident) LPAREN ctxt=save_context
   rev_ids= identifier_list RPAREN
     { LF.fun_ids_decl (List.rev rev_ids) ctxt ddecltor }
 ;
 
-array_declarator:
-| ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
+array_declarator(ident, paren_ident):
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK tquals_opt= type_qualifier_list?
   expr_opt= assignment_expression? RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
         opt_to_rev_list tquals_opt, false,
         Option.map (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
-| ddecltor= direct_declarator LBRACK STATIC tquals_opt= type_qualifier_list?
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK STATIC tquals_opt= type_qualifier_list?
   expr= assignment_expression RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
                             opt_to_rev_list tquals_opt,
                             true, Some (ADeclSize_expression expr))) ddecltor }
-| ddecltor= direct_declarator LBRACK tquals= type_qualifier_list STATIC
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK tquals= type_qualifier_list STATIC
   expr= assignment_expression RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
                             List.rev tquals, true,
                             Some (ADeclSize_expression expr))) ddecltor }
-| ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
                             opt_to_rev_list tquals_opt, false,
                             Some ADeclSize_asterisk)) ddecltor }
 ;
 
-function_declarator:
-| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) RPAREN
+function_declarator(ident, paren_ident):
+| ddecltor= direct_declarator(ident, paren_ident) LPAREN ptys_ctxt=scoped(parameter_type_list) RPAREN
     { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 ;
 
@@ -1169,7 +1204,7 @@ parameter_list: (* NOTE: the list is in reverse *)
 
 parameter_declaration:
 | ioption(attribute_specifier_sequence) specifs= declaration_specifiers
-  decltor= declarator_varname
+  decltor= parameter_declarator_varname
     { PDeclaration_decl (specifs, LF.cabs_of_declarator decltor) }
 | ioption(attribute_specifier_sequence) specifs= declaration_specifiers
   abs_decltor_opt= ioption(abstract_declarator)

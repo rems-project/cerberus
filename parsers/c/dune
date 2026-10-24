@@ -9,7 +9,7 @@
 
 (ocamllex c_lexer)
 (menhir
- (flags (--external-tokens Tokens --exn-carries-state
+ (flags (--external-tokens Tokens --exn-carries-state --strict
         ; the C23 and GNU keywords that the grammar does not yet use
         --unused-token ATTRIBUTE
         --unused-token AUTO_TYPE
@@ -28,7 +28,7 @@
 
 (ocamllex cn_lexer)
 (menhir
- (flags (--external-tokens Cn_tokens --exn-carries-state))
+ (flags (--external-tokens Cn_tokens --exn-carries-state --strict))
  (modules cn_parser))
 
 (rule
