@@ -3345,6 +3345,8 @@ let rec collect_switch_content_aux stmt =
         St.return ()
     | A.AilSpar ss ->
         St.mapM_ collect_switch_content_aux ss
+    | A.AilSasm _ ->
+        St.return ()
     | A.AilSreg_store _ _ ->
         St.return ()
     | A.AilSmarker _ s ->
@@ -3439,6 +3441,8 @@ let rec erase_loop_control_aux stmt =
         St.return stmt.A.node
     | A.AilSpar ss ->
         A.AilSpar <$> St.mapM erase_loop_control_aux ss
+    | A.AilSasm _ ->
+        St.return stmt.A.node
     | A.AilSreg_store _ _ ->
         St.return stmt.A.node
     | A.AilSmarker id s ->
@@ -3507,6 +3511,8 @@ let rec collect_visibles_ stmt =
         St.return ()
     | A.AilSpar ss ->
         St.mapM_ collect_visibles_ ss
+    | A.AilSasm _ ->
+        St.return ()
     | A.AilSreg_store _ _ ->
         St.return ()
     | A.AilSmarker _ s ->
@@ -4276,6 +4282,12 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
           | z::zs' ->
               E.foldlM (fun x y -> E.return (Caux.concat_sseq x y)) z zs'
         end
+    
+    | A.AilSasm _ ->
+        (* TODO: we do not give dynamic semantics for inline assembly.
+         * The asm statement (including the evaluation of its operands)
+         * is erased for now. *)
+        E.return Caux.mk_skip_e
     
     | A.AilSpar ss ->
         E.mapM self ss >>= fun core_ss ->

@@ -48,6 +48,8 @@ let specifiers_of_external_declaration = function
       Nothing
   | EDecl_magic _ ->
       Nothing
+  | EDecl_asm _ _ ->
+      Nothing
   | EDecl_predCN _ ->
       Nothing
   | EDecl_funcCN _ ->
@@ -298,7 +300,7 @@ let rec has_continue (CabsStatement _ _ stmt_) =
         false
     | CabsSpar ss ->
         List.any has_continue ss
-    | CabsSasm _ _ _ ->
+    | CabsSasm _ ->
         false
     | CabsScaseGNU _ _ s ->
         has_continue s

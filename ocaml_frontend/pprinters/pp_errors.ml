@@ -406,6 +406,22 @@ let string_of_misc_violation = function
   | TypedefInitializer ->
       "illegal initializer in type definition"
 
+let string_of_gnu_asm_cause = function
+  | GNUAsmDuplicateQualifier str ->
+      "duplicate asm qualifier '" ^ str ^ "'"
+  | GNUAsmGotoWithoutLabels ->
+      "asm goto without a goto labels section"
+  | GNUAsmLabelsWithoutGoto ->
+      "goto labels section in an asm without the goto qualifier"
+  | GNUAsmUndeclaredLabel ident ->
+      "use of undeclared label '" ^ string_of_cid ident ^ "' in an asm goto"
+  | GNUAsmPrefixedStringLiteral ->
+      "string literal with an encoding prefix in an asm"
+  | GNUAsmFileScopeQualifier str ->
+      "asm qualifier '" ^ str ^ "' at file scope"
+  | GNUAsmFileScopeClobbers ->
+      "clobbers section in an asm at file scope"
+
 let string_of_desugar_cause = function
   | Desugar_ConstraintViolation e ->
       (ansi_format ~err:true [Bold] "constraint violation: ") ^ string_of_constraint_violation e
@@ -421,6 +437,8 @@ let string_of_desugar_cause = function
       "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnostic)"
   | Desugar_illtypedIntegerConstant ->
       "failed to typecheck an integer constant expression"
+  | Desugar_GNUAsm e ->
+      string_of_gnu_asm_cause e
   | Desugar_CN e ->
       Cn_ocaml.string_of_error e
   | Desugar_TODO msg ->

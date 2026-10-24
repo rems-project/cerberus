@@ -96,11 +96,6 @@ let warn_extra_semicolon pos ctx =
                     Warning)
   else
     ()
-
-type asm_qualifier =
-  | ASM_VOLATILE
-  | ASM_INLINE
-  | ASM_GOTO
 %}
 
 (* §6.4.1 keywords *)
@@ -1482,88 +1477,121 @@ jump_statement:
         , CabsSreturn expr_opt ) }
 ;
 
-(* GCC inline assembly extension *)
+(* GCC extension: Extended Asm
+ *   - https://gcc.gnu.org/onlinedocs/gcc/Basic-Asm.html
+ *   - https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html
+ *   - https://gcc.gnu.org/onlinedocs/gcc/Asm-Labels.html
+ *
+ * NOTE: the lexer produces a COLON_COLON token for "::" (for attributes),
+ * which in an asm stands for two consecutive COLON. The grammar of sections
+ * is tweaked to handle this properly (see below). *)
+
 asm_register:
 | ASM LPAREN STRING_LITERAL RPAREN
     { () }
+;
 
 asm_qualifier:
 | VOLATILE
-    { ASM_VOLATILE }
+    { (region $loc noCursor, CabsAsm_volatile) }
 | INLINE
-    { ASM_INLINE }
+    { (region $loc noCursor, CabsAsm_inline) }
 | GOTO
-    { ASM_GOTO }
+    { (region $loc noCursor, CabsAsm_goto) }
 ;
 
-asm_output_input:
-|                             STRING_LITERAL LPAREN expression RPAREN
-| LBRACK NAME VARIABLE RBRACK STRING_LITERAL LPAREN expression RPAREN
-    { () }
+asm_operand:
+| name_opt= ioption(delimited(LBRACK, general_identifier, RBRACK))
+  lit= STRING_LITERAL LPAREN expr= expression RPAREN
+    { { cabs_asm_operand_name= name_opt
+      ; cabs_asm_operand_constraint= lit
+      ; cabs_asm_operand_expr= expr } }
+;
 
-asm_clobber:
-| STRING_LITERAL
-    { () }
+asm_operands:
+| ops= separated_list(COMMA, asm_operand)
+    { ops }
+;
 
-asm_label:
-| NAME VARIABLE
-    { () }
+asm_clobbers:
+| lits= separated_list(COMMA, STRING_LITERAL)
+    { lits }
+;
 
-asm_with_output:
-| COLON xs= separated_list(COMMA, asm_output_input) _ys= asm_with_input?
-    { let (ys, zs, ws) = match _ys with
-        | None ->
-            ([], [], [])
-        | Some z ->
-            z in
-      (xs, ys, zs, ws) }
+asm_goto_labels:
+| labels= separated_nonempty_list(COMMA, general_identifier)
+    { labels }
+;
 
-asm_with_input:
-| COLON xs= separated_list(COMMA, asm_output_input) _ys= asm_with_clobbers?
-    { let (ys, zs) = match _ys with
-        | None ->
-            ([], [])
-        | Some z ->
-            z in
-      (xs, ys, zs) }
+(* The structure of grammar for the sections differs from the one in the
+ * GCC documentation to properly treat a "::" token like two ':' tokens with an
+ * empty section between them. *)
+asm_sections:
+| COLON outputs= asm_operands rest= asm_sections_inputs
+    { let (inputs_opt, clobbers_opt, labels_opt) = rest in
+      { cabs_asm_outputs= outputs
+      ; cabs_asm_inputs= inputs_opt
+      ; cabs_asm_clobbers= clobbers_opt
+      ; cabs_asm_labels= labels_opt } }
+| COLON_COLON rest= asm_sections_inputs_body
+    { let (inputs_opt, clobbers_opt, labels_opt) = rest in
+      { cabs_asm_outputs= []
+      ; cabs_asm_inputs= inputs_opt
+      ; cabs_asm_clobbers= clobbers_opt
+      ; cabs_asm_labels= labels_opt } }
+;
 
-asm_with_clobbers:
-| COLON xs= separated_list(COMMA, asm_clobber) _ys= asm_with_labels?
-    { let ys = match _ys with
-        | None ->
-            []
-        | Some z ->
-            z in
-      (xs, ys) }
+asm_sections_inputs:
+| (* empty *)
+    { (None, None, None) }
+| COLON rest= asm_sections_inputs_body
+    { rest }
+| COLON_COLON rest= asm_sections_clobbers_body
+    { let (clobbers_opt, labels_opt) = rest in
+      (Some [], clobbers_opt, labels_opt) }
+;
 
-asm_with_labels:
-| COLON xs= asm_label*
-    { xs }
+asm_sections_inputs_body:
+| inputs= asm_operands rest= asm_sections_clobbers
+    { let (clobbers_opt, labels_opt) = rest in
+      (Some inputs, clobbers_opt, labels_opt) }
+;
+
+asm_sections_clobbers:
+| (* empty *)
+    { (None, None) }
+| COLON rest= asm_sections_clobbers_body
+    { rest }
+| COLON_COLON labels= asm_goto_labels
+    { (Some [], Some labels) }
+;
+
+asm_sections_clobbers_body:
+| clobbers= asm_clobbers labels_opt= asm_sections_labels
+    { (Some clobbers, labels_opt) }
+;
+
+asm_sections_labels:
+| (* empty *)
+    { None }
+| COLON labels= asm_goto_labels
+    { Some labels }
+;
+
+asm:
+| ASM qs= asm_qualifier* LPAREN template= STRING_LITERAL sections_opt= asm_sections? RPAREN
+    { { cabs_asm_qualifiers= qs
+      ; cabs_asm_template= template
+      ; cabs_asm_sections= sections_opt } }
+;
 
 asm_statement:
-| ASM qs= asm_qualifier* LPAREN s= STRING_LITERAL RPAREN SEMICOLON
-    { let is_volatile = List.mem ASM_VOLATILE qs in
-      let is_inline = List.mem ASM_INLINE qs in
-      let strs =
-        if fst s = None then snd s else
-          (* TODO: better error *)
-          failwith "encoding prefix found inside a __asm__ ()"
-      in
-      CabsStatement (region ($startpos, $endpos) noCursor, Annot.no_attributes,
-        CabsSasm (is_volatile, is_inline, strs)) }
-| ASM qs= asm_qualifier* LPAREN s= STRING_LITERAL args= asm_with_output RPAREN SEMICOLON
-    { let is_volatile = List.mem ASM_VOLATILE qs in
-      let is_inline = List.mem ASM_INLINE qs in
-      let strs =
-        if fst s = None then snd s else
-          (* TODO: better error *)
-          failwith "encoding prefix found inside a __asm__ ()"
-      in
-(*      let (outputs, inputs, clobbers, labels) = args in *)
-      CabsStatement (region ($startpos, $endpos) noCursor, Annot.no_attributes,
-        CabsSasm (is_volatile, is_inline, strs(*, outputs, intputs, clobbers, labels*))) }
+| asm= asm SEMICOLON
+    { CabsStatement
+        ( region ($startpos, $endpos) noCursor
+        , Annot.no_attributes
+        , CabsSasm asm ) }
 ;
-
 
 
 (* §6.9 External definitions *)
@@ -1582,6 +1610,10 @@ external_declaration:
 | xs_decl= declaration has_extra= boption(SEMICOLON+)
     { if has_extra then warn_extra_semicolon $startpos(has_extra) AFTER_EDECL;
       EDecl_decl xs_decl }
+(* GCC extension: asm-definition *)
+| asm= asm SEMICOLON has_extra= boption(SEMICOLON+)
+    { if has_extra then warn_extra_semicolon $startpos(has_extra) AFTER_EDECL;
+      EDecl_asm (region ($startpos, $endpos(asm)) noCursor, asm) }
 | EXTENSION decl= external_declaration
     { decl }
 ;

@@ -2303,6 +2303,19 @@ let register_static_assertion e strCst =
   )
 
 
+(* GCC extended asm: using a specific constraint for an undeclared label of the goto
+ * labels section of an asm goto, rather than the constraint of STD §6.8.6.1#1. *)
+val resolve_asm_label: Symbol.identifier -> desugM A.ail_identifier
+let resolve_asm_label ident =
+  internal_resolve_identifier ident Namespace_label >>= function
+    | Just (_, Internal sym _ _) ->
+        return sym
+    | _ ->
+        fail (Loc.locOf ident)
+          (Errors.Desugar_GNUAsm (Errors.GNUAsmUndeclaredLabel ident))
+  end
+
+
 val register_label: Symbol.identifier -> desugM unit
 let register_label ident =
   void $ internal_register_identifier (fun _ _ ->

@@ -524,6 +524,41 @@ and dtree_of_statement pp_annot stmt =
     | AilSpar ss ->
         Dnode (pp_stmt_ctor "AilSpar"
                , List.map (fun s -> dtree_of_statement s) ss)
+    | AilSasm asm ->
+        let pp_str str = P.dquotes (!^ str) in
+        let d_quals =
+          List.filter_map (fun (b, str) -> if b then Some (!^ str) else None)
+            [ (asm.asm_is_volatile, "volatile")
+            ; (asm.asm_is_inline, "inline")
+            ; (asm.asm_is_goto, "goto") ] in
+        let d_ctor =
+          pp_stmt_ctor "AilSasm" ^^^
+          !^ (if Option.is_some asm.asm_extended then "extended" else "basic") ^^
+          (match d_quals with [] -> P.empty | _ -> P.space ^^ P.separate P.space d_quals)
+        in
+        let d_template = Dleaf (pp_ctor "Template" ^^^ pp_str asm.asm_template) in
+        (match asm.asm_extended with
+        | None -> Dnode (d_ctor, [d_template])
+        | Some ext ->
+          let dtree_of_operand op =
+            Dnode ( pp_ctor "AsmOperand" ^^
+                    P.optional (fun ident ->
+                      P.space ^^ P.brackets (Pp_symbol.pp_identifier ident)
+                    ) op.asm_operand_name ^^^
+                    pp_str op.asm_operand_constraint
+                  , [dtree_of_expression op.asm_operand_expr] ) in
+          let d_operands name = function
+            | [] -> Dleaf (pp_ctor name ^^^ !^ "empty")
+            | ops -> Dnode (pp_ctor name, List.map dtree_of_operand ops) in
+          let d_leaves name pp = function
+            | [] -> Dleaf (pp_ctor name ^^^ !^ "empty")
+            | xs -> Dleaf (pp_ctor name ^^^ P.separate_map (P.comma ^^ P.space) pp xs) in
+          Dnode ( d_ctor
+                , [ d_template
+                  ; d_operands "Outputs" ext.asm_outputs
+                  ; d_operands "Inputs" ext.asm_inputs
+                  ; d_leaves "Clobbers" pp_str ext.asm_clobbers
+                  ; d_leaves "Labels" Pp_ail.pp_id ext.asm_labels ] ))
     | AilSreg_store (r, e) ->
         Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
               , [dtree_of_expression e])

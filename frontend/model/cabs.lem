@@ -320,7 +320,7 @@ and cabs_statement_ =
   (* NON-STD cppmem par construct *)
   | CabsSpar of list cabs_statement
   (* GCC inline assembly extension *)
-  | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
+  | CabsSasm of cabs_asm
   | CabsScaseGNU of cabs_expression * cabs_expression * cabs_statement
   (* for CN *)
   | CabsSmarker of cabs_statement
@@ -332,6 +332,36 @@ and cabs_statement =
 and for_clause =
  | FC_expr of cabs_expression
  | FC_decl of Loc.t * cabs_declaration
+
+(* GCC inline assembly extension:
+  - https://gcc.gnu.org/onlinedocs/gcc/Basic-Asm.html and
+  - https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html *)
+and cabs_asm_qualifier =
+  | CabsAsm_volatile
+  | CabsAsm_inline
+  | CabsAsm_goto
+
+and cabs_asm = <|
+  cabs_asm_qualifiers: list (Loc.t * cabs_asm_qualifier);
+  cabs_asm_template: cabs_string_literal;
+  (* Nothing for a basic asm (no ':' after the template) *)
+  cabs_asm_sections: maybe cabs_asm_sections;
+|>
+
+(* the colon-separated sections of an extended asm; each section is Nothing
+ * when it is absent, together with the following ones *)
+and cabs_asm_sections = <|
+  cabs_asm_outputs: list cabs_asm_operand;
+  cabs_asm_inputs: maybe (list cabs_asm_operand);
+  cabs_asm_clobbers: maybe (list cabs_string_literal);
+  cabs_asm_labels: maybe (list Symbol.identifier); (* non-empty when present *)
+|>
+
+and cabs_asm_operand = <|
+  cabs_asm_operand_name: maybe Symbol.identifier;
+  cabs_asm_operand_constraint: cabs_string_literal;
+  cabs_asm_operand_expr: cabs_expression;
+|>
 
 
 (* §6.7.2.2 Enumeration specifiers, Syntax *)
@@ -346,6 +376,7 @@ and external_declaration =
   | EDecl_func of function_definition
   | EDecl_decl of cabs_declaration
   | EDecl_magic of (Loc.t * string) (* magic comment at top level *)
+  | EDecl_asm of Loc.t * cabs_asm (* GCC extension *)
   | EDecl_funcCN of Cn.cn_function Symbol.identifier type_name (* CN backend *)
   | EDecl_lemmaCN of Cn.cn_lemma Symbol.identifier type_name (* CN backend *)
   | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)
@@ -430,6 +461,7 @@ instance (Located external_declaration)
       | EDecl_decl (Declaration_static_assert (Static_assert e _)) ->
           locOf e
       | EDecl_magic (loc, _) -> loc
+      | EDecl_asm loc _ -> loc
       | EDecl_funcCN func ->
           locOf (func.Cn.cn_func_name)
       | EDecl_lemmaCN lmma ->
