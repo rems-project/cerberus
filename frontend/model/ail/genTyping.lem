@@ -2182,6 +2182,9 @@ end
 val     annotate_statement_: Loc.t -> sigma unit -> gamma -> ctype -> statement_ unit -> E.errorM (statement_ genTypeCategory)
 let rec annotate_statement_ loc sigm gamm ty stmt =
   let annotate_block loc  = annotate_block loc (Just ty) in
+  (* the output operands of an asm are not lvalue converted (like the left operand
+   * of an assignment) *)
+  let annotate_asm_output = annotate_expression annotate_block sigm gamm CTXassign in
   let annotate_expression = annotate_expression annotate_block sigm gamm CTXother in
   let annotate_rvalue     = annotate_rvalue annotate_block sigm gamm in
   let annotate_statement  = annotate_statement sigm gamm ty in
@@ -2278,6 +2281,42 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSpar ss ->
         E.mapM annotate_statement ss >>= fun ss' ->
         E.return (AilSpar ss')
+    | AilSasm asm ->
+        (* GCC extended asm: the output operands are typed as the left operand of an
+         * assignment (without lvalue conversion) and the input operands as the expression
+         * of an expression statement. *)
+        (* TODO: GCC has more checks, e.g. outputs must be modifiable lvalues *)
+        let annotate_operand annotate op =
+          annotate op.asm_operand_expr >>= fun e' ->
+          E.return <| asm_operand_name= op.asm_operand_name;
+                      asm_operand_constraint= op.asm_operand_constraint;
+                      asm_operand_expr= e' |> in
+        match asm.asm_extended with
+          | Nothing ->
+              E.return (AilSasm <|
+                asm_is_volatile= asm.asm_is_volatile;
+                asm_is_inline=   asm.asm_is_inline;
+                asm_is_goto=     asm.asm_is_goto;
+                asm_template=    asm.asm_template;
+                asm_extended=    Nothing;
+              |>)
+          | Just ext ->
+              E.mapM (annotate_operand annotate_asm_output) ext.asm_outputs
+                >>= fun outputs' ->
+              E.mapM (annotate_operand annotate_expression) ext.asm_inputs
+                >>= fun inputs' ->
+              E.return (AilSasm <|
+                asm_is_volatile= asm.asm_is_volatile;
+                asm_is_inline= asm.asm_is_inline;
+                asm_is_goto= asm.asm_is_goto;
+                asm_template= asm.asm_template;
+                asm_extended= Just <|
+                  asm_outputs= outputs';
+                  asm_inputs= inputs';
+                  asm_clobbers= ext.asm_clobbers;
+                  asm_labels= ext.asm_labels
+                |> |>)
+          end
     | AilSreg_store r e ->
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilSreg_store r e')

@@ -1626,6 +1626,85 @@ type stmt_context = <|
 |>
 
 
+(* GCC inline assembly extension *)
+val string_of_cabs_asm_qualifier: cabs_asm_qualifier -> string
+let string_of_cabs_asm_qualifier = function
+  | CabsAsm_volatile -> "volatile"
+  | CabsAsm_inline   -> "inline"
+  | CabsAsm_goto     -> "goto"
+end
+
+val find_duplicate_asm_qualifier:
+  list cabs_asm_qualifier -> list (Loc.t * cabs_asm_qualifier) ->
+  maybe (Loc.t * cabs_asm_qualifier)
+let rec find_duplicate_asm_qualifier seen = function
+  | [] ->
+      Nothing
+  | (loc, q) :: qs ->
+      (* NOTE: could use a set, but the list is unlikely to be long *)
+      if List.any (fun q' -> q' = q) seen then
+        Just (loc, q)
+      else
+        find_duplicate_asm_qualifier (q :: seen) qs
+end
+
+val check_asm: bool -> Loc.t -> cabs_asm -> maybe (Loc.t * Errors.gnu_asm_cause)
+let check_asm is_file_scope loc asm =
+  let sections =
+    fromMaybe <|
+      cabs_asm_outputs= [];
+      cabs_asm_inputs= Nothing;
+      cabs_asm_clobbers= Nothing;
+      cabs_asm_labels= Nothing
+    |> asm.cabs_asm_sections in
+  (* asm-string-literals, in source order *)
+  let string_literals =
+    asm.cabs_asm_template ::
+      List.map (fun op -> op.cabs_asm_operand_constraint)
+        (sections.cabs_asm_outputs ++ fromMaybe [] sections.cabs_asm_inputs) ++
+    fromMaybe [] sections.cabs_asm_clobbers in
+  let goto_loc_opt =
+    maybe Nothing (fun (loc, _) -> Just loc)
+      (List.find (fun (_, qual) -> qual = CabsAsm_goto) asm.cabs_asm_qualifiers) in
+  match (is_file_scope, asm.cabs_asm_qualifiers) with
+  | (true, (loc, qual) :: _) ->
+      Just (loc, Errors.GNUAsmFileScopeQualifier (string_of_cabs_asm_qualifier qual))
+  | _ ->
+      match find_duplicate_asm_qualifier [] asm.cabs_asm_qualifiers with
+      | Just (loc, qual) ->
+          Just
+            (loc, Errors.GNUAsmDuplicateQualifier (string_of_cabs_asm_qualifier qual))
+      | Nothing ->
+          match List.find (fun (pref_opt, _) -> isJust pref_opt) string_literals with
+          | Just (_, strs) ->
+              Just
+                ( Loc.bbox_location (List.map fst strs)
+                , Errors.GNUAsmPrefixedStringLiteral )
+          | Nothing ->
+              match
+                ( is_file_scope
+                , goto_loc_opt
+                , sections.cabs_asm_clobbers
+                , sections.cabs_asm_labels )
+              with
+              | (true, _, Just _, _) ->
+                  Just (loc, Errors.GNUAsmFileScopeClobbers)
+              | (_, Just goto_loc, _, Nothing) ->
+                  Just (goto_loc, Errors.GNUAsmGotoWithoutLabels)
+              | (_, Nothing, _, Just labels) ->
+                  let loc = match labels with
+                    | [] -> loc (* this is not possible *)
+                    | lab :: _ -> Loc.locOf lab
+                  end in
+                  Just (loc, Errors.GNUAsmLabelsWithoutGoto)
+              | _ ->
+                  Nothing
+              end
+          end
+      end
+  end
+
+
 val     desugar_type_specifiers: list cabs_type_specifier -> E.desugM (Ctype.qualifiers * Ctype.ctype)
 let rec desugar_type_specifiers specs =
   match project_base_type_specifiers specs with
@@ -4192,9 +4271,8 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSpar ss ->
           AilSpar <$> E.mapM self ss
       
-      | CabsSasm is_volatile is_inline xs (* list (list string) *) ->
-          (* TODO: erasing inline assembly for now *)
-          E.return AilSskip
+      | CabsSasm asm ->
+          AilSasm <$> desugar_asm false loc asm
       
       | CabsScaseGNU e1 e2 s ->
           E.get_switch_promoted_type >>= function
@@ -4228,6 +4306,50 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.record_marker () >>= fun id ->
           AilSmarker id <$> self s
     end
+
+(* GCC extended assembly *)
+and desugar_asm is_file_scope loc asm =
+  match check_asm is_file_scope loc asm with
+    | Just (err_loc, cause) ->
+        E.fail err_loc (Errors.Desugar_GNUAsm cause)
+    | Nothing ->
+        let desugar_operand op =
+          desugar_expression op.cabs_asm_operand_expr >>= fun d_e ->
+          E.return <|
+            A.asm_operand_name= op.cabs_asm_operand_name;
+            A.asm_operand_constraint=
+              string_of_string_literal op.cabs_asm_operand_constraint;
+            A.asm_operand_expr= d_e
+          |> in
+        let sections =
+          fromMaybe <|
+            cabs_asm_outputs= [];
+            cabs_asm_inputs= Nothing;
+            cabs_asm_clobbers= Nothing;
+            cabs_asm_labels= Nothing
+          |> asm.cabs_asm_sections in
+        E.mapM desugar_operand sections.cabs_asm_outputs                   >>= fun outputs ->
+        E.mapM desugar_operand (fromMaybe [] sections.cabs_asm_inputs)     >>= fun inputs  ->
+        E.mapM E.resolve_asm_label (fromMaybe [] sections.cabs_asm_labels) >>= fun labels  ->
+        E.return <|
+          A.asm_is_volatile= List.any (fun (_, q) -> q = CabsAsm_volatile) asm.cabs_asm_qualifiers;
+          A.asm_is_inline= List.any (fun (_, q) -> q = CabsAsm_inline) asm.cabs_asm_qualifiers;
+          A.asm_is_goto= List.any (fun (_, q) -> q = CabsAsm_goto) asm.cabs_asm_qualifiers;
+          A.asm_template= string_of_string_literal asm.cabs_asm_template;
+          A.asm_extended=
+            match asm.cabs_asm_sections with
+              | Nothing -> Nothing
+              | Just _ ->
+                  Just <|
+                    A.asm_outputs= outputs;
+                    A.asm_inputs= inputs;
+                    A.asm_clobbers= List.map string_of_string_literal
+                      (fromMaybe [] sections.cabs_asm_clobbers);
+                    A.asm_labels= labels;
+                  |>
+            end
+        |>
+  end
 
 val desugar_statement: cabs_statement -> E.desugM (statement unit)
 let desugar_statement stmt =
@@ -4274,7 +4396,7 @@ let rec register_labels (CabsStatement _ _ stmt_) =
     | CabsSpar _ ->
         (* TODO: temporary *)
         E.return ()
-    | CabsSasm _ _ _ ->
+    | CabsSasm _ ->
         (* TODO: check whether labels can declared here *)
         E.return ()
     | CabsScaseGNU _ _ s ->
@@ -5035,6 +5157,10 @@ let desugar_and_register_external_declaration edecl =
         desugar_and_register_static_assert_declaration sa_decl
     | EDecl_magic str ->
       E.add_toplevel_magic str
+    | EDecl_asm loc asm ->
+      (* TODO: add file scope assembly to Ail. *)
+      desugar_asm true loc asm >>= fun _ ->
+      E.return ()
     | EDecl_predCN pred ->
       desugar_and_register_cn_predicate pred
     | EDecl_funcCN pred ->

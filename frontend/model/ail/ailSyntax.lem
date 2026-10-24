@@ -230,6 +230,7 @@ and statement_ 'a [name="s*"] =
   | AilSgoto of ail_identifier
   | AilSdeclaration of list (ail_identifier * maybe (expression 'a))
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
+  | AilSasm of asm 'a (* GCC extension: https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html *)
   | AilSreg_store of reg * expression 'a
 (* for CN *)
   | AilSmarker of nat * statement 'a (* NOTE: this is placeholder we used to carry annotations for CN *)
@@ -238,6 +239,28 @@ and statement 'a [name="s*"] = <|
   desug_info: desug_info;
   attrs: Annot.attributes;
   node: statement_ 'a;
+|>
+
+(* Inline assembly (we implement GCC extended asm) *)
+and asm 'a = <|
+  asm_is_volatile: bool;
+  asm_is_inline: bool;
+  asm_is_goto: bool;
+  asm_template: string; (* as written in the source, including any escape sequences *)
+  asm_extended: maybe (asm_extended 'a); (* Nothing for a basic asm (i.e. asm("template")) *)
+|>
+
+and asm_extended 'a = <|
+  asm_outputs: list (asm_operand 'a);
+  asm_inputs: list (asm_operand 'a);
+  asm_clobbers: list string; (* as written in the source *)
+  asm_labels: list ail_identifier; (* non-empty iff asm_is_goto *)
+|>
+
+and asm_operand 'a = <|
+  asm_operand_name: maybe Symbol.identifier;
+  asm_operand_constraint: string; (* as written in the source *)
+  asm_operand_expr: expression 'a;
 |>
 
 let mk_statement loc node =

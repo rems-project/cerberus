@@ -731,6 +731,33 @@ and pp_statement_aux pp_annot ~bs {attrs= Annot.Attrs attrs; node; _} =
           (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e) e_opt
       ) defs ^^
       P.semi
+    | AilSasm asm ->
+        (* GCC extended assembly *)
+        let pp_str str = P.dquotes (!^ str) in
+        let pp_operand op =
+          P.optional (fun ident -> P.brackets (Pp_symbol.pp_identifier ident) ^^ P.space)
+            op.asm_operand_name ^^
+          pp_str op.asm_operand_constraint ^^^
+          P.parens (pp_expression_aux pp_annot op.asm_operand_expr) in
+        let d_quals =
+          List.filter_map (fun (b, str) -> if b then Some (pp_keyword str) else None)
+            [ (asm.asm_is_volatile, "volatile")
+            ; (asm.asm_is_inline, "inline")
+            ; (asm.asm_is_goto, "goto") ] in
+        let pp_sections =
+          match asm.asm_extended with
+          | None -> P.empty
+          | Some ext ->
+              P.space ^^ P.colon ^^^ comma_list pp_operand ext.asm_outputs ^^
+              P.space ^^ P.colon ^^^ comma_list pp_operand ext.asm_inputs ^^
+              P.space ^^ P.colon ^^^ comma_list pp_str ext.asm_clobbers ^^
+              (if asm.asm_is_goto then
+                P.space ^^ P.colon ^^^ comma_list pp_id_label ext.asm_labels
+              else
+                P.empty) in
+        pp_keyword "asm" ^^
+        (match d_quals with [] -> P.empty | _ -> P.space ^^ P.separate P.space d_quals)
+        ^^^ P.parens (pp_str asm.asm_template ^^ pp_sections) ^^ P.semi
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) (fun s -> pp_statement ~bs s) ss

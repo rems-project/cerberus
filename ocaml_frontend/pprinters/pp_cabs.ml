@@ -715,8 +715,8 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dleaf (pp_stmt_ctor "CabsSpar" ^^^ !^ "empty")
   | CabsSpar ss ->
       Dnode (pp_stmt_ctor "CabsSpar", List.map dtree_of_cabs_statement ss)
-  | CabsSasm _ ->
-      Dleaf (pp_stmt_ctor "CabsSasm") (* TODO *)
+  | CabsSasm asm ->
+      dtree_of_cabs_asm (pp_stmt_ctor "CabsSasm") asm
   | CabsScaseGNU (e1, e2, s) ->
       Dnode ( pp_stmt_ctor "CabsScaseGNU"
             , let d_e1 = dtree_of_cabs_expression e1 in
@@ -727,6 +727,44 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dnode ( pp_stmt_ctor "CabsSmarker"
             , [dtree_of_cabs_statement stmt] )
   end
+
+and dtree_of_cabs_asm pp_head asm =
+  let pp_qual (_, q) =
+    !^ (match q with
+          | CabsAsm_volatile -> "volatile"
+          | CabsAsm_inline   -> "inline"
+          | CabsAsm_goto     -> "goto") in
+  let pp_head =
+    pp_head ^^ (match asm.cabs_asm_qualifiers with
+                  | [] -> P.empty
+                  | qs -> P.space ^^ P.separate_map P.space pp_qual qs) in
+  let d_template =
+      Dleaf (pp_ctor "Template" ^^^ pp_cabs_string_literal asm.cabs_asm_template) in
+  match asm.cabs_asm_sections with
+    | None ->
+        Dnode (pp_head, [d_template])
+    | Some sections ->
+        let dtree_of_operand op =
+          Dnode ( pp_ctor "AsmOperand" ^^
+                  P.optional (fun ident -> P.space ^^ P.brackets (pp_identifier ident))
+                    op.cabs_asm_operand_name ^^^
+                  pp_cabs_string_literal op.cabs_asm_operand_constraint
+                , [dtree_of_cabs_expression op.cabs_asm_operand_expr] ) in
+        let d_operands name = function
+          | [] -> Dleaf (pp_ctor name ^^^ !^ "empty")
+          | ops -> Dnode (pp_ctor name, List.map dtree_of_operand ops) in
+        let d_section name d = function
+          | None -> Dleaf (pp_ctor name ^^^ !^ "None")
+          | Some xs -> d name xs in
+        let d_leaves pp name = function
+          | [] -> Dleaf (pp_ctor name ^^^ !^ "empty")
+          | xs -> Dleaf (pp_ctor name ^^^ comma_list pp xs) in
+        Dnode ( pp_head
+              , [ d_template
+                ; d_operands "Outputs" sections.cabs_asm_outputs
+                ; d_section "Inputs" d_operands sections.cabs_asm_inputs
+                ; d_section "Clobbers" (d_leaves pp_cabs_string_literal) sections.cabs_asm_clobbers
+                ; d_section "Labels" (d_leaves pp_colour_label) sections.cabs_asm_labels ] )
 
 and dtree_of_for_clause = function
  | FC_expr e ->
@@ -747,6 +785,8 @@ let dtree_of_external_declaration = function
       Dnode (pp_decl_ctor "EDecl_func", [dtree_of_function_definition fdef])
   | EDecl_decl decl ->
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_cabs_declaration decl])
+  | EDecl_asm (_, asm) ->
+      dtree_of_cabs_asm (pp_decl_ctor "EDecl_asm") asm
 (* BEGIN CN *)
   | EDecl_magic (_, str) ->
       Dleaf (pp_stmt_ctor "EDecl_magic" ^^^ !^ str)
@@ -768,7 +808,8 @@ let filter_external_decl =
   let pred = function
     | EDecl_func (FunDef (loc, _, _, _, _))
     | EDecl_decl (Declaration_static_assert (Static_assert (CabsExpression (loc, _), _)))
-    | EDecl_decl (Declaration_base (_, _, InitDecl(loc, _, _)::_)) ->
+    | EDecl_decl (Declaration_base (_, _, InitDecl(loc, _, _)::_))
+    | EDecl_asm (loc, _) ->
         Cerb_location.from_main_file loc
     | EDecl_decl (Declaration_base (_, _, [])) -> true
     | EDecl_magic _ -> true

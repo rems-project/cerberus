@@ -117,6 +117,12 @@ let collect_memory_accesses (_, sigm) =
       | AilSblock (_, ss)
       | AilSpar ss ->
           List.iter aux_stmt ss
+      | AilSasm asm ->
+          (match asm.asm_extended with
+          | Some ext ->
+              List.iter (fun op -> aux_expr op.asm_operand_expr)
+                (ext.asm_outputs @ ext.asm_inputs)
+          | None -> ())
       | AilSif (e, s1, s2) ->
           aux_expr e;
           aux_stmt s1;

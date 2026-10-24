@@ -2,6 +2,7 @@ open Cerb_frontend
 
 module type Config = sig
   val warn_extra_semicolon : bool
+  val cerb_conf: Config.config
 end
 
 module Make(Conf: Config) = struct
@@ -21,7 +22,7 @@ module Make(Conf: Config) = struct
     M.handle parse (token_pos_buffer, lexer) ~offset lexbuf
 
   let parse_with_magic_comments lexbuf =
-    let `LEXER c_lexer = C_lexer.create_lexer () in
+    let `LEXER c_lexer = C_lexer.create_lexer Conf.cerb_conf in
     handle
       C_parser.translation_unit
       (MenhirLib.ErrorReports.wrap c_lexer)

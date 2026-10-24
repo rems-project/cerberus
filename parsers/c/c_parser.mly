@@ -1,10 +1,8 @@
 (* Grammar based on Jacques-Henri Jourdan and Francois Pottier TOPLAS 2017:
-   "A simple, possibly correct LR parser for C11"
-
-   NOTE: There is a reduce/reduce conflict in the grammar, which is solved
-         by reducing to the first production (Menhir's default behaviour).
-         See Jourdan's paper.
-*)
+ * "A simple, possibly correct LR parser for C11"
+ *
+ * NOTE: we parameterise the declarator rules to avoid the conflicts left
+ * in their grammar (see parameter_declarator_varname). *)
 
 %{
 open Cerb_frontend
@@ -98,11 +96,6 @@ let warn_extra_semicolon pos ctx =
                     Warning)
   else
     ()
-
-type asm_qualifier =
-  | ASM_VOLATILE
-  | ASM_INLINE
-  | ASM_GOTO
 %}
 
 (* §6.4.1 keywords *)
@@ -121,7 +114,9 @@ type asm_qualifier =
 %token<Cabs.cabs_constant> CONSTANT
 
 (* §6.4.5 String literals *)
-%token<Cabs.cabs_encoding_prefix option * string list> STRING_LITERAL
+(* NOTE: adjacent string literals are concatenated by the lexer
+ * (see C_lexer.create_lexer) *)
+%token<Cabs.cabs_string_literal> STRING_LITERAL
 
 (* §6.4.6 Punctuators *)
 %token LBRACK RBRACK LPAREN RPAREN (*LBRACE RBRACE*) DOT MINUS_GT
@@ -133,13 +128,20 @@ type asm_qualifier =
   LBRACK_LBRACK (*RBRACK_RBRACK*)
 %token LBRACE RBRACE SEMICOLON
 
-(* NON-STD: *)
-  ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
+(* C23 keywords *)
+%token BITINT CONSTEXPR DECIMAL32 DECIMAL64 DECIMAL128 FALSE NULLPTR TYPEOF
+  TRUE TYPEOF_UNQUAL
+
+(* GNU keywords *)
+%token ATTRIBUTE AUTO_TYPE EXTENSION INT128 LABEL
+
+(* Builtin requiring special parsing *)
+  BUILTIN_ASSERT BUILTIN_OFFSETOF BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
+%token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM
 
 (* BMC syntax *)
 %token BMC_ASSUME
@@ -160,8 +162,11 @@ type asm_qualifier =
 
 %type<LF.context> save_context
 
-%type<LF.declarator> declarator direct_declarator declarator_varname
+%type<LF.declarator>
+  declarator
+  declarator_varname
   declarator_typedefname
+  parameter_declarator_varname
 
 %type<Symbol.identifier>
   enumeration_constant
@@ -192,6 +197,9 @@ type asm_qualifier =
 
 %type<Cabs.cabs_declaration>
   declaration
+
+%type<Cabs.cabs_declaration>
+  declaration_ext
 
 %type<Cabs.specifiers>
   declaration_specifiers
@@ -299,12 +307,6 @@ type asm_qualifier =
 %type<Cabs.function_definition>
   function_definition
 
-%type<Cabs.cabs_encoding_prefix option * (Cerb_location.t * string list)>
-  string_literal_component
-
-%type<Cabs.cabs_string_literal>
-  string_literal
-
 %type<Cerb_location.t * string * (Cerb_location.t * string) list>
   located_string_literal
 
@@ -408,8 +410,6 @@ var_name:
     { n }
 ;
 
-(* NOTE: This rule is declared early, so that reduce/reduce conflict is
-   resolved using it. *)
 typedef_name_spec:
 | i= typedef_name
     { TSpec ((region ($startpos, $endpos) noCursor),
@@ -442,6 +442,25 @@ declarator_typedefname:
     { LF.declare_typedefname (LF.identifier decl); decl }
 ;
 
+(* STD §6.7.6.3#11: "If, in a parameter declaration, an identifier can be
+ * treated either as a typedef name or as a parameter name, it shall be taken
+ * as a typedef name."
+ * This happens when a typedef name is the first token of a parenthesised
+ * declarator, e.g. in [int f(int (T));], where [(T)] can either be a
+ * parenthesised declarator for a parameter named T or (taken here) the
+ * parameter list of an abstract function declarator. So the identifier of a
+ * parenthesised declarator in a parameter declaration cannot be a typedef name.
+ * After a pointer, as in [int f(int ( *T))], T can only be a parameter name. *)
+parameter_declarator_varname:
+| decl = declarator_(general_identifier, var_identifier)
+    { LF.declare_varname (LF.identifier decl); decl }
+;
+
+var_identifier:
+| i= var_name
+    { Symbol.Identifier (region ($startpos, $endpos) noCursor, i) }
+;
+
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
 | i= general_identifier
@@ -456,7 +475,7 @@ primary_expression:
 | cst= CONSTANT
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEconst cst) }
-| lit= string_literal
+| lit= STRING_LITERAL
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
@@ -518,7 +537,7 @@ postfix_expression:
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEcompound (ty, List.rev inits)) }
 (* NOTE: non-std way of dealing with these *)
-| ASSERT LPAREN expr= assignment_expression RPAREN
+| BUILTIN_ASSERT LPAREN expr= assignment_expression RPAREN
     { CabsExpression (region ($startpos, $endpos) noCursor,
                       CabsEassert expr) }
 | VA_START LPAREN expr= assignment_expression COMMA i= general_identifier RPAREN
@@ -533,7 +552,7 @@ postfix_expression:
 | VA_END LPAREN expr= assignment_expression RPAREN
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEva_end(expr) ) }
-| OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
+| BUILTIN_OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
     { CabsExpression ( region ($startpos, $endpos) noCursor
                      , CabsEoffsetof (ty, i) ) }
 | BUILTIN_TYPES_COMPATIBLE_P LPAREN ty1= type_name COMMA ty2= type_name RPAREN
@@ -572,6 +591,8 @@ unary_expression:
 | op= unary_operator expr= cast_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos(op))
                      , CabsEunary (op, expr) ) }
+| EXTENSION expr= cast_expression
+    { expr }
 | SIZEOF expr= unary_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($1))
                      , CabsEsizeof_expr expr ) }
@@ -732,7 +753,7 @@ conditional_expression:
                                COLON    expr3= conditional_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEcond (expr1, expr2, expr3) ) }
-| expr1= logical_OR_expression QUESTION_COLON expr2= conditional_expression
+| expr1= logical_OR_expression QUESTION COLON expr2= conditional_expression
     { CabsExpression ( region ($startpos, $endpos) (pointCursor $startpos($2))
                      , CabsEcondGNU (expr1, expr2) ) }
 ;
@@ -811,6 +832,15 @@ declaration:
     { (*TODO: this is a dummy declaration*)
       let loc = region($startpos, $endpos) (pointCursor $startpos) in
       Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
+;
+
+(* GNU extension: a declaration in a compound statement or in a for clause can
+ * be preceded by __extension__ *)
+declaration_ext:
+| xs_decl= declaration
+    { xs_decl }
+| EXTENSION xs_decl= declaration_ext
+    { xs_decl }
 ;
 
 declaration_specifier:
@@ -966,6 +996,8 @@ struct_declaration:
                           opt_to_rev_list rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
+| EXTENSION decl= struct_declaration
+    { decl }
 ;
 
 specifier_qualifier_list:
@@ -1064,52 +1096,69 @@ attribute_alignment_specifier:
 
 (* §6.7.6 Declarators *)
 
+(* NOTE: the declarator rules are parameterised by [ident], the identifiers
+ * allowed as the identifier of the declarator, and by [paren_ident], those
+ * allowed as the identifier of a parenthesised declarator. They are both
+ * general_identifier, except in parameter declarations,
+ * see parameter_declarator_varname. *)
 declarator:
-| dd= direct_declarator
+| decl= declarator_(general_identifier, general_identifier)
+    { decl }
+;
+
+declarator_(ident, paren_ident):
+| dd= direct_declarator(ident, paren_ident)
     { dd }
-| pdecl= pointer dd= direct_declarator
+(* NOTE: after a pointer, the identifier cannot be confused with a typedef name
+ * starting a parameter list *)
+| pdecl= pointer dd= direct_declarator(general_identifier, paren_ident)
     { LF.pointer_decl pdecl dd }
 ;
 
-direct_declarator:
-| i = general_identifier attr_opt= ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
+direct_declarator(ident, paren_ident):
+(* NOTE: using [ident] rather than [general_identifier], this is to prevent
+ * a reduce/reduce conflict: in a parameter declaration, the first identifier
+ * of a parenthesised declarator cannot be a typedef name, which starts the
+ * parameter list of an abstract function declarator instead (STD §6.7.6.3#11),
+ * see parameter_declarator_varname *)
+| i = ident attr_opt= ioption(attribute_specifier_sequence)
     { LF.identifier_decl (to_attrs attr_opt) i }
-| LPAREN save_context decltor= declarator RPAREN
+| LPAREN save_context decltor= declarator_(paren_ident, paren_ident) RPAREN
     { LF.declarator_decl decltor }
-| decl= array_declarator ioption(attribute_specifier_sequence)
-| decl= function_declarator ioption(attribute_specifier_sequence)
+| decl= array_declarator(ident, paren_ident) ioption(attribute_specifier_sequence)
+| decl= function_declarator(ident, paren_ident) ioption(attribute_specifier_sequence)
     { decl }
-| ddecltor= direct_declarator LPAREN ctxt=save_context RPAREN
+| ddecltor= direct_declarator(ident, paren_ident) LPAREN ctxt=save_context RPAREN
     { LF.fun_decl (Params ([], false)) ctxt ddecltor }
-| ddecltor= direct_declarator LPAREN ctxt=save_context
+| ddecltor= direct_declarator(ident, paren_ident) LPAREN ctxt=save_context
   rev_ids= identifier_list RPAREN
     { LF.fun_ids_decl (List.rev rev_ids) ctxt ddecltor }
 ;
 
-array_declarator:
-| ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
+array_declarator(ident, paren_ident):
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK tquals_opt= type_qualifier_list?
   expr_opt= assignment_expression? RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
         opt_to_rev_list tquals_opt, false,
         Option.map (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
-| ddecltor= direct_declarator LBRACK STATIC tquals_opt= type_qualifier_list?
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK STATIC tquals_opt= type_qualifier_list?
   expr= assignment_expression RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
                             opt_to_rev_list tquals_opt,
                             true, Some (ADeclSize_expression expr))) ddecltor }
-| ddecltor= direct_declarator LBRACK tquals= type_qualifier_list STATIC
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK tquals= type_qualifier_list STATIC
   expr= assignment_expression RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
                             List.rev tquals, true,
                             Some (ADeclSize_expression expr))) ddecltor }
-| ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
+| ddecltor= direct_declarator(ident, paren_ident) LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
     { LF.array_decl (ADecl (region ($startpos, $endpos) noCursor,
                             opt_to_rev_list tquals_opt, false,
                             Some ADeclSize_asterisk)) ddecltor }
 ;
 
-function_declarator:
-| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) RPAREN
+function_declarator(ident, paren_ident):
+| ddecltor= direct_declarator(ident, paren_ident) LPAREN ptys_ctxt=scoped(parameter_type_list) RPAREN
     { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 ;
 
@@ -1150,7 +1199,7 @@ parameter_list: (* NOTE: the list is in reverse *)
 
 parameter_declaration:
 | ioption(attribute_specifier_sequence) specifs= declaration_specifiers
-  decltor= declarator_varname
+  decltor= parameter_declarator_varname
     { PDeclaration_decl (specifs, LF.cabs_of_declarator decltor) }
 | ioption(attribute_specifier_sequence) specifs= declaration_specifiers
   abs_decltor_opt= ioption(abstract_declarator)
@@ -1248,7 +1297,7 @@ designator:
 (* §6.7.10 Static assertions *)
 static_assert_declaration:
 | STATIC_ASSERT LPAREN expr= constant_expression COMMA
-  lit= string_literal RPAREN SEMICOLON
+  lit= STRING_LITERAL RPAREN SEMICOLON
     { Static_assert (expr, lit) }
 ;
 
@@ -1316,7 +1365,8 @@ block_item_list: (* NOTE: the list is in reverse *)
 ;
 
 block_item:
-| xs_decl= declaration
+(* GNU extension: allowing __extension__ keywords to precede the declaration *)
+| xs_decl= declaration_ext
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
         , Annot.no_attributes
@@ -1394,7 +1444,8 @@ iteration_statement:
         ( region ($startpos, $endpos) noCursor
         , magic_to_attrs magic
         , CabsSfor (Option.map (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
-| FOR LPAREN xs_decl= declaration expr2_opt= expression? SEMICOLON
+(* GNU extension: allowing __extension__ keywords to precede the declaration *)
+| FOR LPAREN xs_decl= declaration_ext expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( region ($startpos, $endpos) noCursor
@@ -1426,89 +1477,121 @@ jump_statement:
         , CabsSreturn expr_opt ) }
 ;
 
-(* GCC inline assembly extension *)
+(* GCC extension: Extended Asm
+ *   - https://gcc.gnu.org/onlinedocs/gcc/Basic-Asm.html
+ *   - https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html
+ *   - https://gcc.gnu.org/onlinedocs/gcc/Asm-Labels.html
+ *
+ * NOTE: the lexer produces a COLON_COLON token for "::" (for attributes),
+ * which in an asm stands for two consecutive COLON. The grammar of sections
+ * is tweaked to handle this properly (see below). *)
+
 asm_register:
-| ASM LPAREN string_literal RPAREN
+| ASM LPAREN STRING_LITERAL RPAREN
     { () }
+;
 
 asm_qualifier:
 | VOLATILE
-| ASM_VOLATILE
-    { ASM_VOLATILE }
+    { (region $loc noCursor, CabsAsm_volatile) }
 | INLINE
-    { ASM_INLINE }
+    { (region $loc noCursor, CabsAsm_inline) }
 | GOTO
-    { ASM_GOTO }
+    { (region $loc noCursor, CabsAsm_goto) }
 ;
 
-asm_output_input:
-|                             string_literal LPAREN expression RPAREN
-| LBRACK NAME VARIABLE RBRACK string_literal LPAREN expression RPAREN
-    { () }
+asm_operand:
+| name_opt= ioption(delimited(LBRACK, general_identifier, RBRACK))
+  lit= STRING_LITERAL LPAREN expr= expression RPAREN
+    { { cabs_asm_operand_name= name_opt
+      ; cabs_asm_operand_constraint= lit
+      ; cabs_asm_operand_expr= expr } }
+;
 
-asm_clobber:
-| string_literal
-    { () }
+asm_operands:
+| ops= separated_list(COMMA, asm_operand)
+    { ops }
+;
 
-asm_label:
-| NAME VARIABLE
-    { () }
+asm_clobbers:
+| lits= separated_list(COMMA, STRING_LITERAL)
+    { lits }
+;
 
-asm_with_output:
-| COLON xs= separated_list(COMMA, asm_output_input) _ys= asm_with_input?
-    { let (ys, zs, ws) = match _ys with
-        | None ->
-            ([], [], [])
-        | Some z ->
-            z in
-      (xs, ys, zs, ws) }
+asm_goto_labels:
+| labels= separated_nonempty_list(COMMA, general_identifier)
+    { labels }
+;
 
-asm_with_input:
-| COLON xs= separated_list(COMMA, asm_output_input) _ys= asm_with_clobbers?
-    { let (ys, zs) = match _ys with
-        | None ->
-            ([], [])
-        | Some z ->
-            z in
-      (xs, ys, zs) }
+(* The structure of grammar for the sections differs from the one in the
+ * GCC documentation to properly treat a "::" token like two ':' tokens with an
+ * empty section between them. *)
+asm_sections:
+| COLON outputs= asm_operands rest= asm_sections_inputs
+    { let (inputs_opt, clobbers_opt, labels_opt) = rest in
+      { cabs_asm_outputs= outputs
+      ; cabs_asm_inputs= inputs_opt
+      ; cabs_asm_clobbers= clobbers_opt
+      ; cabs_asm_labels= labels_opt } }
+| COLON_COLON rest= asm_sections_inputs_body
+    { let (inputs_opt, clobbers_opt, labels_opt) = rest in
+      { cabs_asm_outputs= []
+      ; cabs_asm_inputs= inputs_opt
+      ; cabs_asm_clobbers= clobbers_opt
+      ; cabs_asm_labels= labels_opt } }
+;
 
-asm_with_clobbers:
-| COLON xs= separated_list(COMMA, asm_clobber) _ys= asm_with_labels?
-    { let ys = match _ys with
-        | None ->
-            []
-        | Some z ->
-            z in
-      (xs, ys) }
+asm_sections_inputs:
+| (* empty *)
+    { (None, None, None) }
+| COLON rest= asm_sections_inputs_body
+    { rest }
+| COLON_COLON rest= asm_sections_clobbers_body
+    { let (clobbers_opt, labels_opt) = rest in
+      (Some [], clobbers_opt, labels_opt) }
+;
 
-asm_with_labels:
-| COLON xs= asm_label*
-    { xs }
+asm_sections_inputs_body:
+| inputs= asm_operands rest= asm_sections_clobbers
+    { let (clobbers_opt, labels_opt) = rest in
+      (Some inputs, clobbers_opt, labels_opt) }
+;
+
+asm_sections_clobbers:
+| (* empty *)
+    { (None, None) }
+| COLON rest= asm_sections_clobbers_body
+    { rest }
+| COLON_COLON labels= asm_goto_labels
+    { (Some [], Some labels) }
+;
+
+asm_sections_clobbers_body:
+| clobbers= asm_clobbers labels_opt= asm_sections_labels
+    { (Some clobbers, labels_opt) }
+;
+
+asm_sections_labels:
+| (* empty *)
+    { None }
+| COLON labels= asm_goto_labels
+    { Some labels }
+;
+
+asm:
+| ASM qs= asm_qualifier* LPAREN template= STRING_LITERAL sections_opt= asm_sections? RPAREN
+    { { cabs_asm_qualifiers= qs
+      ; cabs_asm_template= template
+      ; cabs_asm_sections= sections_opt } }
+;
 
 asm_statement:
-| ASM qs= asm_qualifier* LPAREN s= string_literal RPAREN SEMICOLON
-    { let is_volatile = List.mem ASM_VOLATILE qs in
-      let is_inline = List.mem ASM_INLINE qs in
-      let strs =
-        if fst s = None then snd s else
-          (* TODO: better error *)
-          failwith "encoding prefix found inside a __asm__ ()"
-      in
-      CabsStatement (region ($startpos, $endpos) noCursor, Annot.no_attributes,
-        CabsSasm (is_volatile, is_inline, strs)) }
-| ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN SEMICOLON
-    { let is_volatile = List.mem ASM_VOLATILE qs in
-      let is_inline = List.mem ASM_INLINE qs in
-      let strs =
-        if fst s = None then snd s else
-          (* TODO: better error *)
-          failwith "encoding prefix found inside a __asm__ ()"
-      in
-(*      let (outputs, inputs, clobbers, labels) = args in *)
-      CabsStatement (region ($startpos, $endpos) noCursor, Annot.no_attributes,
-        CabsSasm (is_volatile, is_inline, strs(*, outputs, intputs, clobbers, labels*))) }
+| asm= asm SEMICOLON
+    { CabsStatement
+        ( region ($startpos, $endpos) noCursor
+        , Annot.no_attributes
+        , CabsSasm asm ) }
 ;
-
 
 
 (* §6.9 External definitions *)
@@ -1527,6 +1610,12 @@ external_declaration:
 | xs_decl= declaration has_extra= boption(SEMICOLON+)
     { if has_extra then warn_extra_semicolon $startpos(has_extra) AFTER_EDECL;
       EDecl_decl xs_decl }
+(* GCC extension: asm-definition *)
+| asm= asm SEMICOLON has_extra= boption(SEMICOLON+)
+    { if has_extra then warn_extra_semicolon $startpos(has_extra) AFTER_EDECL;
+      EDecl_asm (region ($startpos, $endpos(asm)) noCursor, asm) }
+| EXTENSION decl= external_declaration
+    { decl }
 ;
 
 (* §6.9.1 Function definitions *)
@@ -1708,30 +1797,8 @@ balanced_token_sequence: (* NOTE: the list is in reverse *)
     { tk :: tks }
 ;
 
-string_literal_component:
-| STRING_LITERAL
-    { let loc = region ($startpos, $endpos) noCursor in
-      (fst $1, (loc, snd $1)) }
-;
-
-string_literal:
-| string_literal_component+
-    { let (pref_opts, components) = List.split $1 in
-      (* Check that the encoding prefixes are not inconsistent. *)
-      let rec merge_prefix pref_opt ls =
-        match (pref_opt, ls) with
-        | (_         , []              ) -> pref_opt
-        | (_         , None       :: ls) -> merge_prefix pref_opt ls
-        | (None      , pref_opt   :: ls) -> merge_prefix pref_opt ls
-        | (Some pref1, Some pref2 :: ls) ->
-            if pref1 = pref2 then merge_prefix pref_opt ls else
-              raise (C_lexer.Error Errors.Cparser_non_standard_string_concatenation)
-      in
-      (merge_prefix None pref_opts, components) }
-;
-
 located_string_literal:
-| string_literal
+| STRING_LITERAL
     { let loc = region ($startpos, $endpos) noCursor in
       let strs = List.map (fun (loc, s) -> (loc, String.concat "" s)) (snd $1) in
       (loc, String.concat "" (List.map snd strs), strs) }

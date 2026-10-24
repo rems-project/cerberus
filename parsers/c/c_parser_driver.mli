@@ -1,5 +1,6 @@
 module type Config = sig
   val warn_extra_semicolon : bool
+  val cerb_conf : Cerb_frontend.Config.config
 end
 
 module Make(Conf: Config) : sig

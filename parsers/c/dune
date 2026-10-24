@@ -9,12 +9,26 @@
 
 (ocamllex c_lexer)
 (menhir
- (flags (--external-tokens Tokens --exn-carries-state))
+ (flags (--external-tokens Tokens --exn-carries-state --strict
+        ; the C23 and GNU keywords that the grammar does not yet use
+        --unused-token ATTRIBUTE
+        --unused-token AUTO_TYPE
+        --unused-token BITINT
+        --unused-token CONSTEXPR
+        --unused-token DECIMAL32
+        --unused-token DECIMAL64
+        --unused-token DECIMAL128
+        --unused-token FALSE
+        --unused-token INT128
+        --unused-token LABEL
+        --unused-token NULLPTR
+        --unused-token TRUE
+        --unused-token TYPEOF_UNQUAL))
  (modules c_parser))
 
 (ocamllex cn_lexer)
 (menhir
- (flags (--external-tokens Cn_tokens --exn-carries-state))
+ (flags (--external-tokens Cn_tokens --exn-carries-state --strict))
  (modules cn_parser))
 
 (rule
@@ -86,6 +100,7 @@
   (action (with-stdout-to c_parser_error.ml
     (run menhir
       %{dep:c_parser.mly}
+      --unused-tokens
       --compile-errors %{dep:c_parser_error.messages}))))
 
 ; check completeness, i.e. every error state listed in the auto-generated file
@@ -132,6 +147,7 @@
     ; Please update this dune file with the right instructions after you figure it out.
     ;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    --unused-tokens
     --compare-errors %{dep:c_parser_error.auto.messages}
     --compare-errors %{dep:c_parser_error.messages})))
 
@@ -141,6 +157,7 @@
   (with-stdout-to c_parser_error.auto.messages
     (run menhir
        %{dep:c_parser.mly}
+       --unused-tokens
        --list-errors)))
 
 ; Functorising the parser made the build time significantly longer with the
