@@ -8,9 +8,9 @@ val pp_keyword: string -> PPrint.document
 val pp_const: string -> PPrint.document
 
 
-val pp_id: ?is_human:bool -> ail_identifier -> PPrint.document
-val pp_id_obj: ail_identifier -> PPrint.document
-val pp_id_func: ail_identifier -> PPrint.document
+val pp_id: ?is_human:bool -> Symbol.sym -> PPrint.document
+val pp_id_obj: Symbol.sym -> PPrint.document
+val pp_id_func: Symbol.sym -> PPrint.document
 
 val pp_storageDuration: storageDuration -> PPrint.document
 
@@ -76,7 +76,7 @@ let pp_static_assertion (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression e ^^ P.comma ^^^ pp_stringLiteral lit)
 *)
 
-val pp_function_prototype: AilSyntax.ail_identifier -> AilSyntax.declaration -> PPrint.document
+val pp_function_prototype: Symbol.sym -> AilSyntax.declaration -> PPrint.document
 
 val pp_program: show_include:bool -> 'a ail_program -> PPrint.document
 val pp_program_with_annot: GenTypes.genTypeCategory ail_program -> PPrint.document

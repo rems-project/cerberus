@@ -2,8 +2,6 @@ open import Pervasives Loc Ctype
 import Symbol Annot Cn
 import Cabs (* for cn_desugaring_state.cn_decl_spec *)
 
-type ail_identifier = Symbol.sym
-
 type reg = nat
 
 type integerSuffix = 
@@ -128,7 +126,7 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
 (* the boolean tells whether the object was declared with the register
  * storage-class *)
 type bindings =
-  list (ail_identifier * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
+  list (Symbol.sym * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
 
 type identifier_item_kind = Annot.identifier_item_kind
 type identifier_env = Annot.identifier_env
@@ -165,8 +163,8 @@ type expression_ 'a [name = "e*"] =
    * the boolean says whether this array was created from a string literal
    * used to initialise a pointer to an array of character *)
   | AilEarray of bool * ctype * list (maybe (expression 'a))
-  | AilEstruct of ail_identifier * list (Symbol.identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
-  | AilEunion of ail_identifier * Symbol.identifier * maybe (expression 'a)
+  | AilEstruct of Symbol.sym * list (Symbol.identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
+  | AilEunion of Symbol.sym * Symbol.identifier * maybe (expression 'a)
   (* NOTE: the expression obviously need to match the type, and will typically
    * be a AilEarray or AilEstruct *)
   | AilEcompound of qualifiers * ctype * expression 'a
@@ -175,14 +173,14 @@ type expression_ 'a [name = "e*"] =
   | AilEbuiltin of ail_builtin
   | AilEstr of stringLiteral
   | AilEconst of constant
-  | AilEident of ail_identifier
+  | AilEident of Symbol.sym
   | AilEsizeof of qualifiers * ctype
   | AilEsizeof_expr of expression 'a
   | AilEalignof of qualifiers * ctype
   (* NOTE: type annotation on expression, used to remember the type of desugared
    * enumeration constants *)
   | AilEannot of ctype * (expression 'a)
-  | AilEva_start of expression 'a * ail_identifier
+  | AilEva_start of expression 'a * Symbol.sym
   | AilEva_arg of expression 'a * ctype
   | AilEva_copy of expression 'a * expression 'a
   | AilEva_end of expression 'a
@@ -226,9 +224,9 @@ and statement_ 'a [name="s*"] =
   | AilScase of integer * statement 'a
   | AilScase_rangeGNU of integer * integer * statement 'a (* GNU C extension *)
   | AilSdefault of statement 'a
-  | AilSlabel of ail_identifier * statement 'a * maybe Annot.label_annot 
-  | AilSgoto of ail_identifier
-  | AilSdeclaration of list (ail_identifier * maybe (expression 'a))
+  | AilSlabel of Symbol.sym * statement 'a * maybe Annot.label_annot 
+  | AilSgoto of Symbol.sym
+  | AilSdeclaration of list (Symbol.sym * maybe (expression 'a))
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSasm of asm 'a (* GCC extension: https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html *)
   | AilSreg_store of reg * expression 'a
@@ -254,7 +252,7 @@ and asm_extended 'a = <|
   asm_outputs: list (asm_operand 'a);
   asm_inputs: list (asm_operand 'a);
   asm_clobbers: list string; (* as written in the source *)
-  asm_labels: list ail_identifier; (* non-empty iff asm_is_goto *)
+  asm_labels: list Symbol.sym; (* non-empty iff asm_is_goto *)
 |>
 
 and asm_operand 'a = <|
@@ -300,21 +298,21 @@ type id_kind =
   | IK_definition
 
 type sigma_declaration =
-  ail_identifier * (Loc.t * Annot.attributes * declaration)
+  Symbol.sym * (Loc.t * Annot.attributes * declaration)
 
 type sigma_object_definition 'a =
-  ail_identifier * (expression 'a)
+  Symbol.sym * (expression 'a)
 
 type sigma_function_definition 'a =
-  ail_identifier * (Loc.t * nat * Annot.attributes * list ail_identifier * statement 'a)
+  Symbol.sym * (Loc.t * nat * Annot.attributes * list Symbol.sym * statement 'a)
 
 type sigma_static_assertion 'a =
   expression 'a * stringLiteral
 
 type sigma_tag_definition =
-  ail_identifier * (Loc.t * Annot.attributes * tag_definition)
+  Symbol.sym * (Loc.t * Annot.attributes * tag_definition)
 
-type sigma_extern_id = ail_identifier * id_kind
+type sigma_extern_id = Symbol.sym * id_kind
 
 type sigma_cn_function = Cn.cn_function Symbol.sym Ctype.ctype
 
@@ -336,7 +334,7 @@ type sigma 'a = <|
   static_assertions: list (sigma_static_assertion 'a);
   tag_definitions: list sigma_tag_definition;
   extern_idmap: map Symbol.identifier sigma_extern_id;
-  typedef_attributes: map ail_identifier Annot.attributes;
+  typedef_attributes: map Symbol.sym Annot.attributes;
   loop_attributes: Annot.loop_attributes;
   cn_functions: list sigma_cn_function;
   cn_lemmata: list sigma_cn_lemmata;
@@ -364,7 +362,7 @@ let empty_sigma : sigma 'a = <|
 |>
 
 
-type gamma = list (ail_identifier * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
+type gamma = list (Symbol.sym * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
 
-type ail_program 'a = maybe ail_identifier * sigma 'a
+type ail_program 'a = maybe Symbol.sym * sigma 'a
 

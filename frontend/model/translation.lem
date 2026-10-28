@@ -3728,7 +3728,7 @@ let translate_branch_on_unspec conf loc ctx e1 e2 =
 val translate_stmt:
   translation_stdlib ->
   Ctype.tag_definitions ->
-  A.ail_identifier ->
+  Symbol.sym ->
   translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
   E.elabM (C.expr unit)
@@ -4315,7 +4315,7 @@ let rec translate_stmt stdlib tagDefs f env stmt : E.elabM (C.expr unit) =
 
 
 val translate_tag_definitions:
-  list (A.ail_identifier * (Loc.t * Annot.attributes * Ctype.tag_definition)) ->
+  list (Symbol.sym * (Loc.t * Annot.attributes * Ctype.tag_definition)) ->
   Ctype.tag_definitions
 let translate_tag_definitions ctx =
   Map.fromList (List.map (fun (x, (loc, _, y)) -> (x, (loc, y))) ctx)

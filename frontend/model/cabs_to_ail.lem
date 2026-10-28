@@ -223,7 +223,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         (path_prefix, outer_path, outer_ty) :: acc
   end
 
-val elemPathFromCtype3: bool -> map ail_identifier tag_definition -> Ctype.ctype -> list (init_path * init_path * Ctype.ctype)
+val elemPathFromCtype3: bool -> map Symbol.sym tag_definition -> Ctype.ctype -> list (init_path * init_path * Ctype.ctype)
 let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entity_cty) =
   match entity_ty with
     | Ctype.Array _ Nothing ->
@@ -352,7 +352,7 @@ type elemPathMaker = <|
   getElems: integer -> (list path_elem * elemPathMaker);
 |>
 
-val mk_elemsPathFromCtype: map ail_identifier tag_definition -> Ctype.ctype -> elemPathMaker
+val mk_elemsPathFromCtype: map Symbol.sym tag_definition -> Ctype.ctype -> elemPathMaker
 let mk_elemsPathFromCtype tagDefs ty =
   let elems = elemPathFromCtype3 tagDefs ty in
   <|
@@ -408,7 +408,7 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
 
 
 
-val     _UNUSED_ctypeAtPath: map ail_identifier tag_definition -> Ctype.ctype -> init_path -> Ctype.ctype
+val     _UNUSED_ctypeAtPath: map Symbol.sym tag_definition -> Ctype.ctype -> init_path -> Ctype.ctype
 let rec _UNUSED_ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
   match (ty, path) with
     | (_, []) ->
@@ -477,7 +477,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
 
 
 
-val     _UNUSED_outerValidPath: map ail_identifier tag_definition -> Ctype.ctype -> list (init_element) -> init_path
+val     _UNUSED_outerValidPath: map Symbol.sym tag_definition -> Ctype.ctype -> list (init_element) -> init_path
 let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
   match (ty, path) with
     | (_, []) ->
@@ -531,7 +531,7 @@ type init_path = list init_element * Ctype.ctype
 E.desugM (list (init_path * expression unit) * list (init_path * init_path * Ctype.ctype)) =
 *)
 
-val constructValue: map ail_identifier tag_definition -> list (init_path * expression unit) -> Ctype.ctype -> expression unit
+val constructValue: map Symbol.sym tag_definition -> list (init_path * expression unit) -> Ctype.ctype -> expression unit
 let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
   match ty with
     | Ctype.Array _ Nothing ->
@@ -685,15 +685,15 @@ let rec is_integer_constant_expression is_constraint (AnnotatedExpression () _ l
 (*
     | AilEgeneric of expression 'a * list (generic_association 'a)
     | AilEarray of bool * ctype * list (maybe (expression 'a))
-    | AilEstruct of ail_identifier * list (Symbol.identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
-    | AilEunion of ail_identifier * Symbol.identifier * maybe (expression 'a)
+    | AilEstruct of Symbol.sym * list (Symbol.identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
+    | AilEunion of Symbol.sym * Symbol.identifier * maybe (expression 'a)
     | AilEcompound of ctype * expression 'a
     | AilEmemberof of expression 'a * Symbol.identifier
     | AilEmemberofptr of expression 'a * Symbol.identifier
     | AilEbuiltin of string (* TODO: see if that can be moved to [constant] *)
     | AilEstr of stringLiteral
     | AilEconst of constant
-    | AilEident of ail_identifier
+    | AilEident of Symbol.sym
 *)
     | AilEannot _ e ->
         is_integer_constant_expression e
@@ -1082,7 +1082,7 @@ val desugar_init_declarator:
   bool(* isAtomic *) -> bool(* has_alignment *) ->
   Ctype.qualifiers -> Ctype.ctype ->
   list storage_class_specifier -> init_declarator ->
-  E.desugM (maybe (Loc.t * Annot.attributes * linkage * ail_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
+  E.desugM (maybe (Loc.t * Annot.attributes * linkage * Symbol.sym * bool * (Ctype.qualifiers * Ctype.ctype) *
             (unit -> E.desugM (maybe (Ctype.ctype * expression unit)))))
 
 val check_storage_class_specifiers:
@@ -1117,7 +1117,7 @@ val wip_desugar_initializer_:
   Loc.t -> storageDuration -> Ctype.ctype -> initializer_ -> E.desugM (Ctype.ctype * expression unit)
 
 val _UNUSED_static_thread_implicit_initializer:
-  map ail_identifier tag_definition -> Ctype.ctype -> constant
+  map Symbol.sym tag_definition -> Ctype.ctype -> constant
 
 
 
@@ -3713,7 +3713,7 @@ and desugar_and_register_static_assert_declaration sa_decl =
 
 
 (* TODO: this is broken *)
-(* val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit)) *)
+(* val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (Symbol.sym * expression unit)) *)
 and desugar_declaration_base attrs specifs idecltors =
   E.print_debugM 2 (fun () ->
     "BROKEN: desugar_declaration_base"

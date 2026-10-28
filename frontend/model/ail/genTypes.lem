@@ -23,8 +23,8 @@ type genType =
               * (* is_variadic *)bool
  | GenFunctionNoParams of (qualifiers * ctype) (* function type with no `prototype' *)
  | GenPointer of qualifiers * ctype
- | GenStruct of ail_identifier
- | GenUnion of ail_identifier
+ | GenStruct of Symbol.sym
+ | GenUnion of Symbol.sym
  | GenAtomic of genType
  | GenByte
 
