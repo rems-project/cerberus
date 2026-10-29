@@ -1,6 +1,7 @@
 open import Pervasives Utils Show Show_extra Enum Loc
 import Debug
 
+
 type identifier =
   | Identifier of Loc.t * string
 
@@ -134,8 +135,8 @@ let inline symbolEqual sym1 sym2 =
   match (sym1, sym2) with
     | (Symbol d1 n1 sd1, Symbol d2 n2 sd2) ->
         if d1 = d2 && n1 = n2 then
-          if Debug.get_level () >= 5 && sd1 <> sd2 then
-            let () = Debug.print_debug 5 [] (fun () ->
+          if Debug.debug_enabled () && sd1 <> sd2 then
+            let () = Debug.debug (fun () ->
               "[Symbol.symbolEqual] suspicious equality ==> " ^ show sd1
               ^ " <-> " ^ show sd2) in
             true

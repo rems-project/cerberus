@@ -3,6 +3,10 @@ open import Pervasives Utils Show Show_extra State
 import Config Boot Symbol Undefined Ctype AilTypesAux
 import Core Core_aux Ctype
 
+import Debug
+
+let log_record_error = Debug.source "Translation_effect.record_error"
+
 module C    = Core
 module Caux = Core_aux
 
@@ -219,7 +223,7 @@ let record_object_types_marker () =
    translation yet, so the user gets a full list of such errors *)
 val record_error: string -> elabM unit
 let record_error err =
-    let () = Debug.print_unsupported err in
+    let () = Debug.err log_record_error (fun () -> err) in
     elab_update (fun st -> <| st with errors = err :: st.errors |>)
 
 val record_error_at: Loc.t -> string -> elabM unit

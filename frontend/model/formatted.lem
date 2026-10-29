@@ -3,6 +3,10 @@ open import Pervasives Utils Monadic_parsing
 import String_extra Errors AilTypesAux Core Core_aux Ctype Mem Mem_aux Float
 import Decode Implementation Undefined
 
+import Debug
+
+let log_convert = Debug.source "Formatted.convert"
+
 module U = Undefined
 
 type flags = <|
@@ -354,7 +358,7 @@ let rec load_character_array_aux loc elem_ty ptrval prec_n_opt acc =
     | _ ->
         let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
         Mem.bind (Mem.load (Loc.other "Formatted.load_character_array_aux") elem_ty ptrval) (fun (_, mval) ->
-        let () = Debug.print_debug 5 [] (fun () ->
+        let () = Debug.debug (fun () ->
             "load_character_array_aux ==> " ^ Mem.stringFromMem_value mval
         ) in
         Mem.case_mem_value mval
@@ -483,7 +487,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                                   (n=0, cont_int n, args')
                               ))
                           | Nothing ->
-                              let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "printf() found an abstract integer value") in
+                              let () = Debug.warn log_convert (fun () -> "printf() found an abstract integer value") in
                               Mem.return $ Right (U.return (false, [#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
                         end
                     | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
@@ -739,7 +743,7 @@ let rec printf_aux loc eval_conv acc fs ty_ptrvals =
           | Right (U.Undef loc ubs) ->
               Mem.return $ Right (U.Undef loc ubs)
           | Left err ->
-              let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 2") in
+              let () = Debug.debug (fun () -> "PRINTF ERR 2") in
               Mem.return $ Left err
         end
     | _ ->

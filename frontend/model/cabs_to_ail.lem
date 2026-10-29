@@ -16,6 +16,9 @@ import Desugaring_init
 import Cn
 
 
+let log_desugar_struct_declarator = Debug.source "Cabs_to_ail.desugar_struct_declarator"
+let log_desugar_statement_aux = Debug.source "Cabs_to_ail.desugar_statement_aux"
+
 module E = Cabs_to_ail_effect
 
 let inline (>>=)    = E.bind
@@ -186,7 +189,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: xs) _) ->
               let () = if isAnonymous then
-                Debug.print_debug 2 [] (fun () ->
+                Debug.debug (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
                 )
               else () in
@@ -208,7 +211,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
-                Debug.print_debug 2 [] (fun () ->
+                Debug.debug (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
                 )
               else () in
@@ -236,7 +239,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               match Map.lookup tag_sym tagDefs with
                 | Just (Struct_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _) _) ->
                     let () = if isAnonymous then
-                      Debug.print_debug 2 [] (fun () ->
+                      Debug.debug (fun () ->
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
                       )
                     else () in
@@ -249,7 +252,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               match Map.lookup tag_sym tagDefs with
                 | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
-                      Debug.print_debug 2 [] (fun () ->
+                      Debug.debug (fun () ->
                         "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
                       )
                     else () in
@@ -281,7 +284,7 @@ let rec skipTo_aux acc path = function
   | [] ->
       Nothing
   | ((path', _, _) as x) :: xs ->
-      let () = Debug.print_debug 2 [] (fun () ->
+      let () = Debug.debug (fun () ->
         "path: " ^ stringFromInit_path path ^ " <--> " ^
         "path': " ^ stringFromInit_path path' ^ " === " ^
         (if List.isPrefixOf path path' then "true" else "false")
@@ -378,7 +381,7 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
 
           | Just (Struct_definition _ _ isAnonymous xs _) ->
               let () = if isAnonymous then
-                Debug.print_debug 2 [] (fun () ->
+                Debug.debug (fun () ->
                   "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
                 )
               else () in
@@ -535,7 +538,7 @@ val constructValue: map ail_identifier tag_definition -> list (init_path * expre
 let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
   match ty with
     | Ctype.Array _ Nothing ->
-        let () = Debug.print_debug 2 [] (fun () ->
+        let () = Debug.debug (fun () ->
           "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
         ) in
         error "constructValue_aux: Array Nothing"
@@ -551,7 +554,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ _ isAnonymous xs _) ->
               let () = if isAnonymous then
-                Debug.print_debug 2 [] (fun () ->
+                Debug.debug (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
                 )
               else () in
@@ -568,7 +571,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
-                Debug.print_debug 2 [] (fun () ->
+                Debug.debug (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
                 )
               else () in
@@ -908,7 +911,7 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
         if not (AilTypesAux.is_arithmetic ty) then
           E.return false
         else
-          E.print_debugM 2 (fun () -> "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e...") >>
+          let () = Debug.debug (fun () -> "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e...") in
 (*          E.return true *)
           (* TODO: is_lvalue might be wrong depending on the type of e? *)
           is_arithmetic_constant_expression is_lvalue e
@@ -1816,7 +1819,7 @@ let rec desugar_type_specifiers specs =
           
           (* *)
           | [TSpec _ (TSpec_name ((Symbol.Identifier cid_loc str) as ident))] ->
-              E.print_debugM 2 (fun () -> "Cabs_to_ail, TSpec_name ==> " ^ str) >>
+              let () = Debug.debug (fun () -> "Cabs_to_ail, TSpec_name ==> " ^ str) in
               match Builtins.translate_builtin_typenames str with
                 | Just ty ->
                     E.return (Ctype.no_qualifiers, ty)
@@ -2093,7 +2096,7 @@ and desugar_direct_abstract_declarator under_array = function
         (* TODO: isn't this dead code ? *)
         | Just [(Nothing, (qs, Ctype.Ctype annots Ctype.Void, _))] ->
             if not (AilTypesAux.is_unqualified qs) then
-              let () = Debug.warn [Debug.DB_desugaring] (fun () ->
+              let () = Debug.debug (fun () ->
                 "(UNSURE) forbidding the 'void' parameter to have qualifiers") in
               (* NOTE: I can't find if the STD actually requires this, but
                  allowing qualifiers would be meaningless and compilers (at
@@ -2365,7 +2368,7 @@ and desugar_expression (CabsExpression loc expr) =
     | CabsEident ident ->
         AnnotatedExpression () [] loc <$>
         let (Symbol.Identifier _ str) = ident in (* DEBUG *)
-        E.print_debugM 2 (fun () -> "DESUGARING, CabsEident: " ^ str) >>= fun () -> (* DEBUG *)
+        let () = Debug.debug (fun () -> "DESUGARING, CabsEident: " ^ str) in (* DEBUG *)
 STD_ "§6.5.1#2" $
         E.resolve_ordinary_identifier loc ident >>= function
           | Just (_, E.OReg_enum_constant sym) ->
@@ -2385,7 +2388,7 @@ STD_ "§6.5.1#2" $
                 (* TODO: only had that annotation if sym_ty is incomplete? *)
                 match kind with
                   | E.OK_object _ ->
-                      E.print_debugM 2 (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) >>= fun () ->
+                      let () = Debug.debug (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) in
                       E.fetch_object_declaration sym >>= fun (_(*isTentative*), _, _, _, _, _(*sym_qs*), _(*sym_ty*)) ->
                       E.return begin
 (*                  AilEannot sym_ty (AnnotatedExpression () [] loc (AilEident sym)) *)
@@ -2696,9 +2699,9 @@ STD_ "§6.7.1#8" $
 (* TODO: get rid of this function *)
 (* E.desugM (Symbol.identifier * Ctype.qualifiers * Ctype.ctype * desugM (unit -> maybe expression unit)) *)
 and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_specifier) idecltor =
-  E.print_debugM 2 (fun () ->
+  let () = Debug.debug (fun () ->
     "TODO ==> USING `desugar_init_declarator_BROKEN'"
-  ) >>= fun () ->
+  ) in
   (* NOTE: this function does NOT check the wf of the storage classes *)
   E.get_scope >>= fun scope ->
   match idecltor with
@@ -2854,7 +2857,7 @@ and desugar_struct_declarator has_alignment struct_decltor =
             | Nothing ->
                 E.fail loc (Errors.Desugar_NotYetSupported "bit-fields")
             | Just decltor ->
-                E.warnM (fun () -> "ignoring a bit-field declarator at " ^ Loc.stringFromLocation loc) >>= fun () ->
+                let () = Debug.warn log_desugar_struct_declarator (fun () -> "ignoring a bit-field declarator at " ^ Loc.stringFromLocation loc) in
                 desugar_declarator NotFunDef decltor
           end
         else
@@ -3056,7 +3059,7 @@ OTHER
 
 (* STD §6.7.9#10, second sentence *)
 and _UNUSED_static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
-  let () = Debug.print_debug 8 [Debug.DB_desugaring]
+  let () = Debug.debug
       (fun () -> "ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers cty) in
   match ty with
     | Ctype.Pointer _ _ ->
@@ -3214,11 +3217,11 @@ and foo_aux
               let do_scalar d_e =
                 E.get_tag_definitions >>= fun tagDefs ->
                 let cursor_ty = innerCtype tagDefs outer_ty in
-                E.print_debugM 2 (fun () ->
+                let () = Debug.debug (fun () ->
                   "Init_expr, cursor_ty: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers cursor_ty ^
                   ", outer_ty: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers outer_ty ^
                   " ===> " ^ Pp.stringFromAil_expression d_e
-                ) >>= fun () ->
+                ) in
                 (* TODO: should use Ail typing instead of this *)
                 let d_e' =
                   if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
@@ -3293,18 +3296,18 @@ and foo_aux
                               match Map.lookup tag_sym tagDefs with
                                 | Just (Struct_definition _ _ isAnonymous membrs _) ->
                                     begin if isAnonymous then
-                                      E.print_debugM 2 (fun () ->
+                                      let () = Debug.debug (fun () ->
                                         "foo_aux (Init_expr, is_struct): this may be WRONG ==> anonymous Struct"
-                                      )
+                                      ) in E.return ()
                                     else
                                       E.return ()
                                     end >>= fun () ->
                                     let (elems1, elems2) = List.splitAt (List.length membrs) elems in
-                                    E.print_debugM 2 (fun () ->
+                                    let () = Debug.debug (fun () ->
                                       stringFromList (fun (a,b,_) ->
                                         stringFromInit_path a ^ ", " ^ stringFromInit_path b
                                       ) elems1
-                                    ) >>= fun () ->
+                                    ) in
                                     let acc' = List.foldl (fun acc ((path, _, _), (memb_ident, _)) ->
                                       (path, AnnotatedExpression () []
                                                (Loc.other "init with struct expr") (AilEmemberof d_e memb_ident)) :: acc
@@ -3322,7 +3325,7 @@ and foo_aux
                     end
 (*                    do_scalar e *)
                 | Init_list _ ys ->
-                    E.print_debugM 2 (fun () -> "HELLO 4") >>= fun () ->
+                    let () = Debug.debug (fun () -> "HELLO 4") in
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in
                     let (inner_elems_, elems') = List.splitAt (natFromInteger outerCard) elems in
@@ -3338,7 +3341,7 @@ and foo_aux
                                 let (_, isAnonymous, xs, _) = desug_get_structDefs tagDefs tag_sym in
                                 let (_, (_, _, _, first_memb_ty)) = List_extra.head xs in
                                 let () = if isAnonymous then
-                                  Debug.print_debug 2 [] (fun () ->
+                                  Debug.debug (fun () ->
                                     "foo_aux: this may be WRONG ==> anonymous Struct"
                                   )
                                 else () in
@@ -3352,13 +3355,13 @@ and foo_aux
                     (* let inner_elems = List.map (fun (path, opath, ty) ->
                       (match path with [] -> [] | _::xs -> xs end, match opath with [] -> [] | _::xs -> xs end, ty) (* KKK *)
                     ) inner_elems in *)
-                    E.print_debugM 2 (fun () ->
+                    let () = Debug.debug (fun () ->
                       "ONE"
-                    ) >>= fun () ->
+                    ) in
                     foo_aux (*outer_ty*) [] inner_elems (*unknown_array*)Nothing ys >>= fun (inner, _, _) ->
-                    E.print_debugM 2 (fun () ->
+                    let () = Debug.debug (fun () ->
                       "TWO"
-                    ) >>= fun () ->
+                    ) in
                     foo_aux (*entity_ty*) (List.reverse inner ++ acc) elems' unknown_array xs'
               end
         end
@@ -3385,9 +3388,9 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
   E.get_tag_definitions >>= fun tagDefs ->
   match (entity_ty, init_) with
     | (Ctype.Ctype annots (Ctype.Array elem_ty Nothing), Init_list _ xs) ->
-        E.print_debugM 2 (fun () ->
+        let () = Debug.debug (fun () ->
           "HELLO 5"
-        ) >>= fun () ->
+        ) in
         let elems = elemPathFromCtype3 true tagDefs elem_ty in
         let elems' =
           List.map (fun (path, opath, ty) ->
@@ -3402,24 +3405,24 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
         end
     | (Ctype.Ctype _ (Ctype.Array _ _), Init_list _ xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
-        E.print_debugM 2 (fun () ->
+        let () = Debug.debug (fun () ->
           "HELLO 2\n" ^
           stringFromList (fun (x,y,z) ->
             stringFromInit_path x ^ " -- " ^ stringFromInit_path y
                                   ^ " -- " ^ Pp.stringFromCtype_human Ctype.no_qualifiers z ^ "\n"
           ) elems
-        ) >>= fun () ->
+        ) in
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
     | (Ctype.Ctype _ (Ctype.Struct _), Init_list _ xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
-        E.print_debugM 2 (fun () ->
+        let () = Debug.debug (fun () ->
           "HELLO 1\n" ^
           stringFromList (fun (x,y,z) ->
             stringFromInit_path x ^ " -- " ^ stringFromInit_path y
                                   ^ " -- " ^ Pp.stringFromCtype_human Ctype.no_qualifiers z ^ "\n"
           ) elems
-        ) >>= fun () ->
+        ) in
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
     | _ ->
@@ -3565,9 +3568,9 @@ and wip_desugar_initializer_ loc dur current_ty init =
     error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
   else
-    E.print_debugM 2 (fun () ->
+    let () = Debug.debug (fun () ->
       "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
-    ) >>= fun () ->
+    ) in
     match (Ctype.unatomic_ current_ty, init) with
       | (Ctype.Struct _, Init_expr e) ->
           (* TODO: hack *)
@@ -3636,9 +3639,9 @@ and desugar_and_register_static_assert_declaration sa_decl =
 (* TODO: this is broken *)
 (* val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit)) *)
 and desugar_declaration_base attrs specifs idecltors =
-  E.print_debugM 2 (fun () ->
+  let () = Debug.debug (fun () ->
     "BROKEN: desugar_declaration_base"
-  ) >>= fun () ->
+  ) in
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
           (* for each [init_declarator] *)
           E.foldlM (fun acc (InitDecl loc _ _ as init) ->
@@ -3700,13 +3703,13 @@ and desugar_declaration_base attrs specifs idecltors =
                     end >>
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
-                          E.print_debugM 2 (fun () ->
+                          let () = Debug.debug (fun () ->
                             "Hello, ty' = " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty'
-                          ) >>= fun () ->
+                          ) in
                           begin if cty <> ty' then
-                            E.print_debugM 2 (fun () ->
+                            let () = Debug.debug (fun () ->
                               "ty' is new"
-                            ) >>= fun () ->
+                            ) in
                             (* TODO: tentative *)
                             E.update_internal_object_type sym ty'
   (*
@@ -4009,13 +4012,13 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                           mk_desug_init () >>= function
                             | Just (ty', d_e) ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
-                                E.print_debugM 2 (fun () ->
+                                let () = Debug.debug (fun () ->
                                   "Hello, ty' = " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty'
-                                ) >>= fun () ->
+                                ) in
                                 begin if ty <> ty' then
-                                  E.print_debugM 2 (fun () ->
+                                  let () = Debug.debug (fun () ->
                                     "ty' is new"
-                                  ) >>= fun () ->
+                                  ) in
                                   (* TODO: tentative *)
                                   E.register_internal_object_declaration sym
                                     (ident_loc, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, ty')
@@ -4217,9 +4220,9 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                   (* an empty range can never be selected, so the case statement is dropped and not
                    * registered, but we kept its body because it can still be reached when
                    * control-flow falls through from a previous case *)
-                  E.warnM (fun () ->
+                  let () = Debug.warn log_desugar_statement_aux (fun () ->
                     "empty case range [" ^ Loc.stringFromLocation loc ^
-                    "] discarded by the desugaring") >>= fun () ->
+                    "] discarded by the desugaring") in
                   (fun d_s -> AilSblock [] [d_s]) <$> self s
             | Nothing ->
                 E.constraint_violation loc LabelStatementOutsideSwitch
@@ -4832,7 +4835,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
         let process (return_qs, return_ty) params_opt isVariadic =
           (* NOTE: the constraint in §6.9.1#3 is enforced later in the Ail
             typechecker *)
-          let () = Debug.print_debug 4 [] (fun () ->
+          let () = Debug.debug (fun () ->
             show fun_ident ^ " ===> " ^ Pp.stringFromCtype_human qs ty
           ) in
           E.function_is_defined fun_sym >>= function
@@ -4893,7 +4896,7 @@ let desugar_and_register_external_declaration edecl =
       |> []) ->
         let () =
           if attrs <> Annot.no_attributes then
-            Debug.print_debug 0 [] (fun () ->
+            Debug.debug (fun () ->
               "TODO(attributes ignored) -- TSpec_struct 3 => " ^ show ident)
           else () in
         STD_ "§6.7.2.3#7"
@@ -4942,7 +4945,7 @@ let desugar_and_register_external_declaration edecl =
               let do_function fun_qs return_qs_ty params_opt is_variadic =
                 let () =
                   if Annot.no_attributes <> ident_attrs then
-                    Debug.print_debug 0 [] (fun () ->
+                    Debug.debug (fun () ->
                       "WARNING: desugaring of a function initdecl is erasing some attributes!"
                     )
                   else
@@ -4976,13 +4979,13 @@ let desugar_and_register_external_declaration edecl =
                     
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
-                          E.print_debugM 2 (fun () ->
+                          let () = Debug.debug (fun () ->
                             "Hello, ty' = " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty'
-                          ) >>=fun () ->
+                          ) in
                           begin if ty <> ty' then
-                            E.print_debugM 2 (fun () ->
+                            let () = Debug.debug (fun () ->
                               "ty' is new"
-                            ) >>= fun () ->
+                            ) in
                             (* TODO: tentative *)
                             E.update_external_object_type sym ty'
                           else
@@ -5073,9 +5076,9 @@ val register_cn_datatype_names: list external_declaration -> E.desugM unit
 let register_cn_datatype_names xs =
   E.mapM_ (function
     | EDecl_datatypeCN dt ->
-        E.print_debugM 2 (fun () ->
+        let () = Debug.debug (fun () ->
           "adding a datatype name"
-        ) >>= fun () ->
+        ) in
         E.register_cn_ident Cn.CN_datatype_nm dt.cn_dt_name >>= fun _ ->
         E.return ()
     | _ ->

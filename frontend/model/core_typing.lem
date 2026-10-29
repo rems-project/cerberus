@@ -9,6 +9,9 @@ import Mem_common Ctype Ctype_aux Implementation
 
 open import Core_typing_aux
 
+import Debug
+
+
 module I = Implementation
 
 module Cty = struct
@@ -331,7 +334,7 @@ let rec typeof_object_value loc env oval =
        ) lvals' >>
        E.return (OTy_array oTy)
    | OVstruct tag_sym _ ->
-       let () = Debug.warn [Debug.DB_core_typing] (fun () ->
+       let () = Debug.debug (fun () ->
          "Core typing, OVstruct doesn't check the validity of the member"
        ) in
        E.return (OTy_struct tag_sym)

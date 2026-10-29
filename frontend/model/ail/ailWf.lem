@@ -4,6 +4,9 @@ import Undefined
 (* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
    NOTE: this function obviously doesn't see whether the adjusting was PROPERLY
          done. *)
+import Debug
+
+
 val is_adjusted: ctype -> bool
 let is_adjusted ty =
   not (is_array ty) && not (is_function ty)
@@ -84,7 +87,7 @@ let rec wf_type sigm (Ctype _ ty) =
       ) >>
       wf_type ret_ty >>
       (* TODO *)
-      let () = Debug.warn [] (fun () ->
+      let () = Debug.debug (fun () ->
         "(unsure) wf_type, Function calls ==> wf_lvalue_aux"
       ) in
       wf_lvalue_aux ret_qs ret_ty >>
@@ -95,7 +98,7 @@ let rec wf_type sigm (Ctype _ ty) =
       ) >>
       wf_type ret_ty >>
       (* TODO *)
-      let () = Debug.warn [] (fun () ->
+      let () = Debug.debug (fun () ->
         "(unsure) wf_type, FunctionNoParams calls ==> wf_lvalue_aux"
       ) in
       wf_lvalue_aux ret_qs ret_ty

@@ -2,6 +2,9 @@ open import Pervasives Utils Show Map Map_extra
 open import Loc Cabs Core Errors
 import Symbol Exception
 
+import Debug
+
+
 let inline (>>=) = Exception.bind
 val link_fail: forall 'a. Loc.t -> core_linking_cause -> Exception.exceptM 'a (Loc.t * cause)
 let link_fail loc cause =
@@ -14,17 +17,17 @@ val link_extern: forall 'a. SetType 'a =>
                  Exception.exceptM ((map Symbol.identifier (list 'a * linking_kind)) * list (Symbol.sym * Symbol.sym)) (Loc.t * cause)
 let link_extern ext acc =
   Map_extra.fold (fun k (ds, lk_def) m_acc ->
-    let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in
+    let () = Debug.debug (fun _ -> "linking " ^ show k) in
     m_acc >>= fun (acc_ext, acc_tent) ->
     match Map.lookup k acc with
     | Nothing ->
-      let () = Debug.print_debug 3 [] (fun _ -> "linking (Nothing): " ^ show lk_def) in
+      let () = Debug.debug (fun _ -> "linking (Nothing): " ^ show lk_def) in
       Exception.return (Map.insert k (ds, lk_def) acc_ext, acc_tent)
     | Just (acc_ds, LK_none) ->
-      let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_none): " ^ show lk_def) in
+      let () = Debug.debug (fun _ -> "linking (LK_none): " ^ show lk_def) in
       Exception.return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, acc_tent)
     | Just (acc_ds, LK_tentative tent) ->
-      let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_tentative " ^ show tent ^ "): " ^ show lk_def) in
+      let () = Debug.debug (fun _ -> "linking (LK_tentative " ^ show tent ^ "): " ^ show lk_def) in
       match lk_def with
       | LK_normal def ->
         Exception.return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, (tent, def) :: acc_tent)
@@ -34,7 +37,7 @@ let link_extern ext acc =
         Exception.return (Map.insert k (ds ++ acc_ds, LK_tentative tent) acc_ext, acc_tent)
       end
     | Just (acc_ds, LK_normal def) ->
-      let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_normal " ^ show def ^ "): " ^ show lk_def) in
+      let () = Debug.debug (fun _ -> "linking (LK_normal " ^ show def ^ "): " ^ show lk_def) in
       match lk_def with
       | LK_normal _ ->
         link_fail (locOf k) (DuplicateExternalName k)

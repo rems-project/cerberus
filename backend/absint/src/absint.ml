@@ -4,7 +4,9 @@ open Core
 
 open Apron
 
-let debug msg = Cerb_debug.print_debug 2 [] (fun _ -> msg)
+let log_debug = Logs.Src.create "Absint.debug"
+
+let debug msg = Logs.debug ~src:log_debug (fun m -> m "%s" (msg))
 
 let empty_env = Environment.make [||] [||]
 

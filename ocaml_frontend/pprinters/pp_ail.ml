@@ -552,7 +552,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEcond (e1, Some e2, e3) ->
             P.group (pp e1 ^^^ P.qmark ^^^ pp e2 ^^^ P.colon ^^^ pp e3)
         | AilEcast (qs, ty, e) ->
-            if !Cerb_debug.debug_level > 5 then
+            if !Cerb_pp_options.verbose then
               (* printing the types in a human readable format *)
               P.parens (pp_ctype_human qs ty) ^^^ pp e
             else
@@ -592,7 +592,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEident x ->
             pp_id x
         | AilEsizeof (qs, ty) ->
-            if !Cerb_debug.debug_level > 5 then
+            if !Cerb_pp_options.verbose then
               (* printing the types in a human readable format *)
               pp_keyword "sizeof" ^^ P.parens (pp_ctype_human qs ty)
             else
@@ -600,7 +600,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEsizeof_expr e ->
             pp_keyword "sizeof" ^^^ pp e
         | AilEalignof (qs, ty) ->
-            if !Cerb_debug.debug_level > 5 then
+            if !Cerb_pp_options.verbose then
               (* printing the types in a human readable format *)
               pp_keyword "_Alignof" ^^ P.parens (pp_ctype_human qs ty)
             else
@@ -807,7 +807,7 @@ let pp_function_prototype sym decl = match decl with
         let args = P.parens
           (comma_list
              (fun (qs, ty, isRegister) ->
-                if !Cerb_debug.debug_level > 5 then
+                if !Cerb_pp_options.verbose then
                   (* printing the types in a human readable format *)
                   P.parens
                     ((fun z -> if isRegister then !^"register" ^^^ z else z)
@@ -821,7 +821,7 @@ let pp_function_prototype sym decl = match decl with
            else
              P.empty)
       in
-      if !Cerb_debug.debug_level > 5 then
+      if !Cerb_pp_options.verbose then
         (* printing the types in a human readable format *)
         pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
       else (
@@ -891,7 +891,7 @@ let pp_program_aux pp_annot (startup, sigm) =
           in
           comment ^^
           
-          (if !Cerb_debug.debug_level > 5 then
+          (if !Cerb_pp_options.verbose then
             (* printing the types in a human readable format *)
             pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
           else
@@ -922,7 +922,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                       P.parens
                         (comma_list
                           (fun (sym, (qs, ty, isRegister)) ->
-                              if !Cerb_debug.debug_level > 5 then
+                              if !Cerb_pp_options.verbose then
                                 (* printing the types in a human readable format *)
                                 pp_id_obj sym
                                 ^^ P.colon
@@ -939,7 +939,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                         else
                           P.empty)
                     in
-                    (if !Cerb_debug.debug_level > 5 then
+                    (if !Cerb_pp_options.verbose then
                       (* printing the types in a human readable format *)
                       pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
                     else (

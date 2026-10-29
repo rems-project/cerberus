@@ -2,13 +2,16 @@ open import Pervasives Utils Mem
 import Ctype
 
 
+import Debug
+
+
 val integerFromIntegerValue: integer_value -> maybe integer
 let integerFromIntegerValue ival =
   eval_integer_value ival
 
 val integerValueFromMemValue: mem_value -> maybe (Ctype.integerType * integer_value)
 let integerValueFromMemValue mval =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.debug (fun () ->
     "integerValueFromMemValue ==> " ^ Mem.stringFromMem_value mval
   ) in
   case_mem_value mval
@@ -42,7 +45,7 @@ let isUnspecifiedMemValue mval =
 
 val pointerValueFromMemValue: mem_value -> maybe (Ctype.ctype * pointer_value)
 let pointerValueFromMemValue mem_val =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.debug (fun () ->
     "pointerValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   case_mem_value mem_val

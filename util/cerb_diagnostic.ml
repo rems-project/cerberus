@@ -12,7 +12,7 @@ type config = {
 
 let err_count = ref 0
 let wrn_count = ref 0
-let debug_level = ref 0
+let log_warn = Logs.Src.create "Cerb_diagnostic.warn"
 let conf = ref { verbosity= QuoteStd; n1570= None }
 
 
@@ -61,7 +61,6 @@ let fatal ?(code = 1) msg =
   let code = if code = 0 then 1 else code in
   exit code
 
-let warn ?(always=false) _doms msg =
+let warn msg =
   incr wrn_count;
-  if always || !debug_level > 1 then
-    prerr_endline Cerb_colour.(ansi_format [Yellow] ("warning: " ^ msg ()))
+  Logs.warn ~src:log_warn (fun m -> m "%s" (msg ()))

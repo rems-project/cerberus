@@ -3,6 +3,11 @@ open Cerb_diagnostic
 
 (* Pipeline *)
 
+let log_whenM = Logs.Src.create "Pipeline.whenM"
+
+let log_pass_message = Logs.Src.create "Pipeline.pass_message"
+let log_pipeline = Logs.Src.create "Pipeline"
+
 let ( let* )   = Result.bind
 let ( >>= )    = Result.bind
 let (<$>)      = Exception.except_fmap
@@ -64,9 +69,10 @@ type language =
 type pp_flag =
   | Annot
   | Loc
+  | Early
+  | Verbose
 
 type configuration = {
-  debug_level: int;
   pprints: language list;
   astprints: language list;
   ppflags: pp_flag list;
@@ -84,28 +90,20 @@ type io_helpers = {
   set_progress: string -> (unit, Errors.error) Result.t;
   run_pp: string option -> PPrint.document -> (unit, Errors.error) Result.t;
   print_endline: string -> (unit, Errors.error) Result.t;
-  print_debug: int -> (unit -> string) -> (unit, Errors.error) Result.t;
-  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Result.t;
 }
 
 let (default_io_helpers, get_progress) =
   let progress = ref 0 in
-  { pass_message = begin
-      let ref = ref 0 in
-      fun str ->
-        Cerb_debug.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
-        incr ref;
-        Result.ok ()
-    end
+  { pass_message = (fun str ->
+      Logs.info ~src:log_pass_message (fun m -> m "%s" str);
+      Result.ok ())
   ; set_progress= (fun _ -> incr progress; Result.ok ())
   ; run_pp= (fun fout_opt doc -> run_pp fout_opt doc; Result.ok ())
   ; print_endline= (fun str -> print_endline str; Result.ok ())
-  ; print_debug= (fun n mk_str -> Cerb_debug.print_debug n [] mk_str; Result.ok ())
-  ; warn= (fun ?(always=false) mk_str -> warn ~always [] mk_str; Result.ok ())
   }, fun () -> !progress
 
 let cpp (conf, io) ~filename =
-  let* () = io.print_debug 5 (fun () -> "C prepocessor") in
+  let () = Logs.debug ~src:log_pipeline (fun m -> m "C preprocessor") in
   Unix.handle_unix_error begin fun () ->
     let (out_read, out_write) = Unix.pipe () in
     Unix.set_close_on_exec out_read;
@@ -175,7 +173,7 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
       fun () -> io.run_pp None (Pp_cabs.pp_translation_unit true true cabs_tunit)
     end in
     let* () = whenM (List.mem Cabs pipeline_conf.pprints) begin
-      fun () -> io.warn (fun () -> "TODO: Cabs pprint to yet supported")
+      fun () -> Logs.debug ~src:log_pipeline (fun m -> m "Cabs pretty-printing is not yet supported"); Result.ok ()
     end in
     Result.ok cabs_tunit in
   (* -- *)
@@ -194,10 +192,10 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     let* () = io.set_progress "DESUG" in
     let* () = io.pass_message "Cabs -> Ail completed!" in
     let* () =
-    (* NOTE: if the debug level is lower the do the printing after the typing *)
-      whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.astprints)
+    (* The early display flag selects Ail before typechecking. *)
+      whenM (List.mem Early pipeline_conf.ppflags && List.mem Ail pipeline_conf.astprints)
         (fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)) in
-    let* () = whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.pprints)
+    let* () = whenM (List.mem Early pipeline_conf.ppflags && List.mem Ail pipeline_conf.pprints)
       begin
         fun () ->
         let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
@@ -212,20 +210,20 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
       conf
       (GenTyping.annotate_program ail_prog) in
     let* () = io.pass_message "Ail typing completed!" in
-    let* () = whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.astprints) begin
+    let* () = whenM (not (List.mem Early pipeline_conf.ppflags) && List.mem Ail pipeline_conf.astprints) begin
       fun () ->
-        let doc = if pipeline_conf.debug_level = 4 then
-          (* (for debug 4) pretty-printing Ail with type annotations *)
+        let doc = if List.mem Annot pipeline_conf.ppflags then
+          (* Include inferred Ail type annotations when requested. *)
           Pp_ail_ast.pp_program_with_annot ailtau_prog
         else
           Pp_ail_ast.pp_program true false ailtau_prog in
         io.run_pp None doc
     end in
-    let* () = whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.pprints) begin
+    let* () = whenM (not (List.mem Early pipeline_conf.ppflags) && List.mem Ail pipeline_conf.pprints) begin
       fun () ->
         let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
-        let doc = if pipeline_conf.debug_level = 4 then
-          (* (for debug 4) pretty-printing Ail with type annotations *)
+        let doc = if List.mem Annot pipeline_conf.ppflags then
+          (* Include inferred Ail type annotations when requested. *)
           mk_pp_program Pp_ail.pp_program_with_annot fout_opt ailtau_prog
         else
           mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ailtau_prog in
@@ -233,7 +231,7 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     end in
     Result.ok ailtau_prog in
   (* -- *)
-  let* () = io.print_debug 2 (fun () -> "Using the C frontend") in
+  let () = Logs.debug ~src:log_pipeline (fun m -> m "Using the C frontend") in
   let* file_content = cpp (pipeline_conf, io) ~filename in
   let* cabs_tunit = parse filename file_content in
   let* markers_env, ail_prog = desugar cabs_tunit in
@@ -254,7 +252,7 @@ let c_frontend_and_elaboration
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Cerb_fresh.set_digest filename;
-  let* () = io.print_debug 2 (fun () -> "Using the Core frontend") in
+  let () = Logs.debug ~src:log_pipeline (fun m -> m "Using the Core frontend") in
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
         Result.ok {
@@ -277,13 +275,13 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
 
 
 let core_rewrite (conf, io) core_file =
-  let* () = whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
+  let* () = whenM (List.mem Early conf.ppflags && List.mem Core conf.astprints) begin
     fun () ->
       let* () = io.print_endline "BEGIN (before Core rewrite)" in
       let* () = io.run_pp None (Ast_core.ast_file core_file) in
       io.print_endline "END"
   end in
-  let* () = whenM (conf.debug_level >= 5 && List.mem Core conf.pprints) begin
+  let* () = whenM (List.mem Early conf.ppflags && List.mem Core conf.pprints) begin
     fun () ->
       let* () = io.print_endline "BEGIN (before Core rewrite)" in
       let* () = io.run_pp None (Pp_core.Basic.pp_file core_file) in
@@ -552,18 +550,18 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
                   Z.to_int n
                 with
                 | Z.Overflow ->
-                    warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                    warn (fun () -> "Return value overlows (wrapping it down to 255)");
                     Z .(to_int (n mod (of_int 256)))
                 end 
             | None ->
-                warn [] (fun () -> "Return value was not a (simple) specified integer");
+                warn (fun () -> "Return value was not a (simple) specified integer");
                 0
           end)
       | (cval :: _) ->
-          let* () = io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) in
+          let () = Logs.debug ~src:log_pipeline (fun m -> m "%s" ((fun () -> "HELLO> " ^ String_core.string_of_value cval) ())) in
           Result.ok (Either.Right 0)
       | [] ->
-          let* () = io.warn (fun () -> "BACKEND FOUND EMPTY RESULT") in
+          let () = Logs.debug ~src:log_pipeline (fun m -> m "%s" ((fun () -> "BACKEND FOUND EMPTY RESULT") ())) in
           Result.ok (Either.Right 0)
 
 (* NOTE: Every map needs to be serialised as associated lists, since marshalling
@@ -603,7 +601,7 @@ let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filenam
   let v = input_line ic in
   if v <> version_info
   then
-    warn [] (fun () ->
+    warn (fun () ->
       "read core_object file produced with a different version of Cerberus => " ^ v
     );
   let dump: 'a core_dump = Marshal.from_channel ic in

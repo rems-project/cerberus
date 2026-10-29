@@ -71,7 +71,7 @@ let create_executable out =
   close_out oc;
   Unix.chmod out 0o755
 
-let cerberus debug_level progress
+let cerberus logging progress
              cpp_cmd nostdinc nolibc macros macros_undef
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
@@ -83,7 +83,10 @@ let cerberus debug_level progress
              fs_dump fs
              output_name
              files args_opt =
-  Cerb_debug.debug_level := debug_level;
+  begin match Cerb_log_cli.setup logging with
+    | Ok () -> ()
+    | Error msg -> prerr_endline msg; Stdlib.exit 2
+  end;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
@@ -94,7 +97,7 @@ let cerberus debug_level progress
   in *)
   (* set global configuration *)
   set_cerb_conf "Absint" false Random false QuoteStd defacto false false false;
-  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
+  let conf = { astprints; pprints; ppflags; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -175,10 +178,6 @@ let macro_pair =
     | (m, None)   -> Format.pp_print_string ppf m
     | (m, Some v) -> Format.fprintf ppf "%s=%s" m v in
   Arg.(conv (parser, printer))
-
-let debug_level =
-  let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
-  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls\
@@ -319,7 +318,7 @@ let absdomain =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(const cerberus $ debug_level $ progress $
+  let cerberus_t = Term.(const cerberus $ Cerb_log_cli.options $ progress $
                          cpp_cmd $ nostdinc $ nolibc $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $

@@ -484,7 +484,7 @@ let string_of_core_typing_cause = function
   | UndefinedStartup sym ->
       "undefined startup procedure '" ^ string_of_sym sym ^ "'"
   | Mismatch (str, expected, found) ->
-      (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (if !Cerb_pp_options.verbose then "(" ^ str ^ "):\n" else "") ^
       "this expression is of type '" ^ string_of_bty found ^
       "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
   | MismatchBinaryOperator bop ->
@@ -494,11 +494,11 @@ let string_of_core_typing_cause = function
   | MismatchIf (then_bTy, else_bTy) ->
       "type mismatch in conditional expression ('" ^ string_of_bty then_bTy ^ "' and '" ^ string_of_bty else_bTy ^ "')"
   | MismatchExpected (str, expected, found) ->
-      (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (if !Cerb_pp_options.verbose then "(" ^ str ^ "):\n" else "") ^
       "this expression is of type '" ^ found ^
       "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
   | MismatchFound (str, expected, m_found) ->
-      (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (if !Cerb_pp_options.verbose then "(" ^ str ^ "):\n" else "") ^
       (match m_found with Some found -> "this expression is of type '" ^ string_of_bty found ^ "' but " | None -> "") ^
       "an expression of type '" ^ expected ^ "' was expected"
   | ArityMismatchRun (expected, found) ->

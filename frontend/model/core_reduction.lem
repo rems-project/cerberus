@@ -10,6 +10,9 @@ import Cerb_attributes
 (* TODO *)
 import Core_run
 
+import Debug
+
+
 module Cmm = struct
   include Cmm_aux
   include Cmm_csem
@@ -248,7 +251,7 @@ let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
       one_step_unseq_aux (fps_acc, cval::cvals_acc) xs
   | Expr _ (Eannot fps (Expr _ (Epure (Pexpr _ _ (PEval cval))))) :: xs ->
       if do_race fps fps_acc then
-        let () = Debug.print_debug 2 [Debug.DB_core_dynamics] (fun () ->
+        let () = Debug.debug (fun () ->
           "FOUND AN UNSEQUENCED RACE: " ^ show fps ^ " <---> " ^ show fps_acc
         ) in
         (* we found an unsequenced race (undefined behaviour) *)

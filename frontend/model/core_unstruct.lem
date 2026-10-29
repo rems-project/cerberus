@@ -5,6 +5,9 @@ import Symbol State Core_aux Ctype
 import Core_typing Core_typing_effect Core_typing_aux
 
 
+import Debug
+
+
 module Caux = Core_aux
 
 type explodeM 'a =
@@ -291,7 +294,7 @@ let rec explode_expr tagDefs env (Expr annot expr_ as expr) =
     | Epure (Pexpr _ _ (PEmember_shift (Pexpr _ _ (PEsym ptr_sym)) _ ident)) ->
         match Maybe.bind (Map.lookup ptr_sym env) (List.lookup ident) with
           | Nothing ->
-              let () = Debug.print_debug 0 [] (fun () -> show (Map.lookup ptr_sym env)) in
+              let () = Debug.debug (fun () -> show (Map.lookup ptr_sym env)) in
               expr (* error "Core_unstruct.explode_expr: Epure PEmember_shift -- lookup failed" *)
           | Just sym ->
               wrap (Epure (mk_ptr_sym_pe sym))

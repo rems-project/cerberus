@@ -3,6 +3,8 @@ open Cerb_backend
 open Cerb_diagnostic
 open Pipeline
 
+let log_cerberus = Logs.Src.create "Bmc_main.cerberus"
+
 let (>>=) = Result.bind
 let (>>) m f = m >>= fun _ -> f
 
@@ -70,7 +72,7 @@ let create_executable out =
   close_out oc;
   Unix.chmod out 0o755
 
-let cerberus debug_level progress core_obj
+let cerberus logging progress core_obj
              cpp_cmd nostdinc nolibc macros macros_undef
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
@@ -86,7 +88,10 @@ let cerberus debug_level progress core_obj
              ocaml ocaml_corestd
              output_name
              files args_opt =
-  Cerb_debug.debug_level := debug_level;
+  begin match Cerb_log_cli.setup logging with
+    | Ok () -> ()
+    | Error msg -> prerr_endline msg; Stdlib.exit 2
+  end;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
@@ -101,7 +106,7 @@ let cerberus debug_level progress core_obj
   (* Initialise the global state for printing diagnostics  *)
   Cerb_diagnostic.init ~verbosity:QuoteStd ();
   (* ~exec exec_mode ~concurrency QuoteStd ~defacto ~permissive:false ~agnostic:false ~ignore_bitfields:false; *)
-  let cli_conf = { astprints; pprints; ppflags; ppouts=[]; debug_level; typecheck_core;
+  let cli_conf = { astprints; pprints; ppflags; ppouts=[]; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true;
                cpp_save= None } in
   let prelude =
@@ -172,7 +177,7 @@ let cerberus debug_level progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                      Logs.warn ~src:log_cerberus (fun m -> m "%s" ("Return value overlows (wrapping it down to 255)"));
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->
@@ -301,10 +306,6 @@ let macro_pair =
     | (m, None)   -> Format.pp_print_string ppf m
     | (m, Some v) -> Format.fprintf ppf "%s=%s" m v in
   Arg.(conv (parser, printer))
-
-let debug_level =
-  let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
-  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
 let ocaml =
   let doc = "Ocaml backend." in
@@ -551,7 +552,7 @@ let bmc_cat =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(const cerberus $ debug_level $ progress $ core_obj $
+  let cerberus_t = Term.(const cerberus $ Cerb_log_cli.options $ progress $ core_obj $
                          cpp_cmd $ nostdinc $ nolibc $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $

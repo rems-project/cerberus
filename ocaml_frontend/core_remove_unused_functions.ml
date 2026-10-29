@@ -3,10 +3,10 @@ open Core
 
 
 
+let log_debug_print = Logs.Src.create "Core_remove_unused_functions.debug_print"
+
 let debug_print pp =
-  Cerb_debug.print_debug 3
-    [Cerb_debug.DB_core_rewriting] 
-    pp
+  Logs.debug ~src:log_debug_print (fun m -> m "%s" (pp ()))
 
 
 

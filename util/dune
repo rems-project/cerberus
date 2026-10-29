@@ -5,7 +5,7 @@
  (modules :standard)
  (wrapped false)
  (foreign_stubs (language c) (names cerberus_cstubs cerb_log_native_stubs))
- (libraries unix str lem pprint yojson logs threads saturn))
+ (libraries unix str lem pprint yojson logs logs.cli threads cmdliner saturn))
 
 (rule
  (target n1570.ml)

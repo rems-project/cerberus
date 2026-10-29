@@ -1,6 +1,8 @@
 open Ctype
 open Memory_model
 open Memory_utils
+let log_repr = Logs.Src.create "Impl_mem.repr"
+
 module MC = Mem_common
 
 open Monomorphic
@@ -340,7 +342,7 @@ let rec repr ~tagDefs funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t
         bytes_of_int true sz (Z.of_int64 (Int64.bits_of_float fval))
       end
     | MVpointer (_, ptrval) ->
-        Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
+        Logs.debug ~src:log_repr (fun m -> m "%s" ("NOTE: we fix the sizeof pointers to 8 bytes"));
         let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
           | None ->
               failwith "INTERNAL ERROR: the VIP memory model requires a complete implementation"
@@ -348,7 +350,7 @@ let rec repr ~tagDefs funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t
               z in
         begin match ptrval with
           | PVnull ->
-              Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
+              Logs.debug ~src:log_repr (fun m -> m "%s" ("NOTE: we fix the representation of all NULL pointers to be 0x0"));
               ret @@ List.init ptr_size
                 (fun _ -> AbsByte.{prov= Prov_empty; value= (Some '\000'); ptrfrag_idx= None})
           | PVfunptr (Symbol.Symbol (file_dig, n, opt_name)) ->

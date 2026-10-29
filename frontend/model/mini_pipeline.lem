@@ -3,6 +3,9 @@ import Symbol
 import Pp
 
 import Core 
+import Debug
+
+
 module C = Core
 
 module A = struct
@@ -227,7 +230,7 @@ let evalIntegerConstantExpression conf core_env sigm mode d_expr =
               error "TODO error: the memory model failed to concretise the integer value (was impl dependent?)"
         end
     | cval ->
-        let () = Debug.print_debug 1 [] (fun () ->
+        let () = Debug.debug (fun () ->
           "cval: " ^ Pp.stringFromCore_value cval
         ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
