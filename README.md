@@ -83,6 +83,7 @@ Include directories can be added with the usual ```-I```, and macros can be forw
 
 For more, see `cerberus --help`
 
+For debug filters, output destinations, and JSON logging, see [DEBUGGING.md](DEBUGGING.md).
 
 ---
 
