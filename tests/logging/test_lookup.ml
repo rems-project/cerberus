@@ -76,6 +76,45 @@ let native_formatted () =
     Cerb_log_auto.configure None [];
     formatted never)
 
+let concurrent_misses () =
+  (* Distinct static addresses normalize to one enabled or disabled name. *)
+  let enabled = [|"Concurrent_misses.enabled"; "Concurrent_misses.enabled.local";
+                  "Concurrent_misses.enabled.(fun)"; "Concurrent_misses.enabled.other"|] in
+  let disabled = [|"Concurrent_misses.disabled"; "Concurrent_misses.disabled.local"|] in
+  let before = count_sources () in
+  let events = Atomic.make 0 in
+  let previous = Logs.reporter () in
+  Logs.set_reporter {Logs.report = fun src level ~over k msgf ->
+    check (Logs.Src.name src = "Concurrent_misses.enabled" && level = Logs.Debug)
+      "wrong source published during concurrent admission";
+    msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun _ ->
+      Atomic.incr events; over (); k ()) fmt)};
+  Fun.protect ~finally:(fun () -> Logs.set_reporter previous) (fun () ->
+    for _ = 1 to 8 do
+      configure ["Concurrent_misses.enabled"];
+      let start = Atomic.make false and ready = Atomic.make 0 in
+      let worker id =
+        Atomic.incr ready;
+        while not (Atomic.get start) do Domain.cpu_relax () done;
+        Array.iter (fun raw ->
+          Cerb_log_auto.debugf raw (fun _ -> never ());
+          Cerb_log_auto.debugf enabled.(id mod Array.length enabled) (fun m -> m "event");
+          Cerb_log_auto.debug disabled.(id mod Array.length disabled) never) literals in
+      let workers = Array.init 8 (fun id -> Domain.spawn (fun () -> worker id)) in
+      while Atomic.get ready <> Array.length workers do Domain.cpu_relax () done;
+      Atomic.set start true;
+      (* Join everyone before reporting an exception or reconfiguring. *)
+      let results = Array.map (fun worker ->
+        try Ok (Domain.join worker) with exn -> Error exn) workers in
+      Array.iter (function Ok () -> () | Error exn -> raise exn) results;
+      check (count_sources () = before + 1) "concurrent aliases registered duplicate sources";
+      let names = List.filter (String.starts_with ~prefix:"Concurrent_misses.")
+        (Cerb_log_auto.sources ()) in
+      check (names = ["Concurrent_misses.disabled"; "Concurrent_misses.enabled"])
+        "concurrent positive or negative decisions missing from discovery"
+    done;
+    check (Atomic.get events = 8 * 8 * Array.length literals) "concurrent admission lost events")
+
 let () =
   names ();
   configure ["Missing.fn"];
@@ -138,4 +177,5 @@ let () =
   check (not (List.mem "Discovery.not_recorded" (Cerb_log_auto.sources ())))
     "inactive logging performed discovery";
   native_formatted ();
+  concurrent_misses ();
   print_endline "Static lookup: matching, lazy cached options, GC, concurrent first use and reconfiguration passed"

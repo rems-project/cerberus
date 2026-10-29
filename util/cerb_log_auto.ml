@@ -1,6 +1,6 @@
 (* Configure once before starting workers. The policy, selector table and
    source levels remain unchanged until all workers have joined. Only the
-   memo table and its writer-protected source registry grow during use. *)
+   memo table and its mutex-protected source registry grow during use. *)
 external pointer_hash : string -> int = "cerb_log_pointer_hash" [@@noalloc]
 external is_static : string -> bool = "cerb_log_is_static" [@@noalloc]
 module Pointer = struct
@@ -15,27 +15,29 @@ type policy = {
   select : string -> bool;
   pointers : (string, Logs.src option) Saturn.Htbl.t;
   sources : Logs.src Names.t;
-  writer : Mutex.t;
+  sources_mutex : Mutex.t;
 }
 
 let fresh active select = {
   active; select;
   pointers = Saturn.Htbl.create ~hashed_type:(module Pointer) ();
   sources = Names.create 32;
-  writer = Mutex.create ();
+  sources_mutex = Mutex.create ();
 }
 let policy = ref (fresh false (fun _ -> false))
 
-let selected_source p name =
-  if not (p.select name) then None else
-  let src = match Names.find_opt p.sources name with
+let source_for_name p name =
+  (* Different static addresses can name the same function. Serialize only
+     this registry lookup and creation, so aliases share one configured source. *)
+  Mutex.lock p.sources_mutex;
+  Fun.protect ~finally:(fun () -> Mutex.unlock p.sources_mutex) (fun () ->
+    match Names.find_opt p.sources name with
     | Some src -> src
     | None ->
         let src = Logs.Src.create name in
         Logs.Src.set_level src (Some Logs.Debug);
         Names.add p.sources name src;
-        src in
-  Some src
+        src)
 
 let[@inline never] first_use p raw =
   (* Heap strings can move, changing their address hash. They never enter the
@@ -43,18 +45,13 @@ let[@inline never] first_use p raw =
      validation therefore belongs only on the miss path. *)
   if not (is_static raw) then
     invalid_arg "Cerb_log_auto: expected a static source name (use __FUNCTION__)";
-  Mutex.lock p.writer;
-  Fun.protect ~finally:(fun () -> Mutex.unlock p.writer) (fun () ->
-    (* Another domain may have populated the entry while we waited. Keep
-       normalization, source creation and insertion within the same lock so
-       aliases and concurrent first calls share a single registered source. *)
-    match Saturn.Htbl.find_exn p.pointers raw with
-    | decision -> decision
-    | exception Not_found ->
-        let decision = selected_source p (Cerb_log_names.canonical raw) in
-        if not (Saturn.Htbl.try_add p.pointers raw decision) then
-          failwith "Cerb_log_auto: duplicate insertion under writer lock";
-        decision)
+  let name = Cerb_log_names.canonical raw in
+  let decision = if p.select name then Some (source_for_name p name) else None in
+  if Saturn.Htbl.try_add p.pointers raw decision then decision
+  else
+    (* Concurrent misses may compute the same decision. Reuse the winner's
+       cached option. This policy never removes or replaces pointer entries. *)
+    Saturn.Htbl.find_exn p.pointers raw
 
 let source p raw =
   (* [find_exn] returns the cached option itself. [find_opt] would allocate an

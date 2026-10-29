@@ -8,7 +8,8 @@ The measured production sources match commit `ff948c3dc`; the following commit a
 
 The native migration uses `Cerb_log_auto.debugf __FUNCTION__` and removes
 Debug-only source declarations. A follow-up on the same host compares numeric
-master `ae70925fc`, the previous PR head `1ef0b82d5`, and the migrated code. Each
+master `ae70925fc`, the previous PR head `1ef0b82d5`, and the migrated code
+(`ce1122e92`, before the subsequent narrowing of the source-registry mutex). Each
 case has 18 fresh-process rounds, cycling through all six orders of the three
 binaries, pinned to one CPU with no concurrent builds or tests. Text goes to
 `/dev/null`. The enabled rows use the same level-2-style profile as below.
