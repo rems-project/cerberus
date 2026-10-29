@@ -13,7 +13,7 @@ See <https://www.cl.cam.ac.uk/~pes20/cerberus/>.
 Build instructions for the CLI
 ---
 
-To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.12.0).
+To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.14.0).
 
 First install the dependencies (including `lem` and `menhir`) using opam:
 

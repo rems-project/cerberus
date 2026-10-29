@@ -1,0 +1,11 @@
+(test
+ (name test_logging)
+ (modules test_logging)
+ (libraries cerberus-lib.util threads))
+
+(test
+ (name test_domains)
+ (modules test_domains)
+ (enabled_if (>= %{ocaml_version} 5.0))
+ (libraries cerberus-lib.util))
+
