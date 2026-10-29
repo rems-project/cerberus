@@ -114,10 +114,13 @@ The close function is idempotent and does not close borrowed stdout/stderr.
 Configure the shared policy and reporter before workers start. Concurrent
 reconfiguration or changing source levels is outside this contract. On first
 use, Saturn caches the selection result for the static function-name address.
-A source-registry mutex protects lookup and creation of enabled sources so
-aliases share one source. Normalization, matching and Saturn insertion run
-outside it; negative misses and all cache hits avoid that mutex. Concurrent
-insertions reuse the winning cached decision. Negative decisions use
+A second Saturn table shares sources by name, using content hashing.
+Existing names are looked up without a mutex. On a name miss, a creation
+mutex protects a second lookup, source creation and publication, so aliases
+share one fully configured source. Normalization, matching and pointer-cache
+insertion run outside it; negative misses and all cache hits avoid that mutex.
+Both creation and reporter critical sections use `Mutex.protect`. Concurrent
+pointer insertions reuse the winning cached decision. Negative decisions use
 `None`, positive decisions reuse a cached `Some src`. This allocates no option
 wrapper on a hit. Sources registered after reporter creation acquire cached
 text prefixes on their first event through an atomic immutable-map update.

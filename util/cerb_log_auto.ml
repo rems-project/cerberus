@@ -1,6 +1,7 @@
 (* Configure once before starting workers. The policy, selector table and
    source levels remain unchanged until all workers have joined. Only the
-   memo table and its mutex-protected source registry grow during use. *)
+   memo table and source registry grow during use. Source creation is serialized;
+   both tables support concurrent lookup. *)
 external pointer_hash : string -> int = "cerb_log_pointer_hash" [@@noalloc]
 external is_static : string -> bool = "cerb_log_is_static" [@@noalloc]
 module Pointer = struct
@@ -8,36 +9,38 @@ module Pointer = struct
   let equal = (==)
   let hash = pointer_hash
 end
-module Names = Hashtbl.Make (String)
 
 type policy = {
   active : bool;
   select : string -> bool;
   pointers : (string, Logs.src option) Saturn.Htbl.t;
-  sources : Logs.src Names.t;
+  sources : (string, Logs.src) Saturn.Htbl.t;
   sources_mutex : Mutex.t;
 }
 
 let fresh active select = {
   active; select;
   pointers = Saturn.Htbl.create ~hashed_type:(module Pointer) ();
-  sources = Names.create 32;
+  sources = Saturn.Htbl.create ~hashed_type:(module String) ();
   sources_mutex = Mutex.create ();
 }
 let policy = ref (fresh false (fun _ -> false))
 
 let source_for_name p name =
-  (* Different static addresses can name the same function. Serialize only
-     this registry lookup and creation, so aliases share one configured source. *)
-  Mutex.lock p.sources_mutex;
-  Fun.protect ~finally:(fun () -> Mutex.unlock p.sources_mutex) (fun () ->
-    match Names.find_opt p.sources name with
-    | Some src -> src
-    | None ->
-        let src = Logs.Src.create name in
-        Logs.Src.set_level src (Some Logs.Debug);
-        Names.add p.sources name src;
-        src)
+  match Saturn.Htbl.find_exn p.sources name with
+  | src -> src
+  | exception Not_found ->
+      (* Different static addresses can name the same function. Recheck under
+         the creation mutex: a losing [try_add] cannot undo [Logs.Src.create]'s
+         global registration. Publish only after configuring the new source. *)
+      Mutex.protect p.sources_mutex (fun () ->
+        match Saturn.Htbl.find_exn p.sources name with
+        | src -> src
+        | exception Not_found ->
+            let src = Logs.Src.create name in
+            Logs.Src.set_level src (Some Logs.Debug);
+            ignore (Saturn.Htbl.try_add p.sources name src);
+            src)
 
 let[@inline never] first_use p raw =
   (* Heap strings can move, changing their address hash. They never enter the
@@ -74,7 +77,8 @@ let configure ?(discover=false) level selectors =
   List.iter (fun src ->
     let name = Logs.Src.name src in
     Logs.Src.set_level src (if select name then Some Logs.Debug else level);
-    Names.replace p.sources name src) (Logs.Src.list ());
+    if not (Saturn.Htbl.try_add p.sources name src) then
+      ignore (Saturn.Htbl.try_set p.sources name src)) (Logs.Src.list ());
   policy := p
 
 let sources () =

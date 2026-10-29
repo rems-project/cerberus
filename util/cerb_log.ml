@@ -11,10 +11,6 @@ let debug_located src loc msg =
     let tags = Logs.Tag.(add location_tag (Cerb_location.location_to_string loc) empty) in
     m ~tags "%s" (msg ()))
 
-let with_lock mutex f =
-  Mutex.lock mutex;
-  Fun.protect ~finally:(fun () -> Mutex.unlock mutex) f
-
 type format = Text | Json
 type output = Stderr | Stdout | File of string
 
@@ -108,7 +104,7 @@ let open_reporter output format =
     let prefixes = Atomic.make (match format with Text -> text_prefixes () | Json -> Sources.empty) in
     let mutex = Mutex.create () in
     let closed = ref false in
-    let close () = with_lock mutex (fun () ->
+    let close () = Mutex.protect mutex (fun () ->
       if not !closed then begin
         closed := true;
         if owned then close_out channel else flush channel
@@ -121,7 +117,7 @@ let open_reporter output format =
                 let values = cached_text_prefixes prefixes src in
                 String.concat "" [values.(level_index level); message; "\n"]
             | _ -> render format src level header tags message in
-          with_lock mutex (fun () ->
+          Mutex.protect mutex (fun () ->
             if !closed then invalid_arg "Cerb_log: reporter is closed";
             output_string channel line;
             flush channel);
