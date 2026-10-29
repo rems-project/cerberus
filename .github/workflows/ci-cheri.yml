@@ -27,8 +27,7 @@ jobs:
   build:
     strategy:
       matrix:
-        # version: [4.12.0, 4.14.1]
-        version: [4.14.1]
+        version: [5.2.1]
 
 
     runs-on: ubuntu-24.04
@@ -71,7 +70,7 @@ jobs:
         key: ${{ matrix.version }}-cheri
   
     - name: Install Cerberus-CHERI
-      if: ${{ matrix.version == '4.14.1' }}
+      if: ${{ matrix.version == '5.2.1' }}
       run: |
         opam switch ${{ matrix.version }}-cheri
         eval $(opam env --switch=${{ matrix.version }}-cheri )
@@ -80,7 +79,7 @@ jobs:
         opam install --yes cerberus-cheri
 
     - name: Run Cerberus-CHERI CI tests
-      if: ${{ matrix.version == '4.14.1' }}
+      if: ${{ matrix.version == '5.2.1' }}
       run: |
         opam switch ${{ matrix.version }}-cheri
         eval $(opam env --switch=${{ matrix.version }}-cheri )
