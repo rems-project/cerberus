@@ -12,6 +12,10 @@ import Cmm_csem Mem
 import Linux
 
 
+import Debug
+
+let log_floating_conversion_TODO = Debug.source "Translation.floating_conversion_TODO"
+
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
 
@@ -49,7 +53,7 @@ let force_core_object_type_of_ctype ty =
 
 let floating_conversion_TODO to_ty from_ty z =
   (* NOTE: our current implementation of floating types has them all behave like double *)
-  let () = Debug.warn [Debug.DB_elaboration] (fun () ->
+  let () = Debug.warn log_floating_conversion_TODO (fun () ->
     "casts between floating types is currently a NOP: " ^
     Pp.stringFromCtype to_ty ^ " <== " ^
     Pp.stringFromCtype from_ty
@@ -2022,7 +2026,7 @@ else if AilTypesAux.is_integer cast_ty && AilTypesAux.is_byte e_ty then
                 )
 
 else (* pointer <-> pointer cast *)
-              let () = Debug.warn [Debug.DB_elaboration] (fun () ->
+              let () = Debug.debug (fun () ->
                 "the elaboration does the identity for casts between pointer types (this is different from ISO)"
               ) in
               let ub_pe = Caux.mk_undef_pe loc Undefined.UB025_misaligned_pointer_conversion in
@@ -2435,7 +2439,7 @@ end                       )
       | A.AilEassign e1 e2 ->
           (* STD §6.5.16 *)
           (* TODO: model the non-exact overlap UB *)
-          let () = Debug.warn [Debug.DB_elaboration] (fun () ->
+          let () = Debug.debug (fun () ->
             "Cerberus does not currently check the undefined behaviour for non-exactly overlapping assignments (see C11 §6.5.16.1#3)"
           ) in
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e1_wrp  ->
@@ -3131,7 +3135,7 @@ end
       
       | A.AilEprint_type e ->
           let (qs, ty) = qualified_ctype_of conf e in
-          let () = Debug.print_debug_located 0 [] loc (fun () ->
+          let () = Debug.debug_located loc (fun () ->
             "PRINT_TYPE: " ^ Pp.stringFromCtype_human qs ty
           ) in
           self e

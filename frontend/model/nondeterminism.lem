@@ -5,6 +5,7 @@ import Undefined
 
 
 (* Cause of an execution path termination *)
+
 type kill_reason 'err =
   | Undef of Loc.t * list Undefined.undefined_behaviour
   | Error of Loc.t * string
@@ -93,7 +94,7 @@ val bindExhaustive:
   forall 'a 'b 'info 'err 'cs 'st.
   ndM 'a 'info 'err 'cs 'st -> ('a -> ndM 'b 'info 'err 'cs 'st) -> ndM 'b 'info 'err 'cs 'st
 let bindExhaustive m f =
-  let () = Debug.print_debug 2 [] (fun () ->
+  let () = Debug.debug (fun () ->
     "ND2.bindExhaustive is wrong"
   ) in
   bind m f (* error "ND2.bindExhaustive" *)
@@ -106,13 +107,6 @@ let kill r =
 val log: forall 'info 'err 'cs 'st. string -> ndM unit 'info 'err 'cs 'st
 let log msg =
   error "ND2.log"
-
-val print_debug:
-  forall 'info 'err 'cs 'st.
-  nat -> list Debug.domain -> (unit -> string) -> ndM unit 'info 'err 'cs 'st
-let print_debug level doms msg =
-  return (Debug.print_debug level doms msg)
-
 
 val mplus:
   forall 'a 'info 'err 'cs 'st.
@@ -130,7 +124,7 @@ let msum info = function
   | [(_, m)] ->
       m
   | info_ms ->
-    let () = Debug.print_debug 2 [] (fun () ->
+    let () = Debug.debug (fun () ->
       "ND2.msum (|ms| = " ^ show (List.length info_ms) ^ ")"
     ) in
     ND (fun st ->
@@ -185,14 +179,14 @@ let pick info = function
   | [] ->
       error ("ND2.pick(" ^ show info ^ "), empty list")
   | [x] ->
-      let () = Debug.print_debug 2 [] (fun () ->
+      let () = Debug.debug (fun () ->
         "ND2.pick [" ^ show info ^ "] (|ms| = singleton)"
       ) in
       ND (fun st ->
         (NDactive x, st)
       )
   | x::xs ->
-      let () = Debug.print_debug 2 [] (fun () ->
+      let () = Debug.debug (fun () ->
         "ND2.pick [" ^ show info ^ "] (|ms| = " ^ show (List.length (x::xs)) ^ ")"
       ) in
       ND (fun st ->
@@ -283,7 +277,7 @@ let lift_undef m =
 
 
 let mk_step info xs =
-  let () = Debug.print_debug 2 [] (fun () ->
+  let () = Debug.debug (fun () ->
     "ND2.mk_step [" ^ show info ^ "] (|ms| = " ^ show (List.length xs) ^ ")"
   ) in
   ND (fun st -> (NDstep info xs, st))

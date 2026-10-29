@@ -19,13 +19,15 @@ license: "BSD-2-Clause"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
-  "ocaml" {>= "4.12.0"}
+  "ocaml" {>= "5.2.0" & < "6.0.0"}
   "dune" {(>= "3.21.0" & < "3.24.0")}
   "sha" {>= "1.12"}
   "pprint" {>= "20180528"}
   "ppx_sexp_conv" {>= "v0.14.3" }
   "sexplib" {>= "v0.14.0"}
   "cmdliner" {>= "1.1.0"}
+  "logs" {>= "0.10.0"}
+  "saturn" {>= "1.0.0" & < "2.0.0"}
   "yojson" {>= "2.0.0"}
   "lem" {>= "2020-06-03"}
   "menhir" {>= "20211230"}

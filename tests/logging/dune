@@ -1,0 +1,40 @@
+(test
+ (name test_logging)
+ (modules test_logging)
+ (libraries cerberus-lib.util threads))
+
+(test
+ (name test_domains)
+ (modules test_domains)
+ (enabled_if (>= %{ocaml_version} 5.0))
+ (libraries cerberus-lib.util))
+
+(test
+ (name test_lem_logging)
+ (modules test_lem_logging)
+ (libraries cerberus-lib.frontend cerberus-lib.mem.concrete))
+
+(test
+ (name test_lookup)
+ (modes native)
+ (modules test_lookup lookup_literals)
+ (libraries cerberus-lib.util threads))
+
+(executable
+ (name gen_lookup_literals)
+ (modules gen_lookup_literals))
+
+(rule
+ (target lookup_literals.ml)
+ (action (with-stdout-to %{target} (run ./gen_lookup_literals.exe))))
+
+(executable
+ (name bench_lookup)
+ (modes native)
+ (modules bench_lookup lookup_literals)
+ (libraries cerberus-lib.util))
+
+(executable
+ (name bench_logging)
+ (modules bench_logging)
+ (libraries cerberus-lib.util))

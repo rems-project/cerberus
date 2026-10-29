@@ -10,13 +10,11 @@ let do_red str= "\x1b[31m" ^ str ^ "\x1b[0m"
 
 let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st) ndM) (st0: 'st) =
   prerr "ENTERING runND";
-  Cerb_debug.print_debug 2 [] (fun () ->
-    "HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
+  Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
       | Exhaustive ->
           "exhaustive"
       | Random ->
-          "random"
-  );
+          "random"));
   let module CS = (val cs_module : Constraints with type t = cs) in
   let (>>=) = CS.bind in
   let open CS in

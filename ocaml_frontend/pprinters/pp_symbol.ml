@@ -12,7 +12,7 @@ let to_string (Symbol (_, n, sd)) =
 let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
   let maybe_add_number name =
-   if !Cerb_debug.debug_level > 4 then
+   if !Cerb_pp_options.verbose then
       add_number name
      else
       name
@@ -95,7 +95,7 @@ let pp_prefix = function
 
 
 let pp_identifier ?(clever=false) (Symbol.Identifier (loc, str)) =
-  begin if Cerb_debug.get_debug_level () >= 5 then
+  begin if !Cerb_pp_options.verbose then
     pp_location ~clever loc ^^ P.space
   else
     P.empty

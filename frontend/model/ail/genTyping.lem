@@ -6,6 +6,7 @@ import Constraint Undefined Builtins Debug Pp Cmm_csem
 
 import Implementation
 
+
 module Cty = Ctype
 module AAux = AilTypesAux
 module GAux = GenTypesAux
@@ -53,7 +54,7 @@ val gen_typing_type_of_constant: Loc.t -> integerConstant -> E.errorM genInteger
 let gen_typing_type_of_constant loc iCst =
   E.read_config >>= fun conf ->
   if conf.agnostic then
-    let () = Debug.warn [] (fun () ->
+    let () = Debug.debug (fun () ->
       "The typing of Ail integer constants is imprecise because of the --agnostic flag"
     ) in
     (* NOTE: in this mode, this function is trying to stay implementation agnostic,
@@ -175,11 +176,11 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
   in
   if AAux.atomic_qualified_unqualified AAux.is_arithmetic ty1 then
     if GAux.is_arithmetic gty2 then
-      let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 1") in (* DEBUG *)
+      let () = Debug.debug (fun () -> "[well_typed_assignment] OK: bullet 1") in (* DEBUG *)
       E.add "§6.5.16.1#1, bullet 1"
     else if AAux.atomic_qualified_unqualified AAux.is_Bool ty1 then
       if GAux.is_pointer gty2 then
-        let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 6") in (* DEBUG *)
+        let _ = Debug.debug (fun () -> "[well_typed_assignment] OK: bullet 6") in (* DEBUG *)
         E.add "§6.5.16.1#1, bullet 6"
       else
         throw BoolExpectsArithmeticOrPointer
@@ -194,7 +195,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
     match (Cty.unatomic_ ty1, GenTypesAux.unatomic gty2) with
       | (Struct tag_sym1, GenStruct tag_sym2) ->
           (* TODO: this is maybe too conservative *)
-          let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+          let () = Debug.debug (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
             Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           if tag_sym1 = tag_sym2 then
@@ -203,7 +204,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
             throw IncompatibleType
       | (Union tag_sym1, GenUnion tag_sym2) ->
           (* TODO: this is maybe too conservative *)
-          let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+          let () = Debug.debug (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
             Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           if tag_sym1 = tag_sym2 then
@@ -215,11 +216,11 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
     end
   
   else if AAux.atomic_qualified_unqualified AAux.is_pointer ty1 then
-    let () = Debug.print_debug 2 [] (fun () ->
+    let () = Debug.debug (fun () ->
       "TODO: check the use of AAux.lvalue_conversion"
     ) in
     AAux.lvalue_conversion s ty1 >>= fun conv_ty1 ->
-    let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+    let () = Debug.debug (fun () ->
       "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromCtype_human no_qualifiers conv_ty1  ^
       " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
     match ((proj_ctype_ (unatomic ty1)), proj_ctype_ conv_ty1, gty2) with
@@ -230,8 +231,8 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
              conversion (since the lvalue conversion removes the qualifiers) *)
           if    AAux.are_compatible (no_qualifiers, conv_ref_ty1) (no_qualifiers, ref_ty2)
              && AAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 3") in (* DEBUG *)
-            let () = Debug.print_debug 2 [] (fun () ->
+            let _ = Debug.debug (fun () -> "[well_typed_assignment] OK: bullet 3") in (* DEBUG *)
+            let () = Debug.debug (fun () ->
               (* TODO !!!! *)
               "FIXME: sub_qualifiers sees the wrong qualifiers (GenTypeCategory RValue seems to be at fault) !!!!"
             ) in
@@ -240,15 +241,15 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           else if (   (AAux.is_object conv_ref_ty1 && AAux.is_void   ref_ty2)
                    || (AAux.is_void   conv_ref_ty1 && AAux.is_object ref_ty2) ) &&
                   AAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 4") in (* DEBUG *)
+            let _ = Debug.debug (fun () -> "[well_typed_assignment] OK: bullet 4") in (* DEBUG *)
             E.add "§6.5.16.1#1, bullet 4"
           
           else if is_null_pointer_constant e2 then
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 5") in (* DEBUG *)
+            let _ = Debug.debug (fun () -> "[well_typed_assignment] OK: bullet 5") in (* DEBUG *)
             E.add "§6.5.16.1#1, bullet 5"
           
           else
-            let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+            let () = Debug.debug (fun () ->
               "[well_typed_assignment] KO: is_pointer ty1 && gty2 ==> (ref_qs1, conv_ref_ty1)= " ^
               Pp.stringFromCtype_human ref_qs1 conv_ref_ty1 ^ ", (ref_qs2, ref_ty2)= " ^
               Pp.stringFromCtype_human ref_qs2 ref_ty2
@@ -285,7 +286,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           throw IncompatibleType
     end
   else
-    let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] KO: the end") in (* DEBUG *)
+    let _ = Debug.debug (fun () -> "[well_typed_assignment] KO: the end") in (* DEBUG *)
     throw IncompatibleType
 
 
@@ -663,7 +664,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
               E.constraint_violation (with_cursor_from (locOf e) loc) (UnaryAddressNotRvalue gty)
           | GenLValueType qs ty isRegister ->
               (* e is an 'lvalue' *)
-              let () = Debug.warn [Debug.DB_ail_typing]
+              let () = Debug.debug
                  (fun () -> "(TODO) GenTyping.annotate_expression AilEunary Address, not checking for bit-field member") in
               if isRegister then
                 E.constraint_violation (with_cursor_from (locOf e) loc) UnaryAddressRegisterLvalue
@@ -727,7 +728,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         E.mapM (maybe (E.return Nothing) (fun e ->
           if AilTypesAux.is_array elem_ty then
             annotate_rvalue e >>= fun (e', gty) ->
-            let () = Debug.warn [] (fun () ->
+            let () = Debug.debug (fun () ->
               "TODO!!! Ail's typing is not properly checking AilEarray when elem_ty is an array type"
             ) in
             E.return (Just e')
@@ -864,12 +865,12 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEident sym ->
         match (List.lookup sym gamm, List.lookup sym sigm.declarations) with
           | (Just ((_, _, isRegister), _, qs, ty), Nothing) ->
-              let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.debug (fun () ->
                 "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromCtype_human qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (_, _, Decl_object (_, isRegister) _ qs ty)) ->
-              let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.debug (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromCtype_human qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
@@ -1521,7 +1522,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEsizeof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
     
     | AilEsizeof_expr e ->
-        let () = Debug.warn [Debug.DB_ail_typing]
+        let () = Debug.debug
           (fun () -> "(TODO) GenTyping.annotate_expression AilEsizeof_expr, not checking for bit-field member") in
         (* because we are dealing with the operand of sizeof(), we do not call
            any of the conversion/decay functions (see §6.3.2.1#2-4) *)
@@ -1817,7 +1818,7 @@ and perform_decays sigm ctx a_expr =
   end in
   match annotations a_expr with
     | (std_annots, GenLValueType qs ty isRegister) ->
-        let () = Debug.print_debug 2 [] (fun () ->
+        let () = Debug.debug (fun () ->
           "GenLValueType ==>" ^ Pp.stringFromCtype_human qs ty
         ) in
         if    not (AAux.is_array ty)
@@ -1844,7 +1845,7 @@ and perform_decays sigm ctx a_expr =
             (* TODO: qualifiers?? *)
             let () = begin
               if not (AAux.is_unqualified qs) then
-                Debug.warn [Debug.DB_ail_typing] (fun () -> "(UNSURE) GenTyping.array_decay, qs <> {}")
+                Debug.debug (fun () -> "(UNSURE) GenTyping.array_decay, qs <> {}")
               else
                 ()
             end in
@@ -1928,7 +1929,7 @@ and annotate_arguments_aux add_casts annotate_block sigm gamm n_args n_params lo
   let annotate_arguments_aux = annotate_arguments_aux add_casts annotate_block sigm gamm n_args n_params loc is_variadic in
   match (args, params) with
     | ([], []) ->
-        let () = Debug.print_debug 2 [] (fun () ->
+        let () = Debug.debug (fun () ->
           "WTF []"
         ) in
         E.return []
@@ -2094,7 +2095,7 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
         else
           CTXother in
       annotate_expression annotate_block sigm gamm ctx e >>= fun a_e ->
-        let () = Debug.warn [Debug.DB_ail_typing]
+        let () = Debug.debug
           (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
       match (ty, GenTypes.genTypeCategoryOf a_e) with
         | (Ctype _ (Array elem_ty1 Nothing), GenRValueType (GenArray elem_ty2 (Just n))) ->
@@ -2126,10 +2127,10 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                     Pp.stringFromCtype_human no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
             else
-              let () = Debug.print_debug 0 [] (fun () ->
+              let () = Debug.debug (fun () ->
                 "a_e: " ^ Pp.stringFromAil_expression a_e
               ) in
-              let () = Debug.print_debug 0 [] (fun () ->
+              let () = Debug.debug (fun () ->
                 "ty: " ^ Pp.stringFromCtype_human no_qualifiers ty ^ " <--> gty: " ^
                 match GenTypes.genTypeCategoryOf a_e with
                   | GenLValueType qs' ty' _ ->
@@ -2343,7 +2344,7 @@ let annotate_sigma sigm =
     match List.lookup ident sigm.declarations with
       | Just (_, _, Decl_function hasProto (ret_qs, ret_ty) params _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
           (* TODO: qualifiers *)
-          let () = Debug.warn [] (fun () ->
+          let () = Debug.debug (fun () ->
             "(unsure) annotate_sigma doesn't look at [ret_qs]"
            ) in
           let bindings = List.map (fun (ident, (qs, ty, isRegister)) ->

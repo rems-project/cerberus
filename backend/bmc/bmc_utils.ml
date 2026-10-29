@@ -247,9 +247,6 @@ let cartesian_product (xs: 'a list) (ys: 'b list) : ('a * 'b) list =
   ) [] xs
 
 (* ========== Debug ========== *)
-let debug_print level str =
-  Cerb_debug.print_debug level [] (fun () -> str)
-
 let dprintf = Printf.printf
 
 let bmc_debug_print level str =

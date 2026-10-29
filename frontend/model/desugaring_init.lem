@@ -5,6 +5,9 @@ open import Cabs_to_ail_aux
 import Cabs_to_ail_effect
 import AilTypesAux Constraint
 
+import Debug
+
+
 type init_cursor_kind =
   | Init_array of integer(* current index*) * maybe integer(* size (nothing if we are dealing with a top-level unknown sized array) *)
   | Init_struct of Symbol.sym * list (Symbol.identifier * ctype) * Symbol.identifier * list (Symbol.identifier * ctype)
@@ -568,7 +571,7 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ _ isAnonymous xs _) ->
               let () = if isAnonymous then
-                Debug.print_debug 2 [] (fun () ->
+                Debug.debug (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
                 )
               else () in
@@ -584,11 +587,11 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
-                Debug.print_debug 2 [] (fun () ->
+                Debug.debug (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
                 )
               else () in
-              let () = Debug.print_debug 0 [] (fun () ->
+              let () = Debug.debug (fun () ->
                 "constructValue_aux: is WRONG for union ==> always assigning the first member"
               ) in
               wrap_expr begin

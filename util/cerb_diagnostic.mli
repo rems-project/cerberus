@@ -21,4 +21,4 @@ val fatal: ?code:int -> string -> 'a
 
 (* if the always is true or the debug level is >1, prints the msg
  * prefixed by "warning:" *)
-val warn: ?always:bool -> Cerb_debug.domain list -> (unit -> string) -> unit
+val warn: (unit -> string) -> unit

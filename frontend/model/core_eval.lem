@@ -8,6 +8,9 @@ import AilTypesAux
 import Loc Symbol Exception_undefined Pp
 
 import Ctype Ctype_aux Core_aux
+import Debug
+
+
 module Caux = Core_aux
 
 module EU  = Exception_undefined
@@ -118,7 +121,7 @@ let mk_call_catch_exceptional_condition ity iop ival1 ival2 =
 val call_function: Core.file core_run_annotation -> name -> list Core.value ->
                    Exception.exceptM Core.pexpr core_run_cause
 let call_function file f_nm arg_cvals =
-  let () = Debug.print_debug 5 [] (fun () ->
+  let () = Debug.debug (fun () ->
     "CALL_FUNCTION: " ^ Pp.stringFromCore_pexpr (Pexpr [] () (PEcall f_nm (List.map Caux.mk_value_pe arg_cvals)))
   ) in
   Exception.bind match f_nm with
@@ -905,10 +908,10 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Just (Vloaded (LVspecified (OVpointer pv))) ->
               let case_funptrval = function
                 | Just sym ->
-                    let () = Debug.print_debug 3 [] (fun () -> "function pointer: " ^ show sym) in
+                    let () = Debug.debug (fun () -> "function pointer: " ^ show sym) in
                     match Map.lookup sym file.funinfo with
                       | Just (_, _, ret, params, is_variadic, has_proto) ->
-                          let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
+                          let () = Debug.debug (fun () -> "function pointer (lookup): " ^ show sym) in
                           EU.return (PEval (Vtuple [Vctype ret;
                                                     Vlist BTy_ctype (List.map (fun (_, ty) -> Vctype ty) params);
                                                     if is_variadic then Vtrue else Vfalse;
@@ -1118,12 +1121,12 @@ val     eval_pexpr_aux2: Loc.t -> maybe Loc.t ->
                          Core.pexpr ->
                          EU.t (either Core.pexpr Core.value) core_run_cause
 let rec eval_pexpr_aux2 loc current_call_loc_opt core_extern env mem_st_opt file pe =
-  let () = Debug.print_debug 5 [] (fun () ->
+  let () = Debug.debug (fun () ->
     "ENTERING Core_eval.eval_pexpr_aux2 ==> " ^ Pp.stringFromCore_pexpr pe
   ) in
   match let pulled = pull_constrained 0 pe in
 
-  let () = Debug.print_debug 5 [] (fun () ->
+  let () = Debug.debug (fun () ->
     "pulled ==> " ^ Pp.stringFromCore_pexpr pulled
   ) in
   pulled

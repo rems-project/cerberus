@@ -783,7 +783,7 @@ let filter_external_decl =
 let filter_hidden =
   (* hidden declarations marked with the attribute [[cerb::hidden]] *)
   let is_hidden attrs =
-    if Cerb_debug.get_debug_level () < 4 then
+    if not !Cerb_pp_options.verbose then
       let open Cerb_attributes in
       match decode_hidden attrs with
         | CAttr_valid (_, cerb_attrs) ->

@@ -292,7 +292,7 @@ module CHERIMorello : Memory = struct
                        Eff (fun b -> ((if b then `SAT else `UNSAT), b))
 
                      let with_constraints _ cs (Eff ma) =
-                       Cerb_debug.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
+                       Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("HELLO: Concrete.with_constraints"));
                        let rec eval_cs = function
                          | MC_empty ->
                             true
@@ -957,27 +957,29 @@ module CHERIMorello : Memory = struct
   (* --- debugging --- *)
 
   let print_allocations str st =
-    Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%a" (fun ppf () ->
+    Format.fprintf ppf "BEGIN Allocation ==> %s\n" str;
     let l = ZMap.M.elements st.MM.allocations in
     List.iter (fun (aid,a) ->
-        Printf.fprintf stderr "@%s: 0x%s,%s (%s%s)\n"
+        Format.fprintf ppf "@@%s: 0x%s,%s (%s%s)\n"
           (Z.format "%d" aid)
           (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
           (if a.is_dynamic then "dynamic" else "static")
           (if a.is_dead then ", dead" else "")
       ) l;
-    prerr_endline "END Allocations"
+    Format.pp_print_string ppf "END Allocations") ())
 
   let print_bytemap str (st:MM.mem_state) =
-    Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%a" (fun ppf () ->
+    Format.fprintf ppf "BEGIN BYTEMAP ==> %s\n" str;
     let l = AMap.M.elements st.bytemap in
     List.iter (fun (addr, b) ->
-        Printf.fprintf stderr "@0x%s ==> %s\n"
+        Format.fprintf ppf "@@0x%s ==> %s\n"
           (Z.format "%x" addr)
           (match b with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
       ) l;
-    prerr_endline "END BYTEMAP"
+    Format.pp_print_string ppf "END BYTEMAP") ())
 
   let string_of_ghost_state (gs:CapabilitiesGS.coq_CapGhostState): string =
     let s = if gs.tag_unspecified then " notag" else "" in
@@ -985,32 +987,27 @@ module CHERIMorello : Memory = struct
 
   (** Prints provided capability tags table *)
   let print_captags str (st:MM.mem_state) =
-    Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%a" (fun ppf () ->
+    Format.fprintf ppf "BEGIN CAPTAGS ==> %s\n" str;
     let l = AMap.M.elements st.capmeta in
     List.iter (fun (addr, (b,gs)) ->
-        Printf.fprintf stderr "@0x%s ==> %s%s\n"
+        Format.fprintf ppf "@@0x%s ==> %s%s\n"
           (Z.format "%x" addr)
           (string_of_bool b)
           (string_of_ghost_state gs)
       ) l;
-    prerr_endline "END CAPTAGS"
+    Format.pp_print_string ppf "END CAPTAGS") ())
 
   (* lifting memM *)
 
   let lift_coq_memM ?(print_mem_state=true) label (m:'a MM.memM): 'a memM =
     ND (fun st ->
-        if !Cerb_debug.debug_level >= 2 then
-          Printf.fprintf stderr "MEMOP %s\n" label;
-        if print_mem_state then
-          if !Cerb_debug.debug_level >= 2 then
-          begin
-            print_allocations label st ;
-            if !Cerb_debug.debug_level >= 3 then
-              begin
-                print_bytemap label st ;
-                print_captags label st
-              end
-          end ;
+        Cerb_log_auto.debugf __FUNCTION__ (fun emit -> emit "MEMOP %s" label);
+        if print_mem_state then begin
+          print_allocations label st;
+          print_bytemap label st;
+          print_captags label st
+        end;
         match m st with
         | (st', Coq_inl e) ->
            let e' = fromCoq_memMError e in
@@ -1030,10 +1027,8 @@ module CHERIMorello : Memory = struct
         (init_opt: mem_value option): pointer_value memM
     =
     get >>= fun st ->
-    Cerb_debug.print_debug 1 []
-      (fun () -> "allocate_object. last_address=" ^
-                   (String_nat_big_num.string_of_hexadecimal (MM.last_address st))
-      );
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("allocate_object. last_address=" ^
+                   (String_nat_big_num.string_of_hexadecimal (MM.last_address st))));
     lift_coq_memM "allocate_object" (MM.allocate_object
                      (toCoq_thread_id tid)
                      (toCoq_Symbol_prefix pref)
@@ -1060,11 +1055,10 @@ module CHERIMorello : Memory = struct
                               align_int
                               size_int))
       (fun newptr ->
-        Cerb_debug.print_debug 1 []
-          (fun () -> "MEMOP_RET allocate_region " ^
+        Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("MEMOP_RET allocate_region " ^
                        "size=" ^ (Pp_utils.to_plain_string (pp_integer_value size_int)) ^
                          " = " ^
-                           Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false newptr));
+                           Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false newptr)));
         return newptr)
 
   let kill (loc:Cerb_location.t) (is_dyn:bool) (pv:pointer_value) : unit memM
@@ -1083,15 +1077,14 @@ module CHERIMorello : Memory = struct
     bind
       (lift_coq_memM label (MM.load (toCoq_location loc) (toCoq_ctype ty) p))
       (fun (fp,mval) ->
-        Cerb_debug.print_debug 4 []
-          (fun () -> "MEMOP_RET load =" ^ Pp_utils.to_plain_string (pp_mem_value mval));
+        Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("MEMOP_RET load =" ^ Pp_utils.to_plain_string (pp_mem_value mval)));
         return (fp,mval))
 
   let store (loc:Cerb_location.t) (ty:Ctype.ctype) (is_locking:bool) (p:pointer_value) (mval:mem_value): footprint memM
     =
     let label = "store "
                 ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false p)
-                ^ if !Cerb_debug.debug_level >= 4
+                ^ if !Cerb_pp_options.verbose
                   then (" value="^ Pp_utils.to_plain_string (pp_mem_value mval))
                   else ""
     in
@@ -1160,8 +1153,7 @@ module CHERIMorello : Memory = struct
      it requires some dependencies and fixpoint magic.  It OK to have
      in in OCaml for now *)
   let prefix_of_pointer tagDefs (pv:pointer_value) : string option memM =
-    if !Cerb_debug.debug_level >= 2 then
-      Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "MEMOP prefix_of_pointer");
     let open String_symbol in
     let rec aux addr (alloc:MM.allocation) = function
       | None
@@ -1417,12 +1409,9 @@ module CHERIMorello : Memory = struct
                      args)
     >>=
     (fun res ->
-        Cerb_debug.print_debug 4 []
-          (fun () ->
-            match res with
+        Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" (match res with
             | Some mval -> "MEMOP_RET call_intrinsic = Just " ^ Pp_utils.to_plain_string (pp_mem_value mval)
-            | None -> "MEMOP_RET call_intrinsic = None"
-          );
+            | None -> "MEMOP_RET call_intrinsic = None"));
         return res)
 
   let get_intrinsic_type_spec name =

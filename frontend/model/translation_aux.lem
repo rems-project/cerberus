@@ -3,6 +3,9 @@ import Symbol Core Core_aux Mem
 import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
 import Config Boot Map_extra
 
+import Debug
+
+
 module C    = Core
 module Caux = Core_aux
 
@@ -414,7 +417,7 @@ val warn_atomic_elaboration: bool -> elabM unit
 let warn_atomic_elaboration guard =
   let () =
     if guard then
-      Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
+      Debug.debug (fun () -> "TODO: elaboration is wrong for atomic types")
     else
       () in
   return ()

@@ -1,5 +1,8 @@
 open import Core
 
+import Debug
+
+
 val     sequentialise_expr: typed_expr unit -> typed_expr unit
 let rec sequentialise_expr (Expr annot expr_) =
   Expr annot match expr_ with
@@ -21,7 +24,7 @@ let rec sequentialise_expr (Expr annot expr_) =
     | Eproc _ _ _ ->
         expr_
     | Eunseq es ->
-        let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "Core_sequentialise ==> missed an unseq") in
+        let () = Debug.debug (fun () -> "Core_sequentialise ==> missed an unseq") in
         expr_
     | Ewseq (Pattern annot_ctor (CaseBase (Nothing, BTy_tuple bTys))) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (bTy, e) acc ->

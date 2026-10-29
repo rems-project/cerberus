@@ -1,75 +1,39 @@
+open import Pervasives
 import Loc
 
 declare {ocaml} rename module = Lem_debug
 
-type domain =
-  | DB_clexer
-  | DB_cparser
-  | DB_desugaring
-  | DB_ail_typing
-  | DB_elaboration
-  | DB_core_typing
-  | DB_core_dynamics
-  | DB_driver
-  | DB_concurrency
-  | DB_driver_step
-  | DB_memory
+(* Info/warning/error sources are explicit and created at module scope.
+   Debug sources use the enclosing OCaml function name on first use.
+   Proof backends erase both sources and logging operations. *)
+type src = | No_source
+declare ocaml target_rep type src = `Logs.src`
 
-declare ocaml target_rep type domain = `Cerb_debug.domain`
+val source : string -> src
+let ~{ocaml} source name = No_source
+declare ocaml target_rep function source name = `Logs.Src.create` name
 
-val get_level: unit -> nat
-declare ocaml target_rep function get_level   = `Cerb_debug.get_debug_level`
-declare hol   target_rep function get_level u = 0 (* TODO: HOL hack *)
+(* Only needed when the decision to log itself is expensive. *)
+val debug_enabled : unit -> bool
+let ~{ocaml} debug_enabled u = false
+declare ocaml target_rep function debug_enabled u = `Cerb_log_auto.debug_enabled` `__FUNCTION__`
 
+val debug : (unit -> string) -> unit
+let ~{ocaml} debug msg = ()
+declare ocaml target_rep function debug msg = `Cerb_log_auto.debug` `__FUNCTION__` msg
 
-val output_string: string -> unit
-declare ocaml target_rep function output_string = `Cerb_debug.output_string2`
-declare hol   target_rep function output_string = `util$output_string`
+val info : src -> (unit -> string) -> unit
+let ~{ocaml} info src msg = ()
+declare ocaml target_rep function info = `Cerb_log.info`
 
-val print_debug: nat -> list domain -> (unit -> string) -> unit
-declare ocaml target_rep function print_debug = `Cerb_debug.print_debug`
-declare hol   target_rep function print_debug = `util$print_debug`
+val warn : src -> (unit -> string) -> unit
+let ~{ocaml} warn src msg = ()
+declare ocaml target_rep function warn = `Cerb_log.warn`
 
-val print_debug_located: nat -> list domain -> Loc.t -> (unit -> string) -> unit
-declare ocaml target_rep function print_debug_located = `Cerb_debug.print_debug_located`
-declare hol   target_rep function print_debug_located =
-                                  `util$print_debug_located`
+val err : src -> (unit -> string) -> unit
+let ~{ocaml} err src msg = ()
+declare ocaml target_rep function err = `Cerb_log.err`
 
-val print_unsupported: string -> unit
-declare ocaml target_rep function print_unsupported = `Cerb_debug.print_unsupported`
-declare hol   target_rep function print_unsupported = `util$output_string`
-
-
-val warn: list domain -> (unit -> string) -> unit
-declare ocaml target_rep function warn = `Cerb_debug.warn`
-declare hol   target_rep function warn = `util$output_string`
-
-
-(*
-open import Pervasives 
-import Boot
-
-let _DEBUG level f k =
-  if level <= Boot.debug_level then
-    f k
-  else
-    k
-
-
-(* Used in [core_run.lem], print the collected continuation in a Core program *)
-let print_cont_map cont_map k =
-  Boot.print_debug "TODO[newLem]" k
-(*
-  (  "COLLECTED CONTINUATIONS:\n" ^
-  (List.fold_left (fun acc (f, ks) ->
-    "In function `" ^ Boot.pp_core_expr (Core.Esym f) ^ "': [" ^
-      (List.fold_left (fun acc k -> Boot.pp_core_expr (Core.Esym k) ^ ", " ^ acc) "" (List.map fst $ Pmap.bindings ks)) ^ "]\n" ^ acc
-   ) "" $ Pmap.bindings cont_map))
-  k
-*)
-
-*)
-
-
-(* val debug: forall 'a. string -> 'a *)
-
+val debug_located : Loc.t -> (unit -> string) -> unit
+let ~{ocaml} debug_located loc msg = ()
+declare ocaml target_rep function debug_located loc msg = `Cerb_log_auto.debug_located` `__FUNCTION__` loc msg
