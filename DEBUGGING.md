@@ -2,8 +2,9 @@
 
 Cerberus uses [Logs](https://erratique.ch/software/logs/doc/Logs/index.html#usage).
 Configure logging once in the executable, before starting translation-unit workers.
-Every translation unit shares that policy. Libraries only create named sources and
-emit messages; they do not install reporters or change levels.
+Every translation unit shares that policy. Libraries emit messages; the shared
+logging implementation manages automatic Debug sources. Libraries do not install
+reporters or change levels.
 
 ## Command line
 
@@ -59,18 +60,17 @@ Return or raise the actual error separately. Libraries should not use App or the
 default source. Follow Logs' lazy message convention in OCaml:
 
 ```ocaml
-let log_translate = Logs.Src.create "Translation.translate"
-
 let translate input =
-  Logs.debug ~src:log_translate (fun m -> m "input: %a" pp_input input);
+  Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "input: %a" pp_input input);
   (* ... *)
 ```
 
-Create explicit sources once at module scope. Place expensive computations
-inside the callback so disabled logging does not perform them. Native OCaml
-code can also use `Cerb_log_auto.debug __FUNCTION__ (fun () -> message)` for
-automatic Debug names; the ordinary Logs API remains available for formatted
-messages and explicit sources.
+Pass `__FUNCTION__` at each Debug call site. Both native OCaml and Lem-generated
+calls use the shared Saturn cache; no Debug source registration is needed.
+Place expensive computations inside the callback so disabled logging does not
+perform them. `debugf` accepts the usual Logs formatting callback, including
+`%a` printers, headers and tags. Info, Warning and Error messages use the ordinary
+Logs API with explicit sources created once at module scope.
 
 Lem uses a small, non-monadic adapter because its strings are not OCaml format
 strings:
@@ -82,9 +82,12 @@ let translate input =
 ```
 
 Lem has no `__FUNCTION__` identifier, but its OCaml target replacement inserts
-it at the call site. The source uses the extracted OCaml function name. The Dune
-`Cerb_frontend__` wrapper is removed, and nested or anonymous functions use the
-outer function name. Numeric suffixes remain significant: `fn0` and `fn` differ.
+it at the call site. Both paths use the enclosing OCaml function name. The Dune
+`Cerb_frontend__`, `Cerb_backend__` and `Dune__exe__` wrappers are removed, and
+nested or anonymous functions use the outer function name. Numeric suffixes
+remain significant: `fn0` and `fn` differ. For example, the native preprocessor
+message is selected by `Pipeline.cpp`, or by `Pipeline` along with the module's
+other functions.
 
 `Debug.info`, `Debug.warn` and `Debug.err` still take an explicit source created
 with `Debug.source`. `Debug.debug_located loc (fun () -> message)` formats the

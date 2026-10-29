@@ -93,6 +93,12 @@ let debug_enabled raw =
   let p = !policy in
   p.active && Option.is_some (source p raw)
 
+let debugf raw message =
+  let p = !policy in
+  if p.active then match source p raw with
+    | None -> ()
+    | Some src -> Logs.debug ~src message
+
 let debug raw message =
   let p = !policy in
   if p.active then match source p raw with

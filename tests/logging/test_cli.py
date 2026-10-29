@@ -34,7 +34,9 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
     assert listed.stderr == ""
     names = listed.stdout.splitlines()
     assert names == sorted(set(names))
-    assert "Pipeline" in names
+    assert "Pipeline.cpp" in names
+    assert "Pipeline.c_frontend" in names
+    assert "Pipeline.core_frontend" not in names
     assert "Cabs_to_ail.desugar_expression0" in names
     assert "Core_reduction.one_step_unseq_aux" not in names
     assert run("--list-debug-sources", "-q").stdout.splitlines() == names
@@ -50,6 +52,13 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
 
     rows = events(run("--debug=Cabs_to_ail", "--debug=Cabs_to_ail_effect", "--debug-format=json").stderr)
     assert {row["module"] for row in rows} == {"Cabs_to_ail", "Cabs_to_ail_effect"}
+    # Native OCaml functions use the same automatic selection as Lem exports.
+    rows = events(run("--debug=Pipeline.cpp", "--debug-format=json").stderr)
+    assert rows and all(r["source"] == "Pipeline.cpp" for r in rows)
+    assert rows[0]["message"] == "C preprocessor"
+    rows = events(run("--debug=Pipeline", "--debug-format=json").stderr)
+    assert {r["source"] for r in rows if r["level"] == "debug"} == {"Pipeline.cpp", "Pipeline.c_frontend"}
+    assert all(r["module"] == "Pipeline" for r in rows)
     info = events(run("-v", "--debug-format=json").stderr)
     assert info and {r["level"] for r in info} == {"info"}
     debug = events(run("-vv", "--debug-format=json").stderr)
@@ -81,11 +90,22 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
         assert "invalid debug selector" in run("--debug=" + invalid, success=False).stderr
     assert "debug-format" in run("--debug-format=bogus", success=False).stderr
     assert "debug output:" in run("--debug-output=" + str(directory / "missing/log"), success=False).stderr
+    source.write_text("int main(void) { int x = 3; int *p = &x; *p += 1; return x - 4; }\n")
+    execution_log = directory / "execution.jsonl"
+    run("--exec", "--debug=Driver_ocaml", "--debug=Smt2.runND",
+        "--debug=Impl_mem", "--debug=Impl_mem.Concrete", "--debug-format=json",
+        "--debug-output=" + str(execution_log))
+    rows = events(execution_log.read_text())
+    sources = {r["source"] for r in rows}
+    assert "Driver_ocaml.drive" in sources and "Smt2.runND" in sources
+    assert "Impl_mem.Concrete.load" in sources or "Impl_mem.repr" in sources
+    execution_names = run("--exec", "--list-debug-sources", "-q").stdout.splitlines()
+    assert sources <= set(execution_names)
     source.write_text("int main(void) { return missing_identifier; }\n")
     failure = run("-q", success=False)
     assert failure.stderr  # Quiet logging cannot hide or swallow compiler errors.
     partial = run("--list-debug-sources", "-q", success=False)
-    assert partial.stderr and "Pipeline" in partial.stdout.splitlines()
+    assert partial.stderr and "Pipeline.c_frontend" in partial.stdout.splitlines()
     assert not (directory / "cerb.prof").exists()
     assert not (directory / "cerb_times.csv").exists()
 print("CLI logging tests passed")

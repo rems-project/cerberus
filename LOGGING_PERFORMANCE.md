@@ -2,7 +2,56 @@
 
 Measured 2026-10-29 with native OCaml 5.2.1, Logs 0.10.0 and Saturn 1.0.0, on a Linux amd64 development host. Release builds were pinned to one allowed CPU. The numeric baseline is `ae70925fc`, still the upstream master head when checked. The pre-registered Logs version is the previous PR head `de9683d32`. The Saturn column measures the implementation in this PR, including cached options and the corrected late-source prefix cache.
 
-The measured production sources match commit `ff948c3dc`; the following commit adds documentation and benchmark tooling.
+The measured production sources match commit `ff948c3dc`; the following commit adds documentation and benchmark tooling. These measurements predate the migration of native OCaml Debug call sites to `__FUNCTION__` and the shared cache: at that revision, Lem-generated calls used the cache while native OCaml calls still used pre-registered sources. The figures below are historical measurements of that revision, including its trace address counts, rather than measurements of the updated call sites.
+
+## Native OCaml call-site follow-up
+
+The native migration uses `Cerb_log_auto.debugf __FUNCTION__` and removes
+Debug-only source declarations. A follow-up on the same host compares numeric
+master `ae70925fc`, the previous PR head `1ef0b82d5`, and the migrated code. Each
+case has 18 fresh-process rounds, cycling through all six orders of the three
+binaries, pinned to one CPU with no concurrent builds or tests. Text goes to
+`/dev/null`. The enabled rows use the same level-2-style profile as below.
+
+| Input / policy | Master ms | Before native migration | After native migration |
+|---|---:|---:|---:|
+| libc string / enabled | 64.79 | 101.4% | 100.4% |
+| 256 generated functions / enabled | 166.78 | 108.9% | 106.0% |
+| vfscanf ×28 / enabled | 801.38 | 113.3% | 111.4% |
+| 256 functions / unmatched selector | 128.27 | 102.3% | 100.4% |
+| 256 functions / logging off | 131.64 | 102.4% | 100.1% |
+
+These checks show no added slowdown relative to the previous PR binary. The
+median paired changes after migration are −1.4%, −2.8%, −1.2%, −1.3% and −1.0%,
+respectively; nominal 95% bootstrap intervals are [−2.3%, +1.1%],
+[−4.1%, −2.1%], [−2.6%, −0.2%], [−2.8%, −0.2%] and [−3.0%, +0.6%]. These
+compare whole binaries and do not isolate the cost of the new adapter or
+establish a general speedup. The logging-off result remains consistent with
+equality. Fixed was not rerun in this follow-up, so it does not update the
+crossover estimate.
+
+The updated microbenchmark also compares direct Logs calls with the OCaml
+adapter using identical `%d` messages and source names. Medians of five samples
+(20 million disabled calls or 100,000 enabled messages per sample):
+
+| Path | Direct Logs ns/call | Cached OCaml adapter ns/call |
+|---|---:|---:|
+| Globally disabled | 4.130 | 2.351 |
+| Enabled text | 823.140 | 842.099 |
+| Enabled JSON | 1501.970 | 1518.161 |
+
+Globally disabled calls skip lookup. Their measured allocation is 48 versus
+32 bytes/call, including the capturing callback. Enabled allocations agree
+between the two paths: about 2,576 bytes/call for text and 3,968 for JSON.
+These formatted-integer controls differ from the Lem adapter's
+`string_of_int` plus `%s` path; comparing those directly would also measure
+the different formatting work.
+
+Ordered JSON events agree before and after on all three enabled inputs after
+normalizing the two new `Pipeline.cpp` / `Pipeline.c_frontend` names to the
+previous `Pipeline` source. Source discovery and execution-path tests also
+cover native driver and memory-model calls. All measurements in the remaining
+sections refer to the earlier revision identified above.
 
 ## Fresh command-line invocations
 

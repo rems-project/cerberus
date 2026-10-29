@@ -4,10 +4,6 @@ open Core
 
 open Apron
 
-let log_debug = Logs.Src.create "Absint.debug"
-
-let debug msg = Logs.debug ~src:log_debug (fun m -> m "%s" (msg))
-
 let empty_env = Environment.make [||] [||]
 
 type abspointer =
@@ -244,7 +240,7 @@ let rec absvalue_of_texpr ~with_sym core man = function
       | Vfalse ->
         return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int 0))
       | v ->
-        debug @@ String_core.string_of_value v;
+        Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" (String_core.string_of_value v));
         assert false
     end
   | TEcall (Sym (Symbol.Symbol (_, _, SD_Id "catch_exceptional_condition")), [_; te])
@@ -344,7 +340,7 @@ let rec absvalue_of_texpr ~with_sym core man = function
     get_env () >>= fun env ->
     return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int 1))
   | te ->
-    debug @@ show_texpr te;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" (show_texpr te));
     assert false
 
 and absvalue_of_action ~with_sym core man = function
@@ -394,7 +390,7 @@ and absvalue_of_action ~with_sym core man = function
         assert false
     end
   | TAload te_p ->
-    debug "taload";
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "taload");
     absvalue_of_texpr ~with_sym core man te_p >>= fun av_p ->
     get >>= begin fun s ->
         match av_p with
@@ -408,7 +404,7 @@ and absvalue_of_action ~with_sym core man = function
               let var = Var.of_string ("@" ^ string_of_int p) in
               return @@ ATexpr (Texpr1.var env var)
             | Some (ATsym sym) ->
-              debug (show_abs_term s);
+              Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" (show_abs_term s));
               flush_all ();
               assert false;
               aux sym
@@ -422,7 +418,7 @@ and absvalue_of_action ~with_sym core man = function
         | _ ->
           assert false
     end >>= fun t ->
-    debug "taload done";
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "taload done");
     return t
   | TAkill p ->
     (* TODO *)
@@ -446,10 +442,10 @@ let rec match_pattern pat te =
 let assign core man pat te =
   let rec aux v = function
     | Pattern (_, CaseBase (None, _)) ->
-      debug "assign aux: 1";
+      Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "assign aux: 1");
       return ()
     | Pattern (_, CaseBase (Some sym, _)) ->
-      debug "assign aux: 2";
+      Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "assign aux: 2");
       begin match v with
         | ATexpr e ->
           add_env man sym e
@@ -461,10 +457,10 @@ let assign core man pat te =
           )
       end
     | Pattern (_, CaseCtor (Cspecified, [pat])) ->
-      debug "assign aux: 3";
+      Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "assign aux: 3");
       aux v pat
     | Pattern (_, CaseCtor (Ctuple, pats)) ->
-      debug "assign aux: 4";
+      Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "assign aux: 4");
       begin match v with
         | ATtuple es ->
           List.fold_left (fun acc (e, pat) ->
@@ -480,7 +476,7 @@ let assign core man pat te =
   | TEundef _ -> update (fun _ -> top man)
   | _ ->
     absvalue_of_texpr ~with_sym:false core man te >>= fun v ->
-    debug "after absvalue";
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "after absvalue");
     aux v pat
 
 (* TODO: type *)
@@ -616,7 +612,7 @@ let rec guard core man g st = function
     (*
     begin match SMap.find_opt x st.abs_term with
       | Some ATtrue ->
-        debug @@ "SYMBOL: " ^ Sym.show x;
+        Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "SYMBOL: %s" (Sym.show x));
         (* TODO: THIS IS WRONG *)
         (* FIXME: I need to create a 4 elements lattice for booleans *)
         (false, st)
@@ -634,13 +630,13 @@ let rec guard core man g st = function
   | Cval Vfalse ->
     (false, st)
   | Cval v ->
-    debug @@ String_core.string_of_value v;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" (String_core.string_of_value v));
     assert false
   | Care_compatible (te1, te2) ->
     (* TODO *)
     (true, st)
   | c ->
-    debug @@ show_cond c;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" (show_cond c));
     assert false
 
 let apply core man g e st =
@@ -673,7 +669,7 @@ let apply core man g e st =
     print_endline "TODO: call";
     st
   | Tassign (pat, te) ->
-    debug "assign";
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "assign");
     let s = snd @@ run (assign core man pat te) st in
     (if SMap.is_empty s.abs_term then print_endline "empty" else
        print_endline "non_empty");

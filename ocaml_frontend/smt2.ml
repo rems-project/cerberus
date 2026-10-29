@@ -2,8 +2,6 @@ open Nondeterminism
 open Memory_model
 open Config
 
-let log_runND = Logs.Src.create "Smt2.runND"
-
 let pad = ref 0
 
 let prerr str = () (* prerr_endline (String.make !pad ' ' ^ str) *)
@@ -12,7 +10,7 @@ let do_red str= "\x1b[31m" ^ str ^ "\x1b[0m"
 
 let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st) ndM) (st0: 'st) =
   prerr "ENTERING runND";
-  Logs.debug ~src:log_runND (fun m -> m "%s" ("HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
+  Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
       | Exhaustive ->
           "exhaustive"
       | Random ->

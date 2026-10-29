@@ -10,6 +10,8 @@ let count_sources () = List.length (Logs.Src.list ())
 let names () =
   let canonical = Cerb_log_names.canonical in
   check (canonical "Cerb_frontend__M.N.fn0.(fun)" = "M.N.fn0") "wrapper and closure";
+  check (canonical "Cerb_backend__Pipeline.cpp" = "Pipeline.cpp") "backend wrapper";
+  check (canonical "Dune__exe__Absint.assign.aux" = "Absint.assign") "executable wrapper";
   check (canonical "M.fn0.local" = "M.fn0") "nested function";
   check (canonical "M.fn" <> canonical "M.fn0") "digits are significant";
   List.iter (fun s -> rejects (fun () -> canonical s)) [""; "M"; "M."; "M..fn"; "M._"; "fn"];
@@ -29,6 +31,50 @@ let warm_allocation raw =
   for _ = 1 to 100_000 do ignore (Cerb_log_auto.debug_enabled raw) done;
   let allocated = Gc.allocated_bytes () -. before in
   check (allocated < 1024.) "cached decisions allocated on hits"
+
+let formatted callback =
+  Cerb_log_auto.debugf __FUNCTION__ (fun m ->
+    callback ();
+    m ~header:"native"
+      ~tags:Logs.Tag.(add Cerb_log.location_tag "input.c:7" empty)
+      "value: %a" Format.pp_print_int 7)
+
+let other_formatted callback =
+  Cerb_log_auto.debugf __FUNCTION__ (fun m -> callback (); m "other")
+
+let native_formatted () =
+  let before = count_sources () in
+  Cerb_log_auto.configure ~discover:true None [];
+  formatted never;
+  check (count_sources () = before) "native discovery registered a source";
+  check (List.mem "Test_lookup.formatted" (Cerb_log_auto.sources ()))
+    "native function name missing from discovery";
+  check (not (List.mem "Test_lookup.other_formatted" (Cerb_log_auto.sources ())))
+    "unvisited native function discovered";
+  let events = ref [] in
+  let previous = Logs.reporter () in
+  Logs.set_reporter {Logs.report = fun src level ~over k msgf ->
+    msgf (fun ?header ?tags fmt -> Format.kasprintf (fun message ->
+      events := (Logs.Src.name src, level, header, tags, message) :: !events;
+      over (); k ()) fmt)};
+  Fun.protect ~finally:(fun () -> Logs.set_reporter previous) (fun () ->
+    configure ["Test_lookup.formatted"];
+    let callbacks = ref 0 in
+    for _ = 1 to 2 do formatted (fun () -> incr callbacks) done;
+    other_formatted never;
+    check (!callbacks = 2 && List.length !events = 2) "native callback count";
+    check (count_sources () = before + 1) "native source not shared on repeat call";
+    List.iter (function
+      | ("Test_lookup.formatted", Logs.Debug, Some "native", Some tags, "value: 7") ->
+          check (Logs.Tag.get Cerb_log.location_tag tags = "input.c:7") "native tag"
+      | _ -> failwith "native source, format or metadata changed") !events;
+    configure ["Test_lookup"];
+    other_formatted (fun () -> ());
+    check (List.length !events = 3) "native module selection";
+    configure ["Missing.fn"];
+    formatted never;
+    Cerb_log_auto.configure None [];
+    formatted never)
 
 let () =
   names ();
@@ -91,4 +137,5 @@ let () =
   Cerb_log_auto.debug "Discovery.not_recorded" never;
   check (not (List.mem "Discovery.not_recorded" (Cerb_log_auto.sources ())))
     "inactive logging performed discovery";
+  native_formatted ();
   print_endline "Static lookup: matching, lazy cached options, GC, concurrent first use and reconfiguration passed"

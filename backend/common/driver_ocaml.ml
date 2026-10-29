@@ -1,7 +1,5 @@
 open Cerb_frontend
 
-let log_drive = Logs.Src.create "Driver_ocaml.drive"
-
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
 
@@ -10,7 +8,6 @@ let isActive = function
   | _ -> false
 
 type execution_result = (Core.value list, Errors.error) Result.t
-
 
 let string_of_driver_error = function
   | Driver.DErr_core_run err ->
@@ -210,7 +207,7 @@ let drive ~conf file args fs_state : execution_result =
       (Driver.drive conf.Config.concurrency file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
-  Logs.debug ~src:log_drive (fun m -> m "%s" (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives)));
+  Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives)));
   if n_actives = 0 && (n_execs - n_actives) = 0 then begin
     print_endline Cerb_colour.(ansi_format [Red]
       (Printf.sprintf "FOUND NO ACTIVE EXECUTION (with %d killed)\n" (n_execs - n_actives))
@@ -256,7 +253,7 @@ else
           if true (* not (List.mem str_v_ !ky) *) then (
             (print_string dres.Driver.dres_stdout; prerr_string dres.Driver.dres_stderr; flush_all());
             
-            Logs.debug ~src:log_drive (fun m -> m "%s" ((*              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^*)
+            Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ((*              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^*)
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" dres.Driver.dres_stdout ^
               Printf.sprintf "driver steps: %d\n" dres.Driver.dres_driver_steps (* ^ 
               Printf.sprintf "BEGIN LOG\n%s\nEND LOG" (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log)))) *)
@@ -272,7 +269,7 @@ else
             ky := str_v_ :: !ky;
             ret := dres.Driver.dres_core_value :: !ret;
         ) else
-          Logs.debug ~src:log_drive (fun m -> m "%s" ("SKIPPING: " ^ if dres.Driver.dres_blocked then "(blocked)" else "" ^
+          Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("SKIPPING: " ^ if dres.Driver.dres_blocked then "(blocked)" else "" ^
             "eqs= " ^ "Pp_cmm.pp_old_constraints st.ND.eqs"));
         if conf.Config.fs_dump then begin
           print_endline "File System:";

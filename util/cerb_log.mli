@@ -1,4 +1,5 @@
-(** Non-monadic Lem adapters. OCaml callers should use [Logs] directly. *)
+(** Non-monadic Lem adapters for explicit sources. OCaml Debug call sites use
+    [Cerb_log_auto.debugf] with [__FUNCTION__]; other levels use [Logs] directly. *)
 val info : Logs.src -> (unit -> string) -> unit
 val warn : Logs.src -> (unit -> string) -> unit
 val err : Logs.src -> (unit -> string) -> unit

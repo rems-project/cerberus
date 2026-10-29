@@ -9,8 +9,6 @@ open Cerb_colour
 
 open Cerb_pp_prelude
 
-let log_pp_pexpr = Logs.Src.create "Pp_core.pp_pexpr"
-
 module type CONFIG =
 sig
   val show_std: bool
@@ -456,7 +454,7 @@ let pp_pexpr pe =
           pp_impl iCst
       | PEctor (Cnil bTy, pes) ->
           if not (pes <> []) then
-            Logs.debug ~src:log_pp_pexpr (fun m -> m "%s" ("Pp_core found a Cnil with pes <> []"));
+            Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("Pp_core found a Cnil with pes <> []"));
           P.brackets P.empty ^^ P.colon ^^^ pp_core_base_type bTy
       | PEctor (Ccons, pes) ->
           let to_list =

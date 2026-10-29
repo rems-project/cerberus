@@ -4,7 +4,6 @@ open List
 open Cerb_pp_prelude
 open PPrint
 
-let log_should_be_inlined = Logs.Src.create "Milicore_label_inline.should_be_inlined"
 let log_inline_label = Logs.Src.create "Milicore_label_inline.inline_label"
 
 let inline_label run_annots (label_loc, l_annot, label_sym, label_arg_syms_bts, label_body) args =
@@ -70,7 +69,7 @@ let rewrite_expr label expr =
 
 (* todo: ensure CN does not loop when inlining *)
 let should_be_inlined label_name annots = 
-  let warn lk = Logs.debug ~src:log_should_be_inlined (fun m -> m "%s" ("inlining "^lk^" label")) in
+  let warn lk = Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("inlining "^lk^" label")) in
   let label_annot = Option.get (Annot.get_label_annot annots) in
   match label_annot with
   | LAloop_break _ -> true

@@ -1,10 +1,6 @@
 open Pgraph
 open Nested_list
 
-let log_debug = Logs.Src.create "Fixpoint.debug"
-
-let debug msg = Logs.debug ~src:log_debug (fun m -> m "%s" (msg))
-
 module type FIXPOINT = sig
   type 'a absstate
 
@@ -84,8 +80,8 @@ struct
           Pset.add v s
         ) st.workset @@ Pgraph.succ v0 st.graph
     in
-    debug @@ "New work set: " ^ String.concat ", "
-      @@ List.map string_of_int @@ Pset.elements workset;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "New work set: %s"
+      (String.concat ", " (List.map string_of_int (Pset.elements workset))));
     { st with workset; }
 
   let remove_workset v =
@@ -164,7 +160,7 @@ struct
       return @@ st.opers.join_list v lpost
 
   let widening v old_abs =
-    debug ("Widening v" ^ string_of_int v);
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Widening v%d" v);
     abstract_of_vertex v >>= fun new_abs ->
     get >>= fun st ->
     update_vertex v @@
@@ -191,7 +187,7 @@ struct
     remove_workset n.vertex >>
     init_post_list n.vertex >>= fun lpost0 ->
     List.fold_left (fun lpostM (e, v) ->
-        debug ("Propagating edge" ^ string_of_int e ^ " to v" ^ string_of_int v);
+        Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Propagating edge%d to v%d" e v);
         lpostM >>= fun lpost ->
         attr_of_edge e >>= fun coming_from_bot ->
         is_bottom_vertex v >>= fun is_bot ->
@@ -239,7 +235,7 @@ struct
     in loop (false, 0)
 
   let descend stgy =
-    debug "Descending...";
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Descending...");
     widening_descend () >>= fun wd ->
     checkM (return (wd > 0)) begin fun () ->
       get_workset () >>= fun old_ws ->
@@ -260,7 +256,7 @@ struct
 
   (* Run strategy point. *)
   let run_point ~widen p =
-    debug ("Processing v: " ^ string_of_int p.vertex);
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Processing v: %d" p.vertex);
     attr_of_vertex p.vertex >>= fun old_attr ->
     propagate ~descend:false p >>
     checkM (is_growing p.vertex old_attr) begin fun () ->
@@ -345,7 +341,7 @@ struct
    * Francois Bourdoncle (1993) *)
   let init_strategy g v0 =
     let wto = Pgraph.wto g v0 in
-    debug @@ "Strategy: " ^ Nested_list.string_of_nested_list string_of_int wto;
+    Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Strategy: %s" (Nested_list.string_of_nested_list string_of_int wto));
     let init_vertex widen vertex =
       { vertex; edges = Pgraph.pred vertex g; widen }
     in

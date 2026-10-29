@@ -3,10 +3,7 @@ open Cerb_diagnostic
 
 (* Pipeline *)
 
-let log_whenM = Logs.Src.create "Pipeline.whenM"
-
 let log_pass_message = Logs.Src.create "Pipeline.pass_message"
-let log_pipeline = Logs.Src.create "Pipeline"
 
 let ( let* )   = Result.bind
 let ( >>= )    = Result.bind
@@ -103,7 +100,7 @@ let (default_io_helpers, get_progress) =
   }, fun () -> !progress
 
 let cpp (conf, io) ~filename =
-  let () = Logs.debug ~src:log_pipeline (fun m -> m "C preprocessor") in
+  let () = Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "C preprocessor") in
   Unix.handle_unix_error begin fun () ->
     let (out_read, out_write) = Unix.pipe () in
     Unix.set_close_on_exec out_read;
@@ -173,7 +170,7 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
       fun () -> io.run_pp None (Pp_cabs.pp_translation_unit true true cabs_tunit)
     end in
     let* () = whenM (List.mem Cabs pipeline_conf.pprints) begin
-      fun () -> Logs.debug ~src:log_pipeline (fun m -> m "Cabs pretty-printing is not yet supported"); Result.ok ()
+      fun () -> Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Cabs pretty-printing is not yet supported"); Result.ok ()
     end in
     Result.ok cabs_tunit in
   (* -- *)
@@ -231,7 +228,7 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     end in
     Result.ok ailtau_prog in
   (* -- *)
-  let () = Logs.debug ~src:log_pipeline (fun m -> m "Using the C frontend") in
+  let () = Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Using the C frontend") in
   let* file_content = cpp (pipeline_conf, io) ~filename in
   let* cabs_tunit = parse filename file_content in
   let* markers_env, ail_prog = desugar cabs_tunit in
@@ -252,7 +249,7 @@ let c_frontend_and_elaboration
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Cerb_fresh.set_digest filename;
-  let () = Logs.debug ~src:log_pipeline (fun m -> m "Using the Core frontend") in
+  let () = Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "Using the Core frontend") in
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
         Result.ok {
@@ -558,10 +555,10 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
                 0
           end)
       | (cval :: _) ->
-          let () = Logs.debug ~src:log_pipeline (fun m -> m "%s" ((fun () -> "HELLO> " ^ String_core.string_of_value cval) ())) in
+          let () = Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ((fun () -> "HELLO> " ^ String_core.string_of_value cval) ())) in
           Result.ok (Either.Right 0)
       | [] ->
-          let () = Logs.debug ~src:log_pipeline (fun m -> m "%s" ((fun () -> "BACKEND FOUND EMPTY RESULT") ())) in
+          let () = Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ((fun () -> "BACKEND FOUND EMPTY RESULT") ())) in
           Result.ok (Either.Right 0)
 
 (* NOTE: Every map needs to be serialised as associated lists, since marshalling

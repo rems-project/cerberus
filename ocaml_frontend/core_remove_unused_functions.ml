@@ -1,15 +1,6 @@
 open Core_rewriter
 open Core
 
-
-
-let log_debug_print = Logs.Src.create "Core_remove_unused_functions.debug_print"
-
-let debug_print pp =
-  Logs.debug ~src:log_debug_print (fun m -> m "%s" (pp ()))
-
-
-
 module type S = sig 
   type t 
 end
@@ -506,7 +497,7 @@ let remove_unused_functions remove_funinfo_entries file =
 
 
   (* let _ = 
-   *   debug_print (fun () ->
+   *   Cerb_log_auto.debug __FUNCTION__ (fun () ->
    *       "keep: " ^
    *       DefSet.fold (fun i pp ->
    *           pp ^ Def.pp i ^ ", "
@@ -515,7 +506,7 @@ let remove_unused_functions remove_funinfo_entries file =
    * in
    * 
    * let _ = 
-   *   debug_print (fun () ->
+   *   Cerb_log_auto.debug __FUNCTION__ (fun () ->
    *       "deps: " ^
    *       DefRel.fold (fun (i1,i2) pp ->
    *           pp ^ Def.pp i1 ^ " -> " ^ Def.pp i2 ^ ", "
@@ -531,7 +522,7 @@ let remove_unused_functions remove_funinfo_entries file =
 
 
   (* let _ = 
-   *   debug_print (fun () ->
+   *   Cerb_log_auto.debug __FUNCTION__ (fun () ->
    *       "final keep: " ^
    *       DefSet.fold (fun i pp ->
    *           pp ^ Def.pp i ^ ", "

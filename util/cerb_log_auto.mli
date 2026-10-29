@@ -22,5 +22,10 @@ val sources : unit -> string list
 val debug_enabled : string -> bool
 (** Only needed before an expensive condition for logging. Ordinary message
     construction belongs in the callback below. *)
+val debugf : string -> 'a Logs.log
+(** OCaml call sites use [debugf __FUNCTION__ (fun m -> m "value: %a" pp v)].
+    Selection uses the same cache as [debug]. The callback, including format
+    arguments, printers and tags, is evaluated only when enabled. *)
 val debug : string -> (unit -> string) -> unit
+(** String-thunk adapter for Lem's OCaml export. *)
 val debug_located : string -> Cerb_location.t -> (unit -> string) -> unit

@@ -19,10 +19,11 @@ let valid_selector name =
   | [] -> false
 
 let canonical raw =
-  let wrapper = "Cerb_frontend__" in
-  let name = if String.starts_with ~prefix:wrapper raw then
-      String.sub raw (String.length wrapper) (String.length raw - String.length wrapper)
-    else raw in
+  let wrappers = ["Cerb_frontend__"; "Cerb_backend__"; "Dune__exe__"] in
+  let name = match List.find_opt (fun prefix -> String.starts_with ~prefix raw) wrappers with
+    | Some wrapper ->
+        String.sub raw (String.length wrapper) (String.length raw - String.length wrapper)
+    | None -> raw in
   (* The first function component names the source. Nested functions and
      anonymous closures belong to that outer function. Do not strip digits:
      [function0] and [function] can be different functions. *)

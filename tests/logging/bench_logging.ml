@@ -2,7 +2,8 @@
    timing-sensitive test. End-to-end Cerberus measurements are also required. *)
 let iterations = 20_000_000
 let level = ref 0
-let source = Logs.Src.create "Bench.disabled"
+(* Match the automatic source so enabled formatting uses identical prefixes. *)
+let source = Logs.Src.create "Bench_logging.run"
 let old_debug n _doms msg = if !level >= n then ignore (msg ())
 let measure ?(count = iterations) name f =
   Gc.full_major ();
@@ -22,6 +23,8 @@ let run () =
       for i = 1 to iterations do old_debug 2 [] (fun () -> string_of_int i) done);
     measure "native Logs" (fun () ->
       for i = 1 to iterations do Logs.debug ~src:source (fun m -> m "%d" i) done);
+    measure "OCaml adapter" (fun () ->
+      for i = 1 to iterations do Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%d" i) done);
     measure "Lem adapter" (fun () ->
       for i = 1 to iterations do Cerb_log_auto.debug __FUNCTION__ (fun () -> string_of_int i) done)
   done;
@@ -45,11 +48,19 @@ let run () =
           end
         done);
       Logs.set_reporter text;
+      measure ~count "explicit Logs enabled text" (fun () ->
+        for i = 1 to count do Logs.debug ~src:source (fun m -> m "%d" i) done);
       measure ~count "enabled text" (fun () ->
         for i = 1 to count do Cerb_log_auto.debug __FUNCTION__ (fun () -> string_of_int i) done);
+      measure ~count "OCaml enabled text" (fun () ->
+        for i = 1 to count do Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%d" i) done);
       Logs.set_reporter json;
+      measure ~count "explicit Logs enabled JSON" (fun () ->
+        for i = 1 to count do Logs.debug ~src:source (fun m -> m "%d" i) done);
       measure ~count "enabled JSON" (fun () ->
-        for i = 1 to count do Cerb_log_auto.debug __FUNCTION__ (fun () -> string_of_int i) done)
+        for i = 1 to count do Cerb_log_auto.debug __FUNCTION__ (fun () -> string_of_int i) done);
+      measure ~count "OCaml enabled JSON" (fun () ->
+        for i = 1 to count do Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%d" i) done)
     done)
 
 let () = run ()
