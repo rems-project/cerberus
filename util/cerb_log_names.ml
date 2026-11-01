@@ -33,9 +33,17 @@ let rec prefix_matches raw prefix length i =
   i = length ||
   (raw.[i] = prefix.[i] && prefix_matches raw prefix length (i + 1))
 
-let has_prefix raw prefix =
-  let length = String.length prefix in
-  String.length raw >= length && prefix_matches raw prefix length 0
+(* Build the wrapper table once, rather than on each normalization. *)
+let wrappers =
+  List.map (fun prefix -> prefix, String.length prefix)
+    ["Cerb_frontend__"; "Cerb_backend__"; "Dune__exe__"]
+
+let rec wrapper_end raw length = function
+  | [] -> 0
+  | (prefix, prefix_length) :: rest ->
+      if length >= prefix_length && prefix_matches raw prefix prefix_length 0
+      then prefix_length
+      else wrapper_end raw length rest
 
 (* The first function component names the source. Nested functions and anonymous
    closures belong to it; their suffix is not part of the name to validate.
@@ -50,12 +58,8 @@ let rec function_end name length start qualified =
   else -1
 
 let canonical raw =
-  let start =
-    if has_prefix raw "Cerb_frontend__" then String.length "Cerb_frontend__"
-    else if has_prefix raw "Cerb_backend__" then String.length "Cerb_backend__"
-    else if has_prefix raw "Dune__exe__" then String.length "Dune__exe__"
-    else 0 in
   let length = String.length raw in
+  let start = wrapper_end raw length wrappers in
   let stop = function_end raw length start false in
   if stop < 0 then
     invalid_arg "Cerb_log_auto: expected a qualified function name (use __FUNCTION__)"
