@@ -29,21 +29,33 @@ let rec selector_from name length start qualified =
 
 let valid_selector name = selector_from name (String.length name) 0 false
 
-let rec prefix_matches raw prefix length i =
+let rec prefix_matches raw start prefix length i =
   i = length ||
-  (raw.[i] = prefix.[i] && prefix_matches raw prefix length (i + 1))
+  (raw.[start + i] = prefix.[i] && prefix_matches raw start prefix length (i + 1))
 
-(* Build the wrapper table once, rather than on each normalization. *)
-let wrappers =
-  List.map (fun prefix -> prefix, String.length prefix)
-    ["Cerb_frontend__"; "Cerb_backend__"; "Dune__exe__"]
+(* Return the end index on success, or [0] on failure. All matched prefixes are
+   nonempty, so the result needs no allocated option or substring. *)
+let prefix_end raw length start prefix =
+  let prefix_length = String.length prefix in
+  if length - start >= prefix_length &&
+     prefix_matches raw start prefix prefix_length 0
+  then start + prefix_length
+  else 0
 
-let rec wrapper_end raw length = function
-  | [] -> 0
-  | (prefix, prefix_length) :: rest ->
-      if length >= prefix_length && prefix_matches raw prefix prefix_length 0
-      then prefix_length
-      else wrapper_end raw length rest
+(* Dispatch before matching, and consume the shared [Cerb_] prefix only once. *)
+let wrapper_end raw length =
+  if length = 0 then 0 else
+  match raw.[0] with
+  | 'C' ->
+      let start = prefix_end raw length 1 "erb_" in
+      if start = 0 || start = length then 0 else
+      begin match raw.[start] with
+      | 'f' -> prefix_end raw length (start + 1) "rontend__"
+      | 'b' -> prefix_end raw length (start + 1) "ackend__"
+      | _ -> 0
+      end
+  | 'D' -> prefix_end raw length 1 "une__exe__"
+  | _ -> 0
 
 (* The first function component names the source. Nested functions and anonymous
    closures belong to it; their suffix is not part of the name to validate.
@@ -59,7 +71,7 @@ let rec function_end name length start qualified =
 
 let canonical raw =
   let length = String.length raw in
-  let start = wrapper_end raw length wrappers in
+  let start = wrapper_end raw length in
   let stop = function_end raw length start false in
   if stop < 0 then
     invalid_arg "Cerb_log_auto: expected a qualified function name (use __FUNCTION__)"

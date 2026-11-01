@@ -22,6 +22,11 @@ let names () =
     check (canonical raw = raw) "valid identifier or near-matching wrapper changed")
     ["M.N2'.fn0'"; "M.__"; "M._fn"; "Cerb_frontend_X.fn";
      "Cerb_backend_X.fn"; "Dune__exe_X.fn"];
+  List.iter (fun wrapper ->
+    for length = 1 to String.length wrapper - 1 do
+      let raw = String.sub wrapper 0 length ^ ".fn" in
+      check (canonical raw == raw) "partial wrapper was stripped or copied"
+    done) ["Cerb_frontend__"; "Cerb_backend__"; "Dune__exe__"];
   check (canonical "Cerb_frontend__Cerb_frontend__M.fn" = "Cerb_frontend__M.fn")
     "strip only one wrapper";
   List.iter (fun s -> rejects (fun () -> canonical s))
