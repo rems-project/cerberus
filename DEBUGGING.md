@@ -114,6 +114,8 @@ The close function is idempotent and does not close borrowed stdout/stderr.
 Configure the shared policy and reporter before workers start. Concurrent
 reconfiguration or changing source levels is outside this contract. On first
 use, Saturn caches the selection result for the static function-name address.
+Validation and normalization scan the name directly, reusing already canonical
+strings and allocating one substring only when removing a wrapper or suffix.
 A second Saturn table shares sources by name, using content hashing.
 Existing names are looked up without a mutex. On a name miss, a creation
 mutex protects a second lookup, source creation and publication, so aliases

@@ -14,15 +14,40 @@ let names () =
   check (canonical "Dune__exe__Absint.assign.aux" = "Absint.assign") "executable wrapper";
   check (canonical "M.fn0.local" = "M.fn0") "nested function";
   check (canonical "M.fn" <> canonical "M.fn0") "digits are significant";
-  List.iter (fun s -> rejects (fun () -> canonical s)) [""; "M"; "M."; "M..fn"; "M._"; "fn"];
+  List.iter (fun suffix ->
+    check (canonical ("M.fn" ^ suffix) = "M.fn") "outer function ignores closure suffix";
+    check (not (Cerb_log_names.valid_selector ("M.fn" ^ suffix))) "selector includes a suffix")
+    [".local"; ".(fun)"; "."; ".."; ".bad-ignored"; ".\000"];
+  List.iter (fun raw ->
+    check (canonical raw = raw) "valid identifier or near-matching wrapper changed")
+    ["M.N2'.fn0'"; "M.__"; "M._fn"; "Cerb_frontend_X.fn";
+     "Cerb_backend_X.fn"; "Dune__exe_X.fn"];
+  check (canonical "Cerb_frontend__Cerb_frontend__M.fn" = "Cerb_frontend__M.fn")
+    "strip only one wrapper";
+  List.iter (fun s -> rejects (fun () -> canonical s))
+    [""; "M"; "M."; "M..fn"; "M._"; "fn"; "M.1fn"; "M.f-n";
+     "M.f\000n"; "M.f\255n"; "Cerb_frontend__"; "Cerb_frontend__M";
+     "Cerb_frontend__M."; "Cerb_frontend__.fn"; "Cerb_backend__M._"; "Dune__exe__"];
   List.iter (fun s -> check (not (Cerb_log_names.valid_selector s)) "invalid selector")
-    [""; "file:m.lem"; "M*"; "fn"; "m.fn"; "M._"; "M.1fn"; "M..fn"];
+    [""; "file:m.lem"; "M*"; "fn"; "m.fn"; "M._"; "M.1fn"; "M..fn";
+     ".M"; "M."; "M.f-n"; "M.f\000n"; "M.f\255n"];
   List.iter (fun s -> check (Cerb_log_names.valid_selector s) "valid selector")
-    ["M"; "M.N"; "M.N.fn0"; "M._fn"; "M.fn'"];
+    ["M"; "M.N"; "M.N.fn0"; "M._fn"; "M.fn'"; "M.N2'.fn0'"; "M.__"];
   let selected = Cerb_log_names.selected ["M.N"; "A.fn0"] in
   check (selected "M.N.fn" && selected "M.N") "exact module";
   check (not (selected "M.Nested.fn") && not (selected "M.N.Sub.fn")) "no prefix/glob matching";
   check (selected "A.fn0" && not (selected "A.fn")) "exact function"
+
+let name_allocation () =
+  Gc.full_major ();
+  let before = Gc.allocated_bytes () in
+  for i = 0 to 9_999 do
+    let raw = literals.(i mod Array.length literals) in
+    check (Cerb_log_names.valid_selector raw) "canonical name is not a selector";
+    check (Cerb_log_names.canonical raw == raw) "canonical name was copied"
+  done;
+  check (Gc.allocated_bytes () -. before < 1024.)
+    "validation or unchanged normalization allocated per name"
 
 let warm_allocation raw =
   ignore (Cerb_log_auto.debug_enabled raw);
@@ -117,6 +142,7 @@ let concurrent_misses () =
 
 let () =
   names ();
+  name_allocation ();
   configure ["Missing.fn"];
   let before = count_sources () in
   Array.iter (fun name -> Cerb_log_auto.debug name never) literals;

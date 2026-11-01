@@ -112,9 +112,10 @@ The old-style gate/printer are synthetic controls, not a second full Cerberus in
 
 Five fresh processes per size; median full-GC live-heap growth above an already configured empty policy. These generated names each have a distinct static address. Negative entries allocate no Logs sources. Positive growth includes canonical names, the source registry, Logs sources and cached options. Both columns exclude the empty policy/table, static literal storage, reporter prefixes and the rest of process RSS.
 
-These historical measurements use the original standard-library source registry.
-Its later replacement with a second Saturn table changes positive-entry storage;
-the positive column below has not been remeasured for that revision.
+These historical measurements use the original standard-library source registry
+and allocate a canonical name even when its input needs no normalization.
+The later Saturn registry and reuse of already canonical strings change
+positive-entry storage; the positive column below predates both changes.
 
 | Distinct addresses | All negative KiB | All positive KiB |
 |---|---:|---:|
