@@ -125,7 +125,8 @@ Existing names are looked up without a mutex. On a name miss, a creation
 mutex protects a second lookup, source creation and publication, so aliases
 share one fully configured source. Normalization, matching and pointer-cache
 insertion run outside it; negative misses and all cache hits avoid that mutex.
-Both creation and reporter critical sections use `Mutex.protect`. Concurrent
+Both creation and reporter critical sections use `Mutex.protect`, with a small
+backport around real systhreads mutexes on OCaml 4.14. Concurrent
 pointer insertions reuse the winning cached decision. Negative decisions use
 `None`, positive decisions reuse a cached `Some src`. This allocates no option
 wrapper on a hit. Sources registered after reporter creation acquire cached
@@ -133,8 +134,10 @@ text prefixes on their first event through an atomic immutable-map update.
 
 The automatic API accepts native static strings, normally `__FUNCTION__`.
 Active logging rejects moving heap strings with `Invalid_argument`; it has no
-content-hash fallback. Two small C helpers hash the address and check the OCaml 5
-out-of-heap string header. They do not scan binary data. Globally disabled calls
+content-hash fallback. Two small C helpers hash the address and check static
+storage using the OCaml 4.14 runtime's address table or the OCaml 5 out-of-heap
+string header. The storage check runs only on cache misses; neither version
+scans binary data. Globally disabled calls
 skip lookup and validation unless source discovery was requested. In particular,
 normal Warning verbosity with no Debug selectors skips every Debug lookup,
 while warnings and errors still resolve their sources. Selectors raise matched
@@ -165,9 +168,10 @@ backend-specific diagnostics.
 
 ## Validation
 
-Requires native OCaml >= 5.2 and < 6, Logs >= 0.10 (including `logs.cli`),
-and Saturn >= 1.0 and < 2. The static-header check must be reviewed for a new
-OCaml major runtime. Bytecode automatic Debug names are not supported.
+Requires native OCaml 4.14.1 or later in the 4.14 series, or >= 5.2 and < 6,
+Logs >= 0.10 (including `logs.cli`), and Saturn >= 1.0 and < 2.
+OCaml 5.0 and 5.1 are not supported by Saturn. The static-storage check must be
+reviewed for a new OCaml major runtime. Bytecode automatic names are not supported.
 Regenerate Lem output when building:
 
 ```sh
@@ -179,5 +183,8 @@ tests/run-ci.sh
 ```
 
 The prover test checks generation and erasure in all three targets; it does not
-claim to compile Cerberus' complete prover developments. Domain and systhread tests run on OCaml 5. See `LOGGING_PERFORMANCE.md` for measured
+claim to compile Cerberus' complete prover developments. CI runs the logging,
+GC, exception-cleanup, systhread and CLI tests on OCaml 4.14.1 and 5.2.1.
+OCaml 5 additionally runs the domain tests, including the same first-use and
+mixed-severity assertions used with systhreads. See `LOGGING_PERFORMANCE.md` for measured
 costs and the limits of comparisons with the old numeric policy.

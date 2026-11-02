@@ -41,7 +41,7 @@ let new_decisions () = Saturn.Htbl.create ~hashed_type:(module Pointer) ()
 let fresh ~discover level select active = {
   debug_active = active || discover; select;
   debug_decisions = new_decisions ();
-  sources = Saturn.Htbl.create ~hashed_type:(module String) ();
+  sources = Saturn.Htbl.create ~hashed_type:(module Cerb_log_compat.String_key) ();
   sources_mutex = Mutex.create ();
   level;
   (* A selected source is raised to Debug even if the global threshold is
@@ -60,7 +60,7 @@ let source_for_name p name level =
       (* Different static addresses can name the same function. Recheck under
          the creation mutex: a losing [try_add] cannot undo [Logs.Src.create]'s
          global registration. Publish only after configuring the new source. *)
-      Mutex.protect p.sources_mutex (fun () ->
+      Cerb_log_compat.protect p.sources_mutex (fun () ->
         match Saturn.Htbl.find_exn p.sources name with
         | src -> src
         | exception Not_found ->
@@ -258,7 +258,7 @@ let open_reporter output format =
     let prefixes = Atomic.make (match format with Text -> text_prefixes () | Json -> Sources.empty) in
     let mutex = Mutex.create () in
     let closed = ref false in
-    let close () = Mutex.protect mutex (fun () ->
+    let close () = Cerb_log_compat.protect mutex (fun () ->
       if not !closed then begin
         closed := true;
         if owned then close_out channel else flush channel
@@ -271,7 +271,7 @@ let open_reporter output format =
                 let values = cached_text_prefixes prefixes src in
                 String.concat "" [values.(level_index level); message; "\n"]
             | _ -> render format src level header tags message in
-          Mutex.protect mutex (fun () ->
+          Cerb_log_compat.protect mutex (fun () ->
             if !closed then invalid_arg "Cerb_log: reporter is closed";
             output_string channel line;
             flush channel);

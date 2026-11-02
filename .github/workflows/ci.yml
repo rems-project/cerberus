@@ -20,7 +20,7 @@ jobs:
   build:
     strategy:
       matrix:
-        version: [5.2.1]
+        version: [4.14.1, 5.2.1]
 
 
     runs-on: ubuntu-24.04
@@ -64,6 +64,14 @@ jobs:
         opam pin --yes --no-action add cerberus-lib .
         opam pin --yes --no-action add cerberus .
         opam install --yes cerberus
+
+    - name: Run logging tests
+      run: |
+        eval $(opam env --switch=${{ matrix.version }})
+        make prelude-src
+        dune runtest --profile=release tests/logging
+        python3 tests/logging/test_cli.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus" --runtime "$OPAM_SWITCH_PREFIX"
+        python3 tests/logging/test_cli.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus-vip" --runtime "$OPAM_SWITCH_PREFIX"
 
     - name: Run Cerberus CI tests
       run: |

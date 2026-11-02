@@ -1,6 +1,6 @@
 (* Matching runs only at configuration or first use of a static name. Keep it
    separate from the address-keyed cache, whose hits never inspect text. *)
-module Names = Hashtbl.Make (String)
+module Names = Hashtbl.Make (Cerb_log_compat.String_key)
 
 let upper = function 'A'..'Z' -> true | _ -> false
 let identifier_char = function

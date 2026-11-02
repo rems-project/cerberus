@@ -3,7 +3,7 @@
     Pass [__FUNCTION__] directly. Active policies reject heap strings and names
     without a qualified function component with [Invalid_argument]. Globally
     disabled severities return immediately, unless discovery was requested.
-    This API is for native OCaml 5; ordinary explicit [Logs.src] calls remain
+    This API is for native OCaml 4.14 or 5; ordinary explicit [Logs.src] calls remain
     available for other uses. *)
 
 val configure : ?discover:bool -> Logs.level option -> string list -> unit

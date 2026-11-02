@@ -19,7 +19,7 @@ license: "BSD-2-Clause"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
-  "ocaml" {>= "5.2.0" & < "6.0.0"}
+  "ocaml" {(>= "4.14.1" & < "5.0.0") | (>= "5.2.0" & < "6.0.0")}
   "dune" {(>= "3.21.0" & < "3.24.0")}
   "sha" {>= "1.12"}
   "pprint" {>= "20180528"}

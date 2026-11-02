@@ -1,8 +1,8 @@
-/* Native OCaml 5 static strings have the out-of-heap header defined by the
-   runtime. Such blocks are never moved or reclaimed by the GC. Do not admit
+/* Native static strings are never moved or reclaimed by the GC. Do not admit
    ordinary heap strings to an address-keyed table, even after promotion.
-   This uses the runtime's header macros; it does not scan binary data or
-   depend on linker symbols, a data-segment layout, or string contents.
+   This uses the runtime's address classification or header macros; it does
+   not scan binary data or depend on linker symbols, a data-segment layout,
+   or string contents.
 
    The caller supplies a well-typed OCaml string. Both functions are noalloc:
    no callback, allocation, or release of the runtime lock is permitted. */
@@ -10,15 +10,30 @@
 #include <caml/mlvalues.h>
 #include <caml/version.h>
 
-#if OCAML_VERSION_MAJOR != 5
+#if OCAML_VERSION_MAJOR == 4 && OCAML_VERSION_MINOR == 14
+#include <caml/address_class.h>
+#elif OCAML_VERSION_MAJOR != 5
 #error Review the static-string admission check before using a new OCaml major version
 #endif
 
 CAMLprim value cerb_log_is_static(value name)
 {
+#if OCAML_VERSION_MAJOR == 4
+  /* The 4.14 native runtime registers static data in its page table, also
+     in no-naked-pointers builds. Header colour alone is insufficient: live
+     major-heap strings can have the same colour as static strings. */
+#ifdef NO_NAKED_POINTERS
+  /* Is_in_static_data is not exposed in this configuration, although the
+     runtime still maintains the same static-data classification. */
+  return Val_bool((Classify_addr(name) & In_static_data) != 0);
+#else
+  return Val_bool(Is_in_static_data(name) != 0);
+#endif
+#else
   header_t hd = Hd_val(name);
   return Val_bool(Tag_hd(hd) == String_tag &&
     Color_hd(hd) == Color_hd(Caml_out_of_heap_header(0, String_tag)));
+#endif
 }
 
 CAMLprim value cerb_log_pointer_hash(value name)
