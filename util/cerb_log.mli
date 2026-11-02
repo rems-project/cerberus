@@ -1,8 +1,8 @@
-(** Lazy Debug sources for native OCaml function-name literals.
+(** Logging with automatic sources for native OCaml function-name literals.
 
     Pass [__FUNCTION__] directly. Active policies reject heap strings and names
     without a qualified function component with [Invalid_argument]. Globally
-    disabled logging returns immediately, unless discovery was requested.
+    disabled severities return immediately, unless discovery was requested.
     This API is for native OCaml 5; ordinary explicit [Logs.src] calls remain
     available for other uses. *)
 
@@ -11,6 +11,8 @@ val configure : ?discover:bool -> Logs.level option -> string list -> unit
     are exact [Module] or [Module.function] names, or [all]. Source levels and
     the reporter must not be reconfigured concurrently with logging. Invalid
     selector syntax raises [Invalid_argument]; unseen names are allowed.
+    Selected sources have a Debug threshold; other sources use [level].
+    [None] suppresses every level, including selected sources.
     [discover] defaults to [false]. When [true], cache encountered names even
     with logging disabled, without evaluating disabled message callbacks. *)
 
@@ -28,12 +30,12 @@ val debugf : string -> 'a Logs.log
     arguments, printers and tags, is evaluated only when enabled. *)
 val debug : string -> (unit -> string) -> unit
 (** String-thunk adapter for Lem's OCaml export. *)
+val warn : string -> (unit -> string) -> unit
+val err : string -> (unit -> string) -> unit
+(** Lem warning/error adapters use the same automatic naming as Debug.
+    Decisions are cached separately by severity; sources are shared.
+    Messages are evaluated only when their severity is enabled. *)
 val debug_located : string -> Cerb_location.t -> (unit -> string) -> unit
-
-(** Lem adapters for explicit non-Debug sources. *)
-val info : Logs.src -> (unit -> string) -> unit
-val warn : Logs.src -> (unit -> string) -> unit
-val err : Logs.src -> (unit -> string) -> unit
 
 val location_tag : string Logs.Tag.def
 val translation_unit_tag : string Logs.Tag.def

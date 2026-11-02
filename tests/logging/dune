@@ -20,6 +20,12 @@
  (modules test_lookup lookup_literals)
  (libraries cerberus-lib.util threads))
 
+(test
+ (name test_severity)
+ (modes native)
+ (modules test_severity)
+ (libraries cerberus-lib.util))
+
 (executable
  (name gen_lookup_literals)
  (modules gen_lookup_literals))

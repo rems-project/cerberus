@@ -26,11 +26,11 @@ let with_file format f =
 let test_gates () =
   Logs.set_level ~all:true (Some Logs.Warning);
   debug alpha_source never;
-  Cerb_log.info alpha_source never;
+  Logs.info ~src:alpha_source (fun _ -> never ());
   Logs.debug ~src:alpha_source (fun _ -> failwith "native disabled message evaluated");
   Logs.Src.set_level alpha_source None;
-  Cerb_log.warn alpha_source never;
-  Cerb_log.err alpha_source never;
+  Logs.warn ~src:alpha_source (fun _ -> never ());
+  Logs.err ~src:alpha_source (fun _ -> never ());
   Logs.set_level ~all:true (Some Logs.Debug)
 
 let test_json () = with_file Cerb_log.Json (fun filename _ close ->
@@ -40,8 +40,8 @@ let test_json () = with_file Cerb_log.Json (fun filename _ close ->
     m ~tags:Logs.Tag.(add Cerb_log.location_tag "input.c:12" empty) "located");
   Logs.info ~src:beta_source (fun m ->
     m ~tags:Logs.Tag.(add Cerb_log.translation_unit_tag "b.c" empty) "bound");
-  Cerb_log.warn alpha_source (fun () -> "warning");
-  Cerb_log.err alpha_source (fun () -> "error");
+  Logs.warn ~src:alpha_source (fun m -> m "warning");
+  Logs.err ~src:alpha_source (fun m -> m "error");
   close (); close ();
   let open Yojson.Basic.Util in
   match List.map Yojson.Basic.from_string (lines filename) with

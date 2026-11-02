@@ -39,6 +39,8 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
     assert "Pipeline.core_frontend" not in names
     assert "Cabs_to_ail.desugar_expression0" in names
     assert "Core_reduction.one_step_unseq_aux" not in names
+    assert "Translation.floating_conversion_TODO" not in names
+    assert "Formatted.convert" not in names
     assert run("--list-debug-sources", "-q").stdout.splitlines() == names
     assert run("--list-debug-sources", "--debug=Missing.no_such_function").stdout.splitlines() == names
     assert run("--list-debug-sources", "-q").stderr == ""
@@ -101,6 +103,18 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
     assert "Impl_mem.Concrete.load" in sources or "Impl_mem.repr" in sources
     execution_names = run("--exec", "--list-debug-sources", "-q").stdout.splitlines()
     assert sources <= set(execution_names)
+    # A real Lem warning uses its automatic function name and normal severity.
+    source.write_text("int main(void) { switch (0) { case 2 ... 1: return 1; } return 0; }\n")
+    warning_source = "Cabs_to_ail.desugar_statement_aux"
+    warnings = events(run("--debug-format=json").stderr)
+    assert any(r["source"] == warning_source and r["level"] == "warning" for r in warnings)
+    assert run("--verbosity=error").stderr == ""
+    selected_warning = events(run("--verbosity=error", "--debug=" + warning_source,
+                                  "--debug-format=json").stderr)
+    assert any(r["source"] == warning_source and r["level"] == "warning" for r in selected_warning)
+    assert run("--debug=" + warning_source, "--quiet").stderr == ""
+    assert run("--quiet", "--debug=" + warning_source).stderr == ""
+    assert warning_source in run("--list-debug-sources", "--quiet").stdout.splitlines()
     source.write_text("int main(void) { return missing_identifier; }\n")
     failure = run("-q", success=False)
     assert failure.stderr  # Quiet logging cannot hide or swallow compiler errors.

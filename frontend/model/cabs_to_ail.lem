@@ -16,8 +16,6 @@ import Desugaring_init
 import Cn
 
 
-let log_desugar_struct_declarator = Debug.source "Cabs_to_ail.desugar_struct_declarator"
-let log_desugar_statement_aux = Debug.source "Cabs_to_ail.desugar_statement_aux"
 
 module E = Cabs_to_ail_effect
 
@@ -2857,7 +2855,7 @@ and desugar_struct_declarator has_alignment struct_decltor =
             | Nothing ->
                 E.fail loc (Errors.Desugar_NotYetSupported "bit-fields")
             | Just decltor ->
-                let () = Debug.warn log_desugar_struct_declarator (fun () -> "ignoring a bit-field declarator at " ^ Loc.stringFromLocation loc) in
+                let () = Debug.warn (fun () -> "ignoring a bit-field declarator at " ^ Loc.stringFromLocation loc) in
                 desugar_declarator NotFunDef decltor
           end
         else
@@ -4220,7 +4218,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                   (* an empty range can never be selected, so the case statement is dropped and not
                    * registered, but we kept its body because it can still be reached when
                    * control-flow falls through from a previous case *)
-                  let () = Debug.warn log_desugar_statement_aux (fun () ->
+                  let () = Debug.warn (fun () ->
                     "empty case range [" ^ Loc.stringFromLocation loc ^
                     "] discarded by the desugaring") in
                   (fun d_s -> AilSblock [] [d_s]) <$> self s

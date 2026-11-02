@@ -6,6 +6,13 @@ The measured production sources match commit `ff948c3dc`; the following commit a
 
 ## Native OCaml call-site follow-up
 
+The later API cleanup consolidates logging under `Cerb_log` and gives Lem
+warnings/errors automatic names. It adds separate Warning and Error decision
+tables sharing the existing source registry; Debug's global gate and lookup
+remain separate. The historical timings and memory figures below predate that
+cleanup, including the two additional empty tables and removal of five explicit
+source declarations. They do not measure the new diagnostic paths.
+
 The native migration uses `Cerb_log.debugf __FUNCTION__` and removes
 Debug-only source declarations. A follow-up on the same host compares numeric
 master `ae70925fc`, the previous PR head `1ef0b82d5`, and the migrated code

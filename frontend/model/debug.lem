@@ -3,15 +3,8 @@ import Loc
 
 declare {ocaml} rename module = Lem_debug
 
-(* Info/warning/error sources are explicit and created at module scope.
-   Debug sources use the enclosing OCaml function name on first use.
-   Proof backends erase both sources and logging operations. *)
-type src = | No_source
-declare ocaml target_rep type src = `Logs.src`
-
-val source : string -> src
-let ~{ocaml} source name = No_source
-declare ocaml target_rep function source name = `Logs.Src.create` name
+(* Sources use the enclosing OCaml function name on first use.
+   Proof backends erase logging operations without evaluating messages. *)
 
 (* Only needed when the decision to log itself is expensive. *)
 val debug_enabled : unit -> bool
@@ -22,17 +15,13 @@ val debug : (unit -> string) -> unit
 let ~{ocaml} debug msg = ()
 declare ocaml target_rep function debug msg = `Cerb_log.debug` `__FUNCTION__` msg
 
-val info : src -> (unit -> string) -> unit
-let ~{ocaml} info src msg = ()
-declare ocaml target_rep function info = `Cerb_log.info`
+val warn : (unit -> string) -> unit
+let ~{ocaml} warn msg = ()
+declare ocaml target_rep function warn msg = `Cerb_log.warn` `__FUNCTION__` msg
 
-val warn : src -> (unit -> string) -> unit
-let ~{ocaml} warn src msg = ()
-declare ocaml target_rep function warn = `Cerb_log.warn`
-
-val err : src -> (unit -> string) -> unit
-let ~{ocaml} err src msg = ()
-declare ocaml target_rep function err = `Cerb_log.err`
+val err : (unit -> string) -> unit
+let ~{ocaml} err msg = ()
+declare ocaml target_rep function err msg = `Cerb_log.err` `__FUNCTION__` msg
 
 val debug_located : Loc.t -> (unit -> string) -> unit
 let ~{ocaml} debug_located loc msg = ()

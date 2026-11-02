@@ -89,16 +89,17 @@ remain significant: `fn0` and `fn` differ. For example, the native preprocessor
 message is selected by `Pipeline.cpp`, or by `Pipeline` along with the module's
 other functions.
 
-`Debug.info`, `Debug.warn` and `Debug.err` still take an explicit source created
-with `Debug.source`. `Debug.debug_located loc (fun () -> message)` formats the
-location only when enabled. `Debug.debug_enabled ()` uses the same automatic name.
+`Debug.warn (fun () -> message)` and `Debug.err (fun () -> message)` use the same
+automatic function names. There is no Lem source declaration or `Debug.info`
+adapter. `Debug.debug_located loc (fun () -> message)` formats the location only
+when enabled. `Debug.debug_enabled ()` uses the same automatic name.
 `Debug.debug_enabled` is only needed when deciding *whether* to emit a message
 requires expensive work, as in symbol-description comparisons. It is not needed
 for ordinary message construction.
 
 There is no logging monad, context parameter, domain list, numeric verbosity or
 compatibility API. No mutable logging configuration is stored in Lem state.
-HOL, Isabelle and Coq receive a trivial source type and no-op logging functions;
+HOL, Isabelle and Coq receive no-op logging functions;
 they do not evaluate message callbacks. Error handling stays in the existing
 error mechanisms.
 
@@ -113,10 +114,13 @@ The close function is idempotent and does not close borrowed stdout/stderr.
 
 Configure the shared policy and reporter before workers start. Concurrent
 reconfiguration or changing source levels is outside this contract. On first
-use, Saturn caches the selection result for the static function-name address.
+use, Saturn caches the decision for the static function-name address. Debug,
+Warning and Error have separate decision tables: a rejected Debug message must
+not suppress a warning or error from the same function. The tables share one
+source registry, and rejected decisions do not register sources.
 Validation and normalization scan the name directly, reusing already canonical
 strings and allocating one substring only when removing a wrapper or suffix.
-A second Saturn table shares sources by name, using content hashing.
+The source registry uses Saturn with content hashing.
 Existing names are looked up without a mutex. On a name miss, a creation
 mutex protects a second lookup, source creation and publication, so aliases
 share one fully configured source. Normalization, matching and pointer-cache
@@ -131,8 +135,12 @@ The automatic API accepts native static strings, normally `__FUNCTION__`.
 Active logging rejects moving heap strings with `Invalid_argument`; it has no
 content-hash fallback. Two small C helpers hash the address and check the OCaml 5
 out-of-heap string header. They do not scan binary data. Globally disabled calls
-skip lookup and validation unless source discovery was requested. Entries grow with distinct encountered static
-addresses, not the number of C functions, TUs, messages or repeated calls.
+skip lookup and validation unless source discovery was requested. In particular,
+normal Warning verbosity with no Debug selectors skips every Debug lookup,
+while warnings and errors still resolve their sources. Selectors raise matched
+sources to Debug, including their lower-severity messages; quiet overrides them.
+Entries grow with distinct encountered static addresses at each severity, not
+the number of C functions, TUs, messages or repeated calls.
 Multi-domain correctness is tested; parallel-TU throughput is not established.
 
 JSON records contain `schema_version` (1), `source`, `module`, an optional

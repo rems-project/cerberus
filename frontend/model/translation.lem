@@ -14,7 +14,6 @@ import Linux
 
 import Debug
 
-let log_floating_conversion_TODO = Debug.source "Translation.floating_conversion_TODO"
 
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
@@ -53,7 +52,7 @@ let force_core_object_type_of_ctype ty =
 
 let floating_conversion_TODO to_ty from_ty z =
   (* NOTE: our current implementation of floating types has them all behave like double *)
-  let () = Debug.warn log_floating_conversion_TODO (fun () ->
+  let () = Debug.warn (fun () ->
     "casts between floating types is currently a NOP: " ^
     Pp.stringFromCtype to_ty ^ " <== " ^
     Pp.stringFromCtype from_ty

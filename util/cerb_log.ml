@@ -1,9 +1,3 @@
-(* These severity adapters are for Lem, whose format strings are not OCaml's.
-   OCaml callers use Logs directly. Filtering happens before forcing [msg]. *)
-let info src msg = Logs.info ~src (fun m -> m "%s" (msg ()))
-let warn src msg = Logs.warn ~src (fun m -> m "%s" (msg ()))
-let err src msg = Logs.err ~src (fun m -> m "%s" (msg ()))
-
 let location_tag = Logs.Tag.def "location" Format.pp_print_string
 let translation_unit_tag = Logs.Tag.def "translation_unit" Format.pp_print_string
 let log_located src loc msg =
@@ -13,8 +7,8 @@ let log_located src loc msg =
 
 (* Configure once before starting workers. The policy, selector table and
    source levels remain unchanged until all workers have joined. Only the
-   memo table and source registry grow during use. Source creation is serialized;
-   both tables support concurrent lookup. *)
+   decision tables and source registry grow during use. Source creation is
+   serialized; all tables support concurrent lookup. *)
 external pointer_hash : string -> int = "cerb_log_pointer_hash" [@@noalloc]
 external is_static : string -> bool = "cerb_log_is_static" [@@noalloc]
 module Pointer = struct
@@ -23,23 +17,43 @@ module Pointer = struct
   let hash = pointer_hash
 end
 
+type decisions = (string, Logs.src option) Saturn.Htbl.t
+
 type policy = {
-  active : bool;
+  debug_active : bool;
   select : string -> bool;
-  pointers : (string, Logs.src option) Saturn.Htbl.t;
+  debug_decisions : decisions;
   sources : (string, Logs.src) Saturn.Htbl.t;
   sources_mutex : Mutex.t;
+  level : Logs.level option;
+  warn_active : bool;
+  err_active : bool;
+  warn_decisions : decisions;
+  err_decisions : decisions;
 }
 
-let fresh active select = {
-  active; select;
-  pointers = Saturn.Htbl.create ~hashed_type:(module Pointer) ();
+let admits (threshold : Logs.level option) level = match threshold with
+  | None -> false
+  | Some threshold -> level <= threshold
+
+let new_decisions () = Saturn.Htbl.create ~hashed_type:(module Pointer) ()
+
+let fresh ~discover level select active = {
+  debug_active = active || discover; select;
+  debug_decisions = new_decisions ();
   sources = Saturn.Htbl.create ~hashed_type:(module String) ();
   sources_mutex = Mutex.create ();
+  level;
+  (* A selected source is raised to Debug even if the global threshold is
+     Error. These gates only skip levels that cannot be enabled anywhere. *)
+  warn_active = discover || active || admits level Logs.Warning;
+  err_active = discover || active || admits level Logs.Error;
+  warn_decisions = new_decisions ();
+  err_decisions = new_decisions ();
 }
-let policy = ref (fresh false (fun _ -> false))
+let policy = ref (fresh ~discover:false None (fun _ -> false) false)
 
-let source_for_name p name =
+let source_for_name p name level =
   match Saturn.Htbl.find_exn p.sources name with
   | src -> src
   | exception Not_found ->
@@ -51,31 +65,41 @@ let source_for_name p name =
         | src -> src
         | exception Not_found ->
             let src = Logs.Src.create name in
-            Logs.Src.set_level src (Some Logs.Debug);
+            Logs.Src.set_level src level;
             ignore (Saturn.Htbl.try_add p.sources name src);
             src)
 
-let[@inline never] first_use p raw =
+let[@inline never] first_use p decisions level raw =
   (* Heap strings can move, changing their address hash. They never enter the
      table. Looking one up before this check cannot match a static address;
      validation therefore belongs only on the miss path. *)
   if not (is_static raw) then
     invalid_arg "Cerb_log: expected a static source name (use __FUNCTION__)";
   let name = Cerb_log_names.canonical raw in
-  let decision = if p.select name then Some (source_for_name p name) else None in
-  if Saturn.Htbl.try_add p.pointers raw decision then decision
+  let threshold = if p.select name then Some Logs.Debug else p.level in
+  let decision =
+    if admits threshold level then Some (source_for_name p name threshold)
+    else None in
+  if Saturn.Htbl.try_add decisions raw decision then decision
   else
     (* Concurrent misses may compute the same decision. Reuse the winner's
        cached option. This policy never removes or replaces pointer entries. *)
-    Saturn.Htbl.find_exn p.pointers raw
+    Saturn.Htbl.find_exn decisions raw
 
-let source p raw =
+let debug_source p raw =
   (* [find_exn] returns the cached option itself. [find_opt] would allocate an
      additional outer [Some] on each hit. [None] is a cached rejection, while
      [Not_found] means this address has not yet been resolved. *)
-  match Saturn.Htbl.find_exn p.pointers raw with
+  match Saturn.Htbl.find_exn p.debug_decisions raw with
   | decision -> decision
-  | exception Not_found -> first_use p raw
+  | exception Not_found -> first_use p p.debug_decisions Logs.Debug raw
+
+(* Keep diagnostic decisions separate: a cached Debug or Warning rejection
+   must not hide an Error from the same function. Sources are shared by name. *)
+let diagnostic_source p decisions level raw =
+  match Saturn.Htbl.find_exn decisions raw with
+  | decision -> decision
+  | exception Not_found -> first_use p decisions level raw
 
 let configure ?(discover=false) level selectors =
   List.iter (fun name ->
@@ -86,7 +110,7 @@ let configure ?(discover=false) level selectors =
   let select = if not active then (fun _ -> false) else if all then (fun _ -> true)
     else Cerb_log_names.selected selectors in
   (* Listing observes disabled sites too, without enabling their messages. *)
-  let p = fresh (active || discover) select in
+  let p = fresh ~discover level select active in
   List.iter (fun src ->
     let name = Logs.Src.name src in
     Logs.Src.set_level src (if select name then Some Logs.Debug else level);
@@ -97,31 +121,47 @@ let configure ?(discover=false) level selectors =
 let sources () =
   (* Call after workers join. Include negative entries without registering
      Logs sources for them or retaining a second table of their names. *)
-  let encountered = Saturn.Htbl.to_seq (!policy).pointers
-    |> Seq.map (fun (raw, _) -> Cerb_log_names.canonical raw)
-    |> List.of_seq in
+  let p = !policy in
+  let encountered = List.concat_map (fun decisions ->
+    Saturn.Htbl.to_seq decisions
+      |> Seq.map (fun (raw, _) -> Cerb_log_names.canonical raw)
+      |> List.of_seq) [p.debug_decisions; p.warn_decisions; p.err_decisions] in
   List.sort_uniq String.compare
     (encountered @ List.map Logs.Src.name (Logs.Src.list ()))
 
 let debug_enabled raw =
   let p = !policy in
-  p.active && Option.is_some (source p raw)
+  p.debug_active && Option.is_some (debug_source p raw)
 
 let debugf raw message =
   let p = !policy in
-  if p.active then match source p raw with
+  if p.debug_active then match debug_source p raw with
     | None -> ()
     | Some src -> Logs.debug ~src message
 
 let debug raw message =
   let p = !policy in
-  if p.active then match source p raw with
+  if p.debug_active then match debug_source p raw with
     | None -> ()
     | Some src -> Logs.debug ~src (fun m -> m "%s" (message ()))
 
+(* Lem supplies string thunks. Check the gate and cached decision before
+   allocating a formatting callback or evaluating the message. *)
+let warn raw message =
+  let p = !policy in
+  if p.warn_active then match diagnostic_source p p.warn_decisions Logs.Warning raw with
+    | None -> ()
+    | Some src -> Logs.warn ~src (fun m -> m "%s" (message ()))
+
+let err raw message =
+  let p = !policy in
+  if p.err_active then match diagnostic_source p p.err_decisions Logs.Error raw with
+    | None -> ()
+    | Some src -> Logs.err ~src (fun m -> m "%s" (message ()))
+
 let debug_located raw loc message =
   let p = !policy in
-  if p.active then match source p raw with
+  if p.debug_active then match debug_source p raw with
     | None -> ()
     | Some src -> log_located src loc message
 

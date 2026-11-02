@@ -23,5 +23,29 @@ let () =
   Cerb_log.configure None ["all"];
   assert (Symbol.equal_sym left right);
   assert (List.length !events = 1);
+  let warning () =
+    assert (Translation.floating_conversion_TODO Ctype.void Ctype.void 7 = 7) in
+  let error () =
+    let _action = Translation_effect.record_error "logging test error" in () in
+  events := [];
+  Cerb_log.configure (Some Logs.Warning) [];
+  warning (); error ();
+  (match List.rev !events with
+   | [("Translation.floating_conversion_TODO", Logs.Warning, message);
+      ("Translation_effect.record_error", Logs.Error, "logging test error")] ->
+       assert (String.starts_with ~prefix:"casts between floating types" message)
+   | _ -> failwith "Lem warning/error extraction lost automatic names or severities");
+  events := [];
+  Cerb_log.configure (Some Logs.Error) [];
+  warning (); error ();
+  assert (List.length !events = 1);
+  events := [];
+  Cerb_log.configure (Some Logs.Error) ["Translation.floating_conversion_TODO"];
+  warning ();
+  assert (List.length !events = 1);
+  events := [];
+  Cerb_log.configure ~discover:true None ["all"];
+  warning (); error ();
+  assert (!events = []);
   Logs.set_reporter Logs.nop_reporter;
-  print_endline "Lem-generated caller: automatic name, filtering and unchanged result passed"
+  print_endline "Lem-generated callers: automatic Debug/Warning/Error names and filtering passed"

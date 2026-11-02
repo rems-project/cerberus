@@ -5,7 +5,6 @@ import Decode Implementation Undefined
 
 import Debug
 
-let log_convert = Debug.source "Formatted.convert"
 
 module U = Undefined
 
@@ -487,7 +486,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                                   (n=0, cont_int n, args')
                               ))
                           | Nothing ->
-                              let () = Debug.warn log_convert (fun () -> "printf() found an abstract integer value") in
+                              let () = Debug.warn (fun () -> "printf() found an abstract integer value") in
                               Mem.return $ Right (U.return (false, [#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
                         end
                     | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
