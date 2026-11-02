@@ -1,9 +1,4 @@
 let location_tag = Logs.Tag.def "location" Format.pp_print_string
-let translation_unit_tag = Logs.Tag.def "translation_unit" Format.pp_print_string
-let log_located src loc msg =
-  Logs.debug ~src (fun m ->
-    let tags = Logs.Tag.(add location_tag (Cerb_location.location_to_string loc) empty) in
-    m ~tags "%s" (msg ()))
 
 (* Configure once before starting workers. The policy, selector table and
    source levels remain unchanged until all workers have joined. Only the
@@ -129,41 +124,53 @@ let sources () =
   List.sort_uniq String.compare
     (encountered @ List.map Logs.Src.name (Logs.Src.list ()))
 
-let debug_enabled raw =
-  let p = !policy in
-  p.debug_active && Option.is_some (debug_source p raw)
-
-let debugf raw message =
+let debug raw message =
   let p = !policy in
   if p.debug_active then match debug_source p raw with
     | None -> ()
     | Some src -> Logs.debug ~src message
 
-let debug raw message =
-  let p = !policy in
-  if p.debug_active then match debug_source p raw with
-    | None -> ()
-    | Some src -> Logs.debug ~src (fun m -> m "%s" (message ()))
-
-(* Lem supplies string thunks. Check the gate and cached decision before
-   allocating a formatting callback or evaluating the message. *)
 let warn raw message =
   let p = !policy in
   if p.warn_active then match diagnostic_source p p.warn_decisions Logs.Warning raw with
     | None -> ()
-    | Some src -> Logs.warn ~src (fun m -> m "%s" (message ()))
+    | Some src -> Logs.warn ~src message
 
 let err raw message =
   let p = !policy in
   if p.err_active then match diagnostic_source p p.err_decisions Logs.Error raw with
     | None -> ()
-    | Some src -> Logs.err ~src (fun m -> m "%s" (message ()))
+    | Some src -> Logs.err ~src message
 
-let debug_located raw loc message =
+(* Lem callbacks may emit zero or several strings. Invoke them only after
+   selection, and make each emission a complete Logs call: skipping a message
+   must not leave a reporter waiting for its [over] continuation. *)
+let debug_string raw message =
   let p = !policy in
   if p.debug_active then match debug_source p raw with
     | None -> ()
-    | Some src -> log_located src loc message
+    | Some src -> message (fun text -> Logs.debug ~src (fun m -> m "%s" text))
+
+let warn_string raw message =
+  let p = !policy in
+  if p.warn_active then match diagnostic_source p p.warn_decisions Logs.Warning raw with
+    | None -> ()
+    | Some src -> message (fun text -> Logs.warn ~src (fun m -> m "%s" text))
+
+let err_string raw message =
+  let p = !policy in
+  if p.err_active then match diagnostic_source p p.err_decisions Logs.Error raw with
+    | None -> ()
+    | Some src -> message (fun text -> Logs.err ~src (fun m -> m "%s" text))
+
+let debug_located_string raw loc message =
+  let p = !policy in
+  if p.debug_active then match debug_source p raw with
+    | None -> ()
+    | Some src -> message (fun text ->
+        Logs.debug ~src (fun m ->
+          let tags = Logs.Tag.(add location_tag (Cerb_location.location_to_string loc) empty) in
+          m ~tags "%s" text))
 
 type format = Text | Json
 type output = Stderr | Stdout | File of string
@@ -185,10 +192,10 @@ let fields src level header tags message =
   let fields = List.fold_left (fun fields (name, tag) ->
       match Logs.Tag.find tag tags with
       | None -> fields | Some s -> (name, `String s) :: fields)
-      fields ["location", location_tag; "translation_unit", translation_unit_tag] in
+      fields ["location", location_tag] in
   let extra = Logs.Tag.fold (fun (Logs.Tag.V (def, value)) acc ->
       let name = Logs.Tag.name def in
-      if List.mem name ["location"; "translation_unit"] then acc
+      if name = "location" then acc
       else (name, `String (Format.asprintf "%a" (Logs.Tag.printer def) value)) :: acc) tags [] in
   if extra = [] then fields else ("tags", `Assoc extra) :: fields
 
@@ -200,7 +207,7 @@ let render format src level header tags message =
         | None -> "" | Some s -> " [" ^ s ^ "]" in
       String.concat ""
         ["["; Logs.level_to_string (Some level); "] "; Logs.Src.name src;
-         suffix translation_unit_tag; suffix location_tag;
+         suffix location_tag;
          (match header with None -> "" | Some h -> " [" ^ h ^ "]"); ": "; message; "\n"]
 
 (* The Lem facade supplies a prebuilt string. Avoid a second formatter for

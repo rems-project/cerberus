@@ -6,6 +6,13 @@ The measured production sources match commit `ff948c3dc`; the following commit a
 
 ## Native OCaml call-site follow-up
 
+The current API names the native formatting adapters `debug`, `warn` and `err`,
+and the Lem bridges `*_string`. Lem callbacks now receive a string emitter.
+The removed `debug_enabled` helper appears only in historical measurements
+below. The maintained lookup benchmark instead calls the native adapters with
+a no-op reporter; its results include Logs dispatch for enabled calls and are
+not directly comparable to those historical decision-only measurements.
+
 The later API cleanup consolidates logging under `Cerb_log` and gives Lem
 warnings/errors automatic names. It adds separate Warning and Error decision
 tables sharing the existing source registry; Debug's global gate and lookup

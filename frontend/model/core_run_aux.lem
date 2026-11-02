@@ -392,7 +392,7 @@ let rec add_to_sb_stack concurrency p_aids sk =
       | Stack_empty ->
           Stack_empty
       | Stack_cons proc_opt cont sk ->
-          let () = Debug.debug (fun () -> "(UNSURE) Core_run_aux.add_to_sb_stack ==> is not touching lconts") in
+          let () = Debug.debug (fun emit -> emit ("(UNSURE) Core_run_aux.add_to_sb_stack ==> is not touching lconts")) in
           Stack_cons proc_opt (add_to_sb_continuation concurrency p_aids cont) (add_to_sb_stack p_aids sk)
       | Stack_cons2 _ _ _ ->
           error "add_to_sb_stack ==> Stack_cons2"
@@ -407,7 +407,7 @@ val     add_to_asw: bool -> set Cmm_csem.aid -> Core.expr core_run_annotation ->
 let rec add_to_asw concurrency aids (Expr annot expr_ as expr) =
   let add_to_asw = add_to_asw concurrency in
   if concurrency then
-    let () = Debug.debug (fun () -> "HELLO add_to_asw ====") in
+    let () = Debug.debug (fun emit -> emit ("HELLO add_to_asw ====")) in
     Expr annot match expr_ with
       | Epure _ ->
           (* no change *)
@@ -417,7 +417,7 @@ let rec add_to_asw concurrency aids (Expr annot expr_ as expr) =
           expr_
       | Eaction (Paction p' (Action loc annots a)) ->
          let _ = Set.map (fun aid ->
-           Debug.debug (fun () -> "ADD_TO_ASW ==> " ^ show aid)
+           Debug.debug (fun emit -> emit ("ADD_TO_ASW ==> " ^ show aid))
           ) aids in
           Eaction (Paction p' (Action loc <| annots with asw_before= aids union annots.asw_before |> a))
       | Ecase pe pat_es ->
@@ -474,7 +474,7 @@ let rec add_to_asw_continuation concurrency aids ks =
 end
 let rec add_to_asw_stack concurrency aids sk =
   let add_to_asw_stack = add_to_asw_stack concurrency in
-  let () = Debug.debug (fun () -> "BOOM add_to_asw_stack ==> "(* ^ Pp.stringFromCore_stack sk*)) in
+  let () = Debug.debug (fun emit -> emit ("BOOM add_to_asw_stack ==> "(* ^ Pp.stringFromCore_stack sk*))) in
   if concurrency then
     match sk with
       | Stack_empty ->

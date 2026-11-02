@@ -87,9 +87,9 @@ let rec wf_type sigm (Ctype _ ty) =
       ) >>
       wf_type ret_ty >>
       (* TODO *)
-      let () = Debug.debug (fun () ->
-        "(unsure) wf_type, Function calls ==> wf_lvalue_aux"
-      ) in
+      let () = Debug.debug (fun emit ->
+        emit ("(unsure) wf_type, Function calls ==> wf_lvalue_aux"
+      )) in
       wf_lvalue_aux ret_qs ret_ty >>
       wf_parameters params
   | FunctionNoParams (ret_qs, ret_ty) ->
@@ -98,9 +98,9 @@ let rec wf_type sigm (Ctype _ ty) =
       ) >>
       wf_type ret_ty >>
       (* TODO *)
-      let () = Debug.debug (fun () ->
-        "(unsure) wf_type, FunctionNoParams calls ==> wf_lvalue_aux"
-      ) in
+      let () = Debug.debug (fun emit ->
+        emit ("(unsure) wf_type, FunctionNoParams calls ==> wf_lvalue_aux"
+      )) in
       wf_lvalue_aux ret_qs ret_ty
   | Pointer ref_qs ref_ty ->
       wf_type ref_ty >>

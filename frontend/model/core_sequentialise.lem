@@ -24,7 +24,7 @@ let rec sequentialise_expr (Expr annot expr_) =
     | Eproc _ _ _ ->
         expr_
     | Eunseq es ->
-        let () = Debug.debug (fun () -> "Core_sequentialise ==> missed an unseq") in
+        let () = Debug.debug (fun emit -> emit ("Core_sequentialise ==> missed an unseq")) in
         expr_
     | Ewseq (Pattern annot_ctor (CaseBase (Nothing, BTy_tuple bTys))) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (bTy, e) acc ->

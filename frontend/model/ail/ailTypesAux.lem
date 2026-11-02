@@ -673,9 +673,9 @@ let usual_arithmetic_integer_CHERI impl ity1 ity2 =
   end
 let usual_arithmetic_integer_default impl ity1 ity2 =
   (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
-  let () = Debug.debug (fun () ->
-    "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
-  ) in
+  let () = Debug.debug (fun emit ->
+    emit ("NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
+  )) in
   match (ity1, ity2) with
     | (Size_t, _) -> (* NON-std *)
         Size_t
@@ -1169,7 +1169,7 @@ end
 
 val variably_modified: ctype -> bool
 let variably_modified _ =
-  let () = Debug.debug (fun () -> "AilTypesAux.variably_modified is BOGUS") in
+  let () = Debug.debug (fun emit -> emit ("AilTypesAux.variably_modified is BOGUS")) in
   (* TODO *)
   false
 
@@ -1188,7 +1188,7 @@ end
 val is_vla: ctype -> bool
 let is_vla = function
   | _ ->
-      let () = Debug.debug (fun () -> "AilTypesAux.is_vla is BOGUS") in
+      let () = Debug.debug (fun emit -> emit ("AilTypesAux.is_vla is BOGUS")) in
       false (* TODO !!!!!!! *)
 end
 
@@ -1209,9 +1209,9 @@ match ty with
       (no_qualifiers, Ctype a (Pointer qs elem_ty))
  | Function ret_qs_ty params isVariadic ->
       (* STD §6.7.6.3#8 *)
-     let () = Debug.debug (fun () ->
-       "(unsure) AilTypesAux.Function, qualifiers"
-     ) in
+     let () = Debug.debug (fun emit ->
+       emit ("(unsure) AilTypesAux.Function, qualifiers"
+     )) in
      (no_qualifiers, Ctype a (Pointer qs (Ctype [] (Function ret_qs_ty params isVariadic))))
  | FunctionNoParams _ ->
      error "AilTypesAux.adjust ==> FunctionNoParams"

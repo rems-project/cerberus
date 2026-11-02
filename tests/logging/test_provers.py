@@ -21,8 +21,8 @@ with tempfile.TemporaryDirectory(prefix="cerberus-provers-") as tmp:
         assert "Cerb_log" not in text and "Logs." not in text, name
         assert "logM" not in text and "warnM" not in text, name
     coq = outputs["debug.v"]
-    assert "Inductive src" in coq and "Definition source " in coq
-    assert re.search(r"Definition debug_enabled\b[^.]+:=\s*false\.", coq)
-    for operation in ("debug", "info", "warn", "err", "debug_located"):
+    for removed in ("src", "source", "debug_enabled", "info"):
+        assert not re.search(r"(?:Definition|Inductive) " + removed + r"\b", coq), removed
+    for operation in ("debug", "warn", "err", "debug_located"):
         assert re.search(r"Definition " + operation + r"\b[^.]+:=\s*tt\.", coq), operation
 print("HOL, Isabelle and Coq logging erasure checks passed")

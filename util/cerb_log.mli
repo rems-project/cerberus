@@ -21,24 +21,26 @@ val sources : unit -> string list
     names encountered under this policy, including negative cache entries.
     Unvisited automatic sites are absent. No binary scanning is performed. *)
 
-val debug_enabled : string -> bool
-(** Only needed before an expensive condition for logging. Ordinary message
-    construction belongs in the callback below. *)
-val debugf : string -> 'a Logs.log
-(** OCaml call sites use [debugf __FUNCTION__ (fun m -> m "value: %a" pp v)].
-    Selection uses the same cache as [debug]. The callback, including format
+val debug : string -> 'a Logs.log
+val warn : string -> 'a Logs.log
+val err : string -> 'a Logs.log
+(** OCaml call sites use [debug __FUNCTION__ (fun m -> m "value: %a" pp v)].
+    Each severity uses its own decision cache. The callback, including format
     arguments, printers and tags, is evaluated only when enabled. *)
-val debug : string -> (unit -> string) -> unit
-(** String-thunk adapter for Lem's OCaml export. *)
-val warn : string -> (unit -> string) -> unit
-val err : string -> (unit -> string) -> unit
-(** Lem warning/error adapters use the same automatic naming as Debug.
-    Decisions are cached separately by severity; sources are shared.
-    Messages are evaluated only when their severity is enabled. *)
-val debug_located : string -> Cerb_location.t -> (unit -> string) -> unit
+
+val debug_string : string -> ((string -> unit) -> unit) -> unit
+val warn_string : string -> ((string -> unit) -> unit) -> unit
+val err_string : string -> ((string -> unit) -> unit) -> unit
+(** String-emitting adapters for Lem's OCaml export. For example,
+    [debug_string __FUNCTION__ (fun emit -> if condition then emit message)].
+    The callback runs only when enabled and may emit zero or several messages.
+    Each emission is a separate Logs call. Keep diagnostic work inside the
+    callback, and use the emitter only during that callback. *)
+val debug_located_string : string -> Cerb_location.t -> ((string -> unit) -> unit) -> unit
+(** Attach a location to each emitted message. Its formatting is deferred
+    until emission, so a callback that emits nothing does not format it. *)
 
 val location_tag : string Logs.Tag.def
-val translation_unit_tag : string Logs.Tag.def
 
 type format = Text | Json
 type output = Stderr | Stdout | File of string

@@ -9,9 +9,8 @@ let () =
   Fun.protect ~finally:(fun () -> Logs.set_reporter Logs.nop_reporter; close (); Sys.remove path) (fun () ->
     let domains = List.init 8 (fun id -> Domain.spawn (fun () ->
       let source = sources.(id) in
-      let tags = Logs.Tag.(add Cerb_log.translation_unit_tag (Printf.sprintf "tu%d.c" id) empty) in
       for i = 1 to 1000 do
-        Logs.debug ~src:source (fun m -> m ~tags "%d:%d\n%s" id i (String.make 1024 'x'))
+        Logs.debug ~src:source (fun m -> m "%d:%d\n%s" id i (String.make 1024 'x'))
       done)) in
     List.iter Domain.join domains;
     close ();
@@ -26,7 +25,6 @@ let () =
             let name = json |> member "function" |> to_string in
             let worker = String.sub name 3 (String.length name - 3) in
             assert (String.starts_with ~prefix:(worker ^ ":") message);
-            assert (json |> member "translation_unit" |> to_string = "tu" ^ worker ^ ".c");
             assert (not (Hashtbl.mem seen message));
             Hashtbl.add seen message (); loop ()
         | exception End_of_file -> () in
@@ -85,8 +83,7 @@ let () =
   run_workers 4 (fun _ ->
     for _ = 1 to 40 do
       Array.iter (fun raw ->
-        assert (Cerb_log.debug_enabled raw);
-        Cerb_log.debug raw (fun () -> "event")) literals
+        Cerb_log.debug_string raw (fun emit -> emit ("event"))) literals
     done);
   assert (Atomic.get events = 4 * 40 * Array.length literals);
   assert (List.length (Logs.Src.list ()) = before + Array.length literals);

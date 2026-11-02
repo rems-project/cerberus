@@ -1,6 +1,6 @@
 let literals = Array.sub Lookup_literals.names 0 128
 let check condition reason = if not condition then failwith reason
-let never () = failwith "disabled callback evaluated"
+let never _ = failwith "disabled callback evaluated"
 let rejects f = match f () with
   | _ -> failwith "invalid name accepted"
   | exception Invalid_argument _ -> ()
@@ -54,23 +54,38 @@ let name_allocation () =
   check (Gc.allocated_bytes () -. before < 1024.)
     "validation or unchanged normalization allocated per name"
 
+let admitted raw =
+  let called = ref false in
+  Cerb_log.debug_string raw (fun _ -> called := true);
+  !called
+
 let warm_allocation raw =
-  ignore (Cerb_log.debug_enabled raw);
-  Gc.full_major ();
-  let before = Gc.allocated_bytes () in
-  for _ = 1 to 100_000 do ignore (Cerb_log.debug_enabled raw) done;
-  let allocated = Gc.allocated_bytes () -. before in
-  check (allocated < 1024.) "cached decisions allocated on hits"
+  let previous = Logs.reporter () in
+  Logs.set_reporter Logs.nop_reporter;
+  Cerb_log.debug raw (fun _ -> ());
+  let reference = if admitted raw then
+      let src = List.find (fun src -> Logs.Src.name src = Cerb_log_names.canonical raw)
+          (Logs.Src.list ()) in
+      (fun () -> Logs.debug ~src (fun _ -> ()))
+    else (fun () -> ()) in
+  let allocated call =
+    Gc.full_major ();
+    let before = Gc.allocated_bytes () in
+    for _ = 1 to 100_000 do call () done;
+    Gc.allocated_bytes () -. before in
+  let extra = allocated (fun () -> Cerb_log.debug raw (fun _ -> ())) -. allocated reference in
+  Logs.set_reporter previous;
+  check (extra < 1024.) "cached lookup allocated beyond Logs dispatch"
 
 let formatted callback =
-  Cerb_log.debugf __FUNCTION__ (fun m ->
+  Cerb_log.debug __FUNCTION__ (fun m ->
     callback ();
     m ~header:"native"
       ~tags:Logs.Tag.(add Cerb_log.location_tag "input.c:7" empty)
       "value: %a" Format.pp_print_int 7)
 
 let other_formatted callback =
-  Cerb_log.debugf __FUNCTION__ (fun m -> callback (); m "other")
+  Cerb_log.debug __FUNCTION__ (fun m -> callback (); m "other")
 
 let native_formatted () =
   let before = count_sources () in
@@ -111,14 +126,14 @@ let () =
   name_allocation ();
   configure ["Missing.fn"];
   let before = count_sources () in
-  Array.iter (fun name -> Cerb_log.debug name never) literals;
+  Array.iter (fun name -> Cerb_log.debug_string name never) literals;
   check (count_sources () = before) "negative decisions registered sources";
   check (List.for_all (fun name -> List.mem name (Cerb_log.sources ()))
     (Array.to_list literals)) "negative decisions missing from listing";
   warm_allocation literals.(0);
   Cerb_log.configure ~discover:true None ["all"];
-  Cerb_log.debug "Discovery.disabled" never;
-  check (not (Cerb_log.debug_enabled "Discovery.disabled.(fun)")) "discovery enabled logging";
+  Cerb_log.debug_string "Discovery.disabled" never;
+  check (not (admitted "Discovery.disabled.(fun)")) "discovery enabled logging";
   check (count_sources () = before) "discovery registered a disabled source";
   let listed = Cerb_log.sources () in
   check (List.filter (String.starts_with ~prefix:"Discovery.") listed =
@@ -132,13 +147,13 @@ let () =
   let worker _ =
     for _ = 1 to 40 do
       Array.iter (fun name ->
-        check (Cerb_log.debug_enabled name) "lost positive decision";
-        Cerb_log.debug name (fun () -> "event")) literals
+        check (admitted name) "lost positive decision";
+        Cerb_log.debug_string name (fun emit -> emit ("event"))) literals
     done in
   Concurrency_cases.run_threads 4 worker;
   check (Atomic.get events = 4 * 40 * Array.length literals) "lost events";
   check (count_sources () = before + Array.length literals) "duplicate sources";
-  check (Cerb_log.debug_enabled "Lookup_literals.function000.(fun)") "alias decision";
+  check (admitted "Lookup_literals.function000.(fun)") "alias decision";
   check (count_sources () = before + Array.length literals) "alias source duplication";
   warm_allocation literals.(0);
   let copies = Array.map (fun s -> Bytes.to_string (Bytes.of_string s)) literals in
@@ -147,24 +162,24 @@ let () =
   List.iter (fun collect ->
     collect ();
     Array.iter (fun s ->
-      rejects (fun () -> Cerb_log.debug_enabled s);
-      rejects (fun () -> Cerb_log.debug s never);
-      rejects (fun () -> Cerb_log.debug_located s Cerb_location.unknown never)) copies;
-    Array.iter (fun s -> check (Cerb_log.debug_enabled s) "static key after GC") literals)
+      rejects (fun () -> admitted s);
+      rejects (fun () -> Cerb_log.debug_string s never);
+      rejects (fun () -> Cerb_log.debug_located_string s Cerb_location.unknown never)) copies;
+    Array.iter (fun s -> check (admitted s) "static key after GC") literals)
     [(fun () -> ()); Gc.minor; Gc.full_major; Gc.compact];
   (* Reconfiguration is allowed only after workers have joined. It must
      replace both positive and negative decisions from the previous policy. *)
   configure ["Missing.fn"];
-  Array.iter (fun name -> Cerb_log.debug name never) literals;
+  Array.iter (fun name -> Cerb_log.debug_string name never) literals;
   configure ["Lookup_literals"];
   Concurrency_cases.run_threads 4 worker;
-  List.iter (fun s -> rejects (fun () -> Cerb_log.debug_enabled s)) [""; "M."; "M"];
+  List.iter (fun s -> rejects (fun () -> admitted s)) [""; "M."; "M"];
   Cerb_log.configure None ["all"];
-  Array.iter (fun s -> Cerb_log.debug s never) copies;
-  check (not (Cerb_log.debug_enabled "Lookup_literals.function000")) "quiet";
+  Array.iter (fun s -> Cerb_log.debug_string s never) copies;
+  check (not (admitted "Lookup_literals.function000")) "quiet";
   configure [];
-  Array.iter (fun s -> Cerb_log.debug s never) copies;
-  Cerb_log.debug "Discovery.not_recorded" never;
+  Array.iter (fun s -> Cerb_log.debug_string s never) copies;
+  Cerb_log.debug_string "Discovery.not_recorded" never;
   check (not (List.mem "Discovery.not_recorded" (Cerb_log.sources ())))
     "inactive logging performed discovery";
   native_formatted ();

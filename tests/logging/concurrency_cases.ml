@@ -21,13 +21,13 @@ let run_threads count f =
     ~relax:Thread.yield count f
 
 let check condition reason = if not condition then failwith reason
-let never () = failwith "disabled callback evaluated"
+let never _ = failwith "disabled callback evaluated"
 let configure selectors = Cerb_log.configure (Some Logs.Warning) selectors
 let count_sources () = List.length (Logs.Src.list ())
 let emit level raw message = match level with
-  | Logs.Debug -> Cerb_log.debug raw message
-  | Logs.Warning -> Cerb_log.warn raw message
-  | Logs.Error -> Cerb_log.err raw message
+  | Logs.Debug -> Cerb_log.debug_string raw message
+  | Logs.Warning -> Cerb_log.warn_string raw message
+  | Logs.Error -> Cerb_log.err_string raw message
   | _ -> assert false
 
 let concurrent_misses ~run_workers literals =
@@ -48,9 +48,9 @@ let concurrent_misses ~run_workers literals =
       configure ["Concurrent_misses.enabled"];
       let worker id =
         Array.iter (fun raw ->
-          Cerb_log.debugf raw (fun _ -> never ());
-          Cerb_log.debugf enabled.(id mod Array.length enabled) (fun m -> m "event");
-          Cerb_log.debug disabled.(id mod Array.length disabled) never) literals in
+          Cerb_log.debug raw (fun _ -> never ());
+          Cerb_log.debug enabled.(id mod Array.length enabled) (fun m -> m "event");
+          Cerb_log.debug_string disabled.(id mod Array.length disabled) never) literals in
       run_workers 8 worker;
       check (count_sources () = before + 1) "concurrent aliases registered duplicate sources";
       let names = List.filter (String.starts_with ~prefix:"Concurrent_misses.")
@@ -80,7 +80,7 @@ let concurrent_severities ~run_workers () =
         else [Logs.Error; Logs.Warning; Logs.Debug] in
       for _ = 1 to 200 do
         List.iter (fun level -> emit level raw
-          (if level = Logs.Debug then never else fun () -> "event")) order
+          (if level = Logs.Debug then never else fun emit -> emit "event")) order
       done);
     check (count_sources () = before + 1) "concurrent severities duplicated a source";
     check (Atomic.get events = 8 * 200 * 2) "concurrent diagnostics lost events")

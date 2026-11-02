@@ -6,23 +6,20 @@ declare {ocaml} rename module = Lem_debug
 (* Sources use the enclosing OCaml function name on first use.
    Proof backends erase logging operations without evaluating messages. *)
 
-(* Only needed when the decision to log itself is expensive. *)
-val debug_enabled : unit -> bool
-let ~{ocaml} debug_enabled u = false
-declare ocaml target_rep function debug_enabled u = `Cerb_log.debug_enabled` `__FUNCTION__`
-
-val debug : (unit -> string) -> unit
+(* Callbacks can emit zero or several messages. Keep diagnostic conditions
+   and message construction inside the callback, and do not retain emitters. *)
+val debug : ((string -> unit) -> unit) -> unit
 let ~{ocaml} debug msg = ()
-declare ocaml target_rep function debug msg = `Cerb_log.debug` `__FUNCTION__` msg
+declare ocaml target_rep function debug msg = `Cerb_log.debug_string` `__FUNCTION__` msg
 
-val warn : (unit -> string) -> unit
+val warn : ((string -> unit) -> unit) -> unit
 let ~{ocaml} warn msg = ()
-declare ocaml target_rep function warn msg = `Cerb_log.warn` `__FUNCTION__` msg
+declare ocaml target_rep function warn msg = `Cerb_log.warn_string` `__FUNCTION__` msg
 
-val err : (unit -> string) -> unit
+val err : ((string -> unit) -> unit) -> unit
 let ~{ocaml} err msg = ()
-declare ocaml target_rep function err msg = `Cerb_log.err` `__FUNCTION__` msg
+declare ocaml target_rep function err msg = `Cerb_log.err_string` `__FUNCTION__` msg
 
-val debug_located : Loc.t -> (unit -> string) -> unit
+val debug_located : Loc.t -> ((string -> unit) -> unit) -> unit
 let ~{ocaml} debug_located loc msg = ()
-declare ocaml target_rep function debug_located loc msg = `Cerb_log.debug_located` `__FUNCTION__` loc msg
+declare ocaml target_rep function debug_located loc msg = `Cerb_log.debug_located_string` `__FUNCTION__` loc msg

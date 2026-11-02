@@ -24,9 +24,9 @@ let run () =
     measure "native Logs" (fun () ->
       for i = 1 to iterations do Logs.debug ~src:source (fun m -> m "%d" i) done);
     measure "OCaml adapter" (fun () ->
-      for i = 1 to iterations do Cerb_log.debugf __FUNCTION__ (fun m -> m "%d" i) done);
+      for i = 1 to iterations do Cerb_log.debug __FUNCTION__ (fun m -> m "%d" i) done);
     measure "Lem adapter" (fun () ->
-      for i = 1 to iterations do Cerb_log.debug __FUNCTION__ (fun () -> string_of_int i) done)
+      for i = 1 to iterations do Cerb_log.debug_string __FUNCTION__ (fun emit -> emit (string_of_int i)) done)
   done;
   let count = 100_000 in
   let sink = open_out "/dev/null" in
@@ -51,16 +51,16 @@ let run () =
       measure ~count "explicit Logs enabled text" (fun () ->
         for i = 1 to count do Logs.debug ~src:source (fun m -> m "%d" i) done);
       measure ~count "enabled text" (fun () ->
-        for i = 1 to count do Cerb_log.debug __FUNCTION__ (fun () -> string_of_int i) done);
+        for i = 1 to count do Cerb_log.debug_string __FUNCTION__ (fun emit -> emit (string_of_int i)) done);
       measure ~count "OCaml enabled text" (fun () ->
-        for i = 1 to count do Cerb_log.debugf __FUNCTION__ (fun m -> m "%d" i) done);
+        for i = 1 to count do Cerb_log.debug __FUNCTION__ (fun m -> m "%d" i) done);
       Logs.set_reporter json;
       measure ~count "explicit Logs enabled JSON" (fun () ->
         for i = 1 to count do Logs.debug ~src:source (fun m -> m "%d" i) done);
       measure ~count "enabled JSON" (fun () ->
-        for i = 1 to count do Cerb_log.debug __FUNCTION__ (fun () -> string_of_int i) done);
+        for i = 1 to count do Cerb_log.debug_string __FUNCTION__ (fun emit -> emit (string_of_int i)) done);
       measure ~count "OCaml enabled JSON" (fun () ->
-        for i = 1 to count do Cerb_log.debugf __FUNCTION__ (fun m -> m "%d" i) done)
+        for i = 1 to count do Cerb_log.debug __FUNCTION__ (fun m -> m "%d" i) done)
     done)
 
 let () = run ()

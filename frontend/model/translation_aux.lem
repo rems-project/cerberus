@@ -417,7 +417,7 @@ val warn_atomic_elaboration: bool -> elabM unit
 let warn_atomic_elaboration guard =
   let () =
     if guard then
-      Debug.debug (fun () -> "TODO: elaboration is wrong for atomic types")
+      Debug.debug (fun emit -> emit ("TODO: elaboration is wrong for atomic types"))
     else
       () in
   return ()

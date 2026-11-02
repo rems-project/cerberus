@@ -4,6 +4,7 @@ let check condition msg = if not condition then failwith msg
 let get = function Ok x -> x | Error msg -> failwith msg
 let alpha_source = Logs.Src.create "Alpha.parse"
 let beta_source = Logs.Src.create "Beta.parse"
+let context_tag = Logs.Tag.def "context" Format.pp_print_string
 let never () = failwith "disabled message was evaluated"
 
 let lines path =
@@ -39,7 +40,7 @@ let test_json () = with_file Cerb_log.Json (fun filename _ close ->
   Logs.debug ~src:alpha_source (fun m ->
     m ~tags:Logs.Tag.(add Cerb_log.location_tag "input.c:12" empty) "located");
   Logs.info ~src:beta_source (fun m ->
-    m ~tags:Logs.Tag.(add Cerb_log.translation_unit_tag "b.c" empty) "bound");
+    m ~tags:Logs.Tag.(add context_tag "test input" empty) "bound");
   Logs.warn ~src:alpha_source (fun m -> m "warning");
   Logs.err ~src:alpha_source (fun m -> m "error");
   close (); close ();
@@ -53,7 +54,8 @@ let test_json () = with_file Cerb_log.Json (fun filename _ close ->
       check (debug |> member "module" |> to_string = "Alpha") "module metadata";
       check (debug |> member "function" |> to_string = "parse") "function metadata";
       check (located |> member "location" |> to_string = "input.c:12") "location metadata";
-      check (bound |> member "translation_unit" |> to_string = "b.c") "explicit TU tag";
+      check (bound |> member "tags" |> member "context" |> to_string = "test input")
+        "custom tag";
       check (warning |> member "level" |> to_string = "warning") "warning severity";
       check (error |> member "level" |> to_string = "error") "error severity"
   | _ -> failwith "unexpected JSON event count")
@@ -143,7 +145,25 @@ let test_late_source () = with_file Cerb_log.Text (fun filename late close_late 
     let first_ten = List.filteri (fun i _ -> i < 10) (lines filename) in
     check (first_ten = expected @ expected) "late source prefixes at every level"))
 
+let test_located_strings () = with_file Cerb_log.Json (fun filename _ close ->
+  let name = "Bridge.located" in
+  let loc = Cerb_location.other "input.c:7" in
+  Cerb_log.configure (Some Logs.Warning) [];
+  Cerb_log.debug_located_string name loc (fun _ -> failwith "disabled location callback ran");
+  Cerb_log.configure (Some Logs.Warning) ["Bridge"];
+  Cerb_log.debug_located_string name loc (fun _ -> ());
+  Cerb_log.debug_located_string name loc (fun emit -> emit "first"; emit "second");
+  close ();
+  let open Yojson.Basic.Util in
+  let records = List.map Yojson.Basic.from_string (lines filename) in
+  check (List.map (fun record -> record |> member "message" |> to_string) records =
+    ["first"; "second"]) "located callback emission count";
+  List.iter (fun record ->
+    check (record |> member "location" |> to_string = Cerb_location.location_to_string loc)
+      "string bridge lost location metadata") records)
+
 let () =
   test_gates (); test_json (); test_reporter (); test_threads (); test_formats ();
   test_late_source ();
+  test_located_strings ();
   print_endline "logging tests passed"

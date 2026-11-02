@@ -1,10 +1,10 @@
 let check condition reason = if not condition then failwith reason
-let never () = failwith "disabled message evaluated"
+let never _ = failwith "disabled message evaluated"
 let count_sources () = List.length (Logs.Src.list ())
 let emit level raw message = match level with
-  | Logs.Debug -> Cerb_log.debug raw message
-  | Logs.Warning -> Cerb_log.warn raw message
-  | Logs.Error -> Cerb_log.err raw message
+  | Logs.Debug -> Cerb_log.debug_string raw message
+  | Logs.Warning -> Cerb_log.warn_string raw message
+  | Logs.Error -> Cerb_log.err_string raw message
   | _ -> assert false
 
 let with_events f =
@@ -41,8 +41,8 @@ let severity_rules () = with_events (fun events ->
         List.iter (fun raw ->
           events := [];
           callbacks := 0;
-          List.iter (fun severity -> emit severity raw (fun () ->
-            incr callbacks; "message")) order;
+          List.iter (fun severity -> emit severity raw (fun emit ->
+            incr callbacks; emit "message")) order;
           let actual = List.rev !events in
           check (List.map (fun (_, level, _) -> level) actual =
             List.filter (fun level -> List.mem level expected) order)
@@ -69,30 +69,29 @@ let no_allocations f =
 let gates_and_discovery () =
   let heap = Bytes.to_string (Bytes.of_string "Skipped.debug") in
   Cerb_log.configure (Some Logs.Warning) [];
-  no_allocations (fun () -> Cerb_log.debug heap never);
-  check (not (Cerb_log.debug_enabled heap)) "globally disabled Debug enabled";
+  no_allocations (fun () -> Cerb_log.debug_string heap never);
+  Cerb_log.debug heap never;
   check (not (List.mem "Skipped.debug" (Cerb_log.sources ())))
     "globally disabled Debug resolved its name";
-  Cerb_log.warn "Gates.warning" (fun () -> "warning");
-  Cerb_log.debug heap never;
-  check (not (Cerb_log.debug_enabled "Gates.warning"))
-    "registering a warning enabled Debug";
+  Cerb_log.warn_string "Gates.warning" (fun emit -> emit ("warning"));
+  Cerb_log.debug_string heap never;
+  Cerb_log.debug_string "Gates.warning" never;
   List.iter (fun log ->
     match log heap never with
     | () -> failwith "active diagnostic accepted a heap string"
-    | exception Invalid_argument _ -> ()) [Cerb_log.warn; Cerb_log.err];
+    | exception Invalid_argument _ -> ()) [Cerb_log.warn_string; Cerb_log.err_string];
   Cerb_log.configure (Some Logs.Error) [];
-  no_allocations (fun () -> Cerb_log.warn heap never);
+  no_allocations (fun () -> Cerb_log.warn_string heap never);
   Cerb_log.configure (Some Logs.Error) ["Missing.fn"];
   let before = count_sources () in
-  no_allocations (fun () -> Cerb_log.warn "Negative.only_warning" never);
+  no_allocations (fun () -> Cerb_log.warn_string "Negative.only_warning" never);
   check (count_sources () = before) "rejected warning registered a source";
   Cerb_log.configure None ["all"];
   no_allocations (fun () ->
-    Cerb_log.warn heap never; Cerb_log.err heap never; Cerb_log.debug heap never);
+    Cerb_log.warn_string heap never; Cerb_log.err_string heap never; Cerb_log.debug_string heap never);
   Cerb_log.configure ~discover:true None ["all"];
-  Cerb_log.warn "Discovery.warning_only" never;
-  Cerb_log.err "Discovery.error_only" never;
+  Cerb_log.warn_string "Discovery.warning_only" never;
+  Cerb_log.err_string "Discovery.error_only" never;
   check (count_sources () = before) "quiet discovery registered a source";
   let listed = Cerb_log.sources () in
   check (List.mem "Discovery.warning_only" listed && List.mem "Discovery.error_only" listed)
@@ -101,8 +100,35 @@ let gates_and_discovery () =
   check (not (List.mem "Discovery.warning_only" (Cerb_log.sources ())))
     "stale diagnostic decisions after reconfiguration"
 
+let callback_contract () = with_events (fun events ->
+  let calls = ref 0 in
+  Cerb_log.configure (Some Logs.Warning) [];
+  Cerb_log.debug_string "Callbacks.conditional" (fun _ -> incr calls);
+  check (!calls = 0) "disabled string callback ran";
+  Cerb_log.configure (Some Logs.Warning) ["Callbacks"];
+  Cerb_log.debug_string "Callbacks.conditional" (fun _ -> incr calls);
+  check (!calls = 1 && !events = []) "empty callback emitted a record";
+  Cerb_log.debug_string "Callbacks.conditional" (fun emit ->
+    incr calls; emit "first"; emit "second");
+  check (!calls = 2 && List.map (fun (_, _, text) -> text) (List.rev !events) =
+    ["first"; "second"]) "multiple string emissions changed";
+  events := [];
+  Cerb_log.warn "Callbacks.native" (fun m -> m ~header:"warning" "value=%a" Format.pp_print_int 7);
+  Cerb_log.err "Callbacks.native" (fun m -> m "error=%d" 8);
+  check (List.map (fun (_, level, text) -> level, text) (List.rev !events) =
+    [Logs.Warning, "value=7"; Logs.Error, "error=8"]) "native warning/error formats";
+  events := [];
+  Cerb_log.configure (Some Logs.Error) [];
+  Cerb_log.warn "Callbacks.native" never;
+  Cerb_log.warn_string "Callbacks.native" never;
+  check (!events = []) "disabled warning emitted";
+  Cerb_log.configure None [];
+  Cerb_log.err "Callbacks.native" never;
+  Cerb_log.err_string "Callbacks.native" never)
+
 let () =
   severity_rules ();
+  callback_contract ();
   Logs.set_reporter Logs.nop_reporter;
   gates_and_discovery ();
   Concurrency_cases.concurrent_severities ~run_workers:Concurrency_cases.run_threads ();

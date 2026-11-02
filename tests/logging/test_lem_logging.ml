@@ -1,5 +1,5 @@
 (* Exercise an actual Lem-generated caller, including its __FUNCTION__ name
-   and debug_enabled guard. Symbol identity ignores its descriptive label. *)
+   and conditional emission. Symbol identity ignores its descriptive label. *)
 open Cerb_frontend
 
 let () =
@@ -15,6 +15,8 @@ let () =
   assert (Symbol.equal_sym left right);
   assert (!events = []);
   Cerb_log.configure (Some Logs.Warning) ["Symbol.symbolEquality"];
+  assert (Symbol.equal_sym left left);
+  assert (!events = []);
   assert (Symbol.equal_sym left right);
   (match !events with
    | [("Symbol.symbolEquality", Logs.Debug, message)] ->

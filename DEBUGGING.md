@@ -61,23 +61,23 @@ default source. Follow Logs' lazy message convention in OCaml:
 
 ```ocaml
 let translate input =
-  Cerb_log.debugf __FUNCTION__ (fun m -> m "input: %a" pp_input input);
+  Cerb_log.debug __FUNCTION__ (fun m -> m "input: %a" pp_input input);
   (* ... *)
 ```
 
-Pass `__FUNCTION__` at each Debug call site. Both native OCaml and Lem-generated
-calls use the shared Saturn cache; no Debug source registration is needed.
-Place expensive computations inside the callback so disabled logging does not
-perform them. `debugf` accepts the usual Logs formatting callback, including
-`%a` printers, headers and tags. Info, Warning and Error messages use the ordinary
-Logs API with explicit sources created once at module scope.
+Pass `__FUNCTION__` to `Cerb_log.debug`, `Cerb_log.warn` and `Cerb_log.err`.
+Both native OCaml and Lem-generated calls use Saturn; no source declaration
+is needed for these adapters. Place expensive computations inside the callback
+so disabled logging does not perform them. All three accept the usual Logs
+formatting callback, including `%a` printers, headers and tags. Info messages
+use the ordinary Logs API with explicit sources created once at module scope.
 
 Lem uses a small, non-monadic adapter because its strings are not OCaml format
 strings:
 
 ```ocaml
 let translate input =
-  let () = Debug.debug (fun () -> show input) in
+  let () = Debug.debug (fun emit -> emit (show input)) in
   (* ... *)
 ```
 
@@ -89,13 +89,21 @@ remain significant: `fn0` and `fn` differ. For example, the native preprocessor
 message is selected by `Pipeline.cpp`, or by `Pipeline` along with the module's
 other functions.
 
-`Debug.warn (fun () -> message)` and `Debug.err (fun () -> message)` use the same
-automatic function names. There is no Lem source declaration or `Debug.info`
-adapter. `Debug.debug_located loc (fun () -> message)` formats the location only
-when enabled. `Debug.debug_enabled ()` uses the same automatic name.
-`Debug.debug_enabled` is only needed when deciding *whether* to emit a message
-requires expensive work, as in symbol-description comparisons. It is not needed
-for ordinary message construction.
+`Debug.warn (fun emit -> emit message)` and `Debug.err (fun emit -> emit message)`
+use the same automatic function names. There is no Lem source declaration or
+`Debug.info` adapter. Their OCaml exports use `Cerb_log.debug_string`,
+`warn_string` and `err_string`. `Debug.debug_located loc (fun emit -> emit message)`
+uses `debug_located_string` and formats the location only when a message is
+emitted. Callbacks can emit zero or several messages. Put diagnostic-only
+conditions inside the callback too, for example:
+
+```ocaml
+Debug.debug (fun emit -> if sd1 <> sd2 then emit "suspicious equality" else ())
+```
+
+There is no separate enabled-query function. Use the emitter only during its
+callback; each emission is a complete Logs call with its own reporter
+continuations. The callback itself runs only when its severity is enabled.
 
 There is no logging monad, context parameter, domain list, numeric verbosity or
 compatibility API. No mutable logging configuration is stored in Lem state.
@@ -148,10 +156,9 @@ Multi-domain correctness is tested; parallel-TU throughput is not established.
 
 JSON records contain `schema_version` (1), `source`, `module`, an optional
 `function`, `level`, and `message`. Newlines and control characters are escaped.
-Optional Logs tags supply `location` and `translation_unit`; arbitrary extra tags
-appear under `tags`. No translation-unit context is threaded through elaboration
-just to carry the shared policy. Add per-input metadata at a call site only when
-needed.
+The optional `location` tag supplies source location metadata; arbitrary extra
+tags appear under `tags`. No translation-unit context is threaded through
+elaboration just to carry the shared policy.
 
 ## Display and profiling
 

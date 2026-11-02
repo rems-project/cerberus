@@ -357,9 +357,9 @@ let rec load_character_array_aux loc elem_ty ptrval prec_n_opt acc =
     | _ ->
         let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
         Mem.bind (Mem.load (Loc.other "Formatted.load_character_array_aux") elem_ty ptrval) (fun (_, mval) ->
-        let () = Debug.debug (fun () ->
-            "load_character_array_aux ==> " ^ Mem.stringFromMem_value mval
-        ) in
+        let () = Debug.debug (fun emit ->
+            emit ("load_character_array_aux ==> " ^ Mem.stringFromMem_value mval
+        )) in
         Mem.case_mem_value mval
           (fun _ -> error "Formatted.load_character_array, unspecified")
           (fun _ _ -> error "Formatted.load_character_array, concurrency read")
@@ -486,7 +486,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                                   (n=0, cont_int n, args')
                               ))
                           | Nothing ->
-                              let () = Debug.warn (fun () -> "printf() found an abstract integer value") in
+                              let () = Debug.warn (fun emit -> emit ("printf() found an abstract integer value")) in
                               Mem.return $ Right (U.return (false, [#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
                         end
                     | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
@@ -742,7 +742,7 @@ let rec printf_aux loc eval_conv acc fs ty_ptrvals =
           | Right (U.Undef loc ubs) ->
               Mem.return $ Right (U.Undef loc ubs)
           | Left err ->
-              let () = Debug.debug (fun () -> "PRINTF ERR 2") in
+              let () = Debug.debug (fun emit -> emit ("PRINTF ERR 2")) in
               Mem.return $ Left err
         end
     | _ ->
