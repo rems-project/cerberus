@@ -12,6 +12,9 @@ import Cmm_csem Mem
 import Linux
 
 
+import Debug
+
+
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
 
@@ -49,11 +52,11 @@ let force_core_object_type_of_ctype ty =
 
 let floating_conversion_TODO to_ty from_ty z =
   (* NOTE: our current implementation of floating types has them all behave like double *)
-  let () = Debug.warn [Debug.DB_elaboration] (fun () ->
-    "casts between floating types is currently a NOP: " ^
+  let () = Debug.warn (fun m ->
+    m ("casts between floating types is currently a NOP: " ^
     Pp.stringFromCtype to_ty ^ " <== " ^
     Pp.stringFromCtype from_ty
-  ) in
+  )) in
   z
 
 
@@ -2022,9 +2025,8 @@ else if AilTypesAux.is_integer cast_ty && AilTypesAux.is_byte e_ty then
                 )
 
 else (* pointer <-> pointer cast *)
-              let () = Debug.warn [Debug.DB_elaboration] (fun () ->
-                "the elaboration does the identity for casts between pointer types (this is different from ISO)"
-              ) in
+              let () = Debug.debug (fun m ->
+                m "the elaboration does the identity for casts between pointer types (this is different from ISO)") in
               let ub_pe = Caux.mk_undef_pe loc Undefined.UB025_misaligned_pointer_conversion in
               match AilTypesAux.referenced_type cast_ty with
                 | Just cast_ref_ty ->
@@ -2435,9 +2437,8 @@ end                       )
       | A.AilEassign e1 e2 ->
           (* STD §6.5.16 *)
           (* TODO: model the non-exact overlap UB *)
-          let () = Debug.warn [Debug.DB_elaboration] (fun () ->
-            "Cerberus does not currently check the undefined behaviour for non-exactly overlapping assignments (see C11 §6.5.16.1#3)"
-          ) in
+          let () = Debug.debug (fun m ->
+            m "Cerberus does not currently check the undefined behaviour for non-exactly overlapping assignments (see C11 §6.5.16.1#3)") in
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e1_wrp  ->
           self e1                                             >>= fun core_e1 ->
           let ty1 = ctype_of e1 in
@@ -3131,9 +3132,9 @@ end
       
       | A.AilEprint_type e ->
           let (qs, ty) = qualified_ctype_of conf e in
-          let () = Debug.print_debug_located 0 [] loc (fun () ->
-            "PRINT_TYPE: " ^ Pp.stringFromCtype_human qs ty
-          ) in
+          let () = Debug.debug_located loc (fun m ->
+            m ("PRINT_TYPE: " ^ Pp.stringFromCtype_human qs ty
+          )) in
           self e
       | A.AilEbmc_assume e ->
           let oTy = force_core_object_type_of_ctype (ctype_of e) in

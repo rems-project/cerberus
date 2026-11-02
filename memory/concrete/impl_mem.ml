@@ -162,7 +162,7 @@ module Concrete : Memory = struct
       Eff (fun b -> ((if b then `SAT else `UNSAT), b))
     
     let with_constraints _ cs (Eff ma) =
-      Cerb_debug.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
+      Cerb_log.debug __FUNCTION__ (fun m -> m "%s" "HELLO: Concrete.with_constraints");
       let rec eval_cs = function
         | MC_empty ->
             true
@@ -471,22 +471,20 @@ module Concrete : Memory = struct
       (* We are in the mode where integer values have a provenance *)
       IV (prov, n)
   
-  (* TODO: DEBUG *)
   let print_bytemap str =
-    if !Cerb_pp_options.verbose then begin
-      Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
-      get >>= fun st ->
-      IntMap.iter AbsByte.(fun addr b ->
-        Printf.fprintf stderr "@%s ==> %s: %s%s\n"
-          (Z.to_string addr)
-          (string_of_provenance b.prov)
-          (match b.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
-          (match b.copy_offset with None -> "" | Some n -> " [" ^ string_of_int n ^ "]")
-      ) st.bytemap;
-      prerr_endline "END";
+    get >>= fun st ->
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%a" (fun ppf () ->
+        Format.fprintf ppf "BEGIN BYTEMAP ==> %s\n" str;
+        IntMap.iter AbsByte.(fun addr b ->
+          Format.fprintf ppf "@@%s ==> %s: %s%s\n"
+            (Z.to_string addr)
+            (string_of_provenance b.prov)
+            (match b.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+            (match b.copy_offset with None -> "" | Some n -> " [" ^ string_of_int n ^ "]")
+        ) st.bytemap;
+        Format.pp_print_string ppf "END") ());
     return ()
-    end else
-      return ()
   
   let is_dynamic addr : bool memM =
     get >>= fun st ->
@@ -828,7 +826,7 @@ module Concrete : Memory = struct
           aux (Z.to_int n) (`NoTaint, []) bs
       | Pointer (_, ref_ty) ->
           let (bs1, bs2) = L.split_at (Z.to_int (sizeof ~tagDefs cty)) bs in
-          Cerb_debug.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
+          Cerb_log.debug __FUNCTION__ (fun m -> m "%s" "TODO: Concrete, assuming pointer repr is unsigned??");
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint (* PNVI-ae-udi *)
           , begin match extract_unspec bs1' with
@@ -891,7 +889,8 @@ module Concrete : Memory = struct
                   MVunspecified (Ctype ([], Pointer (no_qualifiers, ref_ty)))
             end, bs2)
       | Atomic atom_ty ->
-          Cerb_debug.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
+          Cerb_log.debug __FUNCTION__ (fun m ->
+            m "%s" "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           self atom_ty bs
       | Struct tag_sym ->
           (* TODO: the Z.to_int on the sizeof() will raise Overflow on huge structs *)
@@ -989,7 +988,7 @@ module Concrete : Memory = struct
               (Z.to_int (sizeof ~tagDefs (Ctype ([], Basic (Floating fty))))) (Z.of_int64 (Int64.bits_of_float fval))
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
-          Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
+          Cerb_log.debug __FUNCTION__ (fun m -> m "%s" "NOTE: we fix the sizeof pointers to 8 bytes");
           let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
             | None ->
                 failwith "the concrete memory model requires a complete implementation"
@@ -997,7 +996,8 @@ module Concrete : Memory = struct
                 z in
           begin match ptrval_ with
             | PVnull _ ->
-                Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
+                Cerb_log.debug __FUNCTION__ (fun m ->
+                  m "%s" "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 ret @@ List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
             | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
                 (* TODO: *)
@@ -1130,12 +1130,11 @@ module Concrete : Memory = struct
             failwith "TODO: cerb::with_address() is yet implemented"
            (* allocator_with_address addr size align *)
     end >>= fun (alloc_id, addr) ->
-    Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
-      "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
-      " --> alloc_id= " ^ Z.to_string alloc_id ^
-      ", size= " ^ Z.to_string size ^
-      ", addr= " ^ Z.to_string addr
-    );
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%s" ("STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        " --> alloc_id= " ^ Z.to_string alloc_id ^
+        ", size= " ^ Z.to_string size ^
+        ", addr= " ^ Z.to_string addr));
     begin match init_opt with
       | None ->
           let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= IsWritable; taint= `Unexposed} in
@@ -1188,12 +1187,12 @@ module Concrete : Memory = struct
           | Some alloc ->
               Some { alloc with prefix = pref }
           | None ->
-              Cerb_debug.warn [] (fun () -> "update_prefix: allocation does not exist");
+              Cerb_log.warn __FUNCTION__ (fun m -> m "%s" "update_prefix: allocation does not exist");
               None
         in
         update (fun st -> { st with allocations= IntMap.update alloc_id upd_alloc st.allocations })
     | _ ->
-        Cerb_debug.warn [] (fun () -> "update_prefix: wrong arguments");
+        Cerb_log.warn __FUNCTION__ (fun m -> m "%s" "update_prefix: wrong arguments");
         return ()
   
   let prefix_of_pointer tagDefs (PV (prov, pv)) : string option memM =
@@ -1254,12 +1253,11 @@ module Concrete : Memory = struct
 
   let allocate_region tid pref (IV (_, align_n)) (IV (_, size_n)) =
     allocator size_n align_n >>= fun (alloc_id, addr) ->
-    Cerb_debug.print_debug 1 [] (fun () ->
-      "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
-      " --> alloc_id= " ^ Z.to_string alloc_id ^
-      ", size= " ^ Z.to_string size_n ^
-      ", addr= " ^ Z.to_string addr
-    );
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%s" ("DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
+        " --> alloc_id= " ^ Z.to_string alloc_id ^
+        ", size= " ^ Z.to_string size_n ^
+        ", addr= " ^ Z.to_string addr));
     (* TODO: why aren't we using the argument pref? *)
     let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= IsWritable; taint= `Unexposed} in
     update (fun st ->
@@ -1369,9 +1367,8 @@ module Concrete : Memory = struct
           | false ->
               get_allocation ~loc alloc_id >>= fun alloc ->
               if Z.equal addr alloc.base then begin
-                Cerb_debug.print_debug 1 [] (fun () ->
-                  "KILLING alloc_id= " ^ Z.to_string alloc_id
-                );
+                Cerb_log.debug __FUNCTION__ (fun m ->
+                  m "%s" ("KILLING alloc_id= " ^ Z.to_string alloc_id));
                 update begin fun st ->
                   {st with dead_allocations= alloc_id :: st.dead_allocations;
                            last_used= Some alloc_id;
@@ -1387,9 +1384,8 @@ module Concrete : Memory = struct
         end
   
   let load loc ty (PV (prov, ptrval_)) =
-    Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
-      "ENTERING LOAD: " ^ Cerb_location.location_to_string loc
-    );
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%s" ("ENTERING LOAD: " ^ Cerb_location.location_to_string loc));
     get_tagDefs >>= fun tagDefs ->
     let do_load alloc_id_opt addr =
       get >>= fun st ->
@@ -1406,11 +1402,10 @@ module Concrete : Memory = struct
       let fp = FP (`R, addr, (sizeof ~tagDefs ty)) in
       begin match bs' with
         | [] ->
-            Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
-              "EXITING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
-              ", @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
-              " ==> mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
-             );
+            Cerb_log.debug __FUNCTION__ (fun m ->
+              m "%s" ("EXITING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
+                ", @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
+                " ==> mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)));
             (* trap representation for _Bool *)
             (* TODO: might be nicer to have that part of the Ocaml_implementation interface
                (even so we probably will only ever use it for _Bool) *)
@@ -1488,9 +1483,8 @@ module Concrete : Memory = struct
           end >>= fun () ->
           begin is_within_bound ~tagDefs ~loc alloc_id ty addr >>= function
             | false ->
-                Cerb_debug.print_debug 1 [] (fun () ->
-                  "LOAD out of bound, alloc_id=" ^ Z.to_string alloc_id
-                );
+                Cerb_log.debug __FUNCTION__ (fun m ->
+                  m "%s" ("LOAD out of bound, alloc_id=" ^ Z.to_string alloc_id));
                 fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
             | true ->
                 begin is_atomic_member_access ~tagDefs ~loc alloc_id ty addr >>= function
@@ -1504,11 +1498,10 @@ module Concrete : Memory = struct
   
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
     get_tagDefs >>= fun tagDefs ->
-    Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
-      "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
-      " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
-      ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
-    );
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%s" ("ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
+        " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
+        ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)));
     if not (ctype_mem_compatible ty (typeof mval)) then begin
       Printf.printf "STORE ty          ==> %s\n"
         (String_core_ctype.string_of_ctype ty);
@@ -1967,9 +1960,7 @@ module Concrete : Memory = struct
   let ptrfromint loc _ ref_ty (IV (prov, n)) =
     if not (Z.equal n Z.zero) then
       (* STD §6.3.2.3#5 *)
-      Cerb_debug.warn [] (fun () ->
-        "implementation defined cast from integer to pointer"
-      );
+      Cerb_log.warn __FUNCTION__ (fun m -> m "%s" "implementation defined cast from integer to pointer");
     let n =
       let (min, max) = match (Ocaml_implementation.get ()).sizeof_pointer with
         | Some sz ->

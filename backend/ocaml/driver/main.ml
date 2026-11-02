@@ -81,7 +81,7 @@ let dummy_core_file stdlib impl =
     funinfo= Pmap.empty compare;
   }
 
-let cerberus debug_level progress core_obj
+let cerberus logging progress core_obj
              cpp_cmd nostdinc nolibc macros macros_undef
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
@@ -93,13 +93,16 @@ let cerberus debug_level progress core_obj
              ocaml_corestd
              output_name
              files =
-  Cerb_debug.debug_level := debug_level;
+  begin match Cerb_log_cli.setup logging with
+    | Ok () -> ()
+    | Error msg -> prerr_endline msg; Stdlib.exit 2
+  end;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
   (* set global configuration *)
   set_cerb_conf "Ocaml" false Random false QuoteStd false false false;
-  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core = false;
+  let conf = { astprints; pprints; ppflags; typecheck_core = false;
                rewrite_core; sequentialise_core = true; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -211,10 +214,6 @@ let macro_pair =
     | (m, Some v) -> Format.fprintf ppf "%s=%s" m v in
   Arg.(conv (parser, printer))
 
-let debug_level =
-  let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
-  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
-
 let ocaml_corestd =
   let doc = "Generate coreStd.ml" in
   Arg.(value & flag & info ["ocaml-corestd"] ~doc)
@@ -298,8 +297,8 @@ let astprints =
 let ppflags =
   let open Pipeline in
   let doc = "Pretty print flags [annot: include location and ISO annotations,\
-             loc: include C source locations, fout: output in a file]." in
-  Arg.(value & opt (list (enum ["annot", Annot; "loc", Loc; "fout", FOut])) [] &
+             loc: include C source locations, early: show Ail before typing and Core before rewriting, verbose: include internal display details, fout: output in a file]." in
+  Arg.(value & opt (list (enum ["annot", Annot; "loc", Loc; "early", Early; "verbose", Verbose; "fout", FOut])) [] &
        info ["pp_flags"] ~doc)
 
 let files =
@@ -342,7 +341,7 @@ let switches =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
+  let cerberus_t = Term.(pure cerberus $ Cerb_log_cli.options $ progress $ core_obj $
                          cpp_cmd $ nostdinc $ nolibc $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $

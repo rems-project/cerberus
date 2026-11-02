@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix="cerberus-display-") as temp:
         for flags in ((), ("--pp_flags=early",), ("--pp_flags=verbose",),
                       ("--pp_flags=annot",)):
             options = ("--pp=" + language, *flags)
-            assert run(*options) == run("-d6", *options), options
+            assert run(*options) == run("-vv", *options), options
     plain = run("--pp=ail")
     assert run("--pp=ail", "--pp_flags=verbose") != plain
     assert run("--pp=ail", "--pp_flags=annot") != plain

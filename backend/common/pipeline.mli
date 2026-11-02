@@ -10,7 +10,6 @@ type pp_flag =
   | Verbose
 
 type configuration = {
-  debug_level: int;
   pprints: language list;
   astprints: language list;
   ppflags: pp_flag list;
@@ -28,8 +27,6 @@ type io_helpers = {
   set_progress: string -> (unit, Errors.error) Result.t;
   run_pp: string option -> PPrint.document -> (unit, Errors.error) Result.t;
   print_endline: string -> (unit, Errors.error) Result.t;
-  print_debug: int -> (unit -> string) -> (unit, Errors.error) Result.t;
-  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Result.t;
 }
 val default_io_helpers: io_helpers
 val get_progress: unit -> int

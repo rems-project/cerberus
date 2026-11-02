@@ -17,3 +17,8 @@
  (name test_cli_options)
  (modules test_cli_options)
  (libraries cerberus-lib.util))
+
+(test
+ (name test_lem_logging)
+ (modules test_lem_logging)
+ (libraries cerberus-lib.frontend cerberus-lib.mem.concrete))

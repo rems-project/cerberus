@@ -12,8 +12,7 @@ let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
 let frontend cpp_str filename =
   let conf = {
-      debug_level= 0
-    ; pprints= []
+      pprints= []
     ; astprints= []
     ; ppflags= []
     ; typecheck_core= false

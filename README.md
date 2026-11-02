@@ -88,6 +88,8 @@ Include directories can be added with the usual ```-I```, and macros can be forw
 
 For more, see `cerberus --help`
 
+For source selectors, output destinations, and JSON logging, see [DEBUGGING.md](DEBUGGING.md).
+
 ---
 
 Various C programs can be found in ```tests/```.

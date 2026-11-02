@@ -145,10 +145,10 @@ let set strs =
           if None = has_switch_pred (pred sw) then
             internal_ref := sw :: !internal_ref
           else
-            warn ~always:true [] @@ fun () ->
+            warn @@ fun () ->
               "switch '" ^ String.escaped str ^ "' would override a previous switch --> ignoring."
       | None ->
-          warn ~always:true [] @@ fun () ->
+          warn @@ fun () ->
             "failed to parse switch '" ^ String.escaped str ^ "' --> ignoring."
   ) strs
 

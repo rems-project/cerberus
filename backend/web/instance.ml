@@ -25,14 +25,11 @@ let dummy_io =
     set_progress=   skip;
     run_pp=         (fun _ -> skip);
     print_endline=  skip;
-    print_debug=    (fun _ -> skip);
-    warn=           (fun ?(always=false) -> skip);
   }
 
 let setup conf =
   let pipeline_conf =
-    { debug_level=        conf.cerb_debug_level;
-      pprints=            [];
+    { pprints=            [];
       astprints=          [];
       ppflags=            [];
       ppouts=             [];

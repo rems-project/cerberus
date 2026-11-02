@@ -11,6 +11,7 @@ import Mem Implementation
 
 open import Cn_desugaring Cn
 
+
 module A      = AilSyntax
 
 
@@ -418,17 +419,17 @@ let create_new_scope scope st =
 val under_scope: forall 'a. scope -> desugM 'a -> desugM 'a
 let under_scope scope m =
   State_exception.update (fun st ->
-    let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
-      "ENTERING Scope: " ^ string_of_scope scope
-    ) in
+    let () = Debug.debug (fun m ->
+      m ("ENTERING Scope: " ^ string_of_scope scope
+    )) in
     create_new_scope scope st
   ) >>
   m >>= fun res ->
   update_inner (fun st ->
     let (_, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
-    let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
-      "EXITING Scope: " ^ string_of_scope scope
-    ) in
+    let () = Debug.debug (fun m ->
+      m ("EXITING Scope: " ^ string_of_scope scope
+    )) in
     <| st with registered_identifiers= ident_table'; |> 
   ) >>
   return res
@@ -441,17 +442,17 @@ let under_scope scope m =
 val collect_with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
 let collect_with_scope scope m =
   update_inner (fun st ->
-    let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
-      "ENTERING Scope: " ^ string_of_scope scope
-    ) in
+    let () = Debug.debug (fun m ->
+      m ("ENTERING Scope: " ^ string_of_scope scope
+    )) in
     <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
   ) >>
   m >>= fun res ->
   modify_inner (fun st ->
     let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
-    let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
-      "EXITING Scope: " ^ string_of_scope scope
-    ) in
+    let () = Debug.debug (fun m ->
+      m ("EXITING Scope: " ^ string_of_scope scope
+    )) in
     ( Set_helpers.fold (fun reg acc ->
       match reg with
         | Internal sym kind _ ->
@@ -478,9 +479,8 @@ let collect_with_scope scope m =
                   acc
             end
         | External ->
-            let () = Debug.print_debug 2 [] (fun () ->
-              "KKK: check this"
-            ) in
+            let () = Debug.debug (fun m ->
+              m "KKK: check this") in
             acc
        end) (Map.range idents_map) []
     ,  <| st with registered_identifiers= ident_table'; |> )
@@ -492,17 +492,17 @@ let collect_with_scope scope m =
 val with_scope2: forall 'a. scope -> desugM 'a -> desugM (Map.map (Symbol.identifier * namespace) registration * 'a)
 let with_scope2 scope m =
   update_inner (fun st ->
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      "ENTERING Scope(2): " ^ string_of_scope scope
-    ) in
+    let () = Debug.debug (fun m ->
+      m ("ENTERING Scope(2): " ^ string_of_scope scope
+    )) in
     <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
   ) >>
   m >>= fun res ->
   modify_inner (fun st ->
     let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      "EXITING Scope(2): " ^ string_of_scope scope
-    ) in
+    let () = Debug.debug (fun m ->
+      m ("EXITING Scope(2): " ^ string_of_scope scope
+    )) in
     (idents_map, <| st with registered_identifiers= ident_table'; |>)
   ) >>= fun idents_map ->
   return (idents_map, res)
@@ -683,8 +683,8 @@ val internal_register_identifier:
 let internal_register_identifier if_found ident namespace kind link_opt =
   get_scope >>= fun sc ->
   let () =
-    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      "attempting to register identifier `" ^ show ident ^
+    Debug.debug (fun m ->
+      m ("attempting to register identifier `" ^ show ident ^
        "' with scope= " ^ string_of_scope sc ^
        " with namespace= " ^ show namespace ^
        ", kind= " ^ show kind ^
@@ -692,7 +692,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
          | Nothing -> ""
          | Just _  -> ", linkage= " ^ show link_opt
        end
-    ) in
+    )) in
   (* TODO: we should use a smaller type in the state to avoid having to do these
      checks ... *)
   match (namespace, kind, link_opt) with
@@ -742,70 +742,60 @@ let internal_register_identifier if_found ident namespace kind link_opt =
   
   match link_opt with
     | Just Linkage_external ->
-        let () = Debug.print_debug 2 [] (fun () ->
-          "internal_register_identifier ==> link_opt = Just Linkage_external"
-        ) in
+        let () = Debug.debug (fun m ->
+          m "internal_register_identifier ==> link_opt = Just Linkage_external") in
         (* when registering an identifier with external linkage, we only care
            about previous EXTERNAL registrations *)
            read_inner (fun st ->
           Map.lookup (ident, namespace) st.registered_external_identifiers
         ) >>= function
           | Nothing ->
-              let () = Debug.print_debug 2 [] (fun () ->
-                "lookup external ==> Nothing"
-              ) in
+              let () = Debug.debug (fun m ->
+                m "lookup external ==> Nothing") in
               do_fresh ()
           | Just (scope, decl) ->
-              let () = Debug.print_debug 2 [] (fun () ->
-                "lookup external ==> Just"
-              ) in
+              let () = Debug.debug (fun m ->
+                m "lookup external ==> Just") in
               if_found (scope, decl) do_fresh
         end
     | _ ->
-        let () = Debug.print_debug 2 [] (fun () ->
-          "internal_register_identifier ==> link_opt <> Just Linkage_external"
-        ) in
+        let () = Debug.debug (fun m ->
+          m "internal_register_identifier ==> link_opt <> Just Linkage_external") in
         (* TODO: check this is correct for link = Linkage_internal *)
         read_inner (fun st ->
           Scope_table.resolve (ident, namespace) st.registered_identifiers
         ) >>= function
           | Just (scope, External) ->
-              let () = Debug.print_debug 2 [] (fun () ->
-                "lookup registered ==> Just External"
-              ) in
+              let () = Debug.debug (fun m ->
+                m "lookup registered ==> Just External") in
               read_inner (fun st ->
                 Map.lookup (ident, namespace) st.registered_external_identifiers
               ) >>= function
                 | Nothing ->
                     error "[Cabs_to_ail_effect.internal_register_identifier] - internal ERROR"
                 | Just (_, decl) ->
-                    let () = Debug.print_debug 2 [] (fun () ->
-                      "lookup external ==> Just"
-                    ) in
+                    let () = Debug.debug (fun m ->
+                      m "lookup external ==> Just") in
                     if_found (scope, decl) do_fresh
               end
           | Just (scope, Internal sym kind link_opt) ->
-              let () = Debug.print_debug 2 [] (fun () ->
-                "lookup registered ==> Just Internal"
-              ) in
+              let () = Debug.debug (fun m ->
+                m "lookup registered ==> Just Internal") in
               if_found (scope, (sym, kind, link_opt)) do_fresh
           | Nothing ->
               (* KKK *)
-              let () = Debug.print_debug 2 [] (fun () ->
-                "lookup registered ==> Nothing"
-              ) in
+              let () = Debug.debug (fun m ->
+                m "lookup registered ==> Nothing") in
               read_inner (fun st ->
                 Map.lookup (ident, namespace) st.registered_external_identifiers
               ) >>= function
                 | Nothing ->
-                    let () = Debug.print_debug 2 [] (fun () ->
-                      "lookup external ==> Nothing"
-                    ) in
+                    let () = Debug.debug (fun m ->
+                      m "lookup external ==> Nothing") in
                     do_fresh ()
                 | Just (scope, decl) ->
-                    let () = Debug.print_debug 2 [] (fun () ->
-                      "lookup external ==> Just"
-                    ) in
+                    let () = Debug.debug (fun m ->
+                      m "lookup external ==> Just") in
                     if_found (scope, decl) do_fresh
               end
         end
@@ -824,10 +814,10 @@ let register_typedef ident (attrs, qs, ty) =
         constraint_violation loc Constraint.TypedefBytesAreUnsignedCharsOnly
       else
         return ty in
-  let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-    "registering typedef identifier: " ^ show ident ^
+  let () = Debug.debug (fun m ->
+    m ("registering typedef identifier: " ^ show ident ^
     " with (qs, ty) = " ^ byte_attr_str ^ Pp.stringFromCtype_human qs ty
-  ) in
+  )) in
   (* if the identifier is already declared we reuse that existing declaration *)
   internal_register_identifier
     (fun (_, (sym, _, _)) _ -> return sym)
@@ -1101,13 +1091,13 @@ let resolve_cn_ident ns ident =
      get_inner >>= fun inner ->
      let st = inner.cn_state in
      let same_ns xs = List.concat (List.map (fun (ns2, sym) -> if ns2 = ns then [sym] else []) xs) in
-     let () = Debug.print_debug 8 []
-                (fun () -> "available CN identifiers in ns (" ^ show ns ^ ") in local scope:") in
+     let () = Debug.debug
+                (fun m -> m ("available CN identifiers in ns (" ^ show ns ^ ") in local scope:")) in
      (* let () = Debug.print_debug 8 [] *)
      (*            (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_current_scope)))) in *)
-     let () = Debug.print_debug 8 [] (fun () -> "and in global scope:") in
-     let () = Debug.print_debug 8 []
-                (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_idents)))) in
+     let () = Debug.debug (fun m -> m "and in global scope:") in
+     let () = Debug.debug
+                (fun m -> m (show (same_ns (Set_extra.toList (Map.domain st.cn_idents))))) in
      fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier ns ident)) 
   | Just (s, kind) -> 
      return (s, kind)
@@ -1122,8 +1112,8 @@ let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
      fail (Loc.locOf ident) (Errors.Desugar_CN (CNErr_redeclaration ns))
   | Nothing ->
     let sym = Symbol.fresh_cn str in
-    let () = Debug.print_debug 4 [] (fun () ->
-        "adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")") in
+    let () = Debug.debug (fun m ->
+        m ("adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")")) in
     check_cn_ident ns ident >>= function
     | true ->
       update_cn_state (fun st ->
@@ -1443,9 +1433,9 @@ type ordinary_registration =
 val resolve_ordinary_identifier: Loc.t -> Symbol.identifier -> desugM (maybe (scope * ordinary_registration))
 let resolve_ordinary_identifier loc ident =
   return (
-    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      "attempting to resolve ordinary identifier `" ^ show ident
-    )
+    Debug.debug (fun m ->
+      m ("attempting to resolve ordinary identifier `" ^ show ident
+    ))
   ) >>
   
   read_inner (fun st ->
@@ -1692,7 +1682,7 @@ end
 
 val register_tag_definition: Loc.t -> Symbol.sym -> tag_definition -> desugM unit
 let register_tag_definition loc tag_sym tag_decl =
-  let () = Debug.print_debug 5 [Debug.DB_desugaring] (fun () -> "REGISTERING TAG DEFINITION: " ^ show tag_sym) in
+  let () = Debug.debug (fun m -> m ("REGISTERING TAG DEFINITION: " ^ show tag_sym)) in
   read_inner (fun st ->
     Map.member tag_sym st.tag_definitions
   ) >>= function
@@ -1948,10 +1938,10 @@ let register_global_object_definition2 loc sym link gdef =
               (* TODO: this function is not correct for desugaring *)
               match AilTypesAux.make_composite prev_ty ty with
                 | Nothing ->
-                    let () = Debug.print_debug 0 [] (fun () ->
-                      "  prev_ty: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers prev_ty ^ "\n" ^
+                    let () = Debug.debug (fun m ->
+                      m ("  prev_ty: " ^ Pp.stringFromCtype_human Ctype.no_qualifiers prev_ty ^ "\n" ^
                       "  ty:      " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty
-                    ) in
+                    )) in
                     error "[register_global_object_definition2] make_composite failed"
                 | Just ty' ->
                     do_update (Tentative loc_def ty')
@@ -1973,9 +1963,8 @@ let register_global_object_definition2 loc sym link gdef =
                     constraint_violation loc (Constraint.ExternalRedefinition sym)
                 | Linkage_external ->
                     (* STD §6.9#5, sentence 2 *)
-                    let () = Debug.print_debug 2 [] (fun () ->
-                      "register_global_object_definition2"
-                    ) in
+                    let () = Debug.debug (fun m ->
+                      m "register_global_object_definition2") in
                     undef loc Undefined.UB084
                 | Linkage_none ->
                     error "[Cabs_to_ail_effect.register_global_object_definition] - internal ERROR 2"
@@ -2018,10 +2007,10 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   update_inner (fun st ->
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      let (_, _, _, xs, _) = fdef in
+    let () = Debug.debug (fun m ->
+      m (let (_, _, _, xs, _) = fdef in
       "registering function definition of '" ^ show sym ^ "' with params: " ^ stringFromList show xs
-    ) in
+    )) in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -2077,7 +2066,7 @@ read_inner (fun st ->
           | Just decl' ->
               (* NOTE: we concat the attributes from the previous declartion with the new ones *)
               (* TODO: is it right to only use prev_has_proto? *)
-              let () = Debug.print_debug 2 [] (fun () -> "[register_function_declaration] - had prev, valid composite") in
+              let () = Debug.debug (fun m -> m "[register_function_declaration] - had prev, valid composite") in
               update_inner (fun st ->
                 <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, decl') st.function_declarations |>
               )
@@ -2108,9 +2097,9 @@ read_inner (fun st ->
 *)
     | Nothing ->
         update_inner (fun st ->
-          let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-            "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
-           string_of_decl decl) in
+          let () = Debug.debug (fun m ->
+            m ("registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
+           string_of_decl decl)) in
           <| st with function_declarations= Map.insert sym (is_proto, loc, attrs, decl) st.function_declarations |>
         )
   end
@@ -2170,22 +2159,22 @@ let get_compatible_alignment_requirements loc new_align_opt prev_align_opt =
 val register_external_object_declaration: Symbol.sym -> (bool * Loc.t * Annot.attributes * A.storageDuration * bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype) -> desugM unit
 let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur, isRegister, new_align_opt, new_qs, new_ty) as new_decl) =
   return (
-    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      "attempting to register external object declaration of `" ^ show sym ^
-      "' with dur: " ^ string_of_storageDuration new_dur ^ " qs, ty: " ^ Pp.stringFromCtype_human new_qs new_ty)
+    Debug.debug (fun m ->
+      m ("attempting to register external object declaration of `" ^ show sym ^
+      "' with dur: " ^ string_of_storageDuration new_dur ^ " qs, ty: " ^ Pp.stringFromCtype_human new_qs new_ty))
   ) >>
   
   read_inner (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
     | Just (_, _, _, prev_dur, _, prev_align_opt, prev_qs, prev_ty) ->
-        let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-          "has previous decl ==> with dur: " ^ string_of_storageDuration prev_dur ^
+        let () = Debug.debug (fun m ->
+          m ("has previous decl ==> with dur: " ^ string_of_storageDuration prev_dur ^
           " qs, ty: " ^ Pp.stringFromCtype_human prev_qs prev_ty ^
           " are_compatible ?= " ^
           (if AilTypesAux.are_compatible (new_qs, new_ty) (prev_qs, prev_ty)
            then "true" else "false")
-        ) in
+        )) in
     
         if not (prev_dur = A.Thread --> new_dur = A.Thread) then
           constraint_violation loc Constraint.ThreadLocalShouldAppearInEveryDeclaration
@@ -2205,7 +2194,7 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
           undef loc Undefined.UB015_incompatible_redeclaration
         else 
           get_compatible_alignment_requirements loc new_align_opt prev_align_opt >>= fun align_opt ->
-          let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
+          let () = Debug.debug (fun m -> m ("found a valid redeclaration of `" ^ show sym ^ "'")) in
           (* TODO: check that is ok to use AilTypesAux.make_composite for object types (see comment in AilTypesAux) *)
           (* TODO: what about qualifiers? *)
           if true (* AilTypesAux.is_array prev_ty && AilTypesAux.is_array new_ty *) then
@@ -2217,10 +2206,10 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
                     <| st with external_object_declarations= Map.insert sym decl st.external_object_declarations |>
                   )
               | Nothing ->
-                  let () = Debug.print_debug 0 [] (fun () ->
-                    "prev_ty= " ^ Pp.stringFromCtype_human prev_qs prev_ty ^ "\n" ^
+                  let () = Debug.debug (fun m ->
+                    m ("prev_ty= " ^ Pp.stringFromCtype_human prev_qs prev_ty ^ "\n" ^
                     "new_ty= " ^ Pp.stringFromCtype_human new_qs new_ty
-                  ) in
+                  )) in
                   error "WIP: register_external_object_declaration, make_composite failed"
             end
           else
@@ -2234,9 +2223,9 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
 val update_external_object_type: Symbol.sym -> Ctype.ctype -> desugM unit
 let update_external_object_type sym ty =
   return (
-    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      "updating external object type of `" ^ show sym ^
-      "' with ty= " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty)
+    Debug.debug (fun m ->
+      m ("updating external object type of `" ^ show sym ^
+      "' with ty= " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty))
   ) >>
   update_inner (fun st ->
     match Map.lookup sym st.external_object_declarations with
@@ -2254,10 +2243,10 @@ val register_internal_object_declaration:
   Symbol.sym -> (Loc.t * A.storageDuration * bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype) -> desugM unit
 let register_internal_object_declaration sym ((loc, _, _, _, _, _) as decl) =
   return (
-    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      let (_, _, _, _, new_qs, new_ty) = decl in
+    Debug.debug (fun m ->
+      m (let (_, _, _, _, new_qs, new_ty) = decl in
       "attempting to register internal object declaration of `" ^ show sym ^
-      "' with qs, ty= " ^ Pp.stringFromCtype_human new_qs new_ty)
+      "' with qs, ty= " ^ Pp.stringFromCtype_human new_qs new_ty))
   ) >>
   
   read_inner (fun st ->
@@ -2279,9 +2268,9 @@ let register_internal_object_declaration sym ((loc, _, _, _, _, _) as decl) =
 val update_internal_object_type: Symbol.sym -> Ctype.ctype -> desugM unit
 let update_internal_object_type sym ty =
   return (
-    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      "updating internal object type of `" ^ show sym ^
-      "' with ty= " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty)
+    Debug.debug (fun m ->
+      m ("updating internal object type of `" ^ show sym ^
+      "' with ty= " ^ Pp.stringFromCtype_human Ctype.no_qualifiers ty))
   ) >>
   update_inner (fun st ->
     match Map.lookup sym st.internal_object_declarations with
@@ -2361,7 +2350,7 @@ let is_inside_function =
 val add_used_identifier: Symbol.sym -> desugM unit
 let add_used_identifier sym =
   update_inner (fun st ->
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "USED IDENTIFIER") in
+    let () = Debug.debug (fun m -> m "USED IDENTIFIER") in
     <| st with used_identifier= Set.insert sym st.used_identifier |>
   )
 
@@ -2378,9 +2367,9 @@ let get_used_identifier =
 
 val register_enum_constant: Symbol.identifier -> A.expression_ unit -> desugM unit
 let register_enum_constant ident expr =
-  let () = Debug.print_debug 2 [] (fun () -> 
-    "register_enum_constant: " ^ show ident
-  ) in
+  let () = Debug.debug (fun m ->
+    m ("register_enum_constant: " ^ show ident
+  )) in
   internal_register_identifier (fun (scope, _) do_fresh ->
     current_scope_is scope >>= function
       | true ->
@@ -2500,9 +2489,8 @@ let extract_program startup_str =
       begin map_union
         begin
           Map.map (fun (hasProto, loc, attrs, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
-            let () = Debug.print_debug 2 [] (fun () ->
-              "KKK: check + find STD quote"
-            ) in
+            let () = Debug.debug (fun m ->
+              m "KKK: check + find STD quote") in
             let params = match params_opt with
               | Nothing -> []
               | Just z  -> z
@@ -2653,15 +2641,6 @@ let extract_program startup_str =
 
 
 
-val print_debugM: nat -> (unit -> string) -> desugM unit
-let inline print_debugM n msg =
-  return (Debug.print_debug n [Debug.DB_desugaring] msg)
-
-val warnM: (unit -> string) -> desugM unit
-let inline warnM msg =
-  return (Debug.warn [Debug.DB_desugaring] msg)
-
-
 (* TODO *)
 import Core
 val get_core_eval_stuff: desugM ((map string Symbol.sym) * Core.fun_map unit * Core.impl)
@@ -2690,9 +2669,8 @@ let get_sigma_sofar =
       map_union
         begin
           Map.map (fun (hasProto, loc, attrs, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
-            let () = Debug.print_debug 2 [] (fun () ->
-              "KKK: check + find STD quote"
-            ) in
+            let () = Debug.debug (fun m ->
+              m "KKK: check + find STD quote") in
             (* TODO: is it correct "complete" the params like that ? *)
             let params = match params_opt with
               | Nothing -> []
