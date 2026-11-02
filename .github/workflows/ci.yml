@@ -68,11 +68,7 @@ jobs:
     - name: Run logging tests
       run: |
         eval $(opam env --switch=${{ matrix.version }})
-        make prelude-src
-        dune runtest --profile=release tests/logging
-        python3 tests/logging/test_provers.py
-        python3 tests/logging/test_cli.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus" --runtime "$OPAM_SWITCH_PREFIX"
-        python3 tests/logging/test_cli.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus-vip" --runtime "$OPAM_SWITCH_PREFIX"
+        USE_OPAM='' tests/run-logging.sh
 
     - name: Run Cerberus CI tests
       run: |
