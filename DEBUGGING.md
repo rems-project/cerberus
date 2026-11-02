@@ -129,6 +129,9 @@ Ail before typing and Core before rewriting, and `--pp_flags=verbose` for intern
 symbol identities, provenance and extra display detail. Flags can be combined.
 The existing `loc` flag remains available.
 
+Unused numeric-level timing hooks and their implicit `cerb.prof`/`cerb_times.csv`
+files have been removed. Profiling is independent of logging.
+
 ## Validation
 
 Build with OCaml >= 4.14.1 and Logs >= 0.10, including `logs.cli`.

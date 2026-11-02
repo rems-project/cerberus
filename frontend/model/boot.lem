@@ -1,8 +1,2 @@
-(* TODO: get rid of this module? *)
+(* Reserved for backend-specific boot operations. *)
 open import Pervasives
-
-val begin_timing: string -> unit
-declare ocaml target_rep function begin_timing = `Cerb_debug.begin_timing`
-
-val end_timing: unit -> unit
-declare ocaml target_rep function end_timing = `Cerb_debug.end_timing`
