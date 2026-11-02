@@ -283,8 +283,7 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     (args:(C.ctype0 * M.pointer_value) list) =
   let encode ival = match Mem_aux.integerFromIntegerValue ival with
     | Some n -> Decode_ocaml.encode_character_constant n
-    | None -> Cerb_debug.error
-                "Printf: one of the element of the format array was invalid"
+    | None -> raise (Error "Printf: one of the elements of the format array was invalid")
   in
   let eval_conv cty x =
     let terr _ _ = raise (Error "Rt_ocaml.printf: expecting an integer") in

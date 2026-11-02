@@ -20,8 +20,7 @@ jobs:
   build:
     strategy:
       matrix:
-        # version: [4.12.0, 4.14.1]
-        version: [4.14.1]
+        version: [4.14.1, 5.2.1]
 
 
     runs-on: ubuntu-24.04
@@ -73,3 +72,18 @@ jobs:
         cd tests; USE_OPAM='' ./run-ci.sh --both-callconvs
         ./diff-prog.py cerberus bytes/elab.json
         ./diff-prog.py cerberus bytes/exec.json
+
+    - name: Check display flags
+      run: |
+        eval $(opam env --switch=${{ matrix.version }})
+        python3 tests/test_display.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus" --runtime "$OPAM_SWITCH_PREFIX"
+        python3 tests/test_display.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus-vip" --runtime "$OPAM_SWITCH_PREFIX"
+
+    - name: Test logging API
+      run: |
+        eval $(opam env --switch=${{ matrix.version }})
+        make prelude-src
+        dune runtest --profile=release tests/logging
+        python3 tests/logging/test_provers.py
+        python3 tests/logging/test_cli.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus" --runtime "$OPAM_SWITCH_PREFIX"
+        python3 tests/logging/test_cli.py --binary "$OPAM_SWITCH_PREFIX/bin/cerberus-vip" --runtime "$OPAM_SWITCH_PREFIX"

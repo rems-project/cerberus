@@ -90,7 +90,7 @@ let create_executable out =
   close_out oc;
   Unix.chmod out 0o755
 
-let cerberus debug_level progress core_obj
+let cerberus logging progress core_obj
              cpp_cmd syntax_only nostdinc nolibc agnostic macros macros_undef
              runtime_path_opt incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
@@ -102,7 +102,11 @@ let cerberus debug_level progress core_obj
              fs_dump fs trace
              output_name
              files args_opt =
-  Cerb_debug.debug_level := debug_level;
+  begin match Cerb_log_cli.setup logging with
+    | Ok () -> ()
+    | Error msg -> prerr_endline msg; Stdlib.exit 2
+  end;
+  Cerb_pp_options.verbose := List.mem Pipeline.Verbose ppflags;
   Cerb_runtime.specified_runtime := runtime_path_opt;
   let cpp_cmd =
     let cpp_cmd = if syntax_only then cpp_cmd ^ " -D__cerb_syntax_only__" else cpp_cmd in
@@ -123,7 +127,7 @@ let cerberus debug_level progress core_obj
   (* Initialise the global state for printing diagnostics  *)
   Cerb_diagnostic.init ~verbosity:QuoteStd ();
   let cli_conf = {
-    astprints; pprints; ppflags; ppouts; debug_level; typecheck_core;
+    astprints; pprints; ppflags; ppouts; typecheck_core;
     rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true; cpp_save = None } in
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -137,7 +141,7 @@ let cerberus debug_level progress core_obj
       end else switches in
     begin if iso_switches then begin
       if switches <> [] then
-        Cerb_debug.warn ~always:true [] (fun () -> "the --iso argument overrides --switches");
+        Cerb_log.warn __FUNCTION__ (fun m -> m "the --iso argument overrides --switches");
       Switches.set_iso_switches ()
     end else
       Switches.set switches
@@ -241,7 +245,8 @@ let cerberus debug_level progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                      Cerb_log.warn __FUNCTION__ (fun m ->
+                        m "Return value overlows (wrapping it down to 255)");
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->
@@ -308,9 +313,11 @@ let cerberus debug_level progress core_obj
         Result.ok success
         (* Link and execute *)
       else
-        begin if syntax_only then
-          io.warn ~always:true (fun () -> "some of the translation units are Core or object files: ignoring --syntax-only")
-        else
+        begin if syntax_only then begin
+          Cerb_log.warn __FUNCTION__ (fun m ->
+            m "some of the translation units are Core or object files: ignoring --syntax-only");
+          Result.ok ()
+        end else
           Result.ok ()
         end >>= fun () ->
         prelude >>= fun (core_std, conf) ->
@@ -364,10 +371,6 @@ let macro_pair =
     | (m, None)   -> Format.pp_print_string ppf m
     | (m, Some v) -> Format.fprintf ppf "%s=%s" m v in
   Arg.(conv (parser, printer))
-
-let debug_level =
-  let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
-  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls\
@@ -491,8 +494,8 @@ let fs =
 
 let ppflags =
   let open Pipeline in
-  let doc = "Pretty print flags [annot: include location and ISO annotations, loc: include C source locations]." in
-  Arg.(value & opt (list (enum ["annot", Annot; "loc", Loc; ])) [] &
+  let doc = "Pretty print flags [annot: include location and ISO annotations, loc: include C source locations, early: show Ail before typing and Core before rewriting, verbose: include internal display details]." in
+  Arg.(value & opt (list (enum ["annot", Annot; "loc", Loc; "early", Early; "verbose", Verbose; ])) [] &
        info ["pp_flags"] ~doc)
 
 let pp_ail_out =
@@ -567,7 +570,7 @@ let args =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(const cerberus $ debug_level $ progress $ core_obj $
+  let cerberus_t = Term.(const cerberus $ Cerb_log_cli.options $ progress $ core_obj $
                          cpp_cmd $ syntax_only $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
                          runtime_path $ incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $

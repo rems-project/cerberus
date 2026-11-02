@@ -13,7 +13,7 @@ See <https://www.cl.cam.ac.uk/~pes20/cerberus/>.
 Build instructions for the CLI
 ---
 
-To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.12.0).
+To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and native OCaml (4.14.1 or later in the 4.14 series, or >= 5.2.0 and < 6.0.0).
 
 First install the dependencies (including `lem` and `menhir`) using opam:
 
@@ -70,6 +70,11 @@ $ cerberus --args="arg1","arg2" file.c
 
 * The **Ail** intermediate representation and the **Core** program can be pretty-printed with ```--pp=ail``` and ```--pp=core```.
 
+Use `--pp_flags=annot` for inferred type annotations, `early` for intermediate
+pipeline stages, and `verbose` for internal identifiers and detailed syntax.
+These display options are independent of the logging verbosity and can be
+combined, for example `--pp_flags=annot,verbose`.
+
 ### Running the elaborate-and-link pipeline without executing:
 
 ```bash
@@ -82,6 +87,8 @@ Include directories can be added with the usual ```-I```, and macros can be forw
 ---
 
 For more, see `cerberus --help`
+
+For source selectors, output destinations, and JSON logging, see [DEBUGGING.md](DEBUGGING.md).
 
 ---
 
