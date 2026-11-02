@@ -187,22 +187,15 @@ Requires native OCaml 4.14.1 or later in the 4.14 series, or >= 5.2 and < 6,
 Logs >= 0.10 (including `logs.cli`), and Saturn >= 1.0 and < 2.
 OCaml 5.0 and 5.1 are not supported by Saturn. The static-storage check must be
 reviewed for a new OCaml major runtime. Bytecode automatic names are not supported.
-Run the complete logging suite in the active opam switch:
+Regenerate Lem output when building:
 
 ```sh
-tests/run-logging.sh
+make -j8
+dune runtest tests/logging
+python3 tests/logging/test_cli.py
+python3 tests/logging/test_provers.py
+tests/run-ci.sh
 ```
-
-The runner regenerates Lem output, builds in the release profile, and runs the
-OCaml, prover-output and CLI checks for both concrete and VIP. As with the other
-test runners, set `USE_OPAM=''` to check the active switch's installed CLI
-executables and runtime instead; CI uses this mode:
-
-```sh
-USE_OPAM='' tests/run-logging.sh
-```
-
-Run the existing C regressions separately with `tests/run-ci.sh --both-callconvs`.
 
 The prover test checks generation and erasure in all three targets; it does not
 claim to compile Cerberus' complete prover developments. CI runs the logging,
