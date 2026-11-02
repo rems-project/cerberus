@@ -74,7 +74,7 @@ let canonical raw =
   let start = wrapper_end raw length in
   let stop = function_end raw length start false in
   if stop < 0 then
-    invalid_arg "Cerb_log_auto: expected a qualified function name (use __FUNCTION__)"
+    invalid_arg "Cerb_log: expected a qualified function name (use __FUNCTION__)"
   else if start = 0 && stop = length then raw
   else String.sub raw start (stop - start)
 

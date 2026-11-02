@@ -17,16 +17,16 @@ let measure ?(count = iterations) name f =
 
 let run () =
   Logs.set_level ~all:true (Some Logs.Warning);
-  Cerb_log_auto.configure (Some Logs.Warning) [];
+  Cerb_log.configure (Some Logs.Warning) [];
   for _ = 1 to 5 do
     measure "old integer gate" (fun () ->
       for i = 1 to iterations do old_debug 2 [] (fun () -> string_of_int i) done);
     measure "native Logs" (fun () ->
       for i = 1 to iterations do Logs.debug ~src:source (fun m -> m "%d" i) done);
     measure "OCaml adapter" (fun () ->
-      for i = 1 to iterations do Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%d" i) done);
+      for i = 1 to iterations do Cerb_log.debugf __FUNCTION__ (fun m -> m "%d" i) done);
     measure "Lem adapter" (fun () ->
-      for i = 1 to iterations do Cerb_log_auto.debug __FUNCTION__ (fun () -> string_of_int i) done)
+      for i = 1 to iterations do Cerb_log.debug __FUNCTION__ (fun () -> string_of_int i) done)
   done;
   let count = 100_000 in
   let sink = open_out "/dev/null" in
@@ -38,7 +38,7 @@ let run () =
     close_out sink; close_text (); close_json ()) (fun () ->
     Logs.set_level ~all:true (Some Logs.Debug);
     level := 2;
-    Cerb_log_auto.configure (Some Logs.Debug) ["all"];
+    Cerb_log.configure (Some Logs.Debug) ["all"];
     for _ = 1 to 5 do
       measure ~count "old enabled text" (fun () ->
         for i = 1 to count do
@@ -51,16 +51,16 @@ let run () =
       measure ~count "explicit Logs enabled text" (fun () ->
         for i = 1 to count do Logs.debug ~src:source (fun m -> m "%d" i) done);
       measure ~count "enabled text" (fun () ->
-        for i = 1 to count do Cerb_log_auto.debug __FUNCTION__ (fun () -> string_of_int i) done);
+        for i = 1 to count do Cerb_log.debug __FUNCTION__ (fun () -> string_of_int i) done);
       measure ~count "OCaml enabled text" (fun () ->
-        for i = 1 to count do Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%d" i) done);
+        for i = 1 to count do Cerb_log.debugf __FUNCTION__ (fun m -> m "%d" i) done);
       Logs.set_reporter json;
       measure ~count "explicit Logs enabled JSON" (fun () ->
         for i = 1 to count do Logs.debug ~src:source (fun m -> m "%d" i) done);
       measure ~count "enabled JSON" (fun () ->
-        for i = 1 to count do Cerb_log_auto.debug __FUNCTION__ (fun () -> string_of_int i) done);
+        for i = 1 to count do Cerb_log.debug __FUNCTION__ (fun () -> string_of_int i) done);
       measure ~count "OCaml enabled JSON" (fun () ->
-        for i = 1 to count do Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%d" i) done)
+        for i = 1 to count do Cerb_log.debugf __FUNCTION__ (fun m -> m "%d" i) done)
     done)
 
 let () = run ()

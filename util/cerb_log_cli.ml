@@ -35,12 +35,12 @@ let setup options =
       (* Global startup policy. Automatic sources are registered only when a
          selected function first logs; do not scan or enumerate binary strings. *)
       Logs.set_level ~all:true options.level;
-      Cerb_log_auto.configure ~discover:options.list_sources options.level options.selectors;
+      Cerb_log.configure ~discover:options.list_sources options.level options.selectors;
       match Cerb_log.open_reporter options.output options.format with
       | Error msg -> Error ("debug output: " ^ msg)
       | Ok (reporter, close) ->
           Logs.set_reporter reporter;
           at_exit close;
           if options.list_sources then
-            at_exit (fun () -> List.iter print_endline (Cerb_log_auto.sources ()));
+            at_exit (fun () -> List.iter print_endline (Cerb_log.sources ()));
           Ok ()

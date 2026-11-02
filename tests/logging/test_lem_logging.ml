@@ -11,16 +11,16 @@ let () =
     msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun message ->
       events := (Logs.Src.name src, level, message) :: !events;
       over (); k ()) fmt)};
-  Cerb_log_auto.configure (Some Logs.Warning) [];
+  Cerb_log.configure (Some Logs.Warning) [];
   assert (Symbol.equal_sym left right);
   assert (!events = []);
-  Cerb_log_auto.configure (Some Logs.Warning) ["Symbol.symbolEquality"];
+  Cerb_log.configure (Some Logs.Warning) ["Symbol.symbolEquality"];
   assert (Symbol.equal_sym left right);
   (match !events with
    | [("Symbol.symbolEquality", Logs.Debug, message)] ->
        assert (String.starts_with ~prefix:"[Symbol.symbolEqual] suspicious equality" message)
    | _ -> failwith "Lem extraction lost the caller's function name or message");
-  Cerb_log_auto.configure None ["all"];
+  Cerb_log.configure None ["all"];
   assert (Symbol.equal_sym left right);
   assert (List.length !events = 1);
   Logs.set_reporter Logs.nop_reporter;

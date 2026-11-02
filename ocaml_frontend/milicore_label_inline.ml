@@ -69,7 +69,7 @@ let rewrite_expr label expr =
 
 (* todo: ensure CN does not loop when inlining *)
 let should_be_inlined label_name annots = 
-  let warn lk = Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "%s" ("inlining "^lk^" label")) in
+  let warn lk = Cerb_log.debugf __FUNCTION__ (fun m -> m "%s" ("inlining "^lk^" label")) in
   let label_annot = Option.get (Annot.get_label_annot annots) in
   match label_annot with
   | LAloop_break _ -> true

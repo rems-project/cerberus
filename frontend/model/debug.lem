@@ -16,11 +16,11 @@ declare ocaml target_rep function source name = `Logs.Src.create` name
 (* Only needed when the decision to log itself is expensive. *)
 val debug_enabled : unit -> bool
 let ~{ocaml} debug_enabled u = false
-declare ocaml target_rep function debug_enabled u = `Cerb_log_auto.debug_enabled` `__FUNCTION__`
+declare ocaml target_rep function debug_enabled u = `Cerb_log.debug_enabled` `__FUNCTION__`
 
 val debug : (unit -> string) -> unit
 let ~{ocaml} debug msg = ()
-declare ocaml target_rep function debug msg = `Cerb_log_auto.debug` `__FUNCTION__` msg
+declare ocaml target_rep function debug msg = `Cerb_log.debug` `__FUNCTION__` msg
 
 val info : src -> (unit -> string) -> unit
 let ~{ocaml} info src msg = ()
@@ -36,4 +36,4 @@ declare ocaml target_rep function err = `Cerb_log.err`
 
 val debug_located : Loc.t -> (unit -> string) -> unit
 let ~{ocaml} debug_located loc msg = ()
-declare ocaml target_rep function debug_located loc msg = `Cerb_log_auto.debug_located` `__FUNCTION__` loc msg
+declare ocaml target_rep function debug_located loc msg = `Cerb_log.debug_located` `__FUNCTION__` loc msg

@@ -6,7 +6,7 @@ The measured production sources match commit `ff948c3dc`; the following commit a
 
 ## Native OCaml call-site follow-up
 
-The native migration uses `Cerb_log_auto.debugf __FUNCTION__` and removes
+The native migration uses `Cerb_log.debugf __FUNCTION__` and removes
 Debug-only source declarations. A follow-up on the same host compares numeric
 master `ae70925fc`, the previous PR head `1ef0b82d5`, and the migrated code
 (`ce1122e92`, before the subsequent narrowing of the source-registry mutex). Each

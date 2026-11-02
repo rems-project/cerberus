@@ -497,7 +497,7 @@ let remove_unused_functions remove_funinfo_entries file =
 
 
   (* let _ = 
-   *   Cerb_log_auto.debug __FUNCTION__ (fun () ->
+   *   Cerb_log.debug __FUNCTION__ (fun () ->
    *       "keep: " ^
    *       DefSet.fold (fun i pp ->
    *           pp ^ Def.pp i ^ ", "
@@ -506,7 +506,7 @@ let remove_unused_functions remove_funinfo_entries file =
    * in
    * 
    * let _ = 
-   *   Cerb_log_auto.debug __FUNCTION__ (fun () ->
+   *   Cerb_log.debug __FUNCTION__ (fun () ->
    *       "deps: " ^
    *       DefRel.fold (fun (i1,i2) pp ->
    *           pp ^ Def.pp i1 ^ " -> " ^ Def.pp i2 ^ ", "
@@ -522,7 +522,7 @@ let remove_unused_functions remove_funinfo_entries file =
 
 
   (* let _ = 
-   *   Cerb_log_auto.debug __FUNCTION__ (fun () ->
+   *   Cerb_log.debug __FUNCTION__ (fun () ->
    *       "final keep: " ^
    *       DefSet.fold (fun i pp ->
    *           pp ^ Def.pp i ^ ", "

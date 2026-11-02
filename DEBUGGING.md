@@ -61,7 +61,7 @@ default source. Follow Logs' lazy message convention in OCaml:
 
 ```ocaml
 let translate input =
-  Cerb_log_auto.debugf __FUNCTION__ (fun m -> m "input: %a" pp_input input);
+  Cerb_log.debugf __FUNCTION__ (fun m -> m "input: %a" pp_input input);
   (* ... *)
 ```
 

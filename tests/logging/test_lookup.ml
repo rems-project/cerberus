@@ -4,7 +4,7 @@ let never () = failwith "disabled callback evaluated"
 let rejects f = match f () with
   | _ -> failwith "invalid name accepted"
   | exception Invalid_argument _ -> ()
-let configure selectors = Cerb_log_auto.configure (Some Logs.Warning) selectors
+let configure selectors = Cerb_log.configure (Some Logs.Warning) selectors
 let count_sources () = List.length (Logs.Src.list ())
 
 let names () =
@@ -55,31 +55,31 @@ let name_allocation () =
     "validation or unchanged normalization allocated per name"
 
 let warm_allocation raw =
-  ignore (Cerb_log_auto.debug_enabled raw);
+  ignore (Cerb_log.debug_enabled raw);
   Gc.full_major ();
   let before = Gc.allocated_bytes () in
-  for _ = 1 to 100_000 do ignore (Cerb_log_auto.debug_enabled raw) done;
+  for _ = 1 to 100_000 do ignore (Cerb_log.debug_enabled raw) done;
   let allocated = Gc.allocated_bytes () -. before in
   check (allocated < 1024.) "cached decisions allocated on hits"
 
 let formatted callback =
-  Cerb_log_auto.debugf __FUNCTION__ (fun m ->
+  Cerb_log.debugf __FUNCTION__ (fun m ->
     callback ();
     m ~header:"native"
       ~tags:Logs.Tag.(add Cerb_log.location_tag "input.c:7" empty)
       "value: %a" Format.pp_print_int 7)
 
 let other_formatted callback =
-  Cerb_log_auto.debugf __FUNCTION__ (fun m -> callback (); m "other")
+  Cerb_log.debugf __FUNCTION__ (fun m -> callback (); m "other")
 
 let native_formatted () =
   let before = count_sources () in
-  Cerb_log_auto.configure ~discover:true None [];
+  Cerb_log.configure ~discover:true None [];
   formatted never;
   check (count_sources () = before) "native discovery registered a source";
-  check (List.mem "Test_lookup.formatted" (Cerb_log_auto.sources ()))
+  check (List.mem "Test_lookup.formatted" (Cerb_log.sources ()))
     "native function name missing from discovery";
-  check (not (List.mem "Test_lookup.other_formatted" (Cerb_log_auto.sources ())))
+  check (not (List.mem "Test_lookup.other_formatted" (Cerb_log.sources ())))
     "unvisited native function discovered";
   let events = ref [] in
   let previous = Logs.reporter () in
@@ -103,7 +103,7 @@ let native_formatted () =
     check (List.length !events = 3) "native module selection";
     configure ["Missing.fn"];
     formatted never;
-    Cerb_log_auto.configure None [];
+    Cerb_log.configure None [];
     formatted never)
 
 let concurrent_misses () =
@@ -127,9 +127,9 @@ let concurrent_misses () =
         Atomic.incr ready;
         while not (Atomic.get start) do Domain.cpu_relax () done;
         Array.iter (fun raw ->
-          Cerb_log_auto.debugf raw (fun _ -> never ());
-          Cerb_log_auto.debugf enabled.(id mod Array.length enabled) (fun m -> m "event");
-          Cerb_log_auto.debug disabled.(id mod Array.length disabled) never) literals in
+          Cerb_log.debugf raw (fun _ -> never ());
+          Cerb_log.debugf enabled.(id mod Array.length enabled) (fun m -> m "event");
+          Cerb_log.debug disabled.(id mod Array.length disabled) never) literals in
       let workers = Array.init 8 (fun id -> Domain.spawn (fun () -> worker id)) in
       while Atomic.get ready <> Array.length workers do Domain.cpu_relax () done;
       Atomic.set start true;
@@ -139,7 +139,7 @@ let concurrent_misses () =
       Array.iter (function Ok () -> () | Error exn -> raise exn) results;
       check (count_sources () = before + 1) "concurrent aliases registered duplicate sources";
       let names = List.filter (String.starts_with ~prefix:"Concurrent_misses.")
-        (Cerb_log_auto.sources ()) in
+        (Cerb_log.sources ()) in
       check (names = ["Concurrent_misses.disabled"; "Concurrent_misses.enabled"])
         "concurrent positive or negative decisions missing from discovery"
     done;
@@ -150,16 +150,16 @@ let () =
   name_allocation ();
   configure ["Missing.fn"];
   let before = count_sources () in
-  Array.iter (fun name -> Cerb_log_auto.debug name never) literals;
+  Array.iter (fun name -> Cerb_log.debug name never) literals;
   check (count_sources () = before) "negative decisions registered sources";
-  check (List.for_all (fun name -> List.mem name (Cerb_log_auto.sources ()))
+  check (List.for_all (fun name -> List.mem name (Cerb_log.sources ()))
     (Array.to_list literals)) "negative decisions missing from listing";
   warm_allocation literals.(0);
-  Cerb_log_auto.configure ~discover:true None ["all"];
-  Cerb_log_auto.debug "Discovery.disabled" never;
-  check (not (Cerb_log_auto.debug_enabled "Discovery.disabled.(fun)")) "discovery enabled logging";
+  Cerb_log.configure ~discover:true None ["all"];
+  Cerb_log.debug "Discovery.disabled" never;
+  check (not (Cerb_log.debug_enabled "Discovery.disabled.(fun)")) "discovery enabled logging";
   check (count_sources () = before) "discovery registered a disabled source";
-  let listed = Cerb_log_auto.sources () in
+  let listed = Cerb_log.sources () in
   check (List.filter (String.starts_with ~prefix:"Discovery.") listed =
     ["Discovery.disabled"]) "discovery did not deduplicate aliases";
   check (not (List.mem literals.(0) listed)) "stale negative decisions after reconfiguration";
@@ -173,39 +173,39 @@ let () =
     while not (Atomic.get start) do Domain.cpu_relax () done;
     for _ = 1 to 40 do
       Array.iter (fun name ->
-        check (Cerb_log_auto.debug_enabled name) "lost positive decision";
-        Cerb_log_auto.debug name (fun () -> "event")) literals
+        check (Cerb_log.debug_enabled name) "lost positive decision";
+        Cerb_log.debug name (fun () -> "event")) literals
     done in
   let workers = Array.init 4 (fun _ -> Domain.spawn worker) in
   Atomic.set start true;
   Array.iter Domain.join workers;
   check (Atomic.get events = 4 * 40 * Array.length literals) "lost events";
   check (count_sources () = before + Array.length literals) "duplicate sources";
-  check (Cerb_log_auto.debug_enabled "Lookup_literals.function000.(fun)") "alias decision";
+  check (Cerb_log.debug_enabled "Lookup_literals.function000.(fun)") "alias decision";
   check (count_sources () = before + Array.length literals) "alias source duplication";
   warm_allocation literals.(0);
   let copies = Array.map (fun s -> Bytes.to_string (Bytes.of_string s)) literals in
   Gc.compact ();
   Array.iter (fun s ->
-    rejects (fun () -> Cerb_log_auto.debug_enabled s);
-    rejects (fun () -> Cerb_log_auto.debug s never);
-    rejects (fun () -> Cerb_log_auto.debug_located s Cerb_location.unknown never)) copies;
-  Array.iter (fun s -> check (Cerb_log_auto.debug_enabled s) "static key after compaction") literals;
+    rejects (fun () -> Cerb_log.debug_enabled s);
+    rejects (fun () -> Cerb_log.debug s never);
+    rejects (fun () -> Cerb_log.debug_located s Cerb_location.unknown never)) copies;
+  Array.iter (fun s -> check (Cerb_log.debug_enabled s) "static key after compaction") literals;
   (* Reconfiguration is allowed only after workers have joined. It must
      replace both positive and negative decisions from the previous policy. *)
   configure ["Missing.fn"];
-  Array.iter (fun name -> Cerb_log_auto.debug name never) literals;
+  Array.iter (fun name -> Cerb_log.debug name never) literals;
   configure ["Lookup_literals"];
   let threads = Array.init 4 (fun _ -> Thread.create worker ()) in
   Array.iter Thread.join threads;
-  List.iter (fun s -> rejects (fun () -> Cerb_log_auto.debug_enabled s)) [""; "M."; "M"];
-  Cerb_log_auto.configure None ["all"];
-  Array.iter (fun s -> Cerb_log_auto.debug s never) copies;
-  check (not (Cerb_log_auto.debug_enabled "Lookup_literals.function000")) "quiet";
+  List.iter (fun s -> rejects (fun () -> Cerb_log.debug_enabled s)) [""; "M."; "M"];
+  Cerb_log.configure None ["all"];
+  Array.iter (fun s -> Cerb_log.debug s never) copies;
+  check (not (Cerb_log.debug_enabled "Lookup_literals.function000")) "quiet";
   configure [];
-  Array.iter (fun s -> Cerb_log_auto.debug s never) copies;
-  Cerb_log_auto.debug "Discovery.not_recorded" never;
-  check (not (List.mem "Discovery.not_recorded" (Cerb_log_auto.sources ())))
+  Array.iter (fun s -> Cerb_log.debug s never) copies;
+  Cerb_log.debug "Discovery.not_recorded" never;
+  check (not (List.mem "Discovery.not_recorded" (Cerb_log.sources ())))
     "inactive logging performed discovery";
   native_formatted ();
   concurrent_misses ();

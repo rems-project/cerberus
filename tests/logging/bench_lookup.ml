@@ -13,16 +13,16 @@ let () =
   let names = Array.sub Lookup_literals.names 0 n in
   let positive = match Sys.argv.(3) with
     | "positive" -> true | "negative" -> false | _ -> invalid_arg "expected negative|positive" in
-  Cerb_log_auto.configure (Some Logs.Warning) [if positive then "Lookup_literals" else "Missing.fn"];
+  Cerb_log.configure (Some Logs.Warning) [if positive then "Lookup_literals" else "Missing.fn"];
   let sources_before = List.length (Logs.Src.list ()) in
   let before = live_bytes () in
   let allocated_before = Gc.allocated_bytes () in
   Array.iter (fun name ->
-    if Cerb_log_auto.debug_enabled name <> positive then failwith "wrong decision") names;
+    if Cerb_log.debug_enabled name <> positive then failwith "wrong decision") names;
   let allocated_first = Gc.allocated_bytes () -. allocated_before in
   (* Complete any deferred bookkeeping in table buckets before the retained
      measurement. This does not create additional bindings or source objects. *)
-  Array.iter (fun name -> ignore (Cerb_log_auto.debug_enabled name)) names;
+  Array.iter (fun name -> ignore (Cerb_log.debug_enabled name)) names;
   let retained = live_bytes () - before in
   if operation = "memory" then
     Printf.printf "{\"names\":%d,\"positive\":%b,\"retained_bytes\":%d,\"first_allocated_bytes\":%.0f,\"new_sources\":%d}\n%!"
@@ -30,7 +30,7 @@ let () =
   else if operation = "micro" then begin
     let count = 3_000_000 in
     let iterate () = for i = 0 to count - 1 do
-      ignore (Cerb_log_auto.debug_enabled names.(i mod n)) done in
+      ignore (Cerb_log.debug_enabled names.(i mod n)) done in
     iterate (); Gc.full_major ();
     let before = Gc.allocated_bytes () in
     let start = Unix.gettimeofday () in
