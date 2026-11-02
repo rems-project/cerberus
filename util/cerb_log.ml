@@ -1,15 +1,16 @@
 let location_tag = Logs.Tag.def "location" Format.pp_print_string
 
-(* Configuration and logging are sequential for now. The public API uses
-   function names directly; registration is shared by their canonical text. *)
+(* Configure once before workers start. Source levels and selectors remain
+   fixed while logging; the shared registries grow concurrently. *)
 type policy = {
   debug_active : bool;
   info_active : bool;
   warn_active : bool;
   err_active : bool;
   select : string -> bool;
-  sources : (string, Logs.src) Hashtbl.t;
-  encountered : (string, unit) Hashtbl.t;
+  sources : (string, Logs.src) Saturn.Htbl.t;
+  sources_mutex : Mutex.t;
+  encountered : (string, unit) Saturn.Htbl.t;
   default_level : Logs.level option;
 }
 
@@ -19,8 +20,9 @@ let admits (threshold : Logs.level option) level = match threshold with
 
 let fresh ~discover level select active = {
   debug_active = active || discover; select;
-  sources = Hashtbl.create 16;
-  encountered = Hashtbl.create 16;
+  sources = Saturn.Htbl.create ~hashed_type:(module Cerb_log_compat.String_key) ();
+  sources_mutex = Mutex.create ();
+  encountered = Saturn.Htbl.create ~hashed_type:(module Cerb_log_compat.String_key) ();
   default_level = level;
   (* Selectors can enable any severity regardless of the global threshold. *)
   info_active = discover || active || admits level Logs.Info;
@@ -29,18 +31,28 @@ let fresh ~discover level select active = {
 }
 let policy = ref (fresh ~discover:false None (fun _ -> false) false)
 
+let source_for_name p name level =
+  match Saturn.Htbl.find_exn p.sources name with
+  | src -> src
+  | exception Not_found ->
+      (* Different raw names can normalize to the same function. Recheck under
+         the creation mutex: a losing [try_add] cannot undo [Logs.Src.create]'s
+         global registration. Publish only after configuring the new source. *)
+      Cerb_log_compat.protect p.sources_mutex (fun () ->
+        match Saturn.Htbl.find_exn p.sources name with
+        | src -> src
+        | exception Not_found ->
+            let src = Logs.Src.create name in
+            Logs.Src.set_level src level;
+            ignore (Saturn.Htbl.try_add p.sources name src);
+            src)
+
 let source_for p requested raw =
   let name = Cerb_log_names.canonical raw in
-  Hashtbl.replace p.encountered name ();
+  ignore (Saturn.Htbl.try_add p.encountered name ());
   let level = if p.select name then Some Logs.Debug else p.default_level in
   if not (admits level requested) then None
-  else match Hashtbl.find_opt p.sources name with
-    | Some _ as src -> src
-    | None ->
-        let src = Logs.Src.create name in
-        Logs.Src.set_level src level;
-        Hashtbl.add p.sources name src;
-        Some src
+  else Some (source_for_name p name level)
 
 let configure ?(discover=false) level selectors =
   List.iter (fun name ->
@@ -55,11 +67,12 @@ let configure ?(discover=false) level selectors =
   List.iter (fun src ->
     let name = Logs.Src.name src in
     Logs.Src.set_level src (if select name then Some Logs.Debug else level);
-    Hashtbl.replace p.sources name src) (Logs.Src.list ());
+    if not (Saturn.Htbl.try_add p.sources name src) then
+      ignore (Saturn.Htbl.try_set p.sources name src)) (Logs.Src.list ());
   policy := p
 
 let sources () =
-  let encountered = Hashtbl.to_seq_keys (!policy).encountered |> List.of_seq in
+  let encountered = Saturn.Htbl.to_seq (!policy).encountered |> Seq.map fst |> List.of_seq in
   List.sort_uniq String.compare
     (encountered @ List.map Logs.Src.name (Logs.Src.list ()))
 
@@ -161,19 +174,21 @@ let open_reporter output format =
       | Stderr -> stderr, false
       | Stdout -> stdout, false
       | File path -> open_out_gen [Open_creat; Open_wronly; Open_append; Open_binary] 0o666 path, true in
+    let mutex = Mutex.create () in
     let closed = ref false in
-    let close () =
+    let close () = Cerb_log_compat.protect mutex (fun () ->
       if not !closed then begin
         closed := true;
         if owned then close_out channel else flush channel
-      end in
+      end) in
     let report src level ~over k msgf =
       msgf (fun ?header ?(tags = Logs.Tag.empty) fmt ->
         Format.kasprintf (fun message ->
           let line = render format src level header tags message in
-          if !closed then invalid_arg "Cerb_log: reporter is closed";
-          output_string channel line;
-          flush channel;
+          Cerb_log_compat.protect mutex (fun () ->
+            if !closed then invalid_arg "Cerb_log: reporter is closed";
+            output_string channel line;
+            flush channel);
           over ();
           k ()) fmt)
     in

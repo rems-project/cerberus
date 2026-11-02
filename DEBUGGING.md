@@ -1,7 +1,7 @@
 # Logging
 
 Cerberus uses [Logs](https://erratique.ch/software/logs/doc/Logs/index.html#usage).
-Configure logging once in the executable. Every translation unit shares that policy. Libraries emit messages; the shared
+Configure logging once in the executable, before workers start. Every translation unit shares that policy. Libraries emit messages; the shared
 logging implementation manages automatic sources. Libraries do not install
 reporters or change levels.
 
@@ -109,11 +109,21 @@ HOL, Isabelle and Coq receive no-op logging functions;
 they do not evaluate message callbacks. Error handling stays in the existing
 error mechanisms.
 
-## Reporter
+## Reporter and concurrency
 
-This first implementation is sequential. The reporter formats a complete record,
-then writes and flushes it. Close after processing inputs; writes after closure
-are errors. Closing is idempotent and leaves borrowed stdout/stderr open.
+Configure the policy and reporter before workers start; reconfiguration is
+allowed after they have joined. Source levels and selectors stay fixed during
+logging. Saturn registries support concurrent lookup. A mutex protects source
+creation, with a second lookup inside the lock so aliases share one source.
+Rejected calls register no source and take no source-creation lock.
+
+The reporter formats each record outside its output mutex. The mutex guards
+the complete write and flush, and also closure. Formatting can itself log
+without deadlocking. Records do not interleave, but their order is not
+deterministic. Close after workers join; writes after closure are errors.
+Closing is idempotent and leaves borrowed stdout/stderr open. OCaml 4.14 uses
+real systhreads mutexes with a small backport of `Mutex.protect`.
+
 
 JSON records contain `schema_version` (1), `source`, `module`, an optional
 `function`, `level`, and `message`. Newlines and control characters are escaped.
@@ -134,7 +144,9 @@ files have been removed. Profiling is independent of logging.
 
 ## Validation
 
-Build with OCaml >= 4.14.1 and Logs >= 0.10, including `logs.cli`.
+Build with OCaml 4.14.1 or later in the 4.14 series, or >= 5.2 and < 6;
+Logs >= 0.10, including `logs.cli`; and Saturn >= 1.0 and < 2.
+Saturn does not support OCaml 5.0 or 5.1.
 Regenerate Lem output before building:
 
 ```sh
@@ -149,3 +161,6 @@ python3 tests/logging/test_provers.py
 The prover test checks generation and erasure in HOL, Isabelle and Coq; it does
 not compile Cerberus' complete prover developments. CI runs these tests and the
 existing C and byte regressions on OCaml 4.14.1 and 5.2.1.
+
+Systhread tests run on both compilers; OCaml 5 also runs real domain tests.
+Parallel-TU throughput and contention remain unmeasured.

@@ -3,9 +3,18 @@
  (public_name cerberus-lib.util)
  (synopsis "Cerberus util library")
  (modules :standard)
+ (private_modules cerb_log_compat)
  (wrapped false)
  (foreign_stubs (language c) (names cerberus_cstubs))
- (libraries unix str lem pprint yojson logs logs.cli cmdliner))
+ (libraries unix str lem pprint yojson logs logs.cli threads cmdliner saturn))
+
+(rule
+ (enabled_if (< %{ocaml_version} 5.1))
+ (action (copy cerb_log_compat.ocaml4.ml cerb_log_compat.ml)))
+
+(rule
+ (enabled_if (>= %{ocaml_version} 5.1))
+ (action (copy cerb_log_compat.ocaml5.ml cerb_log_compat.ml)))
 
 (rule
  (target n1570.ml)

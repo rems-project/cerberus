@@ -22,3 +22,30 @@
  (name test_lem_logging)
  (modules test_lem_logging)
  (libraries cerberus-lib.frontend cerberus-lib.mem.concrete))
+
+(test
+ (name test_threads)
+ (modules test_threads concurrency_cases)
+ (modes native)
+ (libraries cerberus-lib.util threads))
+
+(test
+ (name test_domains)
+ (modules test_domains concurrency_cases)
+ (modes native)
+ (enabled_if (>= %{ocaml_version} 5.2))
+ (libraries cerberus-lib.util threads))
+
+(executable
+ (name gen_lookup_literals)
+ (modules gen_lookup_literals))
+
+(rule
+ (target lookup_literals.ml)
+ (action (with-stdout-to %{target} (run ./gen_lookup_literals.exe))))
+
+(executable
+ (name bench_lookup)
+ (modes native)
+ (modules bench_lookup lookup_literals)
+ (libraries cerberus-lib.util))

@@ -2,10 +2,11 @@
 
     Pass [__FUNCTION__] directly. Names must contain a qualified function
     component. Globally disabled severities return immediately, unless
-    discovery was requested. This implementation is sequential. *)
+    discovery was requested. Logging supports concurrent threads and OCaml 5
+    domains. *)
 
 val configure : ?discover:bool -> Logs.level option -> string list -> unit
-(** Configure before processing inputs. Selectors
+(** Configure before workers start, or after all have joined. Selectors
     are exact [Module] or [Module.function] names, or [all]. Source levels and
     the reporter must not be reconfigured concurrently with logging. Invalid
     selector syntax raises [Invalid_argument]; unseen names are allowed.
@@ -15,8 +16,8 @@ val configure : ?discover:bool -> Logs.level option -> string list -> unit
     with logging disabled, without evaluating disabled message callbacks. *)
 
 val sources : unit -> string list
-(** List sorted, unique explicit sources and automatic names encountered
-    under this policy, including disabled sites when discovery is enabled.
+(** After workers join, list sorted, unique explicit sources and automatic
+    names encountered under this policy, including disabled sites when discovery is enabled.
     Unvisited automatic sites are absent. *)
 
 val debug : string -> 'a Logs.log
@@ -43,6 +44,8 @@ val location_tag : string Logs.Tag.def
 
 type format = Text | Json
 type output = Stderr | Stdout | File of string
-(** Open an append-only reporter. The close function is idempotent and
-    leaves borrowed stdout/stderr open. Close after processing inputs. *)
+(** Open an append-only reporter. Formatting runs outside the lock; complete
+    records and closure are serialized. The close function is idempotent and
+    leaves borrowed stdout/stderr open. Install before starting workers,
+    and close after they have joined. *)
 val open_reporter : output -> format -> ((Logs.reporter * (unit -> unit)), string) result
