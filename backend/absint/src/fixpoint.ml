@@ -341,7 +341,8 @@ struct
    * Francois Bourdoncle (1993) *)
   let init_strategy g v0 =
     let wto = Pgraph.wto g v0 in
-    Cerb_log.debug __FUNCTION__ (fun m -> m "Strategy: %s" (Nested_list.string_of_nested_list string_of_int wto));
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "Strategy: %s" (Nested_list.string_of_nested_list string_of_int wto));
     let init_vertex widen vertex =
       { vertex; edges = Pgraph.pred vertex g; widen }
     in

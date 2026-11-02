@@ -10,7 +10,8 @@ let do_red str= "\x1b[31m" ^ str ^ "\x1b[0m"
 
 let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st) ndM) (st0: 'st) =
   prerr "ENTERING runND";
-  Cerb_log.debug __FUNCTION__ (fun m -> m "%s" ("HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
+  Cerb_log.debug __FUNCTION__ (fun m ->
+    m "%s" ("HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
       | Exhaustive ->
           "exhaustive"
       | Random ->

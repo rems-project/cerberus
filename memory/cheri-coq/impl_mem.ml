@@ -292,7 +292,7 @@ module CHERIMorello : Memory = struct
                        Eff (fun b -> ((if b then `SAT else `UNSAT), b))
 
                      let with_constraints _ cs (Eff ma) =
-                       Cerb_log.debug __FUNCTION__ (fun m -> m "%s" ("HELLO: Concrete.with_constraints"));
+                       Cerb_log.debug __FUNCTION__ (fun m -> m "%s" "HELLO: Concrete.with_constraints");
                        let rec eval_cs = function
                          | MC_empty ->
                             true
@@ -957,29 +957,31 @@ module CHERIMorello : Memory = struct
   (* --- debugging --- *)
 
   let print_allocations str st =
-    Cerb_log.debug __FUNCTION__ (fun m -> m "%a" (fun ppf () ->
-    Format.fprintf ppf "BEGIN Allocation ==> %s\n" str;
-    let l = ZMap.M.elements st.MM.allocations in
-    List.iter (fun (aid,a) ->
-        Format.fprintf ppf "@@%s: 0x%s,%s (%s%s)\n"
-          (Z.format "%d" aid)
-          (Z.format "%x" a.MM.base)
-          (Z.format "%d" a.size)
-          (if a.is_dynamic then "dynamic" else "static")
-          (if a.is_dead then ", dead" else "")
-      ) l;
-    Format.pp_print_string ppf "END Allocations") ())
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%a" (fun ppf () ->
+        Format.fprintf ppf "BEGIN Allocation ==> %s\n" str;
+        let l = ZMap.M.elements st.MM.allocations in
+        List.iter (fun (aid,a) ->
+            Format.fprintf ppf "@@%s: 0x%s,%s (%s%s)\n"
+              (Z.format "%d" aid)
+              (Z.format "%x" a.MM.base)
+              (Z.format "%d" a.size)
+              (if a.is_dynamic then "dynamic" else "static")
+              (if a.is_dead then ", dead" else "")
+          ) l;
+        Format.pp_print_string ppf "END Allocations") ())
 
   let print_bytemap str (st:MM.mem_state) =
-    Cerb_log.debug __FUNCTION__ (fun m -> m "%a" (fun ppf () ->
-    Format.fprintf ppf "BEGIN BYTEMAP ==> %s\n" str;
-    let l = AMap.M.elements st.bytemap in
-    List.iter (fun (addr, b) ->
-        Format.fprintf ppf "@@0x%s ==> %s\n"
-          (Z.format "%x" addr)
-          (match b with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
-      ) l;
-    Format.pp_print_string ppf "END BYTEMAP") ())
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%a" (fun ppf () ->
+        Format.fprintf ppf "BEGIN BYTEMAP ==> %s\n" str;
+        let l = AMap.M.elements st.bytemap in
+        List.iter (fun (addr, b) ->
+            Format.fprintf ppf "@@0x%s ==> %s\n"
+              (Z.format "%x" addr)
+              (match b with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+          ) l;
+        Format.pp_print_string ppf "END BYTEMAP") ())
 
   let string_of_ghost_state (gs:CapabilitiesGS.coq_CapGhostState): string =
     let s = if gs.tag_unspecified then " notag" else "" in
@@ -987,16 +989,17 @@ module CHERIMorello : Memory = struct
 
   (** Prints provided capability tags table *)
   let print_captags str (st:MM.mem_state) =
-    Cerb_log.debug __FUNCTION__ (fun m -> m "%a" (fun ppf () ->
-    Format.fprintf ppf "BEGIN CAPTAGS ==> %s\n" str;
-    let l = AMap.M.elements st.capmeta in
-    List.iter (fun (addr, (b,gs)) ->
-        Format.fprintf ppf "@@0x%s ==> %s%s\n"
-          (Z.format "%x" addr)
-          (string_of_bool b)
-          (string_of_ghost_state gs)
-      ) l;
-    Format.pp_print_string ppf "END CAPTAGS") ())
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%a" (fun ppf () ->
+        Format.fprintf ppf "BEGIN CAPTAGS ==> %s\n" str;
+        let l = AMap.M.elements st.capmeta in
+        List.iter (fun (addr, (b,gs)) ->
+            Format.fprintf ppf "@@0x%s ==> %s%s\n"
+              (Z.format "%x" addr)
+              (string_of_bool b)
+              (string_of_ghost_state gs)
+          ) l;
+        Format.pp_print_string ppf "END CAPTAGS") ())
 
   (* lifting memM *)
 
@@ -1027,8 +1030,9 @@ module CHERIMorello : Memory = struct
         (init_opt: mem_value option): pointer_value memM
     =
     get >>= fun st ->
-    Cerb_log.debug __FUNCTION__ (fun m -> m "%s" ("allocate_object. last_address=" ^
-                   (String_nat_big_num.string_of_hexadecimal (MM.last_address st))));
+    Cerb_log.debug __FUNCTION__ (fun m ->
+      m "%s" ("allocate_object. last_address=" ^
+        (String_nat_big_num.string_of_hexadecimal (MM.last_address st))));
     lift_coq_memM "allocate_object" (MM.allocate_object
                      (toCoq_thread_id tid)
                      (toCoq_Symbol_prefix pref)
@@ -1055,10 +1059,10 @@ module CHERIMorello : Memory = struct
                               align_int
                               size_int))
       (fun newptr ->
-        Cerb_log.debug __FUNCTION__ (fun m -> m "%s" ("MEMOP_RET allocate_region " ^
-                       "size=" ^ (Pp_utils.to_plain_string (pp_integer_value size_int)) ^
-                         " = " ^
-                           Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false newptr)));
+        Cerb_log.debug __FUNCTION__ (fun m ->
+          m "%s" ("MEMOP_RET allocate_region " ^
+            "size=" ^ (Pp_utils.to_plain_string (pp_integer_value size_int)) ^
+            " = " ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false newptr)));
         return newptr)
 
   let kill (loc:Cerb_location.t) (is_dyn:bool) (pv:pointer_value) : unit memM
@@ -1077,7 +1081,8 @@ module CHERIMorello : Memory = struct
     bind
       (lift_coq_memM label (MM.load (toCoq_location loc) (toCoq_ctype ty) p))
       (fun (fp,mval) ->
-        Cerb_log.debug __FUNCTION__ (fun m -> m "%s" ("MEMOP_RET load =" ^ Pp_utils.to_plain_string (pp_mem_value mval)));
+        Cerb_log.debug __FUNCTION__ (fun m ->
+          m "%s" ("MEMOP_RET load =" ^ Pp_utils.to_plain_string (pp_mem_value mval)));
         return (fp,mval))
 
   let store (loc:Cerb_location.t) (ty:Ctype.ctype) (is_locking:bool) (p:pointer_value) (mval:mem_value): footprint memM
@@ -1409,7 +1414,8 @@ module CHERIMorello : Memory = struct
                      args)
     >>=
     (fun res ->
-        Cerb_log.debug __FUNCTION__ (fun m -> m "%s" (match res with
+        Cerb_log.debug __FUNCTION__ (fun m ->
+          m "%s" (match res with
             | Some mval -> "MEMOP_RET call_intrinsic = Just " ^ Pp_utils.to_plain_string (pp_mem_value mval)
             | None -> "MEMOP_RET call_intrinsic = None"));
         return res)

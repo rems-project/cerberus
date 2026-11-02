@@ -175,7 +175,8 @@ let cerberus logging progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Cerb_log.warn __FUNCTION__ (fun m -> m "Return value overlows (wrapping it down to 255)");
+                      Cerb_log.warn __FUNCTION__ (fun m ->
+                        m "Return value overlows (wrapping it down to 255)");
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->

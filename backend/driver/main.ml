@@ -229,7 +229,8 @@ let cerberus logging progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Cerb_log.warn __FUNCTION__ (fun m -> m "Return value overlows (wrapping it down to 255)");
+                      Cerb_log.warn __FUNCTION__ (fun m ->
+                        m "Return value overlows (wrapping it down to 255)");
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->
@@ -297,7 +298,8 @@ let cerberus logging progress core_obj
         (* Link and execute *)
       else
         begin if syntax_only then begin
-          Cerb_log.warn __FUNCTION__ (fun m -> m "some of the translation units are Core or object files: ignoring --syntax-only");
+          Cerb_log.warn __FUNCTION__ (fun m ->
+            m "some of the translation units are Core or object files: ignoring --syntax-only");
           Result.ok ()
         end else
           Result.ok ()

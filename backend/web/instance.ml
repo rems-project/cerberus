@@ -24,14 +24,12 @@ let dummy_io =
     pass_message=   skip;
     set_progress=   skip;
     run_pp=         (fun _ -> skip);
-    print_endline=  skip
-
+    print_endline=  skip;
   }
 
 let setup conf =
   let pipeline_conf =
-    {
-      pprints=            [];
+    { pprints=            [];
       astprints=          [];
       ppflags=            [];
       ppouts=             [];

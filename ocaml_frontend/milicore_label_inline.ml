@@ -5,8 +5,8 @@ open Cerb_pp_prelude
 open PPrint
 
 let inline_label run_annots (label_loc, l_annot, label_sym, label_arg_syms_bts, label_body) args =
-  Cerb_log.info __FUNCTION__ (fun m -> m "%s: %s" (Pp_symbol.to_string label_sym)
-    (Pp_utils.to_plain_string (Cerb_location.pp_location label_loc)));
+  Cerb_log.info __FUNCTION__ (fun m ->
+    m "%s" (Pp_symbol.to_string label_sym ^ ": " ^ Pp_utils.to_plain_string (Cerb_location.pp_location label_loc)));
   if ((List.length label_arg_syms_bts) <> (List.length args)) 
   then begin
       PPrint.ToChannel.compact stdout
@@ -130,4 +130,5 @@ let rewrite_fun_map_decl = function
 
 let rewrite_file file = 
   { file with mi_funs = Pmap.map rewrite_fun_map_decl file.mi_funs }
+
 

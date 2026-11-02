@@ -19,6 +19,5 @@ val internal_error: string -> 'a
 (* prints the msg prefixed by "error:" and with a given code (default is 1) *)
 val fatal: ?code:int -> string -> 'a
 
-(* if the always is true or the debug level is >1, prints the msg
- * prefixed by "warning:" *)
+(* Log a warning, constructing its message only when enabled. *)
 val warn: (unit -> string) -> unit

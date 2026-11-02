@@ -170,7 +170,9 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
       fun () -> io.run_pp None (Pp_cabs.pp_translation_unit true true cabs_tunit)
     end in
     let* () = whenM (List.mem Cabs pipeline_conf.pprints) begin
-      fun () -> Cerb_log.debug __FUNCTION__ (fun m -> m "Cabs pretty-printing is not yet supported"); Result.ok ()
+      fun () ->
+        Cerb_log.debug __FUNCTION__ (fun m -> m "Cabs pretty-printing is not yet supported");
+        Result.ok ()
     end in
     Result.ok cabs_tunit in
   (* -- *)
@@ -555,10 +557,11 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
                 0
           end)
       | (cval :: _) ->
-          let () = Cerb_log.debug __FUNCTION__ (fun m -> m "%s" ((fun () -> "HELLO> " ^ String_core.string_of_value cval) ())) in
+          let () = Cerb_log.debug __FUNCTION__ (fun m ->
+            m "%s" ("HELLO> " ^ String_core.string_of_value cval)) in
           Result.ok (Either.Right 0)
       | [] ->
-          let () = Cerb_log.debug __FUNCTION__ (fun m -> m "%s" ((fun () -> "BACKEND FOUND EMPTY RESULT") ())) in
+          let () = Cerb_log.debug __FUNCTION__ (fun m -> m "%s" "BACKEND FOUND EMPTY RESULT") in
           Result.ok (Either.Right 0)
 
 (* NOTE: Every map needs to be serialised as associated lists, since marshalling
