@@ -58,6 +58,58 @@ let callback_contract () = with_events (fun events ->
   check (List.map (fun (_, level, text) -> level, text) (List.rev !events) =
     [Logs.Warning, "value=7"; Logs.Error, "error=8"]) "native warning/error formats")
 
+let no_allocations f =
+  f ();
+  Gc.full_major ();
+  let before = Gc.allocated_bytes () in
+  for _ = 1 to 100_000 do f () done;
+  check (Gc.allocated_bytes () -. before < 1024.) "disabled calls allocated"
+
+let gates_and_discovery () =
+  let heap = Bytes.to_string (Bytes.of_string "Skipped.debug") in
+  Cerb_log.configure (Some Logs.Warning) [];
+  no_allocations (fun () -> Cerb_log.debug heap never; Cerb_log.info heap never);
+  check (not (List.mem "Skipped.debug" (Cerb_log.sources ())))
+    "globally disabled logging resolved its name";
+  Cerb_log.configure (Some Logs.Error) ["Missing.fn"];
+  let before = count_sources () in
+  no_allocations (fun () -> Cerb_log.warn_string "Negative.warning" never);
+  check (count_sources () = before) "rejected warning registered a source";
+  Cerb_log.configure None ["all"];
+  no_allocations (fun () ->
+    Cerb_log.warn heap never; Cerb_log.err heap never;
+    Cerb_log.info heap never; Cerb_log.debug heap never);
+  Cerb_log.configure ~discover:true None [];
+  Cerb_log.warn "Discovery.warning" never;
+  check (count_sources () = before) "quiet discovery registered a source";
+  check (List.mem "Discovery.warning" (Cerb_log.sources ()))
+    "quiet discovery missed a diagnostic"
+
+let shared_source_level () = with_events (fun events ->
+  let name = "Shared_level.target" in
+  Cerb_log.configure (Some Logs.Warning) ["Missing.fn"];
+  let before = count_sources () in
+  Cerb_log.debug_string name never;
+  check (count_sources () = before) "Debug rejection registered a source";
+  Cerb_log.err_string name (fun m -> m "first enabled call");
+  let src = match !events with
+    | [(src, Logs.Error, _)] -> src
+    | _ -> failwith "source promotion lost the Error" in
+  check (Logs.Src.level src = Some Logs.Warning) "first Error changed the function level";
+  Cerb_log.warn_string name (fun m -> m "warning");
+  Cerb_log.debug_string name never;
+  check (List.length !events = 2 && count_sources () = before + 1)
+    "source promotion changed filtering or registered twice";
+  Cerb_log.configure (Some Logs.Error) ["Shared_level.target"];
+  events := [];
+  Cerb_log.err_string name (fun m -> m "selected error");
+  Cerb_log.debug_string name (fun m -> m "selected debug");
+  check (Logs.Src.level src = Some Logs.Debug && List.length !events = 2)
+    "selected source adopted the first requested severity")
+
 let () =
   severity_rules (); callback_contract ();
+  shared_source_level ();
+  Logs.set_reporter Logs.nop_reporter;
+  gates_and_discovery ();
   print_endline "Severity and callback tests passed"

@@ -87,9 +87,9 @@ let concurrent_severities ~run_workers () =
     check (count_sources () = before + 1) "concurrent severities duplicated a source";
     check (Atomic.get events = 8 * 32 * 2) "concurrent diagnostics lost events")
 
-let concurrent_output ~run_workers () =
+let concurrent_output ~run_workers format =
   let path = Filename.temp_file "cerberus-concurrent" ".log" in
-  let reporter, close = match Cerb_log.open_reporter (File path) Json with
+  let reporter, close = match Cerb_log.open_reporter (File path) format with
     | Ok result -> result | Error msg -> failwith msg in
   (* A source created after the reporter is shared by all workers. *)
   let src = Logs.Src.create "Concurrent_output.run" in
@@ -105,13 +105,20 @@ let concurrent_output ~run_workers () =
     let actual = Fun.protect ~finally:(fun () -> close_in channel) (fun () ->
       let rec read acc = match input_line channel with
         | line ->
-            let open Yojson.Basic.Util in
-            let event = Yojson.Basic.from_string line in
-            check (event |> member "source" |> to_string = "Concurrent_output.run")
-              "concurrent source metadata";
-            read ((event |> member "message" |> to_string) :: acc)
+            let message = match format with
+              | Cerb_log.Json ->
+                  let open Yojson.Basic.Util in
+                  let event = Yojson.Basic.from_string line in
+                  check (event |> member "source" |> to_string = "Concurrent_output.run")
+                    "concurrent source metadata";
+                  event |> member "message" |> to_string
+              | Cerb_log.Text -> line in
+            read (message :: acc)
         | exception End_of_file -> acc in
       read []) in
     let expected = List.init 8 (fun id -> List.init 64 (message id)) |> List.concat in
+    let expected = match format with
+      | Cerb_log.Json -> expected
+      | Cerb_log.Text -> List.map (fun s -> "[debug] Concurrent_output.run: " ^ s) expected in
     check (List.sort String.compare actual = List.sort String.compare expected)
       "concurrent records were lost, duplicated or interleaved")

@@ -90,7 +90,48 @@ let test_located_strings () = with_file Cerb_log.Json (fun filename _ close ->
         "string bridge lost location metadata"
   | _ -> failwith "located string emission count")
 
+let test_formats () = with_file Cerb_log.Json (fun filename reporter close ->
+  let log msgf = reporter.Logs.report Logs.default Logs.Debug
+      ~over:(fun () -> ()) (fun () -> ()) msgf in
+  log (fun m -> m "%s" "raw\nstring");
+  log (fun m -> m "%8s" "padded");
+  log (fun m -> m "%s:%04d" "mixed" 7);
+  log (fun m -> m "@[<h>%a@ %s@]" Format.pp_print_int 42 "printer");
+  begin try log (fun m -> m "%a" (fun _ () -> failwith "format printer") ()); assert false
+    with Failure msg when msg = "format printer" -> () end;
+  log (fun m -> m "constant");
+  close ();
+  let messages = List.map (fun line ->
+    Yojson.Basic.Util.(Yojson.Basic.from_string line |> member "message" |> to_string)) (lines filename) in
+  check (messages = ["raw\nstring"; "  padded"; "mixed:0007";
+                     "42 printer"; "constant"]) "plain strings and general Format behavior")
+
+let test_late_source () = with_file Cerb_log.Text (fun filename late close_late ->
+  let source = Logs.Src.create "Late.parse" in
+  let early, close_early = get (Cerb_log.open_reporter (File filename) Text) in
+  Fun.protect ~finally:close_early (fun () ->
+    let log reporter level = reporter.Logs.report source level
+      ~over:(fun () -> ()) (fun () -> ()) (fun m -> m "%s" "message") in
+    let levels = [Logs.App; Logs.Error; Logs.Warning; Logs.Info; Logs.Debug] in
+    List.iter (log late) levels;
+    List.iter (log early) levels;
+    (* Registration order must not leave one reporter rebuilding prefixes on
+       every call. Compare allocations, not machine-dependent elapsed time. *)
+    let allocated reporter =
+      let before = Gc.allocated_bytes () in
+      for _ = 1 to 100 do log reporter Logs.Debug done;
+      Gc.allocated_bytes () -. before in
+    let late_bytes = allocated late in
+    let early_bytes = allocated early in
+    check (late_bytes = early_bytes) "late sources retain their text prefixes";
+    close_late (); close_early ();
+    let expected = List.map (fun level ->
+      "[" ^ Logs.level_to_string (Some level) ^ "] Late.parse: message") levels in
+    let first_ten = List.filteri (fun i _ -> i < 10) (lines filename) in
+    check (first_ten = expected @ expected) "late source prefixes at every level"))
+
 let () =
   Logs.set_level ~all:true (Some Logs.Debug);
   test_json (); test_reporter (); test_located_strings ();
+  test_formats (); test_late_source ();
   print_endline "Reporter tests passed"

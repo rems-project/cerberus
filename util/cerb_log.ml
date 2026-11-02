@@ -1,17 +1,36 @@
 let location_tag = Logs.Tag.def "location" Format.pp_print_string
 
-(* Configure once before workers start. Source levels and selectors remain
-   fixed while logging; the shared registries grow concurrently. *)
+(* Configure once before starting workers. The policy, selector table and
+   source levels remain unchanged until all workers have joined. Only the
+   address table and source registry grow during use. Source creation is
+   serialized; all tables support concurrent lookup. *)
+external pointer_hash : string -> int = "cerb_log_pointer_hash" [@@noalloc]
+external is_static : string -> bool = "cerb_log_is_static" [@@noalloc]
+module Pointer = struct
+  type t = string
+  let equal = (==)
+  let hash = pointer_hash
+end
+
+(* An entry's name and configured level never change. A rejected first call
+   needs no Logs source; an enabled call can later publish a replacement
+   record containing it. Readers may safely retain either immutable record. *)
+type source_info = {
+  name : string;
+  level : Logs.level option;
+  src : Logs.src option;
+}
+
 type policy = {
   debug_active : bool;
   info_active : bool;
-  warn_active : bool;
-  err_active : bool;
   select : string -> bool;
+  by_address : (string, source_info) Saturn.Htbl.t;
   sources : (string, Logs.src) Saturn.Htbl.t;
   sources_mutex : Mutex.t;
-  encountered : (string, unit) Saturn.Htbl.t;
   default_level : Logs.level option;
+  warn_active : bool;
+  err_active : bool;
 }
 
 let admits (threshold : Logs.level option) level = match threshold with
@@ -20,11 +39,12 @@ let admits (threshold : Logs.level option) level = match threshold with
 
 let fresh ~discover level select active = {
   debug_active = active || discover; select;
+  by_address = Saturn.Htbl.create ~hashed_type:(module Pointer) ();
   sources = Saturn.Htbl.create ~hashed_type:(module Cerb_log_compat.String_key) ();
   sources_mutex = Mutex.create ();
-  encountered = Saturn.Htbl.create ~hashed_type:(module Cerb_log_compat.String_key) ();
   default_level = level;
-  (* Selectors can enable any severity regardless of the global threshold. *)
+  (* A selected source is raised to Debug even if the global threshold is
+     Error. These gates only skip levels that cannot be enabled anywhere. *)
   info_active = discover || active || admits level Logs.Info;
   warn_active = discover || active || admits level Logs.Warning;
   err_active = discover || active || admits level Logs.Error;
@@ -35,7 +55,7 @@ let source_for_name p name level =
   match Saturn.Htbl.find_exn p.sources name with
   | src -> src
   | exception Not_found ->
-      (* Different raw names can normalize to the same function. Recheck under
+      (* Different static addresses can name the same function. Recheck under
          the creation mutex: a losing [try_add] cannot undo [Logs.Src.create]'s
          global registration. Publish only after configuring the new source. *)
       Cerb_log_compat.protect p.sources_mutex (fun () ->
@@ -47,12 +67,42 @@ let source_for_name p name level =
             ignore (Saturn.Htbl.try_add p.sources name src);
             src)
 
-let source_for p requested raw =
+let[@inline never] first_use p requested raw =
+  (* Heap strings can move, changing their address hash. They never enter the
+     table. Looking one up before this check cannot match a static address;
+     validation therefore belongs only on the miss path. *)
+  if not (is_static raw) then
+    invalid_arg "Cerb_log: expected a static source name (use __FUNCTION__)";
   let name = Cerb_log_names.canonical raw in
-  ignore (Saturn.Htbl.try_add p.encountered name ());
   let level = if p.select name then Some Logs.Debug else p.default_level in
-  if not (admits level requested) then None
-  else Some (source_for_name p name level)
+  let src =
+    if admits level requested then Some (source_for_name p name level)
+    else None in
+  let info = { name; level; src } in
+  if Saturn.Htbl.try_add p.by_address raw info then info
+  else
+    (* Insert only when absent: a racing miss must not overwrite an entry
+       whose source has already been registered by another severity. *)
+    Saturn.Htbl.find_exn p.by_address raw
+
+let[@inline never] register_source p raw info =
+  let src = source_for_name p info.name info.level in
+  let registered = { info with src = Some src } in
+  (* The creation mutex guarantees the same source for every contender.
+     Only one replaces this record; a losing candidate is still valid for
+     this call. The configured level stays fixed, regardless of severity. *)
+  ignore (Saturn.Htbl.try_compare_and_set p.by_address raw info registered);
+  registered.src
+
+let source_for p requested raw =
+  (* [find_exn] avoids allocating an outer [Some] on every cache hit. *)
+  let info = match Saturn.Htbl.find_exn p.by_address raw with
+    | info -> info
+    | exception Not_found -> first_use p requested raw in
+  if not (admits info.level requested) then None
+  else match info.src with
+    | Some _ as src -> src
+    | None -> register_source p raw info
 
 let configure ?(discover=false) level selectors =
   List.iter (fun name ->
@@ -72,7 +122,11 @@ let configure ?(discover=false) level selectors =
   policy := p
 
 let sources () =
-  let encountered = Saturn.Htbl.to_seq (!policy).encountered |> Seq.map fst |> List.of_seq in
+  (* Call after workers join. Unregistered entries retain their canonical
+     names too, so listing needs no scan or additional normalization. *)
+  let p = !policy in
+  let encountered = Saturn.Htbl.to_seq p.by_address
+    |> Seq.map (fun (_, info) -> info.name) |> List.of_seq in
   List.sort_uniq String.compare
     (encountered @ List.map Logs.Src.name (Logs.Src.list ()))
 
@@ -168,12 +222,59 @@ let render format src level header tags message =
          suffix location_tag;
          (match header with None -> "" | Some h -> " [" ^ h ^ "]"); ": "; message; "\n"]
 
+(* The Lem facade supplies a prebuilt string. Avoid a second formatter for
+   the unpadded [%s] case; all native OCaml formats use Format as usual. *)
+let format_message : type a b.
+    (string -> b) -> (a, Format.formatter, unit, b) format4 -> a =
+  fun k ((CamlinternalFormatBasics.Format (fmt, _)) as format) ->
+    match fmt with
+    | CamlinternalFormatBasics.String
+        (CamlinternalFormatBasics.No_padding, CamlinternalFormatBasics.End_of_format) -> k
+    | _ -> Format.kasprintf k format
+
+module Sources = Map.Make (struct
+  type t = Logs.src
+  let compare = Logs.Src.compare
+end)
+
+let level_index = function
+  | Logs.App -> 0 | Logs.Error -> 1 | Logs.Warning -> 2 | Logs.Info -> 3 | Logs.Debug -> 4
+
+let source_prefixes src =
+  Array.of_list (List.map (fun level ->
+    "[" ^ Logs.level_to_string (Some level) ^ "] " ^ Logs.Src.name src ^ ": ")
+    [Logs.App; Logs.Error; Logs.Warning; Logs.Info; Logs.Debug])
+
+(* Readers use immutable snapshots. A source registered after the reporter
+   opens gets its prefixes on first use; CAS preserves simultaneous additions
+   from other domains without taking the output mutex during formatting. *)
+let text_prefixes () =
+  List.fold_left (fun prefixes src ->
+    Sources.add src (source_prefixes src) prefixes) Sources.empty (Logs.Src.list ())
+
+let[@inline never] add_text_prefixes cache src =
+  let values = source_prefixes src in
+  let rec publish () =
+    let before = Atomic.get cache in
+    match Sources.find_opt src before with
+    | Some values -> values
+    | None ->
+        if Atomic.compare_and_set cache before (Sources.add src values before)
+        then values else publish () in
+  publish ()
+
+let cached_text_prefixes cache src =
+  match Sources.find_opt src (Atomic.get cache) with
+  | Some values -> values
+  | None -> add_text_prefixes cache src
+
 let open_reporter output format =
   try
     let channel, owned = match output with
       | Stderr -> stderr, false
       | Stdout -> stdout, false
       | File path -> open_out_gen [Open_creat; Open_wronly; Open_append; Open_binary] 0o666 path, true in
+    let prefixes = Atomic.make (match format with Text -> text_prefixes () | Json -> Sources.empty) in
     let mutex = Mutex.create () in
     let closed = ref false in
     let close () = Cerb_log_compat.protect mutex (fun () ->
@@ -183,8 +284,12 @@ let open_reporter output format =
       end) in
     let report src level ~over k msgf =
       msgf (fun ?header ?(tags = Logs.Tag.empty) fmt ->
-        Format.kasprintf (fun message ->
-          let line = render format src level header tags message in
+        format_message (fun message ->
+          let line = match format, header with
+            | Text, None when Logs.Tag.is_empty tags ->
+                let values = cached_text_prefixes prefixes src in
+                String.concat "" [values.(level_index level); message; "\n"]
+            | _ -> render format src level header tags message in
           Cerb_log_compat.protect mutex (fun () ->
             if !closed then invalid_arg "Cerb_log: reporter is closed";
             output_string channel line;

@@ -6,11 +6,13 @@
 (test
  (name test_lookup)
  (modules test_lookup)
+ (modes native)
  (libraries cerberus-lib.util))
 
 (test
  (name test_severity)
  (modules test_severity)
+ (modes native)
  (libraries cerberus-lib.util))
 
 (test
@@ -48,4 +50,9 @@
  (name bench_lookup)
  (modes native)
  (modules bench_lookup lookup_literals)
+ (libraries cerberus-lib.util))
+
+(executable
+ (name bench_logging)
+ (modules bench_logging)
  (libraries cerberus-lib.util))

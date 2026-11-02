@@ -76,7 +76,71 @@ let native_formatted () =
     Cerb_log.configure None [];
     formatted never)
 
+let literals = [|"Cache.first"; "Cache.second"; "Cache.third"; "Cache.fourth"|]
+
+let admitted raw =
+  let called = ref false in
+  (* The string bridge runs enabled callbacks even with a nop reporter. *)
+  Cerb_log.debug_string raw (fun _ -> called := true);
+  !called
+
+let name_allocation () =
+  Gc.full_major ();
+  let before = Gc.allocated_bytes () in
+  for i = 0 to 9_999 do
+    let raw = literals.(i mod Array.length literals) in
+    check (Cerb_log_names.valid_selector raw) "canonical name is not a selector";
+    check (Cerb_log_names.canonical raw == raw) "canonical name was copied"
+  done;
+  check (Gc.allocated_bytes () -. before < 1024.)
+    "validation or unchanged normalization allocated per name"
+
+let warm_allocation raw =
+  let previous = Logs.reporter () in
+  Logs.set_reporter Logs.nop_reporter;
+  Cerb_log.debug raw (fun _ -> ());
+  let reference = if admitted raw then
+      let src = List.find (fun src -> Logs.Src.name src = Cerb_log_names.canonical raw)
+          (Logs.Src.list ()) in
+      (fun () -> Logs.debug ~src (fun _ -> ()))
+    else (fun () -> ()) in
+  let allocated call =
+    Gc.full_major ();
+    let before = Gc.allocated_bytes () in
+    for _ = 1 to 100_000 do call () done;
+    Gc.allocated_bytes () -. before in
+  let extra = allocated (fun () -> Cerb_log.debug raw (fun _ -> ())) -. allocated reference in
+  Logs.set_reporter previous;
+  check (extra < 1024.) "cached lookup allocated beyond Logs dispatch"
+
+let cached_decisions () =
+  configure ["Missing.fn"];
+  let before = count_sources () in
+  Array.iter (fun raw -> check (not (admitted raw)) "negative decision") literals;
+  check (count_sources () = before) "negative decisions registered sources";
+  check (List.for_all (fun raw -> List.mem raw (Cerb_log.sources ()))
+    (Array.to_list literals)) "negative decisions missing from listing";
+  warm_allocation literals.(0);
+  configure ["Cache"];
+  Array.iter (fun raw -> check (admitted raw) "lost positive decision") literals;
+  check (admitted "Cache.first.(fun)") "alias decision";
+  check (count_sources () = before + Array.length literals) "alias source duplication";
+  warm_allocation literals.(0);
+  let copies = Array.map (fun s -> Bytes.to_string (Bytes.of_string s)) literals in
+  (* All four GC states matter: heap header colours on OCaml 4 must never
+     be mistaken for the marker used for static storage on OCaml 5. *)
+  List.iter (fun collect ->
+    collect ();
+    Array.iter (fun s -> rejects (fun () -> admitted s)) copies;
+    Array.iter (fun s -> check (admitted s) "static key after GC") literals)
+    [(fun () -> ()); Gc.minor; Gc.full_major; Gc.compact];
+  configure ["Missing.fn"];
+  Array.iter (fun raw -> check (not (admitted raw)) "stale positive decision") literals;
+  check (count_sources () = before + Array.length literals) "reconfiguration duplicated sources"
+
 let () =
+  name_allocation ();
+  cached_decisions ();
   names ();
   native_formatted ();
   Cerb_log.configure ~discover:true None [];

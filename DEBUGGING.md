@@ -1,7 +1,8 @@
 # Logging
 
 Cerberus uses [Logs](https://erratique.ch/software/logs/doc/Logs/index.html#usage).
-Configure logging once in the executable, before workers start. Every translation unit shares that policy. Libraries emit messages; the shared
+Configure logging once in the executable, before starting translation-unit workers.
+Every translation unit shares that policy. Libraries emit messages; the shared
 logging implementation manages automatic sources. Libraries do not install
 reporters or change levels.
 
@@ -65,8 +66,8 @@ let translate input =
 ```
 
 Pass `__FUNCTION__` to `Cerb_log.debug`, `Cerb_log.info`, `Cerb_log.warn` and `Cerb_log.err`.
-Both native OCaml and Lem-generated calls resolve their sources automatically;
-no source declaration is needed. Place expensive computations inside the callback
+Both native OCaml and Lem-generated calls use Saturn; no source declaration
+is needed for these adapters. Place expensive computations inside the callback
 so disabled logging does not perform them. All four accept the usual Logs
 formatting callback, including `%a` printers, headers and tags.
 
@@ -111,19 +112,55 @@ error mechanisms.
 
 ## Reporter and concurrency
 
-Configure the policy and reporter before workers start; reconfiguration is
-allowed after they have joined. Source levels and selectors stay fixed during
-logging. Saturn registries support concurrent lookup. A mutex protects source
-creation, with a second lookup inside the lock so aliases share one source.
-Rejected calls register no source and take no source-creation lock.
+The reporter formats each record independently, outside its mutex. A mutex guards
+the complete write and flush, and also closure. This prevents records from
+interleaving across threads or OCaml 5 domains and allows a formatter to log a
+nested message without deadlocking. It does not impose a deterministic order on
+concurrent events. Close after workers join; writes after closure are errors.
+The close function is idempotent and does not close borrowed stdout/stderr.
 
-The reporter formats each record outside its output mutex. The mutex guards
-the complete write and flush, and also closure. Formatting can itself log
-without deadlocking. Records do not interleave, but their order is not
-deterministic. Close after workers join; writes after closure are errors.
-Closing is idempotent and leaves borrowed stdout/stderr open. OCaml 4.14 uses
-real systhreads mutexes with a small backport of `Mutex.protect`.
+Configure the shared policy and reporter before workers start. Concurrent
+reconfiguration or changing source levels is outside this contract. One
+Saturn table keyed by static function-name address serves Debug, Info, Warning and
+Error. Each immutable entry retains its canonical name, configured logging
+level and optional Logs source. Quiet disables every function; otherwise a
+selected function has level Debug and an unselected function uses the global
+default. This level does not change when calls arrive at different severities.
+A cache hit compares the requested severity with the stored level.
 
+A rejected first call registers no source. A later enabled call obtains the
+source from the shared, content-keyed Saturn registry and uses compare-and-set
+to publish a replacement address entry containing it. Readers can safely use
+an older record. Concurrent contenders may allocate replacement records, but
+only one replaces the old entry. Address misses use insert-if-absent, so they
+cannot overwrite an entry that another caller has already completed.
+
+Existing sources are looked up without a mutex. On a name miss, a creation
+mutex protects a second lookup, source creation and publication, so aliases
+share one fully configured source. Validation, normalization, selector matching
+and address-table operations run outside it; rejected calls and warm hits do
+not take it. An enabled first call can insert its source directly without the
+intermediate unregistered entry. The global severity gates still skip address
+lookups when no source could be enabled, except during source discovery.
+
+Both creation and reporter critical sections use `Mutex.protect`, with a small
+backport around real systhreads mutexes on OCaml 4.14. Cache hits allocate no
+record or option wrapper beyond Logs dispatch. Sources registered after reporter
+creation acquire cached text prefixes through an atomic immutable-map update.
+
+The automatic API accepts native static strings, normally `__FUNCTION__`.
+Active logging rejects moving heap strings with `Invalid_argument`; it has no
+content-hash fallback. Two small C helpers hash the address and check static
+storage using the OCaml 4.14 runtime's address table or the OCaml 5 out-of-heap
+string header. The storage check runs only on cache misses; neither version
+scans binary data. Globally disabled calls
+skip lookup and validation unless source discovery was requested. In particular,
+normal Warning verbosity with no Debug selectors skips every Debug lookup,
+while warnings and errors still resolve their sources. Selectors raise matched
+sources to Debug, including their lower-severity messages; quiet overrides them.
+Entries grow with distinct encountered static addresses, not
+the number of C functions, TUs, messages or repeated calls.
+Multi-domain correctness is tested; parallel-TU throughput is not established.
 
 JSON records contain `schema_version` (1), `source`, `module`, an optional
 `function`, `level`, and `message`. Newlines and control characters are escaped.
@@ -140,14 +177,17 @@ symbol identities, provenance and extra display detail. Flags can be combined.
 The existing `loc` flag remains available.
 
 Unused numeric-level timing hooks and their implicit `cerb.prof`/`cerb_times.csv`
-files have been removed. Profiling is independent of logging.
+files have been removed. Profiling should be configured independently of logging.
+This does not change separate tracing facilities or the BMC/web backends' own
+backend-specific diagnostics.
 
 ## Validation
 
-Build with OCaml 4.14.1 or later in the 4.14 series, or >= 5.2 and < 6;
-Logs >= 0.10, including `logs.cli`; and Saturn >= 1.0 and < 2.
-Saturn does not support OCaml 5.0 or 5.1.
-Regenerate Lem output before building:
+Requires native OCaml 4.14.1 or later in the 4.14 series, or >= 5.2 and < 6,
+Logs >= 0.10 (including `logs.cli`), and Saturn >= 1.0 and < 2.
+OCaml 5.0 and 5.1 are not supported by Saturn. The static-storage check must be
+reviewed for a new OCaml major runtime. Bytecode automatic names are not supported.
+Regenerate Lem output when building:
 
 ```sh
 make prelude-src
@@ -156,11 +196,12 @@ dune runtest --profile=release tests/logging
 python3 tests/test_display.py
 python3 tests/logging/test_cli.py
 python3 tests/logging/test_provers.py
+tests/run-ci.sh --both-callconvs
 ```
 
-The prover test checks generation and erasure in HOL, Isabelle and Coq; it does
-not compile Cerberus' complete prover developments. CI runs these tests and the
-existing C and byte regressions on OCaml 4.14.1 and 5.2.1.
-
-Systhread tests run on both compilers; OCaml 5 also runs real domain tests.
-Parallel-TU throughput and contention remain unmeasured.
+The prover test checks generation and erasure in all three targets; it does not
+claim to compile Cerberus' complete prover developments. CI runs the logging,
+GC, exception-cleanup, systhread and CLI tests on OCaml 4.14.1 and 5.2.1.
+OCaml 5 additionally runs the domain tests, including the same first-use and
+mixed-severity assertions used with systhreads. The CHERI CI configuration is unchanged. See `LOGGING_PERFORMANCE.md` for measured
+costs and the limits of comparisons with the old numeric policy.
