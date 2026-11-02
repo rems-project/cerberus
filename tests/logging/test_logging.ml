@@ -152,7 +152,7 @@ let test_located_strings () = with_file Cerb_log.Json (fun filename _ close ->
   Cerb_log.debug_located_string name loc (fun _ -> failwith "disabled location callback ran");
   Cerb_log.configure (Some Logs.Warning) ["Bridge"];
   Cerb_log.debug_located_string name loc (fun _ -> ());
-  Cerb_log.debug_located_string name loc (fun emit -> emit "first"; emit "second");
+  Cerb_log.debug_located_string name loc (fun m -> m "first"; m "second");
   close ();
   let open Yojson.Basic.Util in
   let records = List.map Yojson.Basic.from_string (lines filename) in

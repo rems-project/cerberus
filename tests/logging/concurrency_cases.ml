@@ -26,6 +26,7 @@ let configure selectors = Cerb_log.configure (Some Logs.Warning) selectors
 let count_sources () = List.length (Logs.Src.list ())
 let emit level raw message = match level with
   | Logs.Debug -> Cerb_log.debug_string raw message
+  | Logs.Info -> Cerb_log.info raw (fun m -> message (m "%s"))
   | Logs.Warning -> Cerb_log.warn_string raw message
   | Logs.Error -> Cerb_log.err_string raw message
   | _ -> assert false
@@ -69,7 +70,8 @@ let concurrent_severities ~run_workers () =
   let previous = Logs.reporter () in
   Logs.set_reporter {Logs.report = fun src level ~over k msgf ->
     check (Logs.Src.name src = "Concurrent_severity.target" &&
-           Logs.Src.level src = Some Logs.Warning && level <> Logs.Debug)
+           Logs.Src.level src = Some Logs.Warning &&
+           (level = Logs.Warning || level = Logs.Error))
       "wrong source or threshold published";
     msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun _ ->
       Atomic.incr events; over (); k ()) fmt)};
@@ -80,11 +82,11 @@ let concurrent_severities ~run_workers () =
     check (count_sources () = before) "rejected first calls registered a source";
     run_workers 8 (fun id ->
       let raw = names.(id mod Array.length names) in
-      let order = if id mod 2 = 0 then [Logs.Debug; Logs.Warning; Logs.Error]
-        else [Logs.Error; Logs.Warning; Logs.Debug] in
+      let order = if id mod 2 = 0 then [Logs.Debug; Logs.Info; Logs.Warning; Logs.Error]
+        else [Logs.Error; Logs.Warning; Logs.Info; Logs.Debug] in
       for _ = 1 to 200 do
         List.iter (fun level -> emit level raw
-          (if level = Logs.Debug then never else fun emit -> emit "event")) order
+          (if level = Logs.Debug || level = Logs.Info then never else fun m -> m "event")) order
       done);
     check (count_sources () = before + 1) "concurrent severities duplicated a source";
     check (Atomic.get events = 8 * 200 * 2) "concurrent diagnostics lost events")

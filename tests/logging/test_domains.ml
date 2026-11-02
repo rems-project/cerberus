@@ -83,7 +83,7 @@ let () =
   run_workers 4 (fun _ ->
     for _ = 1 to 40 do
       Array.iter (fun raw ->
-        Cerb_log.debug_string raw (fun emit -> emit ("event"))) literals
+        Cerb_log.debug_string raw (fun m -> m "event")) literals
     done);
   assert (Atomic.get events = 4 * 40 * Array.length literals);
   assert (List.length (Logs.Src.list ()) = before + Array.length literals);

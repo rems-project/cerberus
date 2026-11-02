@@ -164,7 +164,7 @@ end
 
 val printf_eval_conv: driver_state -> Core_run.thread_state -> Ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let printf_eval_conv dr_st th_st cty mval =
-  let () = Debug.debug (fun emit -> emit ("printf_eval_conv")) in
+  let () = Debug.debug (fun m -> m "printf_eval_conv") in
   let (_, cval) = Core_aux.valueFromMemValue mval in
   print_eval_conv_aux dr_st th_st $
     Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
@@ -680,7 +680,7 @@ val action_request_sequential2:
   Loc.t -> Mem.thread_id -> Cmm.aid -> Core_reduction.action_request2 Core_run.thread_state -> driverM unit
 let action_request_sequential2 loc tid aid = function
   | Core_reduction.AllocRequest2 pref align_ival size_ival mk_th_st' ->
-      let () = Debug.debug_located loc (fun emit -> emit ("REQUEST ALLOC")) in (* DEBUG *)
+      let () = Debug.debug_located loc (fun m -> m "REQUEST ALLOC") in (* DEBUG *)
       liftMem (Mem.allocate_region tid pref align_ival size_ival) >>= fun ptrval ->
       record_trace_event (ND.return (ME_allocate_region tid pref align_ival size_ival ptrval)) >>= fun () ->
       ND.update (fun dr_st ->
@@ -690,7 +690,7 @@ let action_request_sequential2 loc tid aid = function
       )
   
   | Core_reduction.CreateRequest2 pref align_ival lvalue_ty req_addr_opt init_opt mk_th_st' ->
-      let () = Debug.debug_located loc (fun emit -> emit ("REQUEST CREATE")) in (* DEBUG *)
+      let () = Debug.debug_located loc (fun m -> m "REQUEST CREATE") in (* DEBUG *)
       liftMem (Mem.allocate_object tid pref align_ival lvalue_ty req_addr_opt init_opt) >>= fun ptrval ->
       record_trace_event (ND.return (ME_allocate_object tid pref align_ival lvalue_ty init_opt ptrval)) >>= fun () ->
       ND.update (fun dr_st ->
@@ -700,7 +700,7 @@ let action_request_sequential2 loc tid aid = function
       )
   
   | Core_reduction.LoadRequest2 mo lvalue_ty ptr_val mk_th_st' ->
-      let () = Debug.debug_located loc (fun emit -> emit ("REQUEST LOAD")) in (* DEBUG *)
+      let () = Debug.debug_located loc (fun m -> m "REQUEST LOAD") in (* DEBUG *)
       liftMem (Mem.load loc lvalue_ty ptr_val)            >>= fun (fp, mval) ->
       record_trace_event begin
         ND.read (fun dr_st -> dr_st.core_file.Core.tagDefs) >>= fun tagDefs ->
@@ -714,7 +714,7 @@ let action_request_sequential2 loc tid aid = function
       )
   
   | Core_reduction.StoreRequest2 mo lvalue_ty is_locking ptr_val mem_val mk_th_st' ->
-      let () = Debug.debug_located loc (fun emit -> emit ("REQUEST STORE")) in (* DEBUG *)
+      let () = Debug.debug_located loc (fun m -> m "REQUEST STORE") in (* DEBUG *)
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp      ->
@@ -756,7 +756,7 @@ let action_request_sequential2 loc tid aid = function
 *)
   
   | Core_reduction.KillRequest2 is_dynamic ptr_val mk_th_st' ->
-      let () = Debug.debug_located loc (fun emit -> emit ("REQUEST KILL")) in (* DEBUG *)
+      let () = Debug.debug_located loc (fun m -> m "REQUEST KILL") in (* DEBUG *)
       liftMem (Mem.kill loc is_dynamic ptr_val) >>
       record_trace_event (ND.return (ME_kill loc is_dynamic ptr_val)) >>= fun () ->
       ND.update (fun dr_st ->
@@ -787,7 +787,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     
     | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
         begin if ity = Ctype.Bool then
-          (let () = Debug.debug (fun emit -> emit ("IntFromPtr called on _Bool --> this is probably a bug in the elaboration")) in ND.return ())
+          (let () = Debug.debug (fun m -> m "IntFromPtr called on _Bool --> this is probably a bug in the elaboration") in ND.return ())
         else
           ND.return ()
         end >>= fun () -> (* DEBUG *)
@@ -803,7 +803,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         ND.return (mk_th_st (if is_valid then Core.Vtrue else Core.Vfalse))
     
     | (Mem_common.PtrEq, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-        let () = Debug.debug (fun emit -> emit ("PtrEq")) in (* DEBUG *)
+        let () = Debug.debug (fun m -> m "PtrEq") in (* DEBUG *)
         liftMem (Mem.eq_ptrval loc ptr_val1 ptr_val2) >>= fun is_eq ->
         ND.return (mk_th_st (if is_eq then Core.Vtrue else Core.Vfalse))
     
@@ -1332,16 +1332,16 @@ let new_drive_core_threads () =
     let size = List.length steps in
     let () = 
       if size > 1 then
-        Debug.debug (fun emit ->
-          emit ("picking step for thread(" ^ show tid ^ ") size: " ^ show size ^ " ==> " ^ show steps
+        Debug.debug (fun m ->
+          m ("picking step for thread(" ^ show tid ^ ") size: " ^ show size ^ " ==> " ^ show steps
         ))
       else
         () in
     ND.pick (SK_misc ["new_drive_core_threads"]) steps >>= fun step ->
     let () =
     if size > 1 then
-      Debug.debug (fun emit ->
-        emit ("===> PICKED: " ^ show step
+      Debug.debug (fun m ->
+        m ("===> PICKED: " ^ show step
       ))
     else
       () in
@@ -1383,8 +1383,8 @@ let process_core_step2 with_concurrency driver2 step =
       driver2 with_concurrency
   
   | Core_reduction.Step_done2 cval ->
-    let () = Debug.debug (fun emit ->
-      emit ("driver.process_core_step ==> Step_done2 with value: " ^ Pp.stringFromCore_value cval
+    let () = Debug.debug (fun m ->
+      m ("driver.process_core_step ==> Step_done2 with value: " ^ Pp.stringFromCore_value cval
     )) in (* DEBUG *)
     (* ND.return () *)
     ND.update (fun dr_st ->
@@ -1421,7 +1421,7 @@ end
 
 val     driver2: bool -> driverM unit
 let rec driver2 with_concurrency =
-  let () = Debug.debug (fun emit -> emit ("ENTERING Driver.driver2")) in
+  let () = Debug.debug (fun m -> m "ENTERING Driver.driver2") in
   new_drive_core_threads   () >>= fun tid_steps ->
   ND.get >>= fun post_core_dr_st ->
   
@@ -1449,8 +1449,8 @@ let rec driver2 with_concurrency =
     ND.bindExhaustive
       (ND.pick (SK_misc ["driver 2"]) tid_steps)
       (fun (tid, step_opt) ->
-         let () = Debug.debug (fun emit ->
-           emit (show tid ^ " ==> " ^ Maybe.maybe "Nothing" show step_opt
+         let () = Debug.debug (fun m ->
+           m (show tid ^ " ==> " ^ Maybe.maybe "Nothing" show step_opt
          )) in
          match step_opt with
            | Just step ->
@@ -1466,8 +1466,8 @@ let rec driver2 with_concurrency =
       ) tid_steps in
     begin
       if List.length non_blocked = 0 then
-        let () = Debug.debug (fun emit ->
-          emit ("|tid_steps| = " ^ show (List.length tid_steps) ^ "\n" ^
+        let () = Debug.debug (fun m ->
+          m ("|tid_steps| = " ^ show (List.length tid_steps) ^ "\n" ^
           show tid_steps
         )) in
         ND.return ()
@@ -1499,7 +1499,7 @@ let rec driver2 with_concurrency =
 
 val     hack: map Symbol.sym Symbol.sym -> list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack core_extern env mem_st core_file concur_sym_map pexpr =
-  let () = Debug.debug (fun emit -> emit ("ENTERING Driver.hack")) in
+  let () = Debug.debug (fun m -> m "ENTERING Driver.hack") in
   match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") Nothing core_extern env (Just mem_st) core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
@@ -1549,7 +1549,7 @@ let finalize debug_str dr_st =
           dres_stderr= List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.Core_run.io.Core_run.stderr);
         |>
     | xs ->
-        let () = Debug.debug (fun emit -> emit ("ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state)) in (* DEBUG *)
+        let () = Debug.debug (fun m -> m ("ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state)) in (* DEBUG *)
         error ("BOOM finalize [" ^ debug_str ^ "]")
   end
 
@@ -1624,7 +1624,7 @@ let driver_globals with_concurrency file =
     end) [] globs
   in
   ND.mapM_ (fun (glob_sym, glob_bTy, expr) ->
-    let () = Debug.debug (fun emit ->      emit ((* DEBUG *)
+    let () = Debug.debug (fun m ->      m ((* DEBUG *)
       "Starting the evaluation of global `" ^ show glob_sym ^ "'"  (* DEBUG *)
     )) in                                                           (* DEBUG *)
     (* setting up the initialisation of the current global in thread 0 *)

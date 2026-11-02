@@ -22,6 +22,7 @@ val sources : unit -> string list
     Unvisited automatic sites are absent. No binary scanning is performed. *)
 
 val debug : string -> 'a Logs.log
+val info : string -> 'a Logs.log
 val warn : string -> 'a Logs.log
 val err : string -> 'a Logs.log
 (** OCaml call sites use [debug __FUNCTION__ (fun m -> m "value: %a" pp v)].
@@ -32,7 +33,7 @@ val debug_string : string -> ((string -> unit) -> unit) -> unit
 val warn_string : string -> ((string -> unit) -> unit) -> unit
 val err_string : string -> ((string -> unit) -> unit) -> unit
 (** String-emitting adapters for Lem's OCaml export. For example,
-    [debug_string __FUNCTION__ (fun emit -> if condition then emit message)].
+    [debug_string __FUNCTION__ (fun m -> if condition then m message)].
     The callback runs only when enabled and may emit zero or several messages.
     Each emission is a separate Logs call. Keep diagnostic work inside the
     callback, and use the emitter only during that callback. *)

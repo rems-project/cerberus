@@ -334,9 +334,8 @@ let rec typeof_object_value loc env oval =
        ) lvals' >>
        E.return (OTy_array oTy)
    | OVstruct tag_sym _ ->
-       let () = Debug.debug (fun emit ->
-         emit ("Core typing, OVstruct doesn't check the validity of the member"
-       )) in
+       let () = Debug.debug (fun m ->
+         m "Core typing, OVstruct doesn't check the validity of the member") in
        E.return (OTy_struct tag_sym)
    | OVunion tag_sym _ _ ->
        E.return (OTy_union tag_sym)

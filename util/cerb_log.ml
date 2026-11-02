@@ -23,6 +23,7 @@ type source_info = {
 
 type policy = {
   debug_active : bool;
+  info_active : bool;
   select : string -> bool;
   by_address : (string, source_info) Saturn.Htbl.t;
   sources : (string, Logs.src) Saturn.Htbl.t;
@@ -44,6 +45,7 @@ let fresh ~discover level select active = {
   default_level = level;
   (* A selected source is raised to Debug even if the global threshold is
      Error. These gates only skip levels that cannot be enabled anywhere. *)
+  info_active = discover || active || admits level Logs.Info;
   warn_active = discover || active || admits level Logs.Warning;
   err_active = discover || active || admits level Logs.Error;
 }
@@ -133,6 +135,12 @@ let debug raw message =
   if p.debug_active then match source_for p Logs.Debug raw with
     | None -> ()
     | Some src -> Logs.debug ~src message
+
+let info raw message =
+  let p = !policy in
+  if p.info_active then match source_for p Logs.Info raw with
+    | None -> ()
+    | Some src -> Logs.info ~src message
 
 let warn raw message =
   let p = !policy in

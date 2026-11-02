@@ -11,8 +11,8 @@ let integerFromIntegerValue ival =
 
 val integerValueFromMemValue: mem_value -> maybe (Ctype.integerType * integer_value)
 let integerValueFromMemValue mval =
-  let () = Debug.debug (fun emit ->
-    emit ("integerValueFromMemValue ==> " ^ Mem.stringFromMem_value mval
+  let () = Debug.debug (fun m ->
+    m ("integerValueFromMemValue ==> " ^ Mem.stringFromMem_value mval
   )) in
   case_mem_value mval
     (fun _ -> Nothing)
@@ -45,8 +45,8 @@ let isUnspecifiedMemValue mval =
 
 val pointerValueFromMemValue: mem_value -> maybe (Ctype.ctype * pointer_value)
 let pointerValueFromMemValue mem_val =
-  let () = Debug.debug (fun emit ->
-    emit ("pointerValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
+  let () = Debug.debug (fun m ->
+    m ("pointerValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   )) in
   case_mem_value mem_val
     (fun _ -> Nothing)

@@ -148,7 +148,7 @@ let () =
     for _ = 1 to 40 do
       Array.iter (fun name ->
         check (admitted name) "lost positive decision";
-        Cerb_log.debug_string name (fun emit -> emit ("event"))) literals
+        Cerb_log.debug_string name (fun m -> m "event")) literals
     done in
   Concurrency_cases.run_threads 4 worker;
   check (Atomic.get events = 4 * 40 * Array.length literals) "lost events";

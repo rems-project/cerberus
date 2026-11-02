@@ -3,8 +3,6 @@ open Cerb_diagnostic
 
 (* Pipeline *)
 
-let log_pass_message = Logs.Src.create "Pipeline.pass_message"
-
 let ( let* )   = Result.bind
 let ( >>= )    = Result.bind
 let (<$>)      = Exception.except_fmap
@@ -89,11 +87,13 @@ type io_helpers = {
   print_endline: string -> (unit, Errors.error) Result.t;
 }
 
+let pass_message str =
+  Cerb_log.info __FUNCTION__ (fun m -> m "%s" str);
+  Result.ok ()
+
 let (default_io_helpers, get_progress) =
   let progress = ref 0 in
-  { pass_message = (fun str ->
-      Logs.info ~src:log_pass_message (fun m -> m "%s" str);
-      Result.ok ())
+  { pass_message
   ; set_progress= (fun _ -> incr progress; Result.ok ())
   ; run_pp= (fun fout_opt doc -> run_pp fout_opt doc; Result.ok ())
   ; print_endline= (fun str -> print_endline str; Result.ok ())

@@ -3,7 +3,7 @@
 Cerberus uses [Logs](https://erratique.ch/software/logs/doc/Logs/index.html#usage).
 Configure logging once in the executable, before starting translation-unit workers.
 Every translation unit shares that policy. Libraries emit messages; the shared
-logging implementation manages automatic Debug sources. Libraries do not install
+logging implementation manages automatic sources. Libraries do not install
 reporters or change levels.
 
 ## Command line
@@ -65,19 +65,18 @@ let translate input =
   (* ... *)
 ```
 
-Pass `__FUNCTION__` to `Cerb_log.debug`, `Cerb_log.warn` and `Cerb_log.err`.
+Pass `__FUNCTION__` to `Cerb_log.debug`, `Cerb_log.info`, `Cerb_log.warn` and `Cerb_log.err`.
 Both native OCaml and Lem-generated calls use Saturn; no source declaration
 is needed for these adapters. Place expensive computations inside the callback
-so disabled logging does not perform them. All three accept the usual Logs
-formatting callback, including `%a` printers, headers and tags. Info messages
-use the ordinary Logs API with explicit sources created once at module scope.
+so disabled logging does not perform them. All four accept the usual Logs
+formatting callback, including `%a` printers, headers and tags.
 
 Lem uses a small, non-monadic adapter because its strings are not OCaml format
 strings:
 
 ```ocaml
 let translate input =
-  let () = Debug.debug (fun emit -> emit (show input)) in
+  let () = Debug.debug (fun m -> m (show input)) in
   (* ... *)
 ```
 
@@ -89,16 +88,16 @@ remain significant: `fn0` and `fn` differ. For example, the native preprocessor
 message is selected by `Pipeline.cpp`, or by `Pipeline` along with the module's
 other functions.
 
-`Debug.warn (fun emit -> emit message)` and `Debug.err (fun emit -> emit message)`
+`Debug.warn (fun m -> m message)` and `Debug.err (fun m -> m message)`
 use the same automatic function names. There is no Lem source declaration or
 `Debug.info` adapter. Their OCaml exports use `Cerb_log.debug_string`,
-`warn_string` and `err_string`. `Debug.debug_located loc (fun emit -> emit message)`
+`warn_string` and `err_string`. `Debug.debug_located loc (fun m -> m message)`
 uses `debug_located_string` and formats the location only when a message is
 emitted. Callbacks can emit zero or several messages. Put diagnostic-only
 conditions inside the callback too, for example:
 
 ```ocaml
-Debug.debug (fun emit -> if sd1 <> sd2 then emit "suspicious equality" else ())
+Debug.debug (fun m -> if sd1 <> sd2 then m "suspicious equality" else ())
 ```
 
 There is no separate enabled-query function. Use the emitter only during its
@@ -122,7 +121,7 @@ The close function is idempotent and does not close borrowed stdout/stderr.
 
 Configure the shared policy and reporter before workers start. Concurrent
 reconfiguration or changing source levels is outside this contract. One
-Saturn table keyed by static function-name address serves Debug, Warning and
+Saturn table keyed by static function-name address serves Debug, Info, Warning and
 Error. Each immutable entry retains its canonical name, configured logging
 level and optional Logs source. Quiet disables every function; otherwise a
 selected function has level Debug and an unselected function uses the global

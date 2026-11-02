@@ -230,8 +230,8 @@ let evalIntegerConstantExpression conf core_env sigm mode d_expr =
               error "TODO error: the memory model failed to concretise the integer value (was impl dependent?)"
         end
     | cval ->
-        let () = Debug.debug (fun emit ->
-          emit ("cval: " ^ Pp.stringFromCore_value cval
+        let () = Debug.debug (fun m ->
+          m ("cval: " ^ Pp.stringFromCore_value cval
         )) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
         error

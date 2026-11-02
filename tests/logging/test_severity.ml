@@ -3,6 +3,7 @@ let never _ = failwith "disabled message evaluated"
 let count_sources () = List.length (Logs.Src.list ())
 let emit level raw message = match level with
   | Logs.Debug -> Cerb_log.debug_string raw message
+  | Logs.Info -> Cerb_log.info raw (fun m -> message (m "%s"))
   | Logs.Warning -> Cerb_log.warn_string raw message
   | Logs.Error -> Cerb_log.err_string raw message
   | _ -> assert false
@@ -18,7 +19,7 @@ let with_events f =
 
 let severity_rules () = with_events (fun events ->
   let open Logs in
-  let all = [Debug; Warning; Error] in
+  let all = [Debug; Info; Warning; Error] in
   let cases = [
     None, [], [];
     None, ["all"], [];
@@ -29,7 +30,7 @@ let severity_rules () = with_events (fun events ->
     Some Warning, [], [Warning; Error];
     Some Warning, ["Missing.fn"], [Warning; Error];
     Some Warning, ["Severity"], all;
-    Some Info, [], [Warning; Error];
+    Some Info, [], [Info; Warning; Error];
     Some Debug, [], all;
   ] in
   List.iter (fun discover ->
@@ -41,8 +42,8 @@ let severity_rules () = with_events (fun events ->
         List.iter (fun raw ->
           events := [];
           callbacks := 0;
-          List.iter (fun severity -> emit severity raw (fun emit ->
-            incr callbacks; emit "message")) order;
+          List.iter (fun severity -> emit severity raw (fun m ->
+            incr callbacks; m "message")) order;
           let actual = List.rev !events in
           check (List.map (fun (_, level, _) -> level) actual =
             List.filter (fun level -> List.mem level expected) order)
@@ -70,10 +71,11 @@ let gates_and_discovery () =
   let heap = Bytes.to_string (Bytes.of_string "Skipped.debug") in
   Cerb_log.configure (Some Logs.Warning) [];
   no_allocations (fun () -> Cerb_log.debug_string heap never);
+  no_allocations (fun () -> Cerb_log.info heap never);
   Cerb_log.debug heap never;
   check (not (List.mem "Skipped.debug" (Cerb_log.sources ())))
     "globally disabled Debug resolved its name";
-  Cerb_log.warn_string "Gates.warning" (fun emit -> emit ("warning"));
+  Cerb_log.warn_string "Gates.warning" (fun m -> m "warning");
   Cerb_log.debug_string heap never;
   Cerb_log.debug_string "Gates.warning" never;
   List.iter (fun log ->
@@ -88,13 +90,16 @@ let gates_and_discovery () =
   check (count_sources () = before) "rejected warning registered a source";
   Cerb_log.configure None ["all"];
   no_allocations (fun () ->
-    Cerb_log.warn_string heap never; Cerb_log.err_string heap never; Cerb_log.debug_string heap never);
+    Cerb_log.warn_string heap never; Cerb_log.err_string heap never;
+    Cerb_log.info heap never; Cerb_log.debug_string heap never);
   Cerb_log.configure ~discover:true None ["all"];
+  Cerb_log.info "Discovery.info_only" never;
   Cerb_log.warn_string "Discovery.warning_only" never;
   Cerb_log.err_string "Discovery.error_only" never;
   check (count_sources () = before) "quiet discovery registered a source";
   let listed = Cerb_log.sources () in
-  check (List.mem "Discovery.warning_only" listed && List.mem "Discovery.error_only" listed)
+  check (List.mem "Discovery.info_only" listed &&
+         List.mem "Discovery.warning_only" listed && List.mem "Discovery.error_only" listed)
     "quiet discovery missed diagnostics";
   Cerb_log.configure None [];
   check (not (List.mem "Discovery.warning_only" (Cerb_log.sources ())))
@@ -108,8 +113,8 @@ let callback_contract () = with_events (fun events ->
   Cerb_log.configure (Some Logs.Warning) ["Callbacks"];
   Cerb_log.debug_string "Callbacks.conditional" (fun _ -> incr calls);
   check (!calls = 1 && !events = []) "empty callback emitted a record";
-  Cerb_log.debug_string "Callbacks.conditional" (fun emit ->
-    incr calls; emit "first"; emit "second");
+  Cerb_log.debug_string "Callbacks.conditional" (fun m ->
+    incr calls; m "first"; m "second");
   check (!calls = 2 && List.map (fun (_, _, text) -> text) (List.rev !events) =
     ["first"; "second"]) "multiple string emissions changed";
   events := [];
@@ -132,19 +137,19 @@ let shared_source_level () = with_events (fun events ->
   let before = count_sources () in
   Cerb_log.debug_string name never;
   check (count_sources () = before) "Debug rejection registered a source";
-  Cerb_log.err_string name (fun emit -> emit "first enabled call");
+  Cerb_log.err_string name (fun m -> m "first enabled call");
   let src = match !events with
     | [(src, Logs.Error, _)] -> src
     | _ -> failwith "source promotion lost the Error" in
   check (Logs.Src.level src = Some Logs.Warning) "first Error changed the function level";
-  Cerb_log.warn_string name (fun emit -> emit "warning");
+  Cerb_log.warn_string name (fun m -> m "warning");
   Cerb_log.debug_string name never;
   check (List.length !events = 2 && count_sources () = before + 1)
     "source promotion changed filtering or registered twice";
   Cerb_log.configure (Some Logs.Error) ["Shared_level.target"];
   events := [];
-  Cerb_log.err_string name (fun emit -> emit "selected error");
-  Cerb_log.debug_string name (fun emit -> emit "selected debug");
+  Cerb_log.err_string name (fun m -> m "selected error");
+  Cerb_log.debug_string name (fun m -> m "selected debug");
   check (Logs.Src.level src = Some Logs.Debug && List.length !events = 2)
     "selected source adopted the first requested severity")
 

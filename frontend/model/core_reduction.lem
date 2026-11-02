@@ -251,8 +251,8 @@ let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
       one_step_unseq_aux (fps_acc, cval::cvals_acc) xs
   | Expr _ (Eannot fps (Expr _ (Epure (Pexpr _ _ (PEval cval))))) :: xs ->
       if do_race fps fps_acc then
-        let () = Debug.debug (fun emit ->
-          emit ("FOUND AN UNSEQUENCED RACE: " ^ show fps ^ " <---> " ^ show fps_acc
+        let () = Debug.debug (fun m ->
+          m ("FOUND AN UNSEQUENCED RACE: " ^ show fps ^ " <---> " ^ show fps_acc
         )) in
         (* we found an unsequenced race (undefined behaviour) *)
         Nothing

@@ -94,9 +94,8 @@ val bindExhaustive:
   forall 'a 'b 'info 'err 'cs 'st.
   ndM 'a 'info 'err 'cs 'st -> ('a -> ndM 'b 'info 'err 'cs 'st) -> ndM 'b 'info 'err 'cs 'st
 let bindExhaustive m f =
-  let () = Debug.debug (fun emit ->
-    emit ("ND2.bindExhaustive is wrong"
-  )) in
+  let () = Debug.debug (fun m ->
+    m "ND2.bindExhaustive is wrong") in
   bind m f (* error "ND2.bindExhaustive" *)
 
 
@@ -124,8 +123,8 @@ let msum info = function
   | [(_, m)] ->
       m
   | info_ms ->
-    let () = Debug.debug (fun emit ->
-      emit ("ND2.msum (|ms| = " ^ show (List.length info_ms) ^ ")"
+    let () = Debug.debug (fun m ->
+      m ("ND2.msum (|ms| = " ^ show (List.length info_ms) ^ ")"
     )) in
     ND (fun st ->
       (NDnd info info_ms, st)
@@ -179,15 +178,15 @@ let pick info = function
   | [] ->
       error ("ND2.pick(" ^ show info ^ "), empty list")
   | [x] ->
-      let () = Debug.debug (fun emit ->
-        emit ("ND2.pick [" ^ show info ^ "] (|ms| = singleton)"
+      let () = Debug.debug (fun m ->
+        m ("ND2.pick [" ^ show info ^ "] (|ms| = singleton)"
       )) in
       ND (fun st ->
         (NDactive x, st)
       )
   | x::xs ->
-      let () = Debug.debug (fun emit ->
-        emit ("ND2.pick [" ^ show info ^ "] (|ms| = " ^ show (List.length (x::xs)) ^ ")"
+      let () = Debug.debug (fun m ->
+        m ("ND2.pick [" ^ show info ^ "] (|ms| = " ^ show (List.length (x::xs)) ^ ")"
       )) in
       ND (fun st ->
         (NDnd info ((info, return x) :: List.map (fun z -> (info, return z)) xs), st)
@@ -277,8 +276,8 @@ let lift_undef m =
 
 
 let mk_step info xs =
-  let () = Debug.debug (fun emit ->
-    emit ("ND2.mk_step [" ^ show info ^ "] (|ms| = " ^ show (List.length xs) ^ ")"
+  let () = Debug.debug (fun m ->
+    m ("ND2.mk_step [" ^ show info ^ "] (|ms| = " ^ show (List.length xs) ^ ")"
   )) in
   ND (fun st -> (NDstep info xs, st))
 

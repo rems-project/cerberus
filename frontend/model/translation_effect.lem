@@ -222,7 +222,7 @@ let record_object_types_marker () =
    translation yet, so the user gets a full list of such errors *)
 val record_error: string -> elabM unit
 let record_error err =
-    let () = Debug.err (fun emit -> emit (err)) in
+    let () = Debug.err (fun m -> m err) in
     elab_update (fun st -> <| st with errors = err :: st.errors |>)
 
 val record_error_at: Loc.t -> string -> elabM unit

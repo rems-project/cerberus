@@ -12,7 +12,6 @@ type config = {
 
 let err_count = ref 0
 let wrn_count = ref 0
-let log_warn = Logs.Src.create "Cerb_diagnostic.warn"
 let conf = ref { verbosity= QuoteStd; n1570= None }
 
 
@@ -63,4 +62,4 @@ let fatal ?(code = 1) msg =
 
 let warn msg =
   incr wrn_count;
-  Logs.warn ~src:log_warn (fun m -> m "%s" (msg ()))
+  Cerb_log.warn __FUNCTION__ (fun m -> m "%s" (msg ()))

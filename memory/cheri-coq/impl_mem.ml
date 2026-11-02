@@ -1002,7 +1002,7 @@ module CHERIMorello : Memory = struct
 
   let lift_coq_memM ?(print_mem_state=true) label (m:'a MM.memM): 'a memM =
     ND (fun st ->
-        Cerb_log.debug __FUNCTION__ (fun emit -> emit "MEMOP %s" label);
+        Cerb_log.debug __FUNCTION__ (fun m -> m "MEMOP %s" label);
         if print_mem_state then begin
           print_allocations label st;
           print_bytemap label st;

@@ -3,8 +3,6 @@ open Cerb_backend
 open Cerb_diagnostic
 open Pipeline
 
-let log_cerberus = Logs.Src.create "Main.cerberus"
-
 let (>>=) = Result.bind
 let (>>) m f = m >>= fun _ -> f
 
@@ -142,7 +140,7 @@ let cerberus logging progress core_obj
       end else switches in
     begin if iso_switches then begin
       if switches <> [] then
-        Logs.warn ~src:log_cerberus (fun m -> m "%s" ("the --iso argument overrides --switches"));
+        Cerb_log.warn __FUNCTION__ (fun m -> m "the --iso argument overrides --switches");
       Switches.set_iso_switches ()
     end else
       Switches.set switches
@@ -231,7 +229,7 @@ let cerberus logging progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Logs.warn ~src:log_cerberus (fun m -> m "%s" ("Return value overlows (wrapping it down to 255)"));
+                      Cerb_log.warn __FUNCTION__ (fun m -> m "Return value overlows (wrapping it down to 255)");
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->
@@ -299,7 +297,7 @@ let cerberus logging progress core_obj
         (* Link and execute *)
       else
         begin if syntax_only then begin
-          Logs.warn ~src:log_cerberus (fun m -> m "some of the translation units are Core or object files: ignoring --syntax-only");
+          Cerb_log.warn __FUNCTION__ (fun m -> m "some of the translation units are Core or object files: ignoring --syntax-only");
           Result.ok ()
         end else
           Result.ok ()

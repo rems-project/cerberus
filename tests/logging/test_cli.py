@@ -37,6 +37,10 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
     assert "Pipeline.cpp" in names
     assert "Pipeline.c_frontend" in names
     assert "Pipeline.core_frontend" not in names
+    assert "Pipeline.pass_message" in names
+    assert not any(name in names for name in
+                   ("Main.cerberus", "Main_vip.cerberus", "Main_cheri_coq.cerberus",
+                    "Cerb_diagnostic.warn", "Milicore_label_inline.inline_label"))
     assert "Cabs_to_ail.desugar_expression0" in names
     assert "Core_reduction.one_step_unseq_aux" not in names
     assert "Translation.floating_conversion_TODO" not in names
@@ -63,6 +67,10 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
     assert all(r["module"] == "Pipeline" for r in rows)
     info = events(run("-v", "--debug-format=json").stderr)
     assert info and {r["level"] for r in info} == {"info"}
+    assert {r["source"] for r in info} == {"Pipeline.pass_message"}
+    selected_info = events(run("--verbosity=error", "--debug=Pipeline.pass_message",
+                               "--debug-format=json").stderr)
+    assert selected_info == info
     debug = events(run("-vv", "--debug-format=json").stderr)
     assert any(r["level"] == "debug" for r in debug)
     assert run("-vv", "--verbosity=warning").stderr == ""
@@ -70,7 +78,18 @@ with tempfile.TemporaryDirectory(prefix="cerberus-logging-") as temp:
     assert run("--debug=all", "--verbosity=quiet").stderr == ""
     # Selecting a source must not hide warnings from other sources.
     warning = run(selector, "--iso", "--switches=inner_arg_temps", "--debug-format=json")
-    assert any(r["level"] == "warning" and r["source"] == "Main.cerberus" for r in events(warning.stderr))
+    driver_warning = [r for r in events(warning.stderr)
+                      if r["message"] == "the --iso argument overrides --switches"]
+    assert len(driver_warning) == 1 and driver_warning[0]["level"] == "warning"
+    driver_source = driver_warning[0]["source"]
+    assert driver_source in ("Main.cerberus", "Main_vip.cerberus", "Main_cheri_coq.cerberus")
+    warning_options = ("--iso", "--switches=inner_arg_temps", "--debug-format=json")
+    assert run("--verbosity=error", *warning_options).stderr == ""
+    assert events(run("--verbosity=error", "--debug=" + driver_source,
+                      *warning_options).stderr) == driver_warning
+    assert run("--quiet", "--debug=" + driver_source, *warning_options).stderr == ""
+    assert driver_source in run("--list-debug-sources", "--quiet",
+                                *warning_options).stdout.splitlines()
 
     # Logging policy must not change the requested program display.
     pretty = run("--pp=ail").stdout
