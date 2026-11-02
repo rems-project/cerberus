@@ -70,6 +70,11 @@ $ cerberus --args="arg1","arg2" file.c
 
 * The **Ail** intermediate representation and the **Core** program can be pretty-printed with ```--pp=ail``` and ```--pp=core```.
 
+Use `--pp_flags=annot` for inferred type annotations, `early` for intermediate
+pipeline stages, and `verbose` for internal identifiers and detailed syntax.
+These display options are independent of the logging verbosity and can be
+combined, for example `--pp_flags=annot,verbose`.
+
 ### Running the elaborate-and-link pipeline without executing:
 
 ```bash

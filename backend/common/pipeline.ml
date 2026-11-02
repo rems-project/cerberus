@@ -64,6 +64,8 @@ type language =
 type pp_flag =
   | Annot
   | Loc
+  | Early
+  | Verbose
 
 type configuration = {
   debug_level: int;
@@ -195,10 +197,10 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
     let* () = io.set_progress "DESUG" in
     let* () = io.pass_message "Cabs -> Ail completed!" in
     let* () =
-    (* NOTE: if the debug level is lower the do the printing after the typing *)
-      whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.astprints)
+    (* The early display flag selects Ail before typechecking. *)
+      whenM (List.mem Early pipeline_conf.ppflags && List.mem Ail pipeline_conf.astprints)
         (fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)) in
-    let* () = whenM (pipeline_conf.debug_level > 4 && List.mem Ail pipeline_conf.pprints)
+    let* () = whenM (List.mem Early pipeline_conf.ppflags && List.mem Ail pipeline_conf.pprints)
       begin
         fun () ->
         let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
@@ -213,20 +215,20 @@ let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init)
       conf
       (GenTyping.annotate_program ail_prog) in
     let* () = io.pass_message "Ail typing completed!" in
-    let* () = whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.astprints) begin
+    let* () = whenM (not (List.mem Early pipeline_conf.ppflags) && List.mem Ail pipeline_conf.astprints) begin
       fun () ->
-        let doc = if pipeline_conf.debug_level = 4 then
-          (* (for debug 4) pretty-printing Ail with type annotations *)
+        let doc = if List.mem Annot pipeline_conf.ppflags then
+          (* Include inferred Ail type annotations when requested. *)
           Pp_ail_ast.pp_program_with_annot ailtau_prog
         else
           Pp_ail_ast.pp_program true false ailtau_prog in
         io.run_pp None doc
     end in
-    let* () = whenM (pipeline_conf.debug_level <= 4 && List.mem Ail pipeline_conf.pprints) begin
+    let* () = whenM (not (List.mem Early pipeline_conf.ppflags) && List.mem Ail pipeline_conf.pprints) begin
       fun () ->
         let fout_opt = List.assoc_opt Ail pipeline_conf.ppouts in
-        let doc = if pipeline_conf.debug_level = 4 then
-          (* (for debug 4) pretty-printing Ail with type annotations *)
+        let doc = if List.mem Annot pipeline_conf.ppflags then
+          (* Include inferred Ail type annotations when requested. *)
           mk_pp_program Pp_ail.pp_program_with_annot fout_opt ailtau_prog
         else
           mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ailtau_prog in
@@ -278,13 +280,13 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
 
 
 let core_rewrite (conf, io) core_file =
-  let* () = whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
+  let* () = whenM (List.mem Early conf.ppflags && List.mem Core conf.astprints) begin
     fun () ->
       let* () = io.print_endline "BEGIN (before Core rewrite)" in
       let* () = io.run_pp None (Ast_core.ast_file core_file) in
       io.print_endline "END"
   end in
-  let* () = whenM (conf.debug_level >= 5 && List.mem Core conf.pprints) begin
+  let* () = whenM (List.mem Early conf.ppflags && List.mem Core conf.pprints) begin
     fun () ->
       let* () = io.print_endline "BEGIN (before Core rewrite)" in
       let* () = io.run_pp None (Pp_core.Basic.pp_file core_file) in

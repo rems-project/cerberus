@@ -404,7 +404,7 @@ module Concrete : Memory = struct
   let pp_floating_value_for_coq (f:floating_value) = !^ (string_of_float f)
   
   let pp_integer_value (IV (prov, n)) =
-    if !Cerb_debug.debug_level >= 3 then
+    if !Cerb_pp_options.verbose then
       !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Z.to_string n)
     else
       !^ (Z.to_string n)
@@ -473,7 +473,7 @@ module Concrete : Memory = struct
   
   (* TODO: DEBUG *)
   let print_bytemap str =
-    if !Cerb_debug.debug_level >= 3 then begin
+    if !Cerb_pp_options.verbose then begin
       Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
       get >>= fun st ->
       IntMap.iter AbsByte.(fun addr b ->

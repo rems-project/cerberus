@@ -1091,7 +1091,7 @@ module CHERIMorello : Memory = struct
     =
     let label = "store "
                 ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false p)
-                ^ if !Cerb_debug.debug_level >= 4
+                ^ if !Cerb_pp_options.verbose
                   then (" value="^ Pp_utils.to_plain_string (pp_mem_value mval))
                   else ""
     in

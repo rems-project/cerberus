@@ -103,6 +103,7 @@ let cerberus debug_level progress core_obj
              output_name
              files args_opt =
   Cerb_debug.debug_level := debug_level;
+  Cerb_pp_options.verbose := List.mem Pipeline.Verbose ppflags;
   Cerb_runtime.specified_runtime := runtime_path_opt;
   let cpp_cmd =
     let cpp_cmd = if syntax_only then cpp_cmd ^ " -D__cerb_syntax_only__" else cpp_cmd in
@@ -491,8 +492,8 @@ let fs =
 
 let ppflags =
   let open Pipeline in
-  let doc = "Pretty print flags [annot: include location and ISO annotations, loc: include C source locations]." in
-  Arg.(value & opt (list (enum ["annot", Annot; "loc", Loc; ])) [] &
+  let doc = "Pretty print flags [annot: include location and ISO annotations, loc: include C source locations, early: show Ail before typing and Core before rewriting, verbose: include internal display details]." in
+  Arg.(value & opt (list (enum ["annot", Annot; "loc", Loc; "early", Early; "verbose", Verbose; ])) [] &
        info ["pp_flags"] ~doc)
 
 let pp_ail_out =

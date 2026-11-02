@@ -571,7 +571,7 @@ let rec pp_expr expr =
             | Atypedef sym ->
               in_comment (pp_symbol sym) ^^ acc
             | Aattrs (Attrs attrs) ->
-                if Cerb_debug.get_debug_level () > 3 then
+                if !Cerb_pp_options.verbose then
                   in_comment begin
                     !^ "ATTRS" ^^ P.brackets (
                       comma_list (fun attr -> 
@@ -587,7 +587,7 @@ let rec pp_expr expr =
             | Acerb _ ->
                acc
             | Avalue (Ainteger ity) ->
-                if Cerb_debug.get_debug_level () > 3 then
+                if !Cerb_pp_options.verbose then
                   in_comment (!^ "cn_value" ^^ P.colon ^^^ Pp_ail.pp_integerType ity) ^^ acc
                 else
                   acc
@@ -842,7 +842,7 @@ let pp_file file =
   let guard b doc = if b then doc else P.empty in
 
   begin
-    if Cerb_debug.get_debug_level () > 1 then
+    if !Cerb_pp_options.verbose then
       fun z ->
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
         pp_fun_map file.stdlib ^^ P.break 1 ^^
@@ -861,7 +861,7 @@ let pp_file file =
       P.break 1 ^^ P.break 1
     end ^^
 
-    guard (show_include || Cerb_debug.get_debug_level () > 1) begin
+    guard (show_include || !Cerb_pp_options.verbose) begin
       !^ "-- C function types" ^^ P.break 1 ^^
       pp_funinfo file.funinfo
     end ^^

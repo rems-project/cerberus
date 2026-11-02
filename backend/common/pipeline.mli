@@ -6,6 +6,8 @@ type language =
 type pp_flag =
   | Annot
   | Loc
+  | Early
+  | Verbose
 
 type configuration = {
   debug_level: int;
