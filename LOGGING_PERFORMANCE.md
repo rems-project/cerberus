@@ -13,10 +13,10 @@ below. The maintained lookup benchmark instead calls the native adapters with
 a no-op reporter; its results include Logs dispatch for enabled calls and are
 not directly comparable to those historical decision-only measurements.
 
-The later API cleanup consolidates logging under `Cerb_log` and gives Lem
-warnings/errors automatic names. It adds separate Warning and Error decision
-tables sharing the existing source registry; Debug's global gate and lookup
-remain separate. The historical timings and memory figures below predate that
+An earlier API cleanup consolidated logging under `Cerb_log` and gave Lem
+warnings/errors automatic names. It added separate Warning and Error decision
+tables sharing the source registry. The current implementation instead shares
+one address table across all three severities. The historical timings and memory figures below predate that
 cleanup, including the two additional empty tables and removal of five explicit
 source declarations. They do not measure the new diagnostic paths.
 

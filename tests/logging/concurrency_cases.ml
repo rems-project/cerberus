@@ -74,6 +74,10 @@ let concurrent_severities ~run_workers () =
     msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun _ ->
       Atomic.incr events; over (); k ()) fmt)};
   Fun.protect ~finally:(fun () -> Logs.set_reporter previous) (fun () ->
+    (* Start every address with a rejected Debug call. Warning/Error workers
+       then race to attach sources to already-published entries. *)
+    Array.iter (fun raw -> Cerb_log.debug_string raw never) names;
+    check (count_sources () = before) "rejected first calls registered a source";
     run_workers 8 (fun id ->
       let raw = names.(id mod Array.length names) in
       let order = if id mod 2 = 0 then [Logs.Debug; Logs.Warning; Logs.Error]

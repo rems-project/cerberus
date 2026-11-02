@@ -121,24 +121,33 @@ concurrent events. Close after workers join; writes after closure are errors.
 The close function is idempotent and does not close borrowed stdout/stderr.
 
 Configure the shared policy and reporter before workers start. Concurrent
-reconfiguration or changing source levels is outside this contract. On first
-use, Saturn caches the decision for the static function-name address. Debug,
-Warning and Error have separate decision tables: a rejected Debug message must
-not suppress a warning or error from the same function. The tables share one
-source registry, and rejected decisions do not register sources.
-Validation and normalization scan the name directly, reusing already canonical
-strings and allocating one substring only when removing a wrapper or suffix.
-The source registry uses Saturn with content hashing.
-Existing names are looked up without a mutex. On a name miss, a creation
+reconfiguration or changing source levels is outside this contract. One
+Saturn table keyed by static function-name address serves Debug, Warning and
+Error. Each immutable entry retains its canonical name, configured logging
+level and optional Logs source. Quiet disables every function; otherwise a
+selected function has level Debug and an unselected function uses the global
+default. This level does not change when calls arrive at different severities.
+A cache hit compares the requested severity with the stored level.
+
+A rejected first call registers no source. A later enabled call obtains the
+source from the shared, content-keyed Saturn registry and uses compare-and-set
+to publish a replacement address entry containing it. Readers can safely use
+an older record. Concurrent contenders may allocate replacement records, but
+only one replaces the old entry. Address misses use insert-if-absent, so they
+cannot overwrite an entry that another caller has already completed.
+
+Existing sources are looked up without a mutex. On a name miss, a creation
 mutex protects a second lookup, source creation and publication, so aliases
-share one fully configured source. Normalization, matching and pointer-cache
-insertion run outside it; negative misses and all cache hits avoid that mutex.
+share one fully configured source. Validation, normalization, selector matching
+and address-table operations run outside it; rejected calls and warm hits do
+not take it. An enabled first call can insert its source directly without the
+intermediate unregistered entry. The global severity gates still skip address
+lookups when no source could be enabled, except during source discovery.
+
 Both creation and reporter critical sections use `Mutex.protect`, with a small
-backport around real systhreads mutexes on OCaml 4.14. Concurrent
-pointer insertions reuse the winning cached decision. Negative decisions use
-`None`, positive decisions reuse a cached `Some src`. This allocates no option
-wrapper on a hit. Sources registered after reporter creation acquire cached
-text prefixes on their first event through an atomic immutable-map update.
+backport around real systhreads mutexes on OCaml 4.14. Cache hits allocate no
+record or option wrapper beyond Logs dispatch. Sources registered after reporter
+creation acquire cached text prefixes through an atomic immutable-map update.
 
 The automatic API accepts native static strings, normally `__FUNCTION__`.
 Active logging rejects moving heap strings with `Invalid_argument`; it has no
@@ -150,7 +159,7 @@ skip lookup and validation unless source discovery was requested. In particular,
 normal Warning verbosity with no Debug selectors skips every Debug lookup,
 while warnings and errors still resolve their sources. Selectors raise matched
 sources to Debug, including their lower-severity messages; quiet overrides them.
-Entries grow with distinct encountered static addresses at each severity, not
+Entries grow with distinct encountered static addresses, not
 the number of C functions, TUs, messages or repeated calls.
 Multi-domain correctness is tested; parallel-TU throughput is not established.
 

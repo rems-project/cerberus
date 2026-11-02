@@ -25,7 +25,7 @@ val debug : string -> 'a Logs.log
 val warn : string -> 'a Logs.log
 val err : string -> 'a Logs.log
 (** OCaml call sites use [debug __FUNCTION__ (fun m -> m "value: %a" pp v)].
-    Each severity uses its own decision cache. The callback, including format
+    All severities share an address cache. The callback, including format
     arguments, printers and tags, is evaluated only when enabled. *)
 
 val debug_string : string -> ((string -> unit) -> unit) -> unit

@@ -126,9 +126,32 @@ let callback_contract () = with_events (fun events ->
   Cerb_log.err "Callbacks.native" never;
   Cerb_log.err_string "Callbacks.native" never)
 
+let shared_source_level () = with_events (fun events ->
+  let name = "Shared_level.target" in
+  Cerb_log.configure (Some Logs.Warning) ["Missing.fn"];
+  let before = count_sources () in
+  Cerb_log.debug_string name never;
+  check (count_sources () = before) "Debug rejection registered a source";
+  Cerb_log.err_string name (fun emit -> emit "first enabled call");
+  let src = match !events with
+    | [(src, Logs.Error, _)] -> src
+    | _ -> failwith "source promotion lost the Error" in
+  check (Logs.Src.level src = Some Logs.Warning) "first Error changed the function level";
+  Cerb_log.warn_string name (fun emit -> emit "warning");
+  Cerb_log.debug_string name never;
+  check (List.length !events = 2 && count_sources () = before + 1)
+    "source promotion changed filtering or registered twice";
+  Cerb_log.configure (Some Logs.Error) ["Shared_level.target"];
+  events := [];
+  Cerb_log.err_string name (fun emit -> emit "selected error");
+  Cerb_log.debug_string name (fun emit -> emit "selected debug");
+  check (Logs.Src.level src = Some Logs.Debug && List.length !events = 2)
+    "selected source adopted the first requested severity")
+
 let () =
   severity_rules ();
   callback_contract ();
+  shared_source_level ();
   Logs.set_reporter Logs.nop_reporter;
   gates_and_discovery ();
   Concurrency_cases.concurrent_severities ~run_workers:Concurrency_cases.run_threads ();
