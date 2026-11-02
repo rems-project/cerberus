@@ -1,0 +1,19 @@
+(test
+ (name test_logging)
+ (modules test_logging)
+ (libraries cerberus-lib.util))
+
+(test
+ (name test_lookup)
+ (modules test_lookup)
+ (libraries cerberus-lib.util))
+
+(test
+ (name test_severity)
+ (modules test_severity)
+ (libraries cerberus-lib.util))
+
+(test
+ (name test_cli_options)
+ (modules test_cli_options)
+ (libraries cerberus-lib.util))
