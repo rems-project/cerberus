@@ -5,9 +5,10 @@
 
 (test
  (name test_domains)
- (modules test_domains)
- (enabled_if (>= %{ocaml_version} 5.0))
- (libraries cerberus-lib.util))
+ (modules test_domains concurrency_cases lookup_literals)
+ (modes native)
+ (enabled_if (>= %{ocaml_version} 5.2))
+ (libraries cerberus-lib.util threads))
 
 (test
  (name test_lem_logging)
@@ -17,14 +18,14 @@
 (test
  (name test_lookup)
  (modes native)
- (modules test_lookup lookup_literals)
+ (modules test_lookup lookup_literals concurrency_cases)
  (libraries cerberus-lib.util threads))
 
 (test
  (name test_severity)
  (modes native)
- (modules test_severity)
- (libraries cerberus-lib.util))
+ (modules test_severity concurrency_cases)
+ (libraries cerberus-lib.util threads))
 
 (executable
  (name gen_lookup_literals)

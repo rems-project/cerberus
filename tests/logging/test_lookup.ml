@@ -106,45 +106,6 @@ let native_formatted () =
     Cerb_log.configure None [];
     formatted never)
 
-let concurrent_misses () =
-  (* Distinct static addresses normalize to one enabled or disabled name. *)
-  let enabled = [|"Concurrent_misses.enabled"; "Concurrent_misses.enabled.local";
-                  "Concurrent_misses.enabled.(fun)"; "Concurrent_misses.enabled.other"|] in
-  let disabled = [|"Concurrent_misses.disabled"; "Concurrent_misses.disabled.local"|] in
-  let before = count_sources () in
-  let events = Atomic.make 0 in
-  let previous = Logs.reporter () in
-  Logs.set_reporter {Logs.report = fun src level ~over k msgf ->
-    check (Logs.Src.name src = "Concurrent_misses.enabled" && level = Logs.Debug)
-      "wrong source published during concurrent admission";
-    msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun _ ->
-      Atomic.incr events; over (); k ()) fmt)};
-  Fun.protect ~finally:(fun () -> Logs.set_reporter previous) (fun () ->
-    for _ = 1 to 8 do
-      configure ["Concurrent_misses.enabled"];
-      let start = Atomic.make false and ready = Atomic.make 0 in
-      let worker id =
-        Atomic.incr ready;
-        while not (Atomic.get start) do Domain.cpu_relax () done;
-        Array.iter (fun raw ->
-          Cerb_log.debugf raw (fun _ -> never ());
-          Cerb_log.debugf enabled.(id mod Array.length enabled) (fun m -> m "event");
-          Cerb_log.debug disabled.(id mod Array.length disabled) never) literals in
-      let workers = Array.init 8 (fun id -> Domain.spawn (fun () -> worker id)) in
-      while Atomic.get ready <> Array.length workers do Domain.cpu_relax () done;
-      Atomic.set start true;
-      (* Join everyone before reporting an exception or reconfiguring. *)
-      let results = Array.map (fun worker ->
-        try Ok (Domain.join worker) with exn -> Error exn) workers in
-      Array.iter (function Ok () -> () | Error exn -> raise exn) results;
-      check (count_sources () = before + 1) "concurrent aliases registered duplicate sources";
-      let names = List.filter (String.starts_with ~prefix:"Concurrent_misses.")
-        (Cerb_log.sources ()) in
-      check (names = ["Concurrent_misses.disabled"; "Concurrent_misses.enabled"])
-        "concurrent positive or negative decisions missing from discovery"
-    done;
-    check (Atomic.get events = 8 * 8 * Array.length literals) "concurrent admission lost events")
-
 let () =
   names ();
   name_allocation ();
@@ -168,36 +129,35 @@ let () =
   Logs.set_reporter {Logs.report = fun _ _ ~over k msgf ->
     msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun _ ->
       Atomic.incr events; over (); k ()) fmt)};
-  let start = Atomic.make false in
-  let worker () =
-    while not (Atomic.get start) do Domain.cpu_relax () done;
+  let worker _ =
     for _ = 1 to 40 do
       Array.iter (fun name ->
         check (Cerb_log.debug_enabled name) "lost positive decision";
         Cerb_log.debug name (fun () -> "event")) literals
     done in
-  let workers = Array.init 4 (fun _ -> Domain.spawn worker) in
-  Atomic.set start true;
-  Array.iter Domain.join workers;
+  Concurrency_cases.run_threads 4 worker;
   check (Atomic.get events = 4 * 40 * Array.length literals) "lost events";
   check (count_sources () = before + Array.length literals) "duplicate sources";
   check (Cerb_log.debug_enabled "Lookup_literals.function000.(fun)") "alias decision";
   check (count_sources () = before + Array.length literals) "alias source duplication";
   warm_allocation literals.(0);
   let copies = Array.map (fun s -> Bytes.to_string (Bytes.of_string s)) literals in
-  Gc.compact ();
-  Array.iter (fun s ->
-    rejects (fun () -> Cerb_log.debug_enabled s);
-    rejects (fun () -> Cerb_log.debug s never);
-    rejects (fun () -> Cerb_log.debug_located s Cerb_location.unknown never)) copies;
-  Array.iter (fun s -> check (Cerb_log.debug_enabled s) "static key after compaction") literals;
+  (* Check young strings, promoted strings and strings surviving full GC and
+     compaction. OCaml 4 heap header colours must never imply static storage. *)
+  List.iter (fun collect ->
+    collect ();
+    Array.iter (fun s ->
+      rejects (fun () -> Cerb_log.debug_enabled s);
+      rejects (fun () -> Cerb_log.debug s never);
+      rejects (fun () -> Cerb_log.debug_located s Cerb_location.unknown never)) copies;
+    Array.iter (fun s -> check (Cerb_log.debug_enabled s) "static key after GC") literals)
+    [(fun () -> ()); Gc.minor; Gc.full_major; Gc.compact];
   (* Reconfiguration is allowed only after workers have joined. It must
      replace both positive and negative decisions from the previous policy. *)
   configure ["Missing.fn"];
   Array.iter (fun name -> Cerb_log.debug name never) literals;
   configure ["Lookup_literals"];
-  let threads = Array.init 4 (fun _ -> Thread.create worker ()) in
-  Array.iter Thread.join threads;
+  Concurrency_cases.run_threads 4 worker;
   List.iter (fun s -> rejects (fun () -> Cerb_log.debug_enabled s)) [""; "M."; "M"];
   Cerb_log.configure None ["all"];
   Array.iter (fun s -> Cerb_log.debug s never) copies;
@@ -208,5 +168,5 @@ let () =
   check (not (List.mem "Discovery.not_recorded" (Cerb_log.sources ())))
     "inactive logging performed discovery";
   native_formatted ();
-  concurrent_misses ();
+  Concurrency_cases.concurrent_misses ~run_workers:Concurrency_cases.run_threads literals;
   print_endline "Static lookup: matching, lazy cached options, GC, concurrent first use and reconfiguration passed"

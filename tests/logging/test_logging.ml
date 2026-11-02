@@ -71,6 +71,16 @@ let test_reporter () = with_file Cerb_log.Text (fun filename reporter close ->
   (* A nested logger must not deadlock on the output mutex. *)
   debug alpha (fun () -> debug beta (fun () -> "inner"); "outer");
   close ();
+  (* This exception is raised inside the output critical section. Repeating
+     the write and close verifies that protect releases the mutex on failure,
+     including the OCaml 4.14 backport. *)
+  for _ = 1 to 2 do
+    match reporter.Logs.report alpha Logs.Debug
+        ~over:(fun () -> ()) (fun () -> ()) (fun m -> m "closed") with
+    | () -> failwith "write after close accepted"
+    | exception Invalid_argument _ -> ()
+  done;
+  close ();
   let reporter2, close2 = get (Cerb_log.open_reporter (File filename) Text) in
   reporter2.Logs.report Logs.default Logs.Info ~over:(fun () -> ()) (fun () -> ())
     (fun m -> m "appended");

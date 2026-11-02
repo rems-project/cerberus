@@ -101,42 +101,9 @@ let gates_and_discovery () =
   check (not (List.mem "Discovery.warning_only" (Cerb_log.sources ())))
     "stale diagnostic decisions after reconfiguration"
 
-let concurrent_severities () =
-  Cerb_log.configure (Some Logs.Warning) ["Missing.fn"];
-  let names = [|"Concurrent_severity.target"; "Concurrent_severity.target.local";
-                "Concurrent_severity.target.(fun)"; "Concurrent_severity.target.other"|] in
-  let before = count_sources () in
-  let events = Atomic.make 0 in
-  let previous = Logs.reporter () in
-  Logs.set_reporter {Logs.report = fun src level ~over k msgf ->
-    check (Logs.Src.name src = "Concurrent_severity.target" &&
-           Logs.Src.level src = Some Logs.Warning && level <> Logs.Debug)
-      "wrong source or threshold published";
-    msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun _ ->
-      Atomic.incr events; over (); k ()) fmt)};
-  Fun.protect ~finally:(fun () -> Logs.set_reporter previous) (fun () ->
-    let start = Atomic.make false and ready = Atomic.make 0 in
-    let workers = Array.init 8 (fun id -> Domain.spawn (fun () ->
-      Atomic.incr ready;
-      while not (Atomic.get start) do Domain.cpu_relax () done;
-      let raw = names.(id mod Array.length names) in
-      let order = if id mod 2 = 0 then [Logs.Debug; Logs.Warning; Logs.Error]
-        else [Logs.Error; Logs.Warning; Logs.Debug] in
-      for _ = 1 to 200 do
-        List.iter (fun level -> emit level raw
-          (if level = Logs.Debug then never else fun () -> "event")) order
-      done)) in
-    while Atomic.get ready <> Array.length workers do Domain.cpu_relax () done;
-    Atomic.set start true;
-    let results = Array.map (fun worker ->
-      try Ok (Domain.join worker) with exn -> Error exn) workers in
-    Array.iter (function Ok () -> () | Error exn -> raise exn) results;
-    check (count_sources () = before + 1) "concurrent severities duplicated a source";
-    check (Atomic.get events = 8 * 200 * 2) "concurrent diagnostics lost events")
-
 let () =
   severity_rules ();
   Logs.set_reporter Logs.nop_reporter;
   gates_and_discovery ();
-  concurrent_severities ();
+  Concurrency_cases.concurrent_severities ~run_workers:Concurrency_cases.run_threads ();
   print_endline "Automatic severities: filtering, gates, allocation, discovery and concurrency passed"

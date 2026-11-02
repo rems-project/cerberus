@@ -68,3 +68,26 @@ let () =
       read ());
     assert (Hashtbl.length expected = 0));
   print_endline "Late text source cache tests passed across 8 domains"
+
+let () =
+  let run_workers count f =
+    Concurrency_cases.run_workers ~spawn:Domain.spawn ~join:Domain.join
+      ~relax:Domain.cpu_relax count f in
+  let literals = Array.sub Lookup_literals.names 0 128 in
+  Concurrency_cases.concurrent_misses ~run_workers literals;
+  Concurrency_cases.concurrent_severities ~run_workers ();
+  Cerb_log.configure (Some Logs.Debug) [];
+  let before = List.length (Logs.Src.list ()) in
+  let events = Atomic.make 0 in
+  Logs.set_reporter {Logs.report = fun _ _ ~over k msgf ->
+    msgf (fun ?header:_ ?tags:_ fmt -> Format.kasprintf (fun _ ->
+      Atomic.incr events; over (); k ()) fmt)};
+  run_workers 4 (fun _ ->
+    for _ = 1 to 40 do
+      Array.iter (fun raw ->
+        assert (Cerb_log.debug_enabled raw);
+        Cerb_log.debug raw (fun () -> "event")) literals
+    done);
+  assert (Atomic.get events = 4 * 40 * Array.length literals);
+  assert (List.length (Logs.Src.list ()) = before + Array.length literals);
+  print_endline "Domain lookup: first use, warm hits, aliases and mixed severities passed"
