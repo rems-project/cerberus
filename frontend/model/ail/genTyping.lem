@@ -483,7 +483,7 @@ let rec typecheck_constant loc cst =
         (* TODO: this is probably too strong *)
         E.mapM (typecheck_constant loc) csts >>= function
           | [] ->
-              error "typecheck_constant: empty array constant"
+              E.internal_error loc "typecheck_constant: empty array constant"
           | gtys ->
               (* TODO !!!! *)
               E.return (GenArray elem_ty (Just $ integerFromNat (List.length csts)))
@@ -607,13 +607,13 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | Just params ->
         annotate_arguments_aux false annotate_block sigm gamm (List.length args) (List.length params) loc is_variadic args params
     | Nothing ->
-        error "annotate_arguments ==> no proto"
+        E.internal_error loc "annotate_arguments ==> no proto"
   end in
   let annotate_and_cast_arguments loc is_variadic args = function
     | Just params ->
         annotate_arguments_aux true annotate_block sigm gamm (List.length args) (List.length params) loc is_variadic args params
     | Nothing ->
-        error "annotate_and_cast_arguments ==> no proto"
+        E.internal_error loc "annotate_and_cast_arguments ==> no proto"
   end in
   E.read_config >>= fun conf ->
   match expr_ with
@@ -765,7 +765,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
               (* NOTE: the potential flexible array member is never prevent in the list of expressions
                        (as it cannot be initialised with an initializer) *)
               if List.length xs <> List.length membersDefs then
-                error "TODO: AilEstruct not the right number of members"
+                E.internal_error loc "TODO: AilEstruct not the right number of members"
               else
                 E.mapM (fun (memb_ident, e_opt) ->
                   match List.lookup memb_ident membersDefs with
@@ -780,7 +780,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                 ) xs >>= fun a_xs ->
                 E.return (AilEstruct tag_sym a_xs, GenRValueType struct_gty)
           | _ ->
-              error "annotate_expression(AilEstruct): failed to find a valid tag definition"
+              E.internal_error loc "annotate_expression(AilEstruct): failed to find a valid tag definition"
         end
     
     | AilEunion tag_sym memb_ident Nothing ->
@@ -797,7 +797,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                     E.constraint_violation loc (MemberofNoMemberRvalue memb_ident union_gty)
               end
           | _ ->
-              error "annotate_expression(AilEunion): failed to find a valid tag definition"
+              E.internal_error loc "annotate_expression(AilEunion): failed to find a valid tag definition"
         end
     
     | AilEcompound qs ty e ->
@@ -806,7 +806,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         if    (AAux.is_complete sigm ty && AAux.is_object ty)
            || (AAux.is_array_unknown_size ty && not (AAux.is_vla ty)) then
           (* TODO: check that *)
-          annotate_definition_aux annotate_block sigm gamm (ty, e) >>= fun a_e ->
+          annotate_definition_aux loc annotate_block sigm gamm (ty, e) >>= fun a_e ->
           E.add "§6.5.2.5#4" >>
           E.return (AilEcompound qs ty a_e, GenLValueType qs ty false)
         else
@@ -880,7 +880,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                  (§6.3.2.1#4). *)
               E.return (AilEident sym, GenRValueType (inject_type (Ctype [Annot.Aloc loc] (Function (ret_qs, ret_ty) params is_variadic))))
           | _ ->
-              error ("gentpying.annotate_expression: AilEident symbol couldn't be resolved => " ^ show sym)
+              E.internal_error loc ("gentpying.annotate_expression: AilEident symbol couldn't be resolved => " ^ show sym)
         end
     
     | AilEbinary e1 Comma e2 ->
@@ -1019,7 +1019,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                  E.return ( AilEcall (AnnotatedExpression ((* TODO: HACK *)GenRValueType GenVoid) annots' loc' (AilEbuiltin b)) [object_e';order_e']
                           , GenRValueType (inject_type $ Ctype [] (unatomic_ object_ty)) )
              | _ ->
-                 error "WIP: typing of linux_read"
+                 E.internal_error loc "WIP: typing of linux_read"
            end
         
        | (AilBlinux AilBLwrite, [object_e; desired_e; order_e]) ->
@@ -1039,7 +1039,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
    GenRValueType GenVoid) annots' loc' (AilEbuiltin b))
    [object_e'; desired_e'; order_e'], GenRValueType (inject_type $ Ctype [] (unatomic_ object_ty)))
              | _ ->
-                 error "WIP: typing of linux_rmw"
+                 E.internal_error loc "WIP: typing of linux_rmw"
            end
        | (AilBcopy_alloc_id, [from_e; to_e]) ->
             let ret_ty = mk_ctype_pointer no_qualifiers void in
@@ -1051,13 +1051,14 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
        |  (AilBCHERI str, _) ->
             match Mem.get_intrinsic_type_spec str with
               | Nothing ->
-                  error ("TODO(msg) unknown CHERI intrinsics '" ^ str ^ "'")
+                  E.internal_error loc ("TODO(msg) unknown CHERI intrinsics '" ^ str ^ "'")
               | Just spec ->
                   let params_n = List.length (snd spec) in
                   let args_n = List.length args in
                   if params_n <> args_n then
-                    error ("TODO(msg) CHERI intrinsics '" ^ str ^ "' expecting " ^ show params_n ^
-                           " arguments but is given " ^ show args_n)
+                    E.internal_error loc
+                      ("TODO(msg) CHERI intrinsics '" ^ str ^ "' expecting " ^
+                      show params_n ^ " arguments but is given " ^ show args_n)
                   else
                     E.mapM annotate_rvalue args >>= fun xs ->
                     E.mapM (fun (e, gty) ->
@@ -1086,11 +1087,11 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                             AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
                           end cast_args, GenRValueType (inject_type ret_ty))
                       | Left msg ->
-                          error ("TODO(msg) CHERI intrinsics failed to derive signature ==> " ^ msg)
+                          E.internal_error loc ("TODO(msg) CHERI intrinsics failed to derive signature ==> " ^ msg)
                     end
               end
        | (_, _) ->
-            error "WIP: typing builtin"
+            E.internal_error loc "WIP: typing builtin"
     end
     
     (* TODO: this is wrong in so many ways!! *)
@@ -1118,10 +1119,10 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                       E.return (AilEcall e' [], GenRValueType (inject_type ret_ty))
                   | _ ->
                       (* TODO: proper error message *)
-                      error "passing arguments to a function without a prototype is not supported (not supported by ISO starting from C2X"
+                      E.internal_error loc "passing arguments to a function without a prototype is not supported (not supported by ISO starting from C2X"
                 end
               else
-                error "annotate_expression(AilEcall): function decay pointer should not be qualified"
+                E.internal_error loc "annotate_expression(AilEcall): function decay pointer should not be qualified"
           | (e', GenPointer qs (Ctype _ (Function (ret_qs, ret_ty) params is_variadic))) ->
               check_return_type ret_ty >>= fun () ->
               (* TODO: do we need to check if qs is unqualified? *)
@@ -1129,7 +1130,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                 annotate_arguments (locOf e) is_variadic es (Just params) >>= fun es' ->
                 E.return (AilEcall e' es', GenRValueType (inject_type ret_ty))
               else
-                error "annotate_expression(AilEcall): function decay pointer should not be qualified"
+                E.internal_error loc "annotate_expression(AilEcall): function decay pointer should not be qualified"
           | (_, gty) ->
               E.constraint_violation loc FunctionCallIncorrectType
         end
@@ -1196,7 +1197,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                 do_fail
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
                     end
                 | Union tag_sym ->
                     match lookup_tag_definition sigm tag_sym with
@@ -1210,7 +1211,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                                        (MemberofNoMemberLvalue memb_ident qs ty)
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
                     end
                 | _ ->
                     E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofReferenceBaseTypeLvalue qs ty)
@@ -1238,7 +1239,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                             do_fail
                       end
                   | _ ->
-                      error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
+                      E.internal_error loc "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
                 end in
               let do_union tag_sym =
                 match lookup_tag_definition sigm tag_sym with
@@ -1251,7 +1252,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                                    (MemberofNoMemberRvalue memb_ident gty)
                       end
                   | _ ->
-                      error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
+                      E.internal_error loc "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
                 end in
               if GAux.is_incomplete sigm gty then
                 E.constraint_violation (locOf e) (MemberofIncompleteRvalue gty)
@@ -1311,7 +1312,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                 do_fail
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
                     end
                 | (ref_qs, Right tag_sym, ref_ty) ->
                     if AAux.is_incomplete sigm ref_ty then
@@ -1327,7 +1328,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                                        (MemberofptrNoMember memb_ident ref_qs ref_ty)
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberofptr union): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberofptr union): failed to find a valid tag definition"
                     end
               end
         end
@@ -1696,16 +1697,16 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         E.return (AilEreg_load r, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_))))) (* NOTE: assuming registers are always of type int *)
     | AilErvalue _ ->
         (* This should be impossible because the desugaring doesn't emit any AilErvalue *)
-        error "annotate_expression(AilErvalue)"
+        E.internal_error loc "annotate_expression(AilErvalue)"
     | AilEarray_decay _ ->
         (* This should be impossible because the Desugaring doesn't emit any AilEarray_decay *)
-        error "annotate_expression(AilEarray_decay)"
+        E.internal_error loc "annotate_expression(AilEarray_decay)"
     | AilEfunction_decay _ ->
         (* This should be impossible because the Desugaring doesn't emit any AilEfunction_decay *)
-        error "annotate_expression(AilEfunction_decay)"
+        E.internal_error loc "annotate_expression(AilEfunction_decay)"
     | AilEatomic _ ->
         (* This should be impossible because the desugaring doesn't emit any AilEatomic *)
-        error "annotate_expression(AilEatomic)"
+        E.internal_error loc "annotate_expression(AilEatomic)"
     | AilElabel_addressGNU sym ->
         E.return (AilElabel_addressGNU sym, GenRValueType (GenPointer no_qualifiers void))
     | AilEgcc_statement bs ss ->
@@ -1721,7 +1722,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                 E.return (AilEgcc_statement bs (ss' ++ [last_s']), gtc)
           end
         else
-          error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
+          E.internal_error loc "annotate_statement: sigma_fresh bindings failed in a AilSblock"
     | AilEinvalid ty reason ->
         E.return (AilEinvalid ty reason, GenRValueType (inject_type ty))
   end
@@ -1751,7 +1752,7 @@ and nonarray_lvalue_conversion sigm a_expr =
         if not (AAux.is_array ty) then
           let rvalue_ty = unatomic_ (AAux.unqualify ty) in
           if AAux.is_incomplete sigm ty then
-            error "TODO: nonarray_lvalue_conversion ==> undefined behaviour"
+            E.internal_error loc "TODO: nonarray_lvalue_conversion ==> undefined behaviour"
           else
             E.return (
               AnnotatedExpression (GenRValueType (inject_type rvalue_ty))
@@ -1760,7 +1761,7 @@ and nonarray_lvalue_conversion sigm a_expr =
         else
           E.return a_expr
     | GenRValueType gty ->
-        error "WIP: nonarray_lvalue_conversion, GenRValueType"
+        E.internal_error loc "WIP: nonarray_lvalue_conversion, GenRValueType"
   end
 
 (* Must NOT BE CALLED for:
@@ -1775,7 +1776,7 @@ and array_decay sigm a_expr =
     | GenLValueType qs ty isRegister ->
         if AAux.is_array ty then
           if isRegister then
-            error "TODO: array_decay ==> undefined behaviour"
+            E.internal_error loc "TODO: array_decay ==> undefined behaviour"
           else
             (* TODO: qualifiers?? *)
             let () = begin
@@ -1791,7 +1792,7 @@ and array_decay sigm a_expr =
         else
           E.return a_expr
     | GenRValueType gty ->
-        error "WIP: array_decay, GenRValueType"
+        E.internal_error loc "WIP: array_decay, GenRValueType"
   end
 
 (* Must NOT BE CALLED for:
@@ -1801,7 +1802,7 @@ and array_decay sigm a_expr =
 (* TYPE: sigma unit -> expression genTypeCategory -> E.errorM (expression genTypeCategory) *)
 and function_decay sigm a_expr =
   (* TODO: DEAD CODE *)
-  error "WIP: function_decay"
+  E.internal_error loc "WIP: function_decay"
 *)
 
 and perform_decays sigm ctx a_expr =
@@ -2009,11 +2010,11 @@ and annotate_initialization sigm gamm ty e =
   
   (* STD §6.7.9#14 *)
   else if AAux.is_array_of_character ty then
-    error ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ Pp.stringFromCtype_human ty)
+    E.internal_error loc ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ Pp.stringFromCtype_human ty)
   
   (* STD §6.7.9#15 *)
   else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
-    error "WIP: annotate_initialization, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
+    E.internal_error loc "WIP: annotate_initialization, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
   
   (* STD §6.7.9#16 *)
 (*          else if  then *) (* KKK *)
@@ -2027,20 +2028,20 @@ and annotate_initialization sigm gamm ty e =
           if AAux.compatible elem_ty1 elem_ty2 then
             E.return (a_e, Array elem_ty1 (Just n2))
           else
-            error ("TODO(annotate_initialisation, 1): error message: array object definition, types didn't match ==> " ^
+            E.internal_error loc ("TODO(annotate_initialisation, 1): error message: array object definition, types didn't match ==> " ^
                    Pp.stringFromCtype_human elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human elem_ty2)
      | (Array _ elem_ty1 (Just n1), GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
           (* TODO: check, but I don't think we need to do anything regarding qualifiers here *)
          if AAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
            E.return (a_e, Array elem_ty1 (Just n1))
          else
-            error ("TODO(annotate_initialisation, 2): error message: array object definition, types didn't match ==> " ^
+            E.internal_error loc ("TODO(annotate_initialisation, 2): error message: array object definition, types didn't match ==> " ^
                    Pp.stringFromCtype_human elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human elem_ty2)
      | _ ->
-         error "WIP: annotate_initialization, not(is_scalar ty), not array (or had no size)"
+         E.internal_error loc "WIP: annotate_initialization, not(is_scalar ty), not array (or had no size)"
     end
   else
-    error "WIP: annotate_initialization, final case"
+    E.internal_error loc "WIP: annotate_initialization, final case"
 
 *)
 
@@ -2057,7 +2058,7 @@ and annotate_initialization sigm gamm ty e =
 
 
 
-and annotate_definition_aux annotate_block sigm gamm (ty, e) =
+and annotate_definition_aux loc annotate_block sigm gamm (ty, e) =
   if    (AAux.is_array ty --> AAux.has_unknown_size sigm ty)
      || (AAux.is_complete_object sigm ty --> not (AAux.is_vla ty)) then
     if AAux.atomic_qualified_unqualified AAux.is_scalar ty then
@@ -2079,7 +2080,7 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
       
     (* STD §6.7.9#15 *)
     else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t] then
-      error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
+      E.internal_error loc "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
       
           (* STD §6.7.9#16 *)
 (*          else if  then *) (* KKK *)
@@ -2101,13 +2102,13 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
               E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
             else
-              error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
+              E.internal_error loc ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human no_qualifiers elem_ty2)
         | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
               E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
             else
-              error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
+              E.internal_error loc ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human no_qualifiers elem_ty2)
 
         | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
@@ -2117,13 +2118,13 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 >= n2 then
               E.return a_e
             else
-              error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
+              E.internal_error loc ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
         | _ ->
             (* STD §6.7.9#14 *)
             if AAux.is_array_of_character ty then
-              error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
+              E.internal_error loc ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                     Pp.stringFromCtype_human no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
             else
               let () = Debug.print_debug 0 [] (fun () ->
@@ -2138,10 +2139,10 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
                       "rvalue " ^ Pp.stringFromAil_genType gty
                 end
               ) in
-              error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
+              E.internal_error loc "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
       end
     else
-      error "WIP: annotate_definition_aux, final case"
+      E.internal_error loc "WIP: annotate_definition_aux, final case"
   else
     (* STD §6.7.9#3 *)
     let kind =
@@ -2152,29 +2153,32 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
     E.constraint_violation (Loc.locOf e) (IllegalInitialisation kind)
 
 val annotate_definition:
+  Loc.t ->
   (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
-  sigma unit -> gamma -> (Symbol.sym * maybe (expression unit)) -> E.errorM (Symbol.sym * maybe (expression genTypeCategory))
-let annotate_definition annotate_block sigm gamm (sym, e_opt) =
+  sigma unit -> gamma -> (Symbol.sym * maybe (expression unit)) ->
+  E.errorM (Symbol.sym * maybe (expression genTypeCategory))
+let annotate_definition loc_stmt annotate_block sigm gamm (sym, e_opt) =
   match (e_opt, List.lookup sym gamm) with
     | (Nothing, Just _) ->
         E.return (sym, Nothing)
-    | (Just e, Just (_, _, sym_qs, sym_ty)) ->
-        annotate_definition_aux annotate_block sigm gamm (sym_ty, e) >>= fun a_e ->
+    | (Just e, Just ((loc, _, _), _, sym_qs, sym_ty)) ->
+        annotate_definition_aux loc annotate_block sigm gamm (sym_ty, e) >>= fun a_e ->
         E.return (sym, Just a_e)
     | (_, Nothing) ->
-        error "annotate_definition: symbol not found in the context"
+        E.internal_error loc_stmt "annotate_definition: symbol not found in the context"
   end
 
 
 val annotate_definitions:
+  Loc.t ->
   (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> list (Symbol.sym * maybe (expression unit)) -> E.errorM (list (Symbol.sym * maybe (expression genTypeCategory)))
-let rec annotate_definitions annotate_block sigm gamm = function
+let rec annotate_definitions loc_stmt annotate_block sigm gamm = function
   | [] ->
       E.return []
   | d :: ds ->
-      annotate_definition  annotate_block sigm gamm d  >>= fun d  ->
-      annotate_definitions annotate_block sigm gamm ds >>= fun ds ->
+      annotate_definition loc_stmt annotate_block sigm gamm d   >>= fun d  ->
+      annotate_definitions loc_stmt annotate_block sigm gamm ds >>= fun ds ->
       E.return (d :: ds)
 end
 
@@ -2201,7 +2205,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
           annotate_block loc sigm gamm bindings ss >>= fun ss' ->
           E.return (AilSblock bindings ss')
         else
-          error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
+          E.internal_error loc "annotate_statement: sigma_fresh bindings failed in a AilSblock"
     | AilSif e s1 s2 ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.4.1#1" >>
@@ -2276,7 +2280,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSgoto sym ->
         E.return (AilSgoto sym)
     | AilSdeclaration sym_es ->
-        annotate_definitions annotate_block sigm gamm sym_es >>= fun sym_es' ->
+        annotate_definitions loc annotate_block sigm gamm sym_es >>= fun sym_es' ->
         E.return (AilSdeclaration sym_es')
     | AilSpar ss ->
         E.mapM annotate_statement ss >>= fun ss' ->
@@ -2370,10 +2374,10 @@ let annotate_sigma sigm =
     match List.lookup ident sigm.declarations with
       | Just (loc, _, Decl_object _ _ _ (* qs *) ty) ->
           (* TODO: qualifiers?; storage duration? *)
-          annotate_definition_aux (fun loc -> annotate_block loc Nothing) sigm [] (ty, e) >>= fun def ->
+          annotate_definition_aux loc (fun loc -> annotate_block loc Nothing) sigm [] (ty, e) >>= fun def ->
           E.return (ident, def)
       | _ ->
-          error "annotate_sigma: object definition must have a declaration"
+          E.internal_error (Loc.locOf e) "annotate_sigma: object definition must have a declaration"
     end
   ) sigm.object_definitions >>= fun object_defs' ->
   
@@ -2394,9 +2398,9 @@ let annotate_sigma sigm =
             annotate_statement sigm (add_bindings bindings []) ret_ty s >>= fun s' ->
               E.return (ident, (loc, marker_id, attr, param_idents, s'))
           else
-            error "annotate_sigma: parameter syms are not fresh"
+            E.internal_error loc "annotate_sigma: parameter syms are not fresh"
       | _ ->
-          error "annotate_sigma: function definition must have a declaration"
+          E.internal_error loc "annotate_sigma: function definition must have a declaration"
     end
   ) sigm.function_definitions >>= fun function_defs' ->
   
@@ -2490,6 +2494,6 @@ let annotate_program (startup_opt, sigm) =
           | Just (loc, _, _) ->
               E.undef loc Undefined.UB004d_main_not_function
           | Nothing ->
-              error ("Startup function " ^ show startup ^ " not found in AIL declarations.")
+              E.internal_error Loc.unknown ("Startup function " ^ show startup ^ " not found in AIL declarations.")
         end
   end

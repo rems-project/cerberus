@@ -472,6 +472,8 @@ let string_of_ail_typing_error = function
       "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnostic)"
   | TError_CN Cn.CNErr_typing_TODO ->
       "CN typing error"
+  | TError_internal str ->
+      (ansi_format ~err:true [Bold] "internal error: (ail typing) ") ^ str
 
 let string_of_bty =
   String_core.string_of_core_base_type
