@@ -161,14 +161,14 @@ let mk_zeroInit tagDefs ty =
     (A.AilEconst (mk_zeroInit_aux tagDefs ty))
 
 open AilSyntax
-val zeroAil: expression unit
-let zeroAil =
-  AnnotatedExpression () [] Loc.unknown
+val zeroAil: Loc.t -> expression unit
+let zeroAil loc =
+  AnnotatedExpression () [] loc
     (AilEconst (ConstantInteger (IConstant 0 Octal Nothing)))
 
-val oneAil: expression unit
-let oneAil =
-  AnnotatedExpression () [] Loc.unknown
+val oneAil: Loc.t -> expression unit
+let oneAil loc =
+  AnnotatedExpression () [] loc
     (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
 
 
