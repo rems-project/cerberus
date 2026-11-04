@@ -28,9 +28,18 @@ type genType =
  | GenAtomic of genType
  | GenByte
 
-val signedInt_gty: genType
-let signedInt_gty =
+val bool_gty: genType
+let bool_gty =
+  GenBasic (GenInteger (Concrete Bool))
+
+val signed_int_gty: genType
+let signed_int_gty =
   GenBasic (GenInteger (Concrete (Signed Int_)))
+
+val size_t_gty: genType
+let size_t_gty =
+  GenBasic (GenInteger SizeT)
+
 
 val genChar16_t: genType
 let genChar16_t =

@@ -96,7 +96,7 @@ let mkTestExpression conf op (A.AnnotatedExpression gty annots _ _ as a_expr) =
   let loc = locOf a_expr in
   let gtc =
     (* STD §6.5.9#3, sentence 1 *)
-    GenTypes.GenRValueType GenTypes.signedInt_gty in
+    GenTypes.GenRValueType GenTypes.signed_int_gty in
   let bop = match op with
     | TestEq -> A.Eq
     | TestNe -> A.Ne
@@ -118,13 +118,13 @@ let mkTestExpression conf op (A.AnnotatedExpression gty annots _ _ as a_expr) =
 val zeroAil_tau: A.expression GenTypes.genTypeCategory
 let zeroAil_tau =
   A.AnnotatedExpression
-    (GenTypes.GenRValueType GenTypes.signedInt_gty) [] Loc.unknown
+    (GenTypes.GenRValueType GenTypes.signed_int_gty) [] Loc.unknown
     (A.AilEconst (A.ConstantInteger (A.IConstant 0 A.Octal Nothing)))
 
 val oneAil_tau: A.expression GenTypes.genTypeCategory
 let oneAil_tau =
   A.AnnotatedExpression
-    (GenTypes.GenRValueType GenTypes.signedInt_gty) [] Loc.unknown
+    (GenTypes.GenRValueType GenTypes.signed_int_gty) [] Loc.unknown
     (A.AilEconst (A.ConstantInteger (A.IConstant 1 A.Decimal Nothing)))
 
 
@@ -2336,7 +2336,7 @@ end                       )
           Caux.add_stds ["6.5.13#3"; "6.5.13#4"] <$>
             translate_expression true ECTX_logical_operator variadic_env stdlib tagDefs begin
               A.AnnotatedExpression
-                (GenTypes.GenRValueType GenTypes.signedInt_gty) [] loc
+                (GenTypes.GenRValueType GenTypes.signed_int_gty) [] loc
                 (A.AilEcond (mkTestExpression TestEq e1) (Just zeroAil_tau) (mkTestExpression TestNe e2))
             end
       
@@ -2345,7 +2345,7 @@ end                       )
           Caux.add_stds ["6.5.14#3"; "6.5.14#4"] <$>
           translate_expression true ECTX_logical_operator variadic_env stdlib tagDefs begin
               A.AnnotatedExpression
-                (GenTypes.GenRValueType GenTypes.signedInt_gty) [] loc
+                (GenTypes.GenRValueType GenTypes.signed_int_gty) [] loc
                 (A.AilEcond (mkTestExpression TestEq e1) (Just (mkTestExpression TestNe e2)) oneAil_tau)
             end
       

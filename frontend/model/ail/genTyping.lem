@@ -468,7 +468,7 @@ let rec typecheck_constant loc cst =
         match fst cc with
           | Nothing ->
               E.add "§6.4.4.4#10" >>= fun () ->
-              E.return (GenBasic (GenInteger (Concrete (Signed Int_))))
+              E.return signed_int_gty
           | Just Pref_L ->
               E.add "§6.4.4.4#11" >>= fun () ->
               E.return (GenBasic (GenInteger (Concrete (Wchar_t))))
@@ -492,7 +492,7 @@ let rec typecheck_constant loc cst =
         E.return (GenTypes.inject_type ty)
     | ConstantNull ->
         (* TODO: check *)
-        E.return (GenPointer no_qualifiers (Ctype [] Void))
+        E.return (GenPointer no_qualifiers Cty.void)
     | ConstantStruct tag_sym xs ->
         E.mapM (fun (memb_ident, cst) ->
           (* TODO: need to check that the members type match ... *)
@@ -506,10 +506,10 @@ let rec typecheck_constant loc cst =
         E.return (GenTypes.GenUnion tag_sym)
     | ConstantPredefined PConstantFalse ->
         (* STD C23 §6.4.4.5#3 *)
-        E.return (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete Bool)))
+        E.return bool_gty
     | ConstantPredefined PConstantTrue ->
         (* STD C23 §6.4.4.5#3 *)
-        E.return (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete Bool)))
+        E.return bool_gty
   end
 
 val annotate_rvalue:
@@ -910,14 +910,14 @@ let rec annotate_expression annotate_block sigm gamm ctx
     
     | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin b)) args ->
         let loc_cursor = Loc.with_cursor loc' in
-        let memorder_ty = Ctype [] (Basic (Integer (Signed (Int_)))) (* TODO: actually memory_order enum *) in
+        let memorder_ty = Cty.signed_int (* TODO: actually memory_order enum *) in
         match (b, args) with
         | (AilBatomic AilBAstore, object_e :: desired_e :: order_e :: args) ->
             annotate_rvalue object_e >>= fun (object_e',  object_gty)  ->
             match object_gty with
               | GenPointer qs object_ty ->
                   let params_wo_ptr = [(qs, Ctype [] (unatomic_ object_ty), false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction (qs, Ctype [] Void) ((qs, Ctype [] (Pointer qs object_ty), false) :: params_wo_ptr) false) in
+                  let gen_fun_ty = GenRValueType (GenFunction (qs, Cty.void) ((qs, Ctype [] (Pointer qs object_ty), false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicStore object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false (desired_e :: order_e :: args) (Just params_wo_ptr) >>= fun es' ->
                   match memory_order_of_expr order_e with
@@ -993,7 +993,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) (object_e' :: args1 ++ args2)
-                             , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
+                             , GenRValueType bool_gty)
                   end
               | gty ->
                   E.constraint_violation loc_cursor (AtomicAddressArgumentMustBePointer AtomicCompareExchange gty)
@@ -1021,7 +1021,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) (object_e' :: args1 ++ args2)
-                             , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
+                             , GenRValueType bool_gty)
                   end
               | gty ->
                   E.constraint_violation loc_cursor (AtomicAddressArgumentMustBePointer AtomicCompareExchange gty)
@@ -1164,7 +1164,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
           E.constraint_violation loc AssertMacroExpressionScalarType
     
     | AilEoffsetof ty ident ->
-        E.return (AilEoffsetof ty ident, GenRValueType (GenBasic (GenInteger SizeT)))
+        E.return (AilEoffsetof ty ident, GenRValueType size_t_gty)
     
     | AilEgeneric e _ gas ->
         annotate_rvalue e >>= fun (e', gty) ->
@@ -1453,7 +1453,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if GAux.is_scalar gty1 && GAux.is_scalar gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (AndInvalidOperandsType gty1 gty2)
     
@@ -1461,7 +1461,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if GAux.is_scalar gty1 && GAux.is_scalar gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (OrInvalidOperandsType gty1 gty2)
     
@@ -1469,9 +1469,9 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if GAux.is_real gty1 && GAux.is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
     
@@ -1479,9 +1479,9 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if GAux.is_real gty1 && GAux.is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
     
@@ -1489,9 +1489,9 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if GAux.is_real gty1 && GAux.is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
     
@@ -1499,9 +1499,9 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if GAux.is_real gty1 && GAux.is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
     
@@ -1510,12 +1510,12 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if
           conf.allow_distinct_ptr_types_comparison &&
           GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_object gty2
         then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (EqualityInvalidOperandsType gty1 gty2)
     
@@ -1523,12 +1523,12 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if
           conf.allow_distinct_ptr_types_comparison &&
           GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_object gty2
         then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (EqualityInvalidOperandsType gty1 gty2)
     
@@ -1539,7 +1539,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
           E.constraint_violation (with_cursor_from (locOf ty) loc) (SizeofInvalidApplication (inject_type ty))
         else
           E.add "§6.5.3.4#5" >>= fun () ->
-          E.return (AilEsizeof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
+          E.return (AilEsizeof qs ty, GenRValueType size_t_gty)
     
     | AilEsizeof_expr e ->
         let () = Debug.warn [Debug.DB_ail_typing]
@@ -1558,7 +1558,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
           E.constraint_violation (with_cursor_from (locOf e) loc) (SizeofInvalidApplication gty)
         else
           E.add "§6.5.3.4#5" >>= fun () ->
-          E.return (AilEsizeof_expr a_e, GenRValueType (GenBasic (GenInteger SizeT)))
+          E.return (AilEsizeof_expr a_e, GenRValueType size_t_gty)
     
     | AilEalignof qs ty ->
         AilWf.wf_lvalue sigm qs ty >>= fun () ->
@@ -1567,7 +1567,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
           E.constraint_violation (with_cursor_from (locOf ty) loc) (AlignofInvalidApplication qs ty)
         else
           E.add "§6.5.3.4#5" >>= fun () ->
-          E.return (AilEalignof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
+          E.return (AilEalignof qs ty, GenRValueType size_t_gty)
     
     | AilEcast qs (Ctype _ Void as cty) e ->
         AilWf.wf_lvalue sigm qs cty >>= fun () ->
@@ -1676,7 +1676,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
     
     | AilEva_start e sym ->
         annotate_rvalue e >>= fun (e', _) ->
-        E.return (AilEva_start e' sym, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        E.return (AilEva_start e' sym, GenRValueType signed_int_gty)
         (* TODO: add this check later
         annotate_rvalue e >>= function
           | (e', GenBuiltin "va_list") ->
@@ -1689,7 +1689,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
     | AilEva_copy e1 e2 ->
         annotate_rvalue e1 >>= fun (e1', _) ->
         annotate_rvalue e2 >>= fun (e2', _) ->
-        E.return (AilEva_copy e1' e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        E.return (AilEva_copy e1' e2', GenRValueType signed_int_gty)
     
     | AilEva_arg e ty ->
         annotate_rvalue e >>= fun (e', _) ->
@@ -1714,7 +1714,7 @@ let rec annotate_expression annotate_block sigm gamm ctx
         annotate_rvalue e >>= fun (e', gty) ->
         E.return (AilEbmc_assume e', GenRValueType GenVoid)
     | AilEreg_load r ->
-        E.return (AilEreg_load r, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_))))) (* NOTE: assuming registers are always of type int *)
+        E.return (AilEreg_load r, GenRValueType signed_int_gty) (* NOTE: assuming registers are always of type int *)
     | AilErvalue _ ->
         (* This should be impossible because the desugaring doesn't emit any AilErvalue *)
         E.internal_error loc "annotate_expression(AilErvalue)"
