@@ -1,5 +1,6 @@
-open import Pervasives Utils
-open import AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
+open import Pervasives
+open import AilSyntax AilSyntaxAux TypingError GenTypes Constraint Loc Ctype
+import AilWf GenTypesAux
 open import Config
 import Constraint Undefined Builtins Debug Pp Cmm_csem
 
@@ -293,17 +294,17 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
 val well_typed_equality: genType -> genType -> bool -> bool -> bool
 let well_typed_equality gty1 gty2 is_null1 is_null2 =
      (* STD §6.5.9#2, item 1 *)
-     is_arithmetic gty1 && is_arithmetic gty2
+     GAux.is_arithmetic gty1 && GAux.is_arithmetic gty2
      (* STD §6.5.9#2, item 2 *)
-  || are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2
+  || GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2
      (* STD §6.5.9#2, item 3 *)
-  || is_pointer_to_void gty1 && is_pointer_to_object gty2
+  || GAux.is_pointer_to_void gty1 && GAux.is_pointer_to_object gty2
      (* STD §6.5.9#2, item 3 *)
-  || is_pointer_to_object gty1 && is_pointer_to_void gty2
+  || GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_void gty2
      (* STD §6.5.9#2, item 4 *)
-  || is_pointer gty1 && is_null2
+  || GAux.is_pointer gty1 && is_null2
      (* STD §6.5.9#2, item 4 *)
-  || is_null1 && is_pointer gty2
+  || is_null1 && GAux.is_pointer gty2
 
 let guard_violation loc viol b =
   E.guard loc (TError_ConstraintViolation viol) b
@@ -311,16 +312,16 @@ let guard_violation loc viol b =
 let well_typed_binary_arithmetic viol loc_e1 loc_op loc_e2 gt1 aop gt2 =
   let guard bop = guard_violation (with_regions_and_cursor [loc_e1; loc_e2] (Just loc_op)) (viol bop gt1 gt2) in
   match aop with
-    | Mul  -> guard MultiplicativeInvalidOperandsType (is_arithmetic gt1 && is_arithmetic gt2)
-    | Div  -> guard MultiplicativeInvalidOperandsType (is_arithmetic gt1 && is_arithmetic gt2)
-    | Mod  -> guard ModInvalidOperandsType            (is_integer    gt1 && is_integer    gt2)
-    | Add  -> guard AdditiveOperandsArithmeticType    (is_arithmetic gt1 && is_arithmetic gt2)
-    | Sub  -> guard AdditiveOperandsArithmeticType    (is_arithmetic gt1 && is_arithmetic gt2)
-    | Shl  -> guard BitwiseShiftInvalidOperandsType   (is_integer    gt1 && is_integer    gt2)
-    | Shr  -> guard BitwiseShiftInvalidOperandsType   (is_integer    gt1 && is_integer    gt2)
-    | Band -> guard BitwiseAndInvalidOperandsType     (is_integer    gt1 && is_integer    gt2)
-    | Bxor -> guard BitwiseXorInvalidOperandsType     (is_integer    gt1 && is_integer    gt2)
-    | Bor  -> guard BitwiseOrInvalidOperandsType      (is_integer    gt1 && is_integer    gt2)
+    | Mul  -> guard MultiplicativeInvalidOperandsType (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Div  -> guard MultiplicativeInvalidOperandsType (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Mod  -> guard ModInvalidOperandsType            (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Add  -> guard AdditiveOperandsArithmeticType    (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Sub  -> guard AdditiveOperandsArithmeticType    (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Shl  -> guard BitwiseShiftInvalidOperandsType   (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Shr  -> guard BitwiseShiftInvalidOperandsType   (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Band -> guard BitwiseAndInvalidOperandsType     (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Bxor -> guard BitwiseXorInvalidOperandsType     (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Bor  -> guard BitwiseOrInvalidOperandsType      (GAux.is_integer    gt1 && GAux.is_integer    gt2)
   end
 
 
@@ -351,12 +352,12 @@ val well_typed_conditionalGNU:
     (Loc.t * Loc.t * Loc.t) ->
     genType -> genType -> E.errorM genTypeCategory
 let well_typed_conditionalGNU (loc_cond, loc_e1, loc_e3) gty1 gty3 =
-  if is_scalar gty1 && not (is_byte gty1) then
+  if GAux.is_scalar gty1 && not (GAux.is_byte gty1) then
     E.add "§6.5.15#2" >>
-    if is_arithmetic gty3 then
+    if GAux.is_arithmetic gty3 then
       E.add "§6.5.15#3, bullet 1" >>
       E.add "§6.5.15#5, sentence 1" >>
-      E.return (GenRValueType (usual_arithmetic gty3 gty3))
+      E.return (GenRValueType (GAux.usual_arithmetic gty3 gty3))
     
     else if GAux.is_struct_or_union gty3 then
       E.add "§6.5.15#3, bullet 2" >>
@@ -383,12 +384,12 @@ val well_typed_conditional:
     (Loc.t * Loc.t * Loc.t * Loc.t) ->
     genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
 let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_null2 is_null3 =
-  if is_scalar gty1 && not (is_byte gty1) then
+  if GAux.is_scalar gty1 && not (GAux.is_byte gty1) then
     E.add "§6.5.15#2" >>
-    if is_arithmetic gty2 && is_arithmetic gty3 then
+    if GAux.is_arithmetic gty2 && GAux.is_arithmetic gty3 then
       E.add "§6.5.15#3, bullet 1" >>
       E.add "§6.5.15#5, sentence 1" >>
-      E.return (GenRValueType (usual_arithmetic gty2 gty3))
+      E.return (GenRValueType (GAux.usual_arithmetic gty2 gty3))
     
     else if GAux.is_struct_or_union gty2 && gty2 = gty3 then
       E.add "§6.5.15#3, bullet 2" >>
@@ -400,25 +401,25 @@ let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_
       E.add "§6.5.15#5, sentence 3" >>
       E.return (GenRValueType GenVoid)
     
-    else match composite_pointer gty2 gty3 with
+    else match GAux.composite_pointer gty2 gty3 with
       | Just gty ->
           E.add "§6.5.15#3, bullet 4" >>
             E.add "§6.5.15#6" >>
           E.return (GenRValueType gty)
       | Nothing ->
-          if is_pointer gty2 && is_null3 then
+          if GAux.is_pointer gty2 && is_null3 then
             E.add "§6.5.15#3, bullet 5" >>
             E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
-          else if is_pointer gty3 && is_null2 then
+          else if GAux.is_pointer gty3 && is_null2 then
             E.add "§6.5.15#3, bullet 5" >>
             E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
-          else if is_pointer_to_object gty2 && is_pointer_to_void gty3 then
+          else if GAux.is_pointer_to_object gty2 && GAux.is_pointer_to_void gty3 then
             E.add "§6.5.15#3, bullet 6" >>
             E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
-          else if is_pointer_to_object gty3 && is_pointer_to_void gty2 then
+          else if GAux.is_pointer_to_object gty3 && GAux.is_pointer_to_void gty2 then
             E.add "§6.5.15#3, bullet 6" >>
             E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
@@ -621,9 +622,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         (* STD §6.5.3.3#1, sentence 1 *)
         E.add "§6.5.3.3#1, sentence 1" >>
         annotate_rvalue e >>= fun (a_e, gty) ->
-        if is_arithmetic gty then
+        if GAux.is_arithmetic gty then
           let mk_conversion =
-            if is_integer gty then integer_promote else id in
+            if GAux.is_integer gty then GAux.integer_promote else id in
           E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
           E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)
@@ -632,9 +633,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         (* STD §6.5.3.3#1, sentence 1 *)
         E.add "§6.5.3.3#1, sentence 1" >>
         annotate_rvalue e >>= fun (a_e, gty) ->
-        if is_arithmetic gty then
+        if GAux.is_arithmetic gty then
           let mk_conversion =
-            if is_integer gty then integer_promote else id in
+            if GAux.is_integer gty then GAux.integer_promote else id in
           E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
           E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)
@@ -645,8 +646,8 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         E.add "STD §6.5#4, sentence 1" >>
         E.add "STD §6.5.3.3#1, sentence 2" >>
         annotate_rvalue e >>= fun (a_e, gty) ->
-        if is_integer gty then
-          E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
+        if GAux.is_integer gty then
+          E.return (AilEunary uop a_e, GenRValueType (GAux.integer_promote gty))
         else
           E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)
     
@@ -1137,7 +1138,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     
     | AilEassert e ->
         annotate_rvalue e >>= fun (e', gty) ->
-        if is_scalar gty then
+        if GAux.is_scalar gty then
           E.add "§7.2.1.1#2" >>
           E.return (AilEassert e', GenRValueType GenVoid)
         else
@@ -1352,87 +1353,87 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (Arithmetic (Div  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (Arithmetic (Mod  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (Arithmetic (Band as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (Arithmetic (Bxor  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (Arithmetic (Bor  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (Arithmetic (Shl  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.integer_promote gty1))
     
     | AilEbinary e1 (Arithmetic (Shr  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.integer_promote gty1))
     
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         (* NOTE: TODO: this is also relates to §6.5.2.1#1 *)
         (* STD §6.5.6#2 *)
-        if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
+        if GAux.is_pointer_to_complete_object sigm gty1 && GAux.is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
+        else if GAux.is_pointer_to_complete_object sigm gty2 && GAux.is_integer gty1 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
-        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty1 && is_integer gty2 then
+        else if conf.allow_void_ptr_arithmetic && GAux.is_pointer_to_void gty1 && GAux.is_integer gty2 then
           (* NOTE: this is a GNU extension (arithmetic on void pointers) *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty2 && is_integer gty1 then
+        else if conf.allow_void_ptr_arithmetic && GAux.is_pointer_to_void gty2 && GAux.is_integer gty1 then
           (* NOTE: this is a GNU extension (arithmetic on void pointers) *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
         else
           well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Add gty2 >>
-          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+          E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (Arithmetic Sub as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects sigm gty1 gty2 then
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects sigm gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger PtrdiffT)))
-        else if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
+        else if GAux.is_pointer_to_complete_object sigm gty1 && GAux.is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty1 && is_integer gty2 then
+        else if conf.allow_void_ptr_arithmetic && GAux.is_pointer_to_void gty1 && GAux.is_integer gty2 then
           (* NOTE: this is a GNU extension (arithmetic on void pointers)  *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else
           well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Sub gty2 >>
-          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
+          E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
     
     | AilEbinary e1 (And as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if is_scalar gty1 && is_scalar gty2 then
+        if GAux.is_scalar gty1 && GAux.is_scalar gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (AndInvalidOperandsType gty1 gty2)
@@ -1440,7 +1441,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEbinary e1 (Or  as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if is_scalar gty1 && is_scalar gty2 then
+        if GAux.is_scalar gty1 && GAux.is_scalar gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (OrInvalidOperandsType gty1 gty2)
@@ -1448,9 +1449,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEbinary e1 (Lt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
@@ -1458,9 +1459,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEbinary e1 (Gt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
@@ -1468,9 +1469,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEbinary e1 (Le as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
@@ -1478,9 +1479,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEbinary e1 (Ge as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
@@ -1493,7 +1494,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else if
           conf.allow_distinct_ptr_types_comparison &&
-          is_pointer_to_object gty1 && is_pointer_to_object gty2
+          GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_object gty2
         then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
@@ -1506,14 +1507,14 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else if
           conf.allow_distinct_ptr_types_comparison &&
-          is_pointer_to_object gty1 && is_pointer_to_object gty2
+          GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_object gty2
         then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (EqualityInvalidOperandsType gty1 gty2)
     
     | AilEsizeof qs ty ->
-        wf_lvalue sigm qs ty >>
+        AilWf.wf_lvalue sigm qs ty >>
         E.add "§6.5.3.4#1, sentence 1" >>
         if AAux.is_function ty || AAux.is_incomplete sigm ty then
           E.constraint_violation (with_cursor_from (locOf ty) loc) (SizeofInvalidApplication (inject_type ty))
@@ -1541,7 +1542,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEsizeof_expr a_e, GenRValueType (GenBasic (GenInteger SizeT)))
     
     | AilEalignof qs ty ->
-        wf_lvalue sigm qs ty >>
+        AilWf.wf_lvalue sigm qs ty >>
         E.add "§6.5.3.4#1, sentence 1" >>
         if AAux.is_function ty || AAux.is_incomplete sigm ty then
           E.constraint_violation (with_cursor_from (locOf ty) loc) (AlignofInvalidApplication qs ty)
@@ -1550,21 +1551,21 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           E.return (AilEalignof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
     
     | AilEcast qs (Ctype _ Void as cty) e ->
-        wf_lvalue sigm qs cty >>
+        AilWf.wf_lvalue sigm qs cty >>
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilEcast qs cty e', GenRValueType GenVoid)
     
     | AilEcast qs ty e ->
-        wf_lvalue sigm qs ty >>
+        AilWf.wf_lvalue sigm qs ty >>
         annotate_rvalue e >>= fun (e', gty) ->
-        if not (is_scalar gty && AAux.atomic_qualified_unqualified AAux.is_scalar ty) then
+        if not (GAux.is_scalar gty && AAux.atomic_qualified_unqualified AAux.is_scalar ty) then
           E.constraint_violation (with_cursor_from (locOf e) loc) (CastInvalidType qs ty)
-        else if is_pointer gty && AAux.is_floating ty then
+        else if GAux.is_pointer gty && AAux.is_floating ty then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastPointerToFloat
-        else if is_floating gty && AAux.is_pointer ty then
+        else if GAux.is_floating gty && AAux.is_pointer ty then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastFloatToPointer
-        else if (is_byte gty && not (AAux.is_byte ty || AAux.is_integer ty))
-                || (AAux.is_byte ty && not (is_byte gty || is_integer gty)) then
+        else if (GAux.is_byte gty && not (AAux.is_byte ty || AAux.is_integer ty))
+                || (AAux.is_byte ty && not (GAux.is_byte gty || GAux.is_integer gty)) then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastToFromByte
         else
           E.return (AilEcast qs ty e', GenRValueType (inject_type ty))
@@ -1589,7 +1590,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           | GenLValueType qs ty _ -> 
               AAux.lvalue_coercion sigm ty >>= fun ty1 ->
                 if    AAux.modifiable sigm qs ty
-                   && (AAux.is_arithmetic ty1 && is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && is_integer gty2) then
+                   && (AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && GAux.is_integer gty2) then
                   E.return (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1))
                 else
                   E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
@@ -1605,7 +1606,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           | GenLValueType qs ty _ -> 
               AAux.lvalue_coercion sigm ty >>= fun ty1 ->
                 if    AAux.modifiable sigm qs ty
-                   && (AAux.is_arithmetic ty1 && is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && is_integer gty2) then
+                   && (AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && GAux.is_integer gty2) then
                   E.return (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1))
                 else
                   E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
@@ -2209,7 +2210,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSif e s1 s2 ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.4.1#1" >>
-        if is_scalar gty then
+        if GAux.is_scalar gty then
           annotate_statement s1 >>= fun s1' ->
           annotate_statement s2 >>= fun s2' ->
           E.return (AilSif e' s1' s2')
@@ -2218,7 +2219,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSwhile e s id ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.5#2" >>
-        if is_scalar gty then
+        if GAux.is_scalar gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSwhile e' s' id)
         else
@@ -2226,7 +2227,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSdo s e id ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.5#2" >>
-        if is_scalar gty then
+        if GAux.is_scalar gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSdo s' e' id)
         else
@@ -2260,7 +2261,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSswitch e s ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.4.2#1" >>
-        if is_integer gty then
+        if GAux.is_integer gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSswitch e' s')
         else
@@ -2360,11 +2361,11 @@ let annotate_sigma sigm =
   E.mapM (fun (ident, decl) ->
     match decl with
     | (_, _, (Decl_object dur_opt _ qs ty as decl)) ->
-        wf_lvalue sigm qs ty >>
+        AilWf.wf_lvalue sigm qs ty >>
         E.return (ident, decl)
     | (_, _, (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl)) ->
         (* TODO?   ==> AilTyping.well_formed_bindings bs && *)
-        wf_type sigm (Ctype [] (Function ret_ty params isVariadic)) >>
+        AilWf.wf_type sigm (Ctype [] (Function ret_ty params isVariadic)) >>
         E.return (ident, decl)
     end
   ) sigm.declarations >>
@@ -2419,19 +2420,19 @@ let annotate_sigma sigm =
         E.mapM_ (check_member true) xs >>= fun () ->
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
-          wf_lvalue sigm qs ty
+          AilWf.wf_lvalue sigm qs ty
         ) xs >>= fun () ->
         match flexible_opt with
           | Nothing ->
               E.return ()
           | Just (FlexibleArrayMember _ _ flex_qs flex_elem_ty) ->
-              wf_lvalue sigm flex_qs (Ctype [] (Array flex_elem_ty Nothing))
+              AilWf.wf_lvalue sigm flex_qs (Ctype [] (Array flex_elem_ty Nothing))
         end
     | (_, (_, _, UnionDef xs)) ->
         E.mapM (check_member false) xs >>
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
-          wf_lvalue sigm qs ty
+          AilWf.wf_lvalue sigm qs ty
         ) xs
   end) sigm.tag_definitions >>
 
