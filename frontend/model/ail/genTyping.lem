@@ -1435,16 +1435,26 @@ let rec annotate_expression annotate_block sigm gamm ctx
     | AilEbinary e1 (Arithmetic Sub as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects sigm gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger PtrdiffT)))
-        else if GAux.is_pointer_to_complete_object sigm gty1 && GAux.is_integer gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if conf.allow_void_ptr_arithmetic && GAux.is_pointer_to_void gty1 && GAux.is_integer gty2 then
-          (* NOTE: this is a GNU extension (arithmetic on void pointers)  *)
-          E.return (AilEbinary e1' bop e2', GenRValueType gty1)
+        let a_expr = AilEbinary e1' bop e2' in
+        if
+          GAux.are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects
+            sigm gty1 gty2
+              (* GNU extension: arithmetic on void pointers *)
+          ||  (conf.allow_void_ptr_arithmetic &&
+                GAux.is_pointer_to_void gty1 && GAux.is_pointer_to_void gty2)
+        then
+          E.return (a_expr, GenRValueType (GenBasic (GenInteger PtrdiffT)))
+        else if
+          GAux.is_pointer_to_complete_object sigm gty1 && GAux.is_integer gty2
+              (* GNU extension: arithmetic on void pointers *)
+          ||  (conf.allow_void_ptr_arithmetic &&
+                GAux.is_pointer_to_void gty1 && GAux.is_integer gty2)
+        then
+          E.return (a_expr, GenRValueType gty1)
         else
-          well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Sub gty2 >>= fun () ->
-          E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+          well_typed_binary_arithmetic ArithBinopOperandsType
+            (locOf e1) loc (locOf e2) gty1 Sub gty2 >>= fun () ->
+          E.return (a_expr, GenRValueType (GAux.usual_arithmetic gty1 gty2))
 
     | AilEbinary e1 (And as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->

@@ -2216,6 +2216,11 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun memop_wrp ->
           (* NOTE: by Ail typing we can just use the referenced type of either operand *)
           let diff_ty_pe = match (ctype_of e1) with
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ Ctype.Void)) ->
+                (* As a GNU extension (guarded during Ail typing) both operands may be
+                 * void pointers, in which case the difference is computed at the
+                 * granularity of bytes *)
+                Caux.mk_ail_ctype_pe Ctype.unsigned_char
             | Ctype.Ctype _ (Ctype.Pointer _ ref_ty1) ->
                 Caux.mk_ail_ctype_pe ref_ty1
             | (*BISECT-IGNORE*) _ ->
