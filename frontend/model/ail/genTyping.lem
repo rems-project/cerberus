@@ -1615,14 +1615,28 @@ let rec annotate_expression annotate_block sigm gamm ctx
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs ty _ ->
               AAux.lvalue_coercion sigm ty >>= fun ty1 ->
-                if    AAux.modifiable sigm qs ty
-                   && (AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && GAux.is_integer gty2) then
-                  E.return (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1))
-                else
-                  E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
-                                         (CompoundAssignmentAddSubOperandTypes (inject_type ty1) gty2)
+              let res =
+                (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1)) in
+              let is_modifiable = AAux.modifiable sigm qs ty in
+              if
+                is_modifiable &&
+                (AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 ||
+                  AAux.is_pointer_to_complete_object sigm ty && GAux.is_integer gty2)
+              then
+                E.return res
+              else if
+                conf.allow_void_ptr_arithmetic &&
+                is_modifiable && AAux.is_pointer_to_void ty1 && GAux.is_integer gty2
+              then
+                (* GNU extension: arithmetic on void pointers *)
+                E.return res
+              else
+                E.constraint_violation
+                  (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
+                  (CompoundAssignmentAddSubOperandTypes (inject_type ty1) gty2)
           | _ ->
-              E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue
+              E.constraint_violation (with_cursor_from (locOf e1) loc)
+                AssignmentModifiableLvalue
         end
 
     | AilEcompoundAssign e1 (Sub as aop) e2 ->
