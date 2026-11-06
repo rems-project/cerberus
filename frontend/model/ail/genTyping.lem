@@ -742,15 +742,31 @@ let rec annotate_expression annotate_block sigm gamm ctx
           | GenLValueType qs' ty' _ ->
               (* TODO(check): why are we doing an lvalue coercion here? *)
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              (* NOTE: the STD at §6.5.3#1 doesn't directly says that pointer operand must be to
-                       complete object type, but then #2 defers to §6.5.6#2 which does. *)
-              if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
-                                                  AAux.atomic_qualified_unqualified (AAux.is_pointer_to_complete_object sigm) ty') then
-                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
+              let res = (AilEunary uop e', GenRValueType (inject_type ty')) in
+              let is_modifiable = AAux.modifiable sigm qs' ty' in
+              (* NOTE: the STD at §6.5.2.4#1 doesn't directly says that pointer operand
+               * must be to complete object type, but then #2 defers to §6.5.6#2 which
+               * does. *)
+              if
+                is_modifiable &&
+                (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
+                  AAux.atomic_qualified_unqualified
+                    (AAux.is_pointer_to_complete_object sigm) ty')
+              then
+                E.return res
+              else if
+                conf.allow_void_ptr_arithmetic &&
+                is_modifiable &&
+                AAux.atomic_qualified_unqualified AAux.is_pointer_to_void ty'
+              then
+                (* GNU extension: arithmetic on void pointers *)
+                E.return res
               else
-                E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryIncrement ty')
+                E.constraint_violation (with_cursor_from (locOf e) loc)
+                  (InvalidArgumentTypeUnaryIncrement ty')
           | _ ->
-            E.constraint_violation (with_cursor_from (locOf e) loc) UnaryExpressionNotLvalue
+            E.constraint_violation (with_cursor_from (locOf e) loc)
+              UnaryExpressionNotLvalue
         end
 
     | AilEunary (PostfixDecr as uop) e ->
@@ -759,11 +775,25 @@ let rec annotate_expression annotate_block sigm gamm ctx
           | GenLValueType qs' ty' _ ->
               (* TODO(check): why are we doing an lvalue coercion here? *)
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              (* NOTE: the STD at §6.5.3#1 doesn't directly says that pointer operand must be to
-                       complete object type, but then #2 defers to §6.5.6#2 which does. *)
-              if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
-                                                  AAux.atomic_qualified_unqualified (AAux.is_pointer_to_complete_object sigm) ty') then
-                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
+              let res = (AilEunary uop e', GenRValueType (inject_type ty')) in
+              let is_modifiable = AAux.modifiable sigm qs' ty' in
+              (* NOTE: the STD at §6.5.2.4#1 doesn't directly says that pointer operand
+               * must be to complete object type, but then #2 defers to §6.5.6#2 which
+               * does. *)
+              if
+                is_modifiable &&
+                (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
+                  AAux.atomic_qualified_unqualified
+                    (AAux.is_pointer_to_complete_object sigm) ty')
+              then
+                E.return res
+              else if
+                conf.allow_void_ptr_arithmetic &&
+                is_modifiable &&
+                AAux.atomic_qualified_unqualified AAux.is_pointer_to_void ty'
+              then
+                (* GNU extension: arithmetic on void pointers *)
+                E.return res
               else
                 E.constraint_violation (with_cursor_from (locOf e) loc)
                   (InvalidArgumentTypeUnaryDecrement ty')
