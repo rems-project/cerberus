@@ -2085,20 +2085,20 @@ module Concrete : Memory = struct
   
   let eff_array_shift_ptrval loc ptrval ty (IV (_, ival)) =
     get_tagDefs >>= fun tagDefs ->
-    (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
-    let offset = (Z.(mul (sizeof ~tagDefs ty) ival)) in
+    (* As a GNU extension ty may be void, in which case the pointer arithmetic
+     * is performed at the byte granularity *)
+    let sz = if AilTypesAux.is_void ty then Z.one else sizeof ~tagDefs ty in
+    let offset = (Z.(mul sz ival)) in
     match ptrval with
       | PV (_, PVnull _) ->
           (* TODO: this seems to be undefined in ISO C *)
           (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-          (* failwith ("TODO(eff shift a null pointer should be undefined behaviour), offset:" ^ Z.to_string offset) *)
           fail ~loc MerrArrayShift
       | PV (_, PVfunction _) ->
           failwith "Concrete.eff_array_shift_ptrval, PVfunction"
       
       (* PNVI-ae-udi *)
       | PV (Prov_symbolic iota as prov, PVconcrete (_, addr)) ->
-          (* KKK print_endline ("HELLO iota ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
           (* TODO: this is duplicated code from the Prov_some case (I'm keeping
              PNVI-ae-udi stuff separated to avoid polluting the
              vanilla PNVI code) *)
@@ -2109,8 +2109,8 @@ module Concrete : Memory = struct
                || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
               get_allocation ~loc z >>= fun alloc ->
               if    Z.leq alloc.base shifted_addr
-                 && Z.leq (Z.add shifted_addr (sizeof ~tagDefs ty))
-                          (Z.add (Z.add alloc.base alloc.size) (sizeof ~tagDefs ty)) then
+                 && Z.leq (Z.add shifted_addr sz)
+                          (Z.add (Z.add alloc.base alloc.size) sz) then
                 return true
               else
                 return false
@@ -2181,8 +2181,8 @@ module Concrete : Memory = struct
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
             get_allocation ~loc alloc_id >>= fun alloc ->
             if    Z.leq alloc.base shifted_addr
-               && Z.leq (Z.add shifted_addr (sizeof ~tagDefs ty))
-                        (Z.add (Z.add alloc.base alloc.size) (sizeof ~tagDefs ty)) then
+               && Z.leq (Z.add shifted_addr sz)
+                        (Z.add (Z.add alloc.base alloc.size) sz) then
               return (PV (Prov_some alloc_id, PVconcrete (None, shifted_addr)))
             else
               fail ~loc MerrArrayShift

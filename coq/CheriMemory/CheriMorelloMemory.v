@@ -2414,7 +2414,14 @@ Module Type CheriMemoryImpl
     :=
     st <- get ;;
     let ival := num_of_int ival_int in
-    szn <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) ty) ;;
+    szn <- match ty with
+      | CoqCtype.Ctype _ CoqCtype.Void =>
+          (* As a GNU extension ty may be void, in which case the pointer arithmetic
+           * is performed at the byte granularity *)
+          ret 1%nat
+      | _ =>
+          serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) ty)
+    end ;;
     let sz := Z.of_nat szn in
     let offset := Z.mul sz ival
     in

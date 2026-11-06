@@ -946,7 +946,10 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
         fail (MerrVIP (VIP_array_shift VIP_empty))
     | PVloc (Prov_some alloc_id, addr) ->
         lookup_alloc alloc_id >>= fun alloc ->
-          let addr' = Z.(add addr (mul (ival_to_int ival) (Common.sizeof ~tagDefs ty))) in
+        (* As a GNU extension ty may be void, in which case the pointer arithmetic
+         * is performed at the byte granularity *)
+        let sz = if AilTypesAux.is_void ty then Z.one else Common.sizeof ~tagDefs ty in
+        let addr' = Z.(add addr (mul (ival_to_int ival) sz)) in
         if not (in_bounds addr' alloc) then
           fail (MerrVIP (VIP_array_shift VIP_out_of_bound))
         else
