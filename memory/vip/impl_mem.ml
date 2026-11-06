@@ -880,7 +880,7 @@ let intcast _ _ ival =
 
 (* Pointer shifting constructors *)
 let array_shift_ptrval tagDefs loc ptrval ty ival : pointer_value Undefined.t0 =
-  (* TODO: "VIP memory model should be called SWITCH strict_pointer_arith" *)
+  (* TODO: "VIP memory model should be called with SWITCH strict_pointer_arith" *)
   match ptrval with
     | PVnull ->
         Undefined.(undef loc [UB046_array_pointer_outside])
@@ -888,18 +888,10 @@ let array_shift_ptrval tagDefs loc ptrval ty ival : pointer_value Undefined.t0 =
         (* TODO *)
         Undefined.(undef loc [UB046_array_pointer_outside])
     | PVloc (Prov_some alloc_id, addr) ->
-        (* lookup_alloc alloc_id >>= fun alloc -> *)
         (* As a GNU extension ty may be void, in which case the pointer arithmetic
           is performed at the byte granularity *)
         let sz = if AilTypesAux.is_void ty then Z.one else Common.sizeof ~tagDefs ty in
         let addr' = Z.(add addr (mul (ival_to_int ival) sz)) in
-        (* TODO *)
-        (* if alloc.killed then
-          failwith "TODO UB, array_offset ==> killed"
-        else if not (in_bounds addr' alloc) then
-          failwith "TODO UB, array_offset ==> out-of-bound"
-        else *)
-          (* TODO: hack *)
           Undefined.return (PVloc (Prov_some alloc_id, addr'))
     | PVfunptr sym ->
         Undefined.(undef loc [UB046_array_pointer_outside])
