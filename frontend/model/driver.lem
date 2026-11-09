@@ -947,7 +947,10 @@ let as_step do_stepping step m =
   else
     m
 
-let can_advance = function
+(* The boolean [single_thread] indicates whether the program has a single thread.
+ * When it does, action and memop requests can be performed eargerly, otherwise they are
+ * left for the driver to nondeterministical schedule as it steps their threads *)
+let can_advance single_thread = function
   | Core_reduction.Step_ccall2 _ _ ->
       false
   | Core_reduction.Step_with_runstate2 _ _ ->
@@ -955,8 +958,7 @@ let can_advance = function
   | Core_reduction.Step_tau2 _ _ _ ->
       true
   | Core_reduction.Step_action_request2 _ _ _ is_unseq_with_ccall _ ->
-      (* TODO: only correct if there is only ONE thread *)
-      not is_unseq_with_ccall (* false *)
+      single_thread && not is_unseq_with_ccall
   | Core_reduction.Step_blocked2 ->
       false
   | Core_reduction.Step_error2 str ->
@@ -966,8 +968,7 @@ let can_advance = function
   | Core_reduction.Step_done2 _ ->
       false
   | Core_reduction.Step_memop_request2 _ _ _ _ is_unseq_with_ccall _ ->
-      (* TODO: only correct if there is only ONE thread *)
-      not is_unseq_with_ccall (* false *)
+      single_thread && not is_unseq_with_ccall
   | Core_reduction.Step_spawn_threads2 _ _ ->
       true
   | Core_reduction.Step_fs2 _ _ _ ->
@@ -1086,15 +1087,15 @@ let advance_step tid step =
   end
 
 
-let rec find_can_advance steps =
+let rec find_can_advance single_thread steps =
   match steps with
     | [] ->
         Nothing
     | step :: steps' ->
-        if can_advance step then
+        if can_advance single_thread step then
           Just step
         else
-          find_can_advance steps'
+          find_can_advance single_thread steps'
   end
 
 
@@ -1110,9 +1111,13 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
             | Nothing ->
                 error ("Driver.drive_nonmemory_steps_aux2 => invalid tid: " ^ show tid)
           end in
-        Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info
-      ) >>= fun steps ->
-      match find_can_advance steps with
+        ( match dr_st.core_state.Core_run_aux.thread_states with
+          | [_] -> true
+          | _ -> false
+          end
+        , Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info )
+      ) >>= fun (single_thread, steps) ->
+      match find_can_advance single_thread steps with
         | Nothing ->
             drive_nonmemory_steps_aux2 (Map.insert tid steps acc) xs'
         | Just step ->
@@ -1317,22 +1322,29 @@ val new_drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_re
 let new_drive_core_threads () =
   ND.get >>= fun dr_st ->
   let tids = List.map fst dr_st.core_state.Core_run_aux.thread_states in
-  drive_nonmemory_steps_aux2 Map.empty (*NEXT*) tids >>= fun m ->
+  drive_nonmemory_steps_aux2 Map.empty tids >>= fun m ->
   ND.mapM (fun (tid, steps) ->
-    let size = List.length steps in
-    let () = 
-      if size > 1 then
+    let filtered_steps =
+      match List.filter (fun step -> step <> Core_reduction.Step_blocked2) steps with
+        | [] -> [Core_reduction.Step_blocked2]
+        | steps' -> steps'
+      end in
+    let more_than_one = match filtered_steps with
+      | [] -> false | [_] -> false
+      | _ -> true
+    end in
+    let () =
+      if more_than_one then
         Debug.print_debug 5 [] (fun () ->
-          "picking step for thread(" ^ show tid ^ ") size: " ^ show size ^ " ==> " ^ show steps
+          "picking step for thread(" ^ show tid ^ ") size: " ^
+          show (List.length filtered_steps) ^ " ==> " ^ show filtered_steps
         )
       else
         () in
-    ND.pick (SK_misc ["new_drive_core_threads"]) steps >>= fun step ->
+    ND.pick (SK_misc ["new_drive_core_threads"]) filtered_steps >>= fun step ->
     let () =
-    if size > 1 then
-      Debug.print_debug 5 [] (fun () ->
-        "===> PICKED: " ^ show step
-      )
+    if more_than_one then
+      Debug.print_debug 5 [] (fun () -> "===> PICKED: " ^ show step)
     else
       () in
     ND.return (tid, Just step)
@@ -1412,15 +1424,12 @@ end
 val     driver2: bool -> driverM unit
 let rec driver2 with_concurrency =
   let () = Debug.print_debug 2 [] (fun () -> "ENTERING Driver.driver2") in
-  new_drive_core_threads   () >>= fun tid_steps ->
-  ND.get >>= fun post_core_dr_st ->
-  
-  (* TODO: hackish *)
-  let _non_blocked_th_sts = List.filter (fun (tid, th_info) ->
-    List.any (fun step -> step <> Core_reduction.Step_blocked2) $
-      Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info
-  ) post_core_dr_st.core_state.Core_run_aux.thread_states in
-  
+  new_drive_core_threads () >>= fun tid_steps ->
+  (* the threads which is not blocked waiting on another thread. *)
+  let non_blocked =
+    List.filter (fun (tid, step_opt) ->
+      step_opt <> Just Core_reduction.Step_blocked2
+    ) tid_steps in
   read_config >>= fun conf ->
   begin if execution_mode_is_random conf then
     (* HACK The problem is that some threads are blocked (they wait
@@ -1430,14 +1439,8 @@ let rec driver2 with_concurrency =
        implement back tracking. Since we haven't, we temporarily
        switch to exhaustive mode and also compute the steps of the
        other threads. *)
-(*
-    ND.bindExhaustive (ND.pick (SK_misc ["driver 2"]) non_blocked_th_sts)
-                      (fun (tid, th_info) ->
-                       ND.pick (SK_misc ["driver 3"]) $
-                        Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info)
-*)
     ND.bindExhaustive
-      (ND.pick (SK_misc ["driver 2"]) tid_steps)
+      (ND.pick (SK_misc ["driver 2"]) non_blocked)
       (fun (tid, step_opt) ->
          let () = Debug.print_debug 3 [] (fun () ->
            show tid ^ " ==> " ^ Maybe.maybe "Nothing" show step_opt
@@ -1450,32 +1453,23 @@ let rec driver2 with_concurrency =
                ND.return ()
          end)
    else begin
-    let non_blocked =
-      List.filter (fun (tid, step_opt) ->
-        step_opt <> Just Core_reduction.Step_blocked2
-      ) tid_steps in
-    begin
-      if List.length non_blocked = 0 then
-        let () = Debug.print_debug 5 [] (fun () ->
-          "|tid_steps| = " ^ show (List.length tid_steps) ^ "\n" ^
-          show tid_steps
-        ) in
-        ND.return ()
-      else
-        ND.return ()
-    end >>= fun () ->
-    ND.pick (SK_misc ["driver non_blocked"]) non_blocked >>= function
-      | (_, Nothing) ->
-          (* TODO: hack hack, should just exit *)
+      begin
+        if List.length non_blocked = 0 then
+          let () = Debug.print_debug 5 [] (fun () ->
+            "|tid_steps| = " ^ show (List.length tid_steps) ^ "\n" ^
+            show tid_steps
+          ) in
           ND.return ()
-      | (_, Just step) ->
-      process_core_step2 with_concurrency driver2 step
-    end
-    (*
-    ND.pick (SK_misc ["driver 4"]) non_blocked_th_sts >>= fun (tid, th_info) ->
-    ND.pick (SK_misc ["driver 5"]) (Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info)
-      >>= (process_core_step2 with_concurrency driver2)
-    *)
+        else
+          ND.return ()
+      end >>= fun () ->
+      ND.pick (SK_misc ["driver non_blocked"]) non_blocked >>= function
+        | (_, Nothing) ->
+            (* TODO: hack hack, should just exit *)
+            ND.return ()
+        | (_, Just step) ->
+        process_core_step2 with_concurrency driver2 step
+      end
     end
   end
 
