@@ -9,6 +9,7 @@ import Cerb_attributes
 
 (* TODO *)
 import Core_run
+import Builtins
 
 module Cmm = struct
   include Cmm_aux
@@ -304,8 +305,6 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               end
         end
     
-    | Ecase (Pexpr _ () (PEconstrained xs)) _ ->
-        error "TODO: Core_reduction.one_step, Ecase PEconstrained"
     | Ecase pe pat_es ->
         (* reduction: CASE + CASE-UNDEF *)
         Just match valueFromPexpr pe with
@@ -500,7 +499,7 @@ let rec is_unseq_with_ccall_aux acc = function
       is_unseq_with_ccall_aux false ctx'
 end
 
-val is_unseq_with_ccall: Core_run.context -> bool
+val is_unseq_with_ccall: Core_run_aux.context -> bool
 let is_unseq_with_ccall ctx =
   is_unseq_with_ccall_aux false ctx
 
@@ -606,13 +605,6 @@ let rec apply_ctx ctx expr =
   end
 
 
-let act_valueFromPexpr = function
-  | Pexpr _ _ (PEconstrained _) ->
-      error "Core_reduction.step_action => PEconstrained"
-  | z ->
-      valueFromPexpr z
-end
-
 type action_step =
   | ACTION_REQUEST of string * Loc.t * action_request2 (Core.expr core_run_annotation)
   | ACTION_EVAL of string * core_runM (Core.action core_run_annotation)
@@ -627,7 +619,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
     Action loc act_annots z in
   match act with
     | Create pe1 pe2 pref ->
-        match (act_valueFromPexpr pe1, act_valueFromPexpr pe2) with
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
               ACTION_REQUEST
                 "CreateRequest"
@@ -647,7 +639,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
               end
         end
     | CreateReadOnly pe1 pe2 pe3 pref ->
-        match (act_valueFromPexpr pe1, act_valueFromPexpr pe2, act_valueFromPexpr pe3) with
+        match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
           | (Just (Vobject (OVinteger ival)), Just (Vctype ty), Just cval3) ->
               match memValueFromValue tagDefs (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
                 | Just mval ->
@@ -676,10 +668,8 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                 E.return (wrap (CreateReadOnly (Caux.mk_value_pe cval1) (Caux.mk_value_pe cval2) (Caux.mk_value_pe cval3) pref))
               end
         end
-    | Store is_locking pe1 pe2 (Pexpr _ () (PEconstrained xs3)) mo ->
-        error "TODO: Core_reduction.step_action => Store pe1 pe2 PEconstrained"
     | Store is_locking pe1 pe2 pe3 mo ->
-        match (act_valueFromPexpr pe1, act_valueFromPexpr pe2, act_valueFromPexpr pe3) with
+        match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptrval)), Just cval) ->
               match memValueFromValue tagDefs (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval with
                 | Just mval ->
@@ -716,7 +706,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
               end
         end
     | Load pe1 pe2 mo ->
-        match (act_valueFromPexpr pe1, act_valueFromPexpr pe2) with
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptrval)))  ->
               ACTION_REQUEST
                 "LoadRequest"
@@ -746,7 +736,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
     | SeqRMW _ _ _ _ _ ->
         error "Core_reduction.step_action ==> SeqRMW" (* this should not be possible *)
     | Alloc pe1 pe2 pref ->
-        match (act_valueFromPexpr pe1, act_valueFromPexpr pe2) with
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
               ACTION_REQUEST
                 "AllocRequest"
@@ -766,7 +756,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
               end
         end
     | Kill kind pe ->
-        match act_valueFromPexpr pe with
+        match valueFromPexpr pe with
           | Just (Vobject (OVpointer ptrval)) ->
               ACTION_REQUEST
                 "KillRequest"

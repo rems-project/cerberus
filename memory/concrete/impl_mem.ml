@@ -2393,12 +2393,12 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
     IV (Prov_none, Z.of_float fval)
   
   let eq_ival (IV (_, n1)) (IV (_, n2)) =
-    Some (Z.equal n1 n2)
+    Z.equal n1 n2
   let lt_ival (IV (_, n1)) (IV (_, n2)) =
-    Some (Z.compare n1 n2 = -1)
+    Z.compare n1 n2 = -1
   let le_ival (IV (_, n1)) (IV (_, n2)) =
     let cmp = Z.compare n1 n2 in
-    Some (cmp = -1 || cmp = 0)
+    cmp = -1 || cmp = 0
   
   let unspecified_mval ty =
     MVunspecified ty

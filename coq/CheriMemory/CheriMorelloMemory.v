@@ -2941,13 +2941,13 @@ Module Type CheriMemoryImpl
   Definition is_specified_ival (ival : integer_value) : bool := true.
 
   Definition eq_ival (n1 n2: integer_value) :=
-    Some (num_of_int n1 =? num_of_int n2).
+    num_of_int n1 =? num_of_int n2.
 
   Definition lt_ival (n1 n2: integer_value) :=
-    Some (num_of_int n1 <? num_of_int n2).
+    num_of_int n1 <? num_of_int n2.
 
   Definition le_ival (n1 n2: integer_value) :=
-    Some (num_of_int n1 <=? num_of_int n2).
+    num_of_int n1 <=? num_of_int n2.
 
   Definition zero_fval : float := PrimFloat.zero.
 

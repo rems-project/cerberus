@@ -142,8 +142,6 @@ let dtree_of_pexpr pexpr =
           Dleaf (pp_ctor "PEimpl" ^^^ !^ (ansi_format [Red] "TODO"))
       | PEval cval ->
           Dnode (pp_ctor "PEval", [dtree_of_value cval])
-      | PEconstrained xs ->
-          Dleaf (pp_ctor "PEconstrained" ^^^ !^ (ansi_format [Red] "TODO"))
       | PEundef (loc, ub) ->
           Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
       | PEerror (str, pe) ->

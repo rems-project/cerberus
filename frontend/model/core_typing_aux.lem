@@ -231,11 +231,6 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
         E.return (PEimpl iCst)
     | PEval cval ->
         E.return (PEval cval)
-    | PEconstrained xs ->
-        PEconstrained <$> E.mapM (fun (cs, pe) ->
-          export_pexpr pe >>= fun pe' ->
-          E.return (cs, pe')
-        ) xs
     | PEundef loc ub ->
         E.return (PEundef loc ub)
     | PEerror str pe ->
@@ -362,9 +357,6 @@ let rec inject_inferred infer (Pexpr _ pexpr_) =
         
     | PEval cval ->
         
-(*
-    | PEconstrained of list (Mem.mem_iv_constraint  * (generic_pexpr 'bty 'sym)) (* constrained value *)
-*)
     | PEundef _ ->
         
     | PEerror _ pe ->

@@ -76,8 +76,6 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       acc
   | PEval _ ->
       acc
-  | PEconstrained cpes ->
-      List.foldl (fun acc (_, pe) -> free_pexpr acc pe) acc cpes
   | PEundef _ _ ->
       acc
   | PEerror _ pe ->

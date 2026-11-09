@@ -297,11 +297,11 @@ module CHERIMorello : Memory = struct
                          | MC_empty ->
                             true
                          | MC_eq (ival1, ival2) ->
-                            Stdlib.Option.value (MM.eq_ival ival1 ival2) ~default:false
+                            MM.eq_ival ival1 ival2
                          | MC_le (ival1, ival2) ->
-                            Stdlib.Option.value (MM.le_ival ival1 ival2) ~default:false
+                            MM.le_ival ival1 ival2
                          | MC_lt (ival1, ival2) ->
-                            Stdlib.Option.value (MM.lt_ival ival1 ival2) ~default:false
+                            MM.lt_ival ival1 ival2
                          | MC_in_device _ ->
                             failwith "TODO: Concrete, with_constraints: MC_in_device"
                          | MC_or (cs1, cs2) ->

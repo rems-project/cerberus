@@ -147,12 +147,6 @@ module Rewriter = functor (Eff: Monad) -> struct
       | PEimpl _
       | PEval _ ->
           return pexpr
-      | PEconstrained xs ->
-          mapM (fun (x, pe) ->
-            aux pe >>= fun pe' ->
-            return (x, pe')
-          ) xs >>= fun xs' ->
-          return_wrap (PEconstrained xs')
       | PEundef _ ->
           return pexpr
       | PEerror (str, pe) ->

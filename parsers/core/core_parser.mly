@@ -353,8 +353,6 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         Eff.return (Pexpr (annot, (), PEval (Vctype ty')))
     | PEval _cval ->
         failwith "WIP: Core parser -> PEval"
-    | PEconstrained _ ->
-        assert false
     | PEundef (loc, ub) ->
         Eff.return (Pexpr (annot, (), PEundef (loc, ub)))
     | PEerror (str, _pe) ->
@@ -1525,7 +1523,6 @@ core_integer_type:
 
 value:
 (* TODO:
-  | Vconstrained of list (list Mem.mem_constraint * value)
   | Vobject of object_value
   | Vloaded of object_value
   | Vunspecified of ctype

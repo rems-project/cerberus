@@ -230,7 +230,6 @@ type generic_pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEsym of 'sym
  | PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
  | PEval of value
- | PEconstrained of list (Mem.mem_iv_constraint * (generic_pexpr 'bty 'sym)) (* constrained value *)
  | PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | PEerror of string * (generic_pexpr 'bty 'sym) (* impl-defined static error *)
  | PEctor of ctor * list (generic_pexpr 'bty 'sym) (* data constructor application *)
