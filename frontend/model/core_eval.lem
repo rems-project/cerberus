@@ -1,13 +1,13 @@
 open import Pervasives
 
-open import Utils
+import Utils
 open import Core
 open import Core_run_aux Errors
 import Mem
 import AilTypesAux
 import Loc Symbol Exception_undefined Pp
 
-import Ctype Ctype_aux Core_aux
+import Ctype Core_aux
 module Caux = Core_aux
 
 module EU  = Exception_undefined
@@ -33,7 +33,7 @@ let mk_wrapI ity ival =
         let dlt = max - min + 1 in
         match Mem.eval_integer_value (Mem.op_ival Mem_common.IntRem_f ival (Mem.integer_ival dlt)) with
           | Nothing ->
-              error "Core_eval.mk_wrapI"
+              Utils.error "Core_eval.mk_wrapI"
           | Just r ->
               Mem.integer_ival begin
                 if r <= max then
@@ -43,7 +43,7 @@ let mk_wrapI ity ival =
               end
         end
     | _ ->
-        error "Core_eval.mk_wrapI"
+        Utils.error "Core_eval.mk_wrapI"
   end
 
 (*
@@ -61,7 +61,7 @@ let mk_wrapI ity ival =
 let mk_conv_int ity ival =
   match Mem.eval_integer_value ival with
     | Nothing ->
-        error "Core_eval.mk_conv_int"
+        Utils.error "Core_eval.mk_conv_int"
     | Just n ->
         if Ctype.integerTypeEqual ity Ctype.Bool then
           Mem.integer_ival (if n = 0 then 0 else 1)
@@ -76,7 +76,7 @@ let mk_conv_int ity ival =
                   (* TODO need to have the impl-def <Integer.conv_nonrepresentable_signed_integer>(ty, n) (if ity is unsigned) *)
                   mk_wrapI ity n_ival
             | _ ->
-                error "Core_eval.mk_conv_int"
+                Utils.error "Core_eval.mk_conv_int"
           end
     end
 
@@ -107,7 +107,7 @@ let mk_call_catch_exceptional_condition ity iop ival1 ival2 =
         else
           Nothing
     | _ ->
-        error "Core_eval.mk_call_catch_exceptional_condition"
+        Utils.error "Core_eval.mk_call_catch_exceptional_condition"
   end
 
 
@@ -147,7 +147,7 @@ let call_function file f_nm arg_cvals =
   end function
     | Fun _ params body_pe ->
         if List.length params <> List.length arg_cvals then
-          error (
+          Utils.error (
             (*  TODO: clean *)
             "CALL(" (*^ Pp.stringFromCore_value (Vobject (OVcfunction f_nm)) *)^
             ") |params|= " ^ show (List.length params) ^ " <> |args|= " ^ show (List.length arg_cvals)
@@ -155,11 +155,11 @@ let call_function file f_nm arg_cvals =
         else
           Exception.return $ Utils.foldl2 (fun acc (a, _) cval -> Caux.subst_sym_pexpr a cval acc) body_pe params arg_cvals
     | ProcDecl _ _ _ ->
-        error "Core_eval.call_function, called on a ProcDecl"
+        Utils.error "Core_eval.call_function, called on a ProcDecl"
     | BuiltinDecl _ _ _ ->
-        error "Core_eval.call_function, called on a BuiltinDecl"
+        Utils.error "Core_eval.call_function, called on a BuiltinDecl"
     | Proc _ _ _ _ _ ->
-        error "Core_eval.call_function, called on a Proc"
+        Utils.error "Core_eval.call_function, called on a Proc"
   end
 
 
@@ -220,7 +220,7 @@ let step_eval_peop loc self binop pe1 pe2 =
           | OpRem_f -> Mem_common.IntRem_f
           | OpExp   -> Mem_common.IntExp
           | _ ->
-              error ("Core_eval.eval_pexpr, PEop Vinteger Vinteger: " ^ show binop)
+              Utils.error ("Core_eval.eval_pexpr, PEop Vinteger Vinteger: " ^ show binop)
         end in
         EU.return (PEval (Vobject (OVinteger (Mem.op_ival iop ival1 ival2))))
 
@@ -231,7 +231,7 @@ let step_eval_peop loc self binop pe1 pe2 =
           | OpMul -> Mem_common.FloatMul
           | OpDiv -> Mem_common.FloatDiv
           | _ ->
-            error ("Core_eval.eval_pexpr, PEop Vfloating Vfloating " ^ show binop)
+            Utils.error ("Core_eval.eval_pexpr, PEop Vfloating Vfloating " ^ show binop)
         end in
         EU.return (PEval (Vobject (OVfloating (Mem.op_fval fop fval1 fval2))))
     
@@ -298,12 +298,12 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
           | Just sym -> sym
           | Nothing -> sym
         end in
-        match Core_aux.lookup_env sym env with
+        match Caux.lookup_env sym env with
           | Nothing ->
               (* NOTE: check if it is a procedure pointer *)
               match Map.lookup sym file.funs with
                 | Just (Proc _ _ _ _ _) ->
-                    EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval (Ctype.Ctype [] Ctype.Void)))))
+                    EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval Ctype.void))))
                 | _ ->
                     EU.fail (Unresolved_symbol loc sym)
               end
@@ -360,7 +360,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
                 | _ ->
-                    error ("Core_eval ivmax" ^ (* DEBUG *)
+                    Utils.error ("Core_eval ivmax" ^ (* DEBUG *)
                            Pp.stringFromCore_expr (Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval (Vctype ty)))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civmin, Just [Vctype ty]) ->
@@ -368,7 +368,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
                 | _ ->
-                    error ("Core_eval ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^ (* DEBUG *)
+                    Utils.error ("Core_eval ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^ (* DEBUG *)
                                Pp.stringFromCore_expr (Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval (Vctype ty)))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civsizeof, Just [Vctype ty]) ->
@@ -382,28 +382,28 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_complement_ival ity ival)))
                 | _ ->
-                    error "Core_Eval ivCOMPL, not (is_integer ty)"
+                    Utils.error "Core_Eval ivCOMPL, not (is_integer ty)"
               end
           | (CivAND, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
               match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_and_ival ity ival1 ival2)))
                 | _ ->
-                    error "Core_Eval ivAND, not (is_integer ty)"
+                    Utils.error "Core_Eval ivAND, not (is_integer ty)"
               end
           | (CivOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
               match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_or_ival ity ival1 ival2)))
                 | _ ->
-                    error "Core_Eval ivOR, not (is_integer ty)"
+                    Utils.error "Core_Eval ivOR, not (is_integer ty)"
               end
           | (CivXOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
               match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_xor_ival ity ival1 ival2)))
                 | _ ->
-                    error "Core_Eval ivXOR, not (is_integer ty)"
+                    Utils.error "Core_Eval ivXOR, not (is_integer ty)"
               end
           | (Cspecified, Just [Vobject oval]) ->
               EU.return $ PEval (Vloaded (LVspecified oval))
@@ -432,7 +432,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                 | Just pe'' ->
                     EU.return (strip pe'')
                 | Nothing ->
-                    error ("PEcase, mismatched ==> [" ^ Loc.stringFromLocation loc ^ "]" ^ Pp.stringFromCore_value cval)
+                    Utils.error ("PEcase, mismatched ==> [" ^ Loc.stringFromLocation loc ^ "]" ^ Pp.stringFromCore_value cval)
               end
           | pe' ->
               EU.return (PEcase pe' pat_pes)
@@ -541,7 +541,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
         match Caux.valueFromPexprs pes' with
           | Just cvals ->
               let xs = List.map (fun (memb_ident, cval) ->
-                match snd $ fromJust "Core_eval, PEstruct 1,1" (Map.lookup tag_sym file.tagDefs) with
+                match snd $ Utils.fromJust "Core_eval, PEstruct 1,1" (Map.lookup tag_sym file.tagDefs) with
                   | Ctype.StructDef membrs flexible_opt ->
                       (* let () = match flexible_opt with
                         | Nothing ->
@@ -550,11 +550,11 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                             (* TODO(check): PEstruct are only created at static init and struct a value loads, which should be ignoring any flexible array member *)
                             error "Core_eval, PEstruct => found a flexible array member"
                       end in *)
-                      let (_, _, _, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
-                      let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue file.tagDefs memb_ty cval) in
+                      let (_, _, _, memb_ty) = Utils.fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
+                      let mval = Utils.fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue file.tagDefs memb_ty cval) in
                       (memb_ident, memb_ty, mval)
                   | Ctype.UnionDef _ ->
-                      error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
+                      Utils.error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
                 end
               ) (List.zip idents cvals) in
               EU.return (PEval (Vobject (OVstruct tag_sym xs)))
@@ -568,13 +568,13 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
-              match snd $ fromJust "Core_eval, PEunion 1,1" (Map.lookup tag_sym file.tagDefs) with
+              match snd $ Utils.fromJust "Core_eval, PEunion 1,1" (Map.lookup tag_sym file.tagDefs) with
                 | Ctype.UnionDef membrs ->
-                    let (_, _, _, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
-                    let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue file.tagDefs memb_ty cval) in
+                    let (_, _, _, memb_ty) = Utils.fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
+                    let mval = Utils.fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue file.tagDefs memb_ty cval) in
                     EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
                 | Ctype.StructDef _ _ ->
-                      error "Core_eval.step_eval_pexpr, PEunion found a StructDef"
+                      Utils.error "Core_eval.step_eval_pexpr, PEunion found a StructDef"
                 end
           | Nothing ->
               EU.return (PEunion tag_sym memb_ident pe')
@@ -619,7 +619,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Just (Vloaded (LVunspecified _)) ->
               EU.fail $ Illformed_program "function pointer has an unspecified value"
           | _ ->
-            error "Core_eval.step_eval_pexpr, PEcfunction expects a pointer"
+            Utils.error "Core_eval.step_eval_pexpr, PEcfunction expects a pointer"
         end
     | PEmemberof tag_sym memb_ident pe ->
         self pe >>= fun pe' ->
@@ -637,7 +637,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               if tag_sym <> tag_sym' then
                 EU.fail $ Illformed_program ("PEmemberof(union) ==> mismatched tags: " ^ show tag_sym ^ " vs " ^ show tag_sym')
               else if memb_ident <> memb_ident' then
-                error "TODO: evaluation of PEmemberof => union puning"
+                Utils.error "TODO: evaluation of PEmemberof => union puning"
               else
                 EU.return (PEval (snd (Caux.valueFromMemValue mval)))
           | Just cval ->
