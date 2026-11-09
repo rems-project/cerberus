@@ -524,13 +524,13 @@ let rec drive_core_thread2 tid =
               , let () = Debug.print_debug 3 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
                 liftCore_run step_m >>= fun th_st' ->
                 match tsk with
-                  | Core_run.TSK_Misc ->
+                  | Core_reduction.TSK_Misc ->
                       ND.return ()
-                  | Core_run.TSK_Return sym mval_opt ->
+                  | Core_reduction.TSK_Return sym mval_opt ->
                       ND.update $ fun dr_st ->
                         <| dr_st with trace= ME_function_return sym mval_opt :: dr_st.trace |>
                   | _ ->
-                      Utils.error "TODO: drive_core_thread2, non TSK_Misc"
+                      Utils.error "TODO: drive_core_thread2, non Core_reduction.TSK_Misc"
                 end >>= fun () ->
                 begin
                   (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> "tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
@@ -547,15 +547,15 @@ let rec drive_core_thread2 tid =
         ( SK_tau debug_str
         , let () = Debug.print_debug 3 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
           match tsk with
-            | Core_run.TSK_Misc ->
+            | Core_reduction.TSK_Misc ->
                 ND.return ()
-            | Core_run.TSK_Return sym mval_opt ->
+            | Core_reduction.TSK_Return sym mval_opt ->
                 ND.update $ fun dr_st ->
                 <| dr_st with
                   trace= ME_function_return sym mval_opt :: dr_st.trace
                 |>
             | _ ->
-                Utils.error "TODO: drive_core_thread2, non TSK_Misc"
+                Utils.error "TODO: drive_core_thread2, non Core_reduction.TSK_Misc"
           end >>= fun () ->
           
           begin
@@ -766,7 +766,7 @@ let perform_action_request2 with_concurrency loc tid request =
     if with_concurrency then
       Utils.error "TODO: perform_action_request2 ==> concurrency"
     else
-      liftCore_run (SEU.runS Core_run.fresh_action_id') >>= fun aid ->
+      liftCore_run (SEU.runS Core_run.fresh_action_id) >>= fun aid ->
       action_request_sequential2 loc tid aid request
   end
 
@@ -989,7 +989,7 @@ let advance_step tid step =
         ND.return NOWAKEUP
     | Core_reduction.Step_with_runstate2 rsk step_m ->
         match rsk with
-          | Core_reduction.RSK_tau _ (Core_run.TSK_Return sym mval_opt) ->
+          | Core_reduction.RSK_tau _ (Core_reduction.TSK_Return sym mval_opt) ->
               record_trace_event (ND.return (ME_function_return sym mval_opt))
           | _ ->
               ND.return ()
@@ -1003,7 +1003,7 @@ let advance_step tid step =
 
     | Core_reduction.Step_tau2 debug_str tsk th_st' ->
         match tsk with
-          | Core_run.TSK_Return sym mval_opt ->
+          | Core_reduction.TSK_Return sym mval_opt ->
               record_trace_event (ND.return (ME_function_return sym mval_opt))
           | _ ->
               ND.return ()
@@ -1190,7 +1190,7 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
             match step with
               | Core_reduction.Step_with_runstate2 rsk step_m ->
                   match rsk with
-                    | Core_reduction.RSK_tau _ (Core_run.TSK_Return sym mval_opt) ->
+                    | Core_reduction.RSK_tau _ (Core_reduction.TSK_Return sym mval_opt) ->
                         ND.update (fun dr_st ->
                           <| dr_st with trace= ME_function_return sym mval_opt :: dr_st.trace |>
                         )
@@ -1206,7 +1206,7 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
               
               | Core_reduction.Step_tau2 debug_str tsk th_st' ->
                   match tsk with
-                    | Core_run.TSK_Return sym mval_opt ->
+                    | Core_reduction.TSK_Return sym mval_opt ->
                         ND.update (fun dr_st ->
                           <| dr_st with trace= ME_function_return sym mval_opt :: dr_st.trace |>
                         )

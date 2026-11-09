@@ -20,7 +20,6 @@ module Caux = Core_aux
 module EU  = Exception_undefined
 module SEU = State_exception_undefined
 
-(* TODO: duplicate from Core_run *)
 module E = struct
   let inline return = SEU.return
   let inline undef  = SEU.undef
@@ -58,6 +57,50 @@ let rec full_eval_pexpr th_st core_extern mem_st file pe =
         E.return cval
   end)
 
+
+(* Fetch the body and symbol environment for a Core procedure *)
+val fetch_proc_info:
+  map Symbol.sym Symbol.sym ->
+  Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
+  Exception.exceptM
+    (map Symbol.sym Core.value * Core.expr core_run_annotation) Errors.core_run_cause
+let fetch_proc_info core_extern file psym cvals =
+  let bTy_params_body_opt =
+    (* NOTE: the order of lookups implies that user procedure cannot hide the
+       ones from stdlib, do we really want that? *)
+    match Map.lookup psym file.stdlib with
+      | Just (Proc _ _ bTy params body) ->
+          Just (bTy, params, body)
+      | _ ->
+          let core_sym = match Map.lookup psym core_extern with
+            | Just sym -> sym
+            | Nothing -> psym
+          end in
+          match Map.lookup core_sym file.funs with
+            | Just (Proc _ _ bTy params body) ->
+                Just (bTy, params, body)
+            | _ ->
+                Nothing
+          end
+    end in
+  match bTy_params_body_opt with
+    | Just (bTy, params, body) ->
+        if List.length params <> List.length cvals then
+          Exception.fail (Errors.Illformed_program begin
+            "calling procedure `" ^ show psym ^
+            "' with the wrong number of args: |args|=" ^
+            show (List.length cvals) ^ "expecting: " ^
+            show (List.length params)
+          end)
+        else
+          let env = Utils.foldl2 (fun acc (sym, _) cval ->
+            Map.insert sym cval acc
+          ) Map.empty params cvals in
+          Exception.return (env, body)
+    | Nothing ->
+        Exception.fail
+          (Errors.Illformed_program ("calling an unknown procedure: " ^ show psym))
+  end
 
 
 
@@ -100,9 +143,14 @@ type action_request2 'a =
   | KillRequest2 of (* is_dynamic *)bool * Mem.pointer_value * (Cmm.aid -> 'a)
 
 
+type tau_step_kind =
+  | TSK_Ccall of Symbol.sym * list Mem.mem_value
+  | TSK_Return of Symbol.sym * maybe Mem.mem_value
+  | TSK_Misc
+
 type runstate_step_kind =
   | RSK_eval of string
-  | RSK_tau of string * Core_run.core_tau_step_kind
+  | RSK_tau of string * tau_step_kind
 
 type fs_oper_or_done =
   | FS_done of Core.value
@@ -111,7 +159,7 @@ type fs_oper_or_done =
 type core_step2 =
   | Step_ccall2 of Mem_common.thread_id * core_runM thread_state
   | Step_with_runstate2 of runstate_step_kind * core_runM thread_state
-  | Step_tau2 of string * Core_run.core_tau_step_kind * thread_state
+  | Step_tau2 of string * tau_step_kind * thread_state
   
   | Step_action_request2 of string * Loc.t * (* set Cmm.aid * set Cmm.aid * set Cmm.aid * *)
                             Mem_common.thread_id *
@@ -141,11 +189,11 @@ instance (Show core_step2)
               | RSK_tau debug_str kind' ->
                 let kind'_str =
                   match kind' with
-                    | Core_run.TSK_Ccall sym _ ->
+                    | TSK_Ccall sym _ ->
                         "TSK_Ccall(" ^ show sym ^ ")"
-                    | Core_run.TSK_Return sym _ ->
+                    | TSK_Return sym _ ->
                         "TSK_Return(" ^ show sym ^ ")"
-                    | Core_run.TSK_Misc ->
+                    | TSK_Misc ->
                         "TSK_Misc"
                   end in
                 "RSK_tau[" ^ debug_str ^ ", " ^ kind'_str ^ "]"
@@ -955,7 +1003,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
     | Implementation.BuiltinFunction "errno" ->
         match pes with
           | [] ->
-              Step_tau2 "errno" Core_run.TSK_Misc (
+              Step_tau2 "errno" TSK_Misc (
                 wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_value_pe (Vobject (OVpointer th_st.errno)))))
               )
           | _ ->
@@ -982,7 +1030,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
         end
     (* NOTE: some GCC builtins *)
     | Implementation.BuiltinFunction "generic_ffs" ->
-        Step_with_runstate2 (RSK_tau "Eproc builtin_generic_ffs" Core_run.TSK_Misc) begin
+        Step_with_runstate2 (RSK_tau "Eproc builtin_generic_ffs" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -997,7 +1045,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           end
         end
     | Implementation.BuiltinFunction "ctz" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_ctz" Core_run.TSK_Misc) begin
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_ctz" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1013,7 +1061,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
         end
     (* TODO: factorise ... *)
     | Implementation.BuiltinFunction "bswap16" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap16" Core_run.TSK_Misc) begin
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap16" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1028,7 +1076,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           end
         end
     | Implementation.BuiltinFunction "bswap32" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap32" Core_run.TSK_Misc) begin
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap32" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1043,7 +1091,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           end
         end
     | Implementation.BuiltinFunction "bswap64" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap64" Core_run.TSK_Misc) begin
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap64" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1096,12 +1144,12 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                   | Just psym ->
                       match Map.lookup psym file.funinfo with
                         | Just (_, _, ret_ty, _, _, _) ->
-                            Core_run.TSK_Return psym (Core_aux.memValueFromValue file.tagDefs ret_ty cval)
+                            TSK_Return psym (Core_aux.memValueFromValue file.tagDefs ret_ty cval)
                         | Nothing ->
-                            Core_run.TSK_Misc
+                            TSK_Misc
                       end
                   | Nothing ->
-                      Core_run.TSK_Misc
+                      TSK_Misc
                 end in
               (* reduction: RETURN *)
               Step_tau2 "end of procedure" tsk begin
@@ -1116,14 +1164,12 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         current_proc_opt= parent_proc_opt; |>
                 end
               end
-          | Stack_cons _ _ _ ->
-              error "Core_reduction ==> Stack_cons"
         end
     
     | (CTX, (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr')))) ->
         (* {A}v -> v   (in empty context) *)
         (* reduction: REMOVE-ANNOT *)
-        Step_tau2 "CTX, Eannot(value)" Core_run.TSK_Misc begin
+        Step_tau2 "CTX, Eannot(value)" TSK_Misc begin
           <| th_st with arena= expr' |>
         end
     
@@ -1191,14 +1237,14 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           | Ebound (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr'))) ->
               (* bound({A}v)-> v *)
               (* reduction: REMOVE-BOUND *)
-              Step_tau2 "CTX, Ebound Eannot(value)" Core_run.TSK_Misc begin
+              Step_tau2 "CTX, Ebound Eannot(value)" TSK_Misc begin
                 wrap_expr expr'
               end
           
           | Ebound (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr') ->
               (* bound(v)-> v *)
               (* reduction: REMOVE-BOUND *)
-              Step_tau2 "CTX, Ebound(value)" Core_run.TSK_Misc begin
+              Step_tau2 "CTX, Ebound(value)" TSK_Misc begin
                 wrap_expr expr'
               end
           
@@ -1279,7 +1325,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                           error "TODO: NO_BOUND (Neg)"
                       | BOUND_NO_SSEQ ctx_bound ctxA ->
                           let debug_str = "Neg Action, no break ==> " ^ Loc.stringFromLocation loc in
-                          Step_with_runstate2 (RSK_tau debug_str Core_run.TSK_Misc) begin
+                          Step_with_runstate2 (RSK_tau debug_str TSK_Misc) begin
                             E.fresh_excluded_id >>= fun n ->
                             let ctxA' = add_exclusion n ctxA in
                             let sym = Symbol.fresh () in
@@ -1294,14 +1340,14 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       | BOUND_WITH_SSEQ ctx_bound ctxA sseq_pat CTX sseq_e2 ->
                           (* TODO: check *)
                           (* Empty inner context, so no need to pull and annotate for exclusion *)
-                          Step_tau2 "Neg Action, CTX" Core_run.TSK_Misc begin
+                          Step_tau2 "Neg Action, CTX" TSK_Misc begin
                             <| th_st with arena= apply_ctx ctx_bound
                                                    (apply_ctx ctxA (Caux.mk_sseq_e sseq_pat (Expr [] (Eaction (Paction Pos act))) sseq_e2)) |>
                           end
                           
                       | BOUND_WITH_SSEQ ctx_bound ctxA sseq_pat ctxB sseq_e2 ->
                           let debug_str = "Neg Action, with break" ^ Loc.stringFromLocation loc in
-                          Step_with_runstate2 (RSK_tau debug_str Core_run.TSK_Misc) begin
+                          Step_with_runstate2 (RSK_tau debug_str TSK_Misc) begin
                             E.fresh_excluded_id >>= fun n ->
                             let ctxB' = add_exclusion n ctxB in
                             let expr' =
@@ -1328,7 +1374,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                             E.undef th_st.current_loc [Undefined.UB_CERB003_invalid_function_pointer]
                         | Just psym ->
                             SEU.runEU (
-                              Exception.bind (Core_run.call_proc core_extern file psym cvals)
+                              Exception.bind (fetch_proc_info core_extern file psym cvals)
                                 EU.return
                             ) >>= fun (proc_env, expr) ->
                             E.return <| th_st with
@@ -1360,7 +1406,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               Step_with_runstate2 (RSK_eval "Eproc") begin
                 E.mapM full_eval_pexpr' pes >>= fun cvals ->
                  SEU.runEU (
-                   Exception.bind (Core_run.call_proc core_extern file psym cvals)
+                   Exception.bind (fetch_proc_info core_extern file psym cvals)
                     EU.return
                  ) >>= fun (proc_env, expr) ->
                  E.return <| th_st with
@@ -1431,12 +1477,12 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 | Nothing ->
                     error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
                 | Just (TAU_WITH_RUNSTATE debug_str step_m) ->
-                    Step_with_runstate2 (RSK_tau debug_str Core_run.TSK_Misc) begin
+                    Step_with_runstate2 (RSK_tau debug_str TSK_Misc) begin
                       step_m >>= fun (env', expr') ->
                       E.return <| th_st with arena= apply_ctx ctx expr'; env= env' |>
                     end
                 | Just (TAU debug_str env' expr') ->
-                    Step_tau2 debug_str Core_run.TSK_Misc
+                    Step_tau2 debug_str TSK_Misc
                       <| th_st with arena= apply_ctx ctx expr'; env= env' |>
                 | Just (EVAL debug_str eval_m) ->
                     Step_with_runstate2 (RSK_eval debug_str) begin
