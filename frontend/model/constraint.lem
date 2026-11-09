@@ -209,8 +209,6 @@ type violation =
   | AtomicAddressArgumentMustBeAtomic of atomic_operations_synopsys * ctype
   | AtomicAddressArgumentMustBePointer of atomic_operations_synopsys * genType
   (* GNU extensions *)
-  (* ?: operator *)
-  | GNUConditionalOperatorInvalidOperandType of genType
   | GNUBuiltinChooseExprNotIntegerConstant
   | GNUFileScopeStatementExpression
   (* Byte *)
@@ -497,8 +495,6 @@ let std_of_violation = function
       "§7.17.1#5" :: std_of_atomic_operation_synopsis op
   | AtomicAddressArgumentMustBePointer op _ ->
       std_of_atomic_operation_synopsis op
-  | GNUConditionalOperatorInvalidOperandType _ ->
-      []
   | GNUBuiltinChooseExprNotIntegerConstant ->
       []
   | GNUFileScopeStatementExpression ->
