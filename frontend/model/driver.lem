@@ -156,10 +156,10 @@ val printf_eval_conv: driver_state -> Core_run_aux.thread_state -> Ctype.ctype -
 let printf_eval_conv dr_st th_st cty mval =
   let () = Debug.print_debug 4 [] (fun () -> "printf_eval_conv") in
   let (_, cval) = Core_aux.valueFromMemValue mval in
-  print_eval_conv_aux dr_st th_st $
+  print_eval_conv_aux dr_st th_st (
     Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
     [ Caux.mk_ctype_pe cty; Core.Pexpr [] () (Core.PEval cval)]
-
+  )
 
 val liftCore_run: forall 'a. Core_run_aux.core_runM 'a -> driverM 'a
 let liftCore_run m =
@@ -197,19 +197,20 @@ let drive_fs_step tid th_st dr_st fs_oper =
     <| th_st with Core_run_aux.arena= Core.Expr arena_annots (Core.Epure (Caux.mk_value_pe Core.Vunit)) |>
   in
   let update fs_st th_st =
-    ND.update $ fun dr_st ->
+    ND.update (fun dr_st ->
       let core_st' = Core_run.update_thread_state tid th_st dr_st.core_state in
       <| dr_st with
         fs_state= fs_st;
         core_state= core_st';
         dr_step_counter= dr_st.dr_step_counter + 1;
       |>
+    )
   in
   let store_error e =
     let errname = Fs.fs_string_of_error e in
     let err = Builtins.translate_errno ("__cerbvar_" ^ errname) in
     let err_mval = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival err) in
-    liftMem $ Mem.store (Loc.other "update errno") Ctype.signed_int false th_st.Core_run_aux.errno err_mval
+    liftMem (Mem.store (Loc.other "update errno") Ctype.signed_int false th_st.Core_run_aux.errno err_mval)
   in
   let return (fs_st, res) =
     match res with
@@ -217,7 +218,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
         store_error e >>
         update fs_st (th_st_from_int (0 - 1))
       | Right n ->
-        update fs_st $ th_st_from_int (integerFromNat n)
+        update fs_st (th_st_from_int (integerFromNat n))
     end
   in
   let store_buffer ptr (fs_st, res) =
@@ -226,7 +227,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
         store_error e >>
         update fs_st (th_st_from_int (0 - 1))
       | Right buf ->
-        let n = integerFromNat $ List.length buf in
+        let n = integerFromNat (List.length buf) in
         (* TODO: store chars is wrong here!! it adds a \0 in the end of the array *)
         liftMem (Formatted.store_chars_in_array false ptr buf) >>
         update fs_st (th_st_from_int n)
@@ -239,7 +240,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
         update fs_st (th_st_from_int (0 - 1))
       | Right buf ->
         let buf_trunc = List.take (natFromInteger max) buf in
-        let n = integerFromNat $ List.length buf_trunc in
+        let n = integerFromNat (List.length buf_trunc) in
         liftMem (Formatted.store_chars_in_array false ptr buf_trunc) >>
         update fs_st (th_st_from_int n)
     end
@@ -340,11 +341,11 @@ let drive_fs_step tid th_st dr_st fs_oper =
   in
   match fs_oper with
     | Core_run.FS_MKDIR path mode ->
-      return $ Fs.fs_mkdir dr_st.fs_state path mode
+      return (Fs.fs_mkdir dr_st.fs_state path mode)
     | Core_run.FS_OPEN path oflag mode_opt ->
-      return $ Fs.fs_open dr_st.fs_state path oflag mode_opt
+      return (Fs.fs_open dr_st.fs_state path oflag mode_opt)
     | Core_run.FS_CLOSE fd ->
-      return $ Fs.fs_close dr_st.fs_state fd
+      return (Fs.fs_close dr_st.fs_state fd)
     | Core_run.FS_WRITE fd buf size ->
       match natFromInteger fd with
       | 0 ->
@@ -354,50 +355,50 @@ let drive_fs_step tid th_st dr_st fs_oper =
       | 2 ->
         update_stderr (List.take (natFromInteger size) buf)
       | _ ->
-        return $ Fs.fs_write dr_st.fs_state fd buf size
+        return (Fs.fs_write dr_st.fs_state fd buf size)
       end
     | Core_run.FS_READ fd ptr size ->
-      store_buffer ptr $ Fs.fs_read dr_st.fs_state fd size
+      store_buffer ptr (Fs.fs_read dr_st.fs_state fd size)
     | Core_run.FS_PWRITE fd buf size off ->
-      return $ Fs.fs_pwrite dr_st.fs_state fd buf size off
+      return (Fs.fs_pwrite dr_st.fs_state fd buf size off)
     | Core_run.FS_PREAD fd ptr size off ->
-      store_buffer ptr $ Fs.fs_pread dr_st.fs_state fd size off
+      store_buffer ptr (Fs.fs_pread dr_st.fs_state fd size off)
     | Core_run.FS_UMASK mode ->
-      return $ Fs.fs_umask dr_st.fs_state mode
+      return (Fs.fs_umask dr_st.fs_state mode)
     | Core_run.FS_CHMOD path mode ->
-      return $ Fs.fs_chmod dr_st.fs_state path mode
+      return (Fs.fs_chmod dr_st.fs_state path mode)
     | Core_run.FS_CHDIR path ->
-      return $ Fs.fs_chdir dr_st.fs_state path
+      return (Fs.fs_chdir dr_st.fs_state path)
     | Core_run.FS_CHOWN path uid gid ->
-      return $ Fs.fs_chown dr_st.fs_state path uid gid
+      return (Fs.fs_chown dr_st.fs_state path uid gid)
     | Core_run.FS_LINK oldpath newpath ->
-      return $ Fs.fs_link dr_st.fs_state oldpath newpath
+      return (Fs.fs_link dr_st.fs_state oldpath newpath)
     | Core_run.FS_READLINK path ptr max ->
-      store_buffer_trunc ptr max $ Fs.fs_readlink dr_st.fs_state path
+      store_buffer_trunc ptr max (Fs.fs_readlink dr_st.fs_state path)
     | Core_run.FS_STAT path ptr ->
-      store_stat ptr $ Fs.fs_stat dr_st.fs_state path
+      store_stat ptr (Fs.fs_stat dr_st.fs_state path)
     | Core_run.FS_LSTAT path ptr ->
-      store_stat ptr $ Fs.fs_lstat dr_st.fs_state path
+      store_stat ptr (Fs.fs_lstat dr_st.fs_state path)
     | Core_run.FS_SYMLINK target lpath ->
-      return $ Fs.fs_symlink dr_st.fs_state target lpath
+      return (Fs.fs_symlink dr_st.fs_state target lpath)
     | Core_run.FS_RMDIR path ->
-      return $ Fs.fs_rmdir dr_st.fs_state path
+      return (Fs.fs_rmdir dr_st.fs_state path)
     | Core_run.FS_TRUNCATE path len ->
-      return $ Fs.fs_truncate dr_st.fs_state path len
+      return (Fs.fs_truncate dr_st.fs_state path len)
     | Core_run.FS_UNLINK path ->
-      return $ Fs.fs_unlink dr_st.fs_state path
+      return (Fs.fs_unlink dr_st.fs_state path)
     | Core_run.FS_LSEEK fd off whence ->
-      return $ Fs.fs_lseek dr_st.fs_state fd off whence
+      return (Fs.fs_lseek dr_st.fs_state fd off whence)
     | Core_run.FS_RENAME oldpath newpath ->
-      return $ Fs.fs_rename dr_st.fs_state oldpath newpath
+      return (Fs.fs_rename dr_st.fs_state oldpath newpath)
     | Core_run.FS_OPENDIR path ->
-      return $ Fs.fs_opendir dr_st.fs_state path
+      return (Fs.fs_opendir dr_st.fs_state path)
     | Core_run.FS_READDIR dir ->
-      store_dir $ Fs.fs_readdir dr_st.fs_state dir
+      store_dir (Fs.fs_readdir dr_st.fs_state dir)
     | Core_run.FS_REWINDDIR dir ->
       update (Fs.fs_rewinddir dr_st.fs_state dir) (th_st_from_void ())
     | Core_run.FS_CLOSEDIR dir ->
-      return $ Fs.fs_closedir dr_st.fs_state dir
+      return (Fs.fs_closedir dr_st.fs_state dir)
     | Core_run.FS_PRINTF fmt args ->
       liftMem (Formatted.printf th_st.Core_run_aux.current_loc (printf_eval_conv dr_st th_st) fmt args) >>= function
         | Left err ->
@@ -414,7 +415,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined buf) ->
-          let size = integerFromNat $ List.length buf in
+          let size = integerFromNat (List.length buf) in
           match natFromInteger fd with
           | 0 ->
             error "vprintf trying to output in the stdin"
@@ -423,7 +424,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
           | 2 ->
             update_stderr buf
           | _ ->
-            return $ Fs.fs_write dr_st.fs_state fd buf size
+            return (Fs.fs_write dr_st.fs_state fd buf size)
           end
         | Right (Undefined.Error loc str) ->
           ND.kill (ND.Error loc str)
@@ -435,7 +436,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined n) ->
-          update dr_st.fs_state $ th_st_from_int n
+          update dr_st.fs_state (th_st_from_int n)
         | Right (Undefined.Error loc str) ->
           ND.kill (ND.Error loc str)
         | Right (Undefined.Undef loc ubs) ->
@@ -1374,7 +1375,7 @@ let prepare_exit core_st cval =
 val process_core_step2: bool -> (bool -> driverM unit) -> Core_reduction.core_step2 -> driverM unit
 let process_core_step2 with_concurrency driver2 step =
   read_config >>= fun conf ->
-  as_step conf.Config.do_stepping step $ match step with
+  as_step conf.Config.do_stepping step match step with
   | Core_reduction.Step_action_request2 _ loc tid _ m_request ->
       liftCore_run m_request >>= fun request ->
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
@@ -1601,12 +1602,14 @@ let driver_globals with_concurrency file =
   ND.read (fun dr_st ->
     dr_st.core_file.Core.globs
   ) >>= fun globs ->
-  let glob_defs = List.reverse $ List.foldl (fun acc (sym, glb) ->
-    match glb with
-    | Core.GlobalDef (bTy, _) e -> (sym, bTy, e) :: acc
-    | Core.GlobalDecl _ -> acc
-    end) [] globs
-  in
+  let glob_defs = List.reverse (
+    List.foldl (fun acc (sym, glb) ->
+      match glb with
+      | Core.GlobalDef (bTy, _) e -> (sym, bTy, e) :: acc
+      | Core.GlobalDecl _ -> acc
+      end
+    ) [] globs
+  ) in
   ND.mapM_ (fun (glob_sym, glob_bTy, expr) ->
     let () = Debug.print_debug 6 [Debug.DB_driver] (fun () ->      (* DEBUG *)
       "Starting the evaluation of global `" ^ show glob_sym ^ "'"  (* DEBUG *)
