@@ -204,7 +204,6 @@ module BmcInline = struct
         | _ -> assert false
         end
     | PEval _  -> return pe_
-    | PEconstrained _ -> assert false
     | PEundef _ -> return pe_
     | PEerror _ -> return pe_
     | PEctor (ctor, pes) ->
@@ -792,7 +791,6 @@ module BmcSSA = struct
         update_inline_pexpr uid ssad_inlined_pe >>
         return pe_
     | PEval _ -> return pe_
-    | PEconstrained _ -> assert false
     | PEundef _ -> return pe_
     | PEerror _ -> return pe_
     | PEctor (ctor, pelist) ->
@@ -1288,7 +1286,6 @@ module BmcZ3 = struct
     | PEval cval ->
        get_file >>= fun file ->
        return (value_to_z3 cval file)
-    | PEconstrained _ -> assert false
     | PEundef _ ->
         get_file >>= fun file ->
         let sort = cbt_to_z3 bTy file in
@@ -2260,8 +2257,6 @@ module BmcBind = struct
         bind_pe inline_pe
     | PEval _ ->
         return []
-    | PEconstrained _ ->
-        assert false
     | PEundef _ ->
         return []
     | PEerror _ ->
@@ -2662,7 +2657,6 @@ module BmcVC = struct
        get_inline_pexpr uid >>= fun inline_pe ->
        vcs_pe inline_pe
     | PEval _           -> return []
-    | PEconstrained _   -> assert false
     | PEundef (loc, ub) -> return [(mk_false, VcDebugUndef (loc,ub))]
     | PEerror (str, _)  -> return [(mk_false, VcDebugStr (string_of_int uid ^ "_" ^ str))]
     | PEctor (ctor, pelist) ->
@@ -5144,7 +5138,6 @@ module BmcConcActions = struct
         do_taint_pe inline_pe
     | PEval cval ->
         return (Pset.empty Stdlib.compare)
-    | PEconstrained _ -> assert false
     | PEundef _ ->
         return (Pset.empty Stdlib.compare)
     | PEerror _ ->

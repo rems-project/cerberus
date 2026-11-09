@@ -197,11 +197,11 @@ let subf = M.op_fval Mem_common.FloatSub
 let mulf = M.op_fval Mem_common.FloatMul
 let divf = M.op_fval Mem_common.FloatDiv
 
-let eq n m = Option.get (M.eq_ival (Some M.initial_mem_state) n m)
-let lt n m = Option.get (M.lt_ival (Some M.initial_mem_state) n m)
-let gt n m = Option.get (M.lt_ival (Some M.initial_mem_state) m n)
-let le n m = Option.get (M.le_ival (Some M.initial_mem_state) n m)
-let ge n m = Option.get (M.le_ival (Some M.initial_mem_state) m n)
+let eq n m = M.eq_ival (Some M.initial_mem_state) n m
+let lt n m = M.lt_ival (Some M.initial_mem_state) n m
+let gt n m = M.lt_ival (Some M.initial_mem_state) m n
+let le n m = M.le_ival (Some M.initial_mem_state) n m
+let ge n m = M.le_ival (Some M.initial_mem_state) m n
 
 let valid_for_deref_ptrval p = return @@ M.validForDeref_ptrval p
 let memcmp p q r = return @@ M.memcmp p q r

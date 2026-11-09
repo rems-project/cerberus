@@ -52,7 +52,7 @@ let rec can_prop_and_rm binders (Pexpr (_, _, pe_)) =
       List.for_all (can_prop_and_rm binders) pes
   | PEstruct (_, fields) ->
       List.for_all (fun (_, pe1) -> can_prop_and_rm binders pe1) fields
-  | PEif _ | PElet _ | PEcase _ | PEconstrained _ ->
+  | PEif _ | PElet _ | PEcase _ ->
       false  (* not worth extra complexity *)
    | PEcall _ | PEcfunction _ ->
      false (* unsafe to replace with unit *)
@@ -265,7 +265,7 @@ let rec propagate_pexpr env (Pexpr (annots, bty, pe_) as pe) =
       (match Pmap.lookup s env with
        | Some pe' -> pe'
        | None     -> Pexpr (annots, bty, PEsym s))
-  | PEval _ | PEimpl _ | PEundef _ | PEerror _ | PEconstrained _ ->
+  | PEval _ | PEimpl _ | PEundef _ | PEerror _ ->
       pe
   | PElet (pat, pe1, pe2) ->
       let pe1' = propagate_pexpr env pe1 in

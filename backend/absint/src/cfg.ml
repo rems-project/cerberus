@@ -127,7 +127,6 @@ type ('a, 'bty) texpr =
   | TEaction of ('a, 'bty) taction
   | TEmemop of Mem_common.memop * ('a, 'bty) texpr list
   | TEimpl of Implementation.implementation_constant
-  | TEconstrained of (Mem.mem_iv_constraint * ('a, 'bty) texpr) list
   | TEundef of Cerb_location.t * Undefined.undefined_behaviour
   | TEerror of string * ('a, 'bty) texpr
   | TEctor of ctor * ('a, 'bty) texpr list
@@ -288,7 +287,6 @@ let rec show_texpr te =
     "memop" ^ parens (show_memop memop ^ ", " ^ comma_list self tes)
   | TEimpl i ->
     Implementation.string_of_implementation_constant i
-  | TEconstrained (ivs_tes) -> "constrained"
   | TEundef (_, ub) ->
     Undefined.stringFromUndefined_behaviour ub
   | TEerror (str, te) ->
@@ -411,10 +409,6 @@ let rec texpr_of_pexpr (Pexpr (_, _, pe_)) =
     return @@ TEimpl c
   | PEval v ->
     return @@ TEval v
-  | PEconstrained cs ->
-    let (ivs, pes) = List.split cs in
-    selfs pes >>= fun tes ->
-    return @@ TEconstrained (List.combine ivs tes)
   | PEundef (loc, ub) ->
     return @@ TEundef (loc, ub)
   | PEerror (str, pe) ->
@@ -491,8 +485,6 @@ let rec cond_of_pexpr (Pexpr (_, _, pe_)) =
     assert false (* NOTE: not sure about this *)
   | PEval v ->
     return @@ Cval v
-  | PEconstrained _ | PEundef _ | PEerror _ | PEctor _ ->
-    assert false
   | PEcase _ ->
     None
   | PEarray_shift _ | PEmember_shift _ ->
@@ -551,17 +543,6 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
     match pe_ with
     | PEsym _ | PEimpl _ | PEval _ ->
       assert false
-    | PEconstrained cs ->
-      let (ivs, pes) = List.split cs in
-      List.fold_left (fun acc pe ->
-          let (sym, pat) = new_symbol () in
-          acc >>= fun (syms, in_v) ->
-          new_vertex () >>= fun out_v ->
-          self (in_v, out_v) pat pe >>= fun _ ->
-          return (sym::syms, out_v)
-        ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
-      let tes = List.map (fun sym -> TEsym sym) @@ List.rev rev_syms in
-      add (in_v, out_v) (Tassign (in_pat, TEconstrained (List.combine ivs tes)))
     | PEundef _ ->
       assert false
     | PEerror (str, pe) ->

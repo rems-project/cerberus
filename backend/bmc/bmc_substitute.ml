@@ -18,7 +18,6 @@ let rec unsafe_substitute_pexpr (map: substitute_map)
         end
     | PEimpl _ -> pexpr_
     | PEval _ -> pexpr_
-    | PEconstrained _ -> assert false
     | PEundef _ -> pexpr_
     | PEerror (s, pe) ->
         PEerror(s, unsafe_substitute_pexpr map pe)

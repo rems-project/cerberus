@@ -1084,11 +1084,11 @@ let is_specified_ival _ =
 
 (* Predicats on integer values *)
 let eq_ival ival1 ival2 =
-  Some (Z.equal (ival_to_int ival1) (ival_to_int ival2))
+  Z.equal (ival_to_int ival1) (ival_to_int ival2)
 let lt_ival ival1 ival2 =
-Some (Z.lt (ival_to_int ival1) (ival_to_int ival2))
+  Z.lt (ival_to_int ival1) (ival_to_int ival2)
 let le_ival ival1 ival2 =
-Some (Z.leq (ival_to_int ival1) (ival_to_int ival2))
+  Z.leq (ival_to_int ival1) (ival_to_int ival2)
 
 let eval_integer_value ival =
   Some (ival_to_int ival)

@@ -260,8 +260,6 @@ let set_uid file =
       | PEsym s -> PEsym s
       | PEimpl impl -> PEimpl impl
       | PEval v -> PEval v
-      | PEconstrained cs ->
-        PEconstrained (List.map (fun (m, pe) -> (m, set_pe pe)) cs)
       | PEundef (loc, undef) -> PEundef (loc, undef)
       | PEerror (err, pe) -> PEerror (err, set_pe pe)
       | PEctor (ctor, pes) -> PEctor (ctor, List.map set_pe pes)
@@ -360,14 +358,14 @@ let get_state_details st =
     List.fold_left (fun acc e -> acc ^ f e) "" env
   in
   (* TODO: this is a bit naive *)
-  let stdout = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stdout) in
-  let stderr = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stderr) in
-  match st.Driver.core_state.Core_run.thread_states with
+  let stdout = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run_aux.io.Core_run_aux.stdout) in
+  let stderr = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run_aux.io.Core_run_aux.stderr) in
+  match st.Driver.core_state.Core_run_aux.thread_states with
   | (_, (_, ts))::_ ->
     let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
     let Core.Expr (arena_annots, _) = ts.arena in
     let maybe_uid = Annot.get_uid arena_annots in
-    let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
+    let loc = Option.case id (fun _ -> ts.Core_run_aux.current_loc) @@ Annot.get_loc arena_annots in
     (loc, maybe_uid, arena, string_of_env ts.env, stdout, stderr)
   | _ ->
     (Cerb_location.unknown, None, "", "", stdout, stderr)
@@ -582,7 +580,7 @@ let multiple_steps step_state (m, st) =
     let is_user_state st =
       (* NOTE: it checks that the first thread core expression in the
        * arena has an identifier, which means it's user code *)
-      match st.Driver.core_state.Core_run.thread_states with
+      match st.Driver.core_state.Core_run_aux.thread_states with
       | (_, (_, ts))::_ ->
         let Core.Expr (arena_annots, _) = ts.arena in
         begin match Annot.get_uid arena_annots with

@@ -185,9 +185,9 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
       integer_value -> (Z -> a) -> (unit -> a) -> a. *)
 
   Parameter is_specified_ival : integer_value -> bool.
-  Parameter eq_ival : integer_value -> integer_value -> option bool.
-  Parameter lt_ival : integer_value -> integer_value -> option bool.
-  Parameter le_ival : integer_value -> integer_value -> option bool.
+  Parameter eq_ival : integer_value -> integer_value -> bool.
+  Parameter lt_ival : integer_value -> integer_value -> bool.
+  Parameter le_ival : integer_value -> integer_value -> bool.
   Parameter zero_fval : floating_value.
   Parameter one_fval : floating_value.
   Parameter str_fval : string -> serr floating_value.

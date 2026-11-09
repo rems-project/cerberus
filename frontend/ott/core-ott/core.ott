@@ -310,7 +310,6 @@ grammar
     | tyvarsym                                                                         ::   :: sym
     | Implementation__implementation_constant                                          ::   :: impl {{ com implementation-defined constant }} 
     | value                                                                            ::   :: val
-    | constrained ( </ Mem_mem_iv_constrainti , generic_pexpri // , // i /> )          :: X :: constrained {{ com constrained value }} % TODO: hide from tex
     | undef Loc_t ( Undefined_undefined_behaviour )                                    ::   :: undef {{ com undefined behaviour }}
     | error ( string , generic_pexpr )                                                 ::   :: error {{ com impl-defined static error }}
     | ctor ( </ generic_pexpri // , // i /> )                                          ::   :: ctor {{ com data constructor application }}

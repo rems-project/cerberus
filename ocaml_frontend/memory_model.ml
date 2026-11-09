@@ -159,9 +159,9 @@ module type Memory = sig
   val is_specified_ival: integer_value -> bool
   
   (* Predicats on integer values *)
-  val eq_ival: integer_value -> integer_value -> bool option
-  val lt_ival: integer_value -> integer_value -> bool option
-  val le_ival: integer_value -> integer_value -> bool option
+  val eq_ival: integer_value -> integer_value -> bool
+  val lt_ival: integer_value -> integer_value -> bool
+  val le_ival: integer_value -> integer_value -> bool
 
   (* Floating value constructors *)
   val zero_fval: floating_value

@@ -269,10 +269,6 @@ val mk_sym_pe: Symbol.sym -> pexpr
 let mk_sym_pe sym =
   Pexpr [] () (PEsym sym)
 
-(* TODO: mk_impl_pe *)
-
-(* TODO: PEval Vconstrained, Vobject *)
-
 val mk_integer_pe: integer -> pexpr
 let mk_integer_pe n =
   Pexpr [] () (PEval (Vobject (OVinteger (Mem.integer_ival n))))
@@ -359,8 +355,6 @@ let mk_alignof_pe pe =
 val mk_nullcap_pe: bool -> pexpr
 let mk_nullcap_pe is_signed =
   Pexpr [] () (PEctor (CivNULLcap is_signed) [])
-
-(* TODO: PEconstrained *)
 
 val mk_undef_pe: Loc.t -> Undefined.undefined_behaviour -> pexpr
 let mk_undef_pe loc ub =
@@ -806,31 +800,10 @@ let is_negative_action = function
 end
 
 
-(* TODO: rewrite this in bottom-up *)
-(*
-val     flatten_constrained_value: value -> value
-let rec flatten_constrained_value v =
-  match v with
-    | Vconstrained xs ->
-        Vconstrained $ List.concatMap (fun (cs, v') ->
-          match flatten_constrained_value v' with
-            | Vconstrained ys ->
-                List.map (fun (cs', v'') ->
-                  (ND.concat cs cs', v'')
-                ) ys
-            | v'' ->
-                [(cs, v'')]
-          end
-        ) xs
-    | _ ->
-        v
-  end
-*)
-
 val valueFromPexpr: pexpr -> maybe value
 let valueFromPexpr = function
   | Pexpr _ () (PEval cval) ->
-      Just ((*flatten_constrained_value*) cval)
+      Just cval
   | _ ->
       Nothing
   end
@@ -844,31 +817,6 @@ let valueFromPexprs pes =
       | _ ->
           Nothing
     end) (Just []) pes
-
-val valueOrPEconstrainedFromPexpr: pexpr -> maybe (either value pexpr)
-let valueOrPEconstrainedFromPexpr pe =
-  match pe with
-    | Pexpr _ () (PEval cval) ->
-        Just (Left cval)
-    | Pexpr _ () (PEconstrained _) ->
-        Just (Right pe)
-    | _ ->
-        Nothing
-  end
-
-val valueOrPEconstrainedFromPexprs: list pexpr -> maybe (either (list value) ((nat * (list (Mem.mem_iv_constraint  * pexpr))) * (list pexpr)))
-let valueOrPEconstrainedFromPexprs pes =
-  snd (List.foldr (fun pe (i, acc) ->
-      (i+1, match (valueOrPEconstrainedFromPexpr pe, acc) with
-        | (Just (Left cval), Just (Left cvals)) ->
-            Just (Left (cval :: cvals))
-        | (Just (Right (Pexpr _ () (PEconstrained xs) as pe)), Just (Left cvals)) ->
-            Just (Right ((i, xs), pe :: (List.map (fun v -> Pexpr [] () (PEval v)) cvals)))
-        | (Just (Right pe), Just (Right (i_xs, pes))) ->
-            Just (Right (i_xs, pe :: pes))
-        | _ ->
-            Nothing
-      end)) (0, Just (Left [])) pes)
 
 
 val to_integer: pexpr -> maybe integer
@@ -913,9 +861,6 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         pexpr_
     | PEval _ ->
         pexpr_
-    | PEconstrained xs ->
-        PEconstrained $
-          List.map (fun (constrs, pe) -> (constrs, subst_sym_pexpr sym cval pe)) xs
     | PEundef _ _ ->
         pexpr_
     | PEerror str pe ->
@@ -1185,9 +1130,6 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         pe_
     | PEval _ ->
         pe_
-    | PEconstrained xs ->
-        PEconstrained $
-          List.map (fun (constrs, pe) -> (constrs, unsafe_subst_sym_pexpr sym pe' pe)) xs
     | PEundef _ _ ->
         pe_
     | PEerror str pe ->
@@ -2028,18 +1970,6 @@ let rec select_case subst_sym cval = function
             ) pe sym_cvals
       end
 end
-
-
-(*
-val isConstrainedValue: value -> bool
-let isConstrainedValue cval =
-  match flatten_constrained_value cval with
-    | Vconstrained _ ->
-        true
-    | _ ->
-        false
-  end
-*)
 
 val mk_pure_e: forall 'a. pexpr -> expr 'a
 let mk_pure_e pe =

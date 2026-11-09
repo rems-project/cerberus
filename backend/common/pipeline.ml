@@ -307,8 +307,6 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
         pe
     | PEerror (str, pe) ->
         PEerror (str, untype_pexpr pe)
-    | PEconstrained xs ->
-        PEconstrained (List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
     | PEctor (ctor, pes) ->
         PEctor (ctor, List.map untype_pexpr pes)
     | PEcase (pe, pat_pes) ->
