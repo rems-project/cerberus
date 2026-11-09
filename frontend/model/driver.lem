@@ -4,7 +4,8 @@ import Core Boot Decode Formatted Set_extra Map
 import Core_aux Builtins Core_linking
 module Caux = Core_aux
 
-open import Utils Show Errors Trace_event
+open import Show Errors Trace_event
+import Utils
 import Cmm_op Cmm_csem
 
 import Core_eval Core_run Core_reduction
@@ -143,7 +144,7 @@ let rec print_eval_conv_aux dr_st th_st pe =
   | Exception.Result (Undefined.Defined (Right cval)) ->
       ND.return (Right (Undefined.Defined cval))
   | Exception.Result (Undefined.Defined _) ->
-      error "print_eval_conv: should be a value"
+      Utils.error "print_eval_conv: should be a value"
   | Exception.Result (Undefined.Undef loc undef) ->
       ND.return (Right (Undefined.Undef loc undef))
   | Exception.Result (Undefined.Error loc err) ->
@@ -276,11 +277,11 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let res = Set.filter (fun sym ->
       match sym with
       | Symbol.Symbol _ _ (Symbol.SD_Id n) -> n = name
-      | _ -> error ("symbol struct " ^ name ^ " not in tagDefs")
+      | _ -> Utils.error ("symbol struct " ^ name ^ " not in tagDefs")
       end) dom
     in
     match Set_extra.toList res with
-    | [] -> error ("no symbols for struct " ^ name ^ " in tagDefs")
+    | [] -> Utils.error ("no symbols for struct " ^ name ^ " in tagDefs")
     | [sym] -> sym
     | sym::_ -> sym
     end
@@ -349,7 +350,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     | Core_run.FS_WRITE fd buf size ->
       match natFromInteger fd with
       | 0 ->
-        error "driver_fs_step: stdin not supported yet."
+        Utils.error "driver_fs_step: stdin not supported yet."
       | 1 ->
         update_stdout (List.take (natFromInteger size) buf)
       | 2 ->
@@ -402,7 +403,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     | Core_run.FS_PRINTF fmt args ->
       liftMem (Formatted.printf th_st.Core_run_aux.current_loc (printf_eval_conv dr_st th_st) fmt args) >>= function
         | Left err ->
-          error "TODO: printf error"
+          Utils.error "TODO: printf error"
         | Right (Undefined.Defined buf) ->
           update_stdout buf
         | Right (Undefined.Error loc str) ->
@@ -413,12 +414,12 @@ let drive_fs_step tid th_st dr_st fs_oper =
     | Core_run.FS_VPRINTF fd fmt ap ->
       liftMem (Formatted.vprintf th_st.Core_run_aux.current_loc (printf_eval_conv dr_st th_st) fmt ap) >>= function
         | Left err ->
-          error "TODO: vprintf error"
+          Utils.error "TODO: vprintf error"
         | Right (Undefined.Defined buf) ->
           let size = integerFromNat (List.length buf) in
           match natFromInteger fd with
           | 0 ->
-            error "vprintf trying to output in the stdin"
+            Utils.error "vprintf trying to output in the stdin"
           | 1 ->
             update_stdout buf
           | 2 ->
@@ -434,7 +435,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     | Core_run.FS_VSNPRINTF ptr size fmt ap ->
       liftMem (Formatted.vsnprintf th_st.Core_run_aux.current_loc (printf_eval_conv dr_st th_st) ptr size fmt ap) >>= function
         | Left err ->
-          error "TODO: vprintf error"
+          Utils.error "TODO: vprintf error"
         | Right (Undefined.Defined n) ->
           update dr_st.fs_state (th_st_from_int n)
         | Right (Undefined.Error loc str) ->
@@ -455,7 +456,7 @@ let rec drive_core_thread2 tid =
     | Just z ->
         z (* (tid, z) *)
     | _ ->
-        error "drive_core_thread, wrong tid"
+        Utils.error "drive_core_thread, wrong tid"
   end in
   ND.mk_step (SK_misc ["drive_core_thread2"]) $ List.map (function
     | Core_reduction.Step_thread_done2 parent_tid cval ->
@@ -487,7 +488,7 @@ let rec drive_core_thread2 tid =
         , get_thread_states >>= fun th_sts ->
           let th_st = match lookup tid th_sts with
             | Just (_, th_st) -> th_st
-            | Nothing -> error "WIP: Step_done2"
+            | Nothing -> Utils.error "WIP: Step_done2"
           end in
           ND.update (fun dr_st ->
             let core_st' = Core_run.update_thread_state tid
@@ -529,7 +530,7 @@ let rec drive_core_thread2 tid =
                       ND.update $ fun dr_st ->
                         <| dr_st with trace= ME_function_return sym mval_opt :: dr_st.trace |>
                   | _ ->
-                      error "TODO: drive_core_thread2, non TSK_Misc"
+                      Utils.error "TODO: drive_core_thread2, non TSK_Misc"
                 end >>= fun () ->
                 begin
                   (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> "tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
@@ -554,7 +555,7 @@ let rec drive_core_thread2 tid =
                   trace= ME_function_return sym mval_opt :: dr_st.trace
                 |>
             | _ ->
-                error "TODO: drive_core_thread2, non TSK_Misc"
+                Utils.error "TODO: drive_core_thread2, non TSK_Misc"
           end >>= fun () ->
           
           begin
@@ -602,7 +603,7 @@ let rec drive_core_thread2 tid =
           drive_core_thread2 tid )
 
     | Core_reduction.Step_error2 debug_str ->
-        error ("WIP: Step_error --> " ^ debug_str)
+        Utils.error ("WIP: Step_error --> " ^ debug_str)
     | (Core_reduction.Step_action_request2 str _ _ _ _ as step) ->
         ( SK_action_request str
         , ND.return (Just step) )
@@ -737,7 +738,7 @@ let action_request_sequential2 loc tid aid = function
   
 (*
   | Core_run.RMWRequest loc sb_edges dd_edges asw_edges aid tid mo1 mo2 lvalue_ty ptr_val mval_expected mval_actual th_st' ->
-      error "WIP: Driver.seq ==> RMWRequest"
+      Utils.error "WIP: Driver.seq ==> RMWRequest"
   
   | Core_run.FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST FENCE") in (* DEBUG *)
@@ -763,7 +764,7 @@ val perform_action_request2:
 let perform_action_request2 with_concurrency loc tid request =
   begin
     if with_concurrency then
-      error "TODO: perform_action_request2 ==> concurrency"
+      Utils.error "TODO: perform_action_request2 ==> concurrency"
     else
       liftCore_run (SEU.runS Core_run.fresh_action_id') >>= fun aid ->
       action_request_sequential2 loc tid aid request
@@ -851,7 +852,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         let ty_ptrs =
           List.map (function
             | Core.Vtuple [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr)] -> (ty, ptr)
-            | _ -> error "va_start"
+            | _ -> Utils.error "va_start"
           end) ty_cvals in
         liftMem (Mem.va_start ty_ptrs) >>= fun res ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
@@ -876,7 +877,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         ND.read (fun st -> st.core_file.Core.tagDefs) >>= fun tagDefs ->
         let mvals =
           Utils.map2 (fun ty cval ->
-            fromJust "CHERI_intrinsic call" (Caux.memValueFromValue tagDefs ty cval)
+            Utils.fromJust "CHERI_intrinsic call" (Caux.memValueFromValue tagDefs ty cval)
           ) tys cvals in
         liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
         match res_opt with
@@ -887,7 +888,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         end
 
     | _ ->
-        error ("INVALID memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
+        Utils.error ("INVALID memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
   end >>= fun th_st' ->
   ND.update (fun dr_st ->
     update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
@@ -963,7 +964,7 @@ let can_advance single_thread = function
   | Core_reduction.Step_blocked2 ->
       false
   | Core_reduction.Step_error2 str ->
-      error ("can_advance: Step_error2 ==> " ^ str)
+      Utils.error ("can_advance: Step_error2 ==> " ^ str)
   | Core_reduction.Step_thread_done2 _ _ ->
       true
   | Core_reduction.Step_done2 _ ->
@@ -1026,7 +1027,7 @@ let advance_step tid step =
         ND.return NOWAKEUP
 
     | Core_reduction.Step_error2 debug_str ->
-        error ("Driver.advance_step => Step_error2: " ^ debug_str)
+        Utils.error ("Driver.advance_step => Step_error2: " ^ debug_str)
 
     | Core_reduction.Step_thread_done2 parent_tid cval ->
         ND.read (fun dr_st ->
@@ -1076,7 +1077,7 @@ let advance_step tid step =
         ND.return (WAKEUP false spawn_tids)
 
     | Core_reduction.Step_fs2 _ _ _ ->
-        error "TODO: Step_fs2"
+        Utils.error "TODO: Step_fs2"
     
     | Core_reduction.Step_nd2 th_sts ->
         ND.pick (SK_misc ["nd"]) th_sts >>= fun th_st' ->
@@ -1110,7 +1111,7 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
           match List.lookup tid dr_st.core_state.Core_run_aux.thread_states with
             | Just z -> z
             | Nothing ->
-                error ("Driver.drive_nonmemory_steps_aux2 => invalid tid: " ^ show tid)
+                Utils.error ("Driver.drive_nonmemory_steps_aux2 => invalid tid: " ^ show tid)
           end in
         ( match dr_st.core_state.Core_run_aux.thread_states with
           | [_] -> true
@@ -1171,7 +1172,7 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
               match List.lookup tid dr_st.core_state.Core_run_aux.thread_states with
                 | Just z -> z
                 | Nothing ->
-                    error "Driver.drive_nonmemory_steps_aux => invalid tid"
+                    Utils.error "Driver.drive_nonmemory_steps_aux => invalid tid"
               end in
             Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info
           )
@@ -1222,13 +1223,13 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
                   ND.return (SAVE_STEPS step next_steps)
 
               | Core_reduction.Step_aseq _ _ _ _ ->
-                  error "TODO: Driver.drive_nonmemory_steps_aux => Step_aseq"
+                  Utils.error "TODO: Driver.drive_nonmemory_steps_aux => Step_aseq"
               
               | Core_reduction.Step_blocked2 ->
                   ND.return STOP
 
               | Core_reduction.Step_error2 debug_str ->
-                  error ("Driver.drive_nonmemory_steps_aux => Step_error2: " ^ debug_str)
+                  Utils.error ("Driver.drive_nonmemory_steps_aux => Step_error2: " ^ debug_str)
 
               | Core_reduction.Step_thread_done2 parent_tid cval ->
                   ND.read (fun dr_st ->
@@ -1280,7 +1281,7 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
                   ND.return CONTINUE
 
               | Core_reduction.Step_nd2 _ ->
-                  error "TODO: Step_nd2"
+                  Utils.error "TODO: Step_nd2"
             end >>= function
               | PROGRAM_DONE cval ->
                   ND.return (Map.insert tid [Core_reduction.Step_done2 cval] Map.empty)
@@ -1364,7 +1365,7 @@ let new_drive_core_threads () =
 let prepare_exit core_st cval =
   match List.find (function (_, (Nothing, _)) -> true | _ -> false end) core_st.Core_run_aux.thread_states with
     | Nothing ->
-        error "Driver.prepare_exit ==> failed to find the initial thread"
+        Utils.error "Driver.prepare_exit ==> failed to find the initial thread"
     | Just (tid0, (_, th_st)) ->
         let th_st' =
           <| th_st with Core_run_aux.arena= Core_aux.mk_value_e cval; Core_run_aux.stack= Core_run_aux.Stack_empty |> in
@@ -1418,7 +1419,7 @@ let process_core_step2 with_concurrency driver2 step =
       end
 
   | wrong_step ->
-      error ("Driver.process_core_step2: WRONG STEP ==> " ^ show wrong_step)
+      Utils.error ("Driver.process_core_step2: WRONG STEP ==> " ^ show wrong_step)
 end
 
 
@@ -1494,7 +1495,7 @@ let rec hack core_extern env mem_st core_file concur_sym_map pexpr =
               hack core_extern env mem_st core_file concur_sym_map pexpr'
         end
     | _ ->
-        error ("Driver.hack, UNDEF/ERROR:" ^ Pp.stringFromCore_pexpr pexpr)
+        Utils.error ("Driver.hack, UNDEF/ERROR:" ^ Pp.stringFromCore_pexpr pexpr)
 end
 
 
@@ -1523,7 +1524,7 @@ let finalize debug_str dr_st =
               | Just pe ->
                   pe
               | Nothing ->
-                  error ("Driver.finalize: the arena wasn't pure ==> " ^ Pp.stringFromCore_expr th_st.Core_run_aux.arena)
+                  Utils.error ("Driver.finalize: the arena wasn't pure ==> " ^ Pp.stringFromCore_expr th_st.Core_run_aux.arena)
             end in
         <|
           dres_blocked= dr_st.blocked;
@@ -1535,7 +1536,7 @@ let finalize debug_str dr_st =
         |>
     | xs ->
         let () = Debug.print_debug 3 [Debug.DB_driver] (fun () -> "ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state) in (* DEBUG *)
-        error ("BOOM finalize [" ^ debug_str ^ "]")
+        Utils.error ("BOOM finalize [" ^ debug_str ^ "]")
   end
 
 
@@ -1629,7 +1630,7 @@ let driver_globals with_concurrency file =
           Core_run_aux.current_proc_opt= Nothing;
         |>
       | _ ->
-          error "ERROR (in Driver, global init didn't evaluate to value)"
+          Utils.error "ERROR (in Driver, global init didn't evaluate to value)"
     end >>= fun () ->
     
     (* evaluation of the initialisation *)
@@ -1642,7 +1643,7 @@ let driver_globals with_concurrency file =
             | Just pe ->
                 match Core_aux.valueFromPexpr pe with
                   | Nothing ->
-                      error "WIP: driver_globals"
+                      Utils.error "WIP: driver_globals"
                   | Just cval ->
                       update_thread_state tid0
                         <| th_st with
@@ -1650,10 +1651,10 @@ let driver_globals with_concurrency file =
                         |>
                 end
             | Nothing ->
-                error "TODO(msg): Driver.driver_globals, the end of the evaluation of a glob didn't produce a value"
+                Utils.error "TODO(msg): Driver.driver_globals, the end of the evaluation of a glob didn't produce a value"
           end
       | _ ->
-          error "ERROR (in Driver, global init didn't evaluate to value)"
+          Utils.error "ERROR (in Driver, global init didn't evaluate to value)"
     end
   ) glob_defs >>
   ND.return tid0
@@ -1870,7 +1871,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                           end
                    |>
                 | _ ->
-                    error "ERROR (in Driver 1)"
+                    Utils.error "ERROR (in Driver 1)"
               end >>= fun () ->
               ND.return expr
           | _ ->
@@ -1899,12 +1900,12 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                 Core_run_aux.current_proc_opt= Just main_sym;
               |>
           | _ ->
-              error "ERROR (in Driver 2)"
+              Utils.error "ERROR (in Driver 2)"
         end >>
         driver2 with_concurrency >>
         
         if with_concurrency then
-          error "CONCURRENCY IS BROKEN"
+          Utils.error "CONCURRENCY IS BROKEN"
         else
           ND.get >>= fun dr_st' ->
           ND.return (finalize "drive (without concur)" dr_st')
