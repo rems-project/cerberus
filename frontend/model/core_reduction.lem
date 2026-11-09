@@ -1421,7 +1421,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                     current_loc= th_st.current_loc;
                     exec_loc= ELoc_normal [];
                     env= th_st.env;
-                    current_proc_opt= Nothing;
+                    current_proc_opt= th_st.current_proc_opt;
                   |>) es
                 end
           | Ewait _ ->
