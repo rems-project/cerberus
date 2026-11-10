@@ -300,6 +300,7 @@ type one_step =
   | MEMOP of Mem_common.memop * list Core.value
   | UNSEQUENCED_RACE
   | ILLTYPED of string
+  | INTERNAL_ERROR of string (* used to signal a bug in the dynamics implementation *)
 
 
 let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
@@ -437,7 +438,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETW-PURE *)
               TAU "Ewseq" (update_env pat cval env) e2
           | Nothing ->
-              Utils.error "Core_reduction.one_step Ewseq saw a non-evaluated e1"
+              INTERNAL_ERROR "Core_reduction.one_step Ewseq saw a non-evaluated e1"
         end
     | Ewseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
         Just match valueFromPexpr pe1 with
@@ -446,7 +447,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETW-ANNOT *)
               TAU "Ewseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
-              Utils.error "Core_reduction.one_step Ewseq Eannot saw a non-evaluated e1"
+              INTERNAL_ERROR "Core_reduction.one_step Ewseq Eannot saw a non-evaluated e1"
         end
     | Esseq pat (Expr pe1_annots (Epure pe1)) e2 ->
         Just match valueFromPexpr pe1 with
@@ -455,7 +456,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETS-PURE *)
               TAU "Esseq" (update_env pat cval env) e2
           | Nothing ->
-            Utils.error "Core_reduction.one_step Esseq saw a non-evaluated e1"
+            INTERNAL_ERROR "Core_reduction.one_step Esseq saw a non-evaluated e1"
         end
     
     | Esseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
@@ -465,7 +466,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETS-ANNOT *)
               TAU "Esseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
-              Utils.error "Core_reduction.one_step Esseq Eannot saw a non-evaluated e1"
+              INTERNAL_ERROR "Core_reduction.one_step Esseq Eannot saw a non-evaluated e1"
         end
     
     | Esave sym_bTy sym_bTy_pes e ->
@@ -669,6 +670,7 @@ type action_step =
   | ACTION_REQUEST of string * Loc.t * action_request (Core.expr core_run_annotation)
   | ACTION_EVAL of string * core_runM (Core.action core_run_annotation)
   | ACTION_ILLTYPED of string
+  | ACTION_INTERNAL_ERROR of string
 
 val step_action:
   Ctype.tag_definitions ->
@@ -794,7 +796,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
               end
         end
     | SeqRMW _ _ _ _ _ ->
-        Utils.error "Core_reduction.step_action ==> SeqRMW" (* this should not be possible *)
+        ACTION_INTERNAL_ERROR "Core_reduction.step_action ==> SeqRMW" (* this should not be possible *)
     | Alloc pe1 pe2 pref ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -834,21 +836,21 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
               end
         end
     | RMW _ _ _ _ _ _ ->
-        Utils.error "TODO[Core_reduction]: RMW"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: RMW"
     | Fence _ ->
-        Utils.error "TODO[Core_reduction]: Fence"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: Fence"
     | CompareExchangeStrong _ _ _ _ _ _ ->
-        Utils.error "TODO[Core_reduction]: CompareExchangeStrong"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: CompareExchangeStrong"
     | CompareExchangeWeak _ _ _ _ _ _ ->
-        Utils.error "TODO[Core_reduction]: CompareExchangeWeak"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: CompareExchangeWeak"
     | LinuxFence _ ->
-        Utils.error "TODO[Core_reduction]: LinuxFence"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: LinuxFence"
     | LinuxLoad _ _ _ ->
-        Utils.error "TODO[Core_reduction]: LinuxLoad"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: LinuxLoad"
     | LinuxStore _ _ _ _ ->
-        Utils.error "TODO[Core_reduction]: LinuxStore"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: LinuxStore"
     | LinuxRMW _ _ _ _ ->
-        Utils.error "TODO[Core_reduction]: LinuxRMW"
+        ACTION_INTERNAL_ERROR "TODO[Core_reduction]: LinuxRMW"
 end
 
 
@@ -1240,11 +1242,15 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 end
             | ACTION_ILLTYPED str ->
                 Step_error str
+            | ACTION_INTERNAL_ERROR str ->
+                Step_error str
           end in
         match expr_ with
           | Epure (Pexpr _ _ (PEval _)) ->
-              Utils.error ("Core_run.step_ctx ==> found a value with ctx <> CTX ==> " ^
-                     Pp.stringFromCore_expr expr ^ " <--> " ^ show ctx)
+              Step_error (
+                "Core_run.step_ctx ==> found a value with ctx <> CTX ==> " ^
+                Pp.stringFromCore_expr expr ^ " <--> " ^ show ctx
+              )
           
           | Ebound (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr'))) ->
               (* bound({A}v)-> v *)
@@ -1262,7 +1268,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           
           | Eaction (Paction p (Action loc _ (SeqRMW with_forward pe1 pe2 sym pe3))) ->
               if p = Neg then
-                Utils.error "TODO(better typing) negative SeqRMW should be forbidden by the typecheck"
+                Step_error "TODO(better typing) negative SeqRMW should be forbidden by the typecheck"
               else
                 Step_action_request "SeqRMW" loc current_tid (is_unseq_with_ccall ctx) begin
                   full_eval_pexpr' pe1 >>= fun cval1 ->
@@ -1487,7 +1493,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           | _ ->
               match one_step eval_pexpr full_eval_pexpr' th_st.env expr with
                 | Nothing ->
-                    Utils.error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
+                    Step_error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
                 | Just (TAU_WITH_RUNSTATE debug_str step_m) ->
                     Step_with_runstate (RSK_tau debug_str TSK_Misc) begin
                       step_m >>= fun (env', expr') ->
@@ -1514,6 +1520,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       E.undef th_st.current_loc [Undefined.UB035_unsequenced_race]
                     end
                 | Just (ILLTYPED str) ->
+                    Step_error str
+                | Just (INTERNAL_ERROR str) ->
                     Step_error str
               end
         end
