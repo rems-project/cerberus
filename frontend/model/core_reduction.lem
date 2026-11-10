@@ -1,5 +1,5 @@
 open import Pervasives
-open import Utils
+import Utils
 open import Core Core_aux Core_run_aux
 
 import State
@@ -318,7 +318,7 @@ let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
         one_step_unseq_aux (combine_dyn_annotations fps fps_acc, cval :: cvals_acc) xs
   | e :: _ ->
       (* all the operand of the unseq() must have already been reduced to values *)
-      error ("Core_reduction.one_step_unseq_aux ==> " ^ Pp.stringFromCore_expr e)
+      Utils.error ("Core_reduction.one_step_unseq_aux ==> " ^ Pp.stringFromCore_expr e)
   end
 
 
@@ -412,7 +412,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               | Vfalse ->
                   E.return (env, e3)
               | _ ->
-                  error "TODO(use the core_runM) ILLTYPED, the first operand of an Eif didn't evaluated to a boolean"
+                  Utils.error "TODO(use the core_runM) ILLTYPED, the first operand of an Eif didn't evaluated to a boolean"
             end
           end
         end
@@ -437,7 +437,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETW-PURE *)
               TAU "Ewseq" (update_env pat cval env) e2
           | Nothing ->
-              error "Core_reduction.one_step Ewseq saw a non-evaluated e1"
+              Utils.error "Core_reduction.one_step Ewseq saw a non-evaluated e1"
         end
     | Ewseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
         Just match valueFromPexpr pe1 with
@@ -446,7 +446,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETW-ANNOT *)
               TAU "Ewseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
-              error "Core_reduction.one_step Ewseq Eannot saw a non-evaluated e1"
+              Utils.error "Core_reduction.one_step Ewseq Eannot saw a non-evaluated e1"
         end
     | Esseq pat (Expr pe1_annots (Epure pe1)) e2 ->
         Just match valueFromPexpr pe1 with
@@ -455,7 +455,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETS-PURE *)
               TAU "Esseq" (update_env pat cval env) e2
           | Nothing ->
-            error "Core_reduction.one_step Esseq saw a non-evaluated e1"
+            Utils.error "Core_reduction.one_step Esseq saw a non-evaluated e1"
         end
     
     | Esseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
@@ -465,7 +465,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* reduction: LETS-ANNOT *)
               TAU "Esseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
-              error "Core_reduction.one_step Esseq Eannot saw a non-evaluated e1"
+              Utils.error "Core_reduction.one_step Esseq Eannot saw a non-evaluated e1"
         end
     
     | Esave sym_bTy sym_bTy_pes e ->
@@ -794,7 +794,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
               end
         end
     | SeqRMW _ _ _ _ _ ->
-        error "Core_reduction.step_action ==> SeqRMW" (* this should not be possible *)
+        Utils.error "Core_reduction.step_action ==> SeqRMW" (* this should not be possible *)
     | Alloc pe1 pe2 pref ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -834,21 +834,21 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
               end
         end
     | RMW _ _ _ _ _ _ ->
-        error "TODO[Core_reduction]: RMW"
+        Utils.error "TODO[Core_reduction]: RMW"
     | Fence _ ->
-        error "TODO[Core_reduction]: Fence"
+        Utils.error "TODO[Core_reduction]: Fence"
     | CompareExchangeStrong _ _ _ _ _ _ ->
-        error "TODO[Core_reduction]: CompareExchangeStrong"
+        Utils.error "TODO[Core_reduction]: CompareExchangeStrong"
     | CompareExchangeWeak _ _ _ _ _ _ ->
-        error "TODO[Core_reduction]: CompareExchangeWeak"
+        Utils.error "TODO[Core_reduction]: CompareExchangeWeak"
     | LinuxFence _ ->
-        error "TODO[Core_reduction]: LinuxFence"
+        Utils.error "TODO[Core_reduction]: LinuxFence"
     | LinuxLoad _ _ _ ->
-        error "TODO[Core_reduction]: LinuxLoad"
+        Utils.error "TODO[Core_reduction]: LinuxLoad"
     | LinuxStore _ _ _ _ ->
-        error "TODO[Core_reduction]: LinuxStore"
+        Utils.error "TODO[Core_reduction]: LinuxStore"
     | LinuxRMW _ _ _ _ ->
-        error "TODO[Core_reduction]: LinuxRMW"
+        Utils.error "TODO[Core_reduction]: LinuxRMW"
 end
 
 
@@ -886,7 +886,7 @@ let rec break_at_sseq ctx =
               Just (Cannot annots xs ctxA, sseq_pat, ctxB, sseq_e2)
         end
     | Cbound annots ctx' ->
-        error "break_at_sseq, Cbound"
+        Utils.error "break_at_sseq, Cbound"
 (*
         match break_at_sseq ctx' with
           | Nothing ->
@@ -1001,14 +1001,14 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
   let forceIntegerFromIntegerValue errmsg ival =
     match Mem_aux.integerFromIntegerValue ival with
       | Just n -> n
-      | Nothing -> error errmsg
+      | Nothing -> Utils.error errmsg
     end in
   match iCst with
     (* ----------------------------------------------------------- *)
     (* Cerberus headers <any.h> *)
     (* ----------------------------------------------------------- *)
     | Implementation.BuiltinFunction "any_bounded_int" ->
-        error "TODO Core_reduction ==> any_bounded_int()"
+        Utils.error "TODO Core_reduction ==> any_bounded_int()"
     (* ----------------------------------------------------------- *)
     (* 7.5 Errors <errno.h> *)
     (* ----------------------------------------------------------- *)
@@ -1019,7 +1019,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                 wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_value_pe (Vobject (OVpointer th_st.errno)))))
               )
           | _ ->
-              error "wrong arguments for __builtin_errno"
+              Utils.error "wrong arguments for __builtin_errno"
         end
     (* ----------------------------------------------------------- *)
     (* 7.22 General utilities <stdlib.h> *)
@@ -1038,7 +1038,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                     end
               end
           | _ ->
-              error ("Core_reduction, exit given more than one argument ==> " ^ stringFromList Pp.stringFromCore_pexpr pes)
+              Utils.error ("Core_reduction, exit given more than one argument ==> " ^ stringFromList Pp.stringFromCore_pexpr pes)
         end
     (* NOTE: some GCC builtins *)
     | Implementation.BuiltinFunction "generic_ffs" ->
@@ -1050,10 +1050,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_generic_ffs (forceIntegerFromIntegerValue "generic_ffs" n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      error "TODO: generic_ffs illtyped"
+                      Utils.error "TODO: generic_ffs illtyped"
                 end
             | _ ->
-                error "TODO: generic_ffs wrong number of args"
+                Utils.error "TODO: generic_ffs wrong number of args"
           end
         end
     | Implementation.BuiltinFunction "ctz" ->
@@ -1065,10 +1065,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_ctz (forceIntegerFromIntegerValue "ctz" n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      error "TODO: ctz illtyped"
+                      Utils.error "TODO: ctz illtyped"
                 end
             | _ ->
-                error "TODO: ctz wrong number of args"
+                Utils.error "TODO: ctz wrong number of args"
           end
         end
     (* TODO: factorise ... *)
@@ -1081,10 +1081,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_bswap16 (forceIntegerFromIntegerValue "bswap16" n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      error "TODO: bswap16 illtyped"
+                      Utils.error "TODO: bswap16 illtyped"
                 end
             | _ ->
-                error "TODO: bswap16 wrong number of args"
+                Utils.error "TODO: bswap16 wrong number of args"
           end
         end
     | Implementation.BuiltinFunction "bswap32" ->
@@ -1096,10 +1096,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_bswap32 (forceIntegerFromIntegerValue "bswap32" n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      error "TODO: bswap32 illtyped"
+                      Utils.error "TODO: bswap32 illtyped"
                 end
             | _ ->
-                error "TODO: bswap32 wrong number of args"
+                Utils.error "TODO: bswap32 wrong number of args"
           end
         end
     | Implementation.BuiltinFunction "bswap64" ->
@@ -1111,14 +1111,14 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_bswap64 (forceIntegerFromIntegerValue "bswap64" n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      error "TODO: bswap64 illtyped"
+                      Utils.error "TODO: bswap64 illtyped"
                 end
             | _ ->
-                error "TODO: bswap64 wrong number of args"
+                Utils.error "TODO: bswap64 wrong number of args"
           end
         end
     | _ ->
-        error "Core_reduction.process_impl_proc ==> TODO"
+        Utils.error "Core_reduction.process_impl_proc ==> TODO"
   end
 
 val step_ctx:
@@ -1167,7 +1167,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               Step_tau "end of procedure" tsk begin
                 match th_st.env with
                   | [] ->
-                      error "end of proc, found an empty Core_run env"
+                      Utils.error "end of proc, found an empty Core_run env"
                   | _ :: env' ->
                       <| th_st with
                         arena= apply_ctx caller_ctx (Expr e_annots (Epure (Caux.mk_value_pe cval)));
@@ -1230,7 +1230,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         )
                     | SeqRMWRequest _ _ _ _ ->
                         (* this is not possible *)
-                        error "Core_reduction step_action returned SeqRMWRequest"
+                        Utils.error "Core_reduction step_action returned SeqRMWRequest"
                   end
                 end
             | ACTION_EVAL debug_str eval_m ->
@@ -1243,7 +1243,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           end in
         match expr_ with
           | Epure (Pexpr _ _ (PEval _)) ->
-              error ("Core_run.step_ctx ==> found a value with ctx <> CTX ==> " ^
+              Utils.error ("Core_run.step_ctx ==> found a value with ctx <> CTX ==> " ^
                      Pp.stringFromCore_expr expr ^ " <--> " ^ show ctx)
           
           | Ebound (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr'))) ->
@@ -1262,7 +1262,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           
           | Eaction (Paction p (Action loc _ (SeqRMW with_forward pe1 pe2 sym pe3))) ->
               if p = Neg then
-                error "TODO(better typing) negative SeqRMW should be forbidden by the typecheck"
+                Utils.error "TODO(better typing) negative SeqRMW should be forbidden by the typecheck"
               else
                 Step_action_request "SeqRMW" loc current_tid (is_unseq_with_ccall ctx) begin
                   full_eval_pexpr' pe1 >>= fun cval1 ->
@@ -1276,7 +1276,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                               <| th_st with env=
                                 match th_st.env with
                                   | [] ->
-                                      error "Core_reduction.step_ctx, SeqRMW ==> env is empty"
+                                      Utils.error "Core_reduction.step_ctx, SeqRMW ==> env is empty"
                                   | x :: xs ->
                                       Map.insert sym (snd (Caux.valueFromMemValue mval)) x :: xs
                                 end |> in
@@ -1285,7 +1285,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                               | Just mval' ->
                                   E.return mval'
                               | Nothing ->
-                                  error "TODO(use the error the monad) didn't match the lvalue type in SeqRMW"
+                                  Utils.error "TODO(use the error the monad) didn't match the lvalue type in SeqRMW"
                             end)
                             (fun aid fp mval mval' ->
                               let cval_e =
@@ -1294,7 +1294,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                               (* TODO: try to factorize this with the code for negative actions *)
                               match break_at_bound_and_sseq ctx with
                                 | NO_BOUND ->
-                                    error "TODO: NO_BOUND (SeqRMW)"
+                                    Utils.error "TODO: NO_BOUND (SeqRMW)"
                                 | BOUND_NO_SSEQ ctx_bound ctxA ->
                                     let ctxA' = add_exclusion n ctxA in
                                     let sym = Symbol.fresh () in
@@ -1322,7 +1322,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                             )
                         end
                     | _ ->
-                        error "TODO(use the error the monad) illtyped SeqRMW"
+                        Utils.error "TODO(use the error the monad) illtyped SeqRMW"
                   end
                 end
               
@@ -1334,7 +1334,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 | Neg ->
                     match break_at_bound_and_sseq ctx with
                       | NO_BOUND ->
-                          error "TODO: NO_BOUND (Neg)"
+                          Utils.error "TODO: NO_BOUND (Neg)"
                       | BOUND_NO_SSEQ ctx_bound ctxA ->
                           let debug_str = "Neg Action, no break ==> " ^ Loc.stringFromLocation loc in
                           Step_with_runstate (RSK_tau debug_str TSK_Misc) begin
@@ -1398,7 +1398,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                             |>
                       end in
                       Mem.case_ptrval pv
-                        (fun _ -> error "null function pointer")
+                        (fun _ -> Utils.error "null function pointer")
                         case_funptrval
                       (fun _ addr ->
                         (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
@@ -1410,7 +1410,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                               error (show addr ^ " does not point to a function (Eccall)")
                         end *) )
                   | _ ->
-                      error "TODO(use core_runM) Eccall illtyped first operand"
+                      Utils.error "TODO(use core_runM) Eccall illtyped first operand"
                 end
               end
           | Eproc _ (Sym psym) pes ->
@@ -1443,7 +1443,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               let current_proc =
                 match th_st.current_proc_opt with
                   | Just z -> z
-                  | Nothing -> error "Core_reduction ==> Erun outside of a proc"
+                  | Nothing -> Utils.error "Core_reduction ==> Erun outside of a proc"
                 end in
               (* reduction: RUN *)
               Step_with_runstate (RSK_eval "Erun") begin
@@ -1455,7 +1455,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                   Maybe.bind (Map.lookup proc_sym run_st.labeled) (Map.lookup sym)
                 ) >>= function
                   | Nothing ->
-                      error ("Erun couldn't resolve label: `" ^ show sym ^
+                      Utils.error ("Erun couldn't resolve label: `" ^ show sym ^
                              "' for procedure `" ^ show current_proc ^ "'")
                   | Just (sym_bTys, cont_expr) ->
                       E.foldlM (fun acc ((sym, bTy), pe) ->
@@ -1487,7 +1487,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           | _ ->
               match one_step eval_pexpr full_eval_pexpr' th_st.env expr with
                 | Nothing ->
-                    error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
+                    Utils.error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
                 | Just (TAU_WITH_RUNSTATE debug_str step_m) ->
                     Step_with_runstate (RSK_tau debug_str TSK_Misc) begin
                       step_m >>= fun (env', expr') ->
