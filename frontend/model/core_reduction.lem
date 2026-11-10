@@ -105,42 +105,47 @@ let fetch_proc_info core_extern file psym cvals =
 
 
 
-type action_request2 'a =
-  | AllocRequest2 of Symbol.prefix
-                  *  Mem.integer_value (* alignment constraint *)
-                  *  Mem.integer_value (* size of allocation *)
-                  *  (Cmm.aid -> Mem.pointer_value -> 'a) (* new thread state builder *)
+type action_request 'a =
+  | AllocRequest
+      of Symbol.prefix
+      *  Mem.integer_value (* alignment constraint *)
+      *  Mem.integer_value (* size of allocation *)
+      *  (Cmm.aid -> Mem.pointer_value -> 'a) (* new thread state builder *)
   
-  | CreateRequest2 of Symbol.prefix
-                   *  Mem.integer_value (* alignment constraint *)
-                   *  Ctype.ctype (* C type of allocation *)
-                   *  maybe integer (* potential requested address (see Cerb_attributes: cerb::with_address()) *)
-                   *  maybe Mem.mem_value (* optional initialisation value *)
-                   *  (Cmm.aid -> Mem.pointer_value -> 'a)
+  | CreateRequest
+      of Symbol.prefix
+      *  Mem.integer_value (* alignment constraint *)
+      *  Ctype.ctype (* C type of allocation *)
+      *  maybe integer (* potential requested address (see Cerb_attributes: cerb::with_address()) *)
+      *  maybe Mem.mem_value (* optional initialisation value *)
+      *  (Cmm.aid -> Mem.pointer_value -> 'a)
   
-  | StoreRequest2 of Cmm.memory_order (* C11 memory order *)
-                  *  Ctype.ctype (* C type of lvalue *)
-                  *  bool (* whether the store locks the allocation *)
-                  *  Mem.pointer_value
-                  *  Mem.mem_value 
-                  *  (Cmm.aid -> Mem.footprint -> 'a)
+  | StoreRequest
+      of Cmm.memory_order (* C11 memory order *)
+      *  Ctype.ctype (* C type of lvalue *)
+      *  bool (* whether the store locks the allocation *)
+      *  Mem.pointer_value
+      *  Mem.mem_value 
+      *  (Cmm.aid -> Mem.footprint -> 'a)
   
-  | LoadRequest2 of Cmm.memory_order (* C11 memory order *)
-                 *  Ctype.ctype (* C type of lvalue *)
-                 *  Mem.pointer_value
-              (* *  Symbol.sym  (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
-                   (* the argument of the callback is either a concrete value if the memory model
-                      is able to give one right away, or is equal to the symbolic value provided by the
-                      present LoadRequest *) *)
-                 *  (Cmm.aid -> Mem.footprint -> Mem.mem_value -> 'a)
+  | LoadRequest
+      of Cmm.memory_order (* C11 memory order *)
+      *  Ctype.ctype (* C type of lvalue *)
+      *  Mem.pointer_value
+  (* *  Symbol.sym  (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
+        (* the argument of the callback is either a concrete value if the memory model
+          is able to give one right away, or is equal to the symbolic value provided by the
+          present LoadRequest *) *)
+      *  (Cmm.aid -> Mem.footprint -> Mem.mem_value -> 'a)
   
-  | SeqRMWRequest2 of Ctype.ctype
-                   *  Mem.pointer_value
-                   *  (Mem.mem_value -> core_runM Mem.mem_value)
-                   *  (Cmm.aid -> Mem.footprint -> Mem.mem_value -> Mem.mem_value -> 'a)
+  | SeqRMWRequest
+      of Ctype.ctype
+      *  Mem.pointer_value
+      *  (Mem.mem_value -> core_runM Mem.mem_value)
+      *  (Cmm.aid -> Mem.footprint -> Mem.mem_value -> Mem.mem_value -> 'a)
   
   (* TODO: RMW, Fence *)
-  | KillRequest2 of (* is_dynamic *)bool * Mem.pointer_value * (Cmm.aid -> 'a)
+  | KillRequest of (* is_dynamic *)bool * Mem.pointer_value * (Cmm.aid -> 'a)
 
 
 type tau_step_kind =
@@ -156,32 +161,39 @@ type fs_oper_or_done =
   | FS_done of Core.value
   | FS_oper of Core_run.fs_oper
 
-type core_step2 =
-  | Step_ccall2 of Mem_common.thread_id * core_runM thread_state
-  | Step_with_runstate2 of runstate_step_kind * core_runM thread_state
-  | Step_tau2 of string * tau_step_kind * thread_state
-  
-  | Step_action_request2 of string * Loc.t * (* set Cmm.aid * set Cmm.aid * set Cmm.aid * *)
-                            Mem_common.thread_id *
-                            bool * (* is_unseq_with_ccall *)
-                            core_runM (action_request2 thread_state)
-  
-  | Step_blocked2
-  | Step_error2 of string
-  | Step_thread_done2 of Mem_common.thread_id * Core.value
-  | Step_done2 of Core.value
-  | Step_memop_request2 of Loc.t * Mem_common.memop * list Core.value * Mem_common.thread_id * bool(* is_unseq_with_ccall *) * (Core.value -> thread_state)
-  | Step_spawn_threads2 of (list Mem_common.thread_id -> thread_state) * list thread_state (* initial states for the children *)
-  | Step_fs2 of Mem_common.thread_id * thread_state * core_runM fs_oper_or_done
-  | Step_nd2 of list thread_state
+type core_step =
+  | Step_ccall of Mem_common.thread_id * core_runM thread_state
+  | Step_with_runstate of runstate_step_kind * core_runM thread_state
+  | Step_tau of string * tau_step_kind * thread_state
+  | Step_action_request
+      of string * Loc.t
+      (* * set Cmm.aid * set Cmm.aid * set Cmm.aid *)
+      * Mem_common.thread_id
+      * bool (* is_unseq_with_ccall *)
+      * core_runM (action_request thread_state)
+  | Step_blocked
+  | Step_error of string
+  | Step_thread_done of Mem_common.thread_id * Core.value
+  | Step_done of Core.value
+  | Step_memop_request
+      of Loc.t
+      *  Mem_common.memop
+      *  list Core.value
+      *  Mem_common.thread_id
+      *  bool(* is_unseq_with_ccall *)
+      *  (Core.value -> thread_state)
+  | Step_spawn_threads
+      of (list Mem_common.thread_id -> thread_state)
+      *  list thread_state (* initial states for the children *)
+  | Step_fs of Mem_common.thread_id * thread_state * core_runM fs_oper_or_done
+  | Step_nd of list thread_state
 
-
-instance (Show core_step2)
+instance (Show core_step)
   let show step =
     match step with
-      | Step_ccall2 _ _ ->
-          "Step_ccall2"
-      | Step_with_runstate2 kind _ ->
+      | Step_ccall _ _ ->
+          "Step_ccall"
+      | Step_with_runstate kind _ ->
           let kind_str =
             match kind with
               | RSK_eval debug_str ->
@@ -198,30 +210,30 @@ instance (Show core_step2)
                   end in
                 "RSK_tau[" ^ debug_str ^ ", " ^ kind'_str ^ "]"
             end in
-          "Step_with_runstate2[" ^ kind_str ^ "]"
-      | Step_tau2 debug_str kind _ ->
-          "Step_tau2<TAU>[" ^ debug_str ^ "]"
-      | Step_action_request2 debug_str loc tid is_unseq_with_ccall _ ->
-          "Step_action_request2[" ^ debug_str ^ "] -- tid: " ^ show tid ^
+          "Step_with_runstate[" ^ kind_str ^ "]"
+      | Step_tau debug_str kind _ ->
+          "Step_tau<TAU>[" ^ debug_str ^ "]"
+      | Step_action_request debug_str loc tid is_unseq_with_ccall _ ->
+          "Step_action_request[" ^ debug_str ^ "] -- tid: " ^ show tid ^
           (if is_unseq_with_ccall then " [unseq_with_call]" else "") ^ " -- at loc: " ^ Loc.stringFromLocation loc
-      | Step_blocked2 ->
-          "Step_blocked2"
-      | Step_error2 debug_str ->
-          "Step_error2[" ^ debug_str ^ "]"
-      | Step_thread_done2 tid cval ->
-          "Step_thread_done2(tid: " ^ show tid ^ ") -- value: " ^ Pp.stringFromCore_value cval
-      | Step_done2 cval ->
-          "Step_done2 -- value: " ^ Pp.stringFromCore_value cval
-      | Step_memop_request2 loc memop _ tid is_unseq_with_ccall _ ->
-          "Step_memop_request2[" ^ show memop ^ "] -- tid: " ^ show tid ^
+      | Step_blocked ->
+          "Step_blocked"
+      | Step_error debug_str ->
+          "Step_error[" ^ debug_str ^ "]"
+      | Step_thread_done tid cval ->
+          "Step_thread_done(tid: " ^ show tid ^ ") -- value: " ^ Pp.stringFromCore_value cval
+      | Step_done cval ->
+          "Step_done -- value: " ^ Pp.stringFromCore_value cval
+      | Step_memop_request loc memop _ tid is_unseq_with_ccall _ ->
+          "Step_memop_request[" ^ show memop ^ "] -- tid: " ^ show tid ^
           (if is_unseq_with_ccall then " [unseq_with_call]" else "") ^
           " -- at loc: " ^ Loc.stringFromLocation loc
-      | Step_spawn_threads2 _ _ ->
-          "Step_spawn_threads2"
-      | Step_fs2 tid _ _ ->
-          "Step_fs2 -- tid: " ^ show tid
-      | Step_nd2 _ ->
-          "Step_nd2"
+      | Step_spawn_threads _ _ ->
+          "Step_spawn_threads"
+      | Step_fs tid _ _ ->
+          "Step_fs -- tid: " ^ show tid
+      | Step_nd _ ->
+          "Step_nd"
     end
 end
 
@@ -654,7 +666,7 @@ let rec apply_ctx ctx expr =
 
 
 type action_step =
-  | ACTION_REQUEST of string * Loc.t * action_request2 (Core.expr core_run_annotation)
+  | ACTION_REQUEST of string * Loc.t * action_request (Core.expr core_run_annotation)
   | ACTION_EVAL of string * core_runM (Core.action core_run_annotation)
   | ACTION_ILLTYPED of string
 
@@ -673,7 +685,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                 "CreateRequest"
                 loc
                 begin
-                  CreateRequest2 pref ival ty (Cerb_attributes.get_with_address e_annots) Nothing (fun aid ptrval ->
+                  CreateRequest pref ival ty (Cerb_attributes.get_with_address e_annots) Nothing (fun aid ptrval ->
                     Caux.mk_value_e (Vobject (OVpointer ptrval))
                   )
                 end
@@ -695,7 +707,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                       "CreateRequest"
                       loc
                       begin
-                        CreateRequest2 pref ival ty (Cerb_attributes.get_with_address e_annots) (Just mval) (fun aid ptrval ->
+                        CreateRequest pref ival ty (Cerb_attributes.get_with_address e_annots) (Just mval) (fun aid ptrval ->
                           Caux.mk_value_e (Vobject (OVpointer ptrval))
                         )
                       end
@@ -725,7 +737,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                       "StoreRequest"
                       loc
                       begin
-                        StoreRequest2 mo ty is_locking ptrval mval (fun aid fp ->
+                        StoreRequest mo ty is_locking ptrval mval (fun aid fp ->
                           let dyn_annots =
                             match is_excluded with
                               | Nothing ->
@@ -760,7 +772,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                 "LoadRequest"
                 loc
                 begin
-                  LoadRequest2 mo ty ptrval (fun aid fp mval ->
+                  LoadRequest mo ty ptrval (fun aid fp mval ->
                     let dyn_annots =
                       match is_excluded with
                         | Nothing ->
@@ -790,7 +802,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                 "AllocRequest"
                 loc
                 begin
-                  AllocRequest2 pref ival1 ival2 (fun aid ptrval ->
+                  AllocRequest pref ival1 ival2 (fun aid ptrval ->
                     Caux.mk_value_e (Vobject (OVpointer ptrval))
                   )
                 end
@@ -810,7 +822,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                 "KillRequest"
                 loc
                 begin
-                  KillRequest2 (is_dynamic kind) ptrval
+                  KillRequest (is_dynamic kind) ptrval
                     (fun aid -> Caux.mk_value_e Vunit)
                 end
           | Just _ ->
@@ -1003,7 +1015,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
     | Implementation.BuiltinFunction "errno" ->
         match pes with
           | [] ->
-              Step_tau2 "errno" TSK_Misc (
+              Step_tau "errno" TSK_Misc (
                 wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_value_pe (Vobject (OVpointer th_st.errno)))))
               )
           | _ ->
@@ -1018,9 +1030,9 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           | [pe] ->
               match valueFromPexpr pe with
                 | Just cval ->
-                    Step_done2 cval
+                    Step_done cval
                 | Nothing ->
-                    Step_with_runstate2 (RSK_eval "Eproc exit") begin
+                    Step_with_runstate (RSK_eval "Eproc exit") begin
                       full_eval_pexpr pe >>= fun cval ->
                       E.return (wrap_proc [Caux.mk_value_pe cval])
                     end
@@ -1030,7 +1042,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
         end
     (* NOTE: some GCC builtins *)
     | Implementation.BuiltinFunction "generic_ffs" ->
-        Step_with_runstate2 (RSK_tau "Eproc builtin_generic_ffs" TSK_Misc) begin
+        Step_with_runstate (RSK_tau "Eproc builtin_generic_ffs" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1045,7 +1057,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           end
         end
     | Implementation.BuiltinFunction "ctz" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_ctz" TSK_Misc) begin
+        Step_with_runstate (RSK_tau "Eproc __builtin_ctz" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1061,7 +1073,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
         end
     (* TODO: factorise ... *)
     | Implementation.BuiltinFunction "bswap16" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap16" TSK_Misc) begin
+        Step_with_runstate (RSK_tau "Eproc __builtin_bswap16" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1076,7 +1088,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           end
         end
     | Implementation.BuiltinFunction "bswap32" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap32" TSK_Misc) begin
+        Step_with_runstate (RSK_tau "Eproc __builtin_bswap32" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1091,7 +1103,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           end
         end
     | Implementation.BuiltinFunction "bswap64" ->
-        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap64" TSK_Misc) begin
+        Step_with_runstate (RSK_tau "Eproc __builtin_bswap64" TSK_Misc) begin
           match pes with
             | [pe] ->
                 full_eval_pexpr pe >>= function
@@ -1112,7 +1124,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
 val step_ctx:
   Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym ->
   Mem_common.thread_id -> (maybe Mem_common.thread_id * thread_state) ->
-  list core_step2
+  list core_step
 let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
   let eval_pexpr pe =
     E.eval_pexpr2 th_st core_extern mem_st file pe >>= function
@@ -1131,11 +1143,11 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               match parent_tid_opt with
                 | Just parent_tid ->
                     (* reduction: THREAD-DONE *)
-                    Step_thread_done2 parent_tid cval
+                    Step_thread_done parent_tid cval
                 | Nothing ->
                     (* this was the startup thread *)
                     (* reduction: PROGRAM-DONE *)
-                    Step_done2 cval
+                    Step_done cval
               end
           | Stack_cons2 parent_proc_opt caller_ctx sk' ->
               (* reached the end of the execution of a procedure. *)
@@ -1152,7 +1164,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       TSK_Misc
                 end in
               (* reduction: RETURN *)
-              Step_tau2 "end of procedure" tsk begin
+              Step_tau "end of procedure" tsk begin
                 match th_st.env with
                   | [] ->
                       error "end of proc, found an empty Core_run env"
@@ -1169,7 +1181,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
     | (CTX, (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr')))) ->
         (* {A}v -> v   (in empty context) *)
         (* reduction: REMOVE-ANNOT *)
-        Step_tau2 "CTX, Eannot(value)" TSK_Misc begin
+        Step_tau "CTX, Eannot(value)" TSK_Misc begin
           <| th_st with arena= expr' |>
         end
     
@@ -1194,40 +1206,40 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                     th_st.current_loc
                   else
                     loc in
-                Step_action_request2 debug_str loc' current_tid (is_unseq_with_ccall ctx) begin
+                Step_action_request debug_str loc' current_tid (is_unseq_with_ccall ctx) begin
                   E.return match _request with
-                    | CreateRequest2 pref ival ty req_addr_opt mval_opt mk_expr' ->
-                        CreateRequest2 pref ival ty req_addr_opt mval_opt (fun aid ptrval ->
+                    | CreateRequest pref ival ty req_addr_opt mval_opt mk_expr' ->
+                        CreateRequest pref ival ty req_addr_opt mval_opt (fun aid ptrval ->
                           wrap_expr (mk_expr' aid ptrval)
                         )
-                    | AllocRequest2 pref ival1 ival2 mk_expr' ->
-                        AllocRequest2 pref ival1 ival2 (fun aid ptrval ->
+                    | AllocRequest pref ival1 ival2 mk_expr' ->
+                        AllocRequest pref ival1 ival2 (fun aid ptrval ->
                           wrap_expr (mk_expr' aid ptrval)
                         )
-                    | LoadRequest2 mo ty ptrval mk_expr' ->
-                        LoadRequest2 mo ty ptrval (fun aid fp mval ->
+                    | LoadRequest mo ty ptrval mk_expr' ->
+                        LoadRequest mo ty ptrval (fun aid fp mval ->
                           wrap_expr (mk_expr' aid fp mval)
                         )
-                    | StoreRequest2 mk ty is_locking ptrval mval mk_expr' ->
-                        StoreRequest2 mk ty is_locking ptrval mval (fun aid fp ->
+                    | StoreRequest mk ty is_locking ptrval mval mk_expr' ->
+                        StoreRequest mk ty is_locking ptrval mval (fun aid fp ->
                           wrap_expr (mk_expr' aid fp)
                         )
-                    | KillRequest2 is_dynamic ptrval mk_expr' ->
-                        KillRequest2 is_dynamic ptrval (fun aid ->
+                    | KillRequest is_dynamic ptrval mk_expr' ->
+                        KillRequest is_dynamic ptrval (fun aid ->
                           wrap_expr (mk_expr' aid)
                         )
-                    | SeqRMWRequest2 _ _ _ _ ->
+                    | SeqRMWRequest _ _ _ _ ->
                         (* this is not possible *)
-                        error "Core_reduction step_action returned SeqRMWRequest2"
+                        error "Core_reduction step_action returned SeqRMWRequest"
                   end
                 end
             | ACTION_EVAL debug_str eval_m ->
-                Step_with_runstate2 (RSK_eval debug_str) begin
+                Step_with_runstate (RSK_eval debug_str) begin
                   eval_m >>= fun act' ->
                   E.return (wrap_expr (Expr e_annots (wrap_act act')))
                 end
             | ACTION_ILLTYPED str ->
-                Step_error2 str
+                Step_error str
           end in
         match expr_ with
           | Epure (Pexpr _ _ (PEval _)) ->
@@ -1237,14 +1249,14 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           | Ebound (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr'))) ->
               (* bound({A}v)-> v *)
               (* reduction: REMOVE-BOUND *)
-              Step_tau2 "CTX, Ebound Eannot(value)" TSK_Misc begin
+              Step_tau "CTX, Ebound Eannot(value)" TSK_Misc begin
                 wrap_expr expr'
               end
           
           | Ebound (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr') ->
               (* bound(v)-> v *)
               (* reduction: REMOVE-BOUND *)
-              Step_tau2 "CTX, Ebound(value)" TSK_Misc begin
+              Step_tau "CTX, Ebound(value)" TSK_Misc begin
                 wrap_expr expr'
               end
           
@@ -1252,14 +1264,14 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               if p = Neg then
                 error "TODO(better typing) negative SeqRMW should be forbidden by the typecheck"
               else
-                Step_action_request2 "SeqRMW" loc current_tid (is_unseq_with_ccall ctx) begin
+                Step_action_request "SeqRMW" loc current_tid (is_unseq_with_ccall ctx) begin
                   full_eval_pexpr' pe1 >>= fun cval1 ->
                   full_eval_pexpr' pe2 >>= fun cval2 ->
                   match (cval1, cval2) with
                     | (Vctype ty, Vobject (OVpointer ptrval)) ->
                         E.fresh_excluded_id >>= fun n ->
                         E.return begin
-                          SeqRMWRequest2 ty ptrval (fun mval ->
+                          SeqRMWRequest ty ptrval (fun mval ->
                             let th_st_tmp =
                               <| th_st with env=
                                 match th_st.env with
@@ -1325,7 +1337,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                           error "TODO: NO_BOUND (Neg)"
                       | BOUND_NO_SSEQ ctx_bound ctxA ->
                           let debug_str = "Neg Action, no break ==> " ^ Loc.stringFromLocation loc in
-                          Step_with_runstate2 (RSK_tau debug_str TSK_Misc) begin
+                          Step_with_runstate (RSK_tau debug_str TSK_Misc) begin
                             E.fresh_excluded_id >>= fun n ->
                             let ctxA' = add_exclusion n ctxA in
                             let sym = Symbol.fresh () in
@@ -1340,14 +1352,14 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       | BOUND_WITH_SSEQ ctx_bound ctxA sseq_pat CTX sseq_e2 ->
                           (* TODO: check *)
                           (* Empty inner context, so no need to pull and annotate for exclusion *)
-                          Step_tau2 "Neg Action, CTX" TSK_Misc begin
+                          Step_tau "Neg Action, CTX" TSK_Misc begin
                             <| th_st with arena= apply_ctx ctx_bound
                                                    (apply_ctx ctxA (Caux.mk_sseq_e sseq_pat (Expr [] (Eaction (Paction Pos act))) sseq_e2)) |>
                           end
                           
                       | BOUND_WITH_SSEQ ctx_bound ctxA sseq_pat ctxB sseq_e2 ->
                           let debug_str = "Neg Action, with break" ^ Loc.stringFromLocation loc in
-                          Step_with_runstate2 (RSK_tau debug_str TSK_Misc) begin
+                          Step_with_runstate (RSK_tau debug_str TSK_Misc) begin
                             E.fresh_excluded_id >>= fun n ->
                             let ctxB' = add_exclusion n ctxB in
                             let expr' =
@@ -1364,8 +1376,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               process_action (Just n)(*is excluded*) (fun z -> Eexcluded n z) act
           
           | Eccall call_annots _ pe pes ->
-              (* Step_with_runstate2 (RSK_eval "Eccall") begin *)
-              Step_ccall2 current_tid begin
+              (* Step_with_runstate (RSK_eval "Eccall") begin *)
+              Step_ccall current_tid begin
                 full_eval_pexpr' pe >>= function
                   | Vloaded (LVspecified (OVpointer pv)) ->
                       E.mapM full_eval_pexpr' pes >>= fun cvals ->
@@ -1403,7 +1415,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               end
           | Eproc _ (Sym psym) pes ->
               (* reduction: PCALL *)
-              Step_with_runstate2 (RSK_eval "Eproc") begin
+              Step_with_runstate (RSK_eval "Eproc") begin
                 E.mapM full_eval_pexpr' pes >>= fun cvals ->
                  SEU.runEU (
                    Exception.bind (fetch_proc_info core_extern file psym cvals)
@@ -1419,7 +1431,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                end
           | Eproc a (Impl iCst) pes ->
               if Core_reduction_aux.is_fs_function iCst then
-                Step_fs2 current_tid th_st begin
+                Step_fs current_tid th_st begin
                   E.mapM full_eval_pexpr' pes >>= fun cvals ->
                   E.return (FS_oper (Core_reduction_aux.step_fs_proc th_st iCst cvals))
                 end
@@ -1434,7 +1446,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                   | Nothing -> error "Core_reduction ==> Erun outside of a proc"
                 end in
               (* reduction: RUN *)
-              Step_with_runstate2 (RSK_eval "Erun") begin
+              Step_with_runstate (RSK_eval "Erun") begin
                 SEU.read (fun run_st ->
                   let proc_sym = match Map.lookup current_proc core_extern with
                     | Just proc_sym -> proc_sym
@@ -1457,7 +1469,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               (* This step places waiting constructs in the arena and asks the
                  driver to spawn new threads *)
               (* reduction: SPAWN *)
-              Step_spawn_threads2
+              Step_spawn_threads
                 (fun tids -> wrap_expr (Caux.mk_unseq_e (List.map Caux.mk_wait_e tids)))
                 begin
                   List.map (fun e -> <|
@@ -1471,38 +1483,38 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                   |>) es
                 end
           | Ewait _ ->
-              Step_blocked2
+              Step_blocked
           | _ ->
               match one_step eval_pexpr full_eval_pexpr' th_st.env expr with
                 | Nothing ->
                     error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
                 | Just (TAU_WITH_RUNSTATE debug_str step_m) ->
-                    Step_with_runstate2 (RSK_tau debug_str TSK_Misc) begin
+                    Step_with_runstate (RSK_tau debug_str TSK_Misc) begin
                       step_m >>= fun (env', expr') ->
                       E.return <| th_st with arena= apply_ctx ctx expr'; env= env' |>
                     end
                 | Just (TAU debug_str env' expr') ->
-                    Step_tau2 debug_str TSK_Misc
+                    Step_tau debug_str TSK_Misc
                       <| th_st with arena= apply_ctx ctx expr'; env= env' |>
                 | Just (EVAL debug_str eval_m) ->
-                    Step_with_runstate2 (RSK_eval debug_str) begin
+                    Step_with_runstate (RSK_eval debug_str) begin
                       eval_m >>= fun expr' ->
                       E.return (wrap_expr expr')
                     end
                 | Just (ND es) ->
-                    Step_nd2 (List.map wrap_expr es) 
+                    Step_nd (List.map wrap_expr es) 
                 | Just (MEMOP memop cvals) ->
                     (* reduction: MEMOP *)
-                    Step_memop_request2 th_st.current_loc memop cvals current_tid (is_unseq_with_ccall ctx) (fun cval ->
+                    Step_memop_request th_st.current_loc memop cvals current_tid (is_unseq_with_ccall ctx) (fun cval ->
                       wrap_expr (Caux.mk_pure_e (Caux.mk_value_pe cval))
                     )
                 | Just UNSEQUENCED_RACE ->
                     (* TODO: loc *)
-                    Step_with_runstate2 (RSK_eval "unsequenced race") begin
+                    Step_with_runstate (RSK_eval "unsequenced race") begin
                       E.undef th_st.current_loc [Undefined.UB035_unsequenced_race]
                     end
                 | Just (ILLTYPED str) ->
-                    Step_error2 str
+                    Step_error str
               end
         end
   end) (get_ctx th_st.arena)
