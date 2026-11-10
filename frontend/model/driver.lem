@@ -449,7 +449,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
 
 
 (*
-val     drive_core_thread2: Mem.thread_id -> driverM (maybe Core_reduction.core_step2)
+val     drive_core_thread2: Mem.thread_id -> driverM (maybe Core_reduction.core_step)
 let rec drive_core_thread2 tid =
   ND.get >>= fun dr_st ->
   let th_info = match List.lookup tid dr_st.core_state.Core_run.thread_states with
@@ -459,7 +459,7 @@ let rec drive_core_thread2 tid =
         Utils.error "drive_core_thread, wrong tid"
   end in
   ND.mk_step (SK_misc ["drive_core_thread2"]) $ List.map (function
-    | Core_reduction.Step_thread_done2 parent_tid cval ->
+    | Core_reduction.Step_thread_done parent_tid cval ->
         ( SK_misc ["thread_done("^ show tid ^")"]
         , (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () ->
             "thread " ^ show tid ^ " is done"
@@ -479,16 +479,16 @@ let rec drive_core_thread2 tid =
             dr_step_counter= dr_st.dr_step_counter + 1;
           |>) >>= fun () ->
           drive_core_thread2 parent_tid )
-    | (Core_reduction.Step_blocked2 as step) ->
+    | (Core_reduction.Step_blocked as step) ->
         (SK_misc ["blocked("^show tid^")"], ND.return (Just step))
-    | Core_reduction.Step_done2 cval ->
+    | Core_reduction.Step_done cval ->
         ( SK_done, ND.return Nothing )
 (*
         ( SK_done
         , get_thread_states >>= fun th_sts ->
           let th_st = match lookup tid th_sts with
             | Just (_, th_st) -> th_st
-            | Nothing -> Utils.error "WIP: Step_done2"
+            | Nothing -> Utils.error "WIP: Step_done"
           end in
           ND.update (fun dr_st ->
             let core_st' = Core_run.update_thread_state tid
@@ -508,7 +508,7 @@ let rec drive_core_thread2 tid =
           ND.return Nothing)
 *)
     
-    | Core_reduction.Step_with_runstate2 rsk step_m ->
+    | Core_reduction.Step_with_runstate rsk step_m ->
         match rsk with
           | Core_reduction.RSK_eval debug_str ->
               ( SK_eval debug_str
@@ -543,7 +543,7 @@ let rec drive_core_thread2 tid =
                 drive_core_thread2 tid )
         end
     
-    | Core_reduction.Step_tau2 debug_str tsk th_st' ->
+    | Core_reduction.Step_tau debug_str tsk th_st' ->
         ( SK_tau debug_str
         , let () = Debug.print_debug 3 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
           match tsk with
@@ -569,7 +569,7 @@ let rec drive_core_thread2 tid =
           |>) >>= fun () ->
           drive_core_thread2 tid )
     
-    | Core_reduction.Step_spawn_threads2 mk_parent_th_st spawn_th_sts ->
+    | Core_reduction.Step_spawn_threads mk_parent_th_st spawn_th_sts ->
         ( SK_misc ["spawn_threads("^show tid^")"]
           , let ((spawn_tids, core_st'), run_st') = State.runStateM (
               State.foldlM (fun (th_tids_, core_st_) th_st ->
@@ -586,14 +586,14 @@ let rec drive_core_thread2 tid =
             ND.mapM_ drive_core_thread2 spawn_tids >>= fun () ->
             drive_core_thread2 tid )
 
-    | Core_reduction.Step_fs2 tid th_st m_fs_step ->
+    | Core_reduction.Step_fs tid th_st m_fs_step ->
         (* TODO: can m_fs_step change the thread state?, If so this is wrong *)
         ( SK_misc ["fs_step"]
         , liftCore_run m_fs_step                >>= fun fs_step ->
           drive_fs_step tid th_st dr_st fs_step >>= fun () ->
           drive_core_thread2 tid )
 
-    | (Core_reduction.Step_nd2 th_sts) ->
+    | (Core_reduction.Step_nd th_sts) ->
         ( SK_misc ["nd"]
         , ND.pick (SK_misc ["nd"]) th_sts >>= fun th_st' ->
           ND.update (fun dr_st -> <| dr_st with
@@ -602,12 +602,12 @@ let rec drive_core_thread2 tid =
           |>) >>= fun () ->
           drive_core_thread2 tid )
 
-    | Core_reduction.Step_error2 debug_str ->
+    | Core_reduction.Step_error debug_str ->
         Utils.error ("WIP: Step_error --> " ^ debug_str)
-    | (Core_reduction.Step_action_request2 str _ _ _ _ as step) ->
+    | (Core_reduction.Step_action_request str _ _ _ _ as step) ->
         ( SK_action_request str
         , ND.return (Just step) )
-    | (Core_reduction.Step_memop_request2 _ _ _ _ _ _ as step) -> 
+    | (Core_reduction.Step_memop_request _ _ _ _ _ _ as step) -> 
         ( SK_memop_request
         , ND.return (Just step) )
   end) (Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info)
@@ -631,7 +631,7 @@ let rec drive_core_thread2 tid =
 
 (* 
 (* perform drive_core_thread for all the core threads *)
-val drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step2))
+val drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step))
 let drive_core_threads () =
   ND.get >>= fun dr_st ->
   ND.mapM (fun (tid, _) ->
@@ -669,9 +669,9 @@ let record_trace_event mk_event =
     ND.return ()
 
 val action_request_sequential2:
-  Loc.t -> Mem.thread_id -> Cmm.aid -> Core_reduction.action_request2 Core_run_aux.thread_state -> driverM unit
+  Loc.t -> Mem.thread_id -> Cmm.aid -> Core_reduction.action_request Core_run_aux.thread_state -> driverM unit
 let action_request_sequential2 loc tid aid = function
-  | Core_reduction.AllocRequest2 pref align_ival size_ival mk_th_st' ->
+  | Core_reduction.AllocRequest pref align_ival size_ival mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST ALLOC") in (* DEBUG *)
       liftMem (Mem.allocate_region tid pref align_ival size_ival) >>= fun ptrval ->
       record_trace_event (ND.return (ME_allocate_region tid pref align_ival size_ival ptrval)) >>= fun () ->
@@ -681,7 +681,7 @@ let action_request_sequential2 loc tid aid = function
         |>
       )
   
-  | Core_reduction.CreateRequest2 pref align_ival lvalue_ty req_addr_opt init_opt mk_th_st' ->
+  | Core_reduction.CreateRequest pref align_ival lvalue_ty req_addr_opt init_opt mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST CREATE") in (* DEBUG *)
       liftMem (Mem.allocate_object tid pref align_ival lvalue_ty req_addr_opt init_opt) >>= fun ptrval ->
       record_trace_event (ND.return (ME_allocate_object tid pref align_ival lvalue_ty init_opt ptrval)) >>= fun () ->
@@ -691,7 +691,7 @@ let action_request_sequential2 loc tid aid = function
         |>
       )
   
-  | Core_reduction.LoadRequest2 mo lvalue_ty ptr_val mk_th_st' ->
+  | Core_reduction.LoadRequest mo lvalue_ty ptr_val mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST LOAD") in (* DEBUG *)
       liftMem (Mem.load loc lvalue_ty ptr_val)            >>= fun (fp, mval) ->
       record_trace_event begin
@@ -705,7 +705,7 @@ let action_request_sequential2 loc tid aid = function
         |>
       )
   
-  | Core_reduction.StoreRequest2 mo lvalue_ty is_locking ptr_val mem_val mk_th_st' ->
+  | Core_reduction.StoreRequest mo lvalue_ty is_locking ptr_val mem_val mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST STORE") in (* DEBUG *)
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
@@ -721,7 +721,7 @@ let action_request_sequential2 loc tid aid = function
         |>
       )
   
-  | Core_reduction.SeqRMWRequest2 lvalue_ty ptr_val mk_mval' mk_th_st' ->
+  | Core_reduction.SeqRMWRequest lvalue_ty ptr_val mk_mval' mk_th_st' ->
       liftMem (Mem.load loc lvalue_ty ptr_val)              >>= fun (_, mval) ->
       liftCore_run (mk_mval' mval)                          >>= fun mval'     ->
       liftMem (Mem.store loc lvalue_ty false ptr_val mval') >>= fun fp        ->
@@ -747,7 +747,7 @@ let action_request_sequential2 loc tid aid = function
       )
 *)
   
-  | Core_reduction.KillRequest2 is_dynamic ptr_val mk_th_st' ->
+  | Core_reduction.KillRequest is_dynamic ptr_val mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST KILL") in (* DEBUG *)
       liftMem (Mem.kill loc is_dynamic ptr_val) >>
       record_trace_event (ND.return (ME_kill loc is_dynamic ptr_val)) >>= fun () ->
@@ -759,12 +759,12 @@ let action_request_sequential2 loc tid aid = function
 end
 
 
-val perform_action_request2:
-  bool -> Loc.t -> Mem.thread_id -> Core_reduction.action_request2 Core_run_aux.thread_state -> driverM unit
-let perform_action_request2 with_concurrency loc tid request =
+val perform_action_request:
+  bool -> Loc.t -> Mem.thread_id -> Core_reduction.action_request Core_run_aux.thread_state -> driverM unit
+let perform_action_request with_concurrency loc tid request =
   begin
     if with_concurrency then
-      Utils.error "TODO: perform_action_request2 ==> concurrency"
+      Utils.error "TODO: perform_action_request ==> concurrency"
     else
       liftCore_run (SEU.runS Core_run.fresh_action_id) >>= fun aid ->
       action_request_sequential2 loc tid aid request
@@ -909,42 +909,42 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
 
 
 
-val step_kind_of_core_step2: Core_reduction.core_step2 -> step_kind
-let step_kind_of_core_step2 = function
-  | Core_reduction.Step_ccall2 _ _ ->
+val step_kind_of_core_step: Core_reduction.core_step -> step_kind
+let step_kind_of_core_step = function
+  | Core_reduction.Step_ccall _ _ ->
       SK_misc ["ccall"]
-  | Core_reduction.Step_with_runstate2 (Core_reduction.RSK_eval debug_str) _ ->
+  | Core_reduction.Step_with_runstate (Core_reduction.RSK_eval debug_str) _ ->
       SK_eval debug_str
-  | Core_reduction.Step_with_runstate2 (Core_reduction.RSK_tau debug_str _) _ ->
+  | Core_reduction.Step_with_runstate (Core_reduction.RSK_tau debug_str _) _ ->
       SK_tau debug_str
-  | Core_reduction.Step_tau2 debug_str _ _ ->
+  | Core_reduction.Step_tau debug_str _ _ ->
       SK_tau debug_str
-  | Core_reduction.Step_action_request2 debug_str _ _ _ _ ->
+  | Core_reduction.Step_action_request debug_str _ _ _ _ ->
       SK_action_request debug_str
-  | Core_reduction.Step_blocked2 ->
+  | Core_reduction.Step_blocked ->
       SK_misc ["blocked"]
-  | Core_reduction.Step_error2 debug_str ->
+  | Core_reduction.Step_error debug_str ->
       SK_misc ["error"; debug_str]
-  | Core_reduction.Step_thread_done2 _ _ ->
+  | Core_reduction.Step_thread_done _ _ ->
       SK_misc ["thread_done"]
-  | Core_reduction.Step_done2 _ ->
+  | Core_reduction.Step_done _ ->
       SK_done
-  | Core_reduction.Step_memop_request2 _ _ _ _ _ _ ->
+  | Core_reduction.Step_memop_request _ _ _ _ _ _ ->
       SK_memop_request
-  | Core_reduction.Step_spawn_threads2 _ _ ->
+  | Core_reduction.Step_spawn_threads _ _ ->
       SK_misc ["spawn_threads"]
-  | Core_reduction.Step_fs2 _ _ _ ->
+  | Core_reduction.Step_fs _ _ _ ->
       SK_misc ["fs_step"]
-  | Core_reduction.Step_nd2 _ ->
+  | Core_reduction.Step_nd _ ->
       SK_misc ["nd"]
 end
 
 (* When enabled, this adds NDstep nodes which is used by the web instance for the interactive
  * execution stepping. *)
-val as_step: forall 'a. bool -> Core_reduction.core_step2 -> driverM 'a -> driverM 'a
+val as_step: forall 'a. bool -> Core_reduction.core_step -> driverM 'a -> driverM 'a
 let as_step do_stepping step m =
   if do_stepping then
-    let kind = step_kind_of_core_step2 step in
+    let kind = step_kind_of_core_step step in
     ND.mk_step kind [(kind, m)]
   else
     m
@@ -953,29 +953,29 @@ let as_step do_stepping step m =
  * When it does, action and memop requests can be performed eargerly, otherwise they are
  * left for the driver to nondeterministical schedule as it steps their threads *)
 let can_advance single_thread = function
-  | Core_reduction.Step_ccall2 _ _ ->
+  | Core_reduction.Step_ccall _ _ ->
       false
-  | Core_reduction.Step_with_runstate2 _ _ ->
+  | Core_reduction.Step_with_runstate _ _ ->
       true
-  | Core_reduction.Step_tau2 _ _ _ ->
+  | Core_reduction.Step_tau _ _ _ ->
       true
-  | Core_reduction.Step_action_request2 _ _ _ is_unseq_with_ccall _ ->
+  | Core_reduction.Step_action_request _ _ _ is_unseq_with_ccall _ ->
       single_thread && not is_unseq_with_ccall
-  | Core_reduction.Step_blocked2 ->
+  | Core_reduction.Step_blocked ->
       false
-  | Core_reduction.Step_error2 str ->
-      Utils.error ("can_advance: Step_error2 ==> " ^ str)
-  | Core_reduction.Step_thread_done2 _ _ ->
+  | Core_reduction.Step_error str ->
+      Utils.error ("can_advance: Step_error ==> " ^ str)
+  | Core_reduction.Step_thread_done _ _ ->
       true
-  | Core_reduction.Step_done2 _ ->
+  | Core_reduction.Step_done _ ->
       false
-  | Core_reduction.Step_memop_request2 _ _ _ _ is_unseq_with_ccall _ ->
+  | Core_reduction.Step_memop_request _ _ _ _ is_unseq_with_ccall _ ->
       single_thread && not is_unseq_with_ccall
-  | Core_reduction.Step_spawn_threads2 _ _ ->
+  | Core_reduction.Step_spawn_threads _ _ ->
       true
-  | Core_reduction.Step_fs2 _ _ _ ->
+  | Core_reduction.Step_fs _ _ _ ->
       false
-  | Core_reduction.Step_nd2 _ ->
+  | Core_reduction.Step_nd _ ->
       true
 end
 
@@ -985,9 +985,9 @@ type advance_info =
 
 let advance_step tid step =
   match step with
-    | Core_reduction.Step_ccall2 _ _ ->
+    | Core_reduction.Step_ccall _ _ ->
         ND.return NOWAKEUP
-    | Core_reduction.Step_with_runstate2 rsk step_m ->
+    | Core_reduction.Step_with_runstate rsk step_m ->
         match rsk with
           | Core_reduction.RSK_tau _ (Core_reduction.TSK_Return sym mval_opt) ->
               record_trace_event (ND.return (ME_function_return sym mval_opt))
@@ -1001,7 +1001,7 @@ let advance_step tid step =
         |>) >>= fun () ->
         ND.return NOWAKEUP
 
-    | Core_reduction.Step_tau2 debug_str tsk th_st' ->
+    | Core_reduction.Step_tau debug_str tsk th_st' ->
         match tsk with
           | Core_reduction.TSK_Return sym mval_opt ->
               record_trace_event (ND.return (ME_function_return sym mval_opt))
@@ -1014,22 +1014,22 @@ let advance_step tid step =
         |>) >>= fun () ->
         ND.return NOWAKEUP
 
-    | Core_reduction.Step_action_request2 _ loc tid is_unseq_with_ccall m_request ->
+    | Core_reduction.Step_action_request _ loc tid is_unseq_with_ccall m_request ->
         begin if is_unseq_with_ccall then
           ND.return ()
         else
           liftCore_run m_request >>= fun request ->
-          perform_action_request2 false (*TODO!!! with_concurrency*) loc tid request
+          perform_action_request false (*TODO!!! with_concurrency*) loc tid request
         end >>= fun () ->
         ND.return NOWAKEUP
 
-    | Core_reduction.Step_blocked2 ->
+    | Core_reduction.Step_blocked ->
         ND.return NOWAKEUP
 
-    | Core_reduction.Step_error2 debug_str ->
-        Utils.error ("Driver.advance_step => Step_error2: " ^ debug_str)
+    | Core_reduction.Step_error debug_str ->
+        Utils.error ("Driver.advance_step => Step_error: " ^ debug_str)
 
-    | Core_reduction.Step_thread_done2 parent_tid cval ->
+    | Core_reduction.Step_thread_done parent_tid cval ->
         ND.read (fun dr_st ->
           let actions_of_current_thread: set Cmm.action =
             Set.filter (fun act ->
@@ -1048,10 +1048,10 @@ let advance_step tid step =
         |>) >>= fun () ->
         ND.return (WAKEUP true [parent_tid])
 
-    | Core_reduction.Step_done2 cval ->
+    | Core_reduction.Step_done cval ->
         ND.return NOWAKEUP
 
-    | Core_reduction.Step_memop_request2 loc memop cvals tid is_unseq_with_ccall mk_th_st ->
+    | Core_reduction.Step_memop_request loc memop cvals tid is_unseq_with_ccall mk_th_st ->
         begin if is_unseq_with_ccall then
           ND.return ()
         else
@@ -1059,7 +1059,7 @@ let advance_step tid step =
         end >>= fun () ->
         ND.return NOWAKEUP
 
-    | Core_reduction.Step_spawn_threads2 mk_parent_th_st spawn_th_sts ->
+    | Core_reduction.Step_spawn_threads mk_parent_th_st spawn_th_sts ->
         ND.read (fun dr_st ->
           State.runStateM (
             State.foldlM (fun (th_tids_, core_st_) th_st ->
@@ -1076,10 +1076,10 @@ let advance_step tid step =
         |>) >>= fun () ->
         ND.return (WAKEUP false spawn_tids)
 
-    | Core_reduction.Step_fs2 _ _ _ ->
-        Utils.error "TODO: Step_fs2"
+    | Core_reduction.Step_fs _ _ _ ->
+        Utils.error "TODO: Step_fs"
     
-    | Core_reduction.Step_nd2 th_sts ->
+    | Core_reduction.Step_nd th_sts ->
         ND.pick (SK_misc ["nd"]) th_sts >>= fun th_st' ->
         ND.update (fun dr_st -> <| dr_st with
           core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
@@ -1102,7 +1102,7 @@ let rec find_can_advance single_thread steps =
 
 
 
-let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.core_step2)) = function
+let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.core_step)) = function
   | [] ->
       ND.return acc
   | tid :: xs' ->
@@ -1142,18 +1142,18 @@ end
 (*
 type next =
   | CONTINUE
-  | SAVE_STEPS of Core_reduction.core_step2 * list Core_reduction.core_step2
+  | SAVE_STEPS of Core_reduction.core_step * list Core_reduction.core_step
   | STOP
   | PROGRAM_DONE of Core.value
   | WAKEUP of list Mem_common.thread_id
 
 type continue =
-  | DO_CONTINUE of list Core_reduction.core_step2
+  | DO_CONTINUE of list Core_reduction.core_step
   | NEXT
 
 
 
-let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.core_step2)) continue = function
+let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.core_step)) continue = function
   | [] ->
       ND.return acc
   | tid :: xs' ->
@@ -1188,7 +1188,7 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
               else
                 () in
             match step with
-              | Core_reduction.Step_with_runstate2 rsk step_m ->
+              | Core_reduction.Step_with_runstate rsk step_m ->
                   match rsk with
                     | Core_reduction.RSK_tau _ (Core_reduction.TSK_Return sym mval_opt) ->
                         ND.update (fun dr_st ->
@@ -1204,7 +1204,7 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
                   |>) >>= fun () ->
                   ND.return CONTINUE 
               
-              | Core_reduction.Step_tau2 debug_str tsk th_st' ->
+              | Core_reduction.Step_tau debug_str tsk th_st' ->
                   match tsk with
                     | Core_reduction.TSK_Return sym mval_opt ->
                         ND.update (fun dr_st ->
@@ -1219,19 +1219,19 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
                   |>) >>= fun () ->
                   ND.return CONTINUE
 
-              | Core_reduction.Step_action_request2 _ _ _ _ ->
+              | Core_reduction.Step_action_request _ _ _ _ ->
                   ND.return (SAVE_STEPS step next_steps)
 
               | Core_reduction.Step_aseq _ _ _ _ ->
                   Utils.error "TODO: Driver.drive_nonmemory_steps_aux => Step_aseq"
               
-              | Core_reduction.Step_blocked2 ->
+              | Core_reduction.Step_blocked ->
                   ND.return STOP
 
-              | Core_reduction.Step_error2 debug_str ->
-                  Utils.error ("Driver.drive_nonmemory_steps_aux => Step_error2: " ^ debug_str)
+              | Core_reduction.Step_error debug_str ->
+                  Utils.error ("Driver.drive_nonmemory_steps_aux => Step_error: " ^ debug_str)
 
-              | Core_reduction.Step_thread_done2 parent_tid cval ->
+              | Core_reduction.Step_thread_done parent_tid cval ->
                   ND.read (fun dr_st ->
                     let actions_of_current_thread: set Cmm.action =
                       Set.filter (fun act ->
@@ -1250,13 +1250,13 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
                   (* try to wake up the parent thread *)
                   ND.return (WAKEUP [parent_tid])
 
-              | Core_reduction.Step_done2 cval ->
+              | Core_reduction.Step_done cval ->
                   ND.return (PROGRAM_DONE cval)
 
-              | Core_reduction.Step_memop_request2 _ _ _ _ ->
+              | Core_reduction.Step_memop_request _ _ _ _ ->
                   ND.return (SAVE_STEPS step next_steps)
 
-              | Core_reduction.Step_spawn_threads2 mk_parent_th_st spawn_th_sts ->
+              | Core_reduction.Step_spawn_threads mk_parent_th_st spawn_th_sts ->
                   ND.read (fun dr_st ->
                     State.runStateM (
                       State.foldlM (fun (th_tids_, core_st_) th_st ->
@@ -1273,18 +1273,18 @@ let rec drive_nonmemory_steps_aux (acc: map Mem.thread_id (list Core_reduction.c
                   |>) >>= fun () ->
                   ND.return (WAKEUP spawn_tids)
 
-              | Core_reduction.Step_fs2 th_st m_fs_step ->
+              | Core_reduction.Step_fs th_st m_fs_step ->
                   (* TODO: can m_fs_step change the thread state?, If so this is wrong *)
                   liftCore_run m_fs_step                >>= fun fs_step ->
                   ND.get >>= fun dr_st ->
                   drive_fs_step tid th_st dr_st fs_step >>= fun () ->
                   ND.return CONTINUE
 
-              | Core_reduction.Step_nd2 _ ->
-                  Utils.error "TODO: Step_nd2"
+              | Core_reduction.Step_nd _ ->
+                  Utils.error "TODO: Step_nd"
             end >>= function
               | PROGRAM_DONE cval ->
-                  ND.return (Map.insert tid [Core_reduction.Step_done2 cval] Map.empty)
+                  ND.return (Map.insert tid [Core_reduction.Step_done cval] Map.empty)
               | CONTINUE ->
                   let continue' =
                     match continue with
@@ -1320,15 +1320,15 @@ end
 *)
 
 
-val new_drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step2))
+val new_drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step))
 let new_drive_core_threads () =
   ND.get >>= fun dr_st ->
   let tids = List.map fst dr_st.core_state.Core_run_aux.thread_states in
   drive_nonmemory_steps_aux2 Map.empty tids >>= fun m ->
   ND.mapM (fun (tid, steps) ->
     let filtered_steps =
-      match List.filter (fun step -> step <> Core_reduction.Step_blocked2) steps with
-        | [] -> [Core_reduction.Step_blocked2]
+      match List.filter (fun step -> step <> Core_reduction.Step_blocked) steps with
+        | [] -> [Core_reduction.Step_blocked]
         | steps' -> steps'
       end in
     let more_than_one = match filtered_steps with
@@ -1373,22 +1373,22 @@ let prepare_exit core_st cval =
   end
 
 (* performing all action and memop requests until there are no more *)
-val process_core_step2: bool -> (bool -> driverM unit) -> Core_reduction.core_step2 -> driverM unit
-let process_core_step2 with_concurrency driver2 step =
+val process_core_step: bool -> (bool -> driverM unit) -> Core_reduction.core_step -> driverM unit
+let process_core_step with_concurrency driver2 step =
   read_config >>= fun conf ->
   as_step conf.Config.do_stepping step match step with
-  | Core_reduction.Step_action_request2 _ loc tid _ m_request ->
+  | Core_reduction.Step_action_request _ loc tid _ m_request ->
       liftCore_run m_request >>= fun request ->
-      perform_action_request2 with_concurrency loc tid request >>= fun () ->
+      perform_action_request with_concurrency loc tid request >>= fun () ->
       driver2 with_concurrency
 
-  | Core_reduction.Step_memop_request2 loc memop cvals tid _ mk_th_st ->
+  | Core_reduction.Step_memop_request loc memop cvals tid _ mk_th_st ->
       perform_memop_request2 loc memop cvals tid mk_th_st >>= fun () ->
       driver2 with_concurrency
   
-  | Core_reduction.Step_done2 cval ->
+  | Core_reduction.Step_done cval ->
     ND.print_debug 3 [Debug.DB_driver] (fun () ->
-      "driver.process_core_step ==> Step_done2 with value: " ^ Pp.stringFromCore_value cval
+      "driver.process_core_step ==> Step_done with value: " ^ Pp.stringFromCore_value cval
     ) >> (* DEBUG *)
     (* ND.return () *)
     ND.update (fun dr_st ->
@@ -1397,7 +1397,7 @@ let process_core_step2 with_concurrency driver2 step =
     )
   
 
-  | Core_reduction.Step_ccall2 tid step_m ->
+  | Core_reduction.Step_ccall tid step_m ->
       liftCore_run step_m >>= fun th_st' ->
       ND.update (fun dr_st -> <| dr_st with
         core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
@@ -1405,7 +1405,7 @@ let process_core_step2 with_concurrency driver2 step =
       |>) >>= fun () ->
         driver2 with_concurrency
   
-  | Core_reduction.Step_fs2 tid th_st m_fs_step ->
+  | Core_reduction.Step_fs tid th_st m_fs_step ->
       liftCore_run m_fs_step >>= function
         | Core_reduction.FS_done cval ->
             ND.update (fun dr_st ->
@@ -1419,7 +1419,7 @@ let process_core_step2 with_concurrency driver2 step =
       end
 
   | wrong_step ->
-      Utils.error ("Driver.process_core_step2: WRONG STEP ==> " ^ show wrong_step)
+      Utils.error ("Driver.process_core_step: WRONG STEP ==> " ^ show wrong_step)
 end
 
 
@@ -1430,7 +1430,7 @@ let rec driver2 with_concurrency =
   (* the threads which is not blocked waiting on another thread. *)
   let non_blocked =
     List.filter (fun (tid, step_opt) ->
-      step_opt <> Just Core_reduction.Step_blocked2
+      step_opt <> Just Core_reduction.Step_blocked
     ) tid_steps in
   read_config >>= fun conf ->
   begin if execution_mode_is_random conf then
@@ -1449,7 +1449,7 @@ let rec driver2 with_concurrency =
          ) in
          match step_opt with
            | Just step ->
-               process_core_step2 with_concurrency driver2 step
+               process_core_step with_concurrency driver2 step
            | Nothing ->
                (* TODO: hack hack, should just exit *)
                ND.return ()
@@ -1470,7 +1470,7 @@ let rec driver2 with_concurrency =
             (* TODO: hack hack, should just exit *)
             ND.return ()
         | (_, Just step) ->
-        process_core_step2 with_concurrency driver2 step
+        process_core_step with_concurrency driver2 step
       end
     end
   end
