@@ -463,7 +463,14 @@ let core_peval file : 'bty RW.rewriter =
 
   let eval_pexpr pexpr =
     let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
-    Core_eval.eval_pexpr Cerb_location.unknown None emp [] None file pexpr in
+    let loc = Cerb_location.unknown in
+    match Core_eval.full_eval_pexpr loc None emp [] None file pexpr with
+    | Ok z ->
+        Either.Right z
+    | Error err ->
+        Left (loc, Errors.CORE_RUN err)
+
+  in
   
   let to_unfold_funs =
     (* The list of stdlib functions to be unfolded (see PEcall) *)

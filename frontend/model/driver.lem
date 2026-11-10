@@ -140,11 +140,9 @@ let get_thread_states =
 
 val     print_eval_conv_aux: driver_state -> Core_run_aux.thread_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let rec print_eval_conv_aux dr_st th_st pe =
-  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") Nothing dr_st.core_extern th_st.Core_run_aux.env (Just dr_st.layout_state) dr_st.core_file pe with
-  | Exception.Result (Undefined.Defined (Right cval)) ->
+  match Core_eval.full_eval_pexpr (Loc.other "Driver.print_eval_conv_aux") Nothing dr_st.core_extern th_st.Core_run_aux.env (Just dr_st.layout_state) dr_st.core_file pe with
+  | Exception.Result (Undefined.Defined cval) ->
       ND.return (Right (Undefined.Defined cval))
-  | Exception.Result (Undefined.Defined _) ->
-      Utils.error "print_eval_conv: should be a value"
   | Exception.Result (Undefined.Undef loc undef) ->
       ND.return (Right (Undefined.Undef loc undef))
   | Exception.Result (Undefined.Error loc err) ->
