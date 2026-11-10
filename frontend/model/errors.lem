@@ -60,9 +60,10 @@ type core_linking_cause =
   | IncompatibleCallingConvention
 
 type core_run_cause =
-  | Illformed_program of string (* typing or name-scope error *)
-  | Found_empty_stack of string (* TODO debug *)
-  | Reached_end_of_proc
+    (* used to signal an illformed/illtyped Core program *)
+  | Illformed_program of string
+    (* used to signal a bug in the dynamics implementation *)
+  | Internal_error_core_run of string
   | Unknown_impl
   | Unresolved_symbol of Loc.t * Symbol.sym (* found an unresolved symbolic name in core_eval *)
 
@@ -138,10 +139,8 @@ instance (Show core_run_cause)
   let show = function
     | Illformed_program str ->
         "Illformed_program[" ^ str ^ "]"
-    | Found_empty_stack str ->
-        "Found_empty_stack[" ^ str ^ "]"
-    | Reached_end_of_proc ->
-        "Reached_end_of_proc"
+    | Internal_error_core_run str ->
+        "Internal_error_core_run[" ^ str ^ "]"
     | Unknown_impl ->
         "Unknown_impl"
     | Unresolved_symbol _ sym ->

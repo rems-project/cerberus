@@ -557,10 +557,8 @@ let string_of_core_linking_cause = function
 let string_of_core_run_cause = function
   | Illformed_program str ->
       "ill-formed program: `" ^ str ^ "'"
-  | Found_empty_stack str ->
-      "found an empty stack: `" ^ str ^ "'"
-  | Reached_end_of_proc ->
-      "reached the end of a procedure"
+  | Internal_error_core_run str ->
+      "internal error in the Core dynamics: `" ^ str ^ "'"
   | Unknown_impl ->
       "unknown implementation constant"
   | Unresolved_symbol (loc, sym) ->
