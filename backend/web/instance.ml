@@ -449,7 +449,7 @@ let multiple_steps step_state (m, st) =
             Some loc, "Error: " ^ str ^ ""
           | Other dr_err ->
             let string_of_driver_error = function
-              | Driver.DErr_core_run err ->
+              | Driver.DErr_core_run (loc, err) ->
                 None, Pp_errors.string_of_core_run_cause err
               | Driver.DErr_memory err ->
                 let open Mem_common in
