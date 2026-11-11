@@ -62,6 +62,9 @@ type core_linking_cause =
 type core_run_cause =
     (* used to signal an illformed/illtyped Core program *)
   | Illformed_program of string
+  | Invalid_struct_tag of Symbol.sym
+  | Invalid_union_tag of Symbol.sym
+  | Invalid_member of Symbol.sym * Symbol.identifier
     (* used to signal a bug in the dynamics implementation *)
   | Internal_error_core_run of string
   | Unknown_impl
@@ -139,6 +142,12 @@ instance (Show core_run_cause)
   let show = function
     | Illformed_program str ->
         "Illformed_program[" ^ str ^ "]"
+    | Invalid_struct_tag tag_sym ->
+        "Invalid_struct_tag[" ^ show tag_sym ^ "]"
+    | Invalid_union_tag tag_sym ->
+        "Invalid_union_tag[" ^ show tag_sym ^ "]"
+    | Invalid_member tag_sym membr_ident ->
+        "Invalid_member[" ^ show tag_sym ^ ", " ^ show membr_ident ^ "]"
     | Internal_error_core_run str ->
         "Internal_error_core_run[" ^ str ^ "]"
     | Unknown_impl ->
