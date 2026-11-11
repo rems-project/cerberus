@@ -1010,11 +1010,6 @@ end
 import Core_reduction_aux
 
 let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
-  let forceIntegerFromIntegerValue errmsg ival =
-    match Mem_aux.integerFromIntegerValue ival with
-      | Just n -> n
-      | Nothing -> Utils.error errmsg
-    end in
   match iCst with
     (* ----------------------------------------------------------- *)
     (* Cerberus headers <any.h> *)
@@ -1060,7 +1055,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
             | [pe] ->
                 full_eval_pexpr pe >>= function
                   | Vobject (OVinteger n_ival) ->
-                      let n' = Builtins.gcc_builtin_generic_ffs (forceIntegerFromIntegerValue "generic_ffs" n_ival) in
+                      let n' = Builtins.gcc_builtin_generic_ffs (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
                       E.fail (Errors.Illformed_program "__builtin_generic_ffs illtyped")
@@ -1075,7 +1070,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
             | [pe] ->
                 full_eval_pexpr pe >>= function
                   | Vobject (OVinteger n_ival) ->
-                      let n' = Builtins.gcc_builtin_ctz (forceIntegerFromIntegerValue "ctz" n_ival) in
+                      let n' = Builtins.gcc_builtin_ctz (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
                       E.fail (Errors.Illformed_program "__builtin_ctz illtyped")
@@ -1091,7 +1086,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
             | [pe] ->
                 full_eval_pexpr pe >>= function
                   | Vobject (OVinteger n_ival) ->
-                      let n' = Builtins.gcc_builtin_bswap16 (forceIntegerFromIntegerValue "bswap16" n_ival) in
+                      let n' = Builtins.gcc_builtin_bswap16 (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
                       E.fail (Errors.Illformed_program "__builtin_bswap16 illtyped")
@@ -1106,7 +1101,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
             | [pe] ->
                 full_eval_pexpr pe >>= function
                   | Vobject (OVinteger n_ival) ->
-                      let n' = Builtins.gcc_builtin_bswap32 (forceIntegerFromIntegerValue "bswap32" n_ival) in
+                      let n' = Builtins.gcc_builtin_bswap32 (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
                       E.fail (Errors.Illformed_program "__builtin_bswap32 illtyped")
@@ -1121,7 +1116,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
             | [pe] ->
                 full_eval_pexpr pe >>= function
                   | Vobject (OVinteger n_ival) ->
-                      let n' = Builtins.gcc_builtin_bswap64 (forceIntegerFromIntegerValue "bswap64" n_ival) in
+                      let n' = Builtins.gcc_builtin_bswap64 (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
                       E.fail (Errors.Illformed_program "__builtin_bswap64 illtyped")

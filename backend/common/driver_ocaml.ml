@@ -172,9 +172,7 @@ let batch_drive ~conf (file: 'a Core.file) args fs_state =
           let exit =
             match dres.Driver.dres_core_value with
               | Vloaded (LVspecified (OVinteger ival)) ->
-                  Impl_mem.case_integer_value ival
-                    (fun n  -> Specified n)
-                    (fun () -> OtherValue dres.Driver.dres_core_value)
+                  Specified (Impl_mem.integer_of_integer_value ival)
               | Vloaded (LVunspecified ty) ->
                   Unspecified ty
               | _ ->

@@ -150,13 +150,7 @@ module type Memory = sig
   val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
   val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
   
-  val case_integer_value: (* TODO: expose more ctors *)
-    integer_value ->
-    (Z.t -> 'a) ->
-    (unit -> 'a) ->
-    'a
-  
-  val is_specified_ival: integer_value -> bool
+  val integer_of_integer_value: integer_value -> Z.t
   
   (* Predicats on integer values *)
   val eq_ival: integer_value -> integer_value -> bool

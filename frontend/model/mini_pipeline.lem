@@ -220,12 +220,7 @@ let evalIntegerConstantExpression conf core_env sigm mode d_expr =
   evalIntegerConstantExpressionAux conf core_env sigm typing_guard mode d_expr >>=
   function
     | C.Vloaded (C.LVspecified (C.OVinteger ival)) ->
-        match Mem.eval_integer_value ival with
-          | Just n ->
-              Eff.return n
-          | Nothing ->
-              error "TODO error: the memory model failed to concretise the integer value (was impl dependent?)"
-        end
+        Eff.return (Mem.integer_of_integer_value ival)
     | cval ->
         let () = Debug.print_debug 1 [] (fun () ->
           "cval: " ^ Pp.stringFromCore_value cval
@@ -238,16 +233,8 @@ let evalIntegerConstantExpression conf core_env sigm mode d_expr =
 
 
 
-val in_range_of_signed_int: integer -> maybe bool
+val in_range_of_signed_int: integer -> bool
 let in_range_of_signed_int n =
-  match ( Mem.eval_integer_value (Mem.min_ival (Ctype.Signed Ctype.Int_))
-        , Mem.eval_integer_value (Mem.max_ival (Ctype.Signed Ctype.Int_)) ) with
-    | (Just min, Just max) ->
-        Just (min <= n && n <= max)
-    | (Just min, Nothing) ->
-        if n < min then Just false else Nothing
-    | (Nothing, Just max) ->
-        if max < n then Just false else Nothing
-    | (Nothing, Nothing) ->
-        Nothing
-  end
+  let min = Mem.integer_of_integer_value (Mem.min_ival (Ctype.Signed Ctype.Int_)) in
+  let max = Mem.integer_of_integer_value (Mem.max_ival (Ctype.Signed Ctype.Int_)) in
+  min <= n && n <= max

@@ -2349,11 +2349,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     IV (combine_prov prov1 prov2, Z.logxor n1 n2)
   
-  let case_integer_value (IV (_, n)) f_concrete _ =
-    f_concrete n
-  
-  let is_specified_ival ival =
-    true
+  let integer_of_integer_value (IV (_, n)) = n
   
   let zero_fval =
     0.0

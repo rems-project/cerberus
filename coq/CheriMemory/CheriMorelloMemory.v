@@ -2930,16 +2930,6 @@ Module Type CheriMemoryImpl
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.lxor.
 
-  (* Definition case_integer_value
-    {A : Set}
-    (v : integer_value)
-    (f : Z -> A)
-    (_ : unit -> A) : A :=
-    f (num_of_int v).
-   *)
-
-  Definition is_specified_ival (ival : integer_value) : bool := true.
-
   Definition eq_ival (n1 n2: integer_value) :=
     num_of_int n1 =? num_of_int n2.
 

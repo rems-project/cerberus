@@ -1312,10 +1312,7 @@ module CHERIMorello : Memory = struct
 
   (* We have this one implemented in Coq but it looks like
      it OK to have in in OCaml for now *)
-  let case_integer_value v f_concrete _ =
-    f_concrete (MM.num_of_int v)
-
-  let is_specified_ival = MM.is_specified_ival
+  let integer_of_integer_value v = MM.num_of_int v
 
   (* Predicats on integer values *)
   let eq_ival = MM.eq_ival
