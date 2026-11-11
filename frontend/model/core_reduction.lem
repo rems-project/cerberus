@@ -891,46 +891,31 @@ type break_at_sseq =
 
 val     break_at_sseq: context -> break_at_sseq
 let rec break_at_sseq ctx =
+  let aux ctx' if_not_found if_found =
+    match break_at_sseq ctx' with
+        | BAS_found_no_sseq ->
+            if_not_found
+        | BAS_found_sseq ctxA sseq_pat ctxB sseq_e2 ->
+            BAS_found_sseq (if_found ctxA) sseq_pat ctxB sseq_e2
+        | BAS_error_Cbound ->
+            BAS_error_Cbound
+    end in
   match ctx with
     | CTX ->
         BAS_found_no_sseq
     | Cwseq annots pat ctx' e2 ->
-        match break_at_sseq ctx' with
-          | BAS_found_no_sseq ->
-              BAS_found_no_sseq
-          | BAS_found_sseq ctxA sseq_pat ctxB sseq_e2 ->
-              BAS_found_sseq (Cwseq annots pat ctxA e2) sseq_pat ctxB sseq_e2
-          | BAS_error_Cbound ->
-              BAS_error_Cbound
-        end
+        aux ctx' BAS_found_no_sseq
+          (fun z -> Cwseq annots pat z e2)
     | Csseq annots pat ctx' e2 ->
-        match break_at_sseq ctx' with
-          | BAS_found_no_sseq ->
-              BAS_found_sseq CTX pat ctx' e2
-          | BAS_found_sseq in_ctxA in_pat in_ctxB in_e2 ->
-              BAS_found_sseq (Csseq annots pat in_ctxA e2) in_pat in_ctxB in_e2
-          | BAS_error_Cbound ->
-              BAS_error_Cbound
-      end
+        aux ctx' (BAS_found_sseq CTX pat ctx' e2)
+          (fun z -> Csseq annots pat z e2)
     | Cunseq annots es1 ctx' es2 ->
-        match break_at_sseq ctx' with
-          | BAS_found_no_sseq ->
-              BAS_found_no_sseq
-          | BAS_found_sseq ctxA sseq_pat ctxB sseq_e2 ->
-              BAS_found_sseq (Cunseq annots es1 ctxA es2) sseq_pat ctxB sseq_e2
-          | BAS_error_Cbound ->
-              BAS_error_Cbound
-        end
+        aux ctx' BAS_found_no_sseq
+          (fun z -> Cunseq annots es1 z es2)
     | Cannot annots xs ctx' ->
-        match break_at_sseq ctx' with
-          | BAS_found_no_sseq ->
-              BAS_found_no_sseq
-          | BAS_found_sseq ctxA sseq_pat ctxB sseq_e2 ->
-              BAS_found_sseq (Cannot annots xs ctxA) sseq_pat ctxB sseq_e2
-          | BAS_error_Cbound ->
-              BAS_error_Cbound
-        end
-    | Cbound annots ctx' ->
+        aux ctx' BAS_found_no_sseq
+          (fun z -> Cannot annots xs z)
+    | Cbound _ _ ->
         BAS_error_Cbound
   end
 
@@ -946,53 +931,28 @@ type break =
   | BREAK_ERROR
 
 let rec break_at_bound_and_sseq ctx =
+  let aux ctx' mk =
+    match break_at_bound_and_sseq ctx' with
+      | NO_BOUND ->
+          NO_BOUND
+      | BOUND_NO_SSEQ ctxA ctxB ->
+          BOUND_NO_SSEQ (mk ctxA) ctxB
+      | BOUND_WITH_SSEQ ctxA ctxB sseq_pat ctxC e2_sseq ->
+          BOUND_WITH_SSEQ (mk ctxA) ctxB sseq_pat ctxC e2_sseq
+      | BREAK_ERROR ->
+          BREAK_ERROR
+    end in
   match ctx with
     | CTX ->
         NO_BOUND
     | Cwseq annots pat ctx' e2 ->
-        match break_at_bound_and_sseq ctx' with
-          | NO_BOUND ->
-              NO_BOUND
-          | BOUND_NO_SSEQ ctxA ctxB ->
-              BOUND_NO_SSEQ (Cwseq annots pat ctxA e2) ctxB
-          | BOUND_WITH_SSEQ ctxA ctxB sseq_pat ctxC e2_sseq ->
-              BOUND_WITH_SSEQ (Cwseq annots pat ctxA e2) ctxB sseq_pat ctxC e2_sseq
-          | BREAK_ERROR ->
-              BREAK_ERROR
-        end
+        aux ctx' (fun z -> Cwseq annots pat z e2)
     | Csseq annots pat ctx' e2 ->
-        match break_at_bound_and_sseq ctx' with
-          | NO_BOUND ->
-              NO_BOUND
-          | BOUND_NO_SSEQ ctxA ctxB ->
-              BOUND_NO_SSEQ (Csseq annots pat ctxA e2) ctxB
-          | BOUND_WITH_SSEQ ctxA ctxB sseq_pat ctxC e2_sseq ->
-              BOUND_WITH_SSEQ (Csseq annots pat ctxA e2) ctxB sseq_pat ctxC e2_sseq
-          | BREAK_ERROR ->
-              BREAK_ERROR
-      end
+        aux ctx' (fun z -> Csseq annots pat z e2)
     | Cunseq annots es1 ctx' es2 ->
-        match break_at_bound_and_sseq ctx' with
-          | NO_BOUND ->
-              NO_BOUND
-          | BOUND_NO_SSEQ ctxA ctxB ->
-              BOUND_NO_SSEQ (Cunseq annots es1 ctxA es2) ctxB
-          | BOUND_WITH_SSEQ ctxA ctxB sseq_pat ctxC e2_sseq ->
-              BOUND_WITH_SSEQ (Cunseq annots es1 ctxA es2) ctxB sseq_pat ctxC e2_sseq
-          | BREAK_ERROR ->
-              BREAK_ERROR
-        end
+       aux ctx' (fun z -> Cunseq annots es1 z es2)
     | Cannot annots xs ctx' ->
-        match break_at_bound_and_sseq ctx' with
-          | NO_BOUND ->
-              NO_BOUND
-          | BOUND_NO_SSEQ ctxA ctxB ->
-              BOUND_NO_SSEQ (Cannot annots xs ctxA) ctxB
-          | BOUND_WITH_SSEQ ctxA ctxB sseq_pat ctxC e2_sseq ->
-              BOUND_WITH_SSEQ (Cannot annots xs ctxA) ctxB sseq_pat ctxC e2_sseq
-          | BREAK_ERROR ->
-              BREAK_ERROR
-        end
+        aux ctx' (fun z -> Cannot annots xs z)
     | Cbound annots ctx' ->
         match break_at_sseq ctx' with
           | BAS_found_no_sseq ->
@@ -1003,7 +963,6 @@ let rec break_at_bound_and_sseq ctx =
               BREAK_ERROR
         end
   end
-
 
 let rec pull_dyn_annotations z =
   match z with
