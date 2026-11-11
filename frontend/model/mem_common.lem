@@ -626,8 +626,12 @@ let try_usual_arithmetic (Ctype.Ctype _ ty1) (Ctype.Ctype _ ty2) =
   end
 
 val resolve_arg:
-  nat -> (nat -> Ctype.ctype * bool) -> (nat -> intrinsics_arg_spec) -> (Ctype.ctype * bool) -> intrinsics_arg_spec -> either string Ctype.ctype
-let rec resolve_arg n get_arg get_spec (arg, is_null_pointer_constant) spec =
+  nat ->
+  (nat -> maybe (Ctype.ctype * bool)) ->
+  (nat -> maybe intrinsics_arg_spec) ->
+  ((Ctype.ctype * bool) * intrinsics_arg_spec) ->
+  either string Ctype.ctype
+let rec resolve_arg n get_arg get_spec ((arg, is_null_pointer_constant), spec) =
   let resolve_arg = resolve_arg n get_arg get_spec in
   match spec with
     | ExactArg ty ->
@@ -672,19 +676,25 @@ let rec resolve_arg n get_arg get_spec (arg, is_null_pointer_constant) spec =
       if i>=n then Left "CopyArg -- invalid index" (* spec error! *)
       else
         match get_spec i with
-          | CopyArg _ ->
+          | Nothing ->
+              Left "invalid signature"
+          | Just (CopyArg _) ->
               Left "CopyArg -- dual indirection not allowed!"
-          | spec' ->
-              resolve_arg (get_arg i) spec'
+          | Just spec' ->
+              match get_arg i with
+                | Nothing -> Left "invalid signature"
+                | Just z -> resolve_arg (z, spec')
+              end
         end
   end
 
 let inline get xs idx =
   match List.index xs idx with
     | Just z ->
-        z
+        Just z
     | Nothing ->
-        error "Mem_common.derive_intrinsic_signature: internal error (get)"
+        Nothing
+        (* error "Mem_common.derive_intrinsic_signature: internal error (get)" *)
   end 
 
 val derive_intrinsic_signature: list (Ctype.ctype * bool) -> intrinsics_signature -> either string (Ctype.ctype * list Ctype.ctype)
@@ -692,14 +702,20 @@ let derive_intrinsic_signature args (ret_spec, specs) =
   let n = List.length args in
   if n <> List.length specs then Left "|args| <> |specs|"
   else
-    match either_sequence (Utils.map2 (resolve_arg n (get args) (get specs)) args specs) with
+    match
+      either_sequence
+        (List.map (resolve_arg n (get args) (get specs)) (List.zip args specs))
+    with
       | Left msg ->
           Left msg
       | Right tys ->
-          Right match ret_spec with
+          match ret_spec with
             | ExactRet ty ->
-                (ty, tys)
+                Right (ty, tys)
             | CopyRet i ->
-                (get tys i, tys)
+                match get tys i with
+                  | Just z -> Right (z, tys)
+                  | Nothing -> Left "invalid signature"
+                end
           end
     end
