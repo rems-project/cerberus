@@ -82,20 +82,6 @@ let fromJust debug_str = function
       error ("Util.fromJust(" ^ debug_str ^ ")")
 end
 
-let fromLeft = function
-  | Left z ->
-      z
-  | Right _ ->
-      error "Util.fromLeft"
-end
-
-let fromRight = function
-  | Left _ ->
-      error "Util.fromRight"
-  | Right z ->
-      z
-end
-
 let rec filter_opt l = 
   match l with
     | [] -> []
@@ -249,17 +235,6 @@ let first f (x, y) =
 val second: forall 'a 'b 'c . ('a -> 'b) -> 'c * 'a -> 'c * 'b
 let second f (x, y) =
   (x, f y)
-
-val     list_index_update: forall 'a. nat -> ('a -> 'a) -> list 'a -> list 'a
-let rec list_index_update n f = function
-  | [] ->
-      error "Util.list_index_update"
-  | x::xs ->
-      if n = 0 then
-        f x :: xs
-      else
-        x :: (list_index_update (n-1) f xs)
-end
 
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> list (list 'a * 'a * list 'a)
 let rec pickWith_ pred acc = function
