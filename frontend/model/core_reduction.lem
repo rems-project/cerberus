@@ -81,7 +81,7 @@ let fetch_proc_info loc core_extern file psym cvals =
     end in
   match bTy_params_body_opt with
     | Just (bTy, params, body) ->
-        if List.length params <> List.length cvals then
+        (* if List.length params <> List.length cvals then
           Exception.fail
             ( loc
             , Errors.Illformed_program begin
@@ -90,11 +90,23 @@ let fetch_proc_info loc core_extern file psym cvals =
                 show (List.length cvals) ^ "expecting: " ^
                 show (List.length params)
               end )
-        else
-          let env = Utils.foldl2 (fun acc (sym, _) cval ->
-            Map.insert sym cval acc
-          ) Map.empty params cvals in
-          Exception.return (env, body)
+        else *)
+          match
+            Utils.foldl2 (fun acc (sym, _) cval ->
+              Map.insert sym cval acc
+            ) Map.empty params cvals
+          with
+            | Just env -> Exception.return (env, body)
+            | Nothing ->
+                Exception.fail
+                  ( loc
+                  , Errors.Illformed_program begin
+                      "calling procedure `" ^ show psym ^
+                      "' with the wrong number of args: |args|=" ^
+                      show (List.length cvals) ^ "expecting: " ^
+                      show (List.length params)
+                    end )
+          end
     | Nothing ->
         Exception.fail
           (loc, Errors.Illformed_program ("calling an unknown procedure: " ^ show psym))

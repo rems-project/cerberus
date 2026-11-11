@@ -163,11 +163,20 @@ let call_function loc file nm arg_cvals =
         end
   end function
     | Fun _ params body_pe ->
-        if List.length params <> List.length arg_cvals then
+        (* if List.length params <> List.length arg_cvals then
           Exception.fail
             (loc, Illformed_program "wrong number of arguments in a function call")
-        else
-          Exception.return (Utils.foldl2 (fun acc (a, _) cval -> Caux.subst_sym_pexpr a cval acc) body_pe params arg_cvals)
+        else *)
+          match
+            Utils.foldl2 (fun acc (a, _) cval ->
+              Caux.subst_sym_pexpr a cval acc
+            ) body_pe params arg_cvals
+          with
+            | Just x -> Exception.return x
+            | Nothing ->
+                Exception.fail
+                  (loc, Illformed_program "wrong number of arguments in a function call")
+          end
     | ProcDecl _ _ _ ->
         Exception.fail
           (loc, Illformed_program (str_of_nm () ^ " does not have a function definition"))

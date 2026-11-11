@@ -50,16 +50,15 @@ val unzip3: forall 'a 'b 'c. list ('a * 'b * 'c) -> (list 'a * list 'b * list 'c
 let unzip3 xyzs =
   foldr (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z :: zs)) ([],[],[]) xyzs
 
-(* TODO: move into Lem's libary *)
-val foldl2: forall 'a 'b 'c. ('a -> 'b -> 'c -> 'a) -> 'a -> list 'b -> list 'c -> 'a
+val foldl2: forall 'a 'b 'c. ('a -> 'b -> 'c -> 'a) -> 'a -> list 'b -> list 'c -> maybe 'a
 let rec foldl2 f z xs ys =
   match (xs, ys) with
     | ([],[]) ->
-        z
+        Just z
     | (a::xs', b::ys') ->
         foldl2 f (f z a b) xs' ys'
     | _ ->
-        error "[Util.foldl2] the twos weren't of same length"
+        Nothing
   end
 
 (* TODO: get rid of this for the Coq backend *)
