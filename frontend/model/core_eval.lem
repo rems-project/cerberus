@@ -17,6 +17,30 @@ import Exception
 import Nondeterminism
 module ND = Nondeterminism
 
+let fetch_structdef tagDefs tag_sym =
+  match Map.lookup tag_sym tagDefs with
+    | Just (loc, Ctype.StructDef membrs flexible_opt) ->
+        EU.return (loc, membrs, flexible_opt)
+    | _ ->
+        EU.fail (Invalid_struct_tag tag_sym)
+  end
+
+let fetch_uniondef tagDefs tag_sym =
+  match Map.lookup tag_sym tagDefs with
+    | Just (loc, Ctype.UnionDef membrs) ->
+        EU.return (loc, membrs)
+    | _ ->
+        EU.fail (Invalid_struct_tag tag_sym)
+  end
+
+let fetch_member_type tag_sym membr_ident membrs =
+  match List.lookup membr_ident membrs with
+    | Just (_, _, _, memb_ty) ->
+        EU.return memb_ty
+    | Nothing ->
+        EU.fail (Invalid_member tag_sym membr_ident)
+  end
+
 
 (* -- see §5.1.2 from ISO/IEC 10967-1:1994(E)
 fun wrapI(ty: ctype, n: integer) : integer :=
@@ -521,44 +545,34 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
         EU.mapM self pes >>= fun pes' ->
         match Caux.valueFromPexprs pes' with
           | Just cvals ->
-              let xs = List.map (fun (memb_ident, cval) ->
-                match snd $ Utils.fromJust "Core_eval, PEstruct 1,1" (Map.lookup tag_sym file.tagDefs) with
-                  | Ctype.StructDef membrs flexible_opt ->
-                      (* let () = match flexible_opt with
-                        | Nothing ->
-                            ()
-                        | Just (Ctype.FlexibleArrayMember _ flex_ident _ _) ->
-                            (* TODO(check): PEstruct are only created at static init and struct a value loads, which should be ignoring any flexible array member *)
-                            error "Core_eval, PEstruct => found a flexible array member"
-                      end in *)
-                      let (_, _, _, memb_ty) = Utils.fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
-                      let mval = Utils.fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue file.tagDefs memb_ty cval) in
-                      (memb_ident, memb_ty, mval)
-                  | Ctype.UnionDef _ ->
-                      Utils.error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
+              fetch_structdef file.tagDefs tag_sym >>= fun (_, membrs, flexible_opt) ->
+              EU.mapM (fun (membr_ident, cval) ->
+                fetch_member_type tag_sym membr_ident membrs >>= fun membr_ty ->
+                match Caux.memValueFromValue file.tagDefs membr_ty cval with
+                  | Just mval ->
+                      EU.return (membr_ident, membr_ty, mval)
+                  | Nothing ->
+                      EU.fail (Illformed_program "PEstruct: member expressions should have object types")
                 end
-              ) (List.zip idents cvals) in
+              ) (List.zip idents cvals) >>= fun xs ->
               EU.return (PEval (Vobject (OVstruct tag_sym xs)))
-(*
-KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs))))
-*)
           | Nothing ->
               EU.return (PEstruct tag_sym (List.zip idents pes'))
         end
-    | PEunion tag_sym memb_ident pe ->
+    | PEunion tag_sym membr_ident pe ->
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
-              match snd $ Utils.fromJust "Core_eval, PEunion 1,1" (Map.lookup tag_sym file.tagDefs) with
-                | Ctype.UnionDef membrs ->
-                    let (_, _, _, memb_ty) = Utils.fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
-                    let mval = Utils.fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue file.tagDefs memb_ty cval) in
-                    EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
-                | Ctype.StructDef _ _ ->
-                      Utils.error "Core_eval.step_eval_pexpr, PEunion found a StructDef"
-                end
+              fetch_uniondef file.tagDefs tag_sym          >>= fun (_, membrs) ->
+              fetch_member_type tag_sym membr_ident membrs >>= fun membr_ty    ->
+              match Caux.memValueFromValue file.tagDefs membr_ty cval with
+                | Just mval ->
+                    EU.return (PEval (Vobject (OVunion tag_sym membr_ident mval)))
+                | Nothing ->
+                    EU.fail (Illformed_program "PEunion: member expressions should have object types")
+              end
           | Nothing ->
-              EU.return (PEunion tag_sym memb_ident pe')
+              EU.return (PEunion tag_sym membr_ident pe')
         end
     | PEcfunction pe ->
         self pe >>= fun pe' ->

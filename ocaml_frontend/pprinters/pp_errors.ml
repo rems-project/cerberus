@@ -557,6 +557,13 @@ let string_of_core_linking_cause = function
 let string_of_core_run_cause = function
   | Illformed_program str ->
       "ill-formed program: `" ^ str ^ "'"
+    | Invalid_struct_tag tag_sym ->
+        "invalid struct tag:" ^ string_of_sym tag_sym
+    | Invalid_union_tag tag_sym ->
+        "invalid union tag:" ^ string_of_sym tag_sym
+    | Invalid_member (tag_sym, membr_ident) ->
+        "invalid member '" ^ string_of_cid membr_ident ^ "' for tag '" ^
+        string_of_sym tag_sym ^ "'"
   | Internal_error_core_run str ->
       "internal error in the Core dynamics: `" ^ str ^ "'"
   | Unknown_impl ->
