@@ -27,23 +27,16 @@ fun wrapI(ty: ctype, n: integer) : integer :=
   else
     r - dlt *)
 let mk_wrapI ity ival =
-  match ( Mem.eval_integer_value (Mem.min_ival ity)
-        , Mem.eval_integer_value (Mem.max_ival ity) ) with
-    | (Just min, Just max) ->
-        let dlt = max - min + 1 in
-        match Mem.eval_integer_value (Mem.op_ival Mem_common.IntRem_f ival (Mem.integer_ival dlt)) with
-          | Nothing ->
-              Utils.error "Core_eval.mk_wrapI"
-          | Just r ->
-              Mem.integer_ival begin
-                if r <= max then
-                  r
-                else
-                  r - dlt
-              end
-        end
-    | _ ->
-        Utils.error "Core_eval.mk_wrapI"
+  let min = Mem.integer_of_integer_value (Mem.min_ival ity) in
+  let max = Mem.integer_of_integer_value (Mem.max_ival ity) in
+  let dlt = max - min + 1 in
+  let r = Mem.integer_of_integer_value
+    (Mem.op_ival Mem_common.IntRem_f ival (Mem.integer_ival dlt)) in
+  Mem.integer_ival begin
+    if r <= max then
+      r
+    else
+      r - dlt
   end
 
 (*
@@ -59,26 +52,18 @@ let mk_wrapI ity ival =
         <Integer.conv_nonrepresentable_signed_integer>(ty, n)
 *)
 let mk_conv_int ity ival =
-  match Mem.eval_integer_value ival with
-    | Nothing ->
-        Utils.error "Core_eval.mk_conv_int"
-    | Just n ->
-        if Ctype.integerTypeEqual ity Ctype.Bool then
-          Mem.integer_ival (if n = 0 then 0 else 1)
-        else
-          match ( Mem.eval_integer_value (Mem.min_ival ity)
-                , Mem.eval_integer_value (Mem.max_ival ity) ) with
-            | (Just min, Just max) ->
-                let n_ival = Mem.integer_ival n in
-                if min <= n && n <= max then
-                  n_ival
-                else
-                  (* TODO need to have the impl-def <Integer.conv_nonrepresentable_signed_integer>(ty, n) (if ity is unsigned) *)
-                  mk_wrapI ity n_ival
-            | _ ->
-                Utils.error "Core_eval.mk_conv_int"
-          end
-    end
+  let n = Mem.integer_of_integer_value ival in
+  if Ctype.integerTypeEqual ity Ctype.Bool then
+    Mem.integer_ival (if n = 0 then 0 else 1)
+  else
+    let min = Mem.integer_of_integer_value (Mem.min_ival ity) in
+    let max = Mem.integer_of_integer_value (Mem.max_ival ity) in
+    let n_ival = Mem.integer_ival n in
+    if min <= n && n <= max then
+      n_ival
+    else
+      (* TODO need to have the impl-def <Integer.conv_nonrepresentable_signed_integer>(ty, n) (if ity is unsigned) *)
+      mk_wrapI ity n_ival
 
 let mk_iop = function
   | IOpAdd -> fun x y -> Mem.op_ival Mem_common.IntAdd x y
@@ -98,17 +83,13 @@ let mk_wrapI_op ity iop ival1 ival2 =
 
 let mk_call_catch_exceptional_condition ity iop ival1 ival2 =
   let ival = mk_iop iop ival1 ival2 in
-  match ( Mem.eval_integer_value (Mem.min_ival ity)
-        , Mem.eval_integer_value (Mem.max_ival ity)
-        , Mem.eval_integer_value ival ) with
-    | (Just min, Just max, Just n) ->
-        if min <= n && n <= max then
-          Just ival
-        else
-          Nothing
-    | _ ->
-        Utils.error "Core_eval.mk_call_catch_exceptional_condition"
-  end
+  let min = Mem.integer_of_integer_value (Mem.min_ival ity) in
+  let max = Mem.integer_of_integer_value (Mem.max_ival ity) in
+  let n = Mem.integer_of_integer_value ival in
+  if min <= n && n <= max then
+    Just ival
+  else
+    Nothing
 
 
 

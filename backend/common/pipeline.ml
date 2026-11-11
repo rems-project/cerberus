@@ -545,18 +545,14 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
     D.drive ~conf core_file ("cmdname" :: args) fs_state >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           Result.ok (Either.Right begin
-            match Mem.eval_integer_value ival with
-            | Some n ->
-                begin try
-                  Z.to_int n
-                with
-                | Z.Overflow ->
-                    warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
-                    Z .(to_int (n mod (of_int 256)))
-                end 
-            | None ->
-                warn [] (fun () -> "Return value was not a (simple) specified integer");
-                0
+            let n = Impl_mem.integer_of_integer_value ival in
+            begin try
+              Z.to_int n
+            with
+            | Z.Overflow ->
+                warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                Z .(to_int (n mod (of_int 256)))
+            end
           end)
       | (cval :: _) ->
           let* () = io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) in

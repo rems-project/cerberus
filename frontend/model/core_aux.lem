@@ -819,25 +819,6 @@ let valueFromPexprs pes =
     end) (Just []) pes
 
 
-val to_integer: pexpr -> maybe integer
-let core_aux_to_integer pe =
-  match valueFromPexpr pe with
-    | Just (Vobject (OVinteger ival)) ->
-        Mem_aux.integerFromIntegerValue ival
-    | _ ->
-        Nothing
-  end
-let inline to_integer = core_aux_to_integer
-
-
-
-
-
-
-
-
-
-
 (* check if a symbolic names is part of a pattern *)
 val in_pattern: Symbol.sym -> pattern -> bool
 let rec in_pattern sym (Pattern _ pat) =

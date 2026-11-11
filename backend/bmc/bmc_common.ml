@@ -131,9 +131,7 @@ let size_of_ctype (ty: ctype)
 
 let integer_value_to_z3 (ival: Impl_mem.integer_value) : Expr.expr =
   (* TODO: check which is the correct ival->big num function *)
-  match Mem.eval_integer_value ival with
-  | None -> assert false
-  | Some i -> big_num_to_z3 i
+  big_num_to_z3 (Impl_mem.integer_of_integer_value ival)
 
 let object_value_to_z3 ~tagDefs (oval: object_value) : Expr.expr =
   match oval with

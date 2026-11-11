@@ -719,15 +719,11 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
           | (Sym (Symbol.Symbol _ _ (Symbol.SD_Id "conv_int")), [pe_ty; pe_n]) ->
               match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
                 | (Just (Vctype ty), Just ((Vobject (OVinteger ival)) as cval)) ->
-                    match Mem_aux.integerFromIntegerValue ival with
-                      | Just n ->
-                          if in_minimal_range ty n then
-                            PEval cval
-                          else
-                            PEcall nm pes'
-                      | Nothing ->
-                          PEcall nm pes'
-                    end
+                    let n = Mem.integer_of_integer_value ival in
+                    if in_minimal_range ty n then
+                      PEval cval
+                    else
+                      PEcall nm pes'
                 | _ ->
                     PEcall nm pes'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)

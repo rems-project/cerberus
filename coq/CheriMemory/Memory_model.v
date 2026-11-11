@@ -180,11 +180,6 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
     CoqIntegerType.integerType -> integer_value -> integer_value ->
     integer_value.
 
-  (* Parameter case_integer_value :
-    forall {a : Set},
-      integer_value -> (Z -> a) -> (unit -> a) -> a. *)
-
-  Parameter is_specified_ival : integer_value -> bool.
   Parameter eq_ival : integer_value -> integer_value -> bool.
   Parameter lt_ival : integer_value -> integer_value -> bool.
   Parameter le_ival : integer_value -> integer_value -> bool.
