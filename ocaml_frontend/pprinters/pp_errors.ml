@@ -456,6 +456,9 @@ let string_of_ail_typing_misc_error = function
       "the first argument of 'va_arg' must be of type 'va_list'"
   | GenericFunctionMustBeDirectlyCalled ->
       "builtin generic functions must be directly called"
+  | ArityMismatchCHERI (str, expected, found) ->
+      "CHERI intrinsic '" ^ str ^ "' given the wrong number of arguments (expected: " ^
+      string_of_int expected ^ ", found: " ^ string_of_int found ^ ")"
 
 let string_of_ail_typing_error = function
   | TError_ConstraintViolation tcv ->

@@ -9,6 +9,7 @@ type typing_misc_error =
   | VaStartArgumentType (* §7.16.1.4#1 *)
   | VaArgArgumentType (* §7.16.1.1#1 *)
   | GenericFunctionMustBeDirectlyCalled
+  | ArityMismatchCHERI of string * nat * nat
 
 type typing_error =
   | TError_ConstraintViolation of Constraint.violation
@@ -32,6 +33,8 @@ let std_of_typing_misc_error = function
   | VaArgArgumentType ->
       ["§7.16.1.1#1"; "§7.16#3"]
   | GenericFunctionMustBeDirectlyCalled ->
+      []
+  | ArityMismatchCHERI _ _ _ ->
       []
 end
 

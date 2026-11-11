@@ -873,10 +873,15 @@ let perform_memop_request loc memop cvals tid mk_th_st =
 
     | (Mem_common.CHERI_intrinsic str (ret_ty, tys), cvals) ->
         ND.read (fun st -> st.core_file.Core.tagDefs) >>= fun tagDefs ->
-        let mvals =
-          Utils.map2 (fun ty cval ->
-            Utils.fromJust "CHERI_intrinsic call" (Caux.memValueFromValue tagDefs ty cval)
-          ) tys cvals in
+        if List.length tys <> List.length cvals then
+          ND.kill (ND.Other (DErr_other "CHERI_intrinsic: wrong numbers of arguments"))
+        else
+          ND.mapM (fun (ty, cval) ->
+            match Caux.memValueFromValue tagDefs ty cval with
+              | Just mval -> ND.return mval
+              | Nothing -> ND.kill (ND.Other (DErr_other "CHERI_intrinsic: an argument did not have object type"))
+            end
+          ) (List.zip tys cvals) >>= fun mvals ->
         liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
         match res_opt with
           | Just res ->

@@ -1097,13 +1097,18 @@ let rec annotate_expression annotate_block sigm gamm ctx
                           ) in *)
                           let params = List.map (fun ty -> (no_qualifiers, ty, false)) args_tys in
                           annotate_arguments loc false args (Just params) >>= fun args' ->
-                          let cast_args =
-                            Utils.map2 (fun ty e ->
-                              AnnotatedExpression (GenRValueType (inject_type ty)) [] (Loc.locOf e) (AilEcast no_qualifiers ty e)
-                            ) args_tys args' in
-                          E.return (AilEcall begin
-                            AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
-                          end cast_args, GenRValueType (inject_type ret_ty))
+                          let n_args_ty = List.length args_tys in
+                          let n_args' = List.length args' in
+                          if n_args_ty <> n_args' then
+                            E.misc loc (ArityMismatchCHERI str n_args_ty n_args')
+                          else
+                            let cast_args =
+                              List.map (fun (ty, e) ->
+                                AnnotatedExpression (GenRValueType (inject_type ty)) [] (Loc.locOf e) (AilEcast no_qualifiers ty e)
+                              ) (List.zip args_tys args') in
+                            E.return (AilEcall begin
+                              AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
+                            end cast_args, GenRValueType (inject_type ret_ty))
                       | Left msg ->
                           E.internal_error loc ("TODO(msg) CHERI intrinsics failed to derive signature ==> " ^ msg)
                     end
