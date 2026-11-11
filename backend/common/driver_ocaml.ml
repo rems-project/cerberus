@@ -11,7 +11,8 @@ type execution_result = (Core.value list, Errors.error) Result.t
 
 
 let string_of_driver_error = function
-  | Driver.DErr_core_run err ->
+  | Driver.DErr_core_run (loc, err) ->
+      Cerb_location.location_to_string loc ^ " - " ^
       Pp_errors.string_of_core_run_cause err
   | Driver.DErr_memory err ->
       Mem_common.instance_Show_Show_Mem_common_mem_error_dict.Lem_pervasives.show_method err

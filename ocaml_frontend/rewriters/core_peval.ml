@@ -467,7 +467,7 @@ let core_peval file : 'bty RW.rewriter =
     match Core_eval.full_eval_pexpr loc None emp [] None file pexpr with
     | Ok z ->
         Either.Right z
-    | Error err ->
+    | Error (loc, err) ->
         Left (loc, Errors.CORE_RUN err)
 
   in

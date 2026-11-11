@@ -54,11 +54,13 @@ let inline (>>=) = SEU.bind
 
 (* Fetch the body and symbol environment for a Core procedure *)
 val fetch_proc_info:
+  Loc.t -> 
   map Symbol.sym Symbol.sym ->
   Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
   Exception.exceptM
-    (map Symbol.sym Core.value * Core.expr core_run_annotation) Errors.core_run_cause
-let fetch_proc_info core_extern file psym cvals =
+    (map Symbol.sym Core.value * Core.expr core_run_annotation)
+    (Loc.t * Errors.core_run_cause)
+let fetch_proc_info loc core_extern file psym cvals =
   let bTy_params_body_opt =
     (* NOTE: the order of lookups implies that user procedure cannot hide the
        ones from stdlib, do we really want that? *)
@@ -80,12 +82,14 @@ let fetch_proc_info core_extern file psym cvals =
   match bTy_params_body_opt with
     | Just (bTy, params, body) ->
         if List.length params <> List.length cvals then
-          Exception.fail (Errors.Illformed_program begin
-            "calling procedure `" ^ show psym ^
-            "' with the wrong number of args: |args|=" ^
-            show (List.length cvals) ^ "expecting: " ^
-            show (List.length params)
-          end)
+          Exception.fail
+            ( loc
+            , Errors.Illformed_program begin
+                "calling procedure `" ^ show psym ^
+                "' with the wrong number of args: |args|=" ^
+                show (List.length cvals) ^ "expecting: " ^
+                show (List.length params)
+              end )
         else
           let env = Utils.foldl2 (fun acc (sym, _) cval ->
             Map.insert sym cval acc
@@ -93,7 +97,7 @@ let fetch_proc_info core_extern file psym cvals =
           Exception.return (env, body)
     | Nothing ->
         Exception.fail
-          (Errors.Illformed_program ("calling an unknown procedure: " ^ show psym))
+          (loc, Errors.Illformed_program ("calling an unknown procedure: " ^ show psym))
   end
 
 
@@ -325,9 +329,10 @@ let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
 (* NOTE: for performance, we use scoped environment instead of substitutions for
 * bound variables *)
 val one_step:
+  Loc.t ->
   (Core.pexpr -> core_runM Core.value) ->
   list (map Symbol.sym value) -> Core.expr core_run_annotation -> maybe one_step
-let one_step full_eval_pexpr env (Expr annots expr_ as expr) =
+let one_step loc full_eval_pexpr env (Expr annots expr_ as expr) =
   if is_irreducible expr then
     Nothing
   else match expr_ with
@@ -415,8 +420,10 @@ let one_step full_eval_pexpr env (Expr annots expr_ as expr) =
               | Vfalse ->
                   E.return (env, e3)
               | _ ->
-                  E.fail (Errors.Illformed_program
-                    "the first operand of an Eif didn't evaluated to a boolean")
+                  E.fail
+                    ( loc
+                    , Errors.Illformed_program
+                        "the first operand of an Eif didn't evaluated to a boolean" )
             end
           end
         end
@@ -1009,7 +1016,7 @@ end
 
 import Core_reduction_aux
 
-let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
+let process_impl_proc loc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
   match iCst with
     (* ----------------------------------------------------------- *)
     (* Cerberus headers <any.h> *)
@@ -1058,10 +1065,12 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_generic_ffs (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      E.fail (Errors.Illformed_program "__builtin_generic_ffs illtyped")
+                      E.fail
+                        (loc, Errors.Illformed_program "__builtin_generic_ffs illtyped")
                 end
             | _ ->
-                E.fail (Errors.Illformed_program "__builtin_generic_ffs given wrong number of args")
+                E.fail
+                  (loc, Errors.Illformed_program "__builtin_generic_ffs given wrong number of args")
           end
         end
     | Implementation.BuiltinFunction "ctz" ->
@@ -1073,10 +1082,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_ctz (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      E.fail (Errors.Illformed_program "__builtin_ctz illtyped")
+                      E.fail (loc, Errors.Illformed_program "__builtin_ctz illtyped")
                 end
             | _ ->
-                E.fail (Errors.Illformed_program "__builtin_ctz given wrong number of args")
+                E.fail (loc, Errors.Illformed_program "__builtin_ctz given wrong number of args")
           end
         end
     (* TODO: factorise ... *)
@@ -1089,10 +1098,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_bswap16 (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      E.fail (Errors.Illformed_program "__builtin_bswap16 illtyped")
+                      E.fail (loc, Errors.Illformed_program "__builtin_bswap16 illtyped")
                 end
             | _ ->
-                E.fail (Errors.Illformed_program "__builtin_bswap16 given wrong number of args")
+                E.fail (loc, Errors.Illformed_program "__builtin_bswap16 given wrong number of args")
           end
         end
     | Implementation.BuiltinFunction "bswap32" ->
@@ -1104,10 +1113,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_bswap32 (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      E.fail (Errors.Illformed_program "__builtin_bswap32 illtyped")
+                      E.fail (loc, Errors.Illformed_program "__builtin_bswap32 illtyped")
                 end
             | _ ->
-                E.fail (Errors.Illformed_program "__builtin_bswap32 given wrong number of args")
+                E.fail (loc, Errors.Illformed_program "__builtin_bswap32 given wrong number of args")
           end
         end
     | Implementation.BuiltinFunction "bswap64" ->
@@ -1119,10 +1128,10 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                       let n' = Builtins.gcc_builtin_bswap64 (Mem.integer_of_integer_value n_ival) in
                       E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
                   | _ ->
-                      E.fail (Errors.Illformed_program "__builtin_bswap64 illtyped")
+                      E.fail (loc, Errors.Illformed_program "__builtin_bswap64 illtyped")
                 end
             | _ ->
-                E.fail (Errors.Illformed_program "__builtin_bswap64 given wrong number of args")
+                E.fail (loc, Errors.Illformed_program "__builtin_bswap64 given wrong number of args")
           end
         end
     | _ ->
@@ -1243,8 +1252,10 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                     | SeqRMWRequest _ _ _ _ ->
                         (* Internal error: should not be possible SeqRMWRequest is
                          * handled elsewhere *)
-                        E.fail (Errors.Internal_error_core_run
-                          "Core_reduction step_action returned SeqRMWRequest")
+                        E.fail
+                          ( th_st.current_loc
+                          , Errors.Internal_error_core_run
+                              "Core_reduction step_action returned SeqRMWRequest" )
                   end
                 end
             | ACTION_EVAL debug_str eval_m ->
@@ -1309,7 +1320,9 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                                   | Just mval' ->
                                       E.return mval'
                                   | Nothing ->
-                                      E.fail (Errors.Illformed_program "pe3 didn't match the lvalue type in SeqRMW")
+                                      E.fail
+                                        ( th_st.current_loc
+                                        , Errors.Illformed_program "pe3 didn't match the lvalue type in SeqRMW" )
                                 end)
                                 (fun aid fp mval mval' ->
                                   let cval_e =
@@ -1350,7 +1363,9 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                                 )
                             end
                         | _ ->
-                            E.fail (Errors.Illformed_program "illtyped SeqRMW")
+                            E.fail
+                              ( th_st.current_loc
+                              , Errors.Illformed_program "illtyped SeqRMW" )
                       end
                     end
               end
@@ -1417,7 +1432,9 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                             E.undef th_st.current_loc [Undefined.UB_CERB003_invalid_function_pointer]
                         | Just psym ->
                             SEU.runEU (
-                              Exception.bind (fetch_proc_info core_extern file psym cvals)
+                              Exception.bind
+                                (fetch_proc_info th_st.current_loc core_extern
+                                  file psym cvals)
                                 EU.return
                             ) >>= fun (proc_env, expr) ->
                             E.return <| th_st with
@@ -1442,7 +1459,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         end *) )
                   | _ ->
                       E.fail
-                        (Errors.Illformed_program "Eccall with an illtyped first operand")
+                        ( th_st.current_loc
+                        , Errors.Illformed_program "Eccall with an illtyped first operand" )
                 end
               end
           | Eproc _ (Sym psym) pes ->
@@ -1450,7 +1468,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               Step_with_runstate (RSK_eval "Eproc") begin
                 E.mapM full_eval_pexpr pes >>= fun cvals ->
                  SEU.runEU (
-                   Exception.bind (fetch_proc_info core_extern file psym cvals)
+                   Exception.bind
+                    (fetch_proc_info th_st.current_loc core_extern file psym cvals)
                     EU.return
                  ) >>= fun (proc_env, expr) ->
                  E.return <| th_st with
@@ -1469,7 +1488,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 end
               else
                 let wrap_proc xs = wrap_expr (Expr e_annots (Eproc a (Impl iCst) xs)) in
-                process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes
+                process_impl_proc th_st.current_loc full_eval_pexpr wrap_proc wrap_expr
+                  th_st iCst pes
 
           | Erun run_annots sym pes ->
               match th_st.current_proc_opt with
@@ -1488,11 +1508,11 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         Maybe.bind (Map.lookup proc_sym run_st.labeled) (Map.lookup sym)
                       ) >>= function
                         | Nothing ->
-                            E.fail (
-                              Errors.Illformed_program
-                                ("Erun couldn't resolve label: `" ^ show sym ^
-                                "' for procedure `" ^ show current_proc ^ "'")
-                            )
+                            E.fail
+                              ( th_st.current_loc
+                              , Errors.Illformed_program
+                                  ("Erun couldn't resolve label: `" ^ show sym ^
+                                  "' for procedure `" ^ show current_proc ^ "'") )
                         | Just (sym_bTys, cont_expr) ->
                             E.foldlM (fun acc ((sym, bTy), pe) ->
                               full_eval_pexpr pe >>= fun cval ->
@@ -1524,7 +1544,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           | Ewait _ ->
               Step_blocked
           | _ ->
-              match one_step full_eval_pexpr th_st.env expr with
+              match one_step th_st.current_loc full_eval_pexpr th_st.env expr with
                 | Nothing ->
                     Step_error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
                 | Just (TAU_WITH_RUNSTATE debug_str step_m) ->
