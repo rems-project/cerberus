@@ -182,7 +182,9 @@ let evalIntegerConstantExpressionAux
         let driver_action =
           ND.bind (Driver.driver2 false) (fun () ->
             ND.bind ND.get (fun dr_st' ->
-              ND.return (Driver.finalize "Mini_pipeline" dr_st')
+              ND.bind (Driver.liftMem Mem.get_case_funsym_opt) (fun case_funsym_opt ->
+                ND.return (Driver.finalize "Mini_pipeline" case_funsym_opt dr_st')
+              )
             )
           ) in
         match runND_proxy driver_action dr_st with

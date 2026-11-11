@@ -464,7 +464,7 @@ let core_peval file : 'bty RW.rewriter =
   let eval_pexpr pexpr =
     let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
     let loc = Cerb_location.unknown in
-    match Core_eval.full_eval_pexpr loc None emp [] None file pexpr with
+    match Core_eval.full_eval_pexpr loc None emp [] (fun _ -> None) file pexpr with
     | Ok z ->
         Either.Right z
     | Error (loc, err) ->

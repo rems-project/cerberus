@@ -1123,8 +1123,11 @@ module CHERIMorello : Memory = struct
        then fconc None (C.cap_get_value c)
        else ffun None
 
-  let case_funsym_opt (st:MM.mem_state) (pv:pointer_value): Symbol.sym option
-    = Option.map fromCoq_Symbol_sym (MM.case_funsym_opt st pv)
+  let get_case_funsym_opt =
+    get >>= fun st ->
+    return (fun (pv:pointer_value) ->
+      Option.map fromCoq_Symbol_sym (MM.case_funsym_opt st pv)
+    )
 
   (* Operations on pointer values *)
   let eq_ptrval loc (a:pointer_value) (b:pointer_value) : bool memM =
