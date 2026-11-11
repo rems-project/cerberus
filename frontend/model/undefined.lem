@@ -15,6 +15,7 @@ type unspecified_ub_context =
   | UB_unspec_while
   | UB_unspec_do
   | UB_unspec_switch
+  | UB_unspec_function_call
 
 type undefined_by_omission =
   | UB_OMIT_memcpy_non_object
@@ -718,6 +719,7 @@ type undefined_behaviour =
   | UB_CERB002c_out_of_bound_free
   | UB_CERB002d_out_of_bound_realloc
 
+  (* This seems to be an undefined behaviour by omission in the ISO prose *)
   | UB_CERB003_invalid_function_pointer
 
 
@@ -1086,6 +1088,7 @@ let ub_str_bimap =
     ; (UB_CERB004_unspecified UB_unspec_while, "UB_CERB004_unspecified__while")
     ; (UB_CERB004_unspecified UB_unspec_do, "UB_CERB004_unspecified__do")
     ; (UB_CERB004_unspecified UB_unspec_switch, "UB_CERB004_unspecified__switch")
+    ; (UB_CERB004_unspecified UB_unspec_function_call, "UB_CERB004_unspecified__function_call")
     ; (UB_CERB005_free_nullptr, "UB_CERB005_free_nullptr")
     ; (UB_CHERI_InvalidCap,"UB_CHERI_InvalidCap")
     ; (UB_CHERI_InsufficientPermissions,"UB_CHERI_InsufficientPermissions")
@@ -1422,6 +1425,8 @@ let pretty_string_of_undefined_behaviour = function
             "the controlling expression of a 'do' statement evaluated to an unspecified value"
         | UB_unspec_switch ->
             "the controlling expression of a 'switch' statement evaluated to an unspecified value"
+        | UB_unspec_function_call ->
+            "the expression denoting the function in a call evaluated to an unspecified value"
       end
   | UB_CERB005_free_nullptr ->
       "a call to 'free()' is given a 'NULL' pointer"

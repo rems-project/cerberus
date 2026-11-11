@@ -326,14 +326,14 @@ val step_eval_pexpr:
   nat -> Loc.t -> maybe Loc.t ->
   map Symbol.sym Symbol.sym ->
   list (map Symbol.sym Core.value) ->
-  maybe Mem.mem_state -> Core.file core_run_annotation ->
+  (Mem.pointer_value -> maybe Symbol.sym) -> Core.file core_run_annotation ->
   Core.pexpr ->
   EU.t Core.pexpr (Loc.t * core_run_cause)
-let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt file pexpr =
+let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env case_funsym_opt file pexpr =
   match pexpr with Pexpr _ () pexpr_ ->
   let strip (Pexpr _ _ pe_) = pe_ in
   let self pe =
-    step_eval_pexpr (n+1) loc parent_call_loc_opt core_extern env mem_st_opt file pe in
+    step_eval_pexpr (n+1) loc parent_call_loc_opt core_extern env case_funsym_opt file pe in
   Pexpr [] () <$> match pexpr_ with
     | PEsym sym ->
         let sym = match Map.lookup sym core_extern with
@@ -625,18 +625,18 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
     | PEcfunction pe ->
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
-          | Just (Vloaded (LVspecified (OVpointer pv))) ->
+          | Just (Vloaded (LVspecified (OVpointer ptrval))) ->
+              let ub = Undefined.UB_CERB003_invalid_function_pointer in
               let case_funptrval = function
                 | Just sym ->
-                    let () = Debug.print_debug 3 [] (fun () -> "function pointer: " ^ show sym) in
                     match Map.lookup sym file.funinfo with
                       | Just (_, _, ret, params, is_variadic, has_proto) ->
-                          let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
-                          EU.return (PEval (Vtuple [Vctype ret;
-                                                    Vlist BTy_ctype (List.map (fun (_, ty) -> Vctype ty) params);
-                                                    if is_variadic then Vtrue else Vfalse;
-                                                    if has_proto then Vtrue else Vfalse; ]))
-                      | _ ->
+                          EU.return (PEval (Vtuple
+                            [Vctype ret
+                            ; Vlist BTy_ctype (List.map (fun (_, ty) -> Vctype ty) params)
+                            ; if is_variadic then Vtrue else Vfalse
+                            ; if has_proto then Vtrue else Vfalse ]))
+                      | Nothing ->
                         EU.fail
                           ( loc
                           ,  Illformed_program (
@@ -645,36 +645,18 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                             ) )
                     end
                 | Nothing ->
-                  let ub = Undefined.UB_CERB003_invalid_function_pointer in
-                  Exception.return (Undefined.undef loc [ub])
+                    Exception.return (Undefined.undef loc [ub])
               end in
-              Mem.case_ptrval pv
-                (fun _ -> EU.fail (loc, Illformed_program "null function pointer"))
-                case_funptrval
-                (fun _ _ ->
-                (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
-                  match mem_st_opt with
-                  | Just mem_st ->
-                      match Mem.case_funsym_opt mem_st pv with
-                      | Just sym ->
-                          case_funptrval (Just sym)
-                      | Nothing ->
-                          EU.fail
-                            ( loc
-                            , Illformed_program (
-                                Loc.stringFromLocation loc ^
-                                ": does not point to a function"
-                              ) )
-                      end
-                  | Nothing ->
-                      EU.fail
-                        ( loc
-                        , Illformed_program (
-                            Loc.stringFromLocation loc ^ ": does not point to a function"
-                          ) )
-                  end)
+              match case_funsym_opt ptrval with
+              | Just sym ->
+                  case_funptrval (Just sym)
+              | Nothing ->
+                  Exception.return (Undefined.undef loc [ub])
+              end
           | Just (Vloaded (LVunspecified _)) ->
-              EU.fail (loc, Illformed_program "function pointer has an unspecified value")
+              let ub =
+                Undefined.UB_CERB004_unspecified Undefined.UB_unspec_function_call in
+              Exception.return (Undefined.undef loc [ub])
           | _ ->
             EU.fail (loc, Illformed_program "PEcfunction")
         end
@@ -824,16 +806,16 @@ val full_eval_pexpr:
   Loc.t -> maybe Loc.t ->
   map Symbol.sym Symbol.sym ->
   list (map Symbol.sym Core.value) ->
-  maybe Mem.mem_state ->
+  (Mem.pointer_value -> maybe Symbol.sym) ->
   Core.file core_run_annotation ->
   Core.pexpr ->
   EU.t Core.value (Loc.t * core_run_cause)
-let rec full_eval_pexpr loc current_call_loc_opt core_extern env mem_st_opt file pe =
-  step_eval_pexpr 0 loc current_call_loc_opt core_extern env mem_st_opt file pe
+let rec full_eval_pexpr loc current_call_loc_opt core_extern env case_funsym_opt file pe =
+  step_eval_pexpr 0 loc current_call_loc_opt core_extern env case_funsym_opt file pe
     >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval
     | Nothing ->
-        full_eval_pexpr loc current_call_loc_opt core_extern env mem_st_opt file pe'
+        full_eval_pexpr loc current_call_loc_opt core_extern env case_funsym_opt file pe'
   end

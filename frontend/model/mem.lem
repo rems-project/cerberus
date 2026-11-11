@@ -83,15 +83,9 @@ declare ocaml target_rep function fun_ptrval = `Impl_mem.fun_ptrval`
 
 (*TODO: revise that, just a hack for codegen*)
 val concrete_ptrval: integer -> integer -> pointer_value
-val case_ptrval: forall 'a. pointer_value ->
-   (* null pointer *) (Ctype.ctype -> 'a) ->
-   (* function pointer *) (maybe Symbol.sym -> 'a) ->
-   (* concrete pointer *) (maybe integer -> integer -> 'a) -> 'a
-val case_funsym_opt: mem_state -> pointer_value -> maybe Symbol.sym
-
+val get_case_funsym_opt: memM (pointer_value -> maybe Symbol.sym)
 declare ocaml target_rep function concrete_ptrval = `Impl_mem.concrete_ptrval`
-declare ocaml target_rep function case_ptrval = `Impl_mem.case_ptrval`
-declare ocaml target_rep function case_funsym_opt = `Impl_mem.case_funsym_opt`
+declare ocaml target_rep function get_case_funsym_opt = `Impl_mem.get_case_funsym_opt`
 
 (* Operations on pointer values *)
 val eq_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool

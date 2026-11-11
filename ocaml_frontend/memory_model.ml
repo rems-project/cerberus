@@ -76,7 +76,7 @@ module type Memory = sig
    (* null pointer *) (Ctype.ctype -> 'a) ->
    (* function pointer *) (Symbol.sym option -> 'a) ->
    (* concrete pointer *) (Z.t option -> Z.t -> 'a) -> 'a
-  val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
+  val get_case_funsym_opt: (pointer_value -> Symbol.sym option) memM
 
   (* Operations on pointer values *)
   val eq_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM

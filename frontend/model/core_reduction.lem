@@ -33,7 +33,7 @@ module E = struct
     (n, <| run_st with excluded_supply= n+1 |>)
   )
   
-  let full_eval_pexpr th_st core_extern mem_st file pe =
+  let full_eval_pexpr th_st core_extern case_funsym_opt file pe =
     let current_call_loc_opt =
       match th_st.exec_loc with
         | ELoc_globals ->
@@ -45,7 +45,7 @@ module E = struct
       end
     in
     SEU.runEU (Core_eval.full_eval_pexpr
-      th_st.current_loc current_call_loc_opt core_extern th_st.env (Just mem_st) file pe
+      th_st.current_loc current_call_loc_opt core_extern th_st.env case_funsym_opt file pe
     )
 end
 
@@ -1151,11 +1151,12 @@ let process_impl_proc loc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
   end
 
 val step_ctx:
-  Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym ->
+  (Mem.pointer_value -> maybe Symbol.sym) ->
+  Core.file core_run_annotation -> map Symbol.sym Symbol.sym ->
   Mem_common.thread_id -> (maybe Mem_common.thread_id * thread_state) ->
   list core_step
-let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
-  let full_eval_pexpr pe = E.full_eval_pexpr th_st core_extern mem_st file pe in
+let step_ctx case_funsym_opt file core_extern current_tid (parent_tid_opt, th_st) =
+  let full_eval_pexpr pe = E.full_eval_pexpr th_st core_extern case_funsym_opt file pe in
   List.map (function
     | (CTX, Expr e_annots (Epure (Pexpr _ _ (PEval cval)))) ->
         match th_st.stack with
@@ -1323,8 +1324,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                                       Map.insert sym (snd (Caux.valueFromMemValue mval))
                                         env0 :: envs
                                   |> in
-                                E.full_eval_pexpr th_st_tmp core_extern mem_st file pe3
-                                  >>= fun cval3 ->
+                                E.full_eval_pexpr th_st_tmp core_extern case_funsym_opt
+                                  file pe3 >>= fun cval3 ->
                                 match
                                   Caux.memValueFromValue file.tagDefs
                                     (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3
@@ -1434,7 +1435,6 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               process_action (Just n)(*is excluded*) (fun z -> Eexcluded n z) act
           
           | Eccall call_annots _ pe pes ->
-              (* Step_with_runstate (RSK_eval "Eccall") begin *)
               Step_ccall current_tid begin
                 full_eval_pexpr pe >>= function
                   | Vloaded (LVspecified (OVpointer pv)) ->
@@ -1457,18 +1457,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                               current_proc_opt= Just psym;
                             |>
                       end in
-                      Mem.case_ptrval pv
-                        (fun _ -> Utils.error "null function pointer")
-                        case_funptrval
-                      (fun _ addr ->
-                        (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
-                        case_funptrval (Mem.case_funsym_opt mem_st pv)
-                        (* match Mem.case_funsym_opt mem_st pv with
-                          | Just sym ->
-                              case_funptrval sym
-                          | Nothing ->
-                              error (show addr ^ " does not point to a function (Eccall)")
-                        end *) )
+                      case_funptrval (case_funsym_opt pv)
                   | _ ->
                       E.fail
                         ( th_st.current_loc

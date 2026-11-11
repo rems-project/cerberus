@@ -690,13 +690,14 @@ let case_ptrval ptrval f_null f_funptr f_concrete =
     | PVfunptr sym ->
         f_funptr (Some sym)
 
-let case_funsym_opt _ ptrval : Symbol.sym option =
-  match ptrval with
+let get_case_funsym_opt =
+  return (function
     | PVfunptr sym ->
         Some sym
     | _ ->
         (* TODO *)
         None
+  )
 
 (* Operations on pointer values *)
 let eq_ptrval _ ptrval1 ptrval2 : bool memM =

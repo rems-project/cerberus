@@ -140,7 +140,11 @@ let get_thread_states =
 
 val     print_eval_conv_aux: driver_state -> Core_run_aux.thread_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let rec print_eval_conv_aux dr_st th_st pe =
-  match Core_eval.full_eval_pexpr (Loc.other "Driver.print_eval_conv_aux") Nothing dr_st.core_extern th_st.Core_run_aux.env (Just dr_st.layout_state) dr_st.core_file pe with
+  Mem.get_case_funsym_opt >>= fun case_funsym_opt ->
+  match
+    Core_eval.full_eval_pexpr (Loc.other "Driver.print_eval_conv_aux")
+      Nothing dr_st.core_extern th_st.Core_run_aux.env case_funsym_opt dr_st.core_file pe
+  with
   | Exception.Result (Undefined.Defined cval) ->
       ND.return (Right (Undefined.Defined cval))
   | Exception.Result (Undefined.Undef loc undef) ->
@@ -1109,6 +1113,7 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
   | [] ->
       ND.return acc
   | tid :: xs' ->
+      liftMem Mem.get_case_funsym_opt >>= fun case_funsym_opt ->
       ND.read (fun dr_st ->
         let th_info =
           match List.lookup tid dr_st.core_state.Core_run_aux.thread_states with
@@ -1120,7 +1125,7 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
           | [_] -> true
           | _ -> false
           end
-        , Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info )
+        , Core_reduction.step_ctx case_funsym_opt dr_st.core_file dr_st.core_extern tid th_info )
       ) >>= fun (single_thread, steps) ->
       match find_can_advance single_thread steps with
         | Nothing ->
@@ -1486,16 +1491,26 @@ let rec driver2 with_concurrency =
 
 
 
-val     hack: map Symbol.sym Symbol.sym -> list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run_aux.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
-let rec hack core_extern env mem_st core_file concur_sym_map pexpr =
+val hack:
+  map Symbol.sym Symbol.sym ->
+  list (map Symbol.sym Core.value) ->
+  (Mem.pointer_value -> maybe Symbol.sym) ->
+  Core.file Core_run_aux.core_run_annotation ->
+  map Symbol.sym Core.object_value ->
+  Core.pexpr ->
+  Core.value
+let rec hack core_extern env case_funsym_opt core_file concur_sym_map pexpr =
   let () = Debug.print_debug 2 [] (fun () -> "ENTERING Driver.hack") in
-  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") Nothing core_extern env (Just mem_st) core_file pexpr with
+  match
+    Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack")
+      Nothing core_extern env case_funsym_opt core_file pexpr
+  with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
               cval
           | Nothing ->
-              hack core_extern env mem_st core_file concur_sym_map pexpr'
+              hack core_extern env case_funsym_opt core_file concur_sym_map pexpr'
         end
     | _ ->
         Utils.error ("Driver.hack, UNDEF/ERROR:" ^ Pp.stringFromCore_pexpr pexpr)
@@ -1513,17 +1528,13 @@ type driver_result = <|
 |>
 
 
-val finalize: string -> driver_state -> driver_result (* (string * (bool * Cmm_op.symState * Core.value) * (nat * nat)) *)
-let finalize debug_str dr_st =
+val finalize:
+  string -> (Mem.pointer_value -> maybe Symbol.sym) -> driver_state -> driver_result
+let finalize debug_str case_funsym_opt dr_st =
   match dr_st.core_state.Core_run_aux.thread_states with
     | [(tid, (_, th_st))] ->
-        let cval = hack dr_st.core_extern th_st.Core_run_aux.env dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
+        let cval = hack dr_st.core_extern th_st.Core_run_aux.env case_funsym_opt dr_st.core_file dr_st.symbolic_assoc
             match Core_aux.to_pure th_st.Core_run_aux.arena with
-(*
-              | Just (Core.PEval (Core.Vinteger ival)) ->
-                  let Just symb = Mem_aux.symbolicFromIntegerValue ival in
-                  Core_aux.unsymbolify symb
-*)
               | Just pe ->
                   pe
               | Nothing ->
@@ -1911,5 +1922,6 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
           Utils.error "CONCURRENCY IS BROKEN"
         else
           ND.get >>= fun dr_st' ->
-          ND.return (finalize "drive (without concur)" dr_st')
+          liftMem Mem.get_case_funsym_opt >>= fun case_funsym_opt ->
+          ND.return (finalize "drive (without concur)" case_funsym_opt dr_st')
 end
