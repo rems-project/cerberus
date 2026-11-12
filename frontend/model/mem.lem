@@ -262,7 +262,6 @@ declare ocaml target_rep function union_mval = `Impl_mem.union_mval`
 val case_mem_value: forall 'a.
   mem_value ->
   (Ctype.ctype -> 'a) -> (* unspecified case *)
-  (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
   (Ctype.integerType -> integer_value -> 'a) ->
   (Ctype.floatingType -> floating_value -> 'a) ->
   (Ctype.ctype -> pointer_value -> 'a) ->

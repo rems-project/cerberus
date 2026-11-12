@@ -1375,7 +1375,6 @@ module CHERIMorello : Memory = struct
   let case_mem_value
         (mval:mem_value)
         (f_unspec:ctype -> 'a)
-        (_:Ctype.integerType -> Symbol.sym -> 'a)
         (f_ival:integerType -> integer_value -> 'a)
         (f_fval:floatingType -> floating_value -> 'a)
         (f_ptr:ctype -> pointer_value -> 'a)

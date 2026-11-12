@@ -190,7 +190,6 @@ module type Memory = sig
   val case_mem_value:
     mem_value ->
     (Ctype.ctype -> 'a) -> (* unspecified case *)
-    (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
     (Ctype.integerType -> integer_value -> 'a) ->
     (Ctype.floatingType -> floating_value -> 'a) ->
     (Ctype.ctype -> pointer_value -> 'a) ->

@@ -2414,7 +2414,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   let union_mval tag_sym memb_ident mval =
     MVunion (tag_sym, memb_ident, mval)
   
-  let case_mem_value mval f_unspec f_concur f_ival f_fval f_ptr f_array f_struct f_union =
+  let case_mem_value mval f_unspec f_ival f_fval f_ptr f_array f_struct f_union =
     match mval with
       | MVunspecified ty ->
           f_unspec ty
