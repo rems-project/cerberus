@@ -79,7 +79,6 @@ let rec objectValueFromMemValue mem_val =
   ) in
   Mem.case_mem_value mem_val
     (fun ty                -> error"[Core_aux.objectValueFromMemValue] FOUND AN UNSPECIFIED MVAL")
-    (fun _ _               -> error "[Core_aux.objectValueFromMemValue] concurrency read")
     (fun _ ival            -> (OTy_integer, OVinteger ival))
     (fun _ fval            -> (OTy_floating, OVfloating fval))
     (fun _ ptr_val         -> (OTy_pointer, OVpointer ptr_val))
@@ -93,7 +92,6 @@ and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
   ) in
   Mem.case_mem_value mem_val
     (fun ty                -> (fromJust "loadedValueFromMemValue" (core_object_type_of_ctype ty), LVunspecified ty))
-    (fun _ _               -> error "[Core_aux.loadedValueFromMemValue] concurrency read")
     (fun _ ival            -> (OTy_integer, LVspecified (OVinteger ival)))
     (fun _ fval            -> (OTy_floating, LVspecified (OVfloating fval)))
     (fun _ ptr_val         -> (OTy_pointer, LVspecified (OVpointer ptr_val)))
@@ -118,7 +116,6 @@ let valueFromMemValue mem_val =
   ) in
   Mem.case_mem_value mem_val
     (fun ty                -> (fromJust "Core_aux.valueFromMemValue" (core_object_type_of_ctype ty), Vloaded (LVunspecified ty)))
-    (fun _ _               -> error "[Core_aux.valueFromMemValue] concurrency read")
     (fun _ ival            -> (OTy_integer, Vloaded (LVspecified (OVinteger ival))))
     (fun _ fval            -> (OTy_floating, Vloaded (LVspecified (OVfloating fval))))
     (fun _ ptr_val         -> (OTy_pointer, Vloaded (LVspecified (OVpointer ptr_val))))

@@ -359,7 +359,6 @@ let rec load_character_array_aux loc elem_ty ptrval prec_n_opt acc =
         ) in
         Mem.case_mem_value mval
           (fun _ -> error "Formatted.load_character_array, unspecified")
-          (fun _ _ -> error "Formatted.load_character_array, concurrency read")
           (fun ity ival ->
             let n = Mem.integer_of_integer_value ival in
             if n = 0 then

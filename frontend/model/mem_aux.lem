@@ -9,7 +9,6 @@ let integerValueFromMemValue mval =
   ) in
   case_mem_value mval
     (fun _ -> Nothing)
-    (fun _ _ -> Nothing)
     (fun ity ival -> Just (ity, ival))
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
@@ -21,7 +20,6 @@ val unspecifiedFromMemValue: mem_value -> maybe Ctype.ctype
 let unspecifiedFromMemValue mval =
   case_mem_value mval
     (fun ty -> Just ty)
-    (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
@@ -43,7 +41,6 @@ let pointerValueFromMemValue mem_val =
   ) in
   case_mem_value mem_val
     (fun _ -> Nothing)
-    (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun ref_ty ptr_val -> Just (ref_ty, ptr_val))
