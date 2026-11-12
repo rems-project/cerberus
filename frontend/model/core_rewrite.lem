@@ -10,6 +10,16 @@ module Caux = Core_aux
 val pp_pexpr: pexpr -> string
 declare ocaml target_rep function pp_pexpr = `String_core.string_of_pexpr`
 
+val mk_tuple_pe: list pexpr -> pexpr
+let mk_tuple_pe = function
+  | [] ->
+      Utils.error "mk_tuple_pe []"
+  | [pe] ->
+      pe
+  | pes ->
+      Pexpr [] () (PEctor Ctuple pes)
+end
+
 
 (*
 type rewriter = <|
@@ -275,7 +285,7 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
             | _ ->
                 Nothing
           end) (Just []) es in
-        Expr annot (maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (Caux.mk_tuple_pe pes)) pes_opt)
+        Expr annot (maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (mk_tuple_pe pes)) pes_opt)
 (* TODO (bring back)
   | Ewseq pat (Eunseq es) e2 ->
       (* ys is the assoc list of symbolic names, values that can be substituted away *)
@@ -1156,7 +1166,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         let es' = List.map pure_propagation2 es in
         match to_pures' es' with
           | Just pes ->
-              Core_aux.mk_pure_e (Caux.mk_tuple_pe pes)
+              Core_aux.mk_pure_e (mk_tuple_pe pes)
           | Nothing ->
               let es'' =
                 List.map (fun e ->

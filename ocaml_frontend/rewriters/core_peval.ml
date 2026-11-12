@@ -614,7 +614,7 @@ let core_peval file : 'bty RW.rewriter =
                               | _ ->
                                   Core_aux.mk_let_pe
                                     (Core_aux.mk_tuple_pat pats)
-                                    (Core_aux.mk_tuple_pe pes)
+                                    (Pexpr ([], (), PEctor (Ctuple, pes)))
                                     body_pe
                           end
                       | None ->
@@ -756,7 +756,7 @@ let core_peval file : 'bty RW.rewriter =
                               | _ ->
                                   Core_aux.mk_let_e
                                     (Core_aux.mk_tuple_pat pats)
-                                    (Core_aux.mk_tuple_pe pes)
+                                    (Pexpr ([], (), PEctor (Ctuple, pes)))
                                     body_e
                           end
                       | None ->
