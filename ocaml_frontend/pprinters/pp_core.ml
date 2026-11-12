@@ -357,6 +357,17 @@ let pp_ctor = function
   | CivNULLcap is_signed ->
       pp_datactor "CivNULLcap" ^^ P.parens (!^ (if is_signed then "signed" else "unsigned"))
 
+let pp_dtor = function
+  | Dnil _ ->
+      pp_datactor "Nil"
+  | Dcons ->
+      pp_datactor "Cons"
+  | Dtuple ->
+      pp_datactor "Tuple"
+  | Dspecified ->
+      pp_datactor "Specified"
+  | Dunspecified ->
+      pp_datactor "Unspecified"
 
 let rec pp_pattern (Pattern (_, pat)) =
   match pat with
@@ -365,10 +376,10 @@ let rec pp_pattern (Pattern (_, pat)) =
   | CaseBase (Some sym, bTy) ->
       pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 (* Syntactic sugar for tuples and lists *)
-  | CaseCtor (Ctuple, pats) ->
+  | CaseDtor (Dtuple, pats) ->
       P.parens (comma_list pp_pattern pats)
-  | CaseCtor (ctor, pats) ->
-      pp_ctor ctor ^^ P.parens (comma_list pp_pattern pats)
+  | CaseDtor (dtor, pats) ->
+      pp_dtor dtor ^^ P.parens (comma_list pp_pattern pats)
 
 let pp_case pp_pexpr pp pe xs =
   pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^

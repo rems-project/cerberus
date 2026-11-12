@@ -33,28 +33,28 @@ let rec match_pattern_pexpr loc_opt (Pattern (annots_pat, pat_) as pat) (Pexpr (
 
 
     | CaseBase _, _
-    | CaseCtor _, PEcfunction _
-    | CaseCtor _, PEsym _ ->
+    | CaseDtor _, PEcfunction _
+    | CaseDtor _, PEsym _ ->
         `MATCHED (Some (pat, pexpr), [])
     
-    | CaseCtor (Cspecified, [pat']), PEctor (Cspecified, [pe']) ->
+    | CaseDtor (Dspecified, [pat']), PEctor (Cspecified, [pe']) ->
         begin match match_pattern_pexpr loc_opt pat' pe' with
           | `MISMATCHED ->
               `MISMATCHED
           | `MATCHED (None, xs) ->
               `MATCHED (None, xs)
           | `MATCHED (Some (pat'', pe''), xs) ->
-              `MATCHED (Some (wrap_pat (CaseCtor (Cspecified, [pat''])), wrap_pexpr (PEctor (Cspecified, [pe'']))), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dspecified, [pat''])), wrap_pexpr (PEctor (Cspecified, [pe'']))), xs)
         end
 
 (*
 
 Vloaded (LVspecified oval)) ->
         match_pattern pat' (Vobject oval)
-    | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
+    | (CaseDtor Dunspecified [pat'], Vloaded (LVunspecified ty)) ->
         match_pattern pat' (Vctype ty)
 *)
-    | CaseCtor (Ctuple, pats), PEctor (Ctuple, pes) ->
+    | CaseDtor (Dtuple, pats), PEctor (Ctuple, pes) ->
         let xs =
           List.fold_left2 (fun acc pat pe ->
             match match_pattern_pexpr loc_opt pat pe, acc with
@@ -77,7 +77,7 @@ Vloaded (LVspecified oval)) ->
               `MATCHED (Some (pat', pe'), xs)
           | `MATCHED (Some (pats', pes'), xs) ->
               assert (List.length pats' = List.length pes');
-              `MATCHED (Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs)
         end
     | _ ->
         print_endline "\n===========================================";
@@ -106,7 +106,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
     | CaseBase (Some _, _), _ ->
         `MATCHED (Some (pat, expr), [])
     
-    | CaseCtor (Ctuple, pats), Eunseq es ->
+    | CaseDtor (Dtuple, pats), Eunseq es ->
         let xs =
           List.fold_left2 (fun acc pat e ->
             match match_pattern_expr pat e, acc with
@@ -129,7 +129,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
               `MATCHED (Some (pat', e'), xs)
           | `MATCHED (Some (pats', es'), xs) ->
               assert (List.length pats' = List.length es');
-              `MATCHED (Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_expr (Eunseq es')), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_expr (Eunseq es')), xs)
         end
     
     | _ ->
@@ -138,7 +138,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
     | CaseBase (Some sym, _), PEval cval ->
         (None, [(sym, cval)])
 
-    | CaseCtor (Ctuple, pats), PEctor (Ctuple, pes) ->
+    | CaseDtor (Dtuple, pats), PEctor (Ctuple, pes) ->
         let xs =
           List.fold_left2 (fun acc pat pe ->
             match match_pattern_pexpr pat pe, acc with
@@ -157,7 +157,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
               Some (pat', pe'), xs
           | Some (pats', pes'), xs ->
               assert (List.length pats' = List.length pes');
-              Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs
+              Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs
         end
 
     | _ ->

@@ -217,10 +217,19 @@ type ctor =  (* data constructors *)
  | Civfromfloat (* cast floating to integer value *)
  | CivNULLcap of bool (* CHERI: null capability *)
 
+type dtor =  (* data destructors *)
+
+ | Dnil of core_base_type (* empty list (annotated with the type of the items) *)
+ | Dcons (* list cons *)
+
+ | Dtuple (* tuple *)
+ | Dspecified (* non-unspecified loaded value *)
+ | Dunspecified (* unspecified loaded value *)
+
 
 type generic_pattern_ 'sym = 
  | CaseBase of (maybe 'sym * core_base_type)
- | CaseCtor of ctor * list (generic_pattern 'sym)
+ | CaseDtor of dtor * list (generic_pattern 'sym)
 
 and generic_pattern 'sym = 
  | Pattern of list annot * (generic_pattern_ 'sym)

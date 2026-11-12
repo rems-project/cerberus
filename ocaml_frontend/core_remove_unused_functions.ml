@@ -272,7 +272,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
     | CaseBase (Some sym, cbt) -> 
        record_dep (Sym sym) >>
        names_in_core_base_type cbt
-    | CaseCtor (_, pats) ->
+    | CaseDtor (_, pats) ->
        iterate pats names_in_pattern
   in
 
