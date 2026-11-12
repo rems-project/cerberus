@@ -174,8 +174,17 @@ let rec remove_skips (Expr annot expr_ as expr) =
         Expr annot (Eunseq (List.map remove_skips es))
     | Ewseq pat e1 e2 ->
         match remove_skips e1 with
-          | Expr _ (Epure (Pexpr _ _ (PEval Vunit))) ->
-              remove_skips (Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2)
+          | (Expr _ (Epure (Pexpr _ _ (PEval Vunit))) as e1') ->
+              match Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2 with
+                | Just expr -> remove_skips expr
+                | Nothing ->
+                    match remove_skips e2 with
+                      | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
+                          e1'
+                      | e2' ->
+                          Expr annot (Ewseq pat e1' e2')
+                    end
+              end
           | e1' ->
               match remove_skips e2 with
                 | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
@@ -186,8 +195,17 @@ let rec remove_skips (Expr annot expr_ as expr) =
         end
     | Esseq pat e1 e2 ->
         match remove_skips e1 with
-          | Expr _ (Epure (Pexpr _ _ (PEval Vunit))) ->
-              remove_skips (Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2)
+          | (Expr _ (Epure (Pexpr _ _ (PEval Vunit))) as e1') ->
+              match Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2 with
+                | Just expr -> remove_skips expr
+                | Nothing ->
+                    match remove_skips e2 with
+                      | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
+                          e1'
+                      | e2' ->
+                          Expr annot (Esseq pat e1' e2')
+                    end
+              end
           | e1' ->
               match remove_skips e2 with
                 | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
