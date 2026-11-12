@@ -387,6 +387,8 @@ let string_of_constraint_violation = function
       "[[cerb::byte]] attribute must only be applied to typedefs of unsigned char"
   | CastToFromByte ->
       "cannot cast non-byte type to or from byte"
+  | TypeofExprDesignateBitfield ->
+      "typeof shall not be applied to an expression that designates a bit-field member"
 
 let string_of_misc_violation = function
   | MultipleEnumDeclaration x ->

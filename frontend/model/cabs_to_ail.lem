@@ -1704,6 +1704,18 @@ let check_asm is_file_scope loc asm =
       end
   end
 
+let designates_bitfield_member tagDefs (AnnotatedExpression _ _ _ desc) =
+  match desc with
+    | AilEmemberof _ membr ->
+        (* TODO(bitfield) *)
+        (* membr is bit-field member *)false
+    | AilEmemberofptr _ membr ->
+        (* TODO(bitfield) *)
+        (* membr is bit-field member *)false
+    | _ ->
+        false
+  end
+
 
 val     desugar_type_specifiers: list cabs_type_specifier -> E.desugM (Ctype.qualifiers * Ctype.ctype)
 let rec desugar_type_specifiers specs =
@@ -1912,18 +1924,35 @@ let rec desugar_type_specifiers specs =
                     end
               end
 
-          | [TSpec loc (TSpec_typeof_expr e)] ->
+          | [TSpec loc (TSpec_typeof_expr is_unqual e)] ->
               desugar_expression e >>= fun d_e ->
-              (* NOTE: reusing CTXsizeof for typeof() *)
-              typecheckAil_with_ctx GenTyping.CTXsizeof d_e >>= function
-              | Left (loc, err) ->
-                  E.fail_ailtyping loc err
-              | Right (qs, ty) ->
-                  E.return (qs, ty)
-              end
+              E.get_tag_definitions >>= fun tagDefs ->
+              if designates_bitfield_member tagDefs d_e then
+                E.constraint_violation loc TypeofExprDesignateBitfield
+              else
+                (* NOTE: reusing CTXsizeof for typeof() *)
+                typecheckAil_with_ctx GenTyping.CTXsizeof d_e >>= function
+                | Left (loc, err) ->
+                    E.fail_ailtyping loc err
+                | Right (qs, ty) ->
+                    (* C23 §6.7.3.6#5 *)
+                    let (qs, ty) =
+                      if is_unqual then
+                        (Ctype.no_qualifiers, Ctype.unatomic ty)
+                      else
+                        (qs, ty) in
+                    E.return (qs, ty)
+                end
 
-          | [TSpec loc (TSpec_typeof_type tyname)] ->
-              desugar_type_name tyname
+          | [TSpec loc (TSpec_typeof_type is_unqual tyname)] ->
+              desugar_type_name tyname >>= fun (qs, ty) ->
+              (* C23 §6.7.3.6#5 *)
+              let (qs, ty) =
+                if is_unqual then
+                  (Ctype.no_qualifiers, Ctype.unatomic ty)
+                else
+                  (qs, ty) in
+              E.return (qs, ty)
           
           | _ ->
               let loc = Loc.bbox_location (List.map Loc.locOf specs) in

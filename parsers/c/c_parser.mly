@@ -945,9 +945,13 @@ type_specifier_unique:
 | spec= typedef_name_spec
     { spec }
 | TYPEOF LPAREN expr= expression RPAREN
-    { TSpec (region ($startpos, $endpos) noCursor, TSpec_typeof_expr expr) }
+    { TSpec (region ($startpos, $endpos) noCursor, TSpec_typeof_expr (false, expr)) }
 | TYPEOF LPAREN ty= type_name RPAREN
-    { TSpec (region ($startpos, $endpos) noCursor, TSpec_typeof_type ty) }
+    { TSpec (region ($startpos, $endpos) noCursor, TSpec_typeof_type (false, ty)) }
+| TYPEOF_UNQUAL LPAREN expr= expression RPAREN
+    { TSpec (region ($startpos, $endpos) noCursor, TSpec_typeof_expr (true, expr)) }
+| TYPEOF_UNQUAL LPAREN ty= type_name RPAREN
+    { TSpec (region ($startpos, $endpos) noCursor, TSpec_typeof_type (true, ty)) }
 ;
 
 attribute_type_specifier_unique:
