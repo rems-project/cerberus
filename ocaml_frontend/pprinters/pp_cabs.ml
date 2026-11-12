@@ -469,10 +469,14 @@ and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
                node_of_list_option dtree_of_enumerator enums_opt)
     | TSpec_name id ->
         Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_identifier id))
-    | TSpec_typeof_expr e ->
-        Dnode (pp_ctor "TSpec_typeof_expr", [dtree_of_cabs_expression e])
-    | TSpec_typeof_type ty ->
-        Dnode (pp_ctor "TSpec_typeof_type", [dtree_of_type_name ty])
+    | TSpec_typeof_expr (is_unqual, e) ->
+        let ctor_str =
+          if is_unqual then "TSpec_typeof_expr (unqual)" else "TSpec_typeof_expr" in
+        Dnode (pp_ctor ctor_str, [dtree_of_cabs_expression e])
+    | TSpec_typeof_type (is_unqual, ty) ->
+        let ctor_str =
+          if is_unqual then "TSpec_typeof_type (unqual)" else "TSpec_typeof_type" in
+        Dnode (pp_ctor ctor_str, [dtree_of_type_name ty])
 
 and dtree_of_struct_declaration = function
   | Struct_declaration (attrs, specs, qs, align_specs, s_decls) ->
