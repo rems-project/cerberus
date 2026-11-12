@@ -299,8 +299,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
     Pattern ( annots
             , match pat_ with
               | (CaseBase _ as pat_) -> pat_
-              | CaseCtor (ctor, pats) ->
-                  CaseCtor (ctor, List.map untype_pattern pats) ) in
+              | CaseDtor (dtor, pats) ->
+                  CaseDtor (dtor, List.map untype_pattern pats) ) in
   let rec untype_pexpr (Pexpr (annots, _, pexpr_) : Core.typed_pexpr) : Core.pexpr =
     let aux = function
     | (PEsym _ as pe) | (PEimpl _ as pe) | (PEval _ as pe) | (PEundef _ as pe) ->

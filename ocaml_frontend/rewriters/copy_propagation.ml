@@ -61,7 +61,7 @@ let rec binders_of_pat (Pattern (_, pat_)) =
   match pat_ with
   | CaseBase (None, _)   -> []
   | CaseBase (Some s, _) -> [s]
-  | CaseCtor (_, pats)   -> List.concat_map binders_of_pat pats
+  | CaseDtor (_, pats)   -> List.concat_map binders_of_pat pats
 
 (* ------------------------------------------------------------------ *)
 (* analyze_pat_pexpr: pattern-aware single-pass analysis for pexprs   *)
@@ -124,21 +124,21 @@ let rec analyze_pat_pexpr binders pat pe =
   | CaseBase (_, _), _ ->
       ([], pat, pe)
 
-  | CaseCtor (Ctuple, pats), Pexpr (pe_annots, pe_bty, PEctor (Ctuple, pes))
+  | CaseDtor (Dtuple, pats), Pexpr (pe_annots, pe_bty, PEctor (Ctuple, pes))
     when List.length pats = List.length pes ->
       let results = List.map2 (analyze_pat_pexpr binders) pats pes in
       let bindings  = List.concat_map (fun (bs, _, _) -> bs) results in
       let new_pats  = List.map (fun (_, p, _) -> p) results in
       let new_pes   = List.map (fun (_, _, e) -> e) results in
       ( bindings
-      , Pattern (p_annots, CaseCtor (Ctuple, new_pats))
+      , Pattern (p_annots, CaseDtor (Dtuple, new_pats))
       , Pexpr (pe_annots, pe_bty, PEctor (Ctuple, new_pes)) )
 
-  | CaseCtor (Cspecified, [inner_pat]),
+  | CaseDtor (Dspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [inner_pe])) ->
       analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
 
-  | CaseCtor (Cspecified, [inner_pat]),
+  | CaseDtor (Dspecified, [inner_pat]),
     Pexpr (pe_annots, pe_bty, PEval (Vloaded (LVspecified ov))) ->
       let inner_pe = Pexpr (pe_annots, pe_bty, PEval (Vobject ov)) in
       analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty, inner_pe)
@@ -161,7 +161,7 @@ and analyse_specified_pat_expr binders (p_annots, inner_pat) (pe_annots, pe_bty,
     (* if it's already been pushed inside, the outer will duplicate it *)
     let pe_annots = remove_integer_annot pe_annots in
     ( bindings
-    , Pattern (p_annots, CaseCtor (Cspecified, [new_inner_pat]))
+    , Pattern (p_annots, CaseDtor (Dspecified, [new_inner_pat]))
     , Pexpr (pe_annots, pe_bty, PEctor (Cspecified, [new_inner_pe])) )
 
 
@@ -197,7 +197,7 @@ let unwrap_loaded_pat ~enabled (subs, pat, expr) =
          let pe_sym = Pexpr ([], (), PEsym s) in
          let pe = Pexpr ([], (), PEctor (Cspecified, [pe_sym])) in
          let pattern = Pattern ([], CaseBase (Some s, BTy_object cbt)) in
-         let pattern = Pattern (p_annots, CaseCtor (Cspecified, [pattern])) in
+         let pattern = Pattern (p_annots, CaseDtor (Dspecified, [pattern])) in
          (* re-using the same sym! *)
          ((s, pe) :: subs, pattern, expr)
      | _ ->
@@ -222,13 +222,13 @@ let rec analyze_pat_expr ~unwrap_loaded binders pat (Expr (annot, e_) as expr) =
   | Eunseq es ->
       let Pattern (p_annots, pat_) = pat in
       (match pat_ with
-       | CaseCtor (Ctuple, pats) when List.length pats = List.length es ->
+       | CaseDtor (Dtuple, pats) when List.length pats = List.length es ->
            let results = List.map2 (analyze binders) pats es in
            let bindings = List.concat_map (fun (bs, _, _) -> bs) results in
            let new_pats = List.map (fun (_, p, _) -> p) results in
            let new_es   = List.map (fun (_, _, e) -> e) results in
            ( bindings
-           , Pattern (p_annots, CaseCtor (Ctuple, new_pats))
+           , Pattern (p_annots, CaseDtor (Dtuple, new_pats))
            , ret_e (Eunseq new_es) )
        | _ ->
            ([], pat, expr))

@@ -208,13 +208,26 @@ let export_ctor loc = function
      E.return (CivNULLcap is_signed)
 end
 
+let export_dtor loc = function
+ | Dnil bty ->
+    E.return (Dnil bty)
+ | Dcons ->
+     E.return Dcons
+ | Dtuple ->
+     E.return Dtuple
+ | Dspecified ->
+     E.return Dspecified
+ | Dunspecified ->
+     E.return Dunspecified
+end
+
 val     export_pattern: Loc.t -> inferred_pattern -> E.eff typed_pattern
 let rec export_pattern loc (Pattern annots pat) =
   match pat with
    | CaseBase z ->
        E.return (Pattern annots (CaseBase z))
-   | CaseCtor ctor pats ->
-       (fun c args -> Pattern annots (CaseCtor c args)) <$> export_ctor loc ctor
+   | CaseDtor dtor pats ->
+       (fun d args -> Pattern annots (CaseDtor d args)) <$> export_dtor loc dtor
                                                         <*> E.mapM (export_pattern loc) pats
   end
 
