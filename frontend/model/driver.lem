@@ -158,7 +158,7 @@ end
 val printf_eval_conv: driver_state -> Core_run_aux.thread_state -> Ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let printf_eval_conv dr_st th_st cty mval =
   let () = Debug.print_debug 4 [] (fun () -> "printf_eval_conv") in
-  let (_, cval) = Core_aux.valueFromMemValue mval in
+  let cval = Core_aux.valueFromMemValue mval in
   print_eval_conv_aux dr_st th_st (
     Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
     [ Caux.mk_ctype_pe cty; Core.Pexpr [] () (Core.PEval cval)]
@@ -889,7 +889,7 @@ let perform_memop_request loc memop cvals tid mk_th_st =
         liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
         match res_opt with
           | Just res ->
-              ND.return (mk_th_st (Core.Vloaded (snd (Caux.loadedValueFromMemValue res))))
+              ND.return (mk_th_st (Core.Vloaded (Caux.loadedValueFromMemValue res)))
           | Nothing ->
             ND.return (mk_th_st Core.Vunit)
         end

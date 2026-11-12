@@ -829,7 +829,7 @@ let step_action tagDefs e_annots full_eval_pexpr is_excluded (Action loc act_ann
                         | Just excl_id ->
                             [DA_neg excl_id [] fp]
                       end in
-                    let (_, cval) = Caux.valueFromMemValue mval in
+                    let cval = Caux.valueFromMemValue mval in
                     Expr [] (Eannot dyn_annots (Caux.mk_value_e cval))
                   )
                 end
@@ -1321,7 +1321,7 @@ let step_ctx case_funsym_opt file core_extern current_tid (parent_tid_opt, th_st
                               SeqRMWRequest ty ptrval (fun mval ->
                                 let th_st_tmp =
                                   <| th_st with env=
-                                      Map.insert sym (snd (Caux.valueFromMemValue mval))
+                                      Map.insert sym (Caux.valueFromMemValue mval)
                                         env0 :: envs
                                   |> in
                                 E.full_eval_pexpr th_st_tmp core_extern case_funsym_opt
@@ -1339,8 +1339,8 @@ let step_ctx case_funsym_opt file core_extern current_tid (parent_tid_opt, th_st
                                 end)
                                 (fun aid fp mval mval' ->
                                   let cval_e =
-                                    Caux.mk_value_e (snd (Caux.valueFromMemValue
-                                      (if with_forward then mval' else mval))) in
+                                    Caux.mk_value_e (Caux.valueFromMemValue
+                                      (if with_forward then mval' else mval)) in
                                   let mk_annot_e z = Expr [] (Eannot [DA_neg n [] fp] z) in
                                   (* TODO: try to factorize this with the code for
                                    * negative actions *)

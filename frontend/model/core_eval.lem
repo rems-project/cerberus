@@ -678,7 +678,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env case_funsym_op
                           "PEmemberof ==> invalid member: " ^ show memb_ident
                         ) )
                 | Just mval ->
-                    EU.return (PEval (snd (Caux.valueFromMemValue mval)))
+                    EU.return (PEval (Caux.valueFromMemValue mval))
               end
           | Just (Vobject (OVunion tag_sym' memb_ident' mval)) ->
               if tag_sym <> tag_sym' then
@@ -691,7 +691,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env case_funsym_op
               else if memb_ident <> memb_ident' then
                 Utils.error "TODO: evaluation of PEmemberof => union puning"
               else
-                EU.return (PEval (snd (Caux.valueFromMemValue mval)))
+                EU.return (PEval (Caux.valueFromMemValue mval))
           | Just cval ->
               EU.fail (loc, Illformed_program "PEmemberof")
           | Nothing ->

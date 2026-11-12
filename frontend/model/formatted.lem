@@ -462,7 +462,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                   end
               | Nothing ->
                   (* TODO: this is wrong if "not (is_integer ty)" *)
-                  match snd (Core_aux.valueFromMemValue mval) with
+                  match Core_aux.valueFromMemValue mval with
                     | Core.Vloaded (Core.LVunspecified _) ->
                         Mem.return $ Right (U.return (false, [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
                     | Core.Vloaded (Core.LVspecified (Core.OVinteger ival)) ->

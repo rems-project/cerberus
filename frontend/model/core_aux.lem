@@ -1,5 +1,5 @@
-open import Pervasives Utils Show Core Ctype Annot Map Map_extra
-import AilSyntax Ctype_aux 
+open import Pervasives Show Core Ctype Annot Map Map_extra
+import Utils AilSyntax Ctype_aux
 import Product Exception Mem Mem_common Mem_aux
 
 open import Errors
@@ -22,34 +22,34 @@ let strip_expr (Expr _ expr_) =
 val     core_object_type_of_ctype: ctype -> maybe core_object_type
 let rec core_object_type_of_ctype (Ctype _ ty) =
   match ty with
-   | Void ->
-       Nothing
-   | Basic (Integer _) ->
-       Just OTy_integer
-   | Basic (Floating _) ->
-       Just OTy_floating
-   | Array ty _ ->
-       match core_object_type_of_ctype ty with
-         | Just oTy ->
-             Just (OTy_array oTy)
-         | Nothing ->
-             error "Core_aux.core_object_type_of_ctype: Array found a Nothing"
-       end
-   | Function (_, ret_ty) xs isVariadic ->
-       error "core_object_type_of_ctype: not core function object"
-   | FunctionNoParams _ ->
-       error "core_object_type_of_ctype: not core function (no params) object"
-   | Pointer _ _ ->
-       Just OTy_pointer
-   | Atomic ty ->
-       core_object_type_of_ctype ty
-   | Struct tag_sym ->
-       Just (OTy_struct tag_sym)
-   | Union tag_sym ->
-       Just (OTy_union tag_sym)
-   | Byte ->
-       (* May need to revisit based on CN *)
-       Just OTy_integer
+    | Void ->
+        Nothing
+    | Basic (Integer _) ->
+        Just OTy_integer
+    | Basic (Floating _) ->
+        Just OTy_floating
+    | Array ty _ ->
+        match core_object_type_of_ctype ty with
+          | Just oTy ->
+              Just (OTy_array oTy)
+          | Nothing ->
+              Nothing
+        end
+    | Function (_, ret_ty) xs isVariadic ->
+        Nothing
+    | FunctionNoParams _ ->
+        Nothing
+    | Pointer _ _ ->
+        Just OTy_pointer
+    | Atomic ty ->
+        core_object_type_of_ctype ty
+    | Struct tag_sym ->
+        Just (OTy_struct tag_sym)
+    | Union tag_sym ->
+        Just (OTy_union tag_sym)
+    | Byte ->
+        (* May need to revisit based on CN *)
+        Just OTy_integer
   end
 
 val oTy_of_bTy: core_base_type -> maybe core_object_type
@@ -72,64 +72,28 @@ let oTy_of_bTy = function
      Nothing
 end
 
-val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_value
-let rec objectValueFromMemValue mem_val =
-  let () = Debug.print_debug 6 [] (fun () ->
-    "objectValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
-  ) in
+let rec loadedValueFromMemValue mem_val : loaded_value =
   Mem.case_mem_value mem_val
-    (fun ty                -> error"[Core_aux.objectValueFromMemValue] FOUND AN UNSPECIFIED MVAL")
-    (fun _ ival            -> (OTy_integer, OVinteger ival))
-    (fun _ fval            -> (OTy_floating, OVfloating fval))
-    (fun _ ptr_val         -> (OTy_pointer, OVpointer ptr_val))
-    (fun mem_vals          -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVarray (List.map objectValueFromMemValue mem_vals))")
-    (fun sym xs            -> (OTy_struct sym, OVstruct sym xs))
-    (fun sym ident mem_val -> (OTy_union sym, OVunion sym ident mem_val))
-
-and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
-  let () = Debug.print_debug 6 [] (fun () ->
-    "loadedValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
-  ) in
-  Mem.case_mem_value mem_val
-    (fun ty                -> (fromJust "loadedValueFromMemValue" (core_object_type_of_ctype ty), LVunspecified ty))
-    (fun _ ival            -> (OTy_integer, LVspecified (OVinteger ival)))
-    (fun _ fval            -> (OTy_floating, LVspecified (OVfloating fval)))
-    (fun _ ptr_val         -> (OTy_pointer, LVspecified (OVpointer ptr_val)))
-    (fun mem_vals          ->
-      match List.map loadedValueFromMemValue mem_vals with
-        | [] ->
-            error "[Core_aux.loadedValueFromMemValue] empty array"
-        | (oTy, lval) :: oTy_lvals ->
-            if List.any (fun (oTy', _) -> oTy <> oTy') oTy_lvals then
-              error "[Core_aux.loadedValueFromMemValue] heterogenous array"
-            else
-              (OTy_array oTy, LVspecified (OVarray (lval :: List.map snd oTy_lvals)))
-      end)
-    (fun sym xs            -> (OTy_struct sym, LVspecified (OVstruct sym xs)))
-    (fun sym ident mem_val -> (OTy_union sym, LVspecified (OVunion sym ident mem_val)))
+    (fun ty                -> LVunspecified ty)
+    (fun _ ival            -> LVspecified (OVinteger ival))
+    (fun _ fval            -> LVspecified (OVfloating fval))
+    (fun _ ptr_val         -> LVspecified (OVpointer ptr_val))
+    (fun mem_vals          -> LVspecified (OVarray (List.map loadedValueFromMemValue mem_vals)))
+    (fun sym xs            -> LVspecified (OVstruct sym xs))
+    (fun sym ident mem_val -> LVspecified (OVunion sym ident mem_val))
 
 
-val valueFromMemValue: Mem.mem_value -> core_object_type * value
+val valueFromMemValue: Mem.mem_value -> value
 let valueFromMemValue mem_val =
-  let () = Debug.print_debug 6 [] (fun () ->
-    "valueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
-  ) in
   Mem.case_mem_value mem_val
-    (fun ty                -> (fromJust "Core_aux.valueFromMemValue" (core_object_type_of_ctype ty), Vloaded (LVunspecified ty)))
-    (fun _ ival            -> (OTy_integer, Vloaded (LVspecified (OVinteger ival))))
-    (fun _ fval            -> (OTy_floating, Vloaded (LVspecified (OVfloating fval))))
-    (fun _ ptr_val         -> (OTy_pointer, Vloaded (LVspecified (OVpointer ptr_val))))
-    (fun mem_vals          -> let (oTys, lvals) = List.unzip (List.map loadedValueFromMemValue mem_vals) in
-                              let oTy = match oTys with
-                                | [] ->
-                                    (* Something went wrong in the MLM *)
-                                    error "Core_aux.valueFromMemValue ==> empty array"
-                                | oTy :: _ ->
-                                    oTy
-                              end in
-                              (OTy_array oTy, Vloaded (LVspecified (OVarray lvals))))
-    (fun sym xs            -> (OTy_struct sym, Vloaded (LVspecified (OVstruct sym xs))))
-    (fun sym ident mem_val -> (OTy_union sym, Vloaded (LVspecified (OVunion sym ident mem_val))))
+    (fun ty                -> Vloaded (LVunspecified ty))
+    (fun _ ival            -> Vloaded (LVspecified (OVinteger ival)))
+    (fun _ fval            -> Vloaded (LVspecified (OVfloating fval)))
+    (fun _ ptr_val         -> Vloaded (LVspecified (OVpointer ptr_val)))
+    (fun mem_vals          -> let lvals = List.map loadedValueFromMemValue mem_vals in
+                              Vloaded (LVspecified (OVarray lvals)))
+    (fun sym xs            -> Vloaded (LVspecified (OVstruct sym xs)))
+    (fun sym ident mem_val -> Vloaded (LVspecified (OVunion sym ident mem_val)))
 
 val     memValueFromValue: Ctype.tag_definitions -> ctype -> value -> maybe Mem.mem_value
 let rec memValueFromValue tagDefs ty cval =
@@ -215,7 +179,9 @@ let mk_sym_pat sym bty = mk_sym_pat_ [] (Just sym) bty
 val mk_tuple_pat: list pattern -> pattern
 let mk_tuple_pat = function
   | [] ->
-      error "[Core_aux.mk_tuple_pat] called with |pats| = 0"
+      (* NOTE: this is dummy case, this function is not meant to be called with
+       * an empty list *)
+      Pattern [] (CaseBase (Nothing, BTy_unit))
   | [pat] ->
       pat
   | pats ->
@@ -236,7 +202,7 @@ let mk_unspecified_pat_ annots pat =
 val mk_unspecified_pat: pattern -> pattern
 let mk_unspecified_pat pat = mk_unspecified_pat_ [] pat
 
-let rec mk_list_pat (bTy : core_base_type) pats = 
+let rec mk_list_pat (bTy : core_base_type) pats =
   match pats with
   | [] ->
       Pattern [] (CaseDtor (Dnil bTy) [])
@@ -304,8 +270,6 @@ val mk_boolean_pe: bool -> pexpr
 let mk_boolean_pe b =
   Pexpr [] () (PEval (mk_boolean_v b))
 
-(* TODO: PEval Vtrue, Vfalse *)
-
 val mk_ail_ctype_pe: ctype -> pexpr
 let mk_ail_ctype_pe ty =
   Pexpr [] () (PEval (Vctype ty))
@@ -323,15 +287,9 @@ let rec mk_list_pe bTy pes =
         PEctor Ccons [pe; mk_list_pe bTy pes']
   end
 
-val mk_tuple_pe: list pexpr -> pexpr
-let mk_tuple_pe = function
-  | [] ->
-      error "Core_aux.mk_tuple_pe []"
-  | [pe] ->
-      pe
-  | pes ->
-      Pexpr [] () (PEctor Ctuple pes)
-end
+val mk_pair_pe: pexpr -> pexpr -> pexpr
+let mk_pair_pe pe1 pe2 =
+  Pexpr [] () (PEctor Ctuple [pe1; pe2])
 
 val mk_ivmax_pe: pexpr -> pexpr
 let mk_ivmax_pe pe =
@@ -460,245 +418,51 @@ let mk_are_compatible pe1 pe2 =
   Pexpr [] () (PEare_compatible pe1 pe2)
 
 
-
-
 (* Some common undef *)
-
 val mk_undef_exceptional_condition: Loc.t -> pexpr
 let mk_undef_exceptional_condition loc =
   mk_std_undef_pe loc "§6.5#5" Undefined.UB036_exceptional_condition
 
 
-
-
-
-
-
-
-
-
-
-
 val bitwise_complement_pe: pexpr -> pexpr -> pexpr
-(*
-val integer_encode_pe:     pexpr -> pexpr -> pexpr
-val integer_decode_pe:     pexpr -> pexpr -> pexpr
-*)
-
 let bitwise_complement_pe pe1 pe2 =
   Pexpr [] () (PEctor CivCOMPL [pe1; pe2])
-(*
-  Pexpr [] () (PEcall (Impl Implementation.Bitwise_complement) [pe1; pe2])
-*)
-(*
-let integer_encode_pe pe1 pe2 =
-  Pexpr [] () (PEcall (Impl Implementation.Integer__encode) [pe1; pe2])
-let integer_decode_pe pe1 pe2 =
-  Pexpr [] () (PEcall (Impl Implementation.Integer__decode) [pe1; pe2])
-*)
+
 
 (* Some aliases for positive actions *)
 let pcreate loc al ty pref =
-  Expr [] (Eaction (Paction Pos (Action loc default (Create al ty pref))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (Create al ty pref))))
 let pcreate_readonly loc al ty init pref =
-  Expr [] (Eaction (Paction Pos (Action loc default (CreateReadOnly  al ty init pref))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (CreateReadOnly  al ty init pref))))
 let palloc loc al e pref =
-  Expr [] (Eaction (Paction Pos (Action loc default (Alloc al e pref))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (Alloc al e pref))))
 let pkill loc kind x =
-  Expr [] (Eaction (Paction Pos (Action loc default (Kill kind x))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (Kill kind x))))
 let pstore loc ty x n mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (Store false ty x n mo))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (Store false ty x n mo))))
 let pstore_lock loc ty x n mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (Store true ty x n mo))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (Store true ty x n mo))))
 let pload loc ty x mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (Load ty x mo))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (Load ty x mo))))
 let prmw loc ty x n1 n2 mo1 mo2 =
-  Expr [] (Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (RMW ty x n1 n2 mo1 mo2))))
 let pcompare_exchange_strong loc ty x n1 n2 mo1 mo2 =
   Expr [] (Eaction (Paction Pos (
-        Action loc default (CompareExchangeStrong ty x n1 n2 mo1 mo2))))
+        Action loc Utils.default (CompareExchangeStrong ty x n1 n2 mo1 mo2))))
 let pcompare_exchange_weak loc ty x n1 n2 mo1 mo2 =
   Expr [] (Eaction (Paction Pos (
-        Action loc default (CompareExchangeWeak ty x n1 n2 mo1 mo2))))
+        Action loc Utils.default (CompareExchangeWeak ty x n1 n2 mo1 mo2))))
 let plinux_load loc ty x mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (LinuxLoad ty x mo))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (LinuxLoad ty x mo))))
 let plinux_store loc ty x n mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (LinuxStore ty x n mo))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (LinuxStore ty x n mo))))
 let plinux_rmw loc ty x n mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (LinuxRMW ty x n mo))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (LinuxRMW ty x n mo))))
 
 import Global Cmm_csem
 let seq_rmw loc with_forward ty oTy x sym upd =
-  Expr [] (Eaction (Paction Pos (Action loc default (SeqRMW with_forward ty x sym upd))))
+  Expr [] (Eaction (Paction Pos (Action loc Utils.default (SeqRMW with_forward ty x sym upd))))
 
-
-
-
-
-(* for a given Ctype returns the corresponding "zero" value *)
-(*val     zeros: AilSyntax.tag_definition -> ctype -> pexpr *)
-(* see §6.7.9#10 *)
-let rec zeros_aux tagDefs (Ctype _ ty) =
-  let zero_ival = Mem.integer_ival 0 in
-  match ty with
-    | Basic (Integer ity) ->
-        Mem.integer_value_mval ity zero_ival
-    | Basic (Floating fty) ->
-        Mem.floating_value_mval fty Mem.zero_fval
-    | Array elem_ty (Just n) ->
-        Mem.array_mval (List.replicate (natFromInteger n) (zeros_aux tagDefs elem_ty))
-(*
-  Mem.array_mval (List.replicate (natFromInteger n) (Mem.integer_value_mval zero_ival))
-*)
-    | Pointer _ ref_ty ->
-        Mem.pointer_mval ref_ty (Mem.null_ptrval ref_ty)
-    | Atomic ty' ->
-        zeros_aux tagDefs ty'
-    | Struct tag ->
-        match Map.lookup tag tagDefs with
-          | Just (_, StructDef ident_tys Nothing) ->
-              Mem.struct_mval tag (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
-          | Just (_, StructDef ident_tys (Just (FlexibleArrayMember _ flex_ident flex_qs flex_elem_ty))) ->
-              let () = Debug.print_debug 0 [] (fun () ->
-                "TODO: check Core_aux.zeros_aux for flexible array member"
-              ) in
-              Mem.struct_mval tag (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
-          | _ ->
-              error "Core_aux.zeros_aux, not StructDef"
-        end
-    | Union tag ->
-        match Map.lookup tag tagDefs with
-          | Just (_, UnionDef ((ident, (_, _, _, ty'))::_)) ->
-              Mem.union_mval tag ident (zeros_aux tagDefs ty')
-          | _ ->
-              error "Core_aux.zeros_aux, not UnionDef"
-        end
-   | _ ->
-       error "Core_aux.zeros should only be called on complete types"
-  end
-
-val zeros: Ctype.tag_definitions -> ctype -> pexpr
-let zeros tagDefs ty =
-  (* TODO: yucky *)
-  Pexpr [] ()
-(*
-    (PEval (Vobject (snd $ objectValueFromMemValue (zeros_aux ty))))
-*)
-    (PEval (snd $ valueFromMemValue (zeros_aux tagDefs ty)))
-
-
-(*
-
-
-(*
-
-TODO: bring back structs/unions
-
-  let proj_member = function
-    | Ail.MEMBER ty               -> MEMBER (proj_ctype ty)
-    | Ail.BITFIELD ty w is_packed -> BITFIELD (proj_ctype ty) w is_packed
-  end in
-*)
-  match ty with
-    | Ctype.Void             -> Void
-    | Ctype.Basic bt         -> Basic bt
-    | Ctype.Array ty n       -> Array (proj_ctype ty) n
-    | Ctype.Function ty ps b -> Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps) b
-    | Ctype.Pointer _ ty    -> Pointer (proj_ctype ty)
-    | Ctype.Atomic ty        -> Atomic (proj_ctype ty)
-(*
-    | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
-    | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
-    | Ail.ENUM id              -> ENUM id
-    | Ail.ATOMIC ty            -> ATOMIC (proj_ctype ty)
-    | Ail.TYPEDEF _            -> error "[Core_aux.proj_ctype] found a A.TYPEDEF"
-    | Ail.SIZE_T               -> SIZE_T
-    | Ail.INTPTR_T             -> INTPTR_T
-    | Ail.WCHAR_T              -> WCHAR_T
-    | Ail.CHAR16_T             -> CHAR16_T
-    | Ail.CHAR32_T             -> CHAR32_T
-*)
-end
-*)
-
-(*
-(* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
-let rec unproj_ctype ty =
-  Ctype.Ctype [] (match ty with
-    | Void ->
-        Ctype.Void
-    | Basic bty ->
-        Ctype.Basic bty
-    | Array ty n_opt ->
-        Ctype.Array (unproj_ctype ty) n_opt
-    | Function (qs, ty) qs_tys is_variadic ->
-        (* NOTE: there is a potential loss of information here for hasProto and
-           inside the parameters with isRegister. But this shouldn't matter to
-           the dynamics *)
-        Ctype.Function false (qs, unproj_ctype ty) (
-          List.map (fun (qs,ty) ->
-            (qs, unproj_ctype ty, false)
-          ) qs_tys
-        ) is_variadic
-    | Pointer qs ty ->
-        Ctype.Pointer qs (unproj_ctype ty)
-    | Atomic ty ->
-        Ctype.Atomic (unproj_ctype ty)
-    | Struct tag ->
-        Ctype.Struct tag
-    | Union tag ->
-        Ctype.Union tag
-  end)
-*)
-
-(*
-(*
-  let unproj_member = function
-    | MEMBER ty               -> Ail.MEMBER (unproj_ctype ty)
-    | BITFIELD ty w is_packed -> Ail.BITFIELD (unproj_ctype ty) w is_packed
-  end in
-*)
-  match ty with
-    | Void              -> Ctype.Void
-    | Basic bt          -> Ctype.Basic bt
-    | Array ty n        -> Ctype.Array (unproj_ctype ty) n
-    | Function ty tys b -> Ctype.Function (unproj_ctype ty) (List.map (Product.make Ctype.no_qualifiers -| unproj_ctype) tys) b
-    | Pointer ty        -> Ctype.Pointer Ctype.no_qualifiers (unproj_ctype ty)
-    | Atomic ty         -> Ctype.Atomic (unproj_ctype ty)
-(*
-    | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
-    | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
-    | ENUM id            -> Ail.ENUM id
-    | ATOMIC ty          -> Ail.ATOMIC (unproj_ctype ty)
-    | SIZE_T             -> Ail.SIZE_T
-    | INTPTR_T           -> Ail.INTPTR_T
-    | WCHAR_T            -> Ail.WCHAR_T
-    | CHAR16_T           -> Ail.CHAR16_T
-    | CHAR32_T           -> Ail.CHAR32_T
-*)
-end
-*)
-
-
-
-
-(*
-let rec mk_wseqs_aux end_e pat_es =
-  match pat_es with
-    | []               -> end_e
-    | (pat, e) :: pat_es' -> Ewseq pat e (mk_wseqs_aux end_e pat_es')
-end
-
-val mk_wseqs: expr unit -> list (pattern * expr unit) -> expr unit
-let mk_wseqs end_e = function
-  | [] ->
-      end_e
-  | [(_, e)] ->
-      e
-  | pat_es ->
-      mk_wseqs_aux end_e pat_es
-end
-*)
 
 val annotate_integer_type_expr : integerType -> expr unit -> expr unit
 let annotate_integer_type_expr ity (Expr annots expr_) =
@@ -724,26 +488,6 @@ let rec mk_sseqs pat_es =
   end
 
 
-
-(*
-(* val     mk_sseq: forall 'a. list (pattern * expr 'a) -> expr 'a *)
-let rec mk_sseq a_opts_es =
-  match a_opts_es with
-    | []               -> Eskip
-    | [(_, e)]         -> e
-    | (a_opts, e)::es' -> Esseq a_opts e (mk_sseq es')
-end
-
-(* val     mk_sseq': forall 'a. list (pattern * expr 'a) -> expr 'a -> expr 'a *)
-let rec mk_sseq' a_opts_es z =
-  match a_opts_es with
-    | []               -> z
-    | [(_, e)]         -> e
-    | (a_opts, e)::es' -> Esseq a_opts e (mk_sseq' es' z)
-end
-*)
-
-
 let mk_unseq = function
   | []  -> Expr [] (Epure (Pexpr [] () (PEval Vunit)))
   | [e] -> e
@@ -756,10 +500,6 @@ let rec mk_unit_sseq es =
     match es with
       | [] ->
           z
-(*
-      | [e] ->
-          e
-*)
       | e::es' ->
           Expr [] (Esseq (mk_empty_pat BTy_unit) e (mk_unit_sseq es' z))
     end
@@ -825,9 +565,6 @@ let rec in_pattern sym (Pattern _ pat) =
     | CaseDtor _ pats' ->
         List.any (in_pattern sym) pats'
   end
-
-
-
 
 
 val     subst_sym_pexpr: Symbol.sym -> value -> pexpr -> pexpr
@@ -935,7 +672,7 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
         if List.any (fun (z, _) -> sym = z) sym_bTy_pes then
           let () = Debug.warn [] (fun () -> "subst, Esave ==> shadowing") in
           (* TODO: check *)
-          Esave lab_sym sym_bTy_pes' e 
+          Esave lab_sym sym_bTy_pes' e
         else
           Esave lab_sym sym_bTy_pes' (subst_sym_expr sym cval e)
     | Erun annot lab_sym pes ->
@@ -950,12 +687,6 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
         Eannot xs (subst_sym_expr sym cval e)
     | Eexcluded n act ->
         Eexcluded n (subst_sym_action sym cval act)
-(*
-    | Eloc loc e ->
-        Eloc loc (subst_sym_expr sym cval e)
-    | Estd str e ->
-        Estd str (subst_sym_expr sym cval e)
-*)
   end
 
 and subst_sym_action_ sym cval = function
@@ -1033,30 +764,6 @@ let rec subst_pattern_val (Pattern _ pat) cval expr =
     | _ ->
         Nothing
   end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 (* substitute in an expression a symbolic name with a (pure) expression *)
@@ -1163,7 +870,7 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         if List.any (fun (z, _) -> sym = z) sym_bTy_pes then
           let () = Debug.warn [] (fun () -> "unsafe_subst, Esave ==> shadowing") in
           (* TODO: check *)
-          Esave lab_sym sym_bTy_pes' e 
+          Esave lab_sym sym_bTy_pes' e
         else
           Esave lab_sym sym_bTy_pes' (unsafe_subst_sym_expr sym pe' e)
     | Erun annot lab_sym pes ->
@@ -1178,13 +885,6 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Eannot xs (unsafe_subst_sym_expr sym pe' e)
     | Eexcluded n act ->
         Eexcluded n (unsafe_subst_sym_action sym pe' act)
-
-(*
-    | Eloc loc e ->
-        Eloc loc (unsafe_subst_sym_expr sym pe' e)
-    | Estd s e ->
-        Estd s (unsafe_subst_sym_expr sym pe' e)
-*)
   end
 
 
@@ -1227,12 +927,6 @@ and unsafe_subst_sym_action_ a pe' = function
   | LinuxRMW pe1 pe2 pe3 mo ->
       LinuxRMW (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
         (unsafe_subst_sym_pexpr a pe' pe3) mo
-
-
-(*
-  | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
-        CompareExchangeWeak (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) (unsafe_subst_sym_pexpr a pe' pe4) mo1 mo2
-*)
   end
 and unsafe_subst_sym_action a pe' (Action loc bs act_) =
   Action loc bs (unsafe_subst_sym_action_ a pe' act_)
@@ -1287,7 +981,6 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
 
 val     subst_pattern: forall 'a. pattern -> pexpr -> expr 'a -> maybe (expr 'a)
 let rec subst_pattern (Pattern _ pat) pe' expr =
-  
   match (pat, pe') with
     | (CaseBase (Nothing, _), _) ->
         Just expr
@@ -1331,7 +1024,6 @@ let rec subst_pattern (Pattern _ pat) pe' expr =
     | (CaseDtor dtor pats, _) ->
         Nothing
   end
-
 
 
 val     to_pure: forall 'a. expr 'a -> maybe pexpr
@@ -1408,15 +1100,9 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
     | Ewait _ ->
         Nothing
     | Eannot _ _ ->
-        error "to_pure Eannot"
+        Nothing
     | Eexcluded _ _ ->
-        error "to_pure Eexcluded"
-(*
-    | Eloc _ e ->
-        to_pure e
-    | Estd _ e ->
-        to_pure e
-*)
+        Nothing
     | Ecase pe pat_es ->
        let (pats, es) = List.unzip pat_es in
         match to_pures es with
@@ -1436,7 +1122,6 @@ and to_pures (es: list (expr 'a)) =
       | _ ->
           Nothing
     end) (Just []) es
-
 
 
 val subst_wait: forall 'a. Mem_common.thread_id -> value -> expr 'a -> expr 'a
@@ -1466,12 +1151,6 @@ let rec subst_wait tid v (Expr annot expr_) =
        Esseq _as (subst_wait tid v e1) (subst_wait tid v e2)
    | Ebound e ->
        Ebound (subst_wait tid v e)
-(*
-   | Esave ksym sym_tys e ->
-       Esave ksym sym_tys (subst_wait tid v e)
-   | (Erun _ _ _ as expr) ->
-       expr
-*)
    | Esave sym sym_bTys e ->
        Esave sym sym_bTys (subst_wait tid v e)
    | Erun _ _ _ ->
@@ -1494,12 +1173,6 @@ let rec subst_wait tid v (Expr annot expr_) =
        Eannot xs (subst_wait tid v e)
    | Eexcluded _ _ ->
        expr_
-(*
-   | Eloc loc e ->
-       Eloc loc (subst_wait tid v e)
-   | Estd s e ->
-       Estd s (subst_wait tid v e)
-*)
 end
 
 
@@ -1588,13 +1261,6 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
         (* NOTE: Eexcluded only appear at runtime, and inside an Eexcluded, where
                  typing forbids labeled continuation bindings. *)
         Nothing
-
-(*
-    | Eloc _ e ->
-        find_labeled_continuation sym e
-    | Estd _ e ->
-        find_labeled_continuation sym e
-*)
   end
 
 
@@ -1665,13 +1331,6 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
     | Eexcluded _ _ ->
         (* NOTE: Typing forbids labeled continuation bindings inside excluded() *)
         acc
-
-(*
-    | Eloc _ e ->
-        find_labeled_continuation2_aux acc sym e
-    | Estd _ e ->
-        find_labeled_continuation2_aux acc sym e
-*)
 end
 
 let find_labeled_continuation2 sym e =
@@ -1682,13 +1341,6 @@ let find_labeled_continuation2 sym e =
     | Nothing ->
         Nothing
   end
-
-
-
-
-
-
-
 
 
 val unsafe_subst_sym_fun_map: forall 'a. Symbol.sym -> pexpr -> fun_map 'a -> fun_map 'a
@@ -1750,12 +1402,6 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         Map.empty
     | Eexcluded _ _ ->
         Map.empty
-(*
-    | Eloc loc e ->
-        collect_labeled_continuations e
-    | Estd _ e ->
-        collect_labeled_continuations e
-*)
   end
 
 
@@ -1769,56 +1415,6 @@ let is_unseq_with_negative = function
 end
 
 
-(*
-val     has_sseqs: forall 'a. expr 'a -> bool
-let rec has_sseqs expr =
-  match expr with
-    | Epure _ ->
-        false
-    | Ememop _ _ ->
-        false
-    | Eaction p ->
-        false
-    | Ecase _ pat_es ->
-        List.any (fun (_, e) -> has_sseqs e) pat_es
-    | Elet _ _ e2 ->
-        has_sseqs e2
-    | Eif _ e2 e3 ->
-        has_sseqs e2 || has_sseqs e3
-    | Eskip ->
-        false
-    | Eccall _ _ _ ->
-        (* TODO: look into the called body *)
-        false
-    | Eproc _ _ _ ->
-        (* TODO: look into the called body *)
-        false
-    | Eunseq es ->
-        List.any has_sseqs es
-    | Ewseq _ e1 e2 ->
-        has_sseqs e1 || has_sseqs e2
-    | Esseq _ _ _ ->
-        true
-    | Ebound e ->
-        has_sseqs e
-    | Esave _ _ e ->
-        has_sseqs e
-    | Erun _ _ _ ->
-        false
-    | End es ->
-        List.any has_sseqs es
-    | Epar _ ->
-        (* TODO: I think *)
-        false
-    | Ewait _ ->
-        false
-    | Eloc _ e ->
-        has_sseqs e
-  end
-*)
-
-
-
 val     match_pattern: pattern -> value -> maybe (list (Symbol.sym * value))
 let rec match_pattern (Pattern _ pat) cval =
   match (pat, cval) with
@@ -1826,13 +1422,11 @@ let rec match_pattern (Pattern _ pat) cval =
         Just []
     | (CaseBase (Just sym, _), _) ->
         Just [(sym, cval)]
-(*      | Vobject of (generic_object_value 'sym) *)
     | (CaseDtor Dspecified [pat'], Vloaded (LVspecified oval)) ->
         match_pattern pat' (Vobject oval)
     | (CaseDtor Dunspecified [pat'], Vloaded (LVunspecified ty)) ->
         match_pattern pat' (Vctype ty)
-(*      | Vlist of core_base_type * list (generic_value 'sym) *)
-    | (CaseDtor Dtuple pats', Vtuple cvals') -> 
+    | (CaseDtor Dtuple pats', Vtuple cvals') ->
         List.foldr (fun (pat', cval') acc ->
           Maybe.bind acc (fun xs ->
             Maybe.bind (match_pattern pat' cval') (fun x ->
@@ -1928,7 +1522,7 @@ let mk_let_e pat pe e =
 
 val mk_ccall_e_: list annot -> pexpr -> pexpr -> list pexpr -> expr unit
 let mk_ccall_e_ annots cty pe pes =
-  Expr annots (Eccall default cty pe pes)
+  Expr annots (Eccall Utils.default cty pe pes)
 
 val mk_memop_e: Mem_common.memop -> list pexpr -> expr unit
 let mk_memop_e mop pes =
@@ -2085,10 +1679,10 @@ let collect_saves expr =
    esave. The above could be defined in terms of the below, but I
    didn't want to mess that up, so leaving for now. *)
 
-type m_labeled_continuation 'a = 
+type m_labeled_continuation 'a =
   (core_base_type * list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)) * pexpr)) * (expr 'a) * list Annot.annot)
 
-type m_labeled_continuations 'a = 
+type m_labeled_continuations 'a =
   map Symbol.sym (m_labeled_continuation 'a)
 
 type m_collect_saves_state 'a = <|
@@ -2132,7 +1726,7 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         m_union_saves st begin
           m_union_saves
             <| st1 with
-              m_tmp_acc= Map.map (fun (cbt,args,body,annots') -> 
+              m_tmp_acc= Map.map (fun (cbt,args,body,annots') ->
                              (cbt, args, Expr annots (Ewseq pat body e2), annots') )
                                st1.m_tmp_acc
             |>
@@ -2144,7 +1738,7 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         m_union_saves st begin
           m_union_saves
             <| st1 with
-              m_tmp_acc= Map.map (fun (cbt,args,body,annots') -> 
+              m_tmp_acc= Map.map (fun (cbt,args,body,annots') ->
                              (cbt, args, Expr annots (Esseq pat body e2), annots') )
                                st1.m_tmp_acc
             |>
@@ -2158,8 +1752,8 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         st
     | Esave (sym, ty) params e ->
 	   let oloc = Annot.get_loc annots in
-	   let () = match oloc with 
-	     | Just _ -> () 
+	   let () = match oloc with
+	     | Just _ -> ()
 		 | _ -> Debug.print_debug 0 [] (fun () -> "label " ^ show sym ^ "missing label location")
 		end in
         m_collect_saves_aux
@@ -2207,21 +1801,10 @@ let collect_labeled_continuations_NEW file =
           Map.insert fun_sym (collect_saves e) acc
     end
   ) (Map.(union) file.stdlib file.funs) Map.empty
-(*
-in
-  let _ = Map.mapi (fun sym labs ->
-    Debug.print_debug 2 [] (fun () ->
-      "PROC " ^ show sym ^ " ==>\n" ^
-      List.foldl (fun acc (sym, (_, e)) -> show sym ^ " ==> " ^ Pp.stringFromCore_expr e) "" (Map_extra.toList labs) 
-    )
-  ) xs in
-  xs
-*)
 
 
 val     update_env: pattern -> value -> list (map Symbol.sym value) -> list (map Symbol.sym value)
 let rec update_env_aux (Pattern _ pat) cval env =
-  (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
   match (pat, cval) with
     | (CaseBase (Nothing, _), _) ->
         (* e[_ \ v] = e *)
