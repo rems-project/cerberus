@@ -1,18 +1,17 @@
 open import Pervasives
 
-import Utils
-open import Core
-open import Core_run_aux Errors
+open import Errors Core
+
+import Utils Core_run_aux
 import Mem
 import AilTypesAux
-import Loc Symbol Exception_undefined Pp
+import Loc Symbol Pp
 
 import Ctype Core_aux
 module Caux = Core_aux
 
-module EU  = Exception_undefined
-
-import Exception
+import Exception Exception_undefined
+module EU = Exception_undefined
 
 import Nondeterminism
 module ND = Nondeterminism
@@ -122,7 +121,7 @@ let mk_call_catch_exceptional_condition ity iop ival1 ival2 =
    the function body where the arguments have been substituted *)
 val call_function:
   Loc.t ->
-  Core.file core_run_annotation ->
+  Core.file Core_run_aux.core_run_annotation ->
   name ->
   list Core.value ->
   Exception.exceptM Core.pexpr (Loc.t * core_run_cause)
@@ -326,7 +325,7 @@ val step_eval_pexpr:
   nat -> Loc.t -> maybe Loc.t ->
   map Symbol.sym Symbol.sym ->
   list (map Symbol.sym Core.value) ->
-  (Mem.pointer_value -> maybe Symbol.sym) -> Core.file core_run_annotation ->
+  (Mem.pointer_value -> maybe Symbol.sym) -> Core.file Core_run_aux.core_run_annotation ->
   Core.pexpr ->
   EU.t Core.pexpr (Loc.t * core_run_cause)
 let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env case_funsym_opt file pexpr =
@@ -807,7 +806,7 @@ val full_eval_pexpr:
   map Symbol.sym Symbol.sym ->
   list (map Symbol.sym Core.value) ->
   (Mem.pointer_value -> maybe Symbol.sym) ->
-  Core.file core_run_annotation ->
+  Core.file Core_run_aux.core_run_annotation ->
   Core.pexpr ->
   EU.t Core.value (Loc.t * core_run_cause)
 let rec full_eval_pexpr loc current_call_loc_opt core_extern env case_funsym_opt file pe =
