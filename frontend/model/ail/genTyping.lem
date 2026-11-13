@@ -1,5 +1,6 @@
-open import Pervasives Utils
-open import AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
+open import Pervasives
+open import AilSyntax AilSyntaxAux TypingError GenTypes Constraint Loc Ctype
+import AilWf GenTypesAux
 open import Config
 import Constraint Undefined Builtins Debug Pp Cmm_csem
 
@@ -12,7 +13,6 @@ module GAux = GenTypesAux
 module E = ErrorMonad
 
 let inline (>>=) m f = E.bind m f
-let inline (>>) m f = m >>= (fun _ -> f)
 let inline (<$>) = E.fmap
 
 val lookup_tag_definition: forall 'a. sigma 'a -> Symbol.sym -> maybe tag_definition
@@ -20,8 +20,8 @@ let lookup_tag_definition s sym =
   Maybe.map (fun (_, _, z) -> z) (List.lookup sym s.tag_definitions)
 
 
-(* NOTE: move in_range and try_ranges inside gen_typing_type_of_constant if Lem ever allows
-   recursive functions inside other functions... *)
+(* NOTE: move in_range and try_ranges inside gen_typing_type_of_constant if Lem ever
+ * allows recursive functions inside other functions... *)
 let in_range loc (n: integer) ity =
   match Implementation.precision_ity ity with
     | Nothing ->
@@ -29,8 +29,8 @@ let in_range loc (n: integer) ity =
     | Just prec ->
         let (min, max) =
           if Implementation.is_signed_ity ity then
-            (* NOTE: we are assuming two's complement integer. Which will be the only allowed
-               implementation in case in C2X anyways *)
+            (* NOTE: we are assuming two's complement integer. Which will be the only
+             * allowed implementation in case in C2X anyways *)
             (~(2 ** prec), (2 ** prec) - 1)
           else
             (0, (2 ** prec) - 1) in
@@ -149,12 +149,13 @@ let gen_typing_type_of_constant loc iCst =
           E.return (Concrete ity)
       | IConstantMin ity ->
           E.return (Concrete ity)
-  end
+    end
 
-(* the GCC documentation says "he compound statement should be an expression followed by a semicolon", otherwise the type is void *)
+
+(* the GCC documentation says "he compound statement should be an expression followed by
+ * a semicolon", otherwise the type is void *)
 val     typeof_statement_as_expression: statement genTypeCategory -> genTypeCategory
 let rec typeof_statement_as_expression stmt =
-  let void_gtc = GenRValueType GenVoid in
   match stmt.node with
     | AilSexpr (AnnotatedExpression gtc _ _ _) ->
         gtc
@@ -163,23 +164,35 @@ let rec typeof_statement_as_expression stmt =
     | AilSmarker _ s ->
         typeof_statement_as_expression s
     | _ ->
-        void_gtc
+        GenRValueType GenVoid
   end
 
 
 (* STD §6.5.16.1#1 *)
-val well_typed_assignment: sigma unit -> bool -> assignment_violation -> Loc.t -> ctype -> genType -> expression genTypeCategory -> E.errorM unit
+val well_typed_assignment:
+  sigma unit ->
+  bool ->
+  assignment_violation ->
+  Loc.t ->
+  ctype ->
+  genType ->
+  expression genTypeCategory ->
+  E.errorM unit
 let well_typed_assignment s is_init f loc ty1 gty2 e2 =
   let throw err =
     E.constraint_violation (with_cursor_from (locOf e2) loc) (f err ty1 gty2)
   in
   if AAux.atomic_qualified_unqualified AAux.is_arithmetic ty1 then
     if GAux.is_arithmetic gty2 then
-      let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 1") in (* DEBUG *)
+      let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+        "[well_typed_assignment] OK: bullet 1"
+      ) in
       E.add "§6.5.16.1#1, bullet 1"
     else if AAux.atomic_qualified_unqualified AAux.is_Bool ty1 then
       if GAux.is_pointer gty2 then
-        let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 6") in (* DEBUG *)
+        let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+          "[well_typed_assignment] OK: bullet 6"
+        ) in
         E.add "§6.5.16.1#1, bullet 6"
       else
         throw BoolExpectsArithmeticOrPointer
@@ -190,13 +203,15 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
     E.return ()
 
   else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty1 then
-    E.add "§6.5.16.1#1, bullet 2" >>
+    E.add "§6.5.16.1#1, bullet 2" >>= fun () ->
     match (Cty.unatomic_ ty1, GenTypesAux.unatomic gty2) with
       | (Struct tag_sym1, GenStruct tag_sym2) ->
           (* TODO: this is maybe too conservative *)
           let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
-            Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
+            Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^
+            Pp.stringFromAil_genType gty2
+          ) in
           if tag_sym1 = tag_sym2 then
             E.return ()
           else
@@ -205,7 +220,9 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           (* TODO: this is maybe too conservative *)
           let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
-            Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
+            Pp.stringFromCtype_human no_qualifiers ty1 ^ " -- " ^
+            Pp.stringFromAil_genType gty2
+          ) in
           if tag_sym1 = tag_sym2 then
             E.return ()
           else
@@ -213,15 +230,17 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
       | _ ->
           throw IncompatibleType
     end
-  
+
   else if AAux.atomic_qualified_unqualified AAux.is_pointer ty1 then
     let () = Debug.print_debug 2 [] (fun () ->
       "TODO: check the use of AAux.lvalue_conversion"
     ) in
     AAux.lvalue_conversion s ty1 >>= fun conv_ty1 ->
     let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
-      "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromCtype_human no_qualifiers conv_ty1  ^
-      " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
+      "[well_typed_assignment] before bullet 3: conv_ty1= " ^
+      Pp.stringFromCtype_human no_qualifiers conv_ty1 ^
+      " -- gty2= " ^ Pp.stringFromAil_genType gty2
+    ) in
     match ((proj_ctype_ (unatomic ty1)), proj_ctype_ conv_ty1, gty2) with
       | (Pointer ref_qs1 _, Pointer _ conv_ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* doing the "qualified or unqualified versions of" by checking the compatibility of
@@ -230,23 +249,29 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
              conversion (since the lvalue conversion removes the qualifiers) *)
           if    AAux.are_compatible (no_qualifiers, conv_ref_ty1) (no_qualifiers, ref_ty2)
              && AAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 3") in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+              "[well_typed_assignment] OK: bullet 3"
+            ) in (* DEBUG *)
             let () = Debug.print_debug 2 [] (fun () ->
               (* TODO !!!! *)
               "FIXME: sub_qualifiers sees the wrong qualifiers (GenTypeCategory RValue seems to be at fault) !!!!"
             ) in
             E.add "§6.5.16.1#1, bullet 3"
-          
+
           else if (   (AAux.is_object conv_ref_ty1 && AAux.is_void   ref_ty2)
                    || (AAux.is_void   conv_ref_ty1 && AAux.is_object ref_ty2) ) &&
                   AAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 4") in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+              "[well_typed_assignment] OK: bullet 4"
+            ) in (* DEBUG *)
             E.add "§6.5.16.1#1, bullet 4"
-          
+
           else if is_null_pointer_constant e2 then
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 5") in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+              "[well_typed_assignment] OK: bullet 5"
+            ) in (* DEBUG *)
             E.add "§6.5.16.1#1, bullet 5"
-          
+
           else
             let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
               "[well_typed_assignment] KO: is_pointer ty1 && gty2 ==> (ref_qs1, conv_ref_ty1)= " ^
@@ -263,7 +288,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           else
             throw IncompatibleType
     end
-  
+
   (* NOTE: bullet 6 is dealt with earlier (look for the code dealing with bullet 1) *)
   else if is_init then
     (* TODO: check *)
@@ -285,7 +310,9 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           throw IncompatibleType
     end
   else
-    let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] KO: the end") in (* DEBUG *)
+    let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+      "[well_typed_assignment] KO: the end"
+    ) in (* DEBUG *)
     throw IncompatibleType
 
 
@@ -293,17 +320,17 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
 val well_typed_equality: genType -> genType -> bool -> bool -> bool
 let well_typed_equality gty1 gty2 is_null1 is_null2 =
      (* STD §6.5.9#2, item 1 *)
-     is_arithmetic gty1 && is_arithmetic gty2
+     GAux.is_arithmetic gty1 && GAux.is_arithmetic gty2
      (* STD §6.5.9#2, item 2 *)
-  || are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2
+  || GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2
      (* STD §6.5.9#2, item 3 *)
-  || is_pointer_to_void gty1 && is_pointer_to_object gty2
+  || GAux.is_pointer_to_void gty1 && GAux.is_pointer_to_object gty2
      (* STD §6.5.9#2, item 3 *)
-  || is_pointer_to_object gty1 && is_pointer_to_void gty2
+  || GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_void gty2
      (* STD §6.5.9#2, item 4 *)
-  || is_pointer gty1 && is_null2
+  || GAux.is_pointer gty1 && is_null2
      (* STD §6.5.9#2, item 4 *)
-  || is_null1 && is_pointer gty2
+  || is_null1 && GAux.is_pointer gty2
 
 let guard_violation loc viol b =
   E.guard loc (TError_ConstraintViolation viol) b
@@ -311,16 +338,16 @@ let guard_violation loc viol b =
 let well_typed_binary_arithmetic viol loc_e1 loc_op loc_e2 gt1 aop gt2 =
   let guard bop = guard_violation (with_regions_and_cursor [loc_e1; loc_e2] (Just loc_op)) (viol bop gt1 gt2) in
   match aop with
-    | Mul  -> guard MultiplicativeInvalidOperandsType (is_arithmetic gt1 && is_arithmetic gt2)
-    | Div  -> guard MultiplicativeInvalidOperandsType (is_arithmetic gt1 && is_arithmetic gt2)
-    | Mod  -> guard ModInvalidOperandsType            (is_integer    gt1 && is_integer    gt2)
-    | Add  -> guard AdditiveOperandsArithmeticType    (is_arithmetic gt1 && is_arithmetic gt2)
-    | Sub  -> guard AdditiveOperandsArithmeticType    (is_arithmetic gt1 && is_arithmetic gt2)
-    | Shl  -> guard BitwiseShiftInvalidOperandsType   (is_integer    gt1 && is_integer    gt2)
-    | Shr  -> guard BitwiseShiftInvalidOperandsType   (is_integer    gt1 && is_integer    gt2)
-    | Band -> guard BitwiseAndInvalidOperandsType     (is_integer    gt1 && is_integer    gt2)
-    | Bxor -> guard BitwiseXorInvalidOperandsType     (is_integer    gt1 && is_integer    gt2)
-    | Bor  -> guard BitwiseOrInvalidOperandsType      (is_integer    gt1 && is_integer    gt2)
+    | Mul  -> guard MultiplicativeInvalidOperandsType (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Div  -> guard MultiplicativeInvalidOperandsType (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Mod  -> guard ModInvalidOperandsType            (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Add  -> guard AdditiveOperandsArithmeticType    (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Sub  -> guard AdditiveOperandsArithmeticType    (GAux.is_arithmetic gt1 && GAux.is_arithmetic gt2)
+    | Shl  -> guard BitwiseShiftInvalidOperandsType   (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Shr  -> guard BitwiseShiftInvalidOperandsType   (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Band -> guard BitwiseAndInvalidOperandsType     (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Bxor -> guard BitwiseXorInvalidOperandsType     (GAux.is_integer    gt1 && GAux.is_integer    gt2)
+    | Bor  -> guard BitwiseOrInvalidOperandsType      (GAux.is_integer    gt1 && GAux.is_integer    gt2)
   end
 
 
@@ -329,7 +356,7 @@ let combine_qualifiers_left gty1 gty2 =
   match (gty1, gty2) with
     | (GenPointer qs1 ty1, GenPointer qs2 _) ->
         GenPointer (combine_qualifiers qs1 qs2) ty1
-    | (GenPointer _  _ , _) ->
+    | (GenPointer _ _ , _) ->
         gty1
     | _ ->
         gty1
@@ -347,90 +374,64 @@ let combine_qualifiers_right gty1 gty2 =
         gty2
   end
 
-val well_typed_conditionalGNU:
-    (Loc.t * Loc.t * Loc.t) ->
-    genType -> genType -> E.errorM genTypeCategory
-let well_typed_conditionalGNU (loc_cond, loc_e1, loc_e3) gty1 gty3 =
-  if is_scalar gty1 && not (is_byte gty1) then
-    E.add "§6.5.15#2" >>
-    if is_arithmetic gty3 then
-      E.add "§6.5.15#3, bullet 1" >>
-      E.add "§6.5.15#5, sentence 1" >>
-      E.return (GenRValueType (usual_arithmetic gty3 gty3))
-    
-    else if GAux.is_struct_or_union gty3 then
-      E.add "§6.5.15#3, bullet 2" >>
-      E.add "§6.5.15#5, sentence 2" >>
-      E.return (GenRValueType gty3)
-    
-    else if GAux.void gty3 then
-      E.add "§6.5.15#3, bullet 3" >>
-      E.add "§6.5.15#5, sentence 3" >>
-      E.return (GenRValueType GenVoid)
-    
-    else if GAux.is_pointer gty3 then
-      E.add "§6.5.15#3, bullet 4" >>
-      E.return (GenRValueType gty3)
-
-    else
-      E.constraint_violation (with_cursor_from loc_e3 loc_cond)
-        (GNUConditionalOperatorInvalidOperandType gty3)
-  else
-    E.constraint_violation (with_cursor_from loc_e1 loc_cond) (ConditionalOperatorControlType gty1)
-
 
 val well_typed_conditional:
     (Loc.t * Loc.t * Loc.t * Loc.t) ->
     genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
-let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_null2 is_null3 =
-  if is_scalar gty1 && not (is_byte gty1) then
-    E.add "§6.5.15#2" >>
-    if is_arithmetic gty2 && is_arithmetic gty3 then
-      E.add "§6.5.15#3, bullet 1" >>
-      E.add "§6.5.15#5, sentence 1" >>
-      E.return (GenRValueType (usual_arithmetic gty2 gty3))
-    
+let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3)
+  gty1 gty2 gty3 is_null2 is_null3
+=
+  if GAux.is_scalar gty1 && not (GAux.is_byte gty1) then
+    E.add "§6.5.15#2" >>= fun () ->
+    if GAux.is_arithmetic gty2 && GAux.is_arithmetic gty3 then
+      E.add "§6.5.15#3, bullet 1" >>= fun () ->
+      E.add "§6.5.15#5, sentence 1" >>= fun () ->
+      E.return (GenRValueType (GAux.usual_arithmetic gty2 gty3))
+
     else if GAux.is_struct_or_union gty2 && gty2 = gty3 then
-      E.add "§6.5.15#3, bullet 2" >>
-      E.add "§6.5.15#5, sentence 2" >>
+      E.add "§6.5.15#3, bullet 2" >>= fun () ->
+      E.add "§6.5.15#5, sentence 2" >>= fun () ->
       E.return (GenRValueType gty2)
-    
+
     else if GAux.void gty2 && GAux.void gty3 then
-      E.add "§6.5.15#3, bullet 3" >>
-      E.add "§6.5.15#5, sentence 3" >>
+      E.add "§6.5.15#3, bullet 3" >>= fun () ->
+      E.add "§6.5.15#5, sentence 3" >>= fun () ->
       E.return (GenRValueType GenVoid)
-    
-    else match composite_pointer gty2 gty3 with
+
+    else match GAux.composite_pointer gty2 gty3 with
       | Just gty ->
-          E.add "§6.5.15#3, bullet 4" >>
-            E.add "§6.5.15#6" >>
+          E.add "§6.5.15#3, bullet 4" >>= fun () ->
+            E.add "§6.5.15#6" >>= fun () ->
           E.return (GenRValueType gty)
       | Nothing ->
-          if is_pointer gty2 && is_null3 then
-            E.add "§6.5.15#3, bullet 5" >>
-            E.add "§6.5.15#6" >>
+          if GAux.is_pointer gty2 && is_null3 then
+            E.add "§6.5.15#3, bullet 5" >>= fun () ->
+            E.add "§6.5.15#6" >>= fun () ->
             E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
-          else if is_pointer gty3 && is_null2 then
-            E.add "§6.5.15#3, bullet 5" >>
-            E.add "§6.5.15#6" >>
+          else if GAux.is_pointer gty3 && is_null2 then
+            E.add "§6.5.15#3, bullet 5" >>= fun () ->
+            E.add "§6.5.15#6" >>= fun () ->
             E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
-          else if is_pointer_to_object gty2 && is_pointer_to_void gty3 then
-            E.add "§6.5.15#3, bullet 6" >>
-            E.add "§6.5.15#6" >>
+          else if GAux.is_pointer_to_object gty2 && GAux.is_pointer_to_void gty3 then
+            E.add "§6.5.15#3, bullet 6" >>= fun () ->
+            E.add "§6.5.15#6" >>= fun () ->
             E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
-          else if is_pointer_to_object gty3 && is_pointer_to_void gty2 then
-            E.add "§6.5.15#3, bullet 6" >>
-            E.add "§6.5.15#6" >>
+          else if GAux.is_pointer_to_object gty3 && GAux.is_pointer_to_void gty2 then
+            E.add "§6.5.15#3, bullet 6" >>= fun () ->
+            E.add "§6.5.15#6" >>= fun () ->
             E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
           else
-            E.constraint_violation (with_regions_and_cursor [loc_e2; loc_e3] (Just loc_cond))
-                                   (ConditionalOperatorInvalidOperandTypes gty2 gty3)
+            E.constraint_violation
+              (with_regions_and_cursor [loc_e2; loc_e3] (Just loc_cond))
+              (ConditionalOperatorInvalidOperandTypes gty2 gty3)
     end
   else
-    E.constraint_violation (with_cursor_from loc_e1 loc_cond) (ConditionalOperatorControlType gty1)
+    E.constraint_violation (with_cursor_from loc_e1 loc_cond)
+      (ConditionalOperatorControlType gty1)
 
 
-val annotate_stringLiteral: stringLiteral -> E.errorM (expression_ genTypeCategory * genTypeCategory)
+val annotate_stringLiteral:
+  stringLiteral -> E.errorM (expression_ genTypeCategory * genTypeCategory)
 let annotate_stringLiteral (pref_opt, strs) =
   let elem_ty = match pref_opt with
                   | Nothing     -> char     (* STD §6.4.5#6 sentence 3 *)
@@ -452,8 +453,8 @@ let rec typecheck_constant loc cst =
     | ConstantInteger iCst ->
         gen_typing_type_of_constant loc iCst >>= fun gity ->
         E.return (GenBasic (GenInteger gity))
-    | ConstantFloating ((_, suff_opt)) ->
-        E.add "§6.4.4.2#4" >>
+    | ConstantFloating (_, suff_opt) ->
+        E.add "§6.4.4.2#4" >>= fun () ->
         let rfty = match suff_opt with
           | Nothing ->
               Double
@@ -467,32 +468,32 @@ let rec typecheck_constant loc cst =
         (* TODO: §6.4.4.4#9 *)
         match fst cc with
           | Nothing ->
-              E.add "§6.4.4.4#10" >>
-              E.return (GenBasic (GenInteger (Concrete (Signed Int_))))
+              E.add "§6.4.4.4#10" >>= fun () ->
+              E.return signed_int_gty
           | Just Pref_L ->
-              E.add "§6.4.4.4#11" >>
-              E.return (GenBasic (GenInteger (Concrete (Wchar_t))))
+              E.add "§6.4.4.4#11" >>= fun () ->
+              E.return (GenBasic (GenInteger (Concrete Wchar_t)))
           | Just Pref_u ->
-              E.add "§6.4.4.4#11" >>
+              E.add "§6.4.4.4#11" >>= fun () ->
               E.return genChar16_t
           | Just Pref_U ->
-              E.add "§6.4.4.4#11" >>
+              E.add "§6.4.4.4#11" >>= fun () ->
               E.return genChar32_t
         end
     | ConstantArray elem_ty csts ->
         (* TODO: this is probably too strong *)
         E.mapM (typecheck_constant loc) csts >>= function
           | [] ->
-              error "typecheck_constant: empty array constant"
+              E.internal_error loc "typecheck_constant: empty array constant"
           | gtys ->
               (* TODO !!!! *)
-              E.return (GenArray elem_ty (Just $ integerFromNat (List.length csts)))
+              E.return (GenArray elem_ty (Just (integerFromNat (List.length csts))))
         end
     | ConstantIndeterminate ty ->
         E.return (GenTypes.inject_type ty)
     | ConstantNull ->
         (* TODO: check *)
-        E.return (GenPointer no_qualifiers (Ctype [] Void))
+        E.return (GenPointer no_qualifiers Cty.void)
     | ConstantStruct tag_sym xs ->
         E.mapM (fun (memb_ident, cst) ->
           (* TODO: need to check that the members type match ... *)
@@ -506,10 +507,10 @@ let rec typecheck_constant loc cst =
         E.return (GenTypes.GenUnion tag_sym)
     | ConstantPredefined PConstantFalse ->
         (* STD C23 §6.4.4.5#3 *)
-        E.return (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete Bool)))
+        E.return bool_gty
     | ConstantPredefined PConstantTrue ->
         (* STD C23 §6.4.4.5#3 *)
-        E.return (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete Bool)))
+        E.return bool_gty
   end
 
 val annotate_rvalue:
@@ -529,7 +530,8 @@ type generic_selection =
   | GA_no_match
 
 let rec find_generic_association_aux idx (select_opt, default_opt, rev_gas')
-annotate_expression are_compatible gas =
+  annotate_expression are_compatible gas
+=
   let next acc =
     find_generic_association_aux (idx+1) acc
     annotate_expression
@@ -574,7 +576,8 @@ end
 let find_generic_association annotate_expression ctrl_ty gas =
   let are_compatible qs ty =
     AilTypesAux.are_compatible (qs, ty) (no_qualifiers, ctrl_ty) in
-  find_generic_association_aux 0 (Nothing, Nothing, []) annotate_expression are_compatible gas
+  find_generic_association_aux 0 (Nothing, Nothing, []) annotate_expression
+    are_compatible gas
 
 (* context given to [annotate_expression] to inform it on the what the current
    expression is: *)
@@ -597,87 +600,102 @@ type annotation_context =
   | CTXother
 
 val annotate_expression:
-  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
-  sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
-let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression () std_annots loc expr_) =
+  (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) ->
+    E.errorM (list (statement genTypeCategory))) ->
+  sigma unit ->
+  gamma ->
+  annotation_context ->
+  expression unit ->
+  E.errorM (expression genTypeCategory)
+let rec annotate_expression annotate_block sigm gamm ctx
+  (AnnotatedExpression () std_annots loc expr_)
+=
   let annotate_expression = annotate_expression annotate_block sigm gamm in
   let annotate_rvalue     = annotate_rvalue annotate_block sigm gamm     in
   let annotate_assignee   = annotate_assignee annotate_block sigm gamm   in
   let annotate_arguments loc is_variadic args = function
     | Just params ->
-        annotate_arguments_aux false annotate_block sigm gamm (List.length args) (List.length params) loc is_variadic args params
+        annotate_arguments_aux false annotate_block sigm gamm (List.length args)
+          (List.length params) loc is_variadic args params
     | Nothing ->
-        error "annotate_arguments ==> no proto"
+        E.internal_error loc "annotate_arguments ==> no proto"
   end in
   let annotate_and_cast_arguments loc is_variadic args = function
     | Just params ->
-        annotate_arguments_aux true annotate_block sigm gamm (List.length args) (List.length params) loc is_variadic args params
+        annotate_arguments_aux true annotate_block sigm gamm (List.length args)
+          (List.length params) loc is_variadic args params
     | Nothing ->
-        error "annotate_and_cast_arguments ==> no proto"
+        E.internal_error loc "annotate_and_cast_arguments ==> no proto"
   end in
   E.read_config >>= fun conf ->
   match expr_ with
     | AilEunary (Plus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
-        E.add "§6.5.3.3#1, sentence 1" >>
+        E.add "§6.5.3.3#1, sentence 1" >>= fun () ->
         annotate_rvalue e >>= fun (a_e, gty) ->
-        if is_arithmetic gty then
+        if GAux.is_arithmetic gty then
           let mk_conversion =
-            if is_integer gty then integer_promote else id in
+            if GAux.is_integer gty then GAux.integer_promote else id in
           E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
-          E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)
-    
+          E.constraint_violation (with_cursor_from (locOf e) loc)
+            (InvalidArgumentTypeUnaryExpression gty)
+
     | AilEunary (Minus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
-        E.add "§6.5.3.3#1, sentence 1" >>
+        E.add "§6.5.3.3#1, sentence 1" >>= fun () ->
         annotate_rvalue e >>= fun (a_e, gty) ->
-        if is_arithmetic gty then
+        if GAux.is_arithmetic gty then
           let mk_conversion =
-            if is_integer gty then integer_promote else id in
+            if GAux.is_integer gty then GAux.integer_promote else id in
           E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
-          E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)
-    
+          E.constraint_violation (with_cursor_from (locOf e) loc)
+            (InvalidArgumentTypeUnaryExpression gty)
+
     | AilEunary (Bnot as uop) e ->
         (* STD §6.5#4, sentence 1 *)
         (* STD §6.5.3.3#1, sentence 2 *)
-        E.add "STD §6.5#4, sentence 1" >>
-        E.add "STD §6.5.3.3#1, sentence 2" >>
+        E.add "§6.5#4, sentence 1" >>= fun () ->
+        E.add "§6.5.3.3#1, sentence 2" >>= fun () ->
         annotate_rvalue e >>= fun (a_e, gty) ->
-        if is_integer gty then
-          E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
+        if GAux.is_integer gty then
+          E.return (AilEunary uop a_e, GenRValueType (GAux.integer_promote gty))
         else
-          E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)
-    
+          E.constraint_violation (with_cursor_from (locOf e) loc)
+            (InvalidArgumentTypeUnaryExpression gty)
+
     | AilEunary Address e ->
         (* STD §6.5.3.2#1 *)
-        E.add "§6.5.3.2#1" >>
+        E.add "§6.5.3.2#1" >>= fun () ->
         annotate_expression CTXaddr e >>= fun a_e ->
         match GenTypes.genTypeCategoryOf a_e with
           | GenRValueType (GenFunction ty params isVariadic) ->
               (* e is a 'function designator' *)
-              let gty' = GenPointer no_qualifiers (Ctype [] (Function ty params isVariadic)) in
+              let gty' =
+                GenPointer no_qualifiers (Ctype [] (Function ty params isVariadic)) in
               E.return (AilEunary Address a_e, GenRValueType gty')
           | GenRValueType gty ->
-              E.constraint_violation (with_cursor_from (locOf e) loc) (UnaryAddressNotRvalue gty)
+              E.constraint_violation (with_cursor_from (locOf e) loc)
+                (UnaryAddressNotRvalue gty)
           | GenLValueType qs ty isRegister ->
               (* e is an 'lvalue' *)
               let () = Debug.warn [Debug.DB_ail_typing]
                  (fun () -> "(TODO) GenTyping.annotate_expression AilEunary Address, not checking for bit-field member") in
               if isRegister then
-                E.constraint_violation (with_cursor_from (locOf e) loc) UnaryAddressRegisterLvalue
+                E.constraint_violation (with_cursor_from (locOf e) loc)
+                  UnaryAddressRegisterLvalue
               else
-                E.add "§6.5.3.2#3, 2nd sentence" >>
+                E.add "§6.5.3.2#3, 2nd sentence" >>= fun () ->
                 E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
         end
-    
+
     | AilEunary Indirection e ->
         annotate_rvalue e >>= fun (e', gty) ->
         match gty with
           | GenPointer ref_qs ref_ty ->
-              E.add "§6.5.3.2#4, sentence 2" >>
-              E.add "§6.5.3.2#4, sentence 3" >>
+              E.add "§6.5.3.2#4, sentence 2" >>= fun () ->
+              E.add "§6.5.3.2#4, sentence 3" >>= fun () ->
               if AAux.is_object ref_ty then
                 (* *)
                 E.return (AilEunary Indirection e', GenLValueType ref_qs ref_ty false)
@@ -685,43 +703,76 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                 (* TODO: check that it's ok to drop the qualifiers *)
                 E.return (AilEunary Indirection e', GenRValueType (inject_type ref_ty))
           | _ ->
-              E.constraint_violation (with_cursor_from (locOf e) loc) IndirectionNotPointer
+              E.constraint_violation (with_cursor_from (locOf e) loc)
+                IndirectionNotPointer
         end
-    
+
     | AilEunary (PostfixIncr as uop) e ->
         annotate_expression CTXincr e >>= fun e' ->
         match GenTypes.genTypeCategoryOf e' with
           | GenLValueType qs' ty' _ ->
               (* TODO(check): why are we doing an lvalue coercion here? *)
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              (* NOTE: the STD at §6.5.3#1 doesn't directly says that pointer operand must be to
-                       complete object type, but then #2 defers to §6.5.6#2 which does. *)
-              if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
-                                                  AAux.atomic_qualified_unqualified (AAux.is_pointer_to_complete_object sigm) ty') then
-                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
+              let res = (AilEunary uop e', GenRValueType (inject_type ty')) in
+              let is_modifiable = AAux.modifiable sigm qs' ty' in
+              (* NOTE: the STD at §6.5.2.4#1 doesn't directly says that pointer operand
+               * must be to complete object type, but then #2 defers to §6.5.6#2 which
+               * does. *)
+              if
+                is_modifiable &&
+                (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
+                  AAux.atomic_qualified_unqualified
+                    (AAux.is_pointer_to_complete_object sigm) ty')
+              then
+                E.return res
+              else if
+                conf.allow_void_ptr_arithmetic &&
+                is_modifiable &&
+                AAux.atomic_qualified_unqualified AAux.is_pointer_to_void ty'
+              then
+                (* GNU extension: arithmetic on void pointers *)
+                E.return res
               else
-                E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryIncrement ty')
+                E.constraint_violation (with_cursor_from (locOf e) loc)
+                  (InvalidArgumentTypeUnaryIncrement ty')
           | _ ->
-            E.constraint_violation (with_cursor_from (locOf e) loc) UnaryExpressionNotLvalue
+            E.constraint_violation (with_cursor_from (locOf e) loc)
+              UnaryExpressionNotLvalue
         end
-    
+
     | AilEunary (PostfixDecr as uop) e ->
         annotate_expression CTXdecr e >>= fun e' ->
         match GenTypes.genTypeCategoryOf e' with
           | GenLValueType qs' ty' _ ->
               (* TODO(check): why are we doing an lvalue coercion here? *)
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              (* NOTE: the STD at §6.5.3#1 doesn't directly says that pointer operand must be to
-                       complete object type, but then #2 defers to §6.5.6#2 which does. *)
-              if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
-                                                  AAux.atomic_qualified_unqualified (AAux.is_pointer_to_complete_object sigm) ty') then
-                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
+              let res = (AilEunary uop e', GenRValueType (inject_type ty')) in
+              let is_modifiable = AAux.modifiable sigm qs' ty' in
+              (* NOTE: the STD at §6.5.2.4#1 doesn't directly says that pointer operand
+               * must be to complete object type, but then #2 defers to §6.5.6#2 which
+               * does. *)
+              if
+                is_modifiable &&
+                (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
+                  AAux.atomic_qualified_unqualified
+                    (AAux.is_pointer_to_complete_object sigm) ty')
+              then
+                E.return res
+              else if
+                conf.allow_void_ptr_arithmetic &&
+                is_modifiable &&
+                AAux.atomic_qualified_unqualified AAux.is_pointer_to_void ty'
+              then
+                (* GNU extension: arithmetic on void pointers *)
+                E.return res
               else
-                E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryDecrement ty')
+                E.constraint_violation (with_cursor_from (locOf e) loc)
+                  (InvalidArgumentTypeUnaryDecrement ty')
           | _ ->
-            E.constraint_violation (with_cursor_from (locOf e) loc) UnaryExpressionNotLvalue
+            E.constraint_violation (with_cursor_from (locOf e) loc)
+              UnaryExpressionNotLvalue
         end
-    
+
     | AilEarray is_str elem_ty e_opts ->
         (* TODO: think about it *)
         E.mapM (maybe (E.return Nothing) (fun e ->
@@ -732,7 +783,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
             ) in
             E.return (Just e')
           else
-            E.add "§6.7.9#11" >>
+            E.add "§6.7.9#11" >>= fun () ->
             (* TODO: unqualify elem_ty? *)
             (Just <$> annotate_assignee true InitializationAsSimpleAssignment loc elem_ty e)
 (*
@@ -756,8 +807,8 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         )) e_opts >>= fun xs ->
         (* TODO: checking that the types in [xs] match ty *)
         E.return ( AilEarray is_str elem_ty xs
-                 , GenRValueType (GenArray elem_ty (Just (integerFromNat $ List.length xs))) )
-    
+                 , GenRValueType (GenArray elem_ty (Just (integerFromNat (List.length xs)))) )
+
     | AilEstruct tag_sym xs ->
         let struct_gty = GenStruct tag_sym in
         match lookup_tag_definition sigm tag_sym with
@@ -765,7 +816,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
               (* NOTE: the potential flexible array member is never prevent in the list of expressions
                        (as it cannot be initialised with an initializer) *)
               if List.length xs <> List.length membersDefs then
-                error "TODO: AilEstruct not the right number of members"
+                E.internal_error loc "TODO: AilEstruct not the right number of members"
               else
                 E.mapM (fun (memb_ident, e_opt) ->
                   match List.lookup memb_ident membersDefs with
@@ -775,14 +826,15 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                           E.return (memb_ident, Just a_e)
                         ) e_opt
                     | Nothing ->
-                        E.constraint_violation loc (MemberofNoMemberRvalue memb_ident struct_gty)
+                        E.constraint_violation loc
+                          (MemberofNoMemberRvalue memb_ident struct_gty)
                   end
                 ) xs >>= fun a_xs ->
                 E.return (AilEstruct tag_sym a_xs, GenRValueType struct_gty)
           | _ ->
-              error "annotate_expression(AilEstruct): failed to find a valid tag definition"
+              E.internal_error loc "annotate_expression(AilEstruct): failed to find a valid tag definition"
         end
-    
+
     | AilEunion tag_sym memb_ident Nothing ->
         E.return (AilEunion tag_sym memb_ident Nothing, GenRValueType (GenUnion tag_sym))
     | AilEunion tag_sym memb_ident (Just e) ->
@@ -794,20 +846,21 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                     annotate_assignee true InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
                     E.return (AilEunion tag_sym memb_ident (Just a_e), GenRValueType union_gty)
                 | Nothing ->
-                    E.constraint_violation loc (MemberofNoMemberRvalue memb_ident union_gty)
+                    E.constraint_violation loc
+                      (MemberofNoMemberRvalue memb_ident union_gty)
               end
           | _ ->
-              error "annotate_expression(AilEunion): failed to find a valid tag definition"
+              E.internal_error loc "annotate_expression(AilEunion): failed to find a valid tag definition"
         end
-    
+
     | AilEcompound qs ty e ->
         (* STD §6.5.2.5#1 *)
-        E.add "§6.5.2.5#1" >>
+        E.add "§6.5.2.5#1" >>= fun () ->
         if    (AAux.is_complete sigm ty && AAux.is_object ty)
            || (AAux.is_array_unknown_size ty && not (AAux.is_vla ty)) then
           (* TODO: check that *)
-          annotate_definition_aux annotate_block sigm gamm (ty, e) >>= fun a_e ->
-          E.add "§6.5.2.5#4" >>
+          annotate_definition_aux loc annotate_block sigm gamm (ty, e) >>= fun a_e ->
+          E.add "§6.5.2.5#4" >>= fun () ->
           E.return (AilEcompound qs ty a_e, GenLValueType qs ty false)
         else
           E.constraint_violation loc InvalidTypeCompoundLiteral
@@ -824,43 +877,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
               E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
           (* NOTE: other builtins might not need to be call directly *)
         end
-(*
 
-(GenBasic (GenInteger (Concrete ity))))
-
-
-        (* TODO: check *)
-        let ity = match str with
-          | "INT8_MIN" ->
-              Signed Int_
-          | "INT16_MIN" ->
-              Signed Int_
-          | "INT32_MIN" ->
-              Signed Int_ (* TODO: this might not fit in a signed int ... *)
-          | "INT64_MIN" ->
-              Signed Long
-          | "INT8_MAX" ->
-              Signed Int_
-          | "INT16_MAX" ->
-              Signed Int_
-          | "INT32_MAX" ->
-              Signed Int_ (* TODO: this might not fit in a signed int ... *)
-          | "INT64_MAX" ->
-              Signed Long
-          | "UINT8_MAX" ->
-              Unsigned Int_
-          | "UINT16_MAX" ->
-              Unsigned Int_
-          | "UINT32_MAX" ->
-              Unsigned Int_ (* TODO: this might not fit in a signed int ... *)
-          | "UINT64_MAX" ->
-              Unsigned Long
-          | _ ->
-              error ("WIP typing, AilEbuiltin: " ^ str)
-        end in
-        E.return (AilEbuiltin str, GenRValueType (GenBasic (GenInteger (Concrete ity))))
-*)
-    
     | AilEident sym ->
         match (List.lookup sym gamm, List.lookup sym sigm.declarations) with
           | (Just ((_, _, isRegister), _, qs, ty), Nothing) ->
@@ -880,25 +897,25 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                  (§6.3.2.1#4). *)
               E.return (AilEident sym, GenRValueType (inject_type (Ctype [Annot.Aloc loc] (Function (ret_qs, ret_ty) params is_variadic))))
           | _ ->
-              error ("gentpying.annotate_expression: AilEident symbol couldn't be resolved => " ^ show sym)
+              E.internal_error loc ("gentpying.annotate_expression: AilEident symbol couldn't be resolved => " ^ show sym)
         end
-    
+
     | AilEbinary e1 Comma e2 ->
-        E.add "§6.5.17#3, sentence 3" >>
+        E.add "§6.5.17#3, sentence 3" >>= fun () ->
         annotate_rvalue e1 >>= fun (e1', _  ) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         E.return (AilEbinary e1' Comma e2', GenRValueType gty2)
-    
+
     | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin b)) args ->
         let loc_cursor = Loc.with_cursor loc' in
-        let memorder_ty = Ctype [] $ Basic (Integer (Signed (Int_))) (* TODO: actually memory_order enum *) in
+        let memorder_ty = Cty.signed_int (* TODO: actually memory_order enum *) in
         match (b, args) with
         | (AilBatomic AilBAstore, object_e :: desired_e :: order_e :: args) ->
             annotate_rvalue object_e >>= fun (object_e',  object_gty)  ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let params_wo_ptr = [(qs, Ctype [] $ unatomic_ object_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction (qs, Ctype [] Void) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let params_wo_ptr = [(qs, Ctype [] (unatomic_ object_ty), false); (no_qualifiers, memorder_ty, false)] in
+                  let gen_fun_ty = GenRValueType (GenFunction (qs, Cty.void) ((qs, Ctype [] (Pointer qs object_ty), false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicStore object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false (desired_e :: order_e :: args) (Just params_wo_ptr) >>= fun es' ->
                   match memory_order_of_expr order_e with
@@ -909,20 +926,20 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) (object_e' :: es')
                              , GenRValueType GenVoid)
                   end
               | gty ->
-                  E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicStore gty
+                  E.constraint_violation loc_cursor (AtomicAddressArgumentMustBePointer AtomicStore gty)
             end
-        
+
         | (AilBatomic AilBAload, object_e :: order_e :: args) ->
             annotate_rvalue object_e >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
                   let ret_ty = Ctype [] (unatomic_ object_ty) in
                   let params_wo_ptr = [(no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let gen_fun_ty = GenRValueType (GenFunction (qs, ret_ty) ((qs, Ctype [] (Pointer qs object_ty), false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicLoad object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false (order_e :: args) (Just params_wo_ptr) >>= fun es' ->
                   match memory_order_of_expr order_e with
@@ -931,37 +948,37 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB206_atomic_load_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) (object_e' :: es')
                              , GenRValueType (inject_type ret_ty))
                   end
               | gty ->
-                  E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicLoad gty
+                  E.constraint_violation loc_cursor (AtomicAddressArgumentMustBePointer AtomicLoad gty)
             end
-        
+
         | (AilBatomic AilBAexchange, object_e :: args) ->
             annotate_rvalue object_e >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
                   let ret_ty = Ctype [] (unatomic_ object_ty) in
                   let params_wo_ptr = [(qs, ret_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let gen_fun_ty = GenRValueType (GenFunction (qs, ret_ty) ((qs, Ctype [] (Pointer qs object_ty), false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false args (Just params_wo_ptr) >>= fun es' ->
-                  E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                  E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) (object_e' :: es')
                            , GenRValueType (inject_type ret_ty))
               | gty ->
-                  E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicExchange gty
+                  E.constraint_violation loc_cursor (AtomicAddressArgumentMustBePointer AtomicExchange gty)
             end
-        
+
         | (AilBatomic AilBAcompare_exchange_strong, object_e :: expected_e :: desired_e :: order_success_e :: order_failure_e :: args) ->
             annotate_rvalue object_e  >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let ty = Ctype [] $ unatomic_ object_ty in
-                  let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
+                  let ty = Ctype [] (unatomic_ object_ty) in
+                  let params_wo_ptr = [(qs, Ctype [] (Pointer qs ty), false); (qs, ty, false);
                                        (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType $GenFunction (no_qualifiers, Ctype [] $ Basic (Integer Bool))
-                                       ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
+                  let gen_fun_ty = GenRValueType $GenFunction (no_qualifiers, Ctype [] (Basic (Integer Bool)))
+                                       ((qs, Ctype [] (Pointer qs object_ty), false) :: params_wo_ptr) false in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   let (params1, params2) = List.splitAt 2 params_wo_ptr in
                   annotate_and_cast_arguments loc_cursor false [expected_e; desired_e] (Just params1)             >>= fun args1 ->
@@ -973,22 +990,23 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: args1 ++ args2)
-                             , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
+                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) (object_e' :: args1 ++ args2)
+                             , GenRValueType bool_gty)
                   end
               | gty ->
-                  E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicCompareExchange gty
+                  E.constraint_violation loc_cursor (AtomicAddressArgumentMustBePointer AtomicCompareExchange gty)
             end
-        
+
         | (AilBatomic AilBAcompare_exchange_weak, object_e :: expected_e :: desired_e :: order_success_e :: order_failure_e :: args) ->
             annotate_rvalue object_e  >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let ty = Ctype [] $ unatomic_ object_ty in
-                  let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
+                  let ty = Ctype [] (unatomic_ object_ty) in
+                  let params_wo_ptr = [(qs, Ctype [] (Pointer qs ty), false); (qs, ty, false);
                                        (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType $GenFunction (no_qualifiers, Ctype [] $ Basic (Integer Bool))
-                                       ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
+                  let gen_fun_ty = GenRValueType
+                    (GenFunction (no_qualifiers, Ctype [] (Basic (Integer Bool)))
+                      ((qs, Ctype [] (Pointer qs object_ty), false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   let (params1, params2) = List.splitAt 2 params_wo_ptr in
                   annotate_and_cast_arguments loc_cursor false [expected_e; desired_e] (Just params1)             >>= fun args1 ->
@@ -1000,35 +1018,35 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: args1 ++ args2)
-                             , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
+                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' (AilEbuiltin b)) (object_e' :: args1 ++ args2)
+                             , GenRValueType bool_gty)
                   end
               | gty ->
-                  E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicCompareExchange gty
+                  E.constraint_violation loc_cursor (AtomicAddressArgumentMustBePointer AtomicCompareExchange gty)
             end
-        
+
         | (AilBlinux AilBLfence, [order_e]) ->
            annotate_rvalue order_e  >>= fun (order_e' , order_gty) ->
            E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEbuiltin b)) [order_e'], GenRValueType GenVoid)
-        
+
         | (AilBlinux AilBLread, [object_e; order_e]) ->
            annotate_rvalue object_e >>= fun (object_e', object_gty) ->
            annotate_rvalue order_e  >>= fun (order_e' , order_gty ) ->
            match (object_gty) with
              | (GenPointer qs object_ty) ->
                  E.return ( AilEcall (AnnotatedExpression ((* TODO: HACK *)GenRValueType GenVoid) annots' loc' (AilEbuiltin b)) [object_e';order_e']
-                          , GenRValueType (inject_type $ Ctype [] (unatomic_ object_ty)) )
+                          , GenRValueType (inject_type (Ctype [] (unatomic_ object_ty))) )
              | _ ->
-                 error "WIP: typing of linux_read"
+                 E.internal_error loc "WIP: typing of linux_read"
            end
-        
+
        | (AilBlinux AilBLwrite, [object_e; desired_e; order_e]) ->
            annotate_rvalue object_e  >>= fun (object_e',  object_gty)  ->
            annotate_rvalue desired_e >>= fun (desired_e', desired_gty) ->
            annotate_rvalue order_e   >>= fun (order_e' , order_gty )   ->
            E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEbuiltin b)) [object_e'; desired_e'; order_e'],
                      GenRValueType GenVoid)
-        
+
        | (AilBlinux AilBLrmw, [object_e; desired_e; order_e]) ->
            annotate_rvalue object_e  >>= fun (object_e',  object_gty)  ->
            annotate_rvalue desired_e >>= fun (desired_e', desired_gty) ->
@@ -1037,9 +1055,9 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
              | (GenPointer qs object_ty) ->
                  E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *)
    GenRValueType GenVoid) annots' loc' (AilEbuiltin b))
-   [object_e'; desired_e'; order_e'], GenRValueType (inject_type $ Ctype [] (unatomic_ object_ty)))
+   [object_e'; desired_e'; order_e'], GenRValueType (inject_type (Ctype [] (unatomic_ object_ty))))
              | _ ->
-                 error "WIP: typing of linux_rmw"
+                 E.internal_error loc "WIP: typing of linux_rmw"
            end
        | (AilBcopy_alloc_id, [from_e; to_e]) ->
             let ret_ty = mk_ctype_pointer no_qualifiers void in
@@ -1051,13 +1069,14 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
        |  (AilBCHERI str, _) ->
             match Mem.get_intrinsic_type_spec str with
               | Nothing ->
-                  error ("TODO(msg) unknown CHERI intrinsics '" ^ str ^ "'")
+                  E.internal_error loc ("TODO(msg) unknown CHERI intrinsics '" ^ str ^ "'")
               | Just spec ->
                   let params_n = List.length (snd spec) in
                   let args_n = List.length args in
                   if params_n <> args_n then
-                    error ("TODO(msg) CHERI intrinsics '" ^ str ^ "' expecting " ^ show params_n ^
-                           " arguments but is given " ^ show args_n)
+                    E.internal_error loc
+                      ("TODO(msg) CHERI intrinsics '" ^ str ^ "' expecting " ^
+                      show params_n ^ " arguments but is given " ^ show args_n)
                   else
                     E.mapM annotate_rvalue args >>= fun xs ->
                     E.mapM (fun (e, gty) ->
@@ -1086,21 +1105,21 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                             AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
                           end cast_args, GenRValueType (inject_type ret_ty))
                       | Left msg ->
-                          error ("TODO(msg) CHERI intrinsics failed to derive signature ==> " ^ msg)
+                          E.internal_error loc ("TODO(msg) CHERI intrinsics failed to derive signature ==> " ^ msg)
                     end
               end
        | (_, _) ->
-            error "WIP: typing builtin"
+            E.internal_error loc "WIP: typing builtin"
     end
-    
+
     (* TODO: this is wrong in so many ways!! *)
     | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol digest s (Symbol.SD_Id "atomic_thread_fence")))) [order_e] ->
         (* TODO: do typechecking *)
         annotate_rvalue order_e >>= fun (order_e', order_gty) ->
         E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol digest s (Symbol.SD_Id "atomic_thread_fence")))) [order_e'], GenRValueType GenVoid)
-    
+
     | AilEcall e es ->
-        E.add "§6.5.2.2#1" >>
+        E.add "§6.5.2.2#1" >>= fun () ->
         let check_return_type ret_ty =
           if not (AAux.is_void ret_ty || AAux.is_complete_object sigm ret_ty) then
             if AAux.is_array ret_ty then
@@ -1118,10 +1137,10 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                       E.return (AilEcall e' [], GenRValueType (inject_type ret_ty))
                   | _ ->
                       (* TODO: proper error message *)
-                      error "passing arguments to a function without a prototype is not supported (not supported by ISO starting from C2X"
+                      E.internal_error loc "passing arguments to a function without a prototype is not supported (not supported by ISO starting from C2X"
                 end
               else
-                error "annotate_expression(AilEcall): function decay pointer should not be qualified"
+                E.internal_error loc "annotate_expression(AilEcall): function decay pointer should not be qualified"
           | (e', GenPointer qs (Ctype _ (Function (ret_qs, ret_ty) params is_variadic))) ->
               check_return_type ret_ty >>= fun () ->
               (* TODO: do we need to check if qs is unqualified? *)
@@ -1129,22 +1148,22 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                 annotate_arguments (locOf e) is_variadic es (Just params) >>= fun es' ->
                 E.return (AilEcall e' es', GenRValueType (inject_type ret_ty))
               else
-                error "annotate_expression(AilEcall): function decay pointer should not be qualified"
+                E.internal_error loc "annotate_expression(AilEcall): function decay pointer should not be qualified"
           | (_, gty) ->
               E.constraint_violation loc FunctionCallIncorrectType
         end
-    
+
     | AilEassert e ->
         annotate_rvalue e >>= fun (e', gty) ->
-        if is_scalar gty then
-          E.add "§7.2.1.1#2" >>
+        if GAux.is_scalar gty then
+          E.add "§7.2.1.1#2" >>= fun () ->
           E.return (AilEassert e', GenRValueType GenVoid)
         else
           E.constraint_violation loc AssertMacroExpressionScalarType
-    
+
     | AilEoffsetof ty ident ->
-        E.return (AilEoffsetof ty ident, GenRValueType (GenBasic (GenInteger SizeT)))
-    
+        E.return (AilEoffsetof ty ident, GenRValueType size_t_gty)
+
     | AilEgeneric e _ gas ->
         annotate_rvalue e >>= fun (e', gty) ->
         if conf.agnostic then
@@ -1196,7 +1215,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                 do_fail
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
                     end
                 | Union tag_sym ->
                     match lookup_tag_definition sigm tag_sym with
@@ -1210,7 +1229,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                                        (MemberofNoMemberLvalue memb_ident qs ty)
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
                     end
                 | _ ->
                     E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofReferenceBaseTypeLvalue qs ty)
@@ -1238,7 +1257,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                             do_fail
                       end
                   | _ ->
-                      error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
+                      E.internal_error loc "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
                 end in
               let do_union tag_sym =
                 match lookup_tag_definition sigm tag_sym with
@@ -1251,7 +1270,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                                    (MemberofNoMemberRvalue memb_ident gty)
                       end
                   | _ ->
-                      error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
+                      E.internal_error loc "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
                 end in
               if GAux.is_incomplete sigm gty then
                 E.constraint_violation (locOf e) (MemberofIncompleteRvalue gty)
@@ -1268,7 +1287,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                     E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofReferenceBaseTypeRvalue gty)
               end
         end
-    
+
     | AilEmemberofptr e memb_ident ->
       (* NOTE: the qualifiers of the value are the combination of the ones
          of the referenced type of left operand [e] and the ones in the
@@ -1311,7 +1330,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                 do_fail
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
                     end
                 | (ref_qs, Right tag_sym, ref_ty) ->
                     if AAux.is_incomplete sigm ref_ty then
@@ -1327,199 +1346,209 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                                                        (MemberofptrNoMember memb_ident ref_qs ref_ty)
                           end
                       | _ ->
-                          error "annotate_expression(AilEmemberofptr union): failed to find a valid tag definition"
+                          E.internal_error loc "annotate_expression(AilEmemberofptr union): failed to find a valid tag definition"
                     end
               end
         end
-    
+
     | AilEassign e1 e2 ->
         annotate_expression CTXassign e1 >>= fun e1' ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs1 ty1 _ ->
               if AAux.modifiable sigm qs1 ty1 then
                 let assign_ty = AAux.rvalue_coercion ty1 in
-                E.add "§6.5.16#3, sentence 3" >>
-                annotate_assignee false SimpleAssignmentViolation loc assign_ty e2 >>= fun e2' -> 
+                E.add "§6.5.16#3, sentence 3" >>= fun () ->
+                annotate_assignee false SimpleAssignmentViolation loc assign_ty e2 >>= fun e2' ->
                 E.return (AilEassign e1' e2', GenRValueType (inject_type assign_ty))
               else
                 E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue (* lvalue was not modifiable *)
           | _ ->
               E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue (* was not a lvalue *)
         end
-    
+
     | AilEbinary e1 (Arithmetic (Mul  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (Arithmetic (Div  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (Arithmetic (Mod  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (Arithmetic (Band as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (Arithmetic (Bxor  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (Arithmetic (Bor  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (Arithmetic (Shl  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.integer_promote gty1))
+
     | AilEbinary e1 (Arithmetic (Shr  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>
-        E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
-    
+        well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
+        E.return (AilEbinary e1' bop e2', GenRValueType (GAux.integer_promote gty1))
+
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         (* NOTE: TODO: this is also relates to §6.5.2.1#1 *)
         (* STD §6.5.6#2 *)
-        if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
+        if GAux.is_pointer_to_complete_object sigm gty1 && GAux.is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
+        else if GAux.is_pointer_to_complete_object sigm gty2 && GAux.is_integer gty1 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
-        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty1 && is_integer gty2 then
+        else if conf.allow_void_ptr_arithmetic && GAux.is_pointer_to_void gty1 && GAux.is_integer gty2 then
           (* NOTE: this is a GNU extension (arithmetic on void pointers) *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty2 && is_integer gty1 then
+        else if conf.allow_void_ptr_arithmetic && GAux.is_pointer_to_void gty2 && GAux.is_integer gty1 then
           (* NOTE: this is a GNU extension (arithmetic on void pointers) *)
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
         else
-          well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Add gty2 >>
-          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+          well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Add gty2 >>= fun () ->
+          E.return (AilEbinary e1' bop e2', GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (Arithmetic Sub as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects sigm gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger PtrdiffT)))
-        else if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType gty1)
-        else if conf.allow_void_ptr_arithmetic && is_pointer_to_void gty1 && is_integer gty2 then
-          (* NOTE: this is a GNU extension (arithmetic on void pointers)  *)
-          E.return (AilEbinary e1' bop e2', GenRValueType gty1)
+        let a_expr = AilEbinary e1' bop e2' in
+        if
+          GAux.are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects
+            sigm gty1 gty2
+              (* GNU extension: arithmetic on void pointers *)
+          ||  (conf.allow_void_ptr_arithmetic &&
+                GAux.is_pointer_to_void gty1 && GAux.is_pointer_to_void gty2)
+        then
+          E.return (a_expr, GenRValueType (GenBasic (GenInteger PtrdiffT)))
+        else if
+          GAux.is_pointer_to_complete_object sigm gty1 && GAux.is_integer gty2
+              (* GNU extension: arithmetic on void pointers *)
+          ||  (conf.allow_void_ptr_arithmetic &&
+                GAux.is_pointer_to_void gty1 && GAux.is_integer gty2)
+        then
+          E.return (a_expr, GenRValueType gty1)
         else
-          well_typed_binary_arithmetic ArithBinopOperandsType (locOf e1) loc (locOf e2) gty1 Sub gty2 >>
-          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
-    
+          well_typed_binary_arithmetic ArithBinopOperandsType
+            (locOf e1) loc (locOf e2) gty1 Sub gty2 >>= fun () ->
+          E.return (a_expr, GenRValueType (GAux.usual_arithmetic gty1 gty2))
+
     | AilEbinary e1 (And as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if is_scalar gty1 && is_scalar gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        if GAux.is_scalar gty1 && GAux.is_scalar gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (AndInvalidOperandsType gty1 gty2)
-    
+
     | AilEbinary e1 (Or  as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if is_scalar gty1 && is_scalar gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        if GAux.is_scalar gty1 && GAux.is_scalar gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (OrInvalidOperandsType gty1 gty2)
-    
+
     | AilEbinary e1 (Lt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
-    
+
     | AilEbinary e1 (Gt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
-    
+
     | AilEbinary e1 (Le as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
-    
+
     | AilEbinary e1 (Ge as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if is_real gty1 && is_real gty2 then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        if GAux.are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
+        else if GAux.is_real gty1 && GAux.is_real gty2 then
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (RelationalInvalidOperandsType gty1 gty2)
-    
+
     | AilEbinary e1 (Eq as bop) e2 ->
         (* STD §6.5.9#2 *)
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if
           conf.allow_distinct_ptr_types_comparison &&
-          is_pointer_to_object gty1 && is_pointer_to_object gty2
+          GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_object gty2
         then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (EqualityInvalidOperandsType gty1 gty2)
-    
+
     | AilEbinary e1 (Ne as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else if
           conf.allow_distinct_ptr_types_comparison &&
-          is_pointer_to_object gty1 && is_pointer_to_object gty2
+          GAux.is_pointer_to_object gty1 && GAux.is_pointer_to_object gty2
         then
-          E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+          E.return (AilEbinary e1' bop e2', GenRValueType signed_int_gty)
         else
           E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc)) (EqualityInvalidOperandsType gty1 gty2)
-    
+
     | AilEsizeof qs ty ->
-        wf_lvalue sigm qs ty >>
-        E.add "§6.5.3.4#1, sentence 1" >>
+        AilWf.wf_lvalue sigm qs ty >>= fun () ->
+        E.add "§6.5.3.4#1, sentence 1" >>= fun () ->
         if AAux.is_function ty || AAux.is_incomplete sigm ty then
           E.constraint_violation (with_cursor_from (locOf ty) loc) (SizeofInvalidApplication (inject_type ty))
         else
-          E.add "§6.5.3.4#5" >>
-          E.return (AilEsizeof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
-    
+          E.add "§6.5.3.4#5" >>= fun () ->
+          E.return (AilEsizeof qs ty, GenRValueType size_t_gty)
+
     | AilEsizeof_expr e ->
         let () = Debug.warn [Debug.DB_ail_typing]
           (fun () -> "(TODO) GenTyping.annotate_expression AilEsizeof_expr, not checking for bit-field member") in
@@ -1532,118 +1561,148 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           | GenLValueType _ ty _ ->
               inject_type ty
         end in
-        E.add "§6.5.3.4#1, sentence 1" >>
+        E.add "§6.5.3.4#1, sentence 1" >>= fun () ->
         if GAux.is_function gty || GAux.is_incomplete sigm gty then
           E.constraint_violation (with_cursor_from (locOf e) loc) (SizeofInvalidApplication gty)
         else
-          E.add "§6.5.3.4#5" >>
-          E.return (AilEsizeof_expr a_e, GenRValueType (GenBasic (GenInteger SizeT)))
-    
+          E.add "§6.5.3.4#5" >>= fun () ->
+          E.return (AilEsizeof_expr a_e, GenRValueType size_t_gty)
+
     | AilEalignof qs ty ->
-        wf_lvalue sigm qs ty >>
-        E.add "§6.5.3.4#1, sentence 1" >>
+        AilWf.wf_lvalue sigm qs ty >>= fun () ->
+        E.add "§6.5.3.4#1, sentence 1" >>= fun () ->
         if AAux.is_function ty || AAux.is_incomplete sigm ty then
           E.constraint_violation (with_cursor_from (locOf ty) loc) (AlignofInvalidApplication qs ty)
         else
-          E.add "§6.5.3.4#5" >>
-          E.return (AilEalignof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
-    
+          E.add "§6.5.3.4#5" >>= fun () ->
+          E.return (AilEalignof qs ty, GenRValueType size_t_gty)
+
     | AilEcast qs (Ctype _ Void as cty) e ->
-        wf_lvalue sigm qs cty >>
+        AilWf.wf_lvalue sigm qs cty >>= fun () ->
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilEcast qs cty e', GenRValueType GenVoid)
-    
+
     | AilEcast qs ty e ->
-        wf_lvalue sigm qs ty >>
+        AilWf.wf_lvalue sigm qs ty >>= fun () ->
         annotate_rvalue e >>= fun (e', gty) ->
-        if not (is_scalar gty && AAux.atomic_qualified_unqualified AAux.is_scalar ty) then
+        if not (GAux.is_scalar gty && AAux.atomic_qualified_unqualified AAux.is_scalar ty) then
           E.constraint_violation (with_cursor_from (locOf e) loc) (CastInvalidType qs ty)
-        else if is_pointer gty && AAux.is_floating ty then
+        else if GAux.is_pointer gty && AAux.is_floating ty then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastPointerToFloat
-        else if is_floating gty && AAux.is_pointer ty then
+        else if GAux.is_floating gty && AAux.is_pointer ty then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastFloatToPointer
-        else if (is_byte gty && not (AAux.is_byte ty || AAux.is_integer ty))
-                || (AAux.is_byte ty && not (is_byte gty || is_integer gty)) then
+        else if (GAux.is_byte gty && not (AAux.is_byte ty || AAux.is_integer ty))
+                || (AAux.is_byte ty && not (GAux.is_byte gty || GAux.is_integer gty)) then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastToFromByte
         else
           E.return (AilEcast qs ty e', GenRValueType (inject_type ty))
-    
+
     | AilEcond e1 Nothing e3 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e3 >>= fun (e3', gty3) ->
-        well_typed_conditionalGNU (loc, locOf e1, locOf e3) gty1 gty3 >>= fun genCat ->
+        well_typed_conditional (loc, locOf e1, locOf e1, locOf e3)
+          gty1 gty1 gty3 (is_null_pointer_constant e1') (is_null_pointer_constant e3')
+          >>= fun genCat ->
         E.return (AilEcond e1' Nothing e3', genCat)
     | AilEcond e1 (Just e2) e3 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         annotate_rvalue e3 >>= fun (e3', gty3) ->
         well_typed_conditional (loc, locOf e1, locOf e2, locOf e3)
-          gty1 gty2 gty3 (is_null_pointer_constant e2') (is_null_pointer_constant e3') >>= fun genCat ->
+          gty1 gty2 gty3 (is_null_pointer_constant e2') (is_null_pointer_constant e3')
+          >>= fun genCat ->
         E.return (AilEcond e1' (Just e2') e3', genCat)
-    
+
     | AilEcompoundAssign e1 (Add as aop) e2 ->
         annotate_expression CTXassign e1 >>= fun e1'         ->
         annotate_rvalue e2               >>= fun (e2', gty2) ->
         match GenTypes.genTypeCategoryOf e1' with
-          | GenLValueType qs ty _ -> 
+          | GenLValueType qs ty _ ->
               AAux.lvalue_coercion sigm ty >>= fun ty1 ->
-                if    AAux.modifiable sigm qs ty
-                   && (AAux.is_arithmetic ty1 && is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && is_integer gty2) then
-                  E.return (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1))
-                else
-                  E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
-                                         (CompoundAssignmentAddSubOperandTypes (inject_type ty1) gty2)
+              let res =
+                (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1)) in
+              let is_modifiable = AAux.modifiable sigm qs ty in
+              if
+                is_modifiable &&
+                (AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 ||
+                  AAux.is_pointer_to_complete_object sigm ty && GAux.is_integer gty2)
+              then
+                E.return res
+              else if
+                conf.allow_void_ptr_arithmetic &&
+                is_modifiable && AAux.is_pointer_to_void ty1 && GAux.is_integer gty2
+              then
+                (* GNU extension: arithmetic on void pointers *)
+                E.return res
+              else
+                E.constraint_violation
+                  (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
+                  (CompoundAssignmentAddSubOperandTypes (inject_type ty1) gty2)
           | _ ->
-              E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue
+              E.constraint_violation (with_cursor_from (locOf e1) loc)
+                AssignmentModifiableLvalue
         end
-    
+
     | AilEcompoundAssign e1 (Sub as aop) e2 ->
         annotate_expression CTXassign e1 >>= fun e1'         ->
-        annotate_rvalue e2     >>= fun (e2', gty2) ->
+        annotate_rvalue e2               >>= fun (e2', gty2) ->
         match GenTypes.genTypeCategoryOf e1' with
-          | GenLValueType qs ty _ -> 
+          | GenLValueType qs ty _ ->
               AAux.lvalue_coercion sigm ty >>= fun ty1 ->
-                if    AAux.modifiable sigm qs ty
-                   && (AAux.is_arithmetic ty1 && is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && is_integer gty2) then
-                  E.return (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1))
-                else
-                  E.constraint_violation (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
-                                         (CompoundAssignmentAddSubOperandTypes (inject_type ty1) gty2)
+              let res =
+                (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1)) in
+              let is_modifiable = AAux.modifiable sigm qs ty in
+              if
+                is_modifiable && (AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 ||
+                    AAux.is_pointer_to_complete_object sigm ty && GAux.is_integer gty2)
+              then
+                E.return res
+              else if
+                conf.allow_void_ptr_arithmetic &&
+                is_modifiable && AAux.is_pointer_to_void ty1 && GAux.is_integer gty2
+              then
+                (* GNU extension: arithmetic on void pointers *)
+                E.return res
+              else
+                E.constraint_violation
+                  (with_regions_and_cursor [locOf e1; locOf e2] (Just loc))
+                  (CompoundAssignmentAddSubOperandTypes (inject_type ty1) gty2)
           | _ ->
-              E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue
+              E.constraint_violation (with_cursor_from (locOf e1) loc)
+                AssignmentModifiableLvalue
         end
-    
+
     | AilEcompoundAssign e1 aop e2 ->
         annotate_expression CTXassign e1 >>= fun e1'         ->
-        annotate_rvalue e2     >>= fun (e2', gty2) ->
+        annotate_rvalue e2               >>= fun (e2', gty2) ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs ty _ ->
               inject_type <$> AAux.lvalue_coercion sigm ty >>= fun gty1 ->
               if AAux.modifiable sigm qs ty then
-                well_typed_binary_arithmetic CompoundAssignmentOthersOperandTypes (locOf e1) loc (locOf e2) gty1 aop gty2 >>
+                well_typed_binary_arithmetic CompoundAssignmentOthersOperandTypes (locOf e1) loc (locOf e2) gty1 aop gty2 >>= fun () ->
                 E.return (AilEcompoundAssign e1' aop e2', GenRValueType gty1)
               else
                 E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue
           | _ ->
               E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue
         end
-    
+
     | AilEconst cst ->
         (* STD §6.5.1#3 *)
-        E.add "§6.5.1#3" >>
+        E.add "§6.5.1#3" >>= fun () ->
 (*
         annotate_constant cst >>= fun (cst', gty) ->
         E.return (AilEconst cst', gty)
 *)
         typecheck_constant loc cst >>= fun gty ->
         E.return (AilEconst cst, GenRValueType gty)
-    
+
     (* TODO: check *)
     | AilEstr lit ->
         (* STD §6.5.1#4 *)
-        E.add "§6.5.1#4" >>
+        E.add "§6.5.1#4" >>= fun () ->
         annotate_stringLiteral lit
-    
+
     (* TODO: maybe look at the type of inside? *)
     | AilEannot ty e ->
         annotate_expression ctx e >>= function
@@ -1652,10 +1711,10 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
           | AnnotatedExpression (GenRValueType _) annots loc e' ->
               E.return (e', GenRValueType (inject_type ty))
         end
-    
+
     | AilEva_start e sym ->
         annotate_rvalue e >>= fun (e', _) ->
-        E.return (AilEva_start e' sym, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        E.return (AilEva_start e' sym, GenRValueType signed_int_gty)
         (* TODO: add this check later
         annotate_rvalue e >>= function
           | (e', GenBuiltin "va_list") ->
@@ -1664,12 +1723,12 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
               E.misc (locOf e) VaStartArgumentType
         end
         *)
-    
+
     | AilEva_copy e1 e2 ->
         annotate_rvalue e1 >>= fun (e1', _) ->
         annotate_rvalue e2 >>= fun (e2', _) ->
-        E.return (AilEva_copy e1' e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-    
+        E.return (AilEva_copy e1' e2', GenRValueType signed_int_gty)
+
     | AilEva_arg e ty ->
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilEva_arg e' ty, GenRValueType (inject_type ty))
@@ -1685,7 +1744,7 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
     | AilEva_end e ->
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilEva_end e', GenRValueType GenVoid)
-    
+
     | AilEprint_type e ->
         annotate_expression ctx e >>= fun a_e ->
         E.return (AilEprint_type a_e, genTypeCategoryOf a_e)
@@ -1693,19 +1752,19 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
         annotate_rvalue e >>= fun (e', gty) ->
         E.return (AilEbmc_assume e', GenRValueType GenVoid)
     | AilEreg_load r ->
-        E.return (AilEreg_load r, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_))))) (* NOTE: assuming registers are always of type int *)
+        E.return (AilEreg_load r, GenRValueType signed_int_gty) (* NOTE: assuming registers are always of type int *)
     | AilErvalue _ ->
         (* This should be impossible because the desugaring doesn't emit any AilErvalue *)
-        error "annotate_expression(AilErvalue)"
+        E.internal_error loc "annotate_expression(AilErvalue)"
     | AilEarray_decay _ ->
         (* This should be impossible because the Desugaring doesn't emit any AilEarray_decay *)
-        error "annotate_expression(AilEarray_decay)"
+        E.internal_error loc "annotate_expression(AilEarray_decay)"
     | AilEfunction_decay _ ->
         (* This should be impossible because the Desugaring doesn't emit any AilEfunction_decay *)
-        error "annotate_expression(AilEfunction_decay)"
+        E.internal_error loc "annotate_expression(AilEfunction_decay)"
     | AilEatomic _ ->
         (* This should be impossible because the desugaring doesn't emit any AilEatomic *)
-        error "annotate_expression(AilEatomic)"
+        E.internal_error loc "annotate_expression(AilEatomic)"
     | AilElabel_addressGNU sym ->
         E.return (AilElabel_addressGNU sym, GenRValueType (GenPointer no_qualifiers void))
     | AilEgcc_statement bs ss ->
@@ -1721,13 +1780,13 @@ let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression ()
                 E.return (AilEgcc_statement bs (ss' ++ [last_s']), gtc)
           end
         else
-          error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
+          E.internal_error loc "annotate_statement: sigma_fresh bindings failed in a AilSblock"
     | AilEinvalid ty reason ->
         E.return (AilEinvalid ty reason, GenRValueType (inject_type ty))
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->
-  let annots = List.append std_annots  $ List.map Annot.Astd annots in
+  let annots = List.append std_annots (List.map Annot.Astd annots) in
   perform_decays sigm ctx (AnnotatedExpression gtc annots loc expr_')
 
 
@@ -1751,7 +1810,7 @@ and nonarray_lvalue_conversion sigm a_expr =
         if not (AAux.is_array ty) then
           let rvalue_ty = unatomic_ (AAux.unqualify ty) in
           if AAux.is_incomplete sigm ty then
-            error "TODO: nonarray_lvalue_conversion ==> undefined behaviour"
+            E.internal_error loc "TODO: nonarray_lvalue_conversion ==> undefined behaviour"
           else
             E.return (
               AnnotatedExpression (GenRValueType (inject_type rvalue_ty))
@@ -1760,7 +1819,7 @@ and nonarray_lvalue_conversion sigm a_expr =
         else
           E.return a_expr
     | GenRValueType gty ->
-        error "WIP: nonarray_lvalue_conversion, GenRValueType"
+        E.internal_error loc "WIP: nonarray_lvalue_conversion, GenRValueType"
   end
 
 (* Must NOT BE CALLED for:
@@ -1775,7 +1834,7 @@ and array_decay sigm a_expr =
     | GenLValueType qs ty isRegister ->
         if AAux.is_array ty then
           if isRegister then
-            error "TODO: array_decay ==> undefined behaviour"
+            E.internal_error loc "TODO: array_decay ==> undefined behaviour"
           else
             (* TODO: qualifiers?? *)
             let () = begin
@@ -1791,7 +1850,7 @@ and array_decay sigm a_expr =
         else
           E.return a_expr
     | GenRValueType gty ->
-        error "WIP: array_decay, GenRValueType"
+        E.internal_error loc "WIP: array_decay, GenRValueType"
   end
 
 (* Must NOT BE CALLED for:
@@ -1801,7 +1860,7 @@ and array_decay sigm a_expr =
 (* TYPE: sigma unit -> expression genTypeCategory -> E.errorM (expression genTypeCategory) *)
 and function_decay sigm a_expr =
   (* TODO: DEAD CODE *)
-  error "WIP: function_decay"
+  E.internal_error loc "WIP: function_decay"
 *)
 
 and perform_decays sigm ctx a_expr =
@@ -1915,7 +1974,7 @@ and annotate_rvalue annotate_block sigm gamm expr =
 
 and annotate_assignee annotate_block sigm gamm is_init a_ctxt loc ty1 e2 =
   annotate_rvalue annotate_block sigm gamm e2 >>= fun (e2, gty2) ->
-  well_typed_assignment sigm is_init a_ctxt loc ty1 gty2 e2 >>
+  well_typed_assignment sigm is_init a_ctxt loc ty1 gty2 e2 >>= fun () ->
   if AilTypesAux.is_atomic ty1 && not (GenTypesAux.is_atomic gty2) then
     E.return (AnnotatedExpression (GenRValueType (GenAtomic gty2)) [] loc (AilEatomic e2))
   else
@@ -1981,106 +2040,30 @@ and annotate_arguments_aux add_casts annotate_block sigm gamm n_args n_params lo
   end
 
 
-
-
-
-
-
-(*
-(* returns both the annotated intializer and the infered type (used for arrays) *)
-and annotate_initialization sigm gamm ty e =
-  (* §6.7.9#3 *)
-  E.guard (TError "failed §6.7.9#3")
-    (   AAux.is_array_unknown_size ty
-     || AAux.is_complete_object sigm ty && not (AAux.is_vla ty)) >>
-  
-  if AAux.is_scalar ty then
-    (* STD §6.7.9#11, sentence 3 *)
-    annotate_assignee sigm gamm (AAux.unqualify ty) e >>= fun a_e ->
-    E.return (a_e, ty)
-  
-  (* TODO: "(...) that has automatic storage duration" *)
-  (* STD §6.7.9#13 *)
-  else if AAux.is_struct_or_union ty then
-    (* TODO: check *)
-    annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
-    (* TODO: need to make sure that gty is compatible with ty *)
-    E.return (a_e, ty)
-  
-  (* STD §6.7.9#14 *)
-  else if AAux.is_array_of_character ty then
-    error ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ Pp.stringFromCtype_human ty)
-  
-  (* STD §6.7.9#15 *)
-  else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
-    error "WIP: annotate_initialization, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
-  
-  (* STD §6.7.9#16 *)
-(*          else if  then *) (* KKK *)
-  (* TODO: at this point we should now have a non character array *)
-  else if AAux.is_array ty then
-    (* TODO: check the std. (not that it says anything useful here ...) *)
-    annotate_expression sigm gamm e >>= fun a_e ->
-    match (ty, GenTypes.genTypeCategoryOf a_e) with
-      | (Array elem_qs1 elem_ty1 Nothing, GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
-          (* TODO: check, but I don't think we need to do anything regarding qualifiers here *)
-          if AAux.compatible elem_ty1 elem_ty2 then
-            E.return (a_e, Array elem_ty1 (Just n2))
-          else
-            error ("TODO(annotate_initialisation, 1): error message: array object definition, types didn't match ==> " ^
-                   Pp.stringFromCtype_human elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human elem_ty2)
-     | (Array _ elem_ty1 (Just n1), GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
-          (* TODO: check, but I don't think we need to do anything regarding qualifiers here *)
-         if AAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
-           E.return (a_e, Array elem_ty1 (Just n1))
-         else
-            error ("TODO(annotate_initialisation, 2): error message: array object definition, types didn't match ==> " ^
-                   Pp.stringFromCtype_human elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human elem_ty2)
-     | _ ->
-         error "WIP: annotate_initialization, not(is_scalar ty), not array (or had no size)"
-    end
-  else
-    error "WIP: annotate_initialization, final case"
-
-*)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-and annotate_definition_aux annotate_block sigm gamm (ty, e) =
+and annotate_definition_aux loc annotate_block sigm gamm (ty, e) =
   if    (AAux.is_array ty --> AAux.has_unknown_size sigm ty)
      || (AAux.is_complete_object sigm ty --> not (AAux.is_vla ty)) then
     if AAux.atomic_qualified_unqualified AAux.is_scalar ty then
-      E.add "§6.7.9#11, sentence 3" >>
+      E.add "§6.7.9#11, sentence 3" >>= fun () ->
       (* NOTE: since we are not passing a `qs' with `ty' to annotate_assignee,
          we are indeed unqualifying the scalar type *)
       (* TODO: add location *)
       annotate_assignee annotate_block sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
-      
+
     (* TODO: "(...) that has automatic storage duration" *)
     else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
       (* TODO: check *)
-      E.add "§6.7.9#13" >>
+      E.add "§6.7.9#13" >>= fun () ->
       annotate_assignee annotate_block sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
       (* annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
       AilEassign
       (* TODO: need to make sure that gty is compatible with ty *)
       E.return a_e *)
-      
+
     (* STD §6.7.9#15 *)
     else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t] then
-      error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
-      
+      E.internal_error loc "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
+
           (* STD §6.7.9#16 *)
 (*          else if  then *) (* KKK *)
 
@@ -2101,13 +2084,13 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
               E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
             else
-              error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
+              E.internal_error loc ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human no_qualifiers elem_ty2)
         | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
               E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
             else
-              error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
+              E.internal_error loc ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromCtype_human no_qualifiers elem_ty2)
 
         | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
@@ -2117,13 +2100,13 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 >= n2 then
               E.return a_e
             else
-              error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
+              E.internal_error loc ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
                       Pp.stringFromCtype_human no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
         | _ ->
             (* STD §6.7.9#14 *)
             if AAux.is_array_of_character ty then
-              error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
+              E.internal_error loc ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                     Pp.stringFromCtype_human no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
             else
               let () = Debug.print_debug 0 [] (fun () ->
@@ -2138,10 +2121,10 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
                       "rvalue " ^ Pp.stringFromAil_genType gty
                 end
               ) in
-              error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
+              E.internal_error loc "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
       end
     else
-      error "WIP: annotate_definition_aux, final case"
+      E.internal_error loc "WIP: annotate_definition_aux, final case"
   else
     (* STD §6.7.9#3 *)
     let kind =
@@ -2152,29 +2135,32 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
     E.constraint_violation (Loc.locOf e) (IllegalInitialisation kind)
 
 val annotate_definition:
+  Loc.t ->
   (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
-  sigma unit -> gamma -> (Symbol.sym * maybe (expression unit)) -> E.errorM (Symbol.sym * maybe (expression genTypeCategory))
-let annotate_definition annotate_block sigm gamm (sym, e_opt) =
+  sigma unit -> gamma -> (Symbol.sym * maybe (expression unit)) ->
+  E.errorM (Symbol.sym * maybe (expression genTypeCategory))
+let annotate_definition loc_stmt annotate_block sigm gamm (sym, e_opt) =
   match (e_opt, List.lookup sym gamm) with
     | (Nothing, Just _) ->
         E.return (sym, Nothing)
-    | (Just e, Just (_, _, sym_qs, sym_ty)) ->
-        annotate_definition_aux annotate_block sigm gamm (sym_ty, e) >>= fun a_e ->
+    | (Just e, Just ((loc, _, _), _, sym_qs, sym_ty)) ->
+        annotate_definition_aux loc annotate_block sigm gamm (sym_ty, e) >>= fun a_e ->
         E.return (sym, Just a_e)
     | (_, Nothing) ->
-        error "annotate_definition: symbol not found in the context"
+        E.internal_error loc_stmt "annotate_definition: symbol not found in the context"
   end
 
 
 val annotate_definitions:
+  Loc.t ->
   (Loc.t -> sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> list (Symbol.sym * maybe (expression unit)) -> E.errorM (list (Symbol.sym * maybe (expression genTypeCategory)))
-let rec annotate_definitions annotate_block sigm gamm = function
+let rec annotate_definitions loc_stmt annotate_block sigm gamm = function
   | [] ->
       E.return []
   | d :: ds ->
-      annotate_definition  annotate_block sigm gamm d  >>= fun d  ->
-      annotate_definitions annotate_block sigm gamm ds >>= fun ds ->
+      annotate_definition loc_stmt annotate_block sigm gamm d   >>= fun d  ->
+      annotate_definitions loc_stmt annotate_block sigm gamm ds >>= fun ds ->
       E.return (d :: ds)
 end
 
@@ -2196,16 +2182,16 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
         annotate_expression e >>= fun e' ->
         E.return (AilSexpr e')
     | AilSblock bindings ss ->
-        AilTyping.well_formed_bindings loc sigm bindings >>
+        AilTyping.well_formed_bindings loc sigm bindings >>= fun () ->
         if sigma_fresh_bindings bindings sigm then
           annotate_block loc sigm gamm bindings ss >>= fun ss' ->
           E.return (AilSblock bindings ss')
         else
-          error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
+          E.internal_error loc "annotate_statement: sigma_fresh bindings failed in a AilSblock"
     | AilSif e s1 s2 ->
         annotate_rvalue e >>= fun (e', gty) ->
-        E.add "§6.8.4.1#1" >>
-        if is_scalar gty then
+        E.add "§6.8.4.1#1" >>= fun () ->
+        if GAux.is_scalar gty then
           annotate_statement s1 >>= fun s1' ->
           annotate_statement s2 >>= fun s2' ->
           E.return (AilSif e' s1' s2')
@@ -2213,16 +2199,16 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
           E.constraint_violation (Loc.locOf e) IfStatementControllingExpressionNotScalar
     | AilSwhile e s id ->
         annotate_rvalue e >>= fun (e', gty) ->
-        E.add "§6.8.5#2" >>
-        if is_scalar gty then
+        E.add "§6.8.5#2" >>= fun () ->
+        if GAux.is_scalar gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSwhile e' s' id)
         else
           E.constraint_violation (Loc.locOf e) IterationStatementControllingExpressionNotScalar
     | AilSdo s e id ->
         annotate_rvalue e >>= fun (e', gty) ->
-        E.add "§6.8.5#2" >>
-        if is_scalar gty then
+        E.add "§6.8.5#2" >>= fun () ->
+        if GAux.is_scalar gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSdo s' e' id)
         else
@@ -2255,8 +2241,8 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
           E.return (AilSreturn e')
     | AilSswitch e s ->
         annotate_rvalue e >>= fun (e', gty) ->
-        E.add "§6.8.4.2#1" >>
-        if is_integer gty then
+        E.add "§6.8.4.2#1" >>= fun () ->
+        if GAux.is_integer gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSswitch e' s')
         else
@@ -2276,7 +2262,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSgoto sym ->
         E.return (AilSgoto sym)
     | AilSdeclaration sym_es ->
-        annotate_definitions annotate_block sigm gamm sym_es >>= fun sym_es' ->
+        annotate_definitions loc annotate_block sigm gamm sym_es >>= fun sym_es' ->
         E.return (AilSdeclaration sym_es')
     | AilSpar ss ->
         E.mapM annotate_statement ss >>= fun ss' ->
@@ -2351,32 +2337,29 @@ let annotate_block sigm gamm ty stmts =
 
 val annotate_sigma: sigma unit -> E.errorM (sigma genTypeCategory)
 let annotate_sigma sigm =
-  (* TODO: morally we want a "mapP_" here *)
   (* Checking that declarations are well-formed *)
-  E.mapM (fun (ident, decl) ->
+  E.mapM_ (fun (ident, decl) ->
     match decl with
-    | (_, _, (Decl_object dur_opt _ qs ty as decl)) ->
-        wf_lvalue sigm qs ty >>
-        E.return (ident, decl)
-    | (_, _, (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl)) ->
+    | (_, _, Decl_object dur_opt _ qs ty) ->
+        AilWf.wf_lvalue sigm qs ty
+    | (_, _, Decl_function hasProto ret_ty params isVariadic _(*isInline*) _(*isNoreturn*)) ->
         (* TODO?   ==> AilTyping.well_formed_bindings bs && *)
-        wf_type sigm (Ctype [] (Function ret_ty params isVariadic)) >>
-        E.return (ident, decl)
+        AilWf.wf_type sigm (Ctype [] (Function ret_ty params isVariadic))
     end
-  ) sigm.declarations >>
-  
+  ) sigm.declarations >>= fun () ->
+
   (* Typechecking of external objects that have a definition *)
   E.mapM (fun (ident, e) ->
     match List.lookup ident sigm.declarations with
       | Just (loc, _, Decl_object _ _ _ (* qs *) ty) ->
           (* TODO: qualifiers?; storage duration? *)
-          annotate_definition_aux (fun loc -> annotate_block loc Nothing) sigm [] (ty, e) >>= fun def ->
+          annotate_definition_aux loc (fun loc -> annotate_block loc Nothing) sigm [] (ty, e) >>= fun def ->
           E.return (ident, def)
       | _ ->
-          error "annotate_sigma: object definition must have a declaration"
+          E.internal_error (Loc.locOf e) "annotate_sigma: object definition must have a declaration"
     end
   ) sigm.object_definitions >>= fun object_defs' ->
-  
+
   (* Typechecking of functions that have a definition *)
   E.mapM (fun (ident, (loc, marker_id, attr, param_idents, s)) ->
     match List.lookup ident sigm.declarations with
@@ -2394,14 +2377,14 @@ let annotate_sigma sigm =
             annotate_statement sigm (add_bindings bindings []) ret_ty s >>= fun s' ->
               E.return (ident, (loc, marker_id, attr, param_idents, s'))
           else
-            error "annotate_sigma: parameter syms are not fresh"
+            E.internal_error loc "annotate_sigma: parameter syms are not fresh"
       | _ ->
-          error "annotate_sigma: function definition must have a declaration"
+          E.internal_error loc "annotate_sigma: function definition must have a declaration"
     end
   ) sigm.function_definitions >>= fun function_defs' ->
-  
+
   let check_member is_struct (ident, (_, _, qs, ty)) =
-    E.add "§6.7.2.1#3" >>
+    E.add "§6.7.2.1#3" >>= fun () ->
     if is_struct && AilTypesAux.has_flexible_array_member sigm ty then
       E.constraint_violation (Loc.locOf ident) StructMemberFlexibleArray
     else if AilTypesAux.is_function ty then
@@ -2410,31 +2393,30 @@ let annotate_sigma sigm =
       E.constraint_violation (Loc.locOf ident) (StructMemberIncompleteType qs ty)
     else
       E.return () in
-  E.mapM (function
+  E.mapM_ (function
     | (_, (_, _, StructDef xs flexible_opt)) ->
         E.mapM_ (check_member true) xs >>= fun () ->
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
-          wf_lvalue sigm qs ty
+          AilWf.wf_lvalue sigm qs ty
         ) xs >>= fun () ->
         match flexible_opt with
           | Nothing ->
               E.return ()
           | Just (FlexibleArrayMember _ _ flex_qs flex_elem_ty) ->
-              wf_lvalue sigm flex_qs (Ctype [] (Array flex_elem_ty Nothing))
+              AilWf.wf_lvalue sigm flex_qs (Ctype [] (Array flex_elem_ty Nothing))
         end
     | (_, (_, _, UnionDef xs)) ->
-        E.mapM (check_member false) xs >>
+        E.mapM_ (check_member false) xs >>= fun () ->
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
-          wf_lvalue sigm qs ty
+          AilWf.wf_lvalue sigm qs ty
         ) xs
-  end) sigm.tag_definitions >>
+  end) sigm.tag_definitions >>= fun () ->
 
-  
   E.return <|
-    declarations=         sigm.declarations;
-    object_definitions=   object_defs';
+    declarations= sigm.declarations;
+    object_definitions= object_defs';
     function_definitions= function_defs';
     (* TODO: hack *)
     static_assertions= [];
@@ -2442,12 +2424,12 @@ let annotate_sigma sigm =
     extern_idmap= sigm.extern_idmap;
     typedef_attributes= sigm.typedef_attributes;
     loop_attributes= sigm.loop_attributes;
-    cn_predicates=  sigm.cn_predicates;
-    cn_functions=  sigm.cn_functions;
-    cn_lemmata=  sigm.cn_lemmata;
-    cn_datatypes=  sigm.cn_datatypes;
-    cn_decl_specs=  sigm.cn_decl_specs;
-    cn_idents=  sigm.cn_idents;
+    cn_predicates= sigm.cn_predicates;
+    cn_functions= sigm.cn_functions;
+    cn_lemmata= sigm.cn_lemmata;
+    cn_datatypes= sigm.cn_datatypes;
+    cn_decl_specs= sigm.cn_decl_specs;
+    cn_idents= sigm.cn_idents;
   |>
 
 
@@ -2480,7 +2462,7 @@ let annotate_program (startup_opt, sigm) =
                     E.undef (Loc.with_cursor_from (Loc.locOf aty2) loc) Undefined.UB004c_incorrect_main_argument2
                 | ((_, aty1, _)::_) ->
                     E.undef (Loc.with_cursor_from (Loc.locOf aty1) loc) Undefined.UB004b_incorrect_main_argument1
-              end >>
+              end >>= fun () ->
               (* TODO: check arguments *)
               if ret_qs = no_qualifiers && proj_ctype_ ret_ty = Basic (Integer (Signed Int_)) then
                 annotate_sigma sigm >>= fun sigm' ->
@@ -2490,6 +2472,6 @@ let annotate_program (startup_opt, sigm) =
           | Just (loc, _, _) ->
               E.undef loc Undefined.UB004d_main_not_function
           | Nothing ->
-              error ("Startup function " ^ show startup ^ " not found in AIL declarations.")
+              E.internal_error Loc.unknown ("Startup function " ^ show startup ^ " not found in AIL declarations.")
         end
   end

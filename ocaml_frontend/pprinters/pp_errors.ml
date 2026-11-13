@@ -379,8 +379,6 @@ let string_of_constraint_violation = function
       "address argument to atomic operation must be a pointer to _Atomic type ('" ^ string_of_ctype ty ^ "' invalid)"
   | AtomicAddressArgumentMustBePointer (_, gty) ->
       "address argument to atomic operation must be a pointer ('" ^ string_of_gentype gty ^ "' invalid)"
-  | GNUConditionalOperatorInvalidOperandType gty ->
-      "illtyped second operand in a GNU ?: expression ('" ^ string_of_gentype gty ^ "')"
   | GNUBuiltinChooseExprNotIntegerConstant ->
       "first operand of __builtin_choose_expr() is not an integer constant expression"
   | GNUFileScopeStatementExpression ->
@@ -472,6 +470,8 @@ let string_of_ail_typing_error = function
       "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnostic)"
   | TError_CN Cn.CNErr_typing_TODO ->
       "CN typing error"
+  | TError_internal str ->
+      (ansi_format ~err:true [Bold] "internal error: (ail typing) ") ^ str
 
 let string_of_bty =
   String_core.string_of_core_base_type

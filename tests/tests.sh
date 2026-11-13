@@ -214,6 +214,9 @@ citests=(
   0343-subzero-floating-to-_Bool.c
   0344-ptr-to-_Bool-param.c
   0351-for-decl-init-order.c
+  0352-gnu_cond_typing.c
+  0353-gnu_cond_elaboration.c
+  0354-logical_no_duplication.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

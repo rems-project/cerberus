@@ -17,6 +17,7 @@ type typing_error =
   | TError_NotYetSupported of string
   | TError_AgnosticFailure of string
   | TError_CN of Cn.cn_typing_error
+  | TError_internal of string
 
 val std_of_typing_misc_error: typing_misc_error -> list string
 let std_of_typing_misc_error = function
@@ -50,6 +51,8 @@ let std_of_ail_typing_error = function
   | TError_AgnosticFailure _ ->
       []
   | TError_CN _ ->
+      []
+  | TError_internal _ ->
       []
 end
 
