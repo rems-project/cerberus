@@ -1032,11 +1032,12 @@ loop_spec:
 | ct=cn_good COMMA
     { Cerb_frontend.Cn.I_Good ct }
 
-%inline to_be_extracted:
-|
-    { Cerb_frontend.Cn.E_Everything }
-| p=pred COMMA
-    { Cerb_frontend.Cn.E_Pred p }
+%inline focus:
+| e=expr
+    { (Cerb_frontend.Cn.E_Everything, [e]) }
+| p=pred COMMA es=separated_nonempty_list(COMMA,expr)
+    { (Cerb_frontend.Cn.E_Pred p, es) }
+
 
 %inline cn_pack_unpack:
 | PACK
@@ -1073,9 +1074,10 @@ cn_statement:
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = region ($startpos, $endpos) noCursor in
       CN_statement (loc, CN_have a) }
-| FOCUS tbe=to_be_extracted e=expr SEMICOLON
+| FOCUS tbe_es=focus SEMICOLON
     { let loc = region ($startpos, $endpos) noCursor in
-      CN_statement (loc, CN_extract ([], tbe, e)) }
+      let (tbe,es) = tbe_es in
+      CN_statement (loc, CN_extract ([], tbe, es)) }
 | INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = region ($startpos, $endpos) noCursor in
       CN_statement (loc, CN_instantiate (tbi, e)) }

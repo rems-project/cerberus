@@ -2073,7 +2073,7 @@ cn_statements: FOCUS UNAME COMMA W
 ##
 ## Ends in an error in state: 568.
 ##
-## cn_statement -> FOCUS pred COMMA . expr SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
+## cn_statement -> FOCUS pred COMMA . separated_nonempty_list(COMMA,expr) SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
 ##
 ## The known suffix of the stack is as follows:
 ## FOCUS pred COMMA
@@ -6569,7 +6569,7 @@ cn_statements: FOCUS VOLATILE
 ## Ends in an error in state: 565.
 ##
 ## cn_statement -> FOCUS . expr SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
-## cn_statement -> FOCUS . pred COMMA expr SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
+## cn_statement -> FOCUS . pred COMMA separated_nonempty_list(COMMA,expr) SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
 ##
 ## The known suffix of the stack is as follows:
 ## FOCUS
@@ -6596,7 +6596,7 @@ cn_statements: FOCUS RW LPAREN
 ##
 ## Ends in an error in state: 567.
 ##
-## cn_statement -> FOCUS pred . COMMA expr SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
+## cn_statement -> FOCUS pred . COMMA separated_nonempty_list(COMMA,expr) SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
 ##
 ## The known suffix of the stack is as follows:
 ## FOCUS pred
@@ -6610,14 +6610,14 @@ cn_statements: FOCUS RW LPAREN
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-cn_statements: FOCUS UNAME COMMA CN_CONSTANT RBRACK
+cn_statements: FOCUS UNAME COMMA CN_CONSTANT RPAREN
 ##
 ## Ends in an error in state: 569.
 ##
-## cn_statement -> FOCUS pred COMMA expr . SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
+## cn_statement -> FOCUS pred COMMA separated_nonempty_list(COMMA,expr) . SEMICOLON [ UNPACK UNFOLD TO_BYTES SPLIT_CASE PACK INSTANTIATE INLINE FROM_BYTES FOCUS EOF DERIVE_CONSTRAINTS CN_PRINT CN_HAVE ASSERT APPLY ]
 ##
 ## The known suffix of the stack is as follows:
-## FOCUS pred COMMA expr
+## FOCUS pred COMMA separated_nonempty_list(COMMA,expr)
 ##
 ## WARNING: This example involves spurious reductions.
 ## This implies that, although the LR(1) items shown above provide an
@@ -6633,6 +6633,7 @@ cn_statements: FOCUS UNAME COMMA CN_CONSTANT RBRACK
 ## In state 280, spurious reduction of production list_expr -> bool_or_expr
 ## In state 275, spurious reduction of production expr_without_let -> list_expr
 ## In state 314, spurious reduction of production expr -> expr_without_let
+## In state 400, spurious reduction of production separated_nonempty_list(COMMA,expr) -> expr
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
