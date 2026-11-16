@@ -1603,51 +1603,13 @@ let rec translate_expression translate_block_opt is_used ctx variadic_env stdlib
               Caux.mk_conv_int_pe ity pe
             else
               stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer ity))) pe in
-          (* STD §6.3.1.8#1, bullet 4 *)
-          match (AilTypesAux.promotion (Implementation.integerImpl ()) ty1, AilTypesAux.promotion (Implementation.integerImpl ()) ty2) with
-            | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
-                (* "If both operants have the same type, then no further conversion is needed." *)
-                if ty1' = ty2' then
-                  (mk_conv_int ity1' e1, mk_conv_int ity2' e2)
-                (* "Otherwise, if both operands have signed integer types or both have unsigned integer types,
-                    the operand with the type of lesser integer conversion rank is converted to the type
-                    of the operand with greater rank." *)
-                else if   (AilTypesAux.is_signed_integer_type ty1' && AilTypesAux.is_signed_integer_type ty2')
-                       || (AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.is_unsigned_integer_type ty2') then
-                  if AilTypesAux.lt_integer_rank ity1' ity2' then
-                    (mk_conv_int ity2' e1, mk_conv_int ity2' e2)
-                  else
-                    (mk_conv_int ity1' e1, mk_conv_int ity1' e2)
-                (* "Otherwise, if the operand that has unsigned type has rank greater or equal to the rank of the
-                    rank of the type of the other operand, then the operand with signed integer type is converted
-                    to the type of the operand with unsigned integer type." *)
-                else if AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.ge_integer_rank ity1' ity2' then
-                  (mk_conv_int ity1' e1, mk_conv_int ity1' e2)
-                else if AilTypesAux.is_unsigned_integer_type ty2' && AilTypesAux.ge_integer_rank ity2' ity1' then
-                  (mk_conv_int ity2' e1, mk_conv_int ity2' e2)
-                (* "Otherwise, if the type of the operand with signed integer type can represent all of the values
-                    of the type of the operand with unsigned integer type, then the operand with unsigned integer
-                    type is converted to the type of the operand with signed integer type." *)
-                else if AilTypesAux.is_signed_integer_type ty1' then
-                  (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
-                     (mk_conv_int ity1' e1)
-                     (* "Otherwise, both operands are converted to the unsigned integer type corresponding to the type
-                         of the operand with signed integer type". *)
-                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity1') e1)
-                  ,
-                  Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
-                     (mk_conv_int ity1' e2)
-                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity1') e2)
-                  )
-                else
-                  (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
-                     (mk_conv_int ity2' e1)
-                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity2') e1)
-                  ,
-                  Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
-                     (mk_conv_int ity2' e2)
-                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity2') e2)
-                  )
+          (* STD §6.3.1.8#1, bullet 4: both operands are converted to the common type
+           * computed by the typing (AilTypesAux.usual_arithmetic_integer, which applies
+           * the integer promotions) *)
+          match (ty1, ty2) with
+            | (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1)), Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2))) ->
+                let ity = AilTypesAux.usual_arithmetic_integer (Implementation.integerImpl ()) ity1 ity2 in
+                (mk_conv_int ity e1, mk_conv_int ity e2)
             | _ ->
                 error "Translation.usual_arithmetic_conversion: not (integer vs integer)"
           end

@@ -217,6 +217,7 @@ citests=(
   0352-gnu_cond_typing.c
   0353-gnu_cond_elaboration.c
   0354-logical_no_duplication.c
+  0355-integer_promotions_conversions.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

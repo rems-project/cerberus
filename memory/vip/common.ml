@@ -18,10 +18,10 @@ let ity_max ity =
           sub (pow (of_int 2) Stdlib.(8*n-1)) one in
         let unsigned_max =
           sub (pow (of_int 2) Stdlib.(8*n)) one in
-        let ity = match ity with
-          | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
-          | _ -> ity
-        in
+        (* aliased types (size_t, wchar_t, ...) and enumerated types have the
+         * range of the standard integer type the implementation chooses for them *)
+        let ity =
+          Ocaml_implementation.normalise_integerType (Ocaml_implementation.get ()) ity in
         begin match ity with
           | Char ->
               if (Ocaml_implementation.get ()).is_signed_ity Char then
@@ -49,10 +49,10 @@ let ity_max ity =
 
 let ity_min ity =
   let open Z in
-  let ity = match ity with
-    | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
-    | _ -> ity
-  in
+  (* aliased types (size_t, wchar_t, ...) and enumerated types have the range of the
+   * standard integer type the implementation chooses for them *)
+  let ity =
+    Ocaml_implementation.normalise_integerType (Ocaml_implementation.get ()) ity in
   match ity with
     | Char ->
         if (Ocaml_implementation.get ()).is_signed_ity Char then

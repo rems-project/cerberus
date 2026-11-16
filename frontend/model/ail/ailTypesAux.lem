@@ -451,9 +451,20 @@ let eq_integer_rank_base ity1 ity2 =
   end
 
 
-(* TODO: K this looks wrong, in particular the STD says "No two signed integer types shall have the same rank" *)
+(* Some integer types defined by the library (size_t, ptrdiff_t, wchar_t, the types of
+ * <stdint.h>) are modelled with dedicated variants in integerType. The implementation
+ * defines their standard integer type alias. Similarly, enumerated types have an
+ * implementation-defined "compatible integer type" (STD §6.3.1.1#1, bullet 8).
+ * Integer ranks for aliases/enumerated types are compared on the normalised type as
+ * provided by the implementation. *)
+val normalise_ity: integerType -> integerType
+let normalise_ity ity =
+  Implementation.normalise_integerType ity
+
 val eq_integer_rank: integerType -> integerType -> bool
 let eq_integer_rank ity1 ity2 =
+  let ity1 = normalise_ity ity1 in
+  let ity2 = normalise_ity ity2 in
   ity1 = ity2 || eq_integer_rank_base ity1 ity2
 
 val lt_integer_rank: integerType -> integerType -> bool
@@ -524,7 +535,10 @@ let lt_integer_rank ity1 ity2 =
         true
     
     | _ ->
-        (* TODO: this is probably wrong for macro types *)
+      (* NOTE: this assumes the function has been called on normalised types; the
+       * remaining cases are those of equal ranks or of ity1 of greater rank.
+       * TODO: Ptraddr_t (CHERI) is left unchanged by the normalisation and has no
+       * rank here *)
        false
     end in
   if Global.is_CHERI () then
@@ -535,10 +549,10 @@ let lt_integer_rank ity1 ity2 =
     | Signed Intptr_t -> false
     | Unsigned Intptr_t -> false
     | _ ->
-       lt_integer_rank_ISO ity1 ity2
+        lt_integer_rank_ISO (normalise_ity ity1) (normalise_ity ity2)
     end
   else
-    lt_integer_rank_ISO ity1 ity2
+    lt_integer_rank_ISO (normalise_ity ity1) (normalise_ity ity2)
 
 val le_integer_rank: integerType -> integerType -> bool
 let le_integer_rank ity1 ity2 =
@@ -580,34 +594,32 @@ let make_corresponding_unsigned = function
   | Signed ibty ->
       Unsigned ibty
   | ity ->
-      ity
+      (* standard library types (e.g. ptrdiff_t, wchar_t, wint_t) and enumerated types are
+       * normalised to their implementation-defined definitions *)
+      match normalise_ity ity with
+        | Signed ibty ->
+            Unsigned ibty
+        | _ ->
+            ity
+      end
 end
 
 
+(* STD §6.3.1.1#2: "An object or expression with an integer type (other than int or
+ * unsigned int) whose integer conversion rank is less than or equal to the rank of int
+ * and unsigned int [...] If an int can represent all values of the original type [...],
+ * the value is converted to an int; otherwise, it is converted to an unsigned int. [...]
+ * All other types are unchanged by the integer promotions." (an alias type of greater
+ * rank stays as it is) *)
 val integer_promotion: IntegerImpl.implementation -> integerType -> integerType
-let integer_promotion impl = function
-  | Signed   Int_ ->
-      Signed   Int_
-  | Unsigned Int_ ->
+let integer_promotion impl ity =
+  if le_integer_rank ity (Signed Int_) then
+    if le_integer_range impl ity (Signed Int_) then
+      Signed Int_
+    else
       Unsigned Int_
-  | Size_t ->
-      (* TODO: this is not standard, but in cerberus we don't treat size_t as an aliased type *)
-      Size_t
-  | Signed Intptr_t ->
-      (* TODO: this is not standard, but in cerberus we don't treat intptr_t as aliased types *)
-      Signed Intptr_t
-  | Unsigned Intptr_t ->
-      (* TODO: this is not standard, but in cerberus we don't treat uintptr_t as aliased types *)
-      Unsigned Intptr_t
-  | ity ->
-      if le_integer_rank ity (Signed Int_) then
-        if le_integer_range impl ity (Signed Int_) then
-          Signed Int_
-        else
-          Unsigned Int_
-      else
-        ity
-  end
+  else
+    ity
 
 
 val promotion: IntegerImpl.implementation -> ctype -> maybe ctype
@@ -670,59 +682,58 @@ let usual_arithmetic_integer_CHERI impl ity1 ity2 =
           else
             make_corresponding_unsigned promoted_ity2
   end
+
+(* STD §6.3.1.8#1, integer case: "the integer promotions are performed on both operands.
+ * Then the following rules are applied to the promoted operands:" (the result is the
+ * common type, to which both operands are converted; when it is the type of an operand,
+ * it is that type, alias type included) *)
 let usual_arithmetic_integer_default impl ity1 ity2 =
-  (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
-  let () = Debug.warn [] (fun () ->
-    "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
-  ) in
-  match (ity1, ity2) with
-    | (Size_t, _) -> (* NON-std *)
-        Size_t
-    | (_, Size_t) -> (* NON-std *)
-        Size_t
-    | (Signed Intptr_t, Unsigned Intptr_t) -> (* NON-std *)
-        Unsigned Intptr_t
-    | (Signed Intptr_t, _) -> (* NON-std *)
-        Signed Intptr_t
-    | (Unsigned Intptr_t, Signed Intptr_t) -> (* NON-std *)
-        Unsigned Intptr_t
-    | (_, Signed Intptr_t) -> (* NON-std *)
-        Signed Intptr_t
-    | (Unsigned Intptr_t, _) -> (* NON-std *)
-        Unsigned Intptr_t
-    | (_, Unsigned Intptr_t) -> (* NON-std *)
-        Unsigned Intptr_t
-    
-    | _ ->
-        let promoted_ity1 = integer_promotion impl ity1 in
-        let promoted_ity2 = integer_promotion impl ity2 in
-        if    (is_signed_ity promoted_ity1 && is_signed_ity promoted_ity2)
-           || (is_unsigned_ity promoted_ity1 && is_unsigned_ity promoted_ity2) then
-          if lt_integer_rank promoted_ity1 promoted_ity2 then
-            promoted_ity2
-          else
-            promoted_ity1
-        
-        else if is_unsigned_ity promoted_ity1 && ge_integer_rank promoted_ity1 promoted_ity2 then
-          promoted_ity1
-        else if is_unsigned_ity promoted_ity2 && ge_integer_rank promoted_ity2 promoted_ity1 then
-          promoted_ity2
-        
-        else if is_signed_ity promoted_ity1 then
-          if le_integer_range impl promoted_ity2 promoted_ity1 then
-            promoted_ity1
-          else
-            make_corresponding_unsigned promoted_ity1
-        
-        else (* if is_signed_ity promoted_ity2 then *)
-          if le_integer_range impl promoted_ity1 promoted_ity2 then
-            promoted_ity2
-          else
-            make_corresponding_unsigned promoted_ity2
-  end
+  let promoted_ity1 = integer_promotion impl ity1 in
+  let promoted_ity2 = integer_promotion impl ity2 in
+  (* "If both operands have the same type, then no further conversion is needed.
+   * Otherwise, if both operands have signed integer types or both have unsigned integer
+   * types, the operand with the type of lesser integer conversion rank is converted to
+   * the type of the operand with greater rank." *)
+  if    (is_signed_ity promoted_ity1 && is_signed_ity promoted_ity2)
+     || (is_unsigned_ity promoted_ity1 && is_unsigned_ity promoted_ity2) then
+    if lt_integer_rank promoted_ity1 promoted_ity2 then
+      promoted_ity2
+    else
+      promoted_ity1
+  
+  (* "Otherwise, if the operand that has unsigned integer type has rank greater or equal
+   * to the rank of the type of the other operand, then the operand with signed integer
+   * type is converted to the type of the operand with unsigned integer type." *)
+  else if is_unsigned_ity promoted_ity1 && ge_integer_rank promoted_ity1 promoted_ity2 then
+    promoted_ity1
+  else if is_unsigned_ity promoted_ity2 && ge_integer_rank promoted_ity2 promoted_ity1 then
+    promoted_ity2
+  
+  (* "Otherwise, if the type of the operand with signed integer type can represent all of
+   * the values of the type of the operand with unsigned integer type, then the operand
+   * with unsigned integer type is converted to the type of the operand with signed
+   * integer type. Otherwise, both operands are converted to the unsigned integer type
+   * corresponding to the type of the operand with signed integer type." *)
+  else if is_signed_ity promoted_ity1 then
+    if le_integer_range impl promoted_ity2 promoted_ity1 then
+      promoted_ity1
+    else
+      make_corresponding_unsigned promoted_ity1
+  else (* if is_signed_ity promoted_ity2 then *)
+    if le_integer_range impl promoted_ity1 promoted_ity2 then
+      promoted_ity2
+    else
+      make_corresponding_unsigned promoted_ity2
 
 let usual_arithmetic_integer impl ity1 ity2 =
-  (* TODO: this is a temporary hack, we need to add a type alias mechanism to Ocaml_implemetation.implemention *)
+  (* CHERI C: (u)intptr_t carry capabilities, which must be preserved by the conversions,
+   * so usual_arithmetic_integer_CHERI does not decide by rank (§6.3.1.8#1) when an
+   * operand has such a type: the common type is intptr_t, or uintptr_t when an operand is
+   * uintptr_t or the other one is size_t (NON-STD).
+   * The other cases follow the standard, except that if an operand has type size_t, the
+   * common type is size_t (NON-STD, and unrelated to capabilities:
+   * e.g. size_t + long long is size_t, where §6.3.1.8#1 gives long long or
+   * unsigned long long) *)
   if Global.is_CHERI () then
     usual_arithmetic_integer_CHERI impl ity1 ity2
   else
