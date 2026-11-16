@@ -2213,10 +2213,10 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   
   let max_ival ity =
     let open Z in
-    let ity = match ity with
-      | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
-      | _ -> ity
-    in
+    (* aliased types (size_t, wchar_t, ...) and enumerated types have the range of the
+     * standard integer type the implementation chooses for them *)
+    let ity =
+      Ocaml_implementation.normalise_integerType (Ocaml_implementation.get ()) ity in
     IV (Prov_none, begin match (Ocaml_implementation.get ()).sizeof_ity ity with
       | Some n ->
           let signed_max =
@@ -2251,10 +2251,10 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   
   let min_ival ity =
     let open Z in
-    let ity = match ity with
-      | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
-      | _ -> ity
-    in
+    (* aliased types (size_t, wchar_t, ...) and enumerated types have the range of the
+     * standard integer type the implementation chooses for them *)
+    let ity =
+      Ocaml_implementation.normalise_integerType (Ocaml_implementation.get ()) ity in
     IV (Prov_none, begin match ity with
       | Char ->
           if (Ocaml_implementation.get ()).is_signed_ity Char then
