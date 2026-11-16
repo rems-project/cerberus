@@ -1,4 +1,6 @@
-open import Pervasives Utils Translation_effect Show Show_extra Ctype
+open import Pervasives
+open import Translation_effect Ctype
+import Utils
 import Symbol Core Core_aux Mem
 import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
 import Config Boot Map_extra
@@ -8,7 +10,8 @@ module Caux = Core_aux
 
 val illTypedAil: forall 'a. Loc.t -> string -> 'a
 let illTypedAil loc debug_str =
-  error ("[Translation => '" ^ debug_str ^ "'] fatal error, the Ail program was ill-typed")
+  Utils.error
+    ("[Translation => '" ^ debug_str ^ "'] fatal error, the Ail program was ill-typed")
 
 val     fetch_stdlib_symbol_aux: forall 'a. ('a -> bool) -> list 'a -> maybe 'a
 let rec fetch_stdlib_symbol_aux pred xs =
@@ -19,14 +22,19 @@ let rec fetch_stdlib_symbol_aux pred xs =
 
 val fetch_stdlib_symbol: list Symbol.sym -> string -> Symbol.sym
 let fetch_stdlib_symbol syms str =
-  match fetch_stdlib_symbol_aux (function (Symbol.Symbol _ _ (Symbol.SD_Id z)) -> z = str | _ -> false end) syms with
+  match
+    fetch_stdlib_symbol_aux (function (Symbol.Symbol _ _ (Symbol.SD_Id z)) ->
+      z = str | _ -> false
+    end) syms
+  with
     | Just sym ->
         sym
     | Nothing ->
-        error ("[Translate_aux.fetch_stdlib_symbol] `" ^ str ^ "' is required to be defined by the Core standard library.")
- end
-
-
+        Utils.error (
+          "[Translate_aux.fetch_stdlib_symbol] `" ^ str ^
+          "' is required to be defined by the Core standard library."
+        )
+  end
 
 
 (* this is only used by [mk_stdcall] *)
@@ -39,261 +47,62 @@ let rec mk_stdcall_aux pred xs =
 
 val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list Core.pexpr -> Core.pexpr)
 let mk_stdcall stdlib fname =
-  match mk_stdcall_aux (function ((Symbol.Symbol _ _ (Symbol.SD_Id z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
+  match
+    mk_stdcall_aux (function ((Symbol.Symbol _ _ (Symbol.SD_Id z)), _) ->
+      z = fname | _ -> false
+    end) (Map_extra.toList stdlib)
+  with
     | Just (f, Core.Fun bTy params _) ->
         fun pes ->
           Core.Pexpr [] () (Core.PEcall (Core.Sym f) pes)
     | _ ->
-        error $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
+        Utils.error (
+          "[Translate_effect.E.mk_stdcall] `" ^ fname ^
+          "' is not a Core standard function."
+        )
  end
-
-
-
-(* TODO: the third argument shouldn't be a computation *)
-
-
-
-(* (integer) promotion for values. (cf. §6.3.1.1#2) *)
-(* this should be a function from pure Core expr to pure Core expr (I think ...) *)
-let promote_value (e: C.pexpr) : C.pexpr = e (* TODO !!!! *)
-
-
-
-
-
-
-
-(*
-(* NOTE: assume that [e] is a pure expression *)
-val conv A.ctype -> A.ctype -> C.expr 'a -> t (C.expr 'a)
-let conv ty1 ty2 e =
-  
-    (* (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value
-                    compares equal to 0; otherwise, the result is 1. *)
-    if T.is_scalar ty && is_bool ty2 then
-      C.Eif (C.Eop (C.OpEq) e (C.Econst 0))
-        (C.Econst 0) (C.Econst 1)
-    
-    (* (§6.3.1.3#1) When a value with integer type is converted to another integer type other
-                    than _Bool, if the value can be represented by the new type, it is unchanged. *)
-    else if is_integer  ty1 && is_integer ty2 then
-      E.fresh_symbol       >>= fun a_e    ->
-      C.Elet a_e e $
-        C.Eif (is_presentable [e; Caux.mk_ctype ty2])
-        
-      if is_representable(n, ty2) then
-      n
-    -- (§6.3.1.3#1) Otherwise, if the new type is unsigned, the value is converted by repeatedly
-    -- adding or subtracting one more than the maximum value that can be represented in the new type
-    -- until the value is in the range of the new type.
-    else if is_unsigned(ty2) then
-      conv_aux(ty2, n)
-    
-    -- (§6.3.1.3#1) Otherwise, the new type is signed and the value cannot be represented in it;
-    -- either the result is IntegerImpl-defined or an IntegerImpl-defined signal is raised.
-    else
-      error -- TODO
-  else
-    error -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
-*)
-
-
-
-(*
-(* TODO: temporary ==> gcc-4.8.2 x86_64-apple-darwin13.0.0 *)
-val tmp_implementation: IntegerImpl.implementation
-let tmp_implementation =
-  IntegerImpl.make_implementation
-    IntegerImpl.Two'sComplement
-    ( function
-        | Ctype.Char       -> true (* Check that *)
-	| Ctype.Signed   _ -> true
-        | Ctype.Bool       -> false
-	| Ctype.Unsigned _ -> false
-        | Ctype.Enum sym ->
-            error ("WIP: Translation_aux.tmp_implementation (1), Enum '" ^ show sym ^ "'")
-        | Ctype.Size_t ->
-            error "WIP: Translation_aux.tmp_implementation (1), Size_t"
-        | Ctype.Wchar_t ->
-            error "WIP: Translation_aux.tmp_implementation (1), Wchar_t"
-        | Ctype.Wint_t ->
-            error "WIP: Translation_aux.tmp_implementation (1), Wint_t"
-        | Ctype.Ptrdiff_t ->
-            error "WIP: Translation_aux.tmp_implementation (1), Ptrdiff_t"
-      end
-    )
-    ( function
-        | Ctype.Char                  -> 7 (* check *)
-        | Ctype.Bool                  -> 1 (* check *)
-        | Ctype.Signed   Ctype.Ichar    -> 7
-        | Ctype.Unsigned Ctype.Ichar    -> 8
-        | Ctype.Signed   Ctype.Short    -> 15
-        | Ctype.Unsigned Ctype.Short    -> 16
-        | Ctype.Signed   Ctype.Int_     -> 31
-        | Ctype.Unsigned Ctype.Int_     -> 32
-        | Ctype.Signed   Ctype.Long     -> 63
-        | Ctype.Unsigned Ctype.Long     -> 64
-        | Ctype.Signed   Ctype.LongLong -> 63
-        | Ctype.Unsigned Ctype.LongLong -> 64
-
-        | Ctype.Signed (Ctype.IntN_t n)   -> n-1
-        | Ctype.Unsigned (Ctype.IntN_t n) -> n
-        | Ctype.Signed (Ctype.Int_leastN_t _) ->
-            error "WIP: Translation_aux.tmp_implementation, Signed Int_leastN_T"
-        | Ctype.Unsigned (Ctype.Int_leastN_t _) ->
-            error "WIP: Translation_aux.tmp_implementation, Unsigned Int_leastN_T"
-        | Ctype.Signed (Ctype.Int_fastN_t _) ->
-            error "WIP: Translation_aux.tmp_implementation, Signed Int_fastN_T"
-        | Ctype.Unsigned (Ctype.Int_fastN_t _) ->
-            error "WIP: Translation_aux.tmp_implementation, Unsigned Int_fastN_T"
-        | Ctype.Signed (Ctype.Intmax_t) ->
-            error "WIP: Translation_aux.tmp_implementation, Signed Intmax_T"
-        | Ctype.Unsigned (Ctype.Intmax_t) ->
-            error "WIP: Translation_aux.tmp_implementation, Unsigned Intmax_T"
-        | Ctype.Signed (Ctype.Intptr_t) ->
-            error "WIP: Translation_aux.tmp_implementation, Signed Intptr_T"
-        | Ctype.Unsigned (Ctype.Intptr_t) ->
-            error "WIP: Translation_aux.tmp_implementation, Unsigned Intptr_T"
-        
-        | Ctype.Enum sym ->
-            error ("WIP: Translation_aux.tmp_implementation (2), Enum '" ^ show sym ^ "'")
-        | Ctype.Size_t ->
-            error "WIP: Translation_aux.tmp_implementation (2), Size_t"
-        | Ctype.Wchar_t ->
-            error "WIP: Translation_aux.tmp_implementation (2), Wchar_t"
-        | Ctype.Wint_t ->
-            error "WIP: Translation_aux.tmp_implementation (2), Wint_t"
-        | Ctype.Ptrdiff_t ->
-            error "WIP: Translation_aux.tmp_implementation (2), Ptrdiff_t"
-      end
-    )
-    (Size_t)
-    (Ptrdiff_t)
-*)
-
-
-
-let function_return_type = function
-  | Ctype.Function qs_ty _ _     -> qs_ty
-  | Ctype.FunctionNoParams qs_ty -> qs_ty
-  | _ -> error "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
-end
-
-(* TODO: check with J *)
 
 
 val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let from_lvalue_type = function
   | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty _) _ _ _) -> (qs, ty)
-  | _ -> error "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
+  | _ ->
+      Utils.error
+        "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
 end
-
-
-(*
-val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
-let exp_type_of a_expr =
-  match GenTypesAux.interpret_genTypeCategory tmp_implementation
-      (Annotation.type_of Annotation.concrete_annotation a_expr) with
-    | Right (Ctype.LValueType _ ty) -> (* unqualify *) ty
-    | Right (Ctype.RValueType   ty) -> ty
-    | _ -> error "[Translation_aux.exp_type_of] impossible case: TODO move to Exception.t"
-  end
-*)
 
 
 (* NOTE: it does not depend on the annotation state *)
 val ctype_of: Config.config -> AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of conf a_expr =
-  match ErrorMonad.runErrorMonad conf
+  match
+    ErrorMonad.runErrorMonad conf
       (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) (Implementation.integerImpl ())
-        (GenTypes.genTypeCategoryOf a_expr)) with
+        (GenTypes.genTypeCategoryOf a_expr))
+  with
     | Right (GenTypes.LValueType _ ty _) -> ty
     | Right (GenTypes.RValueType   ty) -> ty
     | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
-        error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
-    | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
+        Utils.error (Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n")
+    | _ -> Utils.error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
 (* NOTE: it does not depend on the annotation state *)
 val qualified_ctype_of: Config.config -> AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let qualified_ctype_of conf a_expr =
-  match ErrorMonad.runErrorMonad conf
+  match
+    ErrorMonad.runErrorMonad conf
       (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) (Implementation.integerImpl ())
-        (GenTypes.genTypeCategoryOf a_expr)) with
+        (GenTypes.genTypeCategoryOf a_expr))
+  with
     | Right (GenTypes.LValueType qs ty _) -> (qs, ty)
     | Right (GenTypes.RValueType   ty) -> (no_qualifiers, ty)
     | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
-        error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
-    | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
+        Utils.error (Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n")
+    | _ -> Utils.error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
 
-
-
-val is_lvalue: AilSyntax.expression GenTypes.genTypeCategory -> bool
-let is_lvalue a_expr =
-  match GenTypes.genTypeCategoryOf a_expr with
-    | GenTypes.GenLValueType _ _ _ ->
-        true
-    | GenTypes.GenRValueType _ ->
-        false
-  end
-
-val is_defined_ail_function: forall 'A. Symbol.sym -> AilSyntax.ail_program 'A -> bool
-let is_defined_ail_function sym (_, sigm) =
-  (* NOTE: the Nothing' case could technically also mean that [sym] is not event registered *)
-  isJust (List.lookup sym sigm.AilSyntax.function_definitions)
-
-
-
-
-
-
-
-
-
-(*
-(* STD §6.3.1.8#1 *)
-val mk_usual_arithmetic_conversions: (C.pexpr -> C.pexpr -> C.pexpr) -> Ctype.ctype * C.pexpr -> Ctype.ctype * C.pexpr -> C.pexpr
-let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
-  let longDouble_ty = Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.LongDouble)) in
-  let double_ty      = Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))     in
-  let float_ty       = Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Float))      in
-  
-  if AilTypesAux.corresponding_real_type ty1 = Just longDouble_ty || AilTypesAux.corresponding_real_type ty2 = Just longDouble_ty then
-    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, long double case"
-  else if AilTypesAux.corresponding_real_type ty1 = Just double_ty || AilTypesAux.corresponding_real_type ty2 = Just double_ty then
-    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, double case"
-  else if AilTypesAux.corresponding_real_type ty1 = Just float_ty || AilTypesAux.corresponding_real_type ty2 = Just float_ty then
-    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, float case"
-  else
-    (* error "TODO: Translate_aux.mk_usual_arithmetic_conversions, integers case !!!!" *)
-    (* TODO !!!!!!! *)
-    mk_pexpr pe1 pe2
-*)
-
-
-val combine_params_args:
-  Config.config ->
-  list (Ctype.qualifiers * Ctype.ctype * bool) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
-  list (Ctype.ctype * AilSyntax.expression GenTypes.genTypeCategory)
-let rec combine_params_args conf params es =
-  let combine_params_args = combine_params_args conf in
-  match (params, es) with
-    | ((_, ty, _) :: params', e :: es') ->
-        (ty, e) :: combine_params_args params' es'
-    | ([], e :: es') ->
-        (* argument promotion for variadic functions *)
-        (AilTypesAux.rvalue_coercion (ctype_of conf e), e) :: combine_params_args [] es'
-    | (_::_, []) ->
-        error "Translation_aux.combine_params_args"
-    | ([], []) ->
-        []
-  end
-
-
-
-(* TODO: I need functors ... *)
 type translation_stdlib = <|
   ailnames:                           map string Symbol.sym;
   mkcall_bitwise_AND:                 Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
@@ -323,28 +132,31 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
   let std_syms = Set_extra.toList (Map.domain stdlib_fun_map) in
   let mk_call str pes = Core.Pexpr [] () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
   let mk_proc str pes = Core.Expr [] (Core.Eproc () (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
-  <| ailnames=                           ailnames
-   ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-   ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-   ; mkcall_bitwise_OR=                  fun ty pe1 pe2 -> mk_call "bitwise_OR"                 [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+  <| ailnames= ailnames
+   ; mkcall_bitwise_AND= fun ty pe1 pe2 ->
+        mk_call "bitwise_AND" [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+   ; mkcall_bitwise_XOR= fun ty pe1 pe2 ->
+        mk_call "bitwise_XOR" [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+   ; mkcall_bitwise_OR= fun ty pe1 pe2 ->
+        mk_call "bitwise_OR" [Caux.mk_ail_ctype_pe ty; pe1; pe2]
    ; mkcall_conv_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
-         error "mkcall_conv_int called on non integer type"
+         Utils.error "mkcall_conv_int called on non integer type"
        else
          mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
-         error "mkcall_conv_loaded_int called on non integer type"
+         Utils.error "mkcall_conv_loaded_int called on non integer type"
        else
          mk_call "conv_loaded_int" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_loaded_fvfromint= fun ty pe ->
        if not (AilTypesAux.is_floating ty) then
-         error "mkcall_loaded_fvfromint called on a non floating type"
+         Utils.error "mkcall_loaded_fvfromint called on a non floating type"
        else
          mk_call "loaded_fvfromint" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_loaded_ivfromfloat= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
-         error "mkcall_loaded_ivfromfloat called on a non integer type"
+         Utils.error "mkcall_loaded_ivfromfloat called on a non integer type"
        else
          mk_call "loaded_ivfromfloat" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int_= fun pe1 pe2 ->
@@ -363,7 +175,7 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        else if AilTypesAux.is_floating ty then
          "is_representable_floating"
        else
-         error "Translation_aux.mkcall_is_representable, the type is neither an integer nor a floating" in
+         Utils.error "Translation_aux.mkcall_is_representable, the type is neither an integer nor a floating" in
        mk_call str [pe; Caux.mk_ail_ctype_pe ty]
    ; mkcall_all_values_representable_in= fun ty1 ty2 ->
        mk_call "all_values_representable_in" [Caux.mk_ail_ctype_pe ty1; Caux.mk_ail_ctype_pe ty2]
@@ -392,7 +204,7 @@ let conv_loaded_arith stdlib ty_src ty_dst pe =
       stdlib.mkcall_loaded_fvfromint ty_dst pe
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
-      error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
+      Utils.error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
 (*      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
   else if AilTypesAux.is_floating ty_src then
     if AilTypesAux.is_integer ty_dst then
@@ -403,10 +215,10 @@ let conv_loaded_arith stdlib ty_src ty_dst pe =
       pe
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
-      error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
+      Utils.error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
   else
     (* NOTE: this case will occurs in particular if ty_src is an atomic type *)
-    error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_src)"
+    Utils.error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_src)"
 
 
 (* *)
@@ -430,7 +242,7 @@ let conv_arith stdlib ty_src ty_dst pe =
       C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe])
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
-      error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
+      Utils.error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
   else if AilTypesAux.is_floating ty_src then
     if AilTypesAux.is_Bool ty_dst then
       (* STD §6.3.1.2#1: 0 if the value compares equal to 0.0, 1 otherwise; the test is on
@@ -445,10 +257,10 @@ let conv_arith stdlib ty_src ty_dst pe =
       pe
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
-      error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
+      Utils.error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
   else
     (* NOTE: this case will occurs in particular if ty_src is an atomic type *)
-    error "Translation_aux.conv_arith, not (is_arithmetic ty_src)"
+    Utils.error "Translation_aux.conv_arith, not (is_arithmetic ty_src)"
 
 
 (*
