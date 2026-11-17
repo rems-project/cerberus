@@ -83,15 +83,9 @@ declare ocaml target_rep function fun_ptrval = `Impl_mem.fun_ptrval`
 
 (*TODO: revise that, just a hack for codegen*)
 val concrete_ptrval: integer -> integer -> pointer_value
-val case_ptrval: forall 'a. pointer_value ->
-   (* null pointer *) (Ctype.ctype -> 'a) ->
-   (* function pointer *) (maybe Symbol.sym -> 'a) ->
-   (* concrete pointer *) (maybe integer -> integer -> 'a) -> 'a
-val case_funsym_opt: mem_state -> pointer_value -> maybe Symbol.sym
-
+val get_case_funsym_opt: memM (pointer_value -> maybe Symbol.sym)
 declare ocaml target_rep function concrete_ptrval = `Impl_mem.concrete_ptrval`
-declare ocaml target_rep function case_ptrval = `Impl_mem.case_ptrval`
-declare ocaml target_rep function case_funsym_opt = `Impl_mem.case_funsym_opt`
+declare ocaml target_rep function get_case_funsym_opt = `Impl_mem.get_case_funsym_opt`
 
 (* Operations on pointer values *)
 val eq_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool
@@ -206,28 +200,16 @@ declare ocaml target_rep function bitwise_and_ival = `Impl_mem.bitwise_and_ival`
 declare ocaml target_rep function bitwise_or_ival = `Impl_mem.bitwise_or_ival`
 declare ocaml target_rep function bitwise_xor_ival = `Impl_mem.bitwise_xor_ival`
 
-(* Integer value destructors *)
-val case_integer_value: forall 'a. (* TODO: expose more ctors *)
-    integer_value ->
-    (integer -> 'a) ->
-    (unit -> 'a) ->
-    'a
-val is_specified_ival: integer_value -> bool
-declare ocaml target_rep function case_integer_value = `Impl_mem.case_integer_value`
-declare ocaml target_rep function is_specified_ival = `Impl_mem.is_specified_ival`
+val integer_of_integer_value: integer_value -> integer
+declare ocaml target_rep function integer_of_integer_value = `Impl_mem.integer_of_integer_value`
 
 (* Predicates on integer values *)
-val eq_ival: integer_value -> integer_value -> maybe bool
-val lt_ival: integer_value -> integer_value -> maybe bool
-val le_ival: integer_value -> integer_value -> maybe bool
+val eq_ival: integer_value -> integer_value -> bool
+val lt_ival: integer_value -> integer_value -> bool
+val le_ival: integer_value -> integer_value -> bool
 declare ocaml target_rep function eq_ival = `Impl_mem.eq_ival`
 declare ocaml target_rep function lt_ival = `Impl_mem.lt_ival`
 declare ocaml target_rep function le_ival = `Impl_mem.le_ival`
-
-let eval_integer_value ival =
-  case_integer_value ival
-    (fun n -> Just n)
-    (fun () -> Nothing)
 
 (* Floating value constructors *)
 val zero_fval: floating_value
@@ -280,7 +262,6 @@ declare ocaml target_rep function union_mval = `Impl_mem.union_mval`
 val case_mem_value: forall 'a.
   mem_value ->
   (Ctype.ctype -> 'a) -> (* unspecified case *)
-  (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
   (Ctype.integerType -> integer_value -> 'a) ->
   (Ctype.floatingType -> floating_value -> 'a) ->
   (Ctype.ctype -> pointer_value -> 'a) ->

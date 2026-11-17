@@ -11,7 +11,8 @@ type execution_result = (Core.value list, Errors.error) Result.t
 
 
 let string_of_driver_error = function
-  | Driver.DErr_core_run err ->
+  | Driver.DErr_core_run (loc, err) ->
+      Cerb_location.location_to_string loc ^ " - " ^
       Pp_errors.string_of_core_run_cause err
   | Driver.DErr_memory err ->
       Mem_common.instance_Show_Show_Mem_common_mem_error_dict.Lem_pervasives.show_method err
@@ -172,25 +173,23 @@ let batch_drive ~conf (file: 'a Core.file) args fs_state =
           let exit =
             match dres.Driver.dres_core_value with
               | Vloaded (LVspecified (OVinteger ival)) ->
-                  Impl_mem.case_integer_value ival
-                    (fun n  -> Specified n)
-                    (fun () -> OtherValue dres.Driver.dres_core_value)
+                  Specified (Impl_mem.integer_of_integer_value ival)
               | Vloaded (LVunspecified ty) ->
                   Unspecified ty
               | _ ->
                   OtherValue dres.Driver.dres_core_value in
           Defined { exit; stdout= dres.Driver.dres_stdout; stderr= dres.Driver.dres_stderr; blocked= dres.Driver.dres_blocked }
       | ND.Killed (dr_st, ND.Undef0 (loc, [])) ->
-          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run_aux.io.Core_run_aux.stderr) in
           Error { msg= "[empty UB, probably a cerberus BUG]"; stderr }
       | ND.Killed (dr_st, ND.Undef0 (loc, ub::_)) ->
-          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run_aux.io.Core_run_aux.stderr) in
           Undefined { ub; stderr; loc }
       | ND.Killed (dr_st, ND.Error0 (_, msg)) ->
-          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run_aux.io.Core_run_aux.stderr) in
           Error { msg; stderr }
       | ND.Killed (dr_st, ND.Other dr_err) ->
-          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run_aux.io.Core_run_aux.stderr) in
           Error { msg= string_of_driver_error dr_err; stderr }
     end in
     (z3_strs, result)
@@ -289,7 +288,7 @@ else
 
       | (ND.Killed (dr_st, ND.Undef0 (loc, ubs)), _, st) ->
           let stderr_xs =
-            Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr in
+            Dlist.toList dr_st.Driver.core_state.Core_run_aux.io.Core_run_aux.stderr in
           begin if List.length stderr_xs > 0 then
             let stderr_str = String.concat "" stderr_xs in
             Printf.fprintf stderr "BEGIN stderr\n%s\nEND stderr\n" stderr_str

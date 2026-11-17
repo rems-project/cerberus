@@ -45,17 +45,9 @@ end
 let step_fs_proc th_st iCst cvals =
   let charFromMValue errmsg = function
     | Vobject (OVinteger ival) ->
-        match Mem_aux.integerFromIntegerValue ival with
-          | Just n -> Decode.encode_character_constant n
-          | Nothing -> error errmsg
-        end
+        Decode.encode_character_constant (Mem.integer_of_integer_value ival)
     | _ -> error errmsg
   end in
-  let forceIntegerFromIntegerValue errmsg ival =
-    match Mem_aux.integerFromIntegerValue ival with
-      | Just n -> n
-      | Nothing -> error errmsg
-    end in
   match iCst with
     (* ----------------------------------------------------------- *)
     (* 7.21 Input/output <stdio.h> *)
@@ -77,9 +69,9 @@ let step_fs_proc th_st iCst cvals =
           | [Vobject (OVinteger fd_ival);
               Vlist _ fmt_cvals;
               Vobject (OVinteger ap_ival)] ->
-                let fd = forceIntegerFromIntegerValue "vprintf" fd_ival in
+                let fd = Mem.integer_of_integer_value fd_ival in
                 let fmt = List.map (charFromMValue "vprintf") fmt_cvals in
-                let ap = forceIntegerFromIntegerValue "vprintf" ap_ival in
+                let ap = Mem.integer_of_integer_value ap_ival in
                 Core_run.FS_VPRINTF fd fmt ap
           | _ ->
               error ("Core_reduction, vprintf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
@@ -91,7 +83,7 @@ let step_fs_proc th_st iCst cvals =
               Vlist _ fmt_cvals;
               Vobject (OVinteger ap_ival)] ->
                 let fmt = List.map (charFromMValue "vsnprintf") fmt_cvals in
-                let ap = forceIntegerFromIntegerValue "vsnprintf" ap_ival in
+                let ap = Mem.integer_of_integer_value ap_ival in
                 Core_run.FS_VSNPRINTF ptrval size_ival fmt ap
           | _ ->
               error ("Core_reduction, vsnprintf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
@@ -111,14 +103,14 @@ let step_fs_proc th_st iCst cvals =
         match cvals with
           | [Vlist _ path_cvals; Vobject (OVinteger mode_ival)] ->
               let path_chars = List.map (charFromMValue "mkdir") path_cvals in
-              let mode = forceIntegerFromIntegerValue "mkdir" mode_ival in
+              let mode = Mem.integer_of_integer_value mode_ival in
               Core_run.FS_MKDIR (String.toString path_chars) mode
           | _ -> error "mkdir"
         end
     | Implementation.BuiltinFunction "umask" ->
         match cvals with
           | [Vobject (OVinteger mode_ival)] ->
-              let mode = forceIntegerFromIntegerValue "umask" mode_ival in
+              let mode = Mem.integer_of_integer_value mode_ival in
               Core_run.FS_UMASK mode
           | _ -> error "pread"
         end
@@ -126,7 +118,7 @@ let step_fs_proc th_st iCst cvals =
         match cvals with
           | [Vlist _ path_cvals; Vobject (OVinteger mode_ival)] ->
               let path = List.map (charFromMValue "chmod") path_cvals in
-              let mode = forceIntegerFromIntegerValue "chmod" mode_ival in
+              let mode = Mem.integer_of_integer_value mode_ival in
               Core_run.FS_CHMOD (String.toString path) mode
           | _ -> error "chmod"
         end
@@ -141,8 +133,8 @@ let step_fs_proc th_st iCst cvals =
         match cvals with
           | [Vlist _ path_cvals; Vobject (OVinteger uid_ival); Vobject (OVinteger gid_ival)] ->
               let path = List.map (charFromMValue "chown") path_cvals in
-              let uid = forceIntegerFromIntegerValue "chown" uid_ival in
-              let gid = forceIntegerFromIntegerValue "chown" gid_ival in
+              let uid = Mem.integer_of_integer_value uid_ival in
+              let gid = Mem.integer_of_integer_value gid_ival in
               Core_run.FS_CHOWN (String.toString path) uid gid
           | _ -> error "chown"
         end
@@ -159,21 +151,21 @@ let step_fs_proc th_st iCst cvals =
     | Implementation.BuiltinFunction "readdir" ->
         match cvals with
           | [Vobject (OVinteger dir_ival)] ->
-              let dir = forceIntegerFromIntegerValue "readdir" dir_ival in
+              let dir = Mem.integer_of_integer_value dir_ival in
               Core_run.FS_READDIR dir
           | _ -> error "readdir"
         end
     | Implementation.BuiltinFunction "rewinddir" ->
         match cvals with
           | [Vobject (OVinteger dir_ival)] ->
-              let dir = forceIntegerFromIntegerValue "rewinddir" dir_ival in
+              let dir = Mem.integer_of_integer_value dir_ival in
               Core_run.FS_REWINDDIR dir
           | _ -> error "rewinddir"
         end
     | Implementation.BuiltinFunction "closedir" ->
         match cvals with
           | [Vobject (OVinteger dir_ival)] ->
-              let dir = forceIntegerFromIntegerValue "closedir" dir_ival in
+              let dir = Mem.integer_of_integer_value dir_ival in
               Core_run.FS_CLOSEDIR dir
           | _ -> error "closedir"
         end
@@ -184,7 +176,7 @@ let step_fs_proc th_st iCst cvals =
         match cvals with
           | [Vlist _ path_cvals; Vobject (OVinteger oflag_ival)] ->
               let path_chars = List.map (charFromMValue "open") path_cvals in
-              let oflag = forceIntegerFromIntegerValue "open" oflag_ival in
+              let oflag = Mem.integer_of_integer_value oflag_ival in
               Core_run.FS_OPEN (String.toString path_chars) oflag Nothing
           | _ -> error "open"
         end
@@ -194,7 +186,7 @@ let step_fs_proc th_st iCst cvals =
     | Implementation.BuiltinFunction "close" ->
         match cvals with
           | [Vobject (OVinteger fd_ival)] ->
-              let fd = forceIntegerFromIntegerValue "close" fd_ival in
+              let fd = Mem.integer_of_integer_value fd_ival in
               Core_run.FS_CLOSE fd
           | _ -> error "close"
         end
@@ -202,35 +194,35 @@ let step_fs_proc th_st iCst cvals =
         match cvals with
           | [Vobject (OVinteger fd_ival); Vlist _ buf_cvals; Vobject (OVinteger size_ival)] ->
               let buf = List.map (charFromMValue "write") buf_cvals in
-              let fd = forceIntegerFromIntegerValue "write" fd_ival in
-              let size = forceIntegerFromIntegerValue "write" size_ival in
+              let fd = Mem.integer_of_integer_value fd_ival in
+              let size = Mem.integer_of_integer_value size_ival in
               Core_run.FS_WRITE fd buf size
           | _ -> error "write"
         end
     | Implementation.BuiltinFunction "read" ->
         match cvals with
           | [Vobject (OVinteger fd_ival); Vobject (OVpointer bufptr); Vobject (OVinteger size_ival)] ->
-              let fd = forceIntegerFromIntegerValue "read" fd_ival in
-              let size = forceIntegerFromIntegerValue "read" size_ival in
+              let fd = Mem.integer_of_integer_value fd_ival in
+              let size = Mem.integer_of_integer_value size_ival in
               Core_run.FS_READ fd bufptr size
           | _ -> error "read"
         end
     | Implementation.BuiltinFunction "pwrite" ->
         match cvals with
           | [Vobject (OVinteger fd_ival); Vlist _ buf_cvals; Vobject (OVinteger size_ival); Vobject (OVinteger off_ival)] ->
-              let fd = forceIntegerFromIntegerValue "pwrite" fd_ival in
+              let fd = Mem.integer_of_integer_value fd_ival in
               let buf = List.map (charFromMValue "pwrite") buf_cvals in
-              let size = forceIntegerFromIntegerValue "pwrite" size_ival in
-              let off = forceIntegerFromIntegerValue "pwrite" off_ival in
+              let size = Mem.integer_of_integer_value size_ival in
+              let off = Mem.integer_of_integer_value off_ival in
               Core_run.FS_PWRITE fd buf size off
           | _ -> error "pwrite"
         end
     | Implementation.BuiltinFunction "pread" ->
         match cvals with
           | [Vobject (OVinteger fd_ival); Vobject (OVpointer bufptr); Vobject (OVinteger size_ival); Vobject (OVinteger off_ival)] ->
-              let fd = forceIntegerFromIntegerValue "pread" fd_ival in
-              let size = forceIntegerFromIntegerValue "pread" size_ival in
-              let off = forceIntegerFromIntegerValue "pread" off_ival in
+              let fd = Mem.integer_of_integer_value fd_ival in
+              let size = Mem.integer_of_integer_value size_ival in
+              let off = Mem.integer_of_integer_value off_ival in
               Core_run.FS_PREAD fd bufptr size off
           | _ -> error "pread"
         end
@@ -246,7 +238,7 @@ let step_fs_proc th_st iCst cvals =
         match cvals with
           | [Vlist _ path_cvals; Vobject (OVpointer ptr); Vobject (OVinteger max_ival)] ->
               let path = List.map (charFromMValue "readlink") path_cvals in
-              let max = forceIntegerFromIntegerValue "readlink" max_ival in
+              let max = Mem.integer_of_integer_value max_ival in
               Core_run.FS_READLINK (String.toString path) ptr max
           | _ -> error "readlink"
         end
@@ -283,7 +275,7 @@ let step_fs_proc th_st iCst cvals =
         match cvals with
           | [Vlist _ path_cvals; Vobject (OVinteger len_ival)] ->
               let path_chars = List.map (charFromMValue "truncate") path_cvals in
-              let len = forceIntegerFromIntegerValue "truncate" len_ival in
+              let len = Mem.integer_of_integer_value len_ival in
               Core_run.FS_TRUNCATE (String.toString path_chars) len
           | _ -> error "truncate"
         end
@@ -297,9 +289,9 @@ let step_fs_proc th_st iCst cvals =
     | Implementation.BuiltinFunction "lseek" ->
         match cvals with
           | [Vobject (OVinteger fd_ival); Vobject (OVinteger off_ival); Vobject (OVinteger whence_ival)] ->
-              let fd = forceIntegerFromIntegerValue "lseek" fd_ival in
-              let off = forceIntegerFromIntegerValue "lseek" off_ival in
-              let whence = forceIntegerFromIntegerValue "lseek" whence_ival in
+              let fd = Mem.integer_of_integer_value fd_ival in
+              let off = Mem.integer_of_integer_value off_ival in
+              let whence = Mem.integer_of_integer_value whence_ival in
               Core_run.FS_LSEEK fd off whence
           | _ -> error "lseek"
         end

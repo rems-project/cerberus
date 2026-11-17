@@ -387,6 +387,8 @@ let string_of_constraint_violation = function
       "[[cerb::byte]] attribute must only be applied to typedefs of unsigned char"
   | CastToFromByte ->
       "cannot cast non-byte type to or from byte"
+  | TypeofExprDesignateBitfield ->
+      "typeof shall not be applied to an expression that designates a bit-field member"
 
 let string_of_misc_violation = function
   | MultipleEnumDeclaration x ->
@@ -456,6 +458,9 @@ let string_of_ail_typing_misc_error = function
       "the first argument of 'va_arg' must be of type 'va_list'"
   | GenericFunctionMustBeDirectlyCalled ->
       "builtin generic functions must be directly called"
+  | ArityMismatchCHERI (str, expected, found) ->
+      "CHERI intrinsic '" ^ str ^ "' given the wrong number of arguments (expected: " ^
+      string_of_int expected ^ ", found: " ^ string_of_int found ^ ")"
 
 let string_of_ail_typing_error = function
   | TError_ConstraintViolation tcv ->
@@ -557,10 +562,15 @@ let string_of_core_linking_cause = function
 let string_of_core_run_cause = function
   | Illformed_program str ->
       "ill-formed program: `" ^ str ^ "'"
-  | Found_empty_stack str ->
-      "found an empty stack: `" ^ str ^ "'"
-  | Reached_end_of_proc ->
-      "reached the end of a procedure"
+    | Invalid_struct_tag tag_sym ->
+        "invalid struct tag: " ^ string_of_sym tag_sym
+    | Invalid_union_tag tag_sym ->
+        "invalid union tag: " ^ string_of_sym tag_sym
+    | Invalid_member (tag_sym, membr_ident) ->
+        "invalid member '" ^ string_of_cid membr_ident ^ "' for tag '" ^
+        string_of_sym tag_sym ^ "'"
+  | Internal_error_core_run str ->
+      "internal error in the Core dynamics: `" ^ str ^ "'"
   | Unknown_impl ->
       "unknown implementation constant"
   | Unresolved_symbol (loc, sym) ->

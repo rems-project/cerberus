@@ -10,6 +10,16 @@ module Caux = Core_aux
 val pp_pexpr: pexpr -> string
 declare ocaml target_rep function pp_pexpr = `String_core.string_of_pexpr`
 
+val mk_tuple_pe: list pexpr -> pexpr
+let mk_tuple_pe = function
+  | [] ->
+      Utils.error "mk_tuple_pe []"
+  | [pe] ->
+      pe
+  | pes ->
+      Pexpr [] () (PEctor Ctuple pes)
+end
+
 
 (*
 type rewriter = <|
@@ -174,8 +184,17 @@ let rec remove_skips (Expr annot expr_ as expr) =
         Expr annot (Eunseq (List.map remove_skips es))
     | Ewseq pat e1 e2 ->
         match remove_skips e1 with
-          | Expr _ (Epure (Pexpr _ _ (PEval Vunit))) ->
-              remove_skips (Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2)
+          | (Expr _ (Epure (Pexpr _ _ (PEval Vunit))) as e1') ->
+              match Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2 with
+                | Just expr -> remove_skips expr
+                | Nothing ->
+                    match remove_skips e2 with
+                      | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
+                          e1'
+                      | e2' ->
+                          Expr annot (Ewseq pat e1' e2')
+                    end
+              end
           | e1' ->
               match remove_skips e2 with
                 | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
@@ -186,8 +205,17 @@ let rec remove_skips (Expr annot expr_ as expr) =
         end
     | Esseq pat e1 e2 ->
         match remove_skips e1 with
-          | Expr _ (Epure (Pexpr _ _ (PEval Vunit))) ->
-              remove_skips (Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2)
+          | (Expr _ (Epure (Pexpr _ _ (PEval Vunit))) as e1') ->
+              match Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2 with
+                | Just expr -> remove_skips expr
+                | Nothing ->
+                    match remove_skips e2 with
+                      | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
+                          e1'
+                      | e2' ->
+                          Expr annot (Esseq pat e1' e2')
+                    end
+              end
           | e1' ->
               match remove_skips e2 with
                 | (Expr _ (Epure (Pexpr _ _ (PEval Vunit)))) ->
@@ -257,7 +285,7 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
             | _ ->
                 Nothing
           end) (Just []) es in
-        Expr annot (maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (Caux.mk_tuple_pe pes)) pes_opt)
+        Expr annot (maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (mk_tuple_pe pes)) pes_opt)
 (* TODO (bring back)
   | Ewseq pat (Eunseq es) e2 ->
       (* ys is the assoc list of symbolic names, values that can be substituted away *)
@@ -676,12 +704,6 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         _pe
     | PEval _ ->
         _pe
-    | PEconstrained xs ->
-        PEconstrained begin
-          List.map (fun (constr, pe) ->
-            (constr, remove_conv_int_pexpr pe)
-          ) xs
-        end
     | PEundef _ _ ->
         _pe
     | PEerror str pe ->
@@ -725,15 +747,11 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
           | (Sym (Symbol.Symbol _ _ (Symbol.SD_Id "conv_int")), [pe_ty; pe_n]) ->
               match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
                 | (Just (Vctype ty), Just ((Vobject (OVinteger ival)) as cval)) ->
-                    match Mem_aux.integerFromIntegerValue ival with
-                      | Just n ->
-                          if in_minimal_range ty n then
-                            PEval cval
-                          else
-                            PEcall nm pes'
-                      | Nothing ->
-                          PEcall nm pes'
-                    end
+                    let n = Mem.integer_of_integer_value ival in
+                    if in_minimal_range ty n then
+                      PEval cval
+                    else
+                      PEcall nm pes'
                 | _ ->
                     PEcall nm pes'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
@@ -1016,8 +1034,6 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         true (* TODO: check *)
     | PEval _ ->
         true
-    | PEconstrained xs ->
-        List.all (fun (_, pe) -> isAlwaysDefined pe) xs
     | PEundef _ _ ->
         false
     | PEerror _ _ ->
@@ -1150,7 +1166,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         let es' = List.map pure_propagation2 es in
         match to_pures' es' with
           | Just pes ->
-              Core_aux.mk_pure_e (Caux.mk_tuple_pe pes)
+              Core_aux.mk_pure_e (mk_tuple_pe pes)
           | Nothing ->
               let es'' =
                 List.map (fun e ->
@@ -1163,7 +1179,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
               Expr annot (Eunseq es'')
         end
         (*
-    | Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
+    | Ewseq (Pattern annot_ctor (CaseDtor Dtuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
             let e = (pure_propagation2 e) in
@@ -1179,7 +1195,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | ([pat'], [e']) ->
              Expr annot (Ewseq pat' e' (pure_propagation2 (cont e2)))
          | _ ->
-             Expr annot (Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+             Expr annot (Ewseq (Pattern annot_ctor (CaseDtor Dtuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
        *)
     | Ewseq pat e1 e2 ->
@@ -1195,7 +1211,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
               Expr annot (Ewseq pat e1' (pure_propagation2 e2))
        end
        (*
-    | Esseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
+    | Esseq (Pattern annot_ctor (CaseDtor Dtuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
             let e = (pure_propagation2 e) in
@@ -1211,7 +1227,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | ([pat'], [e']) ->
              Expr annot (Esseq pat' e' (pure_propagation2 (cont e2)))
          | _ ->
-             Expr annot (Esseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+             Expr annot (Esseq (Pattern annot_ctor (CaseDtor Dtuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
        *)
     | Esseq pat e1 e2 ->
@@ -1275,15 +1291,15 @@ let rec simpl_match_pattern (Pattern _ pat) pe =
         Just []
     | (CaseBase (Just sym, _), _) ->
         Just [(sym, pe)]
-    | (CaseCtor Cspecified [pat'], Pexpr _ _ (PEval (Vloaded (LVspecified cval)))) ->
+    | (CaseDtor Dspecified [pat'], Pexpr _ _ (PEval (Vloaded (LVspecified cval)))) ->
         simpl_match_pattern pat' (Caux.mk_value_pe (Vobject cval))
-    | (CaseCtor Cspecified [pat'], Pexpr _ _ (PEctor Cspecified [pe'])) ->
+    | (CaseDtor Dspecified [pat'], Pexpr _ _ (PEctor Cspecified [pe'])) ->
         simpl_match_pattern pat' pe'
 (*
-    | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
+    | (CaseDtor Dunspecified [pat'], Vloaded (LVunspecified ty)) ->
         match_pattern pat' (Vctype ty)
 *)
-    | (CaseCtor Ctuple pats', Pexpr _ _ (PEval (Vtuple cvals))) ->
+    | (CaseDtor Dtuple pats', Pexpr _ _ (PEval (Vtuple cvals))) ->
         if List.length pats' <> List.length cvals then
           Nothing
         else
@@ -1294,7 +1310,7 @@ let rec simpl_match_pattern (Pattern _ pat) pe =
               )
             )
           ) (Just []) (List.zip pats' cvals)
-    | (CaseCtor Ctuple pats', Pexpr _ _ (PEctor Ctuple pes')) ->
+    | (CaseDtor Dtuple pats', Pexpr _ _ (PEctor Ctuple pes')) ->
         if List.length pats' <> List.length pes' then
           Nothing
         else
@@ -1332,8 +1348,6 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
     | PEimpl _ ->
         pexpr
     | PEval _ ->
-        pexpr
-    | PEconstrained _ ->
         pexpr
     | PEundef _ _ ->
         pexpr

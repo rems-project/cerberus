@@ -214,6 +214,8 @@ type violation =
   (* Byte *)
   | TypedefBytesAreUnsignedCharsOnly
   | CastToFromByte
+  (* C23 6.7.3.6 Typeof specifiers *)
+  | TypeofExprDesignateBitfield (* C23 §6.7.3.6#3 *)
 
 
 type assignment_violation =
@@ -503,4 +505,6 @@ let std_of_violation = function
       []
   | CastToFromByte ->
       []
+  | TypeofExprDesignateBitfield ->
+      ["C23 §6.7.3.6#3"]
 end

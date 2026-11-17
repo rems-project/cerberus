@@ -33,28 +33,28 @@ let rec match_pattern_pexpr loc_opt (Pattern (annots_pat, pat_) as pat) (Pexpr (
 
 
     | CaseBase _, _
-    | CaseCtor _, PEcfunction _
-    | CaseCtor _, PEsym _ ->
+    | CaseDtor _, PEcfunction _
+    | CaseDtor _, PEsym _ ->
         `MATCHED (Some (pat, pexpr), [])
     
-    | CaseCtor (Cspecified, [pat']), PEctor (Cspecified, [pe']) ->
+    | CaseDtor (Dspecified, [pat']), PEctor (Cspecified, [pe']) ->
         begin match match_pattern_pexpr loc_opt pat' pe' with
           | `MISMATCHED ->
               `MISMATCHED
           | `MATCHED (None, xs) ->
               `MATCHED (None, xs)
           | `MATCHED (Some (pat'', pe''), xs) ->
-              `MATCHED (Some (wrap_pat (CaseCtor (Cspecified, [pat''])), wrap_pexpr (PEctor (Cspecified, [pe'']))), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dspecified, [pat''])), wrap_pexpr (PEctor (Cspecified, [pe'']))), xs)
         end
 
 (*
 
 Vloaded (LVspecified oval)) ->
         match_pattern pat' (Vobject oval)
-    | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
+    | (CaseDtor Dunspecified [pat'], Vloaded (LVunspecified ty)) ->
         match_pattern pat' (Vctype ty)
 *)
-    | CaseCtor (Ctuple, pats), PEctor (Ctuple, pes) ->
+    | CaseDtor (Dtuple, pats), PEctor (Ctuple, pes) ->
         let xs =
           List.fold_left2 (fun acc pat pe ->
             match match_pattern_pexpr loc_opt pat pe, acc with
@@ -77,7 +77,7 @@ Vloaded (LVspecified oval)) ->
               `MATCHED (Some (pat', pe'), xs)
           | `MATCHED (Some (pats', pes'), xs) ->
               assert (List.length pats' = List.length pes');
-              `MATCHED (Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs)
         end
     | _ ->
         print_endline "\n===========================================";
@@ -106,7 +106,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
     | CaseBase (Some _, _), _ ->
         `MATCHED (Some (pat, expr), [])
     
-    | CaseCtor (Ctuple, pats), Eunseq es ->
+    | CaseDtor (Dtuple, pats), Eunseq es ->
         let xs =
           List.fold_left2 (fun acc pat e ->
             match match_pattern_expr pat e, acc with
@@ -129,7 +129,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
               `MATCHED (Some (pat', e'), xs)
           | `MATCHED (Some (pats', es'), xs) ->
               assert (List.length pats' = List.length es');
-              `MATCHED (Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_expr (Eunseq es')), xs)
+              `MATCHED (Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_expr (Eunseq es')), xs)
         end
     
     | _ ->
@@ -138,7 +138,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
     | CaseBase (Some sym, _), PEval cval ->
         (None, [(sym, cval)])
 
-    | CaseCtor (Ctuple, pats), PEctor (Ctuple, pes) ->
+    | CaseDtor (Dtuple, pats), PEctor (Ctuple, pes) ->
         let xs =
           List.fold_left2 (fun acc pat pe ->
             match match_pattern_pexpr pat pe, acc with
@@ -157,7 +157,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
               Some (pat', pe'), xs
           | Some (pats', pes'), xs ->
               assert (List.length pats' = List.length pes');
-              Some (wrap_pat (CaseCtor (Ctuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs
+              Some (wrap_pat (CaseDtor (Dtuple, pats')), wrap_pexpr (PEctor (Ctuple, pes'))), xs
         end
 
     | _ ->
@@ -265,12 +265,6 @@ let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
     | PEval _
     | PEundef _ ->
         wrap pexpr_
-    | PEconstrained xs ->
-        wrap begin
-          PEconstrained begin
-            List.map (fun (constrs, pe) -> (constrs, subst_sym_pexpr2 sym z pe)) xs
-          end
-        end
     | PEerror (str, pe) ->
         wrap (PEerror (str, subst_sym_pexpr2 sym z pe))
     | PEctor (ctor, pes) ->
@@ -469,7 +463,14 @@ let core_peval file : 'bty RW.rewriter =
 
   let eval_pexpr pexpr =
     let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
-    Core_eval.eval_pexpr Cerb_location.unknown None emp [] None file pexpr in
+    let loc = Cerb_location.unknown in
+    match Core_eval.full_eval_pexpr loc None emp [] (fun _ -> None) file pexpr with
+    | Ok z ->
+        Either.Right z
+    | Error (loc, err) ->
+        Left (loc, Errors.CORE_RUN err)
+
+  in
   
   let to_unfold_funs =
     (* The list of stdlib functions to be unfolded (see PEcall) *)
@@ -613,7 +614,7 @@ let core_peval file : 'bty RW.rewriter =
                               | _ ->
                                   Core_aux.mk_let_pe
                                     (Core_aux.mk_tuple_pat pats)
-                                    (Core_aux.mk_tuple_pe pes)
+                                    (Pexpr ([], (), PEctor (Ctuple, pes)))
                                     body_pe
                           end
                       | None ->
@@ -755,7 +756,7 @@ let core_peval file : 'bty RW.rewriter =
                               | _ ->
                                   Core_aux.mk_let_e
                                     (Core_aux.mk_tuple_pat pats)
-                                    (Core_aux.mk_tuple_pe pes)
+                                    (Pexpr ([], (), PEctor (Ctuple, pes)))
                                     body_e
                           end
                       | None ->
@@ -915,8 +916,6 @@ let is_recursive_function file sym : bool =
                   | PEval _
                   | PEundef _ ->
                       false
-                  | PEconstrained _ ->
-                      assert false
                   | PEerror (_, pe) ->
                       aux pe
                   | PEctor (_, pes) ->

@@ -76,7 +76,7 @@ module type Memory = sig
    (* null pointer *) (Ctype.ctype -> 'a) ->
    (* function pointer *) (Symbol.sym option -> 'a) ->
    (* concrete pointer *) (Z.t option -> Z.t -> 'a) -> 'a
-  val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
+  val get_case_funsym_opt: (pointer_value -> Symbol.sym option) memM
 
   (* Operations on pointer values *)
   val eq_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM
@@ -150,18 +150,12 @@ module type Memory = sig
   val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
   val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
   
-  val case_integer_value: (* TODO: expose more ctors *)
-    integer_value ->
-    (Z.t -> 'a) ->
-    (unit -> 'a) ->
-    'a
-  
-  val is_specified_ival: integer_value -> bool
+  val integer_of_integer_value: integer_value -> Z.t
   
   (* Predicats on integer values *)
-  val eq_ival: integer_value -> integer_value -> bool option
-  val lt_ival: integer_value -> integer_value -> bool option
-  val le_ival: integer_value -> integer_value -> bool option
+  val eq_ival: integer_value -> integer_value -> bool
+  val lt_ival: integer_value -> integer_value -> bool
+  val le_ival: integer_value -> integer_value -> bool
 
   (* Floating value constructors *)
   val zero_fval: floating_value
@@ -196,7 +190,6 @@ module type Memory = sig
   val case_mem_value:
     mem_value ->
     (Ctype.ctype -> 'a) -> (* unspecified case *)
-    (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
     (Ctype.integerType -> integer_value -> 'a) ->
     (Ctype.floatingType -> floating_value -> 'a) ->
     (Ctype.ctype -> pointer_value -> 'a) ->

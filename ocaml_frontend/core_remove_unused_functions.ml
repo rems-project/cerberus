@@ -179,7 +179,6 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
   and names_in_memory_value mv : unit m = 
     Impl_mem.case_mem_value mv 
       (fun ct -> names_in_ctype ct)
-      (fun _ sym -> record_dep (Sym sym))
       (fun _ _ -> return ())
       (fun _ _ -> return ())
       (fun ct pv -> 
@@ -273,7 +272,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
     | CaseBase (Some sym, cbt) -> 
        record_dep (Sym sym) >>
        names_in_core_base_type cbt
-    | CaseCtor (_, pats) ->
+    | CaseDtor (_, pats) ->
        iterate pats names_in_pattern
   in
 

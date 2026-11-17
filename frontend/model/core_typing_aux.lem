@@ -208,13 +208,26 @@ let export_ctor loc = function
      E.return (CivNULLcap is_signed)
 end
 
+let export_dtor loc = function
+ | Dnil bty ->
+    E.return (Dnil bty)
+ | Dcons ->
+     E.return Dcons
+ | Dtuple ->
+     E.return Dtuple
+ | Dspecified ->
+     E.return Dspecified
+ | Dunspecified ->
+     E.return Dunspecified
+end
+
 val     export_pattern: Loc.t -> inferred_pattern -> E.eff typed_pattern
 let rec export_pattern loc (Pattern annots pat) =
   match pat with
    | CaseBase z ->
        E.return (Pattern annots (CaseBase z))
-   | CaseCtor ctor pats ->
-       (fun c args -> Pattern annots (CaseCtor c args)) <$> export_ctor loc ctor
+   | CaseDtor dtor pats ->
+       (fun d args -> Pattern annots (CaseDtor d args)) <$> export_dtor loc dtor
                                                         <*> E.mapM (export_pattern loc) pats
   end
 
@@ -231,11 +244,6 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
         E.return (PEimpl iCst)
     | PEval cval ->
         E.return (PEval cval)
-    | PEconstrained xs ->
-        PEconstrained <$> E.mapM (fun (cs, pe) ->
-          export_pexpr pe >>= fun pe' ->
-          E.return (cs, pe')
-        ) xs
     | PEundef loc ub ->
         E.return (PEundef loc ub)
     | PEerror str pe ->
@@ -362,9 +370,6 @@ let rec inject_inferred infer (Pexpr _ pexpr_) =
         
     | PEval cval ->
         
-(*
-    | PEconstrained of list (Mem.mem_iv_constraint  * (generic_pexpr 'bty 'sym)) (* constrained value *)
-*)
     | PEundef _ ->
         
     | PEerror _ pe ->

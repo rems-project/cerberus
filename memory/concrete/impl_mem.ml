@@ -1652,19 +1652,22 @@ module Concrete : Memory = struct
     | PV (Prov_some i, PVconcrete (_, addr)) -> fconc (Some i) addr
     | _ -> failwith "case_ptrval"
 
-  let case_funsym_opt st (PV (_, ptrval)) =
-    match ptrval with
-    | PVfunction sym -> Some sym
-    | PVconcrete (_, addr) ->
-      (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
-      begin match IntMap.find_opt addr st.funptrmap with
-        | Some (file_dig, name) ->
-            Some (Symbol.Symbol (file_dig, Z.to_int addr, SD_Id name))
-        | None ->
-            None
-      end
-    | _ -> None
-    
+  let get_case_funsym_opt =
+    get >>= fun st ->
+    return (fun (PV (_, ptrval)) ->
+      match ptrval with
+      | PVfunction sym -> Some sym
+      | PVconcrete (_, addr) ->
+        (* FIXME: This is wrong. A function pointer with the same id in different files
+         * might exist. *)
+        begin match IntMap.find_opt addr st.funptrmap with
+          | Some (file_dig, name) ->
+              Some (Symbol.Symbol (file_dig, Z.to_int addr, SD_Id name))
+          | None ->
+              None
+        end
+      | _ -> None
+    )
   
   let eq_ptrval loc (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
@@ -2210,10 +2213,10 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   
   let max_ival ity =
     let open Z in
-    let ity = match ity with
-      | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
-      | _ -> ity
-    in
+    (* aliased types (size_t, wchar_t, ...) and enumerated types have the range of the
+     * standard integer type the implementation chooses for them *)
+    let ity =
+      Ocaml_implementation.normalise_integerType (Ocaml_implementation.get ()) ity in
     IV (Prov_none, begin match (Ocaml_implementation.get ()).sizeof_ity ity with
       | Some n ->
           let signed_max =
@@ -2248,10 +2251,10 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   
   let min_ival ity =
     let open Z in
-    let ity = match ity with
-      | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
-      | _ -> ity
-    in
+    (* aliased types (size_t, wchar_t, ...) and enumerated types have the range of the
+     * standard integer type the implementation chooses for them *)
+    let ity =
+      Ocaml_implementation.normalise_integerType (Ocaml_implementation.get ()) ity in
     IV (Prov_none, begin match ity with
       | Char ->
           if (Ocaml_implementation.get ()).is_signed_ity Char then
@@ -2349,11 +2352,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     IV (combine_prov prov1 prov2, Z.logxor n1 n2)
   
-  let case_integer_value (IV (_, n)) f_concrete _ =
-    f_concrete n
-  
-  let is_specified_ival ival =
-    true
+  let integer_of_integer_value (IV (_, n)) = n
   
   let zero_fval =
     0.0
@@ -2393,12 +2392,12 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
     IV (Prov_none, Z.of_float fval)
   
   let eq_ival (IV (_, n1)) (IV (_, n2)) =
-    Some (Z.equal n1 n2)
+    Z.equal n1 n2
   let lt_ival (IV (_, n1)) (IV (_, n2)) =
-    Some (Z.compare n1 n2 = -1)
+    Z.compare n1 n2 = -1
   let le_ival (IV (_, n1)) (IV (_, n2)) =
     let cmp = Z.compare n1 n2 in
-    Some (cmp = -1 || cmp = 0)
+    cmp = -1 || cmp = 0
   
   let unspecified_mval ty =
     MVunspecified ty
@@ -2415,7 +2414,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   let union_mval tag_sym memb_ident mval =
     MVunion (tag_sym, memb_ident, mval)
   
-  let case_mem_value mval f_unspec f_concur f_ival f_fval f_ptr f_array f_struct f_union =
+  let case_mem_value mval f_unspec f_ival f_fval f_ptr f_array f_struct f_union =
     match mval with
       | MVunspecified ty ->
           f_unspec ty

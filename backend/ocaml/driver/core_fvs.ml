@@ -42,7 +42,6 @@ let rec fv_pe (Pexpr (_,_, e)) fvs =
   | PEsym l -> l::fvs
   | PEimpl _ -> fvs
   | PEval _ -> fvs
-  | PEconstrained cs -> List.fold_left (flip fv_pe %% snd) fvs cs
   | PEundef _ -> fvs
   | PEerror (_, pe) -> fv_pe pe fvs
   | PEctor (_, pes) -> List.fold_left (flip fv_pe) fvs pes

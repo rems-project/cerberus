@@ -690,13 +690,14 @@ let case_ptrval ptrval f_null f_funptr f_concrete =
     | PVfunptr sym ->
         f_funptr (Some sym)
 
-let case_funsym_opt _ ptrval : Symbol.sym option =
-  match ptrval with
+let get_case_funsym_opt =
+  return (function
     | PVfunptr sym ->
         Some sym
     | _ ->
         (* TODO *)
         None
+  )
 
 (* Operations on pointer values *)
 let eq_ptrval _ ptrval1 ptrval2 : bool memM =
@@ -1076,22 +1077,15 @@ let bitwise_or_ival _ ival1 ival2 =
 let bitwise_xor_ival _ ival1 ival2 =
   IVint (Z.logxor (ival_to_int ival1) (ival_to_int ival2))
 
-let case_integer_value ival f_concrete _ =
-  f_concrete (ival_to_int ival)
-
-let is_specified_ival _ =
-  true
+let integer_of_integer_value ival = (ival_to_int ival)
 
 (* Predicats on integer values *)
 let eq_ival ival1 ival2 =
-  Some (Z.equal (ival_to_int ival1) (ival_to_int ival2))
+  Z.equal (ival_to_int ival1) (ival_to_int ival2)
 let lt_ival ival1 ival2 =
-Some (Z.lt (ival_to_int ival1) (ival_to_int ival2))
+  Z.lt (ival_to_int ival1) (ival_to_int ival2)
 let le_ival ival1 ival2 =
-Some (Z.leq (ival_to_int ival1) (ival_to_int ival2))
-
-let eval_integer_value ival =
-  Some (ival_to_int ival)
+  Z.leq (ival_to_int ival1) (ival_to_int ival2)
 
 (* Floating value constructors *)
 let zero_fval =
@@ -1147,7 +1141,7 @@ let union_mval tag_sym memb_ident mval =
   MVunion (tag_sym, memb_ident, mval)
 
 (* Memory value destructor *)
-let case_mem_value mval f_unspec f_concur f_ival f_fval f_ptr f_array f_struct f_union =
+let case_mem_value mval f_unspec f_ival f_fval f_ptr f_array f_struct f_union =
   match mval with
     | MVunspecified ty ->
         f_unspec ty

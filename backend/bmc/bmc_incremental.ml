@@ -204,7 +204,6 @@ module BmcInline = struct
         | _ -> assert false
         end
     | PEval _  -> return pe_
-    | PEconstrained _ -> assert false
     | PEundef _ -> return pe_
     | PEerror _ -> return pe_
     | PEctor (ctor, pes) ->
@@ -773,9 +772,9 @@ module BmcSSA = struct
          return (CaseBase(Some new_sym, typ))
      | CaseBase (None, _) ->
          return pat
-     | CaseCtor (ctor, patlist) ->
+     | CaseDtor (dtor, patlist) ->
          mapM ssa_pattern patlist >>= fun ssad_patlist ->
-         return (CaseCtor(ctor, ssad_patlist))
+         return (CaseDtor(dtor, ssad_patlist))
     ) >>= fun ssad_pat ->
     return (Pattern(annots, ssad_pat))
 
@@ -792,7 +791,6 @@ module BmcSSA = struct
         update_inline_pexpr uid ssad_inlined_pe >>
         return pe_
     | PEval _ -> return pe_
-    | PEconstrained _ -> assert false
     | PEundef _ -> return pe_
     | PEerror _ -> return pe_
     | PEctor (ctor, pelist) ->
@@ -1288,7 +1286,6 @@ module BmcZ3 = struct
     | PEval cval ->
        get_file >>= fun file ->
        return (value_to_z3 cval file)
-    | PEconstrained _ -> assert false
     | PEundef _ ->
         get_file >>= fun file ->
         let sort = cbt_to_z3 bTy file in
@@ -2187,24 +2184,24 @@ module BmcBind = struct
     (match pat with
     | CaseBase(sym, _) ->
         mk_let_binding sym expr
-    | CaseCtor (Ctuple, patlist) ->
+    | CaseDtor (Dtuple, patlist) ->
         assert (Expr.get_num_args expr = List.length patlist);
         mapM (fun (pat, e) -> mk_let_bindings_raw pat e)
              (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
         return (mk_and bindings)
-    | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
+    | CaseDtor(Dspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
         let is_specified = LoadedInteger.is_specified expr in
         let specified_value = LoadedInteger.get_specified_value expr in
         mk_let_binding sym specified_value >>= fun is_eq_value ->
         return (mk_and [is_specified; is_eq_value])
-    | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
+    | CaseDtor(Dspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
         let is_specified = LoadedPointer.is_specified expr in
         let specified_value = LoadedPointer.get_specified_value expr in
         mk_let_binding sym specified_value >>= fun is_eq_value ->
         return (mk_and [is_specified; is_eq_value])
-    | CaseCtor(Cspecified, _) ->
+    | CaseDtor(Dspecified, _) ->
         assert false
-    | CaseCtor(Cunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
+    | CaseDtor(Dunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
         let (is_unspecified, unspecified_value) =
           if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
             let is_unspecified = LoadedInteger.is_unspecified expr in
@@ -2219,18 +2216,18 @@ module BmcBind = struct
         in
         mk_let_binding sym unspecified_value >>= fun is_eq_value ->
         return (mk_and [is_unspecified; is_eq_value])
-    | CaseCtor(Cunspecified, _) ->
+    | CaseDtor(Dunspecified, _) ->
         assert false
-    | CaseCtor(Cnil BTy_ctype, []) ->
+    | CaseDtor(Dnil BTy_ctype, []) ->
         assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
         return mk_true
-    | CaseCtor(Ccons, [hd;tl]) ->
+    | CaseDtor(Dcons, [hd;tl]) ->
         assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
         let is_cons = CtypeListSort.is_cons expr in
         mk_let_bindings_raw hd (CtypeListSort.get_head expr) >>= fun eq_head ->
         mk_let_bindings_raw tl (CtypeListSort.get_tail expr) >>= fun eq_tail ->
         return (mk_and [is_cons; eq_head; eq_tail])
-    | CaseCtor(_, _) ->
+    | CaseDtor(_, _) ->
         assert false
     )
 
@@ -2260,8 +2257,6 @@ module BmcBind = struct
         bind_pe inline_pe
     | PEval _ ->
         return []
-    | PEconstrained _ ->
-        assert false
     | PEundef _ ->
         return []
     | PEerror _ ->
@@ -2662,7 +2657,6 @@ module BmcVC = struct
        get_inline_pexpr uid >>= fun inline_pe ->
        vcs_pe inline_pe
     | PEval _           -> return []
-    | PEconstrained _   -> assert false
     | PEundef (loc, ub) -> return [(mk_false, VcDebugUndef (loc,ub))]
     | PEerror (str, _)  -> return [(mk_false, VcDebugStr (string_of_int uid ^ "_" ^ str))]
     | PEctor (ctor, pelist) ->
@@ -5103,7 +5097,7 @@ module BmcConcActions = struct
         add_taint sym aids
     | CaseBase(None, _) ->
         return ()
-    | CaseCtor(_, patlist) ->
+    | CaseDtor(_, patlist) ->
         mapM_ (fun pat -> do_taint_pat pat aids) patlist
 
   let union_taints (taints: (aid Pset.set) list) : aid Pset.set =
@@ -5144,7 +5138,6 @@ module BmcConcActions = struct
         do_taint_pe inline_pe
     | PEval cval ->
         return (Pset.empty Stdlib.compare)
-    | PEconstrained _ -> assert false
     | PEundef _ ->
         return (Pset.empty Stdlib.compare)
     | PEerror _ ->

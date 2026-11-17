@@ -299,16 +299,14 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
     Pattern ( annots
             , match pat_ with
               | (CaseBase _ as pat_) -> pat_
-              | CaseCtor (ctor, pats) ->
-                  CaseCtor (ctor, List.map untype_pattern pats) ) in
+              | CaseDtor (dtor, pats) ->
+                  CaseDtor (dtor, List.map untype_pattern pats) ) in
   let rec untype_pexpr (Pexpr (annots, _, pexpr_) : Core.typed_pexpr) : Core.pexpr =
     let aux = function
     | (PEsym _ as pe) | (PEimpl _ as pe) | (PEval _ as pe) | (PEundef _ as pe) ->
         pe
     | PEerror (str, pe) ->
         PEerror (str, untype_pexpr pe)
-    | PEconstrained xs ->
-        PEconstrained (List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
     | PEctor (ctor, pes) ->
         PEctor (ctor, List.map untype_pexpr pes)
     | PEcase (pe, pat_pes) ->
@@ -547,18 +545,14 @@ let interp_backend ~conf io core_file ~args ~batch ~fs =
     D.drive ~conf core_file ("cmdname" :: args) fs_state >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           Result.ok (Either.Right begin
-            match Mem.eval_integer_value ival with
-            | Some n ->
-                begin try
-                  Z.to_int n
-                with
-                | Z.Overflow ->
-                    warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
-                    Z .(to_int (n mod (of_int 256)))
-                end 
-            | None ->
-                warn [] (fun () -> "Return value was not a (simple) specified integer");
-                0
+            let n = Impl_mem.integer_of_integer_value ival in
+            begin try
+              Z.to_int n
+            with
+            | Z.Overflow ->
+                warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                Z .(to_int (n mod (of_int 256)))
+            end
           end)
       | (cval :: _) ->
           let* () = io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) in
