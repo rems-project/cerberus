@@ -832,7 +832,8 @@ let pp_function_prototype sym decl = match decl with
   (fun k -> if is_inline then !^ "inline" ^^^ k else k) (
       (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
         let args = P.parens
-          (comma_list
+          (if !executable_spec && List.length params = 0 then !^ "void" else
+           comma_list
              (fun (qs, ty, isRegister) ->
                 if !Cerb_debug.debug_level > 5 then
                   (* printing the types in a human readable format *)
@@ -947,7 +948,8 @@ let pp_program_aux pp_annot (startup, sigm) =
                   (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
                     let args =
                       P.parens
-                        (comma_list
+                        (if !executable_spec && List.length params = 0 then !^ "void" else
+                         comma_list
                           (fun (sym, (qs, ty, isRegister)) ->
                               if !Cerb_debug.debug_level > 5 then
                                 (* printing the types in a human readable format *)
