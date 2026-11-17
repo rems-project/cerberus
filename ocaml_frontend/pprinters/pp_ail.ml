@@ -293,6 +293,8 @@ let pp_ctype_aux ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
                         (if List.length params = 0 then !^ "void" else comma_list (fun (qs, ty, _) -> aux p' qs ty P.empty) params) ^^
                         (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                       )
+                  | Ctype (_, Array (elem_ty, n_opt)) ->
+                    aux p' ref_qs elem_ty (P.parens (P.star ^^ pp_qualifiers qs ^^ k) ^^ P.brackets (P.optional pp_integer n_opt))
                   | _ ->
                       aux p' ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
                 end
@@ -856,7 +858,8 @@ let pp_function_prototype sym decl = match decl with
           let rec aux ct =
             match ct with
             | Ctype (_, Pointer (_, Ctype (_, Function _)))
-            | Ctype (_, Pointer (_, Ctype (_, FunctionNoParams _))) ->
+            | Ctype (_, Pointer (_, Ctype (_, FunctionNoParams _)))
+            | Ctype (_, Pointer (_, Ctype (_, Array _))) ->
               true
             | Ctype (_, Pointer (_, ct')) -> aux ct'
             | _ -> false
@@ -974,7 +977,8 @@ let pp_program_aux pp_annot (startup, sigm) =
                         let rec aux ct =
                           match ct with
                           | Ctype (_, Pointer (_, Ctype (_, Function _)))
-                          | Ctype (_, Pointer (_, Ctype (_, FunctionNoParams _))) ->
+                          | Ctype (_, Pointer (_, Ctype (_, FunctionNoParams _)))
+                          | Ctype (_, Pointer (_, Ctype (_, Array _))) ->
                             true
                           | Ctype (_, Pointer (_, ct')) -> aux ct'
                           | _ -> false
