@@ -294,9 +294,6 @@ let pp_ctype_aux ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
                         (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                       )
                   | Ctype (_, Array (elem_ty, n_opt)) ->
-                    (* a pointer to an array: the star is parenthesised before the
-                       array's brackets, "T (star p)[n]", as before a function's
-                       parameters (STD 6.7.6: the postfix declarators bind tighter) *)
                     aux p' ref_qs elem_ty (P.parens (P.star ^^ pp_qualifiers qs ^^ k) ^^ P.brackets (P.optional pp_integer n_opt))
                   | _ ->
                       aux p' ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
@@ -862,8 +859,6 @@ let pp_function_prototype sym decl = match decl with
             match ct with
             | Ctype (_, Pointer (_, Ctype (_, Function _)))
             | Ctype (_, Pointer (_, Ctype (_, FunctionNoParams _)))
-            (* likewise a pointer to an array: the function's name and parameters are
-               the inner declarator, "T (star f(params))[n]" *)
             | Ctype (_, Pointer (_, Ctype (_, Array _))) ->
               true
             | Ctype (_, Pointer (_, ct')) -> aux ct'
