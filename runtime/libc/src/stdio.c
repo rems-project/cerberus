@@ -46,17 +46,19 @@
 
 static FILE *ofl_head;
 
-static unsigned char __stdout_buf[BUFSIZ+UNGET];
+// Unbuffered, as stderr is: a return from main does not reach exit, which
+// would flush a buffer, and printf writes to the descriptor directly.
+static unsigned char __stdout_buf[UNGET];
 static FILE __stdout_FILE = {
   .flags = F_PERM | F_NORD,
   .close = __stdio_close,
-  .write = __stdout_write,
+  .write = __stdio_write,
   .seek = __stdio_seek,
   .buf = __stdout_buf+UNGET,
-  .buf_size = sizeof __stdout_buf-UNGET,
+  .buf_size = 0,
   .fd = 1,
   .lock = -1,
-  .lbf = '\n',
+  .lbf = -1,
 };
 FILE *const __stdout = &__stdout_FILE;
 FILE *volatile __stdout_used = &__stdout_FILE;
@@ -233,14 +235,6 @@ static size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
     iov[0].iov_base = (char *)iov[0].iov_base + cnt;
     iov[0].iov_len -= cnt;
   }
-}
-
-static size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len)
-{
-  f->write = __stdio_write;
-  if (!(f->flags & F_SVB))
-    f->lbf = -1;
-  return __stdio_write(f, buf, len);
 }
 
 static FILE *__ofl_add(FILE *f)
@@ -709,6 +703,8 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 {
   int __builtin_vprintf(int, const char* restrict, va_list);
   int fd = fileno(f);
+  // The builtin writes to the descriptor, past what `f` has buffered.
+  if (f->wpos != f->wbase && fflush(f)) return -1;
   return __builtin_vprintf(fd, fmt, ap);
 }
 

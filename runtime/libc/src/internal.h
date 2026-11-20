@@ -37,7 +37,6 @@ static int __stdio_close(FILE *f);
 static off_t __stdio_seek(FILE *f, off_t off, int whence);
 static size_t __stdio_read(FILE *f, unsigned char *buf, size_t len);
 static size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len);
-static size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len);
 
 #define shcnt(f) ((f)->shcnt + ((f)->rpos - (f)->buf))
 #define fshlim(f, lim) __shlim((f), (lim))
