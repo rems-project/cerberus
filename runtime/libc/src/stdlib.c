@@ -223,6 +223,7 @@ int at_quick_exit(void (*func)(void))
 _Noreturn void exit(int code)
 {
   __funcs_on_exit();
+  fflush(NULL);
   _Exit(code);
 }
 
