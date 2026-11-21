@@ -222,6 +222,10 @@ citests=(
   0357-cond_unseq_race_ko02.undef.c
   0358-logical_unseq_race_ko.undef.c
   0359-cond_seq_ok.c
+  0360-member_unseq_race_ko01.undef.c
+  0361-member_unseq_race_ko02.undef.c
+  0362-member_unseq_race_ko03.undef.c
+  0363-member_seq_ok.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

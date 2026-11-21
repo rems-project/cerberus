@@ -2957,7 +2957,7 @@ end
           if not is_lvalue then
              E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun obj_wrp ->
              E.return begin
-               Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
+               Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
                  Caux.mk_pure_e begin
                    Caux.mk_case_pe e_wrp.E.sym_pe
                      [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
@@ -2970,7 +2970,7 @@ end
           else
             E.return begin
               C.Expr [Annot.Astd "§6.5.2.3#3, sentence 2"] (
-                C.Esseq e_wrp.E.sym_pat core_e (
+                C.Ewseq e_wrp.E.sym_pat core_e (
 begin if conf.Config.is_CHERI then
                   (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [e_wrp.E.sym_pe])
 else
@@ -3000,7 +3000,7 @@ end
           self e                                              >>= fun core_e   ->
           E.return begin
             Caux.add_std "§6.5.2.3#4, sentence 2" begin
-              Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
                 Caux.mk_case_e e_wrp.E.sym_pe
                   [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                     , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_memberofptr)) )
