@@ -218,6 +218,10 @@ citests=(
   0353-gnu_cond_elaboration.c
   0354-logical_no_duplication.c
   0355-integer_promotions_conversions.c
+  0356-cond_unseq_race_ko01.undef.c
+  0357-cond_unseq_race_ko02.undef.c
+  0358-logical_unseq_race_ko.undef.c
+  0359-cond_seq_ok.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

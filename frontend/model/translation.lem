@@ -1460,7 +1460,7 @@ let translate_conditional loc ctx translate_expr usual_arithmetic_conversion
       (* NOTE: if result_ty is an integer type, then e2 and e3 are both integers
        * (so e_ty must be too) *)
       E.return begin
-        Caux.mk_sseq_e e_wrp.E.sym_pat core_e
+        Caux.mk_wseq_e e_wrp.E.sym_pat core_e
           (Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int result_ty e_wrp.E.sym_pe))
       end
     else if AilTypesAux.is_floating result_ty then
@@ -1469,7 +1469,7 @@ let translate_conditional loc ctx translate_expr usual_arithmetic_conversion
           let e_oTy = force_core_object_type_of_ctype e_ty in
           E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun e_wrp ->
           E.return begin
-            Caux.mk_sseq_e e_wrp.E.sym_pat core_e
+            Caux.mk_wseq_e e_wrp.E.sym_pat core_e
               (Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint result_ty e_wrp.E.sym_pe))
           end
         else
