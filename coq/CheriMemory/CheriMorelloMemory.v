@@ -2237,9 +2237,9 @@ Module Type CheriMemoryImpl
             else ret (IV (unsigned_max z_value))
         | CoqIntegerType.Bool => ret (IV (unsigned_max z_value))
         | CoqIntegerType.Size_t
-        | CoqIntegerType.Wchar_t
         | CoqIntegerType.Unsigned _ => ret (IV (unsigned_max z_value))
         | CoqIntegerType.Ptrdiff_t
+        | CoqIntegerType.Wchar_t
         | CoqIntegerType.Wint_t
         | CoqIntegerType.Signed _ => ret (IV (signed_max z_value))
         | CoqIntegerType.Ptraddr_t => ret (IV (unsigned_max z_value))
@@ -2259,12 +2259,12 @@ Module Type CheriMemoryImpl
         else ret (IV 0)
     | CoqIntegerType.Bool
     | CoqIntegerType.Size_t
-    | CoqIntegerType.Wchar_t
-    | CoqIntegerType.Wint_t
     | CoqIntegerType.Unsigned _ => ret (IV 0)
     | CoqIntegerType.Signed CoqIntegerType.Intptr_t =>
         ret (IV (signed_min (Z.of_nat C.sizeof_ptraddr)))
     | CoqIntegerType.Ptrdiff_t
+    | CoqIntegerType.Wchar_t
+    | CoqIntegerType.Wint_t
     | CoqIntegerType.Signed _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         ret (IV (signed_min (Z.of_nat n_value)))

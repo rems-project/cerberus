@@ -317,17 +317,17 @@ module MorelloImpl = struct
   let register_enum = DefaultImpl.register_enum
   let typeof_enum = DefaultImpl.typeof_enum
   
-  let alignof_ity ity =
-    match Common.normalise_integerType_ type_alias_map typeof_enum ity with
-      | Signed LongLong
-      | Unsigned LongLong -> Some 16
-      | ity ->  DefaultImpl.alignof_ity ity
+  (* NOTE: (u)intptr_t hold capabilities; they are tested before the normalisation,
+     because their alias (long long) has the size of the default implementation *)
+  let alignof_ity = function
+    | Signed Intptr_t
+    | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.alignof_ity ity
 
-  let sizeof_ity ity =
-    match Common.normalise_integerType_ type_alias_map typeof_enum ity with
-      | Signed LongLong
-      | Unsigned LongLong -> Some 16
-      | ity ->  DefaultImpl.sizeof_ity ity
+  let sizeof_ity = function
+    | Signed Intptr_t
+    | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.sizeof_ity ity
   
   let sizeof_fty = DefaultImpl.sizeof_fty
   let alignof_fty = DefaultImpl.alignof_fty
