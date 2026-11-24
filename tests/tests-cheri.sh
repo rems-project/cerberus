@@ -103,6 +103,8 @@ citests=(
   0117-global_array_init_incomplete.error.c
   0118-block_array_init_incomplete.error.c
   0119-block_array_init_rec.c
+  0120-addition_null_pointer.undef.c
+  0121-addition_null_pointer_zero.undef.c
   0122-incr_overflow.undef.c
   0123-decr_underflow.undef.c
   0124-incr_wrap.c
@@ -154,6 +156,8 @@ citests=(
   0245-storage-class-void-param.undef.c
   0246-block-scoped-function.undef.c
   0254-undeclared-label.error.c
+  0258-array-function-type.error.c
+  0270-invalid-compound-literal.error.c
   0285-assignment-not-lvalue.error.c
   0286-binary-operator.error.c
   0287-equality.error.c
@@ -166,6 +170,7 @@ citests=(
   0295-global_const_int.undef.c
   0296-global_const_array.undef.c
   0297-atomic_memberof.undef.c
+  0298-atomic_memberofptr.undef.c
   0299-qualified_ptrdiff.c
   0300-unseq_race_ko01.undef.c
   0301-unseq_race_ko02.undef.c
@@ -193,15 +198,42 @@ citests=(
   0323-nested_function_declarators.syntax-only.c
   0324-atomics.c
   0328-indeterminate_block_declaration.c
+  0329-rvalue-temporary-lifetime.undef.c
   0330-alignas.syntax-only.c
   0331-modifying-rvalue-temporary-lifetime.undef.c
   0332-rvalue-temporary-lifetime-pointer-zap.c
   0333-shifts_non_representable.undef.c
+  0334-non_decimal_long_int_constants.c
+  0335-non_decimal_unsigned_long_int_constants.c
+  0336-scalar-init-with_braces.syntax-only.c
+  0337-scalar-init-with_braces.undef.c
+  0338-cast-pointer-to-_Bool.c
+  0339-invalid-string-character.error.c
+  0340-shl_promotion_to_signed.undef.c
+  0342-empty-range-case.c
+  0343-subzero-floating-to-_Bool.c
+  0344-ptr-to-_Bool-param.c
+  0351-for-decl-init-order.c
+  0352-gnu_cond_typing.c
+  0353-gnu_cond_elaboration.c
+  0354-logical_no_duplication.c
+  0355-integer_promotions_conversions.c
+  0356-cond_unseq_race_ko01.undef.c
+  0357-cond_unseq_race_ko02.undef.c
+  0358-logical_unseq_race_ko.undef.c
+  0359-cond_seq_ok.c
+  0360-member_unseq_race_ko01.undef.c
+  0361-member_unseq_race_ko02.undef.c
+  0362-member_unseq_race_ko03.undef.c
+  0363-member_seq_ok.c
+
   0336-memcpy-ovelap.undef.c
-  0337-CHERI_const1.undef.c
-  0338-CHERI_const2.undef.c
-  0339-CHERI_const3.undef.c
-  0340-CHERI_string-literal.undef.c
+  # CHERI-CI specific tests
+  CHERI-0001_const1.undef.c
+  CHERI-0002_const2.undef.c
+  CHERI-0003_const3.undef.c
+  CHERI-0004_string-literal.undef.c
+  CHERI-0005_integer_promotions_conversions.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
@@ -224,4 +256,7 @@ skip=(
   # CHERI-related bugs/questions:
   0298-atomic_memberofptr.undef.c
   0329-rvalue-temporary-lifetime.undef.c
+
+  # assumes the ISO usual arithmetic conversions, see CHERI-0005
+  0355-integer_promotions_conversions.c
 )
