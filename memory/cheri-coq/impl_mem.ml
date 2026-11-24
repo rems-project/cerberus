@@ -1323,9 +1323,9 @@ module CHERIMorello : Memory = struct
   let le_ival = MM.le_ival
 
   (* Floating value constructors *)
-  let zero_fval = MM.zero_fval
-  let one_fval = MM.one_fval
-  let str_fval s = lift_coq_serr (MM.str_fval s)
+  let zero_fval = Float64.of_float 0.0
+  let one_fval = Float64.of_float 1.0
+  let str_fval str = Float64.of_float (float_of_string str)
 
   (* Floating value destructors *)
   (* We have this one implemented in Coq but it looks like
@@ -1334,17 +1334,25 @@ module CHERIMorello : Memory = struct
     = fconcrete (Float64.to_float fval)
 
   let op_fval fop a b =
-    MM.op_fval (toCoq_floating_operator fop) a b
+    match fop with
+    | FloatAdd -> Float64.add a b
+    | FloatSub -> Float64.sub a b
+    | FloatMul -> Float64.mul a b
+    | FloatDiv -> Float64.div a b
 
   (* Predicates on floating values *)
-  let eq_fval = MM.eq_fval
-  let lt_fval = MM.lt_fval
-  let le_fval = MM.le_fval
+  let eq_fval = Float64.eq
+  let lt_fval = Float64.lt
+  let le_fval = Float64.le
 
   (* Integer <-> Floating casting constructors *)
-  let fvfromint x = lift_coq_serr (MM.fvfromint x)
-  let ivfromfloat ity fv =
-    lift_coq_serr (MM.ivfromfloat (toCoq_integerType ity) fv)
+  let fvfromint ival =
+    (* NOTE: if n is too big, the float will be truncated *)
+    Float64.of_float (Z.to_float (MM.num_of_int ival))
+  
+  let ivfromfloat _ fval =
+    let fval = Float64.to_float fval in
+    integer_ival (Z.of_float fval)
 
   (* Memory value constructors *)
   let unspecified_mval ty =

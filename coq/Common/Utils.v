@@ -264,9 +264,10 @@ Section Z_arith.
       else (Z.succ q, r - b).
 End Z_arith.
 
-Definition float_of_bits (_:Z): float := PrimFloat.zero. (* TODO: implement *)
-
-Definition bits_of_float (_:float) : Z := Z.zero. (* TODO: implement *)
+(* TODO: implement these two in Coq, for now they are just magic-ed up in the
+ * OCaml extraction *)
+Definition float_of_bits (_:Z): float := PrimFloat.zero.
+Definition bits_of_float (_:float) : Z := Z.zero.
 
 Fixpoint List_bool_eqb (l1:list bool) (l2:list bool) : bool := 
   match (l1,l2) with

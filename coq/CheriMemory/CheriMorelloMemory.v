@@ -2939,61 +2939,6 @@ Module Type CheriMemoryImpl
   Definition le_ival (n1 n2: integer_value) :=
     num_of_int n1 <=? num_of_int n2.
 
-  Definition zero_fval : float := PrimFloat.zero.
-
-  Definition one_fval : float := PrimFloat.one.
-
-  (* Not implmeneted but we need a placeholder to compile libc during build *)
-  Definition str_fval (str : string) : serr floating_value :=
-    ret PrimFloat.zero.
-  (* raise "str_fval not implmented". *)
-
-  Definition op_fval
-    (fop : floating_operator)
-    (fval1 fval2 : float) : float
-    :=
-    match fop with
-    | FloatAdd => PrimFloat.add fval1 fval2
-    | FloatSub => PrimFloat.sub fval1 fval2
-    | FloatMul => PrimFloat.mul fval1 fval2
-    | FloatDiv => PrimFloat.div fval1 fval2
-    end.
-
-  Definition eq_fval := PrimFloat.eqb.
-  Definition lt_fval := PrimFloat.ltb.
-  Definition le_fval := PrimFloat.leb.
-
-  Definition fvfromint (iv:integer_value): serr (floating_value)
-    := raise "fvfromint not implemented".
-
-  Definition ivfromfloat
-    (ity: CoqIntegerType.integerType)
-    (fval: floating_value): serr integer_value
-    :=
-    match ity with
-    | CoqIntegerType.Bool =>
-        ret (IV (if eq_fval fval zero_fval then 0 else 1))
-    | _ =>
-        nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
-        let zbytes := Z.of_nat nbytes in
-        let nbits := Z.mul 8 zbytes in
-        is_signed <- option2serr "no is_signed_ity" (is_signed_ity DEFAULT_FUEL ity) ;;
-        let _:bool := is_signed in (* hack to hint type checker *)
-        let '(min, max) :=
-          if is_signed then
-            (Z.opp (Z.pow 2 (nbits - 1)), (Z.pow 2 (nbits - 1)) - 1)
-          else
-            (0, Z.pow 2 nbits - 1) in
-        let wrapI (n_value : Z) : Z :=
-          let dlt := Z.succ (max - min) in
-          let r_value := Z_integerRem_f n_value dlt in
-          if r_value <=? max then
-            r_value
-          else
-            r_value - dlt in
-        (* TODO ret (IV (wrapI (Z.of_int64 (Stdlib.Int64.of_float fval)))) *)
-        raise "ivfromfloat no implemented"
-    end.
 
   Definition unspecified_mval (ty: CoqCtype.ctype): mem_value := MVunspecified ty.
 

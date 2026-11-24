@@ -28,6 +28,15 @@ Extract Constant Common.Utils.print_msg => "Stdlib.prerr_endline".
 Extract Constant SailStdpp.Values.prerr_endline => "Stdlib.prerr_endline".
 Extract Inlined Constant MorelloCapsGS.Capability_GS.strfcap => "strfcap".
 
+(* Floating stuff *)
+(* The IEEE 754 binary64 representation of floating values, as a signed 64 bit integer
+   (CheriMorelloMemory converts it from/to bytes with [bytes_of_Z true]/[Z_of_bytes true]).
+   NOTE: in the extracted code [Z] is Coq's module, hence the use of Big_int_Z *)
+Extract Constant Common.Utils.bits_of_float =>
+  "fun f -> Big_int_Z.big_int_of_int64 (Stdlib.Int64.bits_of_float (Float64.to_float f))".
+Extract Constant Common.Utils.float_of_bits =>
+  "fun z -> Float64.of_float (Stdlib.Int64.float_of_bits (Big_int_Z.int64_of_big_int z))".
+
 (* Used by Coq's Real library *)
 Extract Constant ClassicalDedekindReals.sig_forall_dec => "fun _ -> assert false".
 Extract Constant ClassicalDedekindReals.sig_not_dec => false.  (* Ugh *)

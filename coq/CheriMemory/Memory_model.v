@@ -183,36 +183,10 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter eq_ival : integer_value -> integer_value -> bool.
   Parameter lt_ival : integer_value -> integer_value -> bool.
   Parameter le_ival : integer_value -> integer_value -> bool.
-  Parameter zero_fval : floating_value.
-  Parameter one_fval : floating_value.
-  Parameter str_fval : string -> serr floating_value.
-
-  (* TODO: see if we can avoid float.
-    Parameter case_fval :
-      forall {a : Set}, floating_value -> (unit -> a) -> (float -> a) -> a.
-   *)
-
-  Parameter op_fval :
-    floating_operator -> floating_value ->
-    floating_value -> floating_value.
-
-  Parameter eq_fval : floating_value -> floating_value -> bool.
-  Parameter lt_fval : floating_value -> floating_value -> bool.
-  Parameter le_fval : floating_value -> floating_value -> bool.
-
-
-  (** Not every integer value could be converted to float.
-   Hence the error return type *)
-  Parameter fvfromint : integer_value -> serr floating_value.
-
-  Parameter ivfromfloat :
-    CoqIntegerType.integerType -> floating_value -> serr integer_value.
 
   Parameter unspecified_mval : CoqCtype.ctype -> mem_value.
   Parameter integer_value_mval :
     CoqIntegerType.integerType -> integer_value -> mem_value.
-  Parameter floating_value_mval :
-    CoqCtype.floatingType -> floating_value -> mem_value.
   Parameter pointer_mval : CoqCtype.ctype -> pointer_value -> mem_value.
   Parameter array_mval : list mem_value -> mem_value.
   Parameter struct_mval :
