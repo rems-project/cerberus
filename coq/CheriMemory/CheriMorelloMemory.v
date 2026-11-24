@@ -1962,13 +1962,8 @@ Module Type CheriMemoryImpl
     in
 
     let valid_postcond  (addr1 addr2: Z) : memM integer_value :=
-      let diff_ty' :=
-        match diff_ty with
-        | CoqCtype.Ctype _ (CoqCtype.Array elem_ty _) => elem_ty
-        | _ => diff_ty
-        end in
       st <- get ;;
-      sz <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) diff_ty') ;;
+      sz <- serr2InternalErr (sizeof DEFAULT_FUEL st.(tagDefs) diff_ty) ;;
       ret (IV (Z.div (addr1 - addr2) (Z.of_nat sz)))
     in
 

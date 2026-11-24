@@ -226,6 +226,7 @@ citests=(
   0361-member_unseq_race_ko02.undef.c
   0362-member_unseq_race_ko03.undef.c
   0363-member_seq_ok.c
+  0364-ptrdiff_array_elements.c
 
   0336-memcpy-ovelap.undef.c
   # CHERI-CI specific tests

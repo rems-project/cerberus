@@ -752,12 +752,7 @@ let diff_ptrval loc diff_ty ptrval1 ptrval2 : integer_value memM =
           (* TODO: more precise error message? *)
           fail ~loc MerrPtrdiff
         else if in_bounds addr1 alloc && in_bounds addr2 alloc then
-          let diff_ty' = match diff_ty with
-            | Ctype (_, Array (elem_ty, _)) ->
-                elem_ty
-            | _ ->
-                diff_ty in
-          return (IVint (Z.div (Z.sub addr1 addr2) (Common.sizeof ~tagDefs diff_ty')))
+          return (IVint (Z.div (Z.sub addr1 addr2) (Common.sizeof ~tagDefs diff_ty)))
         else
           fail ~loc (MerrVIP VIP_diffptr_out_of_bound)
     | _ ->

@@ -1802,12 +1802,7 @@ module Concrete : Memory = struct
       && Z.leq addr2 (Z.add alloc.base alloc.size) in
     
     let valid_postcond addr1 addr2 =
-      let diff_ty' = match diff_ty with
-        | Ctype (_, Array (elem_ty, _)) ->
-            elem_ty
-        | _ ->
-            diff_ty in
-      return (IV (Prov_none, Z.div (Z.sub addr1 addr2) (sizeof ~tagDefs diff_ty'))) in
+      return (IV (Prov_none, Z.div (Z.sub addr1 addr2) (sizeof ~tagDefs diff_ty))) in
     let error_postcond =
       fail ~loc MerrPtrdiff in
     if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
