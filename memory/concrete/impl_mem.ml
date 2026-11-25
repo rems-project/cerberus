@@ -91,6 +91,7 @@ end
 
 
 module IntMap = Map.Make(Z)
+module IntSet = Set.Make(Z)
 
 let offsetsof = Ocaml_implementation.offsetsof
 (* TODO(state-removal) *)
@@ -316,7 +317,7 @@ module Concrete : Memory = struct
 
     last_used_union_members: Symbol.identifier IntMap.t;
     
-    dead_allocations: storage_instance_id list;
+    dead_allocations: IntSet.t;
     dynamic_addrs: address list;
     last_used: storage_instance_id option;
 
@@ -339,7 +340,7 @@ module Concrete : Memory = struct
 
     last_used_union_members= IntMap.empty;
     
-    dead_allocations= [];
+    dead_allocations= IntSet.empty;
     dynamic_addrs= [];
     last_used= None;
     requested= [];
@@ -494,7 +495,7 @@ module Concrete : Memory = struct
   
   let is_dead alloc_id : bool memM =
     get >>= fun st ->
-    return (List.mem alloc_id st.dead_allocations)
+    return (IntSet.mem alloc_id st.dead_allocations)
   
   let get_allocation ~loc alloc_id : allocation memM =
     get >>= fun st ->
@@ -608,7 +609,7 @@ module Concrete : Memory = struct
             (false, false) in
     IntMap.fold (fun alloc_id alloc acc ->
       let new_opt =
-        if    not (List.mem alloc_id st.dead_allocations)
+        if    not (IntSet.mem alloc_id st.dead_allocations)
            && Z.leq alloc.base addr && Z.lt addr (Z.add alloc.base alloc.size) then
           (* PNVI-ae, PNVI-ae-udi *)
           if require_exposed && alloc.taint <> `Exposed then
@@ -636,7 +637,7 @@ module Concrete : Memory = struct
                is either of the `DoubleAlloc *)
             acc
 (*
-            if    not (List.mem alloc_id st.dead_allocations)
+            if    not (IntSet.mem alloc_id st.dead_allocations)
                && Z.leq alloc.base addr && Z.lt addr (Z.add alloc.base alloc.size) then
               (* PNVI-ae, PNVI-ae-udi *)
               if require_exposed && alloc.taint <> `Exposed then
@@ -1338,7 +1339,7 @@ module Concrete : Memory = struct
            PNVI-ae-udi stuff separated to avoid polluting the
            vanilla PNVI code) *)
         update begin fun st ->
-          {st with dead_allocations= alloc_id :: st.dead_allocations;
+          {st with dead_allocations= IntSet.add alloc_id st.dead_allocations;
                    last_used= Some alloc_id;
                    allocations= IntMap.remove alloc_id st.allocations}
         end >>= fun () ->
@@ -1373,7 +1374,7 @@ module Concrete : Memory = struct
                   "KILLING alloc_id= " ^ Z.to_string alloc_id
                 );
                 update begin fun st ->
-                  {st with dead_allocations= alloc_id :: st.dead_allocations;
+                  {st with dead_allocations= IntSet.add alloc_id st.dead_allocations;
                            last_used= Some alloc_id;
                            allocations= IntMap.remove alloc_id st.allocations}
                 end >>= fun () ->
